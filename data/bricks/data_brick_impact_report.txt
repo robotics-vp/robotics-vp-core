@@ -1,0 +1,88 @@
+======================================================================
+DATA BRICK IMPACT REPORT
+======================================================================
+
+1. CLUSTERS RANKED BY MPL IMPROVEMENT
+----------------------------------------------------------------------
+  #1: brick_2 (+7.40 units/hr)
+       Semantic: fragile objects, moderate complexity, high-throughput episodes, consistent visual features
+       Key impact: moderately improves throughput
+
+  #2: brick_3 (+3.40 units/hr)
+       Semantic: fragile objects, moderate complexity, high-throughput episodes, consistent visual features
+       Key impact: slightly improves throughput
+
+  #3: brick_1 (+-2.39 units/hr)
+       Semantic: fragile objects, moderate complexity, low-throughput episodes, consistent visual features
+       Key impact: no significant impact detected
+
+  #4: brick_0 (+-2.75 units/hr)
+       Semantic: fragile objects, moderate complexity, low-throughput episodes, consistent visual features
+       Key impact: no significant impact detected
+
+  #5: brick_4 (+-16.60 units/hr)
+       Semantic: fragile objects, single-object scenarios, challenging conditions, low-throughput episodes, consistent visual features
+       Key impact: no significant impact detected
+
+2. CLUSTERS RANKED BY ERROR REDUCTION
+----------------------------------------------------------------------
+  #1: brick_3 (-0.1300 error rate)
+       Semantic: fragile objects, moderate complexity, high-throughput episodes, consistent visual features
+       Error breakdown: slip=-0.0650, breakage=-0.0390
+
+  #2: brick_2 (-0.0639 error rate)
+       Semantic: fragile objects, moderate complexity, high-throughput episodes, consistent visual features
+       Error breakdown: slip=-0.0319, breakage=-0.0192
+
+  #3: brick_1 (+0.0317 error rate)
+       Semantic: fragile objects, moderate complexity, low-throughput episodes, consistent visual features
+       Error breakdown: slip=+0.0159, breakage=+0.0095
+
+  #4: brick_0 (+0.0372 error rate)
+       Semantic: fragile objects, moderate complexity, low-throughput episodes, consistent visual features
+       Error breakdown: slip=+0.0186, breakage=+0.0112
+
+  #5: brick_4 (+0.4628 error rate)
+       Semantic: fragile objects, single-object scenarios, challenging conditions, low-throughput episodes, consistent visual features
+       Error breakdown: slip=+0.2314, breakage=+0.1388
+
+3. CLUSTERS RANKED BY ENERGY EFFICIENCY
+----------------------------------------------------------------------
+  #1: brick_0 (+0.0000 Wh/unit)
+       Limbs: shoulder=+0.0000, elbow=+0.0000, wrist=+0.0000
+
+  #2: brick_1 (+0.0000 Wh/unit)
+       Limbs: shoulder=+0.0000, elbow=+0.0000, wrist=+0.0000
+
+  #3: brick_2 (+0.0000 Wh/unit)
+       Limbs: shoulder=+0.0000, elbow=+0.0000, wrist=+0.0000
+
+  #4: brick_3 (+0.0000 Wh/unit)
+       Limbs: shoulder=+0.0000, elbow=+0.0000, wrist=+0.0000
+
+  #5: brick_4 (+0.0000 Wh/unit)
+       Limbs: shoulder=+0.0000, elbow=+0.0000, wrist=+0.0000
+
+4. CONDITION-SPECIFIC RECOMMENDATIONS
+----------------------------------------------------------------------
+  WET CONDITIONS:
+    - No clusters optimized for this condition
+
+  FRAGILE CONDITIONS:
+    - No clusters optimized for this condition
+
+  MULTI_OBJECT CONDITIONS:
+    - No clusters optimized for this condition
+
+  OCCLUDED CONDITIONS:
+    - No clusters optimized for this condition
+
+5. PER-LIMB EFFICIENCY LEADERS
+----------------------------------------------------------------------
+  SHOULDER: brick_0 (+0.0000 Wh)
+  ELBOW: brick_0 (+0.0000 Wh)
+  WRIST: brick_0 (+0.0000 Wh)
+
+======================================================================
+END OF REPORT
+======================================================================

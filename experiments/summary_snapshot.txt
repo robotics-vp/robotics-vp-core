@@ -1,0 +1,68 @@
+QUANTITATIVE VALIDATION FOR DOCUMENTATION
+Source: logs/sac_train.csv
+Generated: 2025-11-12 18:53:56.201590
+
+======================================================================
+TRAINING SUMMARY STATISTICS
+======================================================================
+
+[TRAINING]
+  Total episodes: 250
+  Final episode: 249
+
+[PERFORMANCE] (last 100 episodes)
+  Marginal Product: 102.5 ± 7.6 units/hr
+  Error Rate: 2.71% ± 1.57%
+  Error Target: 8.34%
+  Error Margin: 67.5% below target
+
+[ECONOMICS] (last 100 episodes)
+  Robot Wage: $27.97/hr ± $2.77
+  Human Wage: $18.00/hr
+  Wage Parity: 1.554 ± 0.154
+  Profit: $27.87/hr ± $2.77
+  Wage Premium: 55.4% above human
+
+[SPREAD ALLOCATION] (episodes with spread > 0)
+  Episodes with spread: 247/250 (98.8%)
+  Spread: $9.11/hr ± $3.18
+  Spread value: $9.11/episode
+  Customer share (s_cust): 34.9%
+  Platform share (s_plat): 65.1%
+  Total rebate: $915.58
+  Total captured: $1334.31
+  Mean rebate: $3.71/episode
+  Mean captured: $5.40/episode
+
+[CONVERGENCE]
+  Episodes above parity: 248/250 (99.2%)
+  Episodes meeting SLA: 246/250 (98.4%)
+  Episodes viable (parity>1 AND err<=target): 98.0%
+
+======================================================================
+
+======================================================================
+INVESTOR METRICS
+======================================================================
+
+[PLATFORM REVENUE]
+  Spread (robot vs human): $9.11/hr
+  Platform share: 65.1%
+  Revenue per robot-hour: $5.93/hr
+  Revenue per robot-year: $5,926/year
+  Total annual revenue (1000 robots): $5,926,233/year
+
+[CUSTOMER ECONOMICS]
+  Human wage: $18.00/hr
+  Rebate per hour: $3.71/hr
+  Net cost per hour: $14.29/hr
+  Savings vs human: 20.6%
+  Annual cost per robot: $14,293/year
+
+[UNIT ECONOMICS]
+  Cost per robot-year: $1,700
+  Gross profit per robot: $4,226
+  Gross margin: 71.3%
+  Total gross profit (1000 robots): $4,226,233/year
+
+======================================================================

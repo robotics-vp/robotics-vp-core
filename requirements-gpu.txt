@@ -1,0 +1,35 @@
+# GPU Requirements for Video-to-Policy Training
+# Use this for RunPod, AWS, Lambda Labs, or any CUDA-enabled environment
+
+# PyTorch with CUDA 11.8 (adjust version as needed)
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# For R3D18 video encoder (pretrained on Kinetics)
+# torchvision includes this
+
+# Diffusion models (for novelty estimation in latent space)
+diffusers>=0.21.0
+transformers>=4.30.0
+accelerate>=0.20.0
+
+# Core dependencies (same as CPU)
+numpy>=1.24.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+pyyaml>=6.0
+scipy>=1.10.0
+
+# Optional: Better progress bars
+tqdm>=4.65.0
+
+# Optional: TensorBoard for visualization
+tensorboard>=2.13.0
+
+# Note: Install with:
+# pip install -r requirements-gpu.txt
+#
+# Or for specific CUDA version:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# pip install -r requirements-gpu.txt

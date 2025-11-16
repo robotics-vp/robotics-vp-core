@@ -1,0 +1,63 @@
+task: dishwashing
+seed: 42
+
+# Human benchmark
+human:
+  wage_per_hour: 18.0           # w_h ($/hr)
+  mpl_units_per_hour: 60.0      # MP_h (dishes/hr)
+
+# Pricing & costs
+economics:
+  price_per_unit: 0.30          # p ($/dish)
+  damage_cost: 1.0              # c_d ($/error * unit-equivalent)
+  energy_cost_per_hour: 0.10    # energy/maintenance costs
+
+# Quality constraint (SLA enforcement)
+quality:
+  error_target: 0.06            # e* (6% max error rate)
+  lagrangian:
+    enabled: true
+    lambda_init: 0.0            # initial Lagrangian multiplier
+    step_eta: 0.1               # dual ascent step size
+
+# Reward shaping (Phase A — parity)
+reward:
+  alpha: 1.0                    # weight on ΔMP normalized
+  beta: 0.5                     # error penalty
+  gamma: 2.0                    # wage convergence
+  target_schedule:
+    type: constant
+    value: 1.0                  # s(t)=1.0 for parity
+  asymmetry:
+    lambda_down: 1.0
+    lambda_up: 0.3
+
+# Phase B (surpass human) — toggle later
+surpass:
+  enabled: false
+  theta: 0.15                   # target uplift (e.g., to 1.15× human wage)
+  schedule:
+    type: sigmoid
+    t0: 200                     # start episode
+    tau: 150                    # ramp width
+
+# Data valuation
+data_value:
+  novelty_window: 256           # N-bar reference window
+  min_novelty_for_bonus: 0.15
+  kappa_confidence: 0.8         # scales non-sharing premium
+  baseline_delta_mpl_per_sample: 0.00 # seed baseline
+  pricing_horizon_hours: 1000   # H
+  deployment_scale: 1.0         # S
+
+# Training
+train:
+  episodes: 1000
+  eval_every: 20
+  max_seconds_per_episode: 3600
+  action_space: [0.0, 1.0]      # speed control
+
+# Logging
+log:
+  csv_path: logs/dishwashing_run.csv
+  metrics: [mp_r, mp_h, err_rate, w_hat_r, wage_parity, prod_parity, reward, target_s]

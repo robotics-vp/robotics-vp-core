@@ -1,0 +1,30 @@
+Using device: cpu
+=== SAC Training with Learned Encoder ===
+Episodes: 1000
+Latent dim: 128
+Device: cpu
+
+[ep   50] MP=91/h  Profit=$27.20  Err=0.000(tgt=0.097)  λ=0.000  Speed=0.97 Care=0.97  WageParity=1.517  Buffer=3000  α=0.081
+[ep  100] MP=109/h  Profit=$29.68  Err=0.027(tgt=0.093)  λ=0.000  Speed=0.98 Care=0.45  WageParity=1.654  Buffer=6000  α=0.109
+[ep  150] MP=100/h  Profit=$26.99  Err=0.029(tgt=0.090)  λ=0.000  Speed=0.97 Care=0.83  WageParity=1.505  Buffer=9000  α=0.121
+[ep  200] MP=115/h  Profit=$33.41  Err=0.009(tgt=0.087)  λ=0.000  Speed=0.97 Care=0.83  WageParity=1.862  Buffer=12000  α=0.223
+[ep  250] MP=90/h  Profit=$24.94  Err=0.022(tgt=0.083)  λ=0.000  Speed=0.94 Care=0.91  WageParity=1.391  Buffer=15000  α=0.316
+[ep  300] MP=96/h  Profit=$26.74  Err=0.020(tgt=0.080)  λ=0.000  Speed=0.96 Care=0.91  WageParity=1.491  Buffer=18000  α=0.369
+[ep  350] MP=109/h  Profit=$32.60  Err=0.000(tgt=0.077)  λ=0.000  Speed=0.94 Care=0.87  WageParity=1.817  Buffer=21000  α=0.374
+[ep  400] MP=98/h  Profit=$26.39  Err=0.030(tgt=0.073)  λ=0.000  Speed=0.84 Care=0.96  WageParity=1.472  Buffer=24000  α=0.352
+[ep  450] MP=96/h  Profit=$25.79  Err=0.030(tgt=0.070)  λ=0.000  Speed=0.92 Care=0.95  WageParity=1.438  Buffer=27000  α=0.425
+[ep  500] MP=108/h  Profit=$27.52  Err=0.044(tgt=0.067)  λ=0.000  Speed=0.93 Care=0.92  WageParity=1.535  Buffer=30000  α=0.512
+[ep  550] MP=91/h  Profit=$19.85  Err=0.081(tgt=0.063)  λ=0.000  Speed=0.90 Care=0.94  WageParity=1.108  Buffer=33000  α=0.578
+[ep  600] MP=99/h  Profit=$27.64  Err=0.020(tgt=0.060)  λ=0.000  Speed=0.89 Care=0.97  WageParity=1.541  Buffer=36000  α=0.514
+[ep  650] MP=89/h  Profit=$26.60  Err=0.000(tgt=0.060)  λ=0.000  Speed=0.75 Care=0.95  WageParity=1.483  Buffer=39000  α=0.510
+[ep  700] MP=100/h  Profit=$27.94  Err=0.020(tgt=0.060)  λ=0.000  Speed=0.86 Care=0.94  WageParity=1.558  Buffer=42000  α=0.573
+[ep  750] MP=89/h  Profit=$24.64  Err=0.022(tgt=0.060)  λ=0.000  Speed=0.62 Care=0.95  WageParity=1.375  Buffer=45000  α=0.518
+[ep  800] MP=95/h  Profit=$26.44  Err=0.021(tgt=0.060)  λ=0.000  Speed=0.78 Care=0.96  WageParity=1.475  Buffer=48000  α=0.567
+[ep  850] MP=104/h  Profit=$30.11  Err=0.010(tgt=0.060)  λ=0.000  Speed=0.86 Care=0.93  WageParity=1.678  Buffer=51000  α=0.724
+[ep  900] MP=92/h  Profit=$22.76  Err=0.052(tgt=0.060)  λ=0.000  Speed=0.91 Care=0.93  WageParity=1.270  Buffer=54000  α=0.808
+[ep  950] MP=86/h  Profit=$21.88  Err=0.044(tgt=0.060)  λ=0.000  Speed=0.94 Care=0.92  WageParity=1.221  Buffer=57000  α=0.787
+[ep 1000] MP=109/h  Profit=$30.64  Err=0.018(tgt=0.060)  λ=0.000  Speed=0.91 Care=0.93  WageParity=1.708  Buffer=60000  α=0.726
+
+✅ Training complete: logs/sac_train.csv
+✅ Model saved: checkpoints/sac_final.pt
+

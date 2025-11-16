@@ -1,0 +1,19 @@
+=== ABLATION A: Baseline (weights=1) ===
+[ep  20] MP_r=141/h  Profit=$28.64  Err=0.096  λ=0.161  Wt=1.00  WageParity=1.597
+[ep  40] MP_r=100/h  Profit=$16.11  Err=0.138  λ=0.365  Wt=1.00  WageParity=0.900
+[ep  60] MP_r=132/h  Profit=$19.19  Err=0.154  λ=0.563  Wt=1.00  WageParity=1.072
+[ep  80] MP_r=120/h  Profit=$20.25  Err=0.130  λ=0.773  Wt=1.00  WageParity=1.130
+[ep 100] MP_r=104/h  Profit=$17.99  Err=0.126  λ=1.004  Wt=1.00  WageParity=1.005
+[ep 120] MP_r=131/h  Profit=$16.13  Err=0.176  λ=1.188  Wt=1.00  WageParity=0.902
+[ep 140] MP_r=132/h  Profit=$18.48  Err=0.159  λ=1.413  Wt=1.00  WageParity=1.032
+[ep 160] MP_r=113/h  Profit=$13.33  Err=0.181  λ=1.633  Wt=1.00  WageParity=0.746
+[ep 180] MP_r=128/h  Profit=$16.69  Err=0.169  λ=1.851  Wt=1.00  WageParity=0.933
+[ep 200] MP_r=127/h  Profit=$23.01  Err=0.118  λ=2.072  Wt=1.00  WageParity=1.284
+[ep 220] MP_r=125/h  Profit=$15.88  Err=0.172  λ=2.309  Wt=1.00  WageParity=0.888
+[ep 240] MP_r=124/h  Profit=$22.15  Err=0.121  λ=2.549  Wt=1.00  WageParity=1.236
+[ep 260] MP_r=123/h  Profit=$16.72  Err=0.163  λ=2.779  Wt=1.00  WageParity=0.934
+[ep 280] MP_r=114/h  Profit=$12.27  Err=0.191  λ=3.014  Wt=1.00  WageParity=0.687
+[ep 300] MP_r=100/h  Profit=$3.97  Err=0.259  λ=3.243  Wt=1.00  WageParity=0.226
+
+✅ A complete: logs/ablation_A_baseline.csv
+

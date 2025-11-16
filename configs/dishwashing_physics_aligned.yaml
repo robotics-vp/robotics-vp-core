@@ -1,0 +1,137 @@
+# Dishwashing Physics Configuration with Aligned Visual Encoder (Phase A.5)
+# PyBullet-based physics simulation with distillation-aligned visual backbone
+
+task: dishwashing
+
+# Environment configuration (same as physics_fast)
+env:
+  type: "dishwashing_physics"
+  frames: 4
+  image_size: [64, 64]
+  max_steps: 60
+  headless: true
+
+  physics:
+    backend: "pybullet"
+    render: true
+    camera:
+      position: [0.0, 0.5, 0.8]
+      target: [0.0, 0.0, 0.0]
+      fov: 60
+
+  # Phase A calibrated parameters
+  randomize_dishes: true
+  camera_jitter: 0.02
+  lighting_variation: 0.1
+  slip_probability: 0.015
+  gripper_failure_rate: 0.008
+  max_speed_multiplier: 2.0
+  max_acceleration: 1.0
+
+# Encoder configuration (Phase A.5: aligned mode)
+encoder:
+  type: "aligned"  # Use AlignedVideoEncoder
+  latent_dim: 128
+
+  # Pretrained checkpoint (set after running train_aligned_encoder.py)
+  checkpoint: "checkpoints/student_video_aligned.pt"  # null for untrained
+
+  # Aligned encoder specific config
+  aligned:
+    arch: "simple2dcnn"       # Base architecture
+    input_channels: 3          # RGB
+    projection_dim: null       # None = use same as latent_dim
+    alignment_type: "mse"      # "mse", "cosine", "contrastive", "smooth_l1"
+    temperature: 0.1           # For contrastive loss
+
+  # Teacher configuration (for distillation training)
+  teacher:
+    teacher_type: "random"     # "clip", "dino", "r3d", "random" (random for CPU)
+    latent_dim: 128
+    freeze: true
+    input_channels: 3
+
+# Distillation training config
+distillation:
+  alpha_alignment: 1.0        # Weight for alignment loss
+  warmup_epochs: 10           # Epochs before adding task loss
+  schedule: "linear"          # "linear", "constant", "cosine"
+  final_alpha: 0.1            # Final alignment weight after schedule
+
+# Task economics (same as physics_fast)
+economics:
+  price_per_unit: 0.30
+  human_mp: 60
+  human_wage: 18.0
+  damage_cost: 1.0
+  energy_cost: 0.10
+  beta_parity: 0.5
+
+# Reward function weights
+reward:
+  alpha_initial: 1.0
+  alpha_final: 0.3
+  beta: 0.5
+  gamma_initial: 0.1
+  gamma_final: 1.0
+  anneal_episodes: 5000
+
+# Lagrangian constraint
+constraint:
+  err_target_init: 0.10
+  err_target_final: 0.06
+  curriculum_episodes: 600
+  lambda_init: 0.0
+  eta: 0.01
+
+# Convergence criteria
+convergence:
+  productivity_threshold: 0.95
+  wage_parity_tolerance: 0.10
+  eval_window: 50
+
+# Wage indexing
+wage_indexer:
+  initial_wage: 18.0
+  alpha: 0.1
+  inflation_adj: true
+  sector_inflation_annual: 0.02
+  episodes_per_update: 100
+
+# Pricing
+pricing:
+  mode: "causal"
+  causal:
+    eps_parity: 0.05
+  customer:
+    base_fee: 0.0
+    floor_margin: 0.0
+    surplus_guarantee: true
+  tiered:
+    premium_rate: 0.20
+    rebate_rate: 0.10
+
+# SAC hyperparameters
+sac:
+  lr: 3e-4
+  gamma: 0.995
+  tau: 5e-3
+  batch_size: 1024
+  buffer_capacity: 1000000
+  target_entropy: -2.0
+  latent_dim: 128
+  hidden_dim: 256
+
+# Training
+training:
+  episodes: 1000
+  max_steps_per_episode: 60
+  warmup_episodes: 10
+  updates_per_step: 1
+  eval_frequency: 50
+  checkpoint_frequency: 100
+
+# Logging
+logging:
+  prefix: "sac_aligned"
+  dir: "logs"

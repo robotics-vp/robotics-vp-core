@@ -1,0 +1,12 @@
+{
+  "experiment": "trust_weighted",
+  "real_transitions": 3000,
+  "synthetic_transitions": 3000,
+  "real_contribution_pct": 99.93737991997705,
+  "syn_contribution_pct": 0.06262008002407107,
+  "final_actor_loss": -4.284007353782654,
+  "final_critic_loss": 0.9199230581521988,
+  "avg_effective_batch_size": 255.60396981811525,
+  "action_mse": 0.17087115347385406,
+  "model_path": "checkpoints/offline_trust_weighted_actor.pt"
+}

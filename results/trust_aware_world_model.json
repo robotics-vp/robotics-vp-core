@@ -1,0 +1,16 @@
+{
+  "initial_trust": 0.42706668222210603,
+  "final_trust": 0.9999974991412873,
+  "trust_improvement": 0.5729308169191814,
+  "initial_syn_std": 0.08709383042568856,
+  "final_syn_std": 0.06232166203095558,
+  "real_z_std": 0.014177187345921993,
+  "final_std_ratio": 4.3959115803659135,
+  "final_recon_loss": 1.8848841678613717e-05,
+  "config": {
+    "lambda_trust": 0.5,
+    "lambda_feat": 0.1,
+    "rollout_steps": 10,
+    "epochs": 50
+  }
+}

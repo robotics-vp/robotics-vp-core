@@ -1,0 +1,13 @@
+{
+  "real_trust_mean": 0.9991724300384521,
+  "real_trust_std": 0.0005282732727522686,
+  "syn_trust_mean": 0.0006260746236988979,
+  "syn_trust_std": 0.0017805238924947903,
+  "trust_gap": 0.9985463554147532,
+  "roc_auc": 1.0,
+  "val_accuracy": 1.0,
+  "high_trust_syn_count": 0,
+  "low_trust_syn_count": 50,
+  "n_real": 50,
+  "n_synthetic": 50
+}

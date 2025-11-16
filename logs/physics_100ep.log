@@ -1,0 +1,16 @@
+pybullet build time: Nov 12 2025 22:14:50
+Using device: cpu
+Environment: dishwashing_physics
+[Encoder] Built VideoEncoder: arch=simple2dcnn, latent_dim=128
+[Encoder] Total parameters: 651,136
+Encoder: Video (arch=simple2dcnn, latent_dim=128)
+=== SAC Training ===
+Config: configs/dishwashing_physics.yaml
+Episodes: 100
+Latent dim: 128
+Environment: dishwashing_physics
+Encoder: video
+Initial human wage: $18.00/hr
+
+/Users/amarmurray/Library/Python/3.9/lib/python/site-packages/sklearn/linear_model/_stochastic_gradient.py:1608: ConvergenceWarning: Maximum number of iteration reached before convergence. Consider increasing max_iter to improve the fit.
+  warnings.warn(

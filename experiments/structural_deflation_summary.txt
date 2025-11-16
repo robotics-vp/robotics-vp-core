@@ -1,0 +1,83 @@
+================================================================================
+STRUCTURAL DEFLATION THEOREM: EMPIRICAL VALIDATION
+================================================================================
+
+Dataset: 150 episodes
+Episode range: 0 - 149
+
+--------------------------------------------------------------------------------
+THEOREM 1: CONSUMER SURPLUS NON-NEGATIVITY
+--------------------------------------------------------------------------------
+Claim: CS(t) ≥ 0 for all t
+
+Validation:
+  Valid episodes: 150/150 (100.0%)
+  Violations: 0
+  ✅ GUARANTEE HOLDS for ALL episodes
+
+Consumer Surplus Statistics:
+  Mean: $0.0105/hr
+  Min:  $0.0000/hr
+  Max:  $1.2206/hr
+
+--------------------------------------------------------------------------------
+THEOREM 2: MECHANISTIC SURPLUS DECOMPOSITION
+--------------------------------------------------------------------------------
+Claim: SV(t) = R(t) + C(t) for episodes with positive spread
+
+Validation:
+  Episodes with spread: 147
+  Valid decompositions: 146/147 (99.3%)
+  Violations: 1
+  ⚠️  1 violations detected
+
+Decomposition Error:
+  Mean: $0.000003
+  Max:  $0.000100
+
+--------------------------------------------------------------------------------
+THEOREM 3: PLATFORM REVENUE INCREASES WITH PRODUCTIVITY
+--------------------------------------------------------------------------------
+Claim: C(t) increases when MPL_r(t) increases (above parity)
+
+Validation:
+  Episodes analyzed: 147
+  Pearson correlation: r = 0.5702 (p = 4.75e-14)
+  Spearman correlation: ρ = 0.6012 (p = 8.25e-16)
+  Linear regression slope: 0.2244
+  ✅ POSITIVE CORRELATION confirmed (p < 0.05)
+
+--------------------------------------------------------------------------------
+THEOREM 4: STRUCTURAL DEFLATION
+--------------------------------------------------------------------------------
+Claim: ρ(t) = MC_r(t)/MC_h(t) ≤ 1 and decreasing over time
+
+Validation:
+  Episodes with ρ ≤ 1: 150/150 (100.0%)
+  Ceiling violations: 0
+  ✅ CEILING HOLDS: ρ ≤ 1 for ALL episodes
+
+Deflation Ratio ρ(t):
+  Initial: 1.0000
+  Final:   1.0000
+  Mean:    0.9994
+  Min:     0.9322
+  Max:     1.0000
+
+Trend Analysis:
+  Linear slope (raw): 1.03e-07 per episode
+  Linear slope (MA):  -1.28e-05 per episode
+  ⚠️  Trend not decreasing (positive slope)
+
+================================================================================
+OVERALL THEOREM VALIDATION
+================================================================================
+⚠️  Some theorem claims have violations or insufficient data
+
+Economic Coherence:
+  1. Customer protection (CS ≥ 0): ✅
+  2. Fair value split (SV = R + C): ⚠️
+  3. Aligned incentives (C ↑ when MPL ↑): ✅
+  4. Structural deflation (ρ ≤ 1, decreasing): ⚠️
+
+================================================================================

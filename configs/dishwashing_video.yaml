@@ -1,0 +1,127 @@
+# Dishwashing Task Configuration - VIDEO MODE
+# Economic parameters for V2P robotics model with video observations
+
+task: dishwashing
+
+# Encoder configuration (VIDEO MODE)
+encoder:
+  type: "video"       # Use video encoder instead of MLP
+  latent_dim: 128
+
+  # MLP encoder settings (not used in video mode)
+  mlp:
+    hidden_dim: 256
+
+  # Video encoder settings
+  video:
+    arch: "simple2dcnn"    # "simple2dcnn", "simple3dcnn", "r3d18"
+    input_channels: 3      # RGB
+    frames: 8              # Number of frames in video clip
+    height: 64             # Frame height
+    width: 64              # Frame width
+    pretrained: false      # Use pretrained weights (r3d18 only, requires GPU)
+
+# Environment configuration (VIDEO MODE)
+env:
+  type: "dishwashing_video"   # Use video wrapper
+  base: "dishwashing"          # Wrap standard dishwashing env
+  video:
+    frames: 8                  # Must match encoder.video.frames
+    height: 64                 # Must match encoder.video.height
+    width: 64                  # Must match encoder.video.width
+    render_mode: "synthetic"   # "synthetic" or "sim" (future)
+
+# Task economics
+economics:
+  price_per_unit: 0.30  # $/dish
+  human_mp: 60          # dishes/hour
+  human_wage: 18.0      # $/hour (national avg dishwasher wage)
+  damage_cost: 1.0      # $/broken dish
+  energy_cost: 0.10     # $/hour
+  beta_parity: 0.5      # Phase A: Wage parity penalty weight
+
+# Reward function weights
+reward:
+  alpha_initial: 1.0    # Productivity improvement weight
+  alpha_final: 0.3
+  beta: 0.5             # Error penalty
+  gamma_initial: 0.1    # Wage convergence weight
+  gamma_final: 1.0
+  anneal_episodes: 5000
+
+# Lagrangian constraint
+constraint:
+  err_target_init: 0.10
+  err_target_final: 0.06
+  curriculum_episodes: 600
+  lambda_init: 0.0
+  eta: 0.01             # Dual ascent step size
+
+# Convergence criteria
+convergence:
+  productivity_threshold: 0.95  # 95% of human MP
+  wage_parity_tolerance: 0.10   # Within 10% of w_h
+  eval_window: 50               # Consecutive evals to confirm
+
+# Wage indexing (dynamic human wage benchmark)
+wage_indexer:
+  initial_wage: 18.0              # Starting human wage ($/hr)
+  alpha: 0.1                      # Smoothing factor (0=no update, 1=instant)
+  inflation_adj: true             # Adjust for sector inflation
+  sector_inflation_annual: 0.02   # 2% annual inflation (stub)
+  episodes_per_update: 100        # Update frequency
+
+# Pricing and spread allocation
+pricing:
+  mode: "causal"   # "causal" or "tiered"
+
+  # Causal mode: mechanistic split based on ΔMPL contributions
+  causal:
+    eps_parity: 0.05   # Parity threshold for spread computation
+
+  # Customer pricing
+  customer:
+    base_fee: 0.0           # Fixed fee per episode
+    floor_margin: 0.0       # Minimum margin ($/hr)
+    surplus_guarantee: true  # Never charge more than w_h
+
+# SAC hyperparameters (same as state mode)
+sac:
+  gamma: 0.99
+  tau: 0.005
+  alpha: 0.2
+  lr_actor: 3.0e-4
+  lr_critic: 3.0e-4
+  lr_alpha: 3.0e-4
+  buffer_size: 100000
+  batch_size: 256
+  warmup_steps: 1000
+
+# Novelty & replay weighting
+novelty:
+  mode: "diffusion"       # "diffusion" or "distance"
+  alpha_novelty: 0.5      # Weight for novelty-based prioritization
+  min_weight: 0.1         # Minimum sample weight
+  update_freq: 100        # Update diffusion model every N episodes
+
+# Training
+training:
+  max_episodes: 1000      # Total episodes to train
+  episode_length: 100     # Steps per episode
+  eval_freq: 50           # Evaluate every N episodes
+  save_freq: 100          # Save checkpoint every N episodes
+  log_freq: 1             # Log every N episodes
+
+# Logging
+logging:
+  dir: "logs"
+  prefix: "sac_video"     # Prefix for log files
+  csv: true               # Save CSV logs
+  tensorboard: false      # TensorBoard (future)
+
+# Video-specific notes:
+# - encoder.type = "video" enables video encoder path
+# - env.type = "dishwashing_video" wraps base env with video observations
+# - Video frames (8x3x64x64) are encoded to latent_dim=128
+# - SAC, economics, pricing all operate on latents (unchanged)
+# - Novelty & ΔMPL computed in latent space (not pixels)

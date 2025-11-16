@@ -1,0 +1,12 @@
+Using device: cpu
+=== SAC Training with Learned Encoder ===
+Episodes: 250
+Latent dim: 128
+Device: cpu
+
+Traceback (most recent call last):
+  File "/Users/amarmurray/robotics v-p economics model/train_sac.py", line 255, in <module>
+    train_sac(episodes=episodes)
+  File "/Users/amarmurray/robotics v-p economics model/train_sac.py", line 164, in train_sac
+    delta_mpl_cust = float(train_metrics.get('mean_novelty', 0.5)) * abs(delta_mpl_total)
+UnboundLocalError: local variable 'train_metrics' referenced before assignment

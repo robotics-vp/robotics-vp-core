@@ -1,0 +1,61 @@
+================================================================================
+THREE-WAY MODALITY COMPARISON REPORT
+State vs Synthetic Video vs Physics
+================================================================================
+
+RESEARCH QUESTION:
+Does the economics theorem (wage parity, profit maximization) hold
+consistently across different observation modalities?
+
+================================================================================
+SUMMARY STATISTICS (Last 20 Episodes)
+================================================================================
+
+Metric                         State           Video           Physics        
+--------------------------------------------------------------------------------
+Marginal Product (units/hr)      96.8 ± 6.0     99.9 ± 6.6    108.0 ± 135.7
+Error Rate                      0.037 ± 0.022  0.022 ± 0.013  0.000 ± 0.000
+Wage Parity (w_r / w_h)         1.412 ± 0.136  1.546 ± 0.140  1.800 ± 2.262
+Profit ($/hr)                   25.32 ± 2.44   27.73 ± 2.53   32.30 ± 40.71
+Consumer Surplus ($/hr)          0.00           0.00           9.90
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+1. WAGE PARITY ANALYSIS:
+   Target: w_r ≈ w_h (parity ≈ 1.0, within ±10% tolerance)
+
+   State          : 1.412  ✗ NOT CONVERGED
+   Video          : 1.546  ✗ NOT CONVERGED
+   Physics        : 1.800  ✗ NOT CONVERGED
+
+2. PRODUCTIVITY ANALYSIS:
+   Human benchmark: 60 units/hr
+
+   State          :  96.8 units/hr  (✓ EXCEEDS HUMAN)
+   Video          :  99.9 units/hr  (✓ EXCEEDS HUMAN)
+   Physics        : 108.0 units/hr  (✓ EXCEEDS HUMAN)
+
+3. ERROR RATE ANALYSIS:
+
+   State          : 0.037 (3.7% error rate)
+   Video          : 0.022 (2.2% error rate)
+   Physics        : 0.000 (0.0% error rate)
+
+4. ECONOMICS THEOREM VALIDATION:
+
+   Core hypothesis: Economics layer (wage convergence, profit, consumer surplus)
+   should be consistent across observation modalities.
+
+   Wage Parity CV: 10.1%  (✗ INCONSISTENT across modalities)
+   Profit CV:      10.2%  (✓ CONSISTENT across modalities)
+
+================================================================================
+CONCLUSION
+================================================================================
+
+❌ THEOREM NOT VALIDATED: Not all modalities achieve wage parity convergence.
+   Economics layer shows inconsistency across observation types.
+
+================================================================================

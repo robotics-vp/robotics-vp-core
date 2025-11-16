@@ -1,0 +1,120 @@
+# Dishwashing Physics Configuration
+# PyBullet-based physics simulation with RGB camera rendering
+
+task: dishwashing
+
+# Environment configuration
+env:
+  type: "dishwashing_physics"
+  frames: 8
+  image_size: [64, 64]  # [height, width]
+  max_steps: 60
+  headless: true  # Run without GUI
+
+  # Physics backend configuration
+  physics:
+    backend: "pybullet"
+    render: true
+
+    # Camera configuration
+    camera:
+      position: [0.0, 0.5, 0.8]  # Camera position (x, y, z)
+      target: [0.0, 0.0, 0.0]    # Look-at target
+      fov: 60                     # Field of view (degrees)
+
+# Encoder configuration (video mode)
+encoder:
+  type: "video"
+  latent_dim: 128
+
+  video:
+    arch: "simple2dcnn"   # "simple2dcnn", "simple3dcnn", "r3d18"
+    input_channels: 3      # RGB
+    frames: 8              # Number of frames in video clip
+    height: 64             # Frame height
+    width: 64              # Frame width
+    pretrained: false      # Use pretrained weights (r3d18 only)
+
+# Task economics
+economics:
+  price_per_unit: 0.30  # $/dish
+  human_mp: 60          # dishes/hour
+  human_wage: 18.0      # $/hour (national avg dishwasher wage)
+  damage_cost: 1.0      # $/broken dish
+  energy_cost: 0.10     # $/hour
+  beta_parity: 0.5      # Phase A: Wage parity penalty weight
+
+# Reward function weights
+reward:
+  alpha_initial: 1.0    # Productivity improvement weight
+  alpha_final: 0.3
+  beta: 0.5             # Error penalty
+  gamma_initial: 0.1    # Wage convergence weight
+  gamma_final: 1.0
+  anneal_episodes: 5000
+
+# Lagrangian constraint
+constraint:
+  err_target_init: 0.10
+  err_target_final: 0.06
+  curriculum_episodes: 600
+  lambda_init: 0.0
+  eta: 0.01             # Dual ascent step size
+
+# Convergence criteria
+convergence:
+  productivity_threshold: 0.95  # 95% of human MP
+  wage_parity_tolerance: 0.10   # Within 10% of w_h
+  eval_window: 50               # Consecutive evals to confirm
+
+# Wage indexing (dynamic human wage benchmark)
+wage_indexer:
+  initial_wage: 18.0              # Starting human wage ($/hr)
+  alpha: 0.1                      # Smoothing factor (0=no update, 1=instant)
+  inflation_adj: true             # Adjust for sector inflation
+  sector_inflation_annual: 0.02   # 2% annual inflation (stub)
+  episodes_per_update: 100        # Update frequency
+
+# Pricing and spread allocation
+pricing:
+  mode: "causal"   # "causal" or "tiered"
+
+  # Causal mode: mechanistic split based on ΔMPL contributions
+  causal:
+    eps_parity: 0.05              # No spread below 1 + eps parity
+
+  # Customer pricing
+  customer:
+    base_fee: 0.0                 # Fixed fee component ($/hr)
+    floor_margin: 0.0             # Minimum margin to preserve ($/hr)
+    surplus_guarantee: true       # Never charge > human wage
+
+  # Tiered mode: NOT IMPLEMENTED YET
+  tiered:
+    premium_rate: 0.20            # 20% premium for non-sharing
+    rebate_rate: 0.10             # 10% rebate for sharing
+
+# SAC hyperparameters
+sac:
+  lr: 3e-4
+  gamma: 0.995
+  tau: 5e-3
+  batch_size: 1024
+  buffer_capacity: 1000000
+  target_entropy: -2.0
+  latent_dim: 128
+  hidden_dim: 256
+
+# Training
+training:
+  episodes: 1000
+  max_steps_per_episode: 60
+  warmup_episodes: 10
+  updates_per_step: 1
+  eval_frequency: 50
+  checkpoint_frequency: 100
+
+# Logging
+logging:
+  prefix: "sac_physics"
+  dir: "logs"

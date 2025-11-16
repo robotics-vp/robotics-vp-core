@@ -1,0 +1,64 @@
+task: ablation_no_novelty
+seed: 42
+# ABLATION: No novelty weighting (uniform weights)
+
+# Human benchmark
+human:
+  wage_per_hour: 18.0
+  mpl_units_per_hour: 60.0
+
+# Pricing & costs
+economics:
+  price_per_unit: 0.30
+  damage_cost: 1.0
+  energy_cost_per_hour: 0.10
+
+# Quality constraint (SLA enforcement)
+quality:
+  error_target: 0.06
+  lagrangian:
+    enabled: true
+    lambda_init: 0.0
+    step_eta: 0.1
+
+# Reward shaping (not used in PPO, kept for compatibility)
+reward:
+  alpha: 1.0
+  beta: 0.5
+  gamma: 2.0
+  target_schedule:
+    type: constant
+    value: 1.0
+  asymmetry:
+    lambda_down: 1.0
+    lambda_up: 0.3
+
+# Phase B (surpass human) — disabled
+surpass:
+  enabled: false
+  theta: 0.15
+  schedule:
+    type: sigmoid
+    t0: 200
+    tau: 150
+
+# Data valuation
+data_value:
+  novelty_window: 256
+  min_novelty_for_bonus: 0.15
+  kappa_confidence: 0.8
+  baseline_delta_mpl_per_sample: 0.00
+  pricing_horizon_hours: 1000
+  deployment_scale: 1.0
+
+# Training (short for testing)
+train:
+  episodes: 20  # Short test run
+  eval_every: 5
+  max_seconds_per_episode: 3600
+  action_space: [0.0, 1.0]
+
+# Logging
+log:
+  csv_path: logs/ppo_test.csv
+  metrics: [mp_r, mp_h, err_rate, w_hat_r, wage_parity, prod_parity, reward, novelty, data_value]

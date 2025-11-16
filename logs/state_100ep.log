@@ -1,0 +1,18 @@
+pybullet build time: Nov 12 2025 22:14:50
+Using device: cpu
+Environment: dishwashing
+Encoder: MLP (obs_dim=4 -> latent_dim=128)
+=== SAC Training ===
+Config: configs/dishwashing_feasible.yaml
+Episodes: 100
+Latent dim: 128
+Environment: dishwashing
+Encoder: mlp
+Initial human wage: $18.00/hr
+
+[ep   50] MP=99/h  Profit=$25.76  Err=0.039(tgt=0.097)  λ=0.000  Speed=0.60 Care=0.49  WageParity=1.436  Buffer=3000  α=0.099
+[ep  100] MP=93/h  Profit=$23.06  Err=0.051(tgt=0.093)  λ=0.000  Speed=0.81 Care=0.71  WageParity=1.286  Buffer=6000  α=0.098
+
+✅ Training complete: logs/sac_train.csv
+✅ Model saved: checkpoints/sac_final.pt
+

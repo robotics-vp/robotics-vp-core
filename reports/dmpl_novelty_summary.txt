@@ -1,0 +1,59 @@
+ΔMPL / Novelty Validation Summary
+======================================================================
+
+Configuration: configs/dishwashing_physics_aligned.yaml
+Episodes collected: 50
+Encoder checkpoint: checkpoints/student_video_aligned.pt
+
+Novelty Statistics:
+  Mean:      0.1604
+  Std:       0.0327
+  Range: [0.1184, 0.2465]
+
+ΔMPL Statistics:
+  Mean:       83.23 dishes/hr
+  Std:       950.04 dishes/hr
+  Range: [-1167.57, 3116.13]
+
+MPL Statistics:
+  Mean:     1080.00 dishes/hr
+  Std:       921.74 dishes/hr
+  Range: [0.00, 4200.00]
+
+Episode Metrics:
+  Avg Attempts:      3.38
+  Avg Error Rate:   0.438
+
+Correlations:
+  Novelty ↔ ΔMPL:   -0.138
+  MPL ↔ ΔMPL:        0.959
+
+======================================================================
+Degeneracy Checks
+======================================================================
+
+1. Novelty Diversity:
+   Unique values: 50/50
+   ✅ Novelty scores show healthy spread
+
+2. Novelty-ΔMPL Correlation:
+   ✓  Weak correlation (|ρ| < 0.15)
+      Expected for early training / untrained encoder
+
+3. MPL Variance:
+   ✅ MPL shows healthy variance
+
+4. Latent Space Collapse:
+   Latent dimension: 128
+   Mean std across dims: 0.0130
+   ✅ Latent space shows variation
+
+======================================================================
+
+Interpretation:
+----------------------------------------------------------------------
+- Novelty diversity checks if latent space is degenerate
+- Weak Novelty-ΔMPL correlation is expected for untrained encoders
+- Strong correlation emerges after encoder training (Phase A.5)
+- These metrics validate that environment + encoder infrastructure
+  are ready for aligned visual backbone training

@@ -1,0 +1,18 @@
+{
+  "final_trust_mean": 0.9999908924102783,
+  "final_trust_std": 3.105304747612941e-06,
+  "final_pred_std_mean": 0.03575896635651588,
+  "final_pred_std_ratio": 0.5771551556405026,
+  "real_std": 0.061957284808158875,
+  "trust_above_0.5": 50,
+  "trust_above_0.9": 50,
+  "config": {
+    "lambda_trust": 0.5,
+    "lambda_var": 1.0,
+    "lambda_norm": 0.1,
+    "max_horizon": 60,
+    "tf_start": 0.8,
+    "tf_end": 0.1,
+    "epochs": 100
+  }
+}

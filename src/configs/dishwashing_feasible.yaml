@@ -1,0 +1,64 @@
+task: dishwashing_feasible
+seed: 42
+
+# Human benchmark
+human:
+  wage_per_hour: 18.0
+  mpl_units_per_hour: 60.0
+
+# Pricing & costs
+economics:
+  price_per_unit: 0.30
+  damage_cost: 1.0
+  energy_cost_per_hour: 0.10
+
+# Quality constraint (SLA enforcement with curriculum)
+quality:
+  error_target: 0.06         # Final SLA target (6%)
+  error_target_init: 0.10    # Start at 10% (easier)
+  curriculum_episodes: 600   # Anneal from init→final over 600 eps
+  lagrangian:
+    enabled: true
+    lambda_init: 0.0
+    step_eta: 0.01           # Reduced from 0.1 (slower dual ascent)
+
+# PPO hyperparameters (CPU-friendly, stable)
+ppo:
+  lr: 3.0e-4
+  batch_size: 8192           # Large batch for stable gradients
+  minibatch_size: 1024       # Mini-batch for updates
+  epochs: 10                 # PPO epochs per rollout
+  gamma: 0.995               # Discount factor
+  gae_lambda: 0.95           # GAE parameter
+  clip_range: 0.2            # PPO clip epsilon
+  entropy_coef: 0.001        # Entropy bonus
+  value_coef: 0.5            # Value loss coefficient
+  max_grad_norm: 0.5         # Gradient clipping
+
+# Novelty weighting (keep modest)
+novelty:
+  enabled: true
+  alpha: 2.0                 # Weight scaling
+  beta: -1.0                 # Bias
+  clip_range: [0.5, 2.0]     # Clip weights to this range
+
+# Data valuation
+data_value:
+  novelty_window: 256
+  min_novelty_for_bonus: 0.15
+  kappa_confidence: 0.8
+  baseline_delta_mpl_per_sample: 0.00
+  pricing_horizon_hours: 1000
+  deployment_scale: 1.0
+
+# Training
+train:
+  episodes: 1000
+  eval_every: 50
+  max_steps_per_episode: 60  # 60 minutes = 1 hour
+  action_space: [0.0, 1.0]   # 2D: [speed, care]
+
+# Logging
+log:
+  csv_path: logs/ppo_feasible.csv
+  metrics: [mp_r, mp_h, err_rate, w_hat_r, wage_parity, prod_parity, reward, novelty, data_value]
