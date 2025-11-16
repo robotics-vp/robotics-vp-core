@@ -1,0 +1,6 @@
+env:
+  type: drawer_vase_arm
+  max_steps: 120
+  headless: true
+training:
+  max_episodes: 100

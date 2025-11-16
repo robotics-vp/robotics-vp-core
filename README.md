@@ -1,123 +1,117 @@
-# Video-to-Policy Economics Model
+# robotics-v-p-core — Economics-First Robotics Stack
 
-**Robots priced like labor, not software.**
+> Robots priced like labor, not software. Full-stack econ + data valuation for video-to-policy, HRL, VLA, and synthetic flywheels.
 
-This project grounds robot learning in labor economics, enabling predictable cash flows, mechanistic data pricing, and securitizable revenue streams.
+## 1) Project Overview
+This repo implements a robotics economics and learning engine that:
+- Learns manipulation from video → latent → policy (SAC / HRL / VLA)
+- Models marginal productivity of labor (MPL) and economics (wage parity, energy efficiency)
+- Generates and prices synthetic data with a closed-loop world model + trust/econ/λ gating
+- Anchors data valuation (ΔMPL/Δerror/ΔEP) into RL, offline RL, and datapacks
+- Provides scaffolding for HRL skill graphs, transformer planners, and SIMA-style co-agents
 
-## Core Innovation
+Target flywheel: better data → better robots → better economics → better data.
 
-Traditional robotics optimizes for task completion. This project optimizes for **economic viability**:
+## 2) Motivation & Teleology
+**Why economics:** Deployment is constrained by MPL, wage parity, energy efficiency, error SLAs, and data value—not just task success.  
+**Why multi-layered reward:** Real factories need MPL, EP, error, wage parity, safety, and meta-value (ΔMPL, novelty) simultaneously.  
+**Why data valuation:** Data is capital. We compute how each episode shifts MPL/error/EP and gate synthetic via trust × w_econ × λ_budget to price data, build datapacks, and control synthetic budgets.
 
-1. **Wage Parity:** Robot policies converge to human wage benchmarks (ŵᵣ/wₕ)
-2. **Data Pricing:** Training data valued by expected MPL improvement (E[ΔMPL])
-3. **Spread Allocation:** Value split mechanistically based on causal contribution
+## 3) Layered Architecture (Phase A → B → C)
+- **Phase A (Calibration):** Dishwashing physics + aligned encoder z_V, novelty/ΔMPL estimators, stable dynamics, wage/MPL reward shaping.
+- **Phase B (Frozen Synthetic Flywheel):** Contractive world model, trust_net, J-trained w_econ lattice, λ budget controller, SyntheticWeightController (trust × econ quality; λ as budget), local synthetic branches, data bricks. Frozen and validated.
+- **Phase C (Generalization Stack):** Drawer+Vase PyBullet env, HRL skill graph (π_H/π_L), vision affordance heads (risk/no-go/fragility), VLA transformer planner, SIMA co-agent/narrator, Fei-Fei benchmark scaffolding.
 
-**Result:** $5.93/hr platform revenue per robot, 71% gross margins, securitizable cash flows.
+## Current Status (Short)
+- Phase B frozen: world model, trust_net, w_econ_lattice, λ controller, SyntheticWeightController — do not change math.
+- Phase C scaffolding: HRL/VLA/SIMA for drawer+vase with datapack hooks.
+- Energy bench: experimental articulated-arm envs (`dishwashing_arm_env`, `drawer_vase_arm_env`) plus energy interventions/analysis; additive only, no changes to Phase B weighting or rewards.
 
-## Quick Start
+## 4) Data Valuation Loop (Heart of the System)
+```
+Episode → EpisodeInfoSummary
+        → Episode features (ΔMPL, Δerror, ΔEP, novelty, trust, brick_id…)
+        → w_econ (lattice, J-trained)
+        → λ_budget (global synthetic share)
+        → w_quality = trust × w_econ
+        → w_final = scale_to_budget(w_quality, λ, max_synth_share)
+```
+Rules: trust gate for plausibility, econ weighting for impact, λ for global budget. Synthetic is admitted only if safe, valuable, and within budget.
 
+## 5) Core Modules & Files
+- **Econ config:** `src/config/econ_params.py`, `src/config/internal_profile.py`
+- **Env + summaries:** `src/envs/dishwashing_env.py`, `EpisodeInfoSummary`, `summarize_episode_info`
+- **Reward shaping:** `src/rl/reward_shaping.py` (MPL/EP/error + wage penalty hook)
+- **Synthetic weighting:** `src/controllers/synthetic_weight_controller.py` (trust/econ quality + λ budget), `src/controllers/synth_lambda_controller.py`, `src/valuation/w_econ_lattice.py`
+- **World model trust:** `src/world_model/...`, `checkpoints/stable_world_model.pt` (frozen, do not alter math)
+- **Phase C env/HRL/VLA:** `src/envs/drawer_vase_physics_env.py`, `src/hrl/*`, `src/vision/*`, `src/vla/*`, `src/sima/*`
+- **Datapacks:** `src/valuation/datapacks.py` → build datapacks from `EpisodeInfoSummary`
+- **Utilities/Smoke tests:** `scripts/smoke_test_dishwashing_sac.py`, `scripts/test_episode_features.py`, `scripts/eval_drawer_vase_scripted.py`, `scripts/smoke_test_phase_c_hrl_vla.py`, `docs/synthetic_weight_controller_design.md`
+
+## 6) Training & Evaluation (Phase B smoke path)
 ```bash
-# Train SAC agent with economic objectives (250 episodes)
-python3 train_sac.py 250
+# Feature extractor sanity
+python3 scripts/test_episode_features.py
 
-# Generate quantitative summary
-python3 experiments/summary_snapshots.py
+# Dishwashing smoke + summaries (JSON/CSV)
+python3 scripts/smoke_test_dishwashing_sac.py --episodes 5 --econ-preset toy --out-json tmp_smoke.json
 
-# Plot spread allocation
-python3 experiments/plot_spread_allocation.py
+# SAC (aligned physics config)
+python3 train_sac_v2.py configs/dishwashing_physics_aligned.yaml --episodes 20 --econ-preset toy
 
-# Run feasibility sweep
-python3 experiments/sweep_frontier.py
+# Novelty/ΔMPL validation + zV dataset + WM training/eval
+python3 scripts/validate_dmpl_novelty.py --config configs/dishwashing_physics_aligned.yaml --episodes 30
+python3 scripts/collect_zv_dataset.py --config configs/dishwashing_physics_aligned.yaml --episodes 30
+python3 scripts/train_stable_world_model.py --epochs 20
+python3 scripts/eval_world_model_rollouts.py --world-model checkpoints/stable_world_model.pt
+
+# Synthetic branches + offline A/B
+python3 scripts/collect_local_synthetic_branches.py --horizon 10
+python3 scripts/train_offline_with_local_synth.py --synth-weight 0.1
+# 4-mode A/B: baseline, trust, trust+econ, trust+econ+λ
+python3 scripts/run_4mode_synth_ab_test.py
 ```
 
-## Documentation
+## 7) Phase C Plumbing
+```bash
+# Drawer+Vase scripted eval + datapacks
+python3 scripts/eval_drawer_vase_scripted.py --episodes 5 --emit-datapacks data/phase_c_datapacks/scripted.json
 
-### Core Concepts
-- **[ECON_ARCHITECTURE.md](ECON_ARCHITECTURE.md)** - Why economics first, Lagrangian constraints, spread allocation
-- **[V2P_TECHNICAL_OVERVIEW.md](V2P_TECHNICAL_OVERVIEW.md)** - SAC implementation, encoder design, video pathway
-- **[INVESTOR_STORY.md](INVESTOR_STORY.md)** - Unit economics, cash flow model, securitization
-
-### Implementation Guides
-- **[DEEP_LEARNING_ARCHITECTURE.md](DEEP_LEARNING_ARCHITECTURE.md)** - SAC + encoder details (V3 architecture)
-- **[FEASIBILITY_FIX_SUMMARY.md](FEASIBILITY_FIX_SUMMARY.md)** - How 2D actions made SLA feasible (V1→V2)
-- **[CLAUDE.md](CLAUDE.md)** - Development guide (for Claude Code)
-
-## Architecture Overview
-
-```
-Video Frames → Encoder (R3D-18) → Latent (128D) → SAC Agent
-                                                      ↓
-                                                   Actions (speed, care)
-                                                      ↓
-                                                   Environment
-                                                      ↓
-                        Economics (MP, wage, profit, spread)
-                                                      ↓
-                        Spread Allocation (mechanistic split)
-                                                      ↓
-                        Cash Flows (rebate, captured)
+# HRL/VLA smoke (imports + episodes + datapacks)
+python3 scripts/smoke_test_phase_c_hrl_vla.py --episodes 3 --out-datapacks data/phase_c_datapacks/smoke.json
 ```
 
-### Current State (V3)
-- ✅ Simulation environment with 2D action space (speed, care)
-- ✅ MLP encoder (128D latent)
-- ✅ SAC agent with novelty-weighted replay
-- ✅ Lagrangian constraint for quality SLA
-- ✅ Mechanistic spread allocation (ΔMPL-based)
-- ✅ Online data value estimator (novelty → ΔMPL)
-- ✅ Economic logging (profit, wage parity, spread)
+## 8) Design Principles
+- **Economics-first:** MPL, wage parity, EP, error, safety, and data value drive rewards and gating.
+- **Multi-gating:** trust × w_econ for quality; λ for budget. Never stack λ as another gate.
+- **Stability:** contractive WM; trust_net gate; J-trained w_econ; EpisodeInfoSummary as single truth.
+- **Portability:** PyBullet today for speed; interfaces kept simple for future Isaac Gym + real robot ports.
+- **Data as capital:** datapacks carry attribution (ΔMPL/Δerror/ΔEP, trust, econ weight, novelty) for pricing and budgeting.
 
-### Next Steps
-- [ ] Video encoder integration (R3D-18 / TimeSformer-B)
-- [ ] Real diffusion novelty (Stable-Video-Diffusion)
-- [ ] Pilot deployments (10 robots)
-- [ ] Expand to 2nd task (bricklaying)
+## 9) Roadmap (what’s next for Codex/Claude)
+- **Energy economics everywhere:** Wh/unit and Wh/hr into reward shaping, datapacks, WM eval, econ weighting, λ budgeting, VLA conditioning.
+- **Distributional metrics in datapacks:** realism/variance gaps (real vs synthetic), fragility/safety footprint, HRL skill impact.
+- **Phase C → B feedback:** funnel Drawer+Vase HRL/VLA/SIMA datapacks into Phase B valuation and synthetic weighting.
+- **Env interface unification:** BaseEnv stub to align PyBullet and future Isaac Gym wrappers.
+- **Video→latent validation:** scripts for encoding external video frames and checking latent distribution match.
 
-## Results (100-Episode Test)
+## 10) Warnings & Frozen Zones
+- Phase B core is frozen: do **not** change WM architecture/training, trust_net, w_econ lattice objective, λ controller objective, or synthetic A/B math. Only wire/consume them.
+- Checkpoints and artifacts are large; avoid committing binaries.
 
-| Metric | Value | Target | Status |
-|--------|-------|--------|--------|
-| **MP** | 109/h | 80/h | ✅ +36% |
-| **Error Rate** | 2.7% | 6.0% | ✅ (2.2× margin) |
-| **Wage Parity** | 1.65 | 1.0 | ✅ +65% |
-| **Profit** | $29.68/hr | $18/hr | ✅ +65% |
-| **Platform Capture** | $5.93/hr | - | ✅ 65% of spread |
-| **Customer Savings** | 20.6% | - | ✅ vs human wage |
-| **Gross Margin** | 71.3% | - | ✅ Software-first |
+## 11) Pointers to Docs
+- `docs/synthetic_weight_controller_design.md` — mother-module spec (trust × econ + λ budget)
+- `docs/drawer_vase_env.md`, `docs/phase_c_hrl_vla_architecture.md` — Phase C env/HRL/VLA
+- `docs/ECON_ARCHITECTURE.md`, `docs/V2P_TECHNICAL_OVERVIEW.md` — economics rationale and V2P pipeline
 
-*From `experiments/summary_snapshot.txt`*
-
-## Key Technical Decisions
-
-### 1. Why 2D Action Space?
-**1D (speed only)** → Error rate 17%, infeasible SLA
-
-**2D (speed, care)** → Error rate 2.7%, 1,615 viable operating points
-
-**Reason:** Task feasibility requires controllable error-throughput tradeoff.
-
-### 2. Why Lagrangian Constraints?
-Simple reward `r = α·MP - β·error` can be gamed.
-
-Lagrangian `r = profit - λ·max(0, err - e*)` enforces hard SLA:
-- λ = 0 when SLA met
-- λ increases when SLA violated
-- Automatic quality guarantee
-
-### 3. Why Mechanistic Spread Allocation?
-Arbitrary splits ("60% customer, 40% platform") lack justification.
-
-Causal split `s_cust = ΔMPL_cust / ΔMPL_total`:
-- Customer gets share proportional to their data's contribution
-- Platform gets share proportional to foundation models
-- Transparent, auditable, incentive-aligned
-
-### 4. Why Online ΔMPL Estimator?
-Direct path: **Novelty → E[ΔMPL] → Price**
-
-```python
-# Predict ΔMPL from novelty
-delta_mpl_pred = estimator.predict(novelty)
+## 12) Flywheel Summary
+1) Collect real/video/physics data → encode to latent  
+2) World model + trust gate → synthetic branches (local, stable)  
+3) Econ valuation: w_econ lattice (J-trained) + trust → w_quality  
+4) λ controller sets global synthetic budget → SyntheticWeightController scales w_quality  
+5) RL/offline RL trains with economically gated data → higher MPL, lower error/Wh  
+6) EpisodeInfoSummary + datapacks capture impact → price data, update λ/w_econ, refresh world model  
+7) Repeat; port to Isaac Gym + real robots when ready.
 
 # Update with actual ΔMPL (incremental learning)
 estimator.update(novelty, actual_delta_mpl)

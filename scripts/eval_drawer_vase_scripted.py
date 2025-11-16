@@ -89,7 +89,8 @@ def evaluate_scripted_policy(n_episodes=20, render=False, datapack_path=None):
                 summary, econ_params,
                 condition_profile={"task": "drawer_vase", "tags": []},
                 agent_profile={"policy": "scripted"},
-                brick_id=None
+                brick_id=None,
+                env_type="drawer_vase",
             ))
 
         # Track metrics

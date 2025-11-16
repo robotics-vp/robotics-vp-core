@@ -53,6 +53,9 @@ from src.hrl.high_level_controller import (
 )
 from src.hrl.skill_termination import SkillTerminationDetector
 from src.sima.co_agent import SIMACoAgent
+from src.config.internal_profile import get_internal_experiment_profile
+from src.config.econ_params import load_econ_params
+from src.valuation.datapacks import build_datapack_from_episode
 
 
 def create_perturbed_config(
@@ -638,6 +641,37 @@ def generate_benchmark_report(results, econ_metrics, save_path=None):
         print(f"\nSaved report to {save_path}")
 
 
+def collect_datapacks(env, econ_params, n_episodes=5):
+    """Run scripted HRL rollout and export datapacks."""
+    pi_h = ScriptedHighLevelController()
+    pi_l = ScriptedSkillPolicy()
+    termination_detector = SkillTerminationDetector()
+    agent = HierarchicalAgent(pi_h, pi_l, termination_detector, use_scripted_hl=True)
+
+    datapacks = []
+    for _ in range(n_episodes):
+        obs, info = env.reset()
+        agent.reset()
+        info_history = []
+        done = False
+        while not done:
+            action, skill_info = agent.act(obs, info)
+            obs, _, env_done, _, info = env.step(action)
+            info_history.append(info)
+            if env_done or info.get("success", False) or not info.get("vase_intact", True):
+                done = True
+        summary = summarize_drawer_vase_episode(info_history)
+        datapacks.append(build_datapack_from_episode(
+            summary,
+            econ_params,
+            condition_profile={"task": "drawer_vase", "tags": ["feifei_benchmark"]},
+            agent_profile={"policy": "hrl_scripted"},
+            brick_id=None,
+            env_type="drawer_vase",
+        ))
+    return datapacks
+
+
 def main():
     parser = argparse.ArgumentParser(description='Fei-Fei Benchmark Evaluation')
     parser.add_argument(
@@ -656,6 +690,18 @@ def main():
         '--quick',
         action='store_true',
         help='Quick evaluation with fewer configurations'
+    )
+    parser.add_argument(
+        '--emit-datapacks',
+        type=str,
+        default=None,
+        help='Path to write datapacks (Phase C)'
+    )
+    parser.add_argument(
+        '--datapack-episodes',
+        type=int,
+        default=5,
+        help='Number of episodes for datapack export'
     )
 
     args = parser.parse_args()
@@ -693,6 +739,22 @@ def main():
     # Generate report
     report_path = os.path.join(args.save_dir, 'benchmark_report.json')
     generate_benchmark_report(results, econ_metrics, report_path)
+
+    # Optional datapack export (Phase C → valuation)
+    if args.emit_datapacks:
+        profile = get_internal_experiment_profile("dishwashing")
+        econ_params = load_econ_params(profile, preset=profile.get("econ_preset", "toy"))
+        config = DrawerVaseConfig()
+        env = DrawerVasePhysicsEnv(
+            config=config,
+            obs_mode='state',
+            render_mode=None
+        )
+        datapacks = collect_datapacks(env, econ_params, n_episodes=args.datapack_episodes)
+        os.makedirs(os.path.dirname(args.emit_datapacks), exist_ok=True)
+        with open(args.emit_datapacks, 'w') as f:
+            json.dump(datapacks, f, indent=2)
+        print(f"Wrote datapacks to {args.emit_datapacks}")
 
     print("\n" + "=" * 70)
     print("BENCHMARK COMPLETE")

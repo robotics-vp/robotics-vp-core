@@ -109,6 +109,8 @@ class DishwashingPhysicsEnv:
         # PyBullet client (will be initialized in reset)
         self.physics_client = None
         self.robot_id = None
+        self.controlled_joint_ids = []
+        self.controlled_joint_ids = []
         self.dishes = []
         self.dish_properties = []  # Store per-episode dish properties
 
@@ -146,14 +148,29 @@ class DishwashingPhysicsEnv:
         )
 
         # Create "robot arm" (simple gripper simulation)
-        # For v0, just a colored box that moves
-        gripper_collision = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.05, 0.05, 0.02])
-        gripper_visual = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.05, 0.05, 0.02], rgbaColor=[1, 0, 0, 1])
-        self.robot_id = p.createMultiBody(
-            baseMass=1.0,
-            baseCollisionShapeIndex=gripper_collision,
-            baseVisualShapeIndex=gripper_visual,
-            basePosition=[0, 0, 0.2]
+        # Load a lightweight articulated arm (KUKA-IIWA)
+        kuka_urdf = pybullet_data.getDataPath() + "/kuka_iiwa/model.urdf"
+        self.robot_id = p.loadURDF(
+            kuka_urdf,
+            basePosition=[0, 0, 0],
+            useFixedBase=True,
+            flags=p.URDF_USE_INERTIA_FROM_FILE
+        )
+
+        # Controlled joints: all revolute joints except last flange
+        self.controlled_joint_ids = []
+        for j in range(p.getNumJoints(self.robot_id)):
+            ji = p.getJointInfo(self.robot_id, j)
+            joint_type = ji[2]
+            if joint_type == p.JOINT_REVOLUTE:
+                self.controlled_joint_ids.append(j)
+
+        # Disable default motors and set damping
+        p.setJointMotorControlArray(
+            self.robot_id,
+            self.controlled_joint_ids,
+            controlMode=p.VELOCITY_CONTROL,
+            forces=[0.0] * len(self.controlled_joint_ids)
         )
 
         # Phase A: Randomize camera position (jitter)

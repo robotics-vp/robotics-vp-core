@@ -6,6 +6,16 @@ from src.config.econ_params import EconParams
 
 # Backward compatibility alias
 DishwashingParams = EconParams
+
+# Limb grouping placeholder (no explicit joints; treat all energy as shoulder/base)
+LIMB_GROUPS = {
+    "shoulder": [],
+    "elbow": [],
+    "wrist": [],
+    "gripper": [],
+}
+# Placeholder joint names (non-physics env)
+JOINT_NAMES = ["joint_0"]
 class DishwashingEnv:
     """
     Dishwashing environment with 2D action space: (speed, care).
@@ -31,6 +41,24 @@ class DishwashingEnv:
         self.errors = 0
         self.catastrophic_errors = 0
         self.energy_Wh = 0.0
+        self.limb_energy_Wh = {
+            "shoulder": 0.0,
+            "elbow": 0.0,
+            "wrist": 0.0,
+            "gripper": 0.0,
+        }
+        self.limb_power_sum_W = {k: 0.0 for k in LIMB_GROUPS}
+        self.limb_peak_power_W = {k: 0.0 for k in LIMB_GROUPS}
+        self.joint_energy_Wh = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_power_sum_W = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_peak_power_W = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_abs_vel_sum = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_abs_tau_sum = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_max_vel = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_max_tau = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_dir_counts = {name: {"pos": 0, "neg": 0} for name in JOINT_NAMES}
+        self.effector_energy_Wh = {"ee_main": 0.0}
+        self.skill_energy_Wh = {}
         obs = self._obs()
         return obs
 
@@ -93,6 +121,37 @@ class DishwashingEnv:
         # Energy accounting (simple proportional model)
         delta_energy_Wh = attempts * self.p.energy_Wh_per_attempt
         self.energy_Wh += delta_energy_Wh
+        # Per-limb power/energy (no joint torques; attribute all to shoulder/base)
+        dt = self.p.time_step_s
+        power_total_W = delta_energy_Wh * 3600.0 / max(dt, 1e-6)
+        limb_power_W = {limb: power_total_W if limb == "shoulder" else 0.0 for limb in LIMB_GROUPS}
+        for limb, pwr in limb_power_W.items():
+            self.limb_power_sum_W[limb] += pwr
+            self.limb_peak_power_W[limb] = max(self.limb_peak_power_W[limb], pwr)
+            self.limb_energy_Wh[limb] += pwr * dt / 3600.0
+        # Skill-level energy (if HRL sets current_skill_id)
+        if hasattr(self, "current_skill_id") and self.current_skill_id:
+            skill_map = self.skill_energy_Wh.setdefault(self.current_skill_id, {k: 0.0 for k in LIMB_GROUPS})
+            for limb, pwr in limb_power_W.items():
+                skill_map[limb] += pwr * dt / 3600.0
+        # Per-joint (placeholder zeros; no torques in this env)
+        for jn in JOINT_NAMES:
+            tau = 0.0
+            omega = 0.0
+            power = max(tau * omega, 0.0)
+            self.joint_energy_Wh[jn] += power * dt / 3600.0
+            self.joint_power_sum_W[jn] += power
+            self.joint_peak_power_W[jn] = max(self.joint_peak_power_W[jn], power)
+            self.joint_abs_vel_sum[jn] += abs(omega)
+            self.joint_abs_tau_sum[jn] += abs(tau)
+            self.joint_max_vel[jn] = max(self.joint_max_vel[jn], abs(omega))
+            self.joint_max_tau[jn] = max(self.joint_max_tau[jn], abs(tau))
+            if omega >= 0:
+                self.joint_dir_counts[jn]["pos"] += 1
+            else:
+                self.joint_dir_counts[jn]["neg"] += 1
+        # Effector energy (single effector)
+        self.effector_energy_Wh["ee_main"] += delta_energy_Wh
 
         # Time and counters
         self.t += self.p.time_step_s
@@ -153,12 +212,70 @@ class DishwashingEnv:
             "units_done": self.completed,
             "errors": self.errors,
             "energy_Wh": self.energy_Wh,
+            "energy_Wh_per_unit": delta_energy_Wh / max(delta_units, 1e-6) if delta_units > 0 else 0.0,
+            "current_skill_id": getattr(self, "current_skill_id", None),
+            "limb_energy_Wh": self.limb_energy_Wh,
+            "skill_energy_Wh": self.skill_energy_Wh,
+            "joint_energy_Wh": self.joint_energy_Wh,
             "terminated_reason": terminated_reason,
             "catastrophic_errors": self.catastrophic_errors,
             "profit_step": profit_step,
             "revenue_step": revenue_step,
             "error_cost_step": error_cost_step,
         }
+        # JSON-safe per-limb summary
+        energy_per_limb = {}
+        for limb, wh in self.limb_energy_Wh.items():
+            energy_per_limb[limb] = {
+                "Wh": wh,
+                "Wh_per_unit": wh / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
+                "Wh_per_hour": wh / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+                "power_sum_W": self.limb_power_sum_W.get(limb, 0.0),
+                "power_peak_W": self.limb_peak_power_W.get(limb, 0.0),
+            }
+        info["energy_per_limb"] = energy_per_limb
+        # Skill summary
+        energy_per_skill = {}
+        for skill_id, limb_map in self.skill_energy_Wh.items():
+            total_wh = sum(limb_map.values())
+            energy_per_skill[skill_id] = {
+                **{f"{limb}_Wh": limb_map.get(limb, 0.0) for limb in LIMB_GROUPS},
+                "total_Wh": total_wh,
+            }
+        info["energy_per_skill"] = energy_per_skill
+        # Per-joint summary
+        energy_per_joint = {}
+        for jn, wh in self.joint_energy_Wh.items():
+            energy_per_joint[jn] = {
+                "Wh": wh,
+                "Wh_per_unit": wh / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
+                "Wh_per_hour": wh / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+                "avg_power_W": self.joint_power_sum_W.get(jn, 0.0) / max(self.steps, 1),
+                "peak_power_W": self.joint_peak_power_W.get(jn, 0.0),
+                "avg_abs_velocity": self.joint_abs_vel_sum.get(jn, 0.0) / max(self.steps, 1),
+                "max_abs_velocity": self.joint_max_vel.get(jn, 0.0),
+                "avg_abs_torque": self.joint_abs_tau_sum.get(jn, 0.0) / max(self.steps, 1),
+                "max_abs_torque": self.joint_max_tau.get(jn, 0.0),
+                "directionality": {
+                    "pos_steps": self.joint_dir_counts.get(jn, {}).get("pos", 0),
+                    "neg_steps": self.joint_dir_counts.get(jn, {}).get("neg", 0),
+                },
+            }
+        info["energy_per_joint"] = energy_per_joint
+
+        # Effector summary (single effector)
+        info["energy_per_effector"] = {
+            "ee_main": {
+                "Wh": self.effector_energy_Wh.get("ee_main", 0.0),
+                "Wh_per_unit": self.effector_energy_Wh.get("ee_main", 0.0) / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
+                "Wh_per_hour": self.effector_energy_Wh.get("ee_main", 0.0) / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+            }
+        }
+        info["coordination_metrics"] = {
+            "mean_active_joints": 0.0,
+            "mean_joint_velocity_corr": 0.0,
+        }
+
         return obs, info, done
 
 
@@ -168,12 +285,14 @@ class EpisodeInfoSummary:
     Canonical episode-level summary used by training and valuation layers.
 
     Fields:
-        termination_reason: string enum for why the episode ended (e.g., max_steps, sla_violation, catastrophic_error, zero_throughput)
+        termination_reason: string enum (max_steps, sla_violation, catastrophic_error, zero_throughput, success, unknown)
         mpl_episode: units per hour over the episode
-        ep_episode: units per Wh over the episode
+        ep_episode: units per Wh over the episode (energy productivity)
         error_rate_episode: errors per unit (fraction) over the episode
-        throughput_units_per_hour: same as mpl_episode (explicit alias for clarity)
-        energy_Wh: total energy consumed in the episode
+        throughput_units_per_hour: alias for mpl_episode
+        energy_Wh: total energy consumed
+        energy_Wh_per_unit: energy per completed unit (Wh/unit)
+        energy_Wh_per_hour: energy per hour (Wh/hr)
         profit: total profit (revenue - error cost) aggregated over steps
         wage_parity: optional wage parity metric (robot wage / human wage) if available
     """
@@ -183,6 +302,15 @@ class EpisodeInfoSummary:
     error_rate_episode: float
     throughput_units_per_hour: float
     energy_Wh: float
+    energy_Wh_per_unit: float
+    energy_Wh_per_hour: float
+    limb_energy_Wh: Dict[str, float]
+    skill_energy_Wh: Dict[str, float]
+    energy_per_limb: Dict[str, Dict[str, float]]
+    energy_per_skill: Dict[str, Dict[str, float]]
+    energy_per_joint: Dict[str, Dict[str, float]]
+    energy_per_effector: Dict[str, Dict[str, float]]
+    coordination_metrics: Dict[str, float]
     profit: float
     wage_parity: Optional[float] = None
 
@@ -199,6 +327,15 @@ def summarize_episode_info(info_history: List[Dict[str, Any]]) -> EpisodeInfoSum
             error_rate_episode=0.0,
             throughput_units_per_hour=0.0,
             energy_Wh=0.0,
+            energy_Wh_per_unit=0.0,
+            energy_Wh_per_hour=0.0,
+            limb_energy_Wh={},
+            skill_energy_Wh={},
+            energy_per_limb={},
+            energy_per_skill={},
+            energy_per_joint={},
+            energy_per_effector={},
+            coordination_metrics={},
             profit=0.0,
             wage_parity=None,
         )
@@ -213,7 +350,16 @@ def summarize_episode_info(info_history: List[Dict[str, Any]]) -> EpisodeInfoSum
     ep_episode = (units_done / total_energy) if total_energy > 0 else 0.0
     error_rate_episode = errors / max(1.0, units_done)
     throughput_units_per_hour = mpl_episode
+    energy_Wh_per_unit = total_energy / max(units_done, 1e-6) if total_energy > 0 else 0.0
+    energy_Wh_per_hour = total_energy / max(time_hours, 1e-6) if total_energy > 0 else 0.0
     profit = sum(step.get("profit_step", 0.0) for step in info_history)
+    limb_energy = last.get("limb_energy_Wh", {})
+    skill_energy = last.get("skill_energy_Wh", {})
+    energy_per_limb = last.get("energy_per_limb", {})
+    energy_per_skill = last.get("energy_per_skill", {})
+    energy_per_joint = last.get("energy_per_joint", {})
+    energy_per_effector = last.get("energy_per_effector", {})
+    coordination_metrics = last.get("coordination_metrics", {})
 
     return EpisodeInfoSummary(
         termination_reason=last.get("terminated_reason", "unknown") or "unknown",
@@ -222,6 +368,15 @@ def summarize_episode_info(info_history: List[Dict[str, Any]]) -> EpisodeInfoSum
         error_rate_episode=error_rate_episode,
         throughput_units_per_hour=throughput_units_per_hour,
         energy_Wh=total_energy,
+        energy_Wh_per_unit=energy_Wh_per_unit,
+        energy_Wh_per_hour=energy_Wh_per_hour,
+        limb_energy_Wh=limb_energy,
+        skill_energy_Wh=skill_energy,
+        energy_per_limb=energy_per_limb,
+        energy_per_skill=energy_per_skill,
+        energy_per_joint=energy_per_joint,
+        energy_per_effector=energy_per_effector,
+        coordination_metrics=coordination_metrics,
         profit=profit,
         wage_parity=None,
     )

@@ -1,0 +1,8 @@
+env:
+  type: dishwashing_arm
+  frames: 4
+  image_size: [64, 64]
+  max_steps: 120
+  headless: true
+training:
+  max_episodes: 100

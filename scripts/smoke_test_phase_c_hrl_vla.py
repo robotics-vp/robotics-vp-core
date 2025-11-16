@@ -30,7 +30,10 @@ from src.config.econ_params import load_econ_params
 from src.valuation.datapacks import build_datapack_from_episode
 
 
-def run_smoke(episodes: int, datapack_path: str | None):
+from typing import Optional
+
+
+def run_smoke(episodes: int, datapack_path: Optional[str]):
     profile = get_internal_experiment_profile("dishwashing")
     econ_params = load_econ_params(profile, preset=profile.get("econ_preset", "toy"))
 
@@ -39,6 +42,15 @@ def run_smoke(episodes: int, datapack_path: str | None):
 
     summaries = []
     datapacks = []
+
+    def _to_python(obj):
+        if isinstance(obj, np.generic):
+            return obj.item()
+        if isinstance(obj, dict):
+            return {k: _to_python(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_to_python(v) for v in obj]
+        return obj
 
     for ep in range(episodes):
         obs, info = env.reset()
@@ -57,6 +69,7 @@ def run_smoke(episodes: int, datapack_path: str | None):
             condition_profile={"task": "drawer_vase", "tags": ["phase_c_smoke"]},
             agent_profile={"policy": "scripted_low_level", "controller": "hierarchy_stub"},
             brick_id=None,
+            env_type="drawer_vase",
         ))
         print(f"[Episode {ep+1}] term={summary.termination_reason} mpl={summary.mpl_episode:.2f} "
               f"ep={summary.ep_episode:.4f} err={summary.error_rate_episode:.3f}")
@@ -68,7 +81,7 @@ def run_smoke(episodes: int, datapack_path: str | None):
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
         with open(datapack_path, "w") as f:
-            json.dump(datapacks, f, indent=2)
+            json.dump(_to_python(datapacks), f, indent=2)
         print(f"Wrote Phase C datapacks to {datapack_path}")
 
     print("\nAggregate:")
@@ -81,6 +94,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Phase C HRL/VLA smoke test")
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--out-datapacks", type=str, default=None)
+    parser.add_argument("--out-json", type=str, default=None, help="Alias for out-datapacks")
     args = parser.parse_args()
 
-    run_smoke(args.episodes, args.out_datapacks)
+    target_path = args.out_datapacks or args.out_json
+    run_smoke(args.episodes, target_path)

@@ -40,7 +40,16 @@ except ImportError:
     print("WARNING: PyBullet not available. Using mock physics.")
 
 from src.config.econ_params import EconParams
+from src.hrl.skills import SkillID
 
+# Limb grouping placeholder (update with actual joint indices if available)
+LIMB_GROUPS = {
+    "shoulder": [],
+    "elbow": [],
+    "wrist": [],
+    "gripper": [],
+}
+JOINT_NAMES = ["joint_0"]
 
 # Stub for when gym is not available
 if not GYM_AVAILABLE:
@@ -168,6 +177,20 @@ class DrawerVasePhysicsEnv(gym.Env):
         self.steps = 0
         self.t = 0.0
         self.energy_Wh = 0.0
+        self.limb_energy_Wh = {
+            "shoulder": 0.0,
+            "elbow": 0.0,
+            "wrist": 0.0,
+            "gripper": 0.0,
+        }
+        self.skill_energy_Wh = {}
+        self.limb_energy_Wh = {
+            "shoulder": 0.0,
+            "elbow": 0.0,
+            "wrist": 0.0,
+            "gripper": 0.0,
+        }
+        self.skill_energy_Wh = {}
         self.vase_intact = True
         self.drawer_opened_fraction = 0.0
         self.min_clearance = float('inf')
@@ -324,6 +347,19 @@ class DrawerVasePhysicsEnv(gym.Env):
         self.steps = 0
         self.t = 0.0
         self.energy_Wh = 0.0
+        self.limb_energy_Wh = {k: 0.0 for k in LIMB_GROUPS}
+        self.limb_power_sum_W = {k: 0.0 for k in LIMB_GROUPS}
+        self.limb_peak_power_W = {k: 0.0 for k in LIMB_GROUPS}
+        self.joint_energy_Wh = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_power_sum_W = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_peak_power_W = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_abs_vel_sum = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_abs_tau_sum = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_max_vel = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_max_tau = {name: 0.0 for name in JOINT_NAMES}
+        self.joint_dir_counts = {name: {"pos": 0, "neg": 0} for name in JOINT_NAMES}
+        self.effector_energy_Wh = {"ee_main": 0.0}
+        self.skill_energy_Wh = {}
         self.vase_intact = True
         self.drawer_opened_fraction = 0.0
         self.min_clearance = float('inf')
@@ -431,6 +467,39 @@ class DrawerVasePhysicsEnv(gym.Env):
         # Energy accounting
         delta_energy_Wh = np.linalg.norm(ee_vel) * self.config.control_dt * 0.01  # Simplified
         self.energy_Wh += delta_energy_Wh
+        # Per-limb power (placeholder: attribute to shoulder/base)
+        power_total_W = delta_energy_Wh * 3600.0 / max(self.config.control_dt, 1e-6)
+        limb_power_W = {limb: power_total_W if limb == "shoulder" else 0.0 for limb in LIMB_GROUPS}
+        for limb, pwr in limb_power_W.items():
+            self.limb_power_sum_W[limb] += pwr
+            self.limb_peak_power_W[limb] = max(self.limb_peak_power_W[limb], pwr)
+            self.limb_energy_Wh[limb] += pwr * self.config.control_dt / 3600.0
+        if hasattr(self, "current_skill_id") and self.current_skill_id:
+            skill_map = self.skill_energy_Wh.setdefault(self.current_skill_id, {k: 0.0 for k in LIMB_GROUPS})
+            for limb, pwr in limb_power_W.items():
+                skill_map[limb] += pwr * self.config.control_dt / 3600.0
+        # Per-joint placeholders (no torque signals)
+        for jn in JOINT_NAMES:
+            tau = 0.0
+            omega = 0.0
+            power = max(tau * omega, 0.0)
+            self.joint_energy_Wh[jn] += power * self.config.control_dt / 3600.0
+            self.joint_power_sum_W[jn] += power
+            self.joint_peak_power_W[jn] = max(self.joint_peak_power_W[jn], power)
+            self.joint_abs_vel_sum[jn] += abs(omega)
+            self.joint_abs_tau_sum[jn] += abs(tau)
+            self.joint_max_vel[jn] = max(self.joint_max_vel[jn], abs(omega))
+            self.joint_max_tau[jn] = max(self.joint_max_tau[jn], abs(tau))
+            if omega >= 0:
+                self.joint_dir_counts[jn]["pos"] += 1
+            else:
+                self.joint_dir_counts[jn]["neg"] += 1
+        self.effector_energy_Wh["ee_main"] += delta_energy_Wh
+        # Simple attribution placeholder: assign to shoulder/base
+        self.limb_energy_Wh["shoulder"] += delta_energy_Wh
+        # Skill-level attribution (HRL integration point)
+        if hasattr(self, "current_skill"):
+            self.skill_energy_Wh[self.current_skill] = self.skill_energy_Wh.get(self.current_skill, 0.0) + delta_energy_Wh
 
         # Time and step counter
         self.t += self.config.control_dt
@@ -610,21 +679,76 @@ class DrawerVasePhysicsEnv(gym.Env):
             # Episode-level (cumulative)
             "t": self.t,
             "energy_Wh": self.energy_Wh,
+            "energy_Wh_per_unit": self.energy_Wh / max(units_done, 1e-6) if units_done > 0 else 0.0,
             "steps": self.steps,
             "units_done": units_done,
             "errors": 0 if self.vase_intact else 1,
             "error_rate_t": error_rate,
             "mpl_t": mpl_t,
             "ep_t": ep_t,
+            "current_skill_id": getattr(self, "current_skill_id", None),
 
             # Economics
             "profit_step": profit_step,
             "revenue_step": revenue_step,
             "error_cost_step": error_cost_step,
+            "limb_energy_Wh": self.limb_energy_Wh,
+            "skill_energy_Wh": self.skill_energy_Wh,
+            "joint_energy_Wh": self.joint_energy_Wh,
 
             # Termination
             "terminated_reason": self.terminated_reason,
             "success": self.terminated_reason == "success",
+        }
+
+        energy_per_limb = {}
+        for limb, wh in self.limb_energy_Wh.items():
+            energy_per_limb[limb] = {
+                "Wh": wh,
+                "Wh_per_unit": wh / max(units_done, 1e-6) if units_done > 0 else 0.0,
+                "Wh_per_hour": wh / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+                "power_sum_W": self.limb_power_sum_W.get(limb, 0.0),
+                "power_peak_W": self.limb_peak_power_W.get(limb, 0.0),
+            }
+        info["energy_per_limb"] = energy_per_limb
+
+        energy_per_skill = {}
+        for skill_id, limb_map in self.skill_energy_Wh.items():
+            total_wh = sum(limb_map.values())
+            energy_per_skill[skill_id] = {
+                **{f"{limb}_Wh": limb_map.get(limb, 0.0) for limb in LIMB_GROUPS},
+                "total_Wh": total_wh,
+            }
+        info["energy_per_skill"] = energy_per_skill
+        energy_per_joint = {}
+        for jn, wh in self.joint_energy_Wh.items():
+            energy_per_joint[jn] = {
+                "Wh": wh,
+                "Wh_per_unit": wh / max(units_done, 1e-6) if units_done > 0 else 0.0,
+                "Wh_per_hour": wh / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+                "avg_power_W": self.joint_power_sum_W.get(jn, 0.0) / max(self.steps, 1),
+                "peak_power_W": self.joint_peak_power_W.get(jn, 0.0),
+                "avg_abs_velocity": self.joint_abs_vel_sum.get(jn, 0.0) / max(self.steps, 1),
+                "max_abs_velocity": self.joint_max_vel.get(jn, 0.0),
+                "avg_abs_torque": self.joint_abs_tau_sum.get(jn, 0.0) / max(self.steps, 1),
+                "max_abs_torque": self.joint_max_tau.get(jn, 0.0),
+                "directionality": {
+                    "pos_steps": self.joint_dir_counts.get(jn, {}).get("pos", 0),
+                    "neg_steps": self.joint_dir_counts.get(jn, {}).get("neg", 0),
+                },
+            }
+        info["energy_per_joint"] = energy_per_joint
+
+        info["energy_per_effector"] = {
+            "ee_main": {
+                "Wh": self.effector_energy_Wh.get("ee_main", 0.0),
+                "Wh_per_unit": self.effector_energy_Wh.get("ee_main", 0.0) / max(units_done, 1e-6) if units_done > 0 else 0.0,
+                "Wh_per_hour": self.effector_energy_Wh.get("ee_main", 0.0) / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+            }
+        }
+        info["coordination_metrics"] = {
+            "mean_active_joints": 0.0,
+            "mean_joint_velocity_corr": 0.0,
         }
 
         return info
@@ -661,6 +785,15 @@ def summarize_drawer_vase_episode(info_history):
             error_rate_episode=0.0,
             throughput_units_per_hour=0.0,
             energy_Wh=0.0,
+            energy_Wh_per_unit=0.0,
+            energy_Wh_per_hour=0.0,
+            limb_energy_Wh={},
+            skill_energy_Wh={},
+            energy_per_limb={},
+            energy_per_skill={},
+            energy_per_joint={},
+            energy_per_effector={},
+            coordination_metrics={},
             profit=0.0,
             wage_parity=None,
         )
@@ -681,7 +814,14 @@ def summarize_drawer_vase_episode(info_history):
     error_rate_episode = 0.0 if vase_intact else 1.0
 
     throughput_units_per_hour = mpl_episode
+    energy_Wh_per_unit = total_energy / max(units_done, 1e-6) if total_energy > 0 else 0.0
+    energy_Wh_per_hour = total_energy / max(time_hours, 1e-6) if total_energy > 0 else 0.0
     profit = sum(step.get("profit_step", 0.0) for step in info_history)
+    energy_per_limb = last.get("energy_per_limb", {})
+    energy_per_skill = last.get("energy_per_skill", {})
+    energy_per_joint = last.get("energy_per_joint", {})
+    energy_per_effector = last.get("energy_per_effector", {})
+    coordination_metrics = last.get("coordination_metrics", {})
 
     return EpisodeInfoSummary(
         termination_reason=last.get("terminated_reason", "unknown") or "unknown",
@@ -690,6 +830,15 @@ def summarize_drawer_vase_episode(info_history):
         error_rate_episode=error_rate_episode,
         throughput_units_per_hour=throughput_units_per_hour,
         energy_Wh=total_energy,
+        energy_Wh_per_unit=energy_Wh_per_unit,
+        energy_Wh_per_hour=energy_Wh_per_hour,
+        limb_energy_Wh=last.get("limb_energy_Wh", {}),
+        skill_energy_Wh=last.get("skill_energy_Wh", {}),
+        energy_per_joint=energy_per_joint,
+        energy_per_effector=energy_per_effector,
+        energy_per_limb=energy_per_limb,
+        energy_per_skill=energy_per_skill,
+        coordination_metrics=coordination_metrics,
         profit=profit,
         wage_parity=None,
     )
