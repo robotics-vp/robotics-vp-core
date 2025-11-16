@@ -7,29 +7,33 @@ End-to-end deep learning:
 - Novelty weighting from diffusion
 - Economic reward + Lagrangian constraint
 """
-import sys
+import argparse
 import numpy as np
 import torch
 
-from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
+from src.envs.dishwashing_env import DishwashingEnv, summarize_episode_info
 from src.rl.sac import SACAgent
 from src.encoders.mlp_encoder import EncoderWithAuxiliaries
-from src.economics.mpl import mpl
 from src.economics.wage import implied_robot_wage
-from src.economics.reward import econ_lagrangian_reward
 from src.economics.spread_allocation import compute_spread_allocation
 from src.economics.data_value import OnlineDataValueEstimator
 from src.economics.wage_indexer import WageIndexer, WageIndexConfig
 from src.economics.pricing import compute_customer_cost_per_hour, compute_consumer_surplus
 from src.utils.logger import CsvLogger
+from src.config.internal_profile import get_internal_experiment_profile
+from src.config.econ_params import load_econ_params
+from src.rl.reward_shaping import compute_econ_reward
 
 
-def train_sac(episodes=1000, seed=42):
+def train_sac(episodes=1000, seed=42, econ_preset="toy"):
     """Train SAC agent with economic objectives."""
 
     # Setup
     torch.manual_seed(seed)
     np.random.seed(seed)
+
+    profile = get_internal_experiment_profile("dishwashing")
+    econ_params = load_econ_params(profile, preset=econ_preset)
 
     # Config
     MPh = 60.0
@@ -59,8 +63,7 @@ def train_sac(episodes=1000, seed=42):
     print(f"Using device: {device}")
 
     # Environment
-    env_params = DishwashingParams()
-    env = DishwashingEnv(env_params)
+    env = DishwashingEnv(econ_params)
 
     # Encoder (with auxiliary heads)
     obs_dim = 4
@@ -95,6 +98,8 @@ def train_sac(episodes=1000, seed=42):
 
     # Track previous MPL for delta computation
     prev_mp_r = None
+    objective_vector = profile.get("default_objective_vector", [1.0, 0.7, 0.5, 0.8])
+    alpha_mpl, alpha_error, alpha_ep, alpha_safety = objective_vector
 
     # Online data value estimator (novelty → ΔMPL)
     data_value_estimator = OnlineDataValueEstimator(
@@ -141,9 +146,11 @@ def train_sac(episodes=1000, seed=42):
         episode_steps = 0
         episode_reward_sum = 0.0
         actions_taken = []
+        terminated_reason = None
+        info_history = []
 
         # Collect episode
-        while not done and episode_steps < 60:
+        while not done:
             # Compute novelty (stub for now)
             novelty = float(np.random.rand() * 0.5 + 0.5)
 
@@ -152,19 +159,31 @@ def train_sac(episodes=1000, seed=42):
 
             # Environment step
             next_obs_dict, info, done = env.step(action)
+            terminated_reason = info.get("terminated_reason", terminated_reason)
+            info_history.append(info)
 
             # Track actions
             actions_taken.append([info['speed'], info['care']])
 
-            # Economic reward
-            time_hours = next_obs_dict['t'] / 3600.0
-            mp_r = mpl(next_obs_dict['completed'], time_hours) if time_hours > 0 else 0
-            err_rate = next_obs_dict['errors'] / max(1, next_obs_dict['attempts'])
+            # MPL/EP/error-based reward
+            mpl_t = info.get("mpl_t", 0.0)
+            ep_t = info.get("ep_t", 0.0)
+            err_term = info.get("delta_errors", 0.0)
+            wage_parity_step = None  # SAC dishwashing currently skip wage penalty
 
-            reward = econ_lagrangian_reward(
-                mp_r, err_rate, p, damage_cost,
-                lam, err_target, energy_cost
+            reward, reward_components = compute_econ_reward(
+                mpl=mpl_t,
+                ep=ep_t,
+                error_rate=err_term,
+                wage_parity=wage_parity_step,
+                mode="mpl_ep_error",
+                alpha_mpl=alpha_mpl,
+                alpha_error=alpha_error,
+                alpha_ep=alpha_ep,
+                alpha_wage=0.0,
             )
+
+            last_reward_components = reward_components
 
             # Store transition
             agent.store_transition(obs_dict, action, reward, next_obs_dict, done, novelty)
@@ -174,9 +193,10 @@ def train_sac(episodes=1000, seed=42):
             episode_steps += 1
 
         # Episode metrics
+        summary = summarize_episode_info(info_history)
         time_hours = next_obs_dict['t'] / 3600.0
-        mp_r = mpl(next_obs_dict['completed'], time_hours) if time_hours > 0 else 0
-        err_rate = next_obs_dict['errors'] / max(1, next_obs_dict['attempts'])
+        mp_r = summary.mpl_episode
+        err_rate = summary.error_rate_episode
         w_hat_r = implied_robot_wage(p, mp_r, err_rate, damage_cost)
         wage_parity = w_hat_r / wh
         prod_parity = mp_r / MPh
@@ -184,6 +204,7 @@ def train_sac(episodes=1000, seed=42):
         revenue = p * mp_r
         error_cost = damage_cost * (err_rate * mp_r)
         profit = revenue - error_cost - energy_cost
+        ep_episode = summary.ep_episode
 
         # Average actions
         actions_arr = np.array(actions_taken)
@@ -260,6 +281,9 @@ def train_sac(episodes=1000, seed=42):
             err_target=round(err_target, 4),
             mp_r=round(mp_r, 2),
             mp_h=MPh,
+            mpl_episode=round(mp_r, 2),
+            ep_episode=round(ep_episode, 4),
+            econ_preset=econ_params.preset,
             w_hat_r=round(w_hat_r, 2),
             w_h=wh,
             wage_parity=round(wage_parity, 4),
@@ -268,6 +292,12 @@ def train_sac(episodes=1000, seed=42):
             lambda_dual=round(lam, 4),
             episode_reward=round(episode_reward_sum, 2),
             episode_steps=episode_steps,
+            reward_mpl=round(last_reward_components.get("mpl_component", 0.0), 4) if 'last_reward_components' in locals() else 0.0,
+            reward_ep=round(last_reward_components.get("ep_component", 0.0), 4) if 'last_reward_components' in locals() else 0.0,
+            reward_error=round(last_reward_components.get("error_penalty", 0.0), 4) if 'last_reward_components' in locals() else 0.0,
+            error_rate_episode=round(err_rate, 4),
+            energy_Wh=round(summary.energy_Wh, 4),
+            terminated_reason=terminated_reason or "",
             mean_speed=round(mean_speed, 3),
             mean_care=round(mean_care, 3),
             buffer_size=len(agent.replay_buffer),
@@ -317,8 +347,9 @@ if __name__ == "__main__":
     os.makedirs('checkpoints', exist_ok=True)
     os.makedirs('logs', exist_ok=True)
 
-    episodes = 1000
-    if len(sys.argv) > 1:
-        episodes = int(sys.argv[1])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--episodes", type=int, default=1000)
+    parser.add_argument("--econ-preset", type=str, default="toy", choices=["toy", "realistic"])
+    args = parser.parse_args()
 
-    train_sac(episodes=episodes)
+    train_sac(episodes=args.episodes, econ_preset=args.econ_preset)

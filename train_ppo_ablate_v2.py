@@ -21,7 +21,8 @@ from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
 from src.rl.ppo import PPOAgent
 from src.economics.mpl import mpl
 from src.economics.wage import implied_robot_wage
-from src.economics.reward import econ_lagrangian_reward
+from src.rl.reward_shaping import compute_econ_reward
+from src.config.internal_profile import get_internal_experiment_profile
 from src.utils.logger import CsvLogger
 
 
@@ -102,6 +103,8 @@ def run_ablation(mode, episodes=1000):
 
     # Dual variable
     lam = lambda_init
+    profile = get_internal_experiment_profile("dishwashing")
+    alpha_mpl, alpha_error, alpha_ep, _ = profile.get("default_objective_vector", [1.0, 1.0, 1.0, 0.0])
 
     # Training loop
     for ep in range(episodes):
@@ -115,6 +118,7 @@ def run_ablation(mode, episodes=1000):
         episode_steps = 0
         episode_reward_sum = 0.0
         actions_taken = []
+        last_reward_components = {}
 
         while not done and episode_steps < 60:
             # Compute novelty (simple stub)
@@ -129,21 +133,21 @@ def run_ablation(mode, episodes=1000):
             # Track actions
             actions_taken.append([info['speed'], info['care']])
 
-            # Economic reward (use next_obs for completed stats)
-            time_hours = next_obs_dict['t'] / 3600.0
-            mp_r = mpl(next_obs_dict['completed'], time_hours) if time_hours > 0 else 0
-            err_rate = next_obs_dict['errors'] / max(1, next_obs_dict['attempts'])
+            # Economic reward (per-step MPL/EP/error)
+            mpl_t = info.get("mpl_t", 0.0)
+            ep_t = info.get("ep_t", 0.0)
+            err_term = info.get("delta_errors", 0.0)
 
-            if use_constraint:
-                reward = econ_lagrangian_reward(
-                    mp_r, err_rate, p, damage_cost,
-                    lam, err_target, energy_cost
-                )
-            else:
-                # No constraint: pure profit
-                revenue = p * mp_r
-                error_cost = damage_cost * (err_rate * mp_r)
-                reward = revenue - error_cost - energy_cost
+            reward, reward_components = compute_econ_reward(
+                mpl=mpl_t,
+                ep=ep_t,
+                error_rate=err_term,
+                wage_parity=None,
+                alpha_mpl=alpha_mpl,
+                alpha_error=alpha_error,
+                alpha_ep=alpha_ep,
+            )
+            last_reward_components = reward_components
 
             # Store transition
             agent.store_transition(reward, done)
@@ -196,6 +200,9 @@ def run_ablation(mode, episodes=1000):
             lambda_dual=round(lam, 4),
             episode_reward=round(episode_reward_sum, 2),
             episode_steps=episode_steps,
+            reward_mpl=round(last_reward_components.get("mpl_component", 0.0), 4),
+            reward_ep=round(last_reward_components.get("ep_component", 0.0), 4),
+            reward_error=round(last_reward_components.get("error_penalty", 0.0), 4),
             mean_speed=round(mean_speed, 3),
             mean_care=round(mean_care, 3),
             policy_loss=round(train_metrics['policy_loss'], 6),

@@ -14,7 +14,7 @@ import yaml
 import numpy as np
 import torch
 
-from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
+from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams, summarize_episode_info
 from src.envs.video_wrappers import DishwashingVideoEnv
 from src.envs.physics import DishwashingPhysicsEnv, create_physics_env
 from src.rl.sac import SACAgent
@@ -22,16 +22,18 @@ from src.encoders.mlp_encoder import EncoderWithAuxiliaries
 from src.encoders.builder import build_encoder
 from src.economics.mpl import mpl
 from src.economics.wage import implied_robot_wage
-from src.economics.reward import econ_lagrangian_reward
 from src.economics.spread_allocation import compute_spread_allocation
 from src.economics.data_value import OnlineDataValueEstimator
 from src.economics.wage_indexer import WageIndexer, WageIndexConfig
 from src.economics.pricing import compute_customer_cost_per_hour, compute_consumer_surplus
 from src.data_value.novelty_diffusion import DiffusionNoveltyEstimator
 from src.utils.logger import CsvLogger
+from src.config.internal_profile import get_internal_experiment_profile
+from src.config.econ_params import load_econ_params
+from src.rl.reward_shaping import compute_econ_reward
 
 
-def make_env(cfg):
+def make_env(cfg, econ_params=None):
     """
     Environment factory - creates state, video, or physics environment based on config.
 
@@ -44,8 +46,11 @@ def make_env(cfg):
     env_config = cfg.get('env', {})
     env_type = env_config.get('type', 'dishwashing')
 
+    if econ_params is None:
+        profile = get_internal_experiment_profile("dishwashing")
+        econ_params = load_econ_params(profile, preset=cfg.get("econ_preset", profile.get("econ_preset", "toy")))
     # Create base environment params
-    env_params = DishwashingParams()
+    env_params = econ_params
 
     if env_type == 'dishwashing':
         # State mode: standard env
@@ -91,7 +96,7 @@ def make_env(cfg):
         raise ValueError(f"Unknown env type: {env_type}")
 
 
-def train_sac(config_path, episodes=None, seed=42):
+def train_sac(config_path, episodes=None, seed=42, econ_preset=None):
     """
     Train SAC agent with economic objectives.
 
@@ -103,10 +108,14 @@ def train_sac(config_path, episodes=None, seed=42):
     # Load config
     with open(config_path, 'r') as f:
         cfg = yaml.safe_load(f)
+    if econ_preset is not None:
+        cfg["econ_preset"] = econ_preset
 
     # Setup
     torch.manual_seed(seed)
     np.random.seed(seed)
+    profile = get_internal_experiment_profile("dishwashing")
+    econ_params = load_econ_params(profile, preset=cfg.get("econ_preset", profile.get("econ_preset", "toy")))
 
     # Extract config values
     MPh = cfg['economics']['human_mp']
@@ -131,6 +140,8 @@ def train_sac(config_path, episodes=None, seed=42):
     # Lagrangian
     lambda_init = cfg['constraint']['lambda_init']
     eta = cfg['constraint']['eta']
+    objective_vector = profile.get("default_objective_vector", [1.0, 0.7, 0.5, 0.8])
+    alpha_mpl, alpha_error, alpha_ep, alpha_safety = objective_vector
 
     # Training config
     if episodes is None:
@@ -142,7 +153,7 @@ def train_sac(config_path, episodes=None, seed=42):
 
     # Environment (state or video)
     env_type = cfg.get('env', {}).get('type', 'dishwashing')
-    env = make_env(cfg)
+    env = make_env(cfg, econ_params=econ_params)
     print(f"Environment: {env_type}")
 
     # Get observation dimensions
@@ -297,9 +308,11 @@ def train_sac(config_path, episodes=None, seed=42):
         episode_steps = 0
         episode_reward_sum = 0.0
         actions_taken = []
+        info_history = []
 
         # Collect episode
-        while not done and episode_steps < 60:
+        terminated_reason = None
+        while not done:
             # Use dummy novelty during episode (compute properly once at end)
             novelty = 0.5
 
@@ -320,28 +333,60 @@ def train_sac(config_path, episodes=None, seed=42):
                 next_obs_video, info, done = env.step(action)
                 # Get underlying state for economic computation
                 next_obs_dict = env.get_state()
+            terminated_reason = info.get("terminated_reason", terminated_reason)
+            info_history.append(info)
 
             # Track actions
-            actions_taken.append([info['speed'], info['care']])
+            actions_taken.append([info.get('speed', 0.0), info.get('care', 0.0)])
 
-            # Economic reward (same for both modes)
-            time_hours = next_obs_dict['t'] / 3600.0
-            mp_r = mpl(next_obs_dict['completed'], time_hours) if time_hours > 0 else 0
-            err_rate = next_obs_dict['errors'] / max(1, next_obs_dict['attempts'])
+            # MPL/EP/error-based reward (same for both modes)
+            time_step_s = getattr(getattr(env, "p", None), "time_step_s", profile.get("time_step_s", 60.0))
+            dt_hours = time_step_s / 3600.0 if time_step_s else 0.0
+            prev_completed = obs_dict['completed'] if isinstance(obs_dict, dict) else 0.0
+            prev_errors = obs_dict['errors'] if isinstance(obs_dict, dict) else 0.0
+            delta_units = info.get("delta_units", info.get("succ", None))
+            if delta_units is None and isinstance(next_obs_dict, dict):
+                delta_units = next_obs_dict['completed'] - prev_completed
+            delta_units = delta_units if delta_units is not None else 0.0
 
-            reward = econ_lagrangian_reward(
-                mp_r, err_rate, p, damage_cost,
-                lam, err_target, energy_cost
+            delta_errors = info.get("delta_errors", info.get("errs", None))
+            if delta_errors is None and isinstance(next_obs_dict, dict):
+                delta_errors = next_obs_dict['errors'] - prev_errors
+            delta_errors = delta_errors if delta_errors is not None else 0.0
+            mpl_t = info.get("mpl_t")
+            if mpl_t is None:
+                mpl_t = (delta_units / dt_hours) if dt_hours > 0 else 0.0
+
+            ep_t = info.get("ep_t")
+            delta_energy = info.get("delta_energy_Wh", 0.0)
+            if ep_t is None:
+                ep_t = (delta_units / delta_energy) if delta_energy > 0 else 0.0
+
+            reward, reward_components = compute_econ_reward(
+                mpl=mpl_t,
+                ep=ep_t,
+                error_rate=delta_errors,
+                wage_parity=None,
+                mode="mpl_ep_error",
+                alpha_mpl=alpha_mpl,
+                alpha_error=alpha_error,
+                alpha_ep=alpha_ep,
+                alpha_wage=0.0,
             )
 
             # Phase A: Add wage parity penalty
             # Pull wage_parity down toward 1.0 (human benchmark)
+            time_hours = next_obs_dict['t'] / 3600.0
+            mp_r = mpl(next_obs_dict['completed'], time_hours) if time_hours > 0 else 0
+            err_rate = next_obs_dict['errors'] / max(1, next_obs_dict['attempts'])
             w_hat_r_step = implied_robot_wage(p, mp_r, err_rate, damage_cost)
             wage_parity_step = w_hat_r_step / wh if wh > 0 else 1.0
             over_parity = max(0.0, wage_parity_step - 1.0)
 
             # Apply penalty for exceeding human wage parity
             reward -= beta_parity * over_parity
+
+            last_reward_components = reward_components
 
             # Store transition
             if env_type == 'dishwashing':
@@ -363,9 +408,10 @@ def train_sac(config_path, episodes=None, seed=42):
             episode_steps += 1
 
         # Episode metrics (same for both modes)
+        summary = summarize_episode_info(info_history)
         time_hours = next_obs_dict['t'] / 3600.0
-        mp_r = mpl(next_obs_dict['completed'], time_hours) if time_hours > 0 else 0
-        err_rate = next_obs_dict['errors'] / max(1, next_obs_dict['attempts'])
+        mp_r = summary.mpl_episode
+        err_rate = summary.error_rate_episode
         w_hat_r = implied_robot_wage(p, mp_r, err_rate, damage_cost)
         wage_parity = w_hat_r / wh
         prod_parity = mp_r / MPh
@@ -373,6 +419,8 @@ def train_sac(config_path, episodes=None, seed=42):
         revenue = p * mp_r
         error_cost = damage_cost * (err_rate * mp_r)
         profit = revenue - error_cost - energy_cost
+        energy_Wh = summary.energy_Wh
+        ep_episode = summary.ep_episode
 
         # Average actions
         actions_arr = np.array(actions_taken)
@@ -471,6 +519,9 @@ def train_sac(config_path, episodes=None, seed=42):
             err_target=round(err_target, 4),
             mp_r=round(mp_r, 2),
             mp_h=MPh,
+            mpl_episode=round(mp_r, 2),
+            ep_episode=round(ep_episode, 4),
+            econ_preset=econ_params.preset,
             w_hat_r=round(w_hat_r, 2),
             w_h=wh,
             wage_parity=round(wage_parity, 4),
@@ -479,6 +530,12 @@ def train_sac(config_path, episodes=None, seed=42):
             lambda_dual=round(lam, 4),
             episode_reward=round(episode_reward_sum, 2),
             episode_steps=episode_steps,
+            reward_mpl=round(last_reward_components.get("mpl_component", 0.0), 4) if 'last_reward_components' in locals() else 0.0,
+            reward_ep=round(last_reward_components.get("ep_component", 0.0), 4) if 'last_reward_components' in locals() else 0.0,
+            reward_error=round(last_reward_components.get("error_penalty", 0.0), 4) if 'last_reward_components' in locals() else 0.0,
+            error_rate_episode=round(err_rate, 4),
+            energy_Wh=round(energy_Wh, 4),
+            terminated_reason=terminated_reason or "",
             mean_speed=round(mean_speed, 3),
             mean_care=round(mean_care, 3),
             buffer_size=len(agent.replay_buffer),
@@ -529,6 +586,8 @@ if __name__ == "__main__":
     parser.add_argument('config', type=str, help='Path to config YAML file')
     parser.add_argument('--episodes', type=int, default=None, help='Number of episodes (overrides config)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--econ-preset', type=str, default=None, choices=['toy', 'realistic'],
+                        help='Economic parameter preset override')
 
     args = parser.parse_args()
 
@@ -537,4 +596,4 @@ if __name__ == "__main__":
     os.makedirs('logs', exist_ok=True)
 
     # Train
-    train_sac(args.config, episodes=args.episodes, seed=args.seed)
+    train_sac(args.config, episodes=args.episodes, seed=args.seed, econ_preset=args.econ_preset)

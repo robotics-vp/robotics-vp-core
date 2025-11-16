@@ -59,31 +59,34 @@ class Actor(nn.Module):
 
         return mean, logstd
 
-    def sample(self, latent, deterministic=False):
+    def sample(self, latent, deterministic=False, return_log_prob=True):
         """
         Sample action with reparameterization trick.
 
         Returns:
             action: [B, action_dim] in [0, 1]
-            logprob: [B] log probability
+            logprob: [B, 1] log probability (None if deterministic or return_log_prob=False)
         """
         mean, logstd = self.forward(latent)
         std = torch.exp(logstd)
+        dist = torch.distributions.Normal(mean, std)
 
         if deterministic:
             action_raw = mean
+            logprob = None
         else:
             # Reparameterization trick
-            eps = torch.randn_like(mean)
-            action_raw = mean + std * eps
+            eps = dist.rsample()
+            action_raw = eps
+
+            if return_log_prob:
+                logprob = dist.log_prob(eps) - torch.log(1 - torch.tanh(action_raw).pow(2) + 1e-6)
+                logprob = logprob.sum(dim=-1, keepdim=True)
+            else:
+                logprob = None
 
         # Tanh squashing
         action = torch.tanh(action_raw)
-
-        # Log probability with change of variables
-        # log π(a|s) = log π(u|s) - Σ log(1 - tanh²(u))
-        logprob = (-0.5 * (eps.pow(2) + 2 * np.log(np.sqrt(2 * np.pi))) - logstd).sum(dim=1)
-        logprob -= torch.log(1 - action.pow(2) + 1e-6).sum(dim=1)
 
         # Scale to [0, 1] from [-1, 1]
         action = (action + 1) / 2
@@ -269,7 +272,7 @@ class SACAgent:
                 obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
 
             latent = self.encoder.encode(obs_tensor)
-            action, _ = self.actor.sample(latent, deterministic=deterministic)
+            action, _ = self.actor.sample(latent, deterministic=deterministic, return_log_prob=False)
 
         return action.cpu().numpy()[0], novelty
 
@@ -313,14 +316,14 @@ class SACAgent:
         # --- Critic Update ---
         with torch.no_grad():
             # Sample next actions from current policy
-            next_actions, next_logprobs = self.actor.sample(next_latent)
+            next_actions, next_logprobs = self.actor.sample(next_latent, return_log_prob=True)
 
             # Target Q-values (use minimum of twin critics)
             q1_target, q2_target = self.critic_target(next_latent, next_actions)
             q_target = torch.min(q1_target, q2_target)
 
             # Bellman backup with entropy
-            target_value = rewards_t + (1 - dones_t) * self.gamma * (q_target - self.alpha * next_logprobs.unsqueeze(1))
+            target_value = rewards_t + (1 - dones_t) * self.gamma * (q_target - self.alpha * next_logprobs)
 
         # Current Q-values
         q1, q2 = self.critic(latent.detach(), actions_t)  # Detach encoder gradients
@@ -343,14 +346,14 @@ class SACAgent:
 
         # --- Actor Update ---
         # Sample actions from current policy
-        new_actions, logprobs = self.actor.sample(latent)
+        new_actions, logprobs = self.actor.sample(latent, return_log_prob=True)
 
         # Q-values for new actions
         q1_new, q2_new = self.critic(latent.detach(), new_actions)
         q_new = torch.min(q1_new, q2_new)
 
         # Actor loss (maximize Q - α*entropy)
-        actor_loss = (self.alpha * logprobs.unsqueeze(1) - q_new).mean()
+        actor_loss = (self.alpha * logprobs - q_new).mean()
 
         # Update actor
         self.actor_optimizer.zero_grad()

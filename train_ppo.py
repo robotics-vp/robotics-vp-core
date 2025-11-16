@@ -17,7 +17,8 @@ from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
 from src.rl.ppo import PPOAgent
 from src.economics.mpl import mpl
 from src.economics.wage import implied_robot_wage
-from src.economics.reward import econ_lagrangian_reward
+from src.rl.reward_shaping import compute_econ_reward
+from src.config.internal_profile import get_internal_experiment_profile
 from src.utils.logger import CsvLogger
 from src.data_value.novelty_diffusion import (
     DiffusionNoveltyTracker,
@@ -190,32 +191,33 @@ def run():
             update_stats=True
         ).item()
 
+    profile = get_internal_experiment_profile("dishwashing")
+    alpha_mpl, alpha_error, alpha_ep, _ = profile.get("default_objective_vector", [1.0, 1.0, 1.0, 0.0])
+
+        last_reward_components = {}
         # Episode rollout
-        while env.t < max_secs:
-            # Select action with novelty signal
-            action, logprob, value = agent.select_action(obs, novelty=novelty)
+    while env.t < max_secs:
+        # Select action with novelty signal
+        action, logprob, value = agent.select_action(obs, novelty=novelty)
 
             # Step environment
             obs_next, info, done = env.step(action[0])
 
-            # Compute economic reward
-            time_h = env.t / 3600.0
-            completed = env.completed
-            attempts = env.attempts
-            errors = env.errors
-            err_rate = errors / max(attempts, 1)
-            mp_r = mpl(units_completed=completed, time_hours=max(time_h, 1e-8))
+        # Compute economic reward (per-step MPL/EP/error)
+        mpl_t = info.get("mpl_t", 0.0)
+        ep_t = info.get("ep_t", 0.0)
+        err_term = info.get("delta_errors", 0.0)
 
-            # Economic reward (Lagrangian)
-            reward = econ_lagrangian_reward(
-                mp_r=mp_r,
-                err_rate=err_rate,
-                price_per_unit=p,
-                damage_cost=c_d,
-                lam=lam,
-                err_target=e_star,
-                energy_cost_per_hour=energy_cost
-            )
+        reward, reward_components = compute_econ_reward(
+            mpl=mpl_t,
+            ep=ep_t,
+            error_rate=err_term,
+            wage_parity=None,
+            alpha_mpl=alpha_mpl,
+            alpha_error=alpha_error,
+            alpha_ep=alpha_ep,
+        )
+        last_reward_components = reward_components
 
             # Store transition
             agent.store_transition(reward, done)
@@ -307,6 +309,9 @@ def run():
             err_target=e_star,
             episode_reward=round(episode_reward, 6),
             episode_steps=episode_steps,
+            reward_mpl=round(last_reward_components.get("mpl_component", 0.0), 6),
+            reward_ep=round(last_reward_components.get("ep_component", 0.0), 6),
+            reward_error=round(last_reward_components.get("error_penalty", 0.0), 6),
             # PPO metrics
             policy_loss=round(train_metrics['policy_loss'], 6),
             value_loss=round(train_metrics['value_loss'], 6),

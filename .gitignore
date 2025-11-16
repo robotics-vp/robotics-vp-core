@@ -1,0 +1,25 @@
+# === MODEL FILES ===
+*.pt
+*.pth
+checkpoints/
+
+# === DATA ===
+*.npz
+*.npy
+data/
+
+# === LOGS ===
+logs/
+*.log
+*.txt
+
+# === RESULTS / REPORTS ===
+results/*
+!results/*.md
+reports/
+
+# === TEMP ===
+tmp/
+tmp_*.json
+*.json.tmp
+*.png

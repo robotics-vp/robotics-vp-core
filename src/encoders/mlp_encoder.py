@@ -58,10 +58,9 @@ class MLPEncoder(nn.Module):
     def _obs_dict_to_tensor(self, obs_dict):
         """Convert observation dict to tensor."""
         # For dishwashing: [t, completed, attempts, errors]
-        features = []
-        for key in ['t', 'completed', 'attempts', 'errors']:
-            features.append(obs_dict[key])
-        return torch.FloatTensor(features).unsqueeze(0)
+        device = next(self.parameters()).device
+        features = [obs_dict[key] for key in ['t', 'completed', 'attempts', 'errors']]
+        return torch.tensor(features, dtype=torch.float32, device=device).unsqueeze(0)
 
 
 class ConsistencyHead(nn.Module):
