@@ -40,6 +40,7 @@ from src.controllers.synth_lambda_controller import (
     build_feature_vector,
     compute_meta_objective
 )
+from src.controllers.synthetic_weight_controller import SyntheticWeightController
 
 
 class LatentActor(nn.Module):
@@ -189,48 +190,48 @@ def load_synthetic_branches(branch_path, device, w_econ_model=None):
     return transitions, branch_metrics
 
 
-def compute_sample_weights(transitions, base_trust_weight=1.0, econ_weight_scale=1.0, synth_ratio=0.1):
+def compute_sample_weights(
+    transitions,
+    base_trust_weight=1.0,
+    econ_weight_scale=1.0,
+    synth_ratio=0.1,
+    controller=None,
+    profile=None,
+    mode="trust_econ_lambda"
+):
     """
-    Compute per-sample weights for importance-weighted training.
-
-    Weight = trust * econ_weight * source_balance
-
-    where source_balance normalizes real vs synthetic contribution.
+    Compute per-sample weights using SyntheticWeightController.
     """
     real_trans = [t for t in transitions if t['source'] == 'real']
     synth_trans = [t for t in transitions if t['source'] == 'synthetic']
 
-    n_real = len(real_trans)
-    n_synth = len(synth_trans)
+    if controller is None:
+        from src.controllers.synthetic_weight_controller import SyntheticWeightController
+        controller = SyntheticWeightController(
+            max_synth_share=profile.get("max_synth_share", 1.0) if profile else 1.0,
+            econ_weight_cap=profile.get("econ_weight_cap", 1.0) if profile else 1.0,
+            trust_floor=profile.get("min_trust_threshold", 0.0) if profile else 0.0,
+            default_lambda=synth_ratio
+        )
 
-    if n_synth == 0:
-        # No synthetic data, all weights from trust
-        for t in transitions:
-            t['weight'] = t['trust'] * base_trust_weight * t['econ_weight'] * econ_weight_scale
-        return transitions
+    trust = np.array([t['trust'] * base_trust_weight for t in synth_trans], dtype=np.float32)
+    econ = np.array([t.get('econ_weight', 1.0) * econ_weight_scale for t in synth_trans], dtype=np.float32)
 
-    # Normalize so that synthetic contributes synth_ratio of total weight mass
-    # real_total_weight / synth_total_weight = (1 - synth_ratio) / synth_ratio
-    # We want sum(synth_weights) / sum(all_weights) = synth_ratio
+    result = controller.compute_weights(
+        trust=trust,
+        econ=econ,
+        n_real=len(real_trans),
+        mode=mode,
+        lambda_target=synth_ratio,
+    )
+    weights = result["weights"]
 
-    # Simple approach: scale synthetic weights by synth_ratio / n_synth, real by (1-synth_ratio) / n_real
-    real_scale = (1 - synth_ratio) / n_real
-    synth_scale = synth_ratio / n_synth
+    for t in real_trans:
+        t['weight'] = 1.0
+    for t, w in zip(synth_trans, weights):
+        t['weight'] = float(w)
 
-    for t in transitions:
-        trust_w = t['trust'] * base_trust_weight
-        econ_w = t['econ_weight'] * econ_weight_scale
-        if t['source'] == 'real':
-            t['weight'] = trust_w * econ_w * real_scale
-        else:
-            t['weight'] = trust_w * econ_w * synth_scale
-
-    # Normalize so sum = number of samples (for stable learning rate)
-    total_weight = sum(t['weight'] for t in transitions)
-    for t in transitions:
-        t['weight'] *= len(transitions) / total_weight
-
-    return transitions
+    return real_trans + synth_trans, result['debug']
 
 
 def train_actor(transitions, latent_dim, action_dim, n_epochs=100, batch_size=256, lr=1e-3, device='cpu'):
@@ -339,6 +340,12 @@ def train_actor_with_controller(
     objective_vector = profile['default_objective_vector']
     max_synth_share = profile.get('max_synth_share', 0.4)
     econ_weight_scale = profile.get('econ_weight_scale', 1.0)
+    controller = SyntheticWeightController(
+        max_synth_share=max_synth_share,
+        econ_weight_cap=profile.get("econ_weight_cap", 1.0),
+        trust_floor=profile.get("min_trust_threshold", 0.0),
+        default_lambda=profile.get("target_synth_share", 0.2),
+    )
 
     # Baseline metrics (from real data statistics)
     baseline_mpl = 50.0  # units/hour
@@ -366,11 +373,14 @@ def train_actor_with_controller(
     total_epochs = 0
     for window_idx in range(n_epochs // eval_every):
         # Reweight transitions with current λ_synth
-        weighted_transitions = compute_sample_weights(
+        weighted_transitions, weight_debug = compute_sample_weights(
             all_transitions.copy(),
             base_trust_weight=1.0,
             econ_weight_scale=econ_weight_scale,
-            synth_ratio=current_lambda
+            synth_ratio=current_lambda,
+            controller=controller,
+            profile=profile,
+            mode="trust_econ_lambda"
         )
 
         # Compute effective synthetic share
@@ -570,11 +580,13 @@ def main():
     print("TRAINING BASELINE (Real-Only)")
     print("="*70)
 
-    baseline_train = compute_sample_weights(
+    baseline_train, baseline_debug = compute_sample_weights(
         real_train.copy(),
         base_trust_weight=1.0,
         econ_weight_scale=args.econ_weight_scale,
-        synth_ratio=0.0  # No synthetic
+        synth_ratio=0.0,  # No synthetic
+        profile=profile,
+        mode="baseline"
     )
 
     baseline_actor, baseline_history = train_actor(
@@ -626,11 +638,13 @@ def main():
             print(f"Economic weight scale: {args.econ_weight_scale}")
 
             augmented_train = real_train.copy() + synth_transitions.copy()
-            augmented_train = compute_sample_weights(
+            augmented_train, aug_debug = compute_sample_weights(
                 augmented_train,
                 base_trust_weight=1.0,
                 econ_weight_scale=args.econ_weight_scale,
-                synth_ratio=args.synth_weight
+                synth_ratio=args.synth_weight,
+                profile=profile,
+                mode="trust_econ_lambda"
             )
 
             # Check effective contributions

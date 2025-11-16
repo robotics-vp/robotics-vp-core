@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Literal, Optional
+from dataclasses import dataclass, field
+from typing import Literal, Optional, Union
 
 
 @dataclass
@@ -34,8 +34,47 @@ class EconParams:
 
     preset: str = "toy"
 
+    # Drawer+Vase specific (optional, for backward compatibility)
+    value_per_unit: float = 0.0  # Alias for price_per_unit
+    vase_break_cost: float = 0.0
+    electricity_price_kWh: float = 0.0
+    other_costs_per_hr: float = 0.0
+    allowable_risk_tolerance: float = 0.0
+    fragility_penalty_coeff: float = 0.0
 
-def load_econ_params(profile: dict, preset: Optional[Literal["toy", "realistic"]] = None) -> EconParams:
+
+@dataclass
+class DrawerVaseEconParams:
+    """
+    Economic parameters specific to Drawer+Vase task.
+
+    Task: Open drawer while avoiding collision with fragile vase.
+    """
+
+    # Task value
+    value_per_successful_drawer_open: float = 5.0  # Revenue for successfully opening drawer
+    vase_break_cost: float = 50.0  # Cost of breaking vase (fragile, expensive)
+
+    # Operating costs
+    electricity_price_kWh: float = 0.12  # $/kWh
+    other_costs_per_hr: float = 2.0  # Maintenance, etc.
+
+    # Risk parameters
+    allowable_risk_tolerance: float = 0.1  # Max acceptable collision probability
+    fragility_penalty_coeff: float = 10.0  # Penalty multiplier for vase contact
+
+    # SLA thresholds
+    max_steps: int = 300
+    max_high_risk_contacts: int = 5
+    max_impulse_threshold: float = 5.0  # N·s before vase breaks
+
+    preset: str = "drawer_vase"
+
+
+def load_econ_params(
+    profile: dict,
+    preset: Optional[Union[Literal["toy", "realistic", "drawer_vase"], str]] = None
+) -> Union[EconParams, DrawerVaseEconParams]:
     """
     Build EconParams from an internal profile with support for preset overrides.
 
@@ -74,6 +113,20 @@ def load_econ_params(profile: dict, preset: Optional[Literal["toy", "realistic"]
             base_rate=profile.get("base_rate_realistic", kwargs["base_rate"]),
             max_error_rate_sla=profile.get("max_error_rate_sla_realistic", kwargs["max_error_rate_sla"]),
             energy_Wh_per_attempt=profile.get("energy_Wh_per_attempt_realistic", kwargs["energy_Wh_per_attempt"]),
+        )
+    elif selected == "drawer_vase":
+        # Return DrawerVaseEconParams for drawer+vase task
+        return DrawerVaseEconParams(
+            value_per_successful_drawer_open=profile.get("value_per_drawer_open", 5.0),
+            vase_break_cost=profile.get("vase_break_cost", 50.0),
+            electricity_price_kWh=profile.get("electricity_price_kWh", 0.12),
+            other_costs_per_hr=profile.get("other_costs_per_hr", 2.0),
+            allowable_risk_tolerance=profile.get("allowable_risk_tolerance", 0.1),
+            fragility_penalty_coeff=profile.get("fragility_penalty_coeff", 10.0),
+            max_steps=profile.get("max_steps", 300),
+            max_high_risk_contacts=profile.get("max_high_risk_contacts", 5),
+            max_impulse_threshold=profile.get("max_impulse_threshold", 5.0),
+            preset=selected,
         )
     else:
         raise ValueError(f"Unknown econ preset: {selected}")

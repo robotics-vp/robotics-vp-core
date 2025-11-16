@@ -1,0 +1,91 @@
+# Drawer+Vase Physics Environment - Vision Mode (Aligned Encoder)
+# Fei-Fei benchmark with video-to-policy z_V encoding
+
+env:
+  type: drawer_vase_physics
+  obs_mode: vision
+  render_mode: rgb_array
+
+# Encoder settings (Phase A.5 AlignedVideoEncoder)
+encoder:
+  type: aligned
+  model_path: checkpoints/aligned_video_encoder.pt
+  latent_dim: 128
+  pretrained: true
+
+# Physics parameters
+physics:
+  control_dt: 0.0333  # 30 Hz control
+  physics_dt: 0.00417  # 240 Hz simulation
+  max_steps: 300
+  gravity: -9.81
+
+# Camera settings
+camera:
+  width: 128
+  height: 128
+  fov: 60.0
+  near: 0.1
+  far: 3.0
+  pos: [0.0, -1.0, 1.0]
+  target: [0.0, 0.0, 0.7]
+
+# Cabinet geometry
+cabinet:
+  pos: [0.0, 0.0, 0.5]
+  size: [0.5, 0.4, 0.6]
+  drawer_mass: 1.0
+  drawer_friction: 0.3
+  drawer_damping: 0.8
+  drawer_max_extension: 0.35
+
+# Vase (fragile object)
+vase:
+  pos: [0.3, 0.0, 0.8]
+  radius: 0.04
+  height: 0.12
+  mass: 0.3
+  fragility: 10.0
+  tip_angle: 30.0
+
+# End-effector
+ee:
+  start_pos: [-0.3, 0.0, 0.8]
+  mass: 0.5
+  max_force: 50.0
+  max_velocity: 0.3
+
+# Success/failure thresholds
+thresholds:
+  drawer_open_threshold: 0.9
+  vase_collision_threshold: 5.0
+  sla_violation_contacts: 5
+
+# Economics
+econ_preset: drawer_vase
+
+# Training parameters
+training:
+  algorithm: sac
+  learning_rate: 3e-4
+  batch_size: 256
+  buffer_size: 100000
+  gamma: 0.99
+  tau: 0.005
+  episodes: 10000
+  eval_every: 100
+
+# Reward shaping
+reward:
+  use_econ_reward: true
+  clearance_bonus_coeff: 0.1
+  impulse_penalty_coeff: 1.0
+  energy_penalty_coeff: 0.01
+
+# World model integration (Phase B frozen)
+world_model:
+  use_synthetic_augmentation: true
+  checkpoint_path: checkpoints/stable_world_model.pt
+  trust_net_path: checkpoints/trust_net.pt
+  w_econ_lattice_path: checkpoints/w_econ_lattice.pt
+  lambda_controller_path: checkpoints/synth_lambda_controller.pt

@@ -1,6 +1,6 @@
 import numpy as np
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from src.config.econ_params import EconParams
 
@@ -184,7 +184,7 @@ class EpisodeInfoSummary:
     throughput_units_per_hour: float
     energy_Wh: float
     profit: float
-    wage_parity: float = None
+    wage_parity: Optional[float] = None
 
 
 def summarize_episode_info(info_history: List[Dict[str, Any]]) -> EpisodeInfoSummary:
