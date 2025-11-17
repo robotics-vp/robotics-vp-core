@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, asdict
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 
 from src.orchestrator.context import OrchestratorContext, OrchestratorResult
 
@@ -14,6 +14,11 @@ class RunSpec:
     energy_profile_mix: Dict[str, float]
     data_mix: Dict[str, float]
     notes: str
+    pareto_profile_name: Optional[str] = None
+    pareto_frontier_summary: Optional[Dict[str, Any]] = None
+    rebate_pct: Optional[float] = None
+    attributable_spread_capture: Optional[float] = None
+    data_premium: Optional[float] = None
 
     def to_dict(self):
         return asdict(self)

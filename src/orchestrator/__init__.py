@@ -6,6 +6,8 @@ from .orchestration_transformer import OrchestrationTransformer, propose_orchest
 from .experiment_config import RunSpec, orchestration_plan_to_run_specs
 from .diffusion_requests import DiffusionPromptSpec, build_diffusion_requests_from_guidance
 from .guidance import annotate_datapacks_with_guidance, score_datapack_economic_value, classify_good_bad
+from .economic_controller import EconomicController
+from .datapack_engine import DatapackEngine
 
 __all__ = [
     "ToolCall",

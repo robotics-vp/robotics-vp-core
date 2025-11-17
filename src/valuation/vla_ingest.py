@@ -12,7 +12,17 @@ def attach_vla_action_to_datapack(datapack: DataPackMeta, vla_json: Dict[str, an
         "instruction": vla_json.get("instruction"),
         "action_7dof": vla_json.get("action", {}).get("raw_action", []),
         "source": "openvla-7b",
+        "semantic_tags": vla_json.get("semantic_tags", []),
+        "vla_hint_text": vla_json.get("vla_hint_text", ""),
     }
+
+    # Also merge VLA semantic tags into datapack's main semantic_tags
+    vla_tags = vla_json.get("semantic_tags", [])
+    if vla_tags:
+        existing_tags = datapack.semantic_tags or []
+        merged_tags = list(set(existing_tags + vla_tags))
+        datapack.semantic_tags = merged_tags
+
     return datapack
 
 

@@ -42,6 +42,10 @@ class PyBulletBackend(PhysicsBackend):
         self._info_history = []
         self._episode_count = 0
 
+        # Media references for datapack integration (mirrors Isaac backend)
+        self._media_refs = {}  # episode_id -> {"rgb_path": ..., "depth_path": ...}
+        self._current_episode_id = None
+
     @property
     def engine_type(self) -> Literal["pybullet", "isaac", "ue5"]:
         """Return engine type."""
@@ -69,6 +73,10 @@ class PyBulletBackend(PhysicsBackend):
         """
         self._info_history = []
         self._episode_count += 1
+
+        # Generate episode ID for datapack tracking
+        import uuid
+        self._current_episode_id = str(uuid.uuid4())
 
         # Check if env supports initial_state parameter
         if initial_state is not None and hasattr(self._env, 'reset_with_state'):
@@ -225,3 +233,55 @@ class PyBulletBackend(PhysicsBackend):
             self._env.set_state(state)
         else:
             raise NotImplementedError("Underlying env has no set_state method")
+
+    # Media references for datapack integration (API parity with Isaac backend)
+
+    def get_media_refs(self) -> Dict[str, str]:
+        """
+        Get media file references (RGB, depth, etc.) for datapack integration.
+
+        Returns:
+            dict: Media references for current episode, e.g.:
+                {
+                    "rgb_path": "/path/to/episode_123_rgb.mp4",
+                    "depth_path": "/path/to/episode_123_depth.npy",
+                }
+        """
+        if self._current_episode_id is None:
+            return {}
+        return self._media_refs.get(self._current_episode_id, {})
+
+    def set_media_refs(self, refs: Dict[str, str]) -> None:
+        """
+        Set media file references for current episode.
+
+        Args:
+            refs: Dictionary of media paths
+        """
+        if self._current_episode_id is not None:
+            self._media_refs[self._current_episode_id] = refs
+
+    def get_current_episode_id(self) -> Optional[str]:
+        """
+        Get current episode ID.
+
+        Returns:
+            str: Episode identifier (UUID)
+        """
+        return self._current_episode_id
+
+    def get_config(self) -> Dict[str, Any]:
+        """
+        Get backend configuration for logging and datapack ConditionProfile.
+
+        Returns:
+            dict: Configuration including:
+                - env_name
+                - engine_type
+                - episode_count
+        """
+        return {
+            "env_name": self._env_name,
+            "engine_type": self.engine_type,
+            "episode_count": self._episode_count,
+        }

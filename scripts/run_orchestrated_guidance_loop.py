@@ -40,6 +40,8 @@ def main():
         market_region=args.market_region,
         interventions_path=args.interventions if os.path.exists(args.interventions) else None,
     )
+    # Optional meta-transformer augmentation if embeddings available (stub)
+    ctx.shared_policy_state = None
 
     model = OrchestrationTransformer()
     plan = propose_orchestrated_plan(model, ctx, args.instruction, steps=4)
@@ -77,6 +79,44 @@ def main():
         neg = len(prompts) - pos
         print(f"    Breakdown: positive-like {pos}, hard_neg {neg}")
 
+    # VLA annotation statistics
+    vla_count = 0
+    vla_confident = 0
+    vla_confusing = 0
+    vla_semantic_tags = []
+    for dp in annotated:
+        if dp.vla_action_summary and dp.vla_action_summary.get("has_vla", False):
+            vla_count += 1
+            tags = dp.vla_action_summary.get("semantic_tags", [])
+            vla_semantic_tags.extend(tags)
+            if "vla:grasp_confident" in tags:
+                vla_confident += 1
+            if "vla:scene_confusing" in tags:
+                vla_confusing += 1
+
+    if vla_count > 0:
+        print(f"\n  VLA Annotations:")
+        print(f"    Datapacks with VLA: {vla_count}/{len(annotated)}")
+        print(f"    Confident grasps: {vla_confident}")
+        print(f"    Confusing scenes: {vla_confusing}")
+
+        # Count unique VLA tags
+        tag_counts = {}
+        for tag in vla_semantic_tags:
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+        if tag_counts:
+            print(f"    VLA semantic tag distribution:")
+            for tag, count in sorted(tag_counts.items(), key=lambda x: -x[1])[:5]:
+                print(f"      {tag}: {count}")
+
+    # VLA hints in diffusion prompts
+    vla_hints_in_prompts = sum(1 for p in prompts if p.vla_hint is not None)
+    if vla_hints_in_prompts > 0:
+        print(f"\n  VLA hints in diffusion prompts: {vla_hints_in_prompts}/{len(prompts)}")
+        high_conf = sum(1 for p in prompts if p.vla_hint and p.vla_hint.get("confidence") == "high")
+        low_conf = sum(1 for p in prompts if p.vla_hint and p.vla_hint.get("confidence") == "low")
+        print(f"    High confidence: {high_conf}, Low confidence: {low_conf}")
+
     summary = {
         "plan_id": plan_id,
         "context": ctx.__dict__,
@@ -94,8 +134,15 @@ def main():
         },
         "annotated_count": len(annotated),
         "diffusion_requests": len(prompts),
+        "vla_statistics": {
+            "datapacks_with_vla": vla_count,
+            "confident_grasps": vla_confident,
+            "confusing_scenes": vla_confusing,
+            "hints_in_prompts": vla_hints_in_prompts,
+        },
     }
     os.makedirs(os.path.dirname(args.out_guidance), exist_ok=True)
+    os.makedirs("results", exist_ok=True)
     with open("results/orchestrated_guidance_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 

@@ -180,6 +180,16 @@ class AttributionProfile:
     skill_contribs: Dict[int, Dict[str, float]] = field(default_factory=dict)
     # e.g., {4: {"delta_mpl": 3.2, "delta_error": -0.05}}
 
+    # Optional attribution breakdowns (all default to 0.0 for backward compatibility)
+    delta_mpl_model: float = 0.0
+    delta_mpl_data: float = 0.0
+    delta_mpl_energy: float = 0.0
+
+    # Economic spread/rebate metrics (no profit)
+    rebate_pct: float = 0.0
+    attributable_spread_capture: float = 0.0
+    data_premium: float = 0.0
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
@@ -389,6 +399,10 @@ class DataPackMeta:
     # Raw data references (for reconstruction)
     raw_data_path: Optional[str] = None  # Path to underlying npz/episode data
 
+    # Vision backbone embedding (optional) - for novelty/regime analysis
+    episode_embedding: Optional[List[float]] = None
+    # e.g., [0.1, -0.2, 0.3, ...] - pooled embedding from VisionBackbone.encode_sequence()
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         d = {
@@ -417,6 +431,7 @@ class DataPackMeta:
             'raw_data_path': self.raw_data_path,
             'guidance_profile': self.guidance_profile.to_dict() if self.guidance_profile else None,
             'vla_action_summary': self.vla_action_summary,
+            'episode_embedding': self.episode_embedding,
         }
         return d
 
@@ -465,6 +480,7 @@ class DataPackMeta:
             raw_data_path=d.get('raw_data_path'),
             guidance_profile=GuidanceProfile.from_dict(d['guidance_profile']) if d.get('guidance_profile') else None,
             vla_action_summary=d.get('vla_action_summary'),
+            episode_embedding=d.get('episode_embedding'),
         )
 
     @classmethod
