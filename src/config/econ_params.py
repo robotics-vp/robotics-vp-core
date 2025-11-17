@@ -132,3 +132,36 @@ def load_econ_params(
         raise ValueError(f"Unknown econ preset: {selected}")
 
     return EconParams(**kwargs, preset=selected)
+
+
+def get_econ_params_with_profile(
+    profile: dict,
+    preset: Optional[str] = None,
+    ctx=None,  # Optional[EconProfileContext]
+    profile_net=None,  # Optional[EconProfileNet]
+) -> Union[EconParams, DrawerVaseEconParams]:
+    """
+    Wrapper: current behavior if ctx/profile_net is None; otherwise
+    apply DL adjustments.
+
+    This is scaffolding for DL-ified economic hyperparameters.
+    Does not change behavior when ctx/profile_net are None.
+
+    Args:
+        profile: Internal experiment profile dict
+        preset: Optional preset selector
+        ctx: Optional EconProfileContext for DL adjustments
+        profile_net: Optional EconProfileNet for computing deltas
+
+    Returns:
+        EconParams (possibly adjusted by profile_net)
+    """
+    base = load_econ_params(profile, preset)
+
+    if ctx is None or profile_net is None:
+        return base
+
+    # Late import to avoid circular dependency
+    from .econ_profile_net import build_econ_params_from_context
+
+    return build_econ_params_from_context(base, ctx, profile_net)

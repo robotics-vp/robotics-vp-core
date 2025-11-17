@@ -95,3 +95,200 @@ def make_episode_feature_vector(
     ], dtype=np.float32)
 
     return np.concatenate([features, term_one_hot])
+
+
+def make_datapack_feature_vector(
+    datapack,
+    baseline_delta_j: float = 0.0,
+) -> np.ndarray:
+    """
+    Build a fixed-length feature vector from a DataPackMeta object.
+
+    Features:
+        - delta_mpl (normalized)
+        - delta_error (normalized)
+        - delta_ep (normalized)
+        - delta_J (normalized)
+        - trust_score
+        - w_econ
+        - lambda_budget (normalized)
+        - bucket_is_positive (binary)
+        - has_counterfactual (binary)
+        - has_sima (binary)
+        - n_skills
+        - total_duration (normalized)
+        - source_type one-hot (real, synthetic, hybrid)
+
+    Args:
+        datapack: DataPackMeta instance
+        baseline_delta_j: Baseline ΔJ for normalization
+
+    Returns:
+        Feature vector (np.ndarray)
+    """
+    # Core attribution features (normalized to [-1, 1] range)
+    delta_mpl_norm = np.tanh(datapack.attribution.delta_mpl)
+    delta_error_norm = np.tanh(datapack.attribution.delta_error * 10)  # Scale up
+    delta_ep_norm = np.tanh(datapack.attribution.delta_ep)
+    delta_j_norm = np.tanh(datapack.attribution.delta_J - baseline_delta_j)
+
+    # Gating signals (already in [0, 1])
+    trust_score = datapack.attribution.trust_score
+    w_econ = datapack.attribution.w_econ
+    lambda_budget_norm = np.tanh(datapack.attribution.lambda_budget / 100.0)  # Normalize
+
+    # Binary flags
+    bucket_is_positive = 1.0 if datapack.bucket == "positive" else 0.0
+    has_counterfactual = 1.0 if datapack.counterfactual_plan is not None else 0.0
+    has_sima = 1.0 if datapack.sima_annotation is not None else 0.0
+
+    # Skill trace features
+    n_skills = len(datapack.skill_trace)
+    n_skills_norm = min(n_skills / 10.0, 1.0)  # Normalize to [0, 1]
+
+    total_duration = datapack.get_total_duration()
+    total_duration_norm = min(total_duration / 200.0, 1.0)  # Normalize
+
+    # Source type one-hot
+    source_type_onehot = [0.0, 0.0, 0.0]  # [real, synthetic, hybrid]
+    if datapack.attribution.source_type == "real":
+        source_type_onehot[0] = 1.0
+    elif datapack.attribution.source_type == "synthetic":
+        source_type_onehot[1] = 1.0
+    elif datapack.attribution.source_type == "hybrid":
+        source_type_onehot[2] = 1.0
+
+    features = np.array([
+        delta_mpl_norm,
+        delta_error_norm,
+        delta_ep_norm,
+        delta_j_norm,
+        trust_score,
+        w_econ,
+        lambda_budget_norm,
+        bucket_is_positive,
+        has_counterfactual,
+        has_sima,
+        n_skills_norm,
+        total_duration_norm,
+        *source_type_onehot,
+    ], dtype=np.float32)
+
+    return features
+
+
+def make_condition_feature_vector(condition) -> np.ndarray:
+    """
+    Build feature vector from ConditionProfile.
+
+    Features:
+        - vase_offset (x, y, z)
+        - drawer_friction
+        - occlusion_level
+        - lighting one-hot (normal, low_light, high_contrast)
+        - objective_vector (first 4 elements)
+        - engine_type one-hot (pybullet, isaac, ue5)
+
+    Args:
+        condition: ConditionProfile instance
+
+    Returns:
+        Feature vector (np.ndarray)
+    """
+    # Vase offset (normalized)
+    vase_offset = np.array(condition.vase_offset[:3], dtype=np.float32)
+    vase_offset_norm = vase_offset / 0.5  # Normalize by max expected offset
+
+    # Friction and occlusion
+    friction = condition.drawer_friction
+    occlusion = condition.occlusion_level
+
+    # Lighting one-hot
+    lighting_onehot = [0.0, 0.0, 0.0]  # [normal, low_light, high_contrast]
+    if condition.lighting_profile == "normal":
+        lighting_onehot[0] = 1.0
+    elif condition.lighting_profile == "low_light":
+        lighting_onehot[1] = 1.0
+    elif condition.lighting_profile == "high_contrast":
+        lighting_onehot[2] = 1.0
+
+    # Objective vector (first 4 weights)
+    obj_vec = np.array(condition.objective_vector[:4], dtype=np.float32)
+    if len(obj_vec) < 4:
+        obj_vec = np.pad(obj_vec, (0, 4 - len(obj_vec)))
+
+    # Engine type one-hot
+    engine_onehot = [0.0, 0.0, 0.0]  # [pybullet, isaac, ue5]
+    if condition.engine_type == "pybullet":
+        engine_onehot[0] = 1.0
+    elif condition.engine_type == "isaac":
+        engine_onehot[1] = 1.0
+    elif condition.engine_type == "ue5":
+        engine_onehot[2] = 1.0
+
+    features = np.concatenate([
+        vase_offset_norm,
+        [friction, occlusion],
+        lighting_onehot,
+        obj_vec,
+        engine_onehot,
+    ]).astype(np.float32)
+
+    return features
+
+
+def make_full_datapack_features(
+    datapack,
+    baseline_delta_j: float = 0.0,
+) -> np.ndarray:
+    """
+    Build comprehensive feature vector combining datapack and condition features.
+
+    Args:
+        datapack: DataPackMeta instance
+        baseline_delta_j: Baseline ΔJ for normalization
+
+    Returns:
+        Combined feature vector (np.ndarray)
+    """
+    dp_features = make_datapack_feature_vector(datapack, baseline_delta_j)
+    cond_features = make_condition_feature_vector(datapack.condition)
+
+    return np.concatenate([dp_features, cond_features])
+
+
+def extract_skill_sequence_features(datapack, num_skills: int = 6) -> np.ndarray:
+    """
+    Extract skill sequence features from datapack.
+
+    Features:
+        - Skill usage one-hot (per skill)
+        - Skill order encoding
+        - Average duration per skill
+
+    Args:
+        datapack: DataPackMeta instance
+        num_skills: Total number of skills
+
+    Returns:
+        Skill sequence feature vector
+    """
+    # Skill usage counts
+    skill_usage = np.zeros(num_skills, dtype=np.float32)
+    skill_order = np.zeros(num_skills, dtype=np.float32)
+    skill_durations = np.zeros(num_skills, dtype=np.float32)
+
+    for i, entry in enumerate(datapack.skill_trace):
+        skill_id = entry.get('skill_id', 0)
+        if 0 <= skill_id < num_skills:
+            skill_usage[skill_id] += 1
+            if skill_order[skill_id] == 0:
+                skill_order[skill_id] = i + 1  # First occurrence position
+            skill_durations[skill_id] += entry.get('duration', 0)
+
+    # Normalize
+    skill_usage = skill_usage / max(len(datapack.skill_trace), 1)
+    skill_order = skill_order / max(len(datapack.skill_trace), 1)
+    skill_durations = skill_durations / max(datapack.get_total_duration(), 1)
+
+    return np.concatenate([skill_usage, skill_order, skill_durations])

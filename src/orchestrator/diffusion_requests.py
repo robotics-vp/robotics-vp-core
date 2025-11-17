@@ -1,0 +1,78 @@
+import uuid
+from dataclasses import dataclass, asdict
+from typing import List, Dict, Any
+
+from src.valuation.datapack_schema import DataPackMeta
+from src.valuation.guidance_profile import GuidanceProfile
+
+
+@dataclass
+class DiffusionPromptSpec:
+    request_id: str
+    env_name: str
+    engine_type: str
+    task_type: str
+    objective_vector: List[float]
+    customer_segment: str
+
+    skill_ids: List[int]
+    semantic_tags: List[str]
+    camera_pose_hint: Dict[str, float]
+    difficulty_hint: str
+
+    rationale: str
+    target_economic_effect: Dict[str, float]
+
+    source_datapack_ids: List[str]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+def build_diffusion_prompt_from_guidance(
+    dp: DataPackMeta,
+    guidance: GuidanceProfile,
+) -> DiffusionPromptSpec:
+    skill_ids = []
+    for s in dp.skill_trace or []:
+        if "skill_id" in s:
+            skill_ids.append(s["skill_id"])
+    semantic_tags = list(set((dp.energy_driver_tags or []) + (guidance.semantic_tags or [])))
+    difficulty_hint = "typical"
+    if not guidance.is_good:
+        difficulty_hint = "hard_neg"
+    rationale = (
+        f"Request data in env {guidance.env_name} ({guidance.engine_type}) to improve {guidance.main_driver} "
+        f"under objective {guidance.objective_vector} with tags {semantic_tags}."
+    )
+    target_effect = {
+        "delta_mpl": guidance.delta_mpl,
+        "delta_error": guidance.delta_error,
+        "delta_energy_Wh": guidance.delta_energy_Wh,
+        "delta_J": guidance.delta_J,
+    }
+    return DiffusionPromptSpec(
+        request_id=str(uuid.uuid4()),
+        env_name=guidance.env_name,
+        engine_type=guidance.engine_type,
+        task_type=guidance.task_type,
+        objective_vector=guidance.objective_vector,
+        customer_segment=guidance.customer_segment,
+        skill_ids=skill_ids,
+        semantic_tags=semantic_tags,
+        camera_pose_hint={},
+        difficulty_hint=difficulty_hint,
+        rationale=rationale,
+        target_economic_effect=target_effect,
+        source_datapack_ids=[dp.pack_id],
+    )
+
+
+def build_diffusion_requests_from_guidance(pairs):
+    """
+    Convenience to build a list of DiffusionPromptSpec from (datapack, guidance) tuples.
+    """
+    prompts = []
+    for dp, gp in pairs:
+        prompts.append(build_diffusion_prompt_from_guidance(dp, gp))
+    return prompts

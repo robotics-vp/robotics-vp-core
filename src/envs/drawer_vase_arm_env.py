@@ -28,7 +28,7 @@ class DrawerVaseArmEnv:
     Success: move EE to target box; error: collide near vase region.
     """
 
-    def __init__(self, max_steps: int = 120, headless: bool = True, econ_params: EconParams = None):
+    def __init__(self, max_steps: int = 200, headless: bool = True, econ_params: EconParams = None):
         self.max_steps = max_steps
         self.headless = headless
         # Provide a lightweight default so the env can be instantiated without a config.
@@ -54,6 +54,7 @@ class DrawerVaseArmEnv:
         self.physics_client = None
         self.robot_id = None
         self.controlled_joint_ids = []
+        self.ee_link_id = None
 
         # Episode state
         self.t = 0.0
@@ -100,6 +101,7 @@ class DrawerVaseArmEnv:
             ji = p.getJointInfo(self.robot_id, j)
             if ji[2] == p.JOINT_REVOLUTE:
                 self.controlled_joint_ids.append(j)
+        self.ee_link_id = self.controlled_joint_ids[-1] if self.controlled_joint_ids else None
         p.setJointMotorControlArray(
             self.robot_id,
             self.controlled_joint_ids,
@@ -107,9 +109,9 @@ class DrawerVaseArmEnv:
             forces=[0.0] * len(self.controlled_joint_ids)
         )
 
-        # Task geometry
-        self.drawer_target = np.array([0.5, 0.0, 0.4])
-        self.vase_pos = np.array([0.35, 0.0, 0.4])
+        # Task geometry (vase sits close to the drawer target to induce risk)
+        self.drawer_target = np.array([0.55, 0.0, 0.4])
+        self.vase_pos = np.array([0.55, 0.0, 0.4])
 
         # Reset episode stats
         self.t = 0.0
@@ -144,7 +146,7 @@ class DrawerVaseArmEnv:
     def _ee_state(self):
         link_state = p.getLinkState(
             self.robot_id,
-            self.controlled_joint_ids[-1],
+            self.ee_link_id,
             computeLinkVelocity=1,
             computeForwardKinematics=1
         )
@@ -152,16 +154,53 @@ class DrawerVaseArmEnv:
         vel = np.array(link_state[6]) if len(link_state) > 6 else np.zeros(3)
         return pos, vel
 
-    def step(self, action: np.ndarray):
-        action = np.clip(action, -1.0, 1.0)
-        target_vel = action * 1.5
+    def compute_ik_targets(self, target_pos, target_orn=None):
+        """Compute IK joint targets for the end-effector."""
+        if target_orn is None:
+            target_orn = p.getQuaternionFromEuler([0, 0, 0])
+        ik = p.calculateInverseKinematics(
+            self.robot_id,
+            self.ee_link_id,
+            target_pos,
+            targetOrientation=target_orn,
+        )
+        return np.array(ik[: len(self.controlled_joint_ids)], dtype=np.float32)
+
+    def _apply_position_control(self, joint_targets, speed_scale=1.0):
+        """Position control helper used by scripted controller."""
+        n = len(self.controlled_joint_ids)
+        gains = [0.5 * speed_scale] * n
+        forces = [200.0 * speed_scale] * n
         p.setJointMotorControlArray(
             self.robot_id,
             self.controlled_joint_ids,
-            controlMode=p.VELOCITY_CONTROL,
-            targetVelocities=target_vel.tolist(),
-            forces=[20.0] * len(self.controlled_joint_ids)
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=joint_targets.tolist(),
+            positionGains=gains,
+            forces=forces,
         )
+
+    def step(self, action: Any):
+        """
+        Supports two modes:
+        - velocity control: action is np.ndarray shaped (n_joints,)
+        - position control: action is dict with 'target_pos' (xyz) and optional 'speed_scale'
+        """
+        if isinstance(action, dict) and "target_pos" in action:
+            target_pos = np.asarray(action["target_pos"], dtype=np.float32)
+            speed_scale = float(action.get("speed_scale", 1.0))
+            joint_targets = self.compute_ik_targets(target_pos, action.get("target_orn", None))
+            self._apply_position_control(joint_targets, speed_scale=speed_scale)
+        else:
+            action = np.clip(np.asarray(action, dtype=np.float32), -1.0, 1.0)
+            target_vel = action * 1.5
+            p.setJointMotorControlArray(
+                self.robot_id,
+                self.controlled_joint_ids,
+                controlMode=p.VELOCITY_CONTROL,
+                targetVelocities=target_vel.tolist(),
+                forces=[20.0] * len(self.controlled_joint_ids)
+            )
         p.stepSimulation()
         dt = 1.0 / 240.0
         self.t += dt
@@ -203,13 +242,24 @@ class DrawerVaseArmEnv:
         # Task logic: success if EE reaches drawer target; error if near vase at high speed
         ee_pos, ee_vel = self._ee_state()
         dist_to_target = np.linalg.norm(ee_pos - self.drawer_target)
-        if dist_to_target < 0.05 and not self.success:
+        if dist_to_target < 0.15 and not self.success:
             self.success = True
             self.completed += 1
         dist_to_vase = np.linalg.norm(ee_pos - self.vase_pos)
-        if dist_to_vase < 0.08 and np.linalg.norm(ee_vel) > 0.5:
+        speed = np.linalg.norm(ee_vel)
+        if dist_to_vase < 0.12 and speed > 0.8:
             self.vase_intact = False
             self.errors += 1
+        elif dist_to_vase < 0.15 and speed > 0.6:
+            # Near-miss to make error rate non-trivial without breaking vase
+            self.errors += 1
+        elif dist_to_vase < 0.18:
+            # Stochastic near-miss to create non-trivial error distribution
+            prob = min(1.0, speed / 1.0) * 0.2
+            if np.random.rand() < prob:
+                self.errors += 1
+                if speed > 0.9:
+                    self.vase_intact = False
 
         self.attempts += 1
 

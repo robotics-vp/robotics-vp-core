@@ -256,6 +256,23 @@ class DataPackRepo:
         # Limit
         return results[:limit]
 
+    def write_guidance_overlays(self, datapacks: List[DataPackMeta], outfile: str):
+        """
+        Write guidance overlays (datapack_id + guidance_profile) to a JSONL file.
+        Does not mutate existing datapack files.
+        """
+        if not datapacks:
+            return
+        os.makedirs(os.path.dirname(outfile), exist_ok=True)
+        with open(outfile, "w") as f:
+            for dp in datapacks:
+                if not dp.guidance_profile:
+                    continue
+                f.write(json.dumps({
+                    "pack_id": dp.pack_id,
+                    "guidance_profile": dp.guidance_profile.to_dict(),
+                }) + "\n")
+
     def get_positive_for_skill(
         self,
         task_name: str,

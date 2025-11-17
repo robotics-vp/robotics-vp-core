@@ -27,13 +27,15 @@ from src.envs.drawer_vase_physics_env import DrawerVasePhysicsEnv, DrawerVaseCon
 from policies.scripted.drawer_open_avoid_vase import DrawerOpenAvoidVasePolicy
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
-from src.valuation.datapacks import build_datapack_from_episode
+from src.valuation.datapacks import build_datapack_from_episode, build_datapack_meta_from_episode
+from src.valuation.datapack_repo import DataPackRepo
+from src.valuation.datapack_schema import ObjectiveProfile
 
 
 from typing import Optional
 
 
-def run_smoke(episodes: int, datapack_path: Optional[str]):
+def run_smoke(episodes: int, datapack_path: Optional[str], use_repo: bool = True):
     profile = get_internal_experiment_profile("dishwashing")
     econ_params = load_econ_params(profile, preset=profile.get("econ_preset", "toy"))
 
@@ -42,6 +44,7 @@ def run_smoke(episodes: int, datapack_path: Optional[str]):
 
     summaries = []
     datapacks = []
+    datapack_metas = []
 
     def _to_python(obj):
         if isinstance(obj, np.generic):
@@ -51,6 +54,11 @@ def run_smoke(episodes: int, datapack_path: Optional[str]):
         if isinstance(obj, list):
             return [_to_python(v) for v in obj]
         return obj
+
+    # Compute baseline from first episode
+    baseline_mpl = None
+    baseline_error = None
+    baseline_ep = None
 
     for ep in range(episodes):
         obs, info = env.reset()
@@ -63,6 +71,53 @@ def run_smoke(episodes: int, datapack_path: Optional[str]):
             info_history.append(info)
         summary = summarize_drawer_vase_episode(info_history)
         summaries.append(summary)
+
+        # Set baseline from first episode
+        if ep == 0:
+            baseline_mpl = summary.mpl_episode
+            baseline_error = summary.error_rate_episode
+            baseline_ep = summary.ep_episode
+
+        # Build unified DataPackMeta
+        if use_repo:
+            # Build ObjectiveProfile for econ profile logging
+            obj_profile = ObjectiveProfile(
+                objective_vector=[1.0, 1.0, 1.0, 1.0, 0.0],  # balanced
+                wage_human=18.0,
+                energy_price_kWh=0.12,
+                market_region="US",
+                task_family="drawer_vase",
+                customer_segment="balanced",
+                baseline_mpl_human=20.0,
+                baseline_error_human=0.05,
+                env_name="drawer_vase",
+                engine_type="pybullet",
+                task_type="fragility",
+                econ_profile_deltas=None,
+                econ_params_effective={
+                    "base_rate": float(econ_params.base_rate),
+                    "damage_cost": float(econ_params.damage_cost),
+                    "care_cost": float(econ_params.care_cost),
+                    "energy_Wh_per_attempt": float(econ_params.energy_Wh_per_attempt),
+                    "max_steps": int(econ_params.max_steps),
+                },
+                reward_weights=None,
+            )
+
+            dp_meta = build_datapack_meta_from_episode(
+                summary, econ_params,
+                condition_profile={"task": "drawer_vase", "tags": ["phase_c_smoke"], "engine_type": "pybullet"},
+                agent_profile={"policy": "scripted_low_level", "controller": "hierarchy_stub", "version": "v1"},
+                brick_id=f"phase_c_smoke_{ep:04d}",
+                env_type="drawer_vase",
+                baseline_mpl=baseline_mpl,
+                baseline_error=baseline_error,
+                baseline_ep=baseline_ep,
+                objective_profile=obj_profile,
+            )
+            datapack_metas.append(dp_meta)
+
+        # Legacy format
         datapacks.append(build_datapack_from_episode(
             summary,
             econ_params,
@@ -76,13 +131,24 @@ def run_smoke(episodes: int, datapack_path: Optional[str]):
 
     env.close()
 
+    # Write to DataPackRepo (unified format)
+    if use_repo and datapack_metas:
+        repo_dir = "data/datapacks/phase_c"
+        repo = DataPackRepo(base_dir=repo_dir)
+        repo.append_batch(datapack_metas)
+        stats = repo.get_statistics("drawer_vase")
+        print(f"\nSaved {len(datapack_metas)} datapacks to DataPackRepo ({repo_dir})")
+        print(f"  Total in repo: {stats['total']}")
+        print(f"  Positive: {stats['positive']}, Negative: {stats['negative']}")
+
+    # Legacy JSON output
     if datapack_path:
         out_dir = os.path.dirname(datapack_path)
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
         with open(datapack_path, "w") as f:
             json.dump(_to_python(datapacks), f, indent=2)
-        print(f"Wrote Phase C datapacks to {datapack_path}")
+        print(f"Wrote legacy Phase C datapacks to {datapack_path}")
 
     print("\nAggregate:")
     print(f"  MPL mean: {np.mean([s.mpl_episode for s in summaries]):.4f}")
@@ -95,7 +161,8 @@ if __name__ == "__main__":
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--out-datapacks", type=str, default=None)
     parser.add_argument("--out-json", type=str, default=None, help="Alias for out-datapacks")
+    parser.add_argument("--no-repo", action="store_true", help="Skip writing to DataPackRepo")
     args = parser.parse_args()
 
     target_path = args.out_datapacks or args.out_json
-    run_smoke(args.episodes, target_path)
+    run_smoke(args.episodes, target_path, use_repo=not args.no_repo)

@@ -1,5 +1,6 @@
 import numpy as np
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
 from src.config.econ_params import EconParams
@@ -312,6 +313,8 @@ class EpisodeInfoSummary:
     energy_per_effector: Dict[str, Dict[str, float]]
     coordination_metrics: Dict[str, float]
     profit: float
+    episode_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    media_refs: Dict[str, str] = field(default_factory=dict)
     wage_parity: Optional[float] = None
 
 
@@ -337,6 +340,8 @@ def summarize_episode_info(info_history: List[Dict[str, Any]]) -> EpisodeInfoSum
             energy_per_effector={},
             coordination_metrics={},
             profit=0.0,
+            episode_id=str(uuid.uuid4()),
+            media_refs={},
             wage_parity=None,
         )
 
@@ -378,5 +383,7 @@ def summarize_episode_info(info_history: List[Dict[str, Any]]) -> EpisodeInfoSum
         energy_per_effector=energy_per_effector,
         coordination_metrics=coordination_metrics,
         profit=profit,
+        episode_id=last.get("episode_id", str(uuid.uuid4())),
+        media_refs=last.get("media_refs", {"sim_trace": f"sim://{last.get('t',0.0):.3f}"}),
         wage_parity=None,
     )

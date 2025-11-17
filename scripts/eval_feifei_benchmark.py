@@ -55,7 +55,9 @@ from src.hrl.skill_termination import SkillTerminationDetector
 from src.sima.co_agent import SIMACoAgent
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
-from src.valuation.datapacks import build_datapack_from_episode
+from src.valuation.datapacks import build_datapack_from_episode, build_datapack_meta_from_episode
+from src.valuation.datapack_repo import DataPackRepo
+from src.valuation.datapack_schema import ObjectiveProfile
 
 
 def create_perturbed_config(
@@ -641,7 +643,7 @@ def generate_benchmark_report(results, econ_metrics, save_path=None):
         print(f"\nSaved report to {save_path}")
 
 
-def collect_datapacks(env, econ_params, n_episodes=5):
+def collect_datapacks(env, econ_params, n_episodes=5, use_repo=True):
     """Run scripted HRL rollout and export datapacks."""
     pi_h = ScriptedHighLevelController()
     pi_l = ScriptedSkillPolicy()
@@ -649,7 +651,14 @@ def collect_datapacks(env, econ_params, n_episodes=5):
     agent = HierarchicalAgent(pi_h, pi_l, termination_detector, use_scripted_hl=True)
 
     datapacks = []
-    for _ in range(n_episodes):
+    datapack_metas = []
+
+    # Compute baseline from first episode
+    baseline_mpl = None
+    baseline_error = None
+    baseline_ep = None
+
+    for ep in range(n_episodes):
         obs, info = env.reset()
         agent.reset()
         info_history = []
@@ -661,6 +670,53 @@ def collect_datapacks(env, econ_params, n_episodes=5):
             if env_done or info.get("success", False) or not info.get("vase_intact", True):
                 done = True
         summary = summarize_drawer_vase_episode(info_history)
+
+        # Set baseline from first episode
+        if ep == 0:
+            baseline_mpl = summary.mpl_episode
+            baseline_error = summary.error_rate_episode
+            baseline_ep = summary.ep_episode
+
+        # Build unified DataPackMeta
+        if use_repo:
+            # Build ObjectiveProfile for econ profile logging
+            obj_profile = ObjectiveProfile(
+                objective_vector=[1.0, 1.0, 1.0, 1.0, 0.0],  # balanced
+                wage_human=18.0,
+                energy_price_kWh=0.12,
+                market_region="US",
+                task_family="drawer_vase",
+                customer_segment="balanced",
+                baseline_mpl_human=20.0,
+                baseline_error_human=0.05,
+                env_name="drawer_vase",
+                engine_type="pybullet",
+                task_type="fragility",
+                econ_profile_deltas=None,
+                econ_params_effective={
+                    "base_rate": float(econ_params.base_rate),
+                    "damage_cost": float(econ_params.damage_cost),
+                    "care_cost": float(econ_params.care_cost),
+                    "energy_Wh_per_attempt": float(econ_params.energy_Wh_per_attempt),
+                    "max_steps": int(econ_params.max_steps),
+                },
+                reward_weights=None,
+            )
+
+            dp_meta = build_datapack_meta_from_episode(
+                summary, econ_params,
+                condition_profile={"task": "drawer_vase", "tags": ["feifei_benchmark"], "engine_type": "pybullet"},
+                agent_profile={"policy": "hrl_scripted", "version": "v1"},
+                brick_id=f"feifei_benchmark_{ep:04d}",
+                env_type="drawer_vase",
+                baseline_mpl=baseline_mpl,
+                baseline_error=baseline_error,
+                baseline_ep=baseline_ep,
+                objective_profile=obj_profile,
+            )
+            datapack_metas.append(dp_meta)
+
+        # Legacy format for backwards compatibility
         datapacks.append(build_datapack_from_episode(
             summary,
             econ_params,
@@ -669,6 +725,17 @@ def collect_datapacks(env, econ_params, n_episodes=5):
             brick_id=None,
             env_type="drawer_vase",
         ))
+
+    # Write to DataPackRepo if enabled
+    if use_repo and datapack_metas:
+        repo_dir = "data/datapacks/phase_c"
+        repo = DataPackRepo(base_dir=repo_dir)
+        repo.append_batch(datapack_metas)
+        stats = repo.get_statistics("drawer_vase")
+        print(f"\nSaved {len(datapack_metas)} datapacks to DataPackRepo ({repo_dir})")
+        print(f"  Total in repo: {stats['total']}")
+        print(f"  Positive: {stats['positive']}, Negative: {stats['negative']}")
+
     return datapacks
 
 
@@ -702,6 +769,11 @@ def main():
         type=int,
         default=5,
         help='Number of episodes for datapack export'
+    )
+    parser.add_argument(
+        '--no-repo',
+        action='store_true',
+        help='Skip writing to DataPackRepo'
     )
 
     args = parser.parse_args()
@@ -741,7 +813,7 @@ def main():
     generate_benchmark_report(results, econ_metrics, report_path)
 
     # Optional datapack export (Phase C → valuation)
-    if args.emit_datapacks:
+    if args.emit_datapacks or not args.no_repo:
         profile = get_internal_experiment_profile("dishwashing")
         econ_params = load_econ_params(profile, preset=profile.get("econ_preset", "toy"))
         config = DrawerVaseConfig()
@@ -750,11 +822,18 @@ def main():
             obs_mode='state',
             render_mode=None
         )
-        datapacks = collect_datapacks(env, econ_params, n_episodes=args.datapack_episodes)
-        os.makedirs(os.path.dirname(args.emit_datapacks), exist_ok=True)
-        with open(args.emit_datapacks, 'w') as f:
-            json.dump(datapacks, f, indent=2)
-        print(f"Wrote datapacks to {args.emit_datapacks}")
+        datapacks = collect_datapacks(
+            env, econ_params,
+            n_episodes=args.datapack_episodes,
+            use_repo=not args.no_repo
+        )
+
+        # Legacy JSON output if requested
+        if args.emit_datapacks:
+            os.makedirs(os.path.dirname(args.emit_datapacks), exist_ok=True)
+            with open(args.emit_datapacks, 'w') as f:
+                json.dump(datapacks, f, indent=2)
+            print(f"Wrote legacy datapacks to {args.emit_datapacks}")
 
     print("\n" + "=" * 70)
     print("BENCHMARK COMPLETE")

@@ -5,6 +5,7 @@ Run paired energy profile interventions and log EpisodeInfoSummary.
 import argparse
 import json
 import numpy as np
+import pybullet as p
 
 from src.envs.drawer_vase_physics_env import DrawerVasePhysicsEnv, DrawerVaseConfig, summarize_drawer_vase_episode
 from src.envs.drawer_vase_arm_env import DrawerVaseArmEnv
@@ -21,19 +22,76 @@ PROFILES = {
 }
 
 
+def run_scripted_drawer_open(env: DrawerVaseArmEnv, profile: EnergyProfile):
+    """Scripted drawer open with IK waypoints; returns info_history."""
+    _, info = env.reset()
+    info_history = [info]
+
+    # Waypoints: approach, skim near vase, contact drawer face
+    pregrasp = env.drawer_target + np.array([0.0, -0.18 * profile.safety_margin_scale, 0.08])
+    offset = max(0.0, (profile.safety_margin_scale - 1.0) * 0.02)
+    skim_vase = env.vase_pos + np.array([offset, 0.0, 0.01])
+    contact = env.drawer_target  # reaching this should mark success
+
+    def _steps(base, speed_override=None):
+        sp = speed_override if speed_override is not None else profile.speed_scale
+        return max(3, int(base / sp))
+
+    def _interpolate_to(target, base_steps, speed_override=None):
+        start, _ = env._ee_state()
+        steps = _steps(base_steps, speed_override)
+        for i in range(steps):
+            frac = float(i + 1) / steps
+            interp = start + frac * (target - start)
+            action = {"target_pos": interp, "speed_scale": speed_override or profile.speed_scale}
+            _, _, done, truncated, info = env.step(action)
+            info_history.append(info)
+            if done or truncated:
+                return True
+        return False
+
+    for target, base_steps, speed_override in [
+        (pregrasp, 80, None),
+        # Aggressive skim to invite near-miss/collision when speed is high
+        (skim_vase, 6, profile.speed_scale * 2.0),
+        # Fast poke directly at vase before final contact
+        (env.vase_pos, 3, profile.speed_scale * 3.0),
+        (contact, 140, None),
+    ]:
+        if _interpolate_to(target, base_steps, speed_override):
+            break
+
+    # If not yet successful, keep nudging toward contact for a short horizon
+    tries = 0
+    while not env.success and env.step_count < env.max_steps and tries < 200:
+        if _interpolate_to(contact, 12, speed_override=profile.speed_scale):
+            break
+        tries += 1
+
+    return info_history
+
+
 def run_episode(env, policy, profile_name, env_type):
     profile = PROFILES[profile_name]
     if env_type == "drawer_vase_arm":
-        obs, info = env.reset()
-    else:
-        obs, info = env.reset()
+        info_history = run_scripted_drawer_open(env, profile)
+        # Early exit handled inside scripted controller; summarize below
+        summary = summarize_drawer_vase_episode(info_history)
+        return summary
+    obs, info = env.reset()
     if hasattr(policy, "reset"):
         policy.reset()
     info_history = []
     done = False
     while not done:
         if env_type == "drawer_vase_arm":
-            action = np.random.uniform(-1, 1, size=len(env.controlled_joint_ids))
+            # Simple IK-based controller toward drawer target to make task non-trivial
+            joint_states = p.getJointStates(env.robot_id, env.controlled_joint_ids)
+            joint_pos = np.array([s[0] for s in joint_states], dtype=np.float32)
+            target_joint = p.calculateInverseKinematics(env.robot_id, env.controlled_joint_ids[-1], env.drawer_target)
+            target_joint = np.array(target_joint[: len(env.controlled_joint_ids)], dtype=np.float32)
+            action = 0.5 * (target_joint - joint_pos)
+            action = np.clip(action, -1.0, 1.0)
         else:
             action = policy.predict(obs)
         action = apply_energy_profile_to_action(action, profile)

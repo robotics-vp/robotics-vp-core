@@ -25,10 +25,12 @@ from src.envs.drawer_vase_physics_env import (
 from policies.scripted.drawer_open_avoid_vase import DrawerOpenAvoidVasePolicy
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
-from src.valuation.datapacks import build_datapack_from_episode
+from src.valuation.datapacks import build_datapack_from_episode, build_datapack_meta_from_episode
+from src.valuation.datapack_repo import DataPackRepo
+from src.valuation.datapack_schema import ObjectiveProfile
 
 
-def evaluate_scripted_policy(n_episodes=20, render=False, datapack_path=None):
+def evaluate_scripted_policy(n_episodes=20, render=False, datapack_path=None, use_repo=True):
     """
     Evaluate scripted policy on drawer+vase task.
 
@@ -68,6 +70,12 @@ def evaluate_scripted_policy(n_episodes=20, render=False, datapack_path=None):
     all_summaries = []
 
     datapacks = []
+    datapack_metas = []
+
+    # Compute baseline from first few episodes for delta calculation
+    baseline_mpl = None
+    baseline_error = None
+    baseline_ep = None
 
     for ep in range(n_episodes):
         obs, info = env.reset()
@@ -84,7 +92,53 @@ def evaluate_scripted_policy(n_episodes=20, render=False, datapack_path=None):
         # Summarize episode
         summary = summarize_drawer_vase_episode(info_history)
         all_summaries.append(summary)
-        if datapack_path:
+
+        # Set baseline from first episode
+        if ep == 0:
+            baseline_mpl = summary.mpl_episode
+            baseline_error = summary.error_rate_episode
+            baseline_ep = summary.ep_episode
+
+        if datapack_path or use_repo:
+            # Build ObjectiveProfile for econ profile logging
+            obj_profile = ObjectiveProfile(
+                objective_vector=[1.0, 1.0, 1.0, 1.0, 0.0],  # balanced
+                wage_human=18.0,
+                energy_price_kWh=0.12,
+                market_region="US",
+                task_family="drawer_vase",
+                customer_segment="balanced",
+                baseline_mpl_human=20.0,
+                baseline_error_human=0.05,
+                env_name="drawer_vase",
+                engine_type="pybullet",
+                task_type="fragility",
+                econ_profile_deltas=None,  # No EconProfileNet applied yet
+                econ_params_effective={
+                    "base_rate": float(econ_params.base_rate),
+                    "damage_cost": float(econ_params.damage_cost),
+                    "care_cost": float(econ_params.care_cost),
+                    "energy_Wh_per_attempt": float(econ_params.energy_Wh_per_attempt),
+                    "max_steps": int(econ_params.max_steps),
+                },
+                reward_weights=None,  # No EconObjectiveNet yet
+            )
+
+            # Build unified DataPackMeta
+            dp_meta = build_datapack_meta_from_episode(
+                summary, econ_params,
+                condition_profile={"task": "drawer_vase", "tags": [], "engine_type": "pybullet"},
+                agent_profile={"policy": "scripted", "version": "v1"},
+                brick_id=f"drawer_vase_scripted_{ep:04d}",
+                env_type="drawer_vase",
+                baseline_mpl=baseline_mpl,
+                baseline_error=baseline_error,
+                baseline_ep=baseline_ep,
+                objective_profile=obj_profile,
+            )
+            datapack_metas.append(dp_meta)
+
+            # Also build legacy format for backwards compatibility
             datapacks.append(build_datapack_from_episode(
                 summary, econ_params,
                 condition_profile={"task": "drawer_vase", "tags": []},
@@ -177,11 +231,22 @@ def evaluate_scripted_policy(n_episodes=20, render=False, datapack_path=None):
         json.dump(results, f, indent=2)
     print(f"\nSaved results to results/drawer_vase_scripted_eval.json")
 
+    # Save via DataPackRepo (unified format)
+    if use_repo and datapack_metas:
+        repo_dir = "data/datapacks/phase_c"
+        repo = DataPackRepo(base_dir=repo_dir)
+        repo.append_batch(datapack_metas)
+        stats = repo.get_statistics("drawer_vase")
+        print(f"\nSaved {len(datapack_metas)} datapacks to DataPackRepo ({repo_dir})")
+        print(f"  Total in repo: {stats['total']}")
+        print(f"  Positive: {stats['positive']}, Negative: {stats['negative']}")
+
+    # Legacy: save to JSON file if path provided
     if datapack_path:
         os.makedirs(os.path.dirname(datapack_path), exist_ok=True)
         with open(datapack_path, 'w') as f:
             json.dump(datapacks, f, indent=2)
-        print(f"Saved datapacks to {datapack_path}")
+        print(f"Saved legacy datapacks to {datapack_path}")
 
     return results
 
@@ -192,7 +257,14 @@ if __name__ == '__main__':
     parser.add_argument('--episodes', type=int, default=20)
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--emit-datapacks', type=str, default=None,
-                        help='Path to write datapacks JSON')
+                        help='Path to write legacy datapacks JSON')
+    parser.add_argument('--no-repo', action='store_true',
+                        help='Skip writing to DataPackRepo')
     args = parser.parse_args()
 
-    evaluate_scripted_policy(n_episodes=args.episodes, render=args.render, datapack_path=args.emit_datapacks)
+    evaluate_scripted_policy(
+        n_episodes=args.episodes,
+        render=args.render,
+        datapack_path=args.emit_datapacks,
+        use_repo=not args.no_repo
+    )

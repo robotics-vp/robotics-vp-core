@@ -26,6 +26,8 @@ Target flywheel: better data → better robots → better economics → better d
 - Phase B frozen: world model, trust_net, w_econ_lattice, λ controller, SyntheticWeightController — do not change math.
 - Phase C scaffolding: HRL/VLA/SIMA for drawer+vase with datapack hooks.
 - Energy bench: experimental articulated-arm envs (`dishwashing_arm_env`, `drawer_vase_arm_env`) plus energy interventions/analysis; additive only, no changes to Phase B weighting or rewards.
+- Orchestrator: advisory meta-planner that proposes tool sequences/run specs (energy profiles, data mix, backend), annotates datapacks via GuidanceProfile, and emits structured diffusion requests; analysis-only, no reward/weight changes.
+- Datapacks: two-bucket taxonomy with ObjectiveProfile and optional GuidanceProfile; diffusion request/ingest scaffold connects synthetic video generation back into datapacks/valuation.
 
 ## 4) Data Valuation Loop (Heart of the System)
 ```

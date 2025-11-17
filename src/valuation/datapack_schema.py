@@ -16,6 +16,70 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional, Literal
 from datetime import datetime
 
+from src.valuation.guidance_profile import GuidanceProfile
+
+from src.valuation.guidance_profile import GuidanceProfile
+
+# Unified schema version - aligns with existing 2.0-energy format
+DATAPACK_SCHEMA_VERSION = "2.0-energy"
+
+
+@dataclass
+class EnergyProfile:
+    """
+    Energy breakdown for 2.0-energy schema compatibility.
+
+    Captures per-limb, per-skill, per-joint, and per-effector energy usage.
+    """
+    total_Wh: float = 0.0
+    Wh_per_unit: float = 0.0
+    Wh_per_hour: float = 0.0
+
+    # Hierarchical energy breakdown (2.0-energy fields)
+    energy_per_limb: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    # e.g., {"shoulder": {"Wh": 0.5, "fraction": 0.3}, ...}
+
+    energy_per_skill: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    # e.g., {"grasp": {"Wh": 0.2, "fraction": 0.15}, ...}
+
+    energy_per_joint: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    # e.g., {"joint_0": {"Wh": 0.1, "torque_integral": 5.0}, ...}
+
+    energy_per_effector: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    # e.g., {"gripper": {"Wh": 0.05, "activation_time": 10.0}, ...}
+
+    coordination_metrics: Dict[str, float] = field(default_factory=dict)
+    # e.g., {"mean_active_joints": 2.5, "peak_power": 10.0, ...}
+
+    # Legacy fields for compatibility
+    limb_energy_Wh: Dict[str, float] = field(default_factory=dict)
+    skill_energy_Wh: Dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d):
+        """Create from dictionary."""
+        return cls(**d)
+
+    @classmethod
+    def from_episode_metrics(cls, metrics: Dict[str, Any]):
+        """Create from EpisodeInfoSummary metrics dict."""
+        return cls(
+            total_Wh=metrics.get("energy_Wh", 0.0),
+            Wh_per_unit=metrics.get("energy_Wh_per_unit", 0.0),
+            Wh_per_hour=metrics.get("energy_Wh_per_hour", 0.0),
+            energy_per_limb=metrics.get("energy_per_limb", {}),
+            energy_per_skill=metrics.get("energy_per_skill", {}),
+            energy_per_joint=metrics.get("energy_per_joint", {}),
+            energy_per_effector=metrics.get("energy_per_effector", {}),
+            coordination_metrics=metrics.get("coordination_metrics", {}),
+            limb_energy_Wh=metrics.get("limb_energy_Wh", {}),
+            skill_energy_Wh=metrics.get("skill_energy_Wh", {}),
+        )
+
 
 @dataclass
 class ConditionProfile:
@@ -169,26 +233,111 @@ class SimaAnnotation:
 
 
 @dataclass
+class ObjectiveProfile:
+    """
+    Objective and economic profile for the datapack.
+
+    Captures:
+    - Which objective_vector was declared for the run
+    - Economic context (wage, energy price, market, customer segment)
+    - EconProfileNet deltas applied (if any)
+    - Effective EconParams used
+
+    This is the bridge to programmable objectives and DL econ hyperparameters.
+    """
+    # Objective vector (what the system was optimizing for)
+    objective_vector: List[float] = field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0, 0.0])
+    # [w_mpl, w_error, w_energy, w_safety, w_novelty]
+
+    # Economic context
+    wage_human: float = 18.0
+    energy_price_kWh: float = 0.12
+    market_region: str = "US"
+    task_family: str = "dishwashing"
+    customer_segment: str = "balanced"
+    baseline_mpl_human: float = 60.0
+    baseline_error_human: float = 0.05
+
+    # Environment context (from EconProfileContext)
+    env_name: str = "drawer_vase"
+    engine_type: str = "pybullet"
+    task_type: str = "fragility"
+
+    # EconProfileNet deltas (if applied)
+    econ_profile_deltas: Optional[List[float]] = None
+    # [Δbase_rate, Δdamage_cost, Δcare_cost, Δenergy_Wh_per_attempt, Δmax_steps_scale]
+
+    # Effective EconParams used (after deltas applied)
+    econ_params_effective: Optional[Dict[str, float]] = None
+    # {"base_rate": ..., "damage_cost": ..., "care_cost": ..., "energy_Wh_per_attempt": ..., "max_steps": ...}
+
+    # Reward weights (if EconObjectiveNet was used)
+    reward_weights: Optional[List[float]] = None
+    # [alpha_mpl, alpha_ep, alpha_error, alpha_energy, alpha_safety]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "ObjectiveProfile":
+        """Create from dictionary."""
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+    def has_econ_profile_deltas(self) -> bool:
+        """Check if EconProfileNet deltas were applied."""
+        return self.econ_profile_deltas is not None
+
+    def summary(self) -> str:
+        """Get human-readable summary."""
+        deltas_str = "none" if not self.econ_profile_deltas else f"{len(self.econ_profile_deltas)} deltas"
+        return (
+            f"ObjectiveProfile[{self.task_family}/{self.env_name}/{self.engine_type}] "
+            f"obj={self.objective_vector[:4]} | "
+            f"segment={self.customer_segment} | "
+            f"deltas={deltas_str}"
+        )
+
+
+@dataclass
 class DataPackMeta:
     """
     Complete datapack metadata for the two-bucket taxonomy.
+
+    Unified with 2.0-energy schema for compatibility with Phase B/C scripts.
 
     Bucket types:
     - positive: Data that improved J/MPL/error/EP
     - negative: Data that worsened J/MPL/error/EP (with counterfactual plan)
     """
+    # Schema version (unified with existing 2.0-energy format)
+    schema_version: str = DATAPACK_SCHEMA_VERSION
+
     # Identification
     pack_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     task_name: str = "drawer_vase"
+    env_type: str = "drawer_vase"  # "dishwashing", "drawer_vase", "bricklaying", etc.
+    brick_id: Optional[str] = None  # For tracing specific data units
     bucket: Literal["positive", "negative"] = "positive"
 
     # Semantic tags for filtering
     semantic_tags: List[str] = field(default_factory=list)
     # e.g., ["fragile glassware", "multi-object", "low-light", "top drawer"]
 
+    # Energy driver tags (from energy_tags.py)
+    energy_driver_tags: List[str] = field(default_factory=list)
+    # e.g., ["energy_driver:long_reach", "energy_driver:fragility_cautious", ...]
+
     # Core profiles
     condition: ConditionProfile = field(default_factory=ConditionProfile)
     attribution: AttributionProfile = field(default_factory=AttributionProfile)
+
+    # Energy profile (2.0-energy fields)
+    energy: EnergyProfile = field(default_factory=EnergyProfile)
+
+    # Agent profile (policy info)
+    agent_profile: Dict[str, Any] = field(default_factory=dict)
+    # e.g., {"policy": "scripted", "model_version": "v1", ...}
 
     # Skill trace (time-ordered skill usage)
     skill_trace: List[Dict[str, Any]] = field(default_factory=list)
@@ -200,8 +349,21 @@ class DataPackMeta:
     #   "local_metrics": Dict[str, float]  # local ΔMPL, Δerror, etc.
     # }
 
+    # Episode metrics (raw from EpisodeInfoSummary)
+    episode_metrics: Dict[str, Any] = field(default_factory=dict)
+
     # SIMA annotation (optional)
     sima_annotation: Optional[SimaAnnotation] = None
+
+    # VLA plan annotation (optional)
+    vla_plan: Optional[Dict[str, Any]] = None
+    # e.g., {"instruction": "...", "skill_sequence": [...], "confidence": [...]}
+
+    # Objective profile (optional) - captures DL econ hyperparameters
+    objective_profile: Optional[ObjectiveProfile] = None
+
+    # Optional orchestration guidance
+    guidance_profile: Optional["GuidanceProfile"] = None
 
     # For negative datapacks: counterfactual plan
     counterfactual_plan: Optional[Dict[str, Any]] = None
@@ -224,53 +386,205 @@ class DataPackMeta:
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         d = {
+            'schema_version': self.schema_version,
             'pack_id': self.pack_id,
             'task_name': self.task_name,
+            'env_type': self.env_type,
+            'brick_id': self.brick_id,
             'bucket': self.bucket,
             'semantic_tags': self.semantic_tags,
+            'energy_driver_tags': self.energy_driver_tags,
             'condition': self.condition.to_dict(),
             'attribution': self.attribution.to_dict(),
+            'energy': self.energy.to_dict(),
+            'agent_profile': self.agent_profile,
             'skill_trace': self.skill_trace,
+            'episode_metrics': self.episode_metrics,
             'sima_annotation': self.sima_annotation.to_dict() if self.sima_annotation else None,
+            'vla_plan': self.vla_plan,
+            'objective_profile': self.objective_profile.to_dict() if self.objective_profile else None,
             'counterfactual_plan': self.counterfactual_plan,
             'counterfactual_source': self.counterfactual_source,
             'created_at': self.created_at,
             'episode_id': self.episode_id,
             'episode_index': self.episode_index,
             'raw_data_path': self.raw_data_path,
+            'guidance_profile': self.guidance_profile.to_dict() if self.guidance_profile else None,
         }
         return d
 
     @classmethod
     def from_dict(cls, d):
         """Create from dictionary."""
-        condition = ConditionProfile.from_dict(d['condition'])
-        attribution = AttributionProfile.from_dict(d['attribution'])
+        condition = ConditionProfile.from_dict(d.get('condition', {}))
+        attribution = AttributionProfile.from_dict(d.get('attribution', {}))
+
+        # Handle energy profile (new in unified schema)
+        energy = EnergyProfile()
+        if 'energy' in d:
+            energy = EnergyProfile.from_dict(d['energy'])
 
         sima_annotation = None
         if d.get('sima_annotation'):
             sima_annotation = SimaAnnotation.from_dict(d['sima_annotation'])
 
+        objective_profile = None
+        if d.get('objective_profile'):
+            objective_profile = ObjectiveProfile.from_dict(d['objective_profile'])
+
         return cls(
-            pack_id=d['pack_id'],
-            task_name=d['task_name'],
-            bucket=d['bucket'],
-            semantic_tags=d['semantic_tags'],
+            schema_version=d.get('schema_version', DATAPACK_SCHEMA_VERSION),
+            pack_id=d.get('pack_id', str(uuid.uuid4())),
+            task_name=d.get('task_name', 'drawer_vase'),
+            env_type=d.get('env_type', d.get('task_name', 'drawer_vase')),
+            brick_id=d.get('brick_id'),
+            bucket=d.get('bucket', 'positive'),
+            semantic_tags=d.get('semantic_tags', []),
+            energy_driver_tags=d.get('energy_driver_tags', []),
             condition=condition,
             attribution=attribution,
-            skill_trace=d['skill_trace'],
+            energy=energy,
+            agent_profile=d.get('agent_profile', {}),
+            skill_trace=d.get('skill_trace', []),
+            episode_metrics=d.get('episode_metrics', {}),
             sima_annotation=sima_annotation,
+            vla_plan=d.get('vla_plan'),
+            objective_profile=objective_profile,
             counterfactual_plan=d.get('counterfactual_plan'),
             counterfactual_source=d.get('counterfactual_source'),
             created_at=d.get('created_at', datetime.now().isoformat()),
             episode_id=d.get('episode_id'),
             episode_index=d.get('episode_index'),
             raw_data_path=d.get('raw_data_path'),
+            guidance_profile=GuidanceProfile.from_dict(d['guidance_profile']) if d.get('guidance_profile') else None,
         )
+
+    @classmethod
+    def from_legacy_energy_dict(cls, legacy_dict: Dict[str, Any]):
+        """
+        Create DataPackMeta from legacy 2.0-energy dict format.
+
+        This is the format produced by build_datapack_from_episode() in datapacks.py.
+        """
+        # Extract episode metrics
+        episode_metrics = legacy_dict.get('episode_metrics', {})
+
+        # Extract condition profile from legacy format
+        legacy_condition = legacy_dict.get('condition_profile', {})
+        condition = ConditionProfile(
+            task_name=legacy_dict.get('env_type', 'drawer_vase'),
+            engine_type=legacy_condition.get('engine_type', 'pybullet'),
+            world_id=legacy_condition.get('world_id', 'pyb_drawer_v1'),
+            econ_preset=legacy_dict.get('econ_params', {}).get('preset', 'drawer_vase'),
+            price_per_unit=legacy_dict.get('econ_params', {}).get('price_per_unit', 5.0),
+            energy_price_kWh=legacy_dict.get('econ_params', {}).get('energy_price_kWh', 0.12),
+            tags=legacy_condition,
+        )
+
+        # Extract attribution from legacy format
+        legacy_attribution = legacy_dict.get('attribution', {})
+        attribution = AttributionProfile(
+            delta_mpl=legacy_attribution.get('delta_mpl', 0.0),
+            delta_error=legacy_attribution.get('delta_error', 0.0),
+            delta_ep=legacy_attribution.get('delta_ep', 0.0),
+            trust_score=legacy_attribution.get('trust', 0.0),
+            w_econ=legacy_attribution.get('econ_weight', 0.0) or 0.0,
+        )
+
+        # Extract energy profile from legacy format
+        legacy_energy = legacy_dict.get('energy', {})
+        energy = EnergyProfile(
+            total_Wh=legacy_energy.get('total_Wh', 0.0),
+            Wh_per_unit=legacy_energy.get('Wh_per_unit', 0.0),
+            Wh_per_hour=legacy_energy.get('Wh_per_hour', 0.0),
+            energy_per_limb=legacy_energy.get('energy_per_limb', {}),
+            energy_per_skill=legacy_energy.get('energy_per_skill', {}),
+            energy_per_joint=legacy_energy.get('energy_per_joint', {}),
+            energy_per_effector=legacy_energy.get('energy_per_effector', {}),
+            coordination_metrics=legacy_energy.get('coordination_metrics', {}),
+            limb_energy_Wh=legacy_energy.get('limb_energy_Wh', {}),
+            skill_energy_Wh=legacy_energy.get('skill_energy_Wh', {}),
+        )
+
+        # Determine bucket based on delta_J or defaults
+        delta_j = legacy_attribution.get('delta_J', legacy_attribution.get('delta_mpl', 0.0))
+        bucket = "positive" if delta_j >= 0 else "negative"
+
+        return cls(
+            schema_version=legacy_dict.get('schema_version', DATAPACK_SCHEMA_VERSION),
+            pack_id=legacy_dict.get('brick_id', str(uuid.uuid4())),
+            task_name=legacy_dict.get('env_type', 'drawer_vase'),
+            env_type=legacy_dict.get('env_type', 'drawer_vase'),
+            brick_id=legacy_dict.get('brick_id'),
+            bucket=bucket,
+            semantic_tags=legacy_dict.get('tags', []),
+            energy_driver_tags=legacy_dict.get('semantic_energy_drivers', []),
+            condition=condition,
+            attribution=attribution,
+            energy=energy,
+            agent_profile=legacy_dict.get('agent_profile', {}),
+            skill_trace=[],
+            episode_metrics=episode_metrics,
+            sima_annotation=None,
+            vla_plan=None,
+            counterfactual_plan=None,
+            counterfactual_source=None,
+            created_at=datetime.now().isoformat(),
+            episode_id=legacy_dict.get('brick_id'),
+            episode_index=None,
+            raw_data_path=None,
+        )
+
+    def to_legacy_energy_dict(self) -> Dict[str, Any]:
+        """
+        Convert DataPackMeta back to legacy 2.0-energy dict format.
+
+        For backwards compatibility with existing scripts.
+        """
+        return {
+            'schema_version': self.schema_version,
+            'env_type': self.env_type,
+            'brick_id': self.brick_id or self.pack_id,
+            'episode_metrics': self.episode_metrics,
+            'econ_params': {
+                'price_per_unit': self.condition.price_per_unit,
+                'damage_cost': self.condition.vase_break_cost,
+                'energy_Wh_per_attempt': self.condition.energy_price_kWh,
+                'time_step_s': 0.01,
+                'max_steps': 1000,
+                'preset': self.condition.econ_preset,
+            },
+            'condition_profile': self.condition.tags,
+            'agent_profile': self.agent_profile,
+            'tags': self.semantic_tags,
+            'attribution': {
+                'delta_mpl': self.attribution.delta_mpl,
+                'delta_error': self.attribution.delta_error,
+                'delta_ep': self.attribution.delta_ep,
+                'novelty': None,
+                'trust': self.attribution.trust_score,
+                'econ_weight': self.attribution.w_econ,
+            },
+            'energy': self.energy.to_dict(),
+            'semantic_energy_drivers': self.energy_driver_tags,
+        }
 
     def to_json(self):
         """Convert to JSON string."""
-        return json.dumps(self.to_dict())
+        def _convert_numpy(obj):
+            """Recursively convert numpy types to Python natives."""
+            import numpy as np
+            if isinstance(obj, np.generic):
+                return obj.item()
+            if isinstance(obj, dict):
+                return {k: _convert_numpy(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_convert_numpy(v) for v in obj]
+            if isinstance(obj, tuple):
+                return tuple(_convert_numpy(v) for v in obj)
+            return obj
+
+        return json.dumps(_convert_numpy(self.to_dict()))
 
     @classmethod
     def from_json(cls, json_str):

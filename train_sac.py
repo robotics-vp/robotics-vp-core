@@ -350,6 +350,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=1000)
     parser.add_argument("--econ-preset", type=str, default="toy", choices=["toy", "realistic"])
+    parser.add_argument("--engine-type", type=str, default="pybullet")
     args = parser.parse_args()
 
+    if args.engine_type != "pybullet":
+        raise NotImplementedError("Only pybullet engine supported in this script.")
     train_sac(episodes=args.episodes, econ_preset=args.econ_preset)
