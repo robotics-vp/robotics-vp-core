@@ -2,13 +2,18 @@
 """
 Offline econ surface solver over datapacks (no training).
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import argparse
 import json
-import os
 
 from src.valuation.datapack_repo import DataPackRepo
 from src.config.objective_profile import get_objective_presets
 from src.orchestrator.economic_controller import EconomicController
+from src.valuation.datapack_validators import validate_datapack_meta
 
 
 def main():
@@ -30,6 +35,12 @@ def main():
         dps = [dp for dp in dps if dp.condition.engine_type == args.engine_type]
     if args.customer_segment:
         dps = [dp for dp in dps if getattr(dp.condition, "customer_segment", None) == args.customer_segment]
+
+    total_warnings = 0
+    for dp in dps:
+        total_warnings += len(validate_datapack_meta(dp))
+    if total_warnings:
+        print(f"[validation] Found {total_warnings} schema warnings in datapacks; continuing with analysis.")
 
     presets = get_objective_presets()
     constraint_bundle = {

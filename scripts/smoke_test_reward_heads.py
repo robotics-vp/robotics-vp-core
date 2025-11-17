@@ -2,6 +2,11 @@
 """
 Smoke test for multi_reward_heads (no training hookup).
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.envs.dishwashing_env import EpisodeInfoSummary
 from src.config.econ_params import EconParams
 from src.rl.multi_reward_heads.mpl_head import MPLRewardHead

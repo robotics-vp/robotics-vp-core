@@ -2,6 +2,11 @@
 """
 Deterministic semantic feedback loop smoke test.
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.orchestrator.semantic_orchestrator import SemanticOrchestrator
 from src.orchestrator.economic_controller import EconomicController
 from src.orchestrator.datapack_engine import DatapackEngine

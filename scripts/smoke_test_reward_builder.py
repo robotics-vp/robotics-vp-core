@@ -2,6 +2,11 @@
 """
 Smoke test for reward_builder (no training behavior change).
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.valuation.reward_builder import build_reward_terms, combine_reward, default_objective_vector
 from src.config.econ_params import EconParams
 from src.envs.dishwashing_env import EpisodeInfoSummary

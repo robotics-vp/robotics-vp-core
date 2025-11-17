@@ -198,3 +198,19 @@ class RewardWeights:
             alpha_energy=self.alpha_energy / total,
             alpha_safety=self.alpha_safety / total,
         )
+
+
+# Default preset mapping for advisory scripts / analysis tooling
+OBJECTIVE_PRESETS: Dict[str, ObjectiveVector] = {
+    "throughput": ObjectiveVector.from_preset("throughput"),
+    "energy_saver": ObjectiveVector.from_preset("energy_saver"),
+    "balanced": ObjectiveVector.from_preset("balanced"),
+    "safety_first": ObjectiveVector.from_preset("safety"),
+    "throughput_focused": ObjectiveVector.from_preset("throughput_focused"),
+    "premium_safety": ObjectiveVector.from_preset("premium_safety"),
+}
+
+
+def get_objective_presets() -> Dict[str, ObjectiveVector]:
+    """Return a copy of named objective presets for analysis/reporting."""
+    return OBJECTIVE_PRESETS.copy()

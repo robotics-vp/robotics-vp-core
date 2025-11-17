@@ -9,12 +9,17 @@ Tests:
 4. Embedding utilities (novelty, regime clustering, statistics)
 5. DataPackMeta embedding serialization
 """
+import os
+import sys
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 import json
 import numpy as np
 from PIL import Image
 import tempfile
-import os
 
 
 def test_dummy_backbone():

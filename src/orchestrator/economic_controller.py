@@ -7,7 +7,23 @@ from src.config.econ_params import EconParams
 from src.valuation.datapack_schema import AttributionProfile, DataPackMeta, ObjectiveProfile
 from src.valuation.reward_builder import build_reward_terms
 from src.valuation.energy_response_model import EnergyResponseNet
-from src.orchestrator.semantic_metrics import SemanticMetrics
+from src.orchestrator.semantic_metrics import (
+    SemanticMetrics,
+    SemanticEconSuggestion,
+    write_semantic_econ_suggestions,
+    semantic_metrics_to_dict,
+)
+import time
+import math
+
+
+def _clamp01(val: float) -> float:
+    try:
+        if math.isnan(val):
+            return 0.0
+    except Exception:
+        return 0.0
+    return min(1.0, max(0.0, float(val)))
 
 
 @dataclass
@@ -109,6 +125,27 @@ class EconSignals:
     def from_dict(cls, d: Dict[str, Any]) -> "EconSignals":
         """Create from dictionary."""
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+    @classmethod
+    def from_raw_dict(cls, raw: Dict[str, Any]) -> "EconSignals":
+        """Lenient constructor that clamps urgencies and handles NaNs."""
+        filtered = {k: raw.get(k) for k in cls.__dataclass_fields__.keys()}
+        for key in ["mpl_urgency", "error_urgency", "energy_urgency"]:
+            if filtered.get(key) is not None:
+                filtered[key] = _clamp01(filtered[key])
+            else:
+                filtered[key] = 0.0
+        # Default None/NaN numeric fields to 0.0
+        for k, v in filtered.items():
+            if isinstance(v, (float, int)):
+                try:
+                    if math.isnan(v):
+                        filtered[k] = 0.0
+                except Exception:
+                    filtered[k] = 0.0
+            elif v is None:
+                filtered[k] = 0.0 if k not in ["customer_segment", "market_region", "task_family", "objective_weights"] else filtered[k]
+        return cls(**{k: v for k, v in filtered.items() if k in cls.__dataclass_fields__})
 
 
 class EconomicController:
@@ -354,6 +391,8 @@ class EconomicController:
     def select_frontier_optimum(self, frontier: List[Dict[str, Any]], objective_vector: List[float]) -> Optional[Dict[str, Any]]:
         if not frontier:
             return None
+        if hasattr(objective_vector, "to_list"):
+            objective_vector = objective_vector.to_list()  # type: ignore
         best = None
         best_u = -np.inf
         for pt in frontier:
@@ -458,3 +497,121 @@ class EconomicController:
         signals.compute_urgencies()
 
         return signals
+
+    def generate_semantic_econ_suggestion(
+        self,
+        econ_signals: EconSignals,
+        datapack_signals: Optional[Dict[str, float]] = None,
+        semantic_metrics: Optional[SemanticMetrics] = None,
+    ) -> SemanticEconSuggestion:
+        """
+        Generate a semantic-aware econ suggestion.
+
+        This captures the contract: econ/datapack say X -> econ controller suggests Y.
+        These suggestions are advisory and used for orchestrator transformer training.
+
+        Args:
+            econ_signals: Current EconSignals from aggregation
+            datapack_signals: Optional datapack engine signals dict
+            semantic_metrics: Optional SemanticMetrics from orchestrator
+
+        Returns:
+            SemanticEconSuggestion for JSONL storage
+        """
+        if datapack_signals is None:
+            datapack_signals = {}
+
+        # Derive suggested profile from econ signals
+        if econ_signals.error_urgency > 0.6:
+            suggested_profile = "SAFE"
+            rationale = f"High error urgency ({econ_signals.error_urgency:.2f}) -> SAFE profile"
+        elif econ_signals.energy_urgency > 0.5:
+            suggested_profile = "SAVER"
+            rationale = f"High energy urgency ({econ_signals.energy_urgency:.2f}) -> SAVER profile"
+        elif econ_signals.mpl_urgency > 0.5 and econ_signals.wage_parity < 0.8:
+            suggested_profile = "BOOST"
+            rationale = f"High MPL urgency ({econ_signals.mpl_urgency:.2f}), low wage parity ({econ_signals.wage_parity:.2f}) -> BOOST profile"
+        else:
+            suggested_profile = "BASE"
+            rationale = "Default balanced regime -> BASE profile"
+
+        # Derive objective adjustments based on econ + semantic signals
+        suggested_adjustments = {}
+        if econ_signals.error_urgency > 0.4:
+            suggested_adjustments["w_safety"] = 1.0 + econ_signals.error_urgency
+        if econ_signals.energy_urgency > 0.3:
+            suggested_adjustments["w_energy"] = 1.0 + econ_signals.energy_urgency
+        if econ_signals.mpl_urgency > 0.5:
+            suggested_adjustments["w_mpl"] = 1.0 + econ_signals.mpl_urgency * 0.5
+
+        # Semantic-aware adjustments
+        if semantic_metrics is not None:
+            if getattr(semantic_metrics, "fragile_object_count", 0) > 0:
+                suggested_adjustments["w_safety"] = suggested_adjustments.get("w_safety", 1.0) * 1.2
+                rationale += f"; fragile objects present (count={semantic_metrics.fragile_object_count})"
+
+            if getattr(semantic_metrics, "high_priority_task_fraction", 0.0) > 0.5:
+                suggested_adjustments["w_safety"] = suggested_adjustments.get("w_safety", 1.0) * 1.1
+                rationale += f"; high priority tasks ({semantic_metrics.high_priority_task_fraction:.2f})"
+
+        # Derive sampling overrides from datapack signals
+        suggested_sampling = {}
+        tier2_frac = datapack_signals.get("tier2_fraction", 0.1)
+        if tier2_frac < 0.1:
+            suggested_sampling["tag:frontier"] = 2.0  # Oversample frontier cases
+            rationale += "; low frontier coverage -> oversample tag:frontier"
+
+        # Build econ context summary
+        econ_context = {
+            "current_mpl": econ_signals.current_mpl,
+            "wage_parity": econ_signals.wage_parity,
+            "error_rate": econ_signals.error_rate,
+            "energy_urgency": econ_signals.energy_urgency,
+            "mpl_urgency": econ_signals.mpl_urgency,
+            "error_urgency": econ_signals.error_urgency,
+            "rebate_pct": econ_signals.rebate_pct,
+            "attributable_spread_capture": econ_signals.attributable_spread_capture,
+            "data_premium": econ_signals.data_premium,
+        }
+
+        # Build semantic metrics summary
+        semantic_summary = {}
+        if semantic_metrics is not None:
+            semantic_summary = {
+                "high_priority_task_fraction": getattr(semantic_metrics, "high_priority_task_fraction", 0.0),
+                "fragile_object_count": getattr(semantic_metrics, "fragile_object_count", 0),
+                "consistency_score": getattr(semantic_metrics, "consistency_score", 1.0),
+                "econ_relevant_task_fraction": semantic_metrics.econ_relevant_task_fraction,
+            }
+
+        return SemanticEconSuggestion(
+            timestamp=time.time(),
+            econ_context=econ_context,
+            datapack_context=datapack_signals,
+            semantic_metrics=semantic_summary,
+            suggested_objective_adjustment=suggested_adjustments,
+            suggested_sampling_override=suggested_sampling,
+            suggested_profile=suggested_profile,
+            rationale=rationale,
+        )
+
+    def dump_semantic_econ_suggestions(
+        self,
+        suggestions: List[SemanticEconSuggestion],
+        path: str = "results/semantic_econ_suggestions.jsonl",
+    ) -> None:
+        """
+        Write semantic-aware econ suggestions to JSONL file.
+
+        This creates the artifact that orchestrator transformer can learn from.
+        """
+        write_semantic_econ_suggestions(suggestions, path)
+        print(f"Dumped {len(suggestions)} semantic-econ suggestions to {path}")
+
+    # ---- Meta-transformer handshake (advisory) ----
+    def apply_meta_update(self, meta_out: Any) -> None:
+        """
+        Accept MetaTransformerOutputs (advisory only).
+        Stores last seen meta outputs for logging; does not alter rewards.
+        """
+        self._last_meta_out = meta_out

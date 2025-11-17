@@ -18,8 +18,6 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from src.orchestrator.semantic_orchestrator import SemanticOrchestrator
 from src.orchestrator.semantic_metrics import write_semantic_metrics, load_semantic_metrics, SemanticMetrics
-from src.orchestrator.semantic_orchestrator import SemanticOrchestrator
-from src.orchestrator.semantic_metrics import write_semantic_metrics
 from enum import Enum
 from datetime import datetime
 import json
@@ -613,12 +611,14 @@ def run_semantic_feedback_pass(
     out_path: str = "data/semantic_metrics/latest.jsonl",
 ) -> None:
     """
-    Offline semantic feedback loop (advisory-only).
+    One offline pass of the semantic feedback loop (advisory-only).
+
+      1) Get econ/datapack signals
+      2) SemanticOrchestrator exports SemanticMetrics
+      3) Feed metrics back into Econ/Datapack facades for advisory tweaks
     """
-    # Econ/datapack signals are assumed to be provided by these facades.
-    # Econ signals may require datapacks list; pass empty list for advisory stub
-    econ_signals = getattr(econ, "compute_signals", lambda dps, episodes=None: {})([], None)
-    datapack_signals = getattr(datapacks, "compute_signals", lambda dps, econ=None: {})([], None)
+    econ_signals = getattr(econ, "compute_signals", lambda dps, episodes=None: {})([])
+    datapack_signals = getattr(datapacks, "compute_signals", lambda dps, econ=None: {})([], econ_signals)
 
     sem.export_semantic_metrics(econ_signals, datapack_signals, out_path)
 

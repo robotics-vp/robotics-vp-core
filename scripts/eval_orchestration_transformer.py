@@ -22,6 +22,8 @@ from src.orchestrator.training_dataset import (
     generate_synthetic_context,
     generate_heuristic_tool_sequence,
     context_to_sample,
+    build_mixed_training_dataset,
+    split_dataset_by_source,
 )
 
 
@@ -108,6 +110,97 @@ def compare_model_vs_heuristic(model, ctx, vocab_size: int = 128):
     }
 
 
+def compute_pareto_correlation(samples):
+    """
+    Compute correlation between model choices and Pareto-optimal profiles.
+
+    Returns metrics showing alignment between urgency/classification and chosen profile.
+    """
+    if not samples:
+        return {}
+
+    econ_samples = [s for s in samples if s.econ_semantic_summary is not None]
+    if not econ_samples:
+        return {}
+
+    # Group by pareto classification
+    pareto_groups = {}
+    for s in econ_samples:
+        pc = s.econ_semantic_summary.pareto_classification
+        if pc not in pareto_groups:
+            pareto_groups[pc] = {"samples": [], "profiles": []}
+        pareto_groups[pc]["samples"].append(s)
+        pareto_groups[pc]["profiles"].append(s.econ_semantic_summary.chosen_profile)
+
+    results = {}
+    for pc, data in pareto_groups.items():
+        profiles = data["profiles"]
+        profile_counts = {}
+        for p in profiles:
+            profile_counts[p] = profile_counts.get(p, 0) + 1
+
+        # Expected profiles based on Pareto classification
+        expected = {
+            "safety_focused": "SAFE",
+            "energy_tight": "SAVER",
+            "mpl_tight": "BOOST",
+            "balanced": "BASE",
+        }.get(pc, "BASE")
+
+        primary_count = profile_counts.get(expected, 0)
+        alignment = primary_count / len(profiles) if profiles else 0.0
+
+        results[pc] = {
+            "total": len(profiles),
+            "expected": expected,
+            "alignment": alignment,
+            "dist": profile_counts,
+        }
+
+    # Overall alignment
+    total_aligned = sum(r["dist"].get(r["expected"], 0) for r in results.values())
+    total_samples = sum(r["total"] for r in results.values())
+    results["overall"] = total_aligned / total_samples if total_samples > 0 else 0.0
+
+    return results
+
+
+def compute_semantic_consistency(samples):
+    """
+    Check if model picks SAFE in high-error-urgency, SAVER when energy high, etc.
+    """
+    if not samples:
+        return {}
+
+    econ_samples = [s for s in samples if s.econ_semantic_summary is not None]
+    if not econ_samples:
+        return {}
+
+    consistency = {
+        "critical_urgency_safe": 0.0,
+        "high_urgency_safe": 0.0,
+        "balanced_base": 0.0,
+    }
+
+    critical = [s for s in econ_samples if s.econ_semantic_summary.urgency_level == "critical"]
+    high = [s for s in econ_samples if s.econ_semantic_summary.urgency_level == "high"]
+    balanced = [s for s in econ_samples if s.econ_semantic_summary.urgency_level in ["moderate", "none"]]
+
+    if critical:
+        safe_ct = sum(1 for s in critical if s.econ_semantic_summary.chosen_profile == "SAFE")
+        consistency["critical_urgency_safe"] = safe_ct / len(critical)
+
+    if high:
+        safe_ct = sum(1 for s in high if s.econ_semantic_summary.chosen_profile == "SAFE")
+        consistency["high_urgency_safe"] = safe_ct / len(high)
+
+    if balanced:
+        base_ct = sum(1 for s in balanced if s.econ_semantic_summary.chosen_profile == "BASE")
+        consistency["balanced_base"] = base_ct / len(balanced)
+
+    return consistency
+
+
 def print_comparison(comparison: dict, index: int):
     """Pretty print a single comparison."""
     ctx = comparison["context"]
@@ -159,6 +252,8 @@ def main():
     parser.add_argument("--vocab-size", type=int, default=128, help="Vocabulary size")
     parser.add_argument("--seed", type=int, default=12345, help="Random seed for synthetic contexts")
     parser.add_argument("--save-results", type=str, default=None, help="Save results to JSON file")
+    parser.add_argument("--analyze-econ-semantic", action="store_true", help="Add Pareto correlation and semantic consistency analysis")
+    parser.add_argument("--econ-semantic-samples", type=int, default=100, help="Number of econ/semantic samples for analysis")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -268,6 +363,51 @@ def main():
     print("  2. Add more heuristic rules for edge cases")
     print("  3. Increase training data diversity")
     print("  4. Eventually: replace heuristic with RL-based learning")
+
+    # Additional econ/semantic analysis
+    if args.analyze_econ_semantic:
+        print("\n" + "=" * 60)
+        print("ECON/SEMANTIC ANALYSIS")
+        print("=" * 60)
+
+        # Generate mixed dataset for analysis
+        print(f"\nGenerating {args.econ_semantic_samples} econ/semantic samples...")
+        samples, stats = build_mixed_training_dataset(
+            num_heuristic=0,
+            num_econ_semantic=args.econ_semantic_samples,
+        )
+        print(f"Generated {len(samples)} samples")
+
+        # Compute Pareto correlation
+        print("\n--- Pareto-Optimal Profile Correlation ---")
+        pareto_corr = compute_pareto_correlation(samples)
+        if pareto_corr:
+            overall = pareto_corr.get("overall", 0.0)
+            print(f"Overall alignment: {overall:.3f}")
+
+            for pc in ["safety_focused", "energy_tight", "mpl_tight", "balanced"]:
+                if pc in pareto_corr:
+                    r = pareto_corr[pc]
+                    print(f"\n  {pc}:")
+                    print(f"    Samples: {r['total']}")
+                    print(f"    Expected profile: {r['expected']}")
+                    print(f"    Alignment: {r['alignment']:.3f}")
+                    print(f"    Distribution: {r['dist']}")
+        else:
+            print("  No econ/semantic samples found")
+
+        # Compute semantic consistency
+        print("\n--- Semantic Consistency Metrics ---")
+        sem_consistency = compute_semantic_consistency(samples)
+        if sem_consistency:
+            print(f"  Critical urgency -> SAFE: {sem_consistency.get('critical_urgency_safe', 0):.3f}")
+            print(f"  High urgency -> SAFE: {sem_consistency.get('high_urgency_safe', 0):.3f}")
+            print(f"  Balanced regime -> BASE: {sem_consistency.get('balanced_base', 0):.3f}")
+        else:
+            print("  No econ/semantic samples found")
+
+        print("\nKey insight: Higher consistency scores mean the model is learning")
+        print("to pick profiles that are semantically appropriate for the economic regime.")
 
 
 if __name__ == "__main__":

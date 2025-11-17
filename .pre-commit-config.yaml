@@ -1,0 +1,48 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3
+        exclude: |
+          (?x)(
+            src/phase_b/.* |
+            .*trust_net.* |
+            .*w_econ_lattice.* |
+            .*lambda_controller.* |
+            src/vla/vision_backbone.py |
+            src/vla/backbones/.* |
+            src/pipeline_manager/.* |
+            .*PHASE_B.*
+          )
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        exclude: |
+          (?x)(
+            src/phase_b/.* |
+            .*trust_net.* |
+            .*w_econ_lattice.* |
+            .*lambda_controller.* |
+            src/vla/vision_backbone.py |
+            src/vla/backbones/.* |
+            src/pipeline_manager/.* |
+            .*PHASE_B.*
+          )
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.1.7
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        exclude: |
+          (?x)(
+            src/phase_b/.* |
+            .*trust_net.* |
+            .*w_econ_lattice.* |
+            .*lambda_controller.* |
+            src/vla/vision_backbone.py |
+            src/vla/backbones/.* |
+            src/pipeline_manager/.* |
+            .*PHASE_B.*
+          )

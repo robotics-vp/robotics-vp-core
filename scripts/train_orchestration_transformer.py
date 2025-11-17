@@ -26,6 +26,8 @@ from src.orchestrator.orchestration_transformer import (
 )
 from src.orchestrator.training_dataset import (
     build_training_dataset,
+    build_mixed_training_dataset,
+    split_dataset_by_source,
     dataset_to_tensors,
     save_dataset,
 )
@@ -118,6 +120,26 @@ def evaluate(
     return {"loss": avg_loss, "accuracy": accuracy}
 
 
+def evaluate_subset(
+    model: OrchestrationTransformer,
+    samples,
+    criterion: nn.Module,
+    vocab_size: int = 128,
+    batch_size: int = 32,
+) -> dict:
+    """Evaluate on a specific subset of samples."""
+    if len(samples) == 0:
+        return {"loss": 0.0, "accuracy": 0.0, "count": 0}
+
+    X, Y, _ = dataset_to_tensors(samples)
+    X_tensor = torch.from_numpy(X).float()
+    Y_tensor = torch.from_numpy(Y).long()
+    dataset = TensorDataset(X_tensor, Y_tensor)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    return evaluate(model, loader, criterion, vocab_size)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train Orchestration Transformer")
     parser.add_argument("--num-samples", type=int, default=1000, help="Number of training samples")
@@ -130,6 +152,8 @@ def main():
     parser.add_argument("--save-dir", type=str, default="checkpoints/orchestrator", help="Save directory")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--val-split", type=float, default=0.1, help="Validation split ratio")
+    parser.add_argument("--use-mixed-dataset", action="store_true", help="Use mixed heuristic + econ/semantic dataset")
+    parser.add_argument("--econ-semantic-ratio", type=float, default=0.5, help="Fraction of samples from econ/semantic (when using mixed)")
     args = parser.parse_args()
 
     # Set seeds
@@ -152,9 +176,29 @@ def main():
     save_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate training dataset
-    print("\nGenerating training dataset with heuristic teacher...")
-    samples = build_training_dataset(num_samples=args.num_samples)
-    print(f"Generated {len(samples)} samples")
+    if args.use_mixed_dataset:
+        print("\nGenerating MIXED dataset (heuristic + econ/semantic)...")
+        num_econ_semantic = int(args.num_samples * args.econ_semantic_ratio)
+        num_heuristic = args.num_samples - num_econ_semantic
+        samples, dataset_stats = build_mixed_training_dataset(
+            num_heuristic=num_heuristic,
+            num_econ_semantic=num_econ_semantic,
+        )
+        print(f"Generated {len(samples)} samples")
+        print(f"  - Heuristic: {dataset_stats['heuristic_count']}")
+        print(f"  - Econ/Semantic: {dataset_stats['econ_semantic_count']}")
+        if "profile_distribution" in dataset_stats:
+            print(f"  - Profile dist: {dataset_stats['profile_distribution']}")
+            print(f"  - Preset dist: {dataset_stats['preset_distribution']}")
+
+        # Save dataset stats
+        with open(save_dir / "dataset_stats.json", "w") as f:
+            json.dump(dataset_stats, f, indent=2)
+    else:
+        print("\nGenerating training dataset with heuristic teacher...")
+        samples = build_training_dataset(num_samples=args.num_samples)
+        print(f"Generated {len(samples)} samples")
+        dataset_stats = None
 
     # Convert to tensors
     X, Y, tool_names = dataset_to_tensors(samples)
@@ -255,6 +299,59 @@ def main():
             tool_counts[tool] += 1
     for tool, count in sorted(tool_counts.items(), key=lambda x: -x[1]):
         print(f"  {tool}: {count}")
+
+    # Evaluate separately on heuristic vs econ/semantic subsets (if using mixed dataset)
+    if args.use_mixed_dataset:
+        print("\n" + "=" * 60)
+        print("Subset Performance Analysis")
+        print("=" * 60)
+
+        # Load best model for evaluation
+        model.load_state_dict(torch.load(save_dir / "best_model.pt"))
+
+        # Split validation samples by source type
+        heuristic_samples, econ_semantic_samples = split_dataset_by_source(samples)
+
+        # Evaluate on heuristic samples
+        if heuristic_samples:
+            heur_metrics = evaluate_subset(model, heuristic_samples, criterion, args.vocab_size, args.batch_size)
+            print(f"Heuristic samples ({len(heuristic_samples)}):")
+            print(f"  Accuracy: {heur_metrics['accuracy']:.3f}")
+            print(f"  Loss: {heur_metrics['loss']:.4f}")
+
+        # Evaluate on econ/semantic samples
+        if econ_semantic_samples:
+            econ_metrics = evaluate_subset(model, econ_semantic_samples, criterion, args.vocab_size, args.batch_size)
+            print(f"Econ/Semantic samples ({len(econ_semantic_samples)}):")
+            print(f"  Accuracy: {econ_metrics['accuracy']:.3f}")
+            print(f"  Loss: {econ_metrics['loss']:.4f}")
+
+            # Check if model tends to pick right profiles in specific regimes
+            print("\nProfile selection analysis (econ/semantic samples):")
+            correct_by_urgency = {}
+            for sample in econ_semantic_samples:
+                if sample.econ_semantic_summary:
+                    urg = sample.econ_semantic_summary.urgency_level
+                    if urg not in correct_by_urgency:
+                        correct_by_urgency[urg] = {"total": 0, "safe_profile": 0}
+                    correct_by_urgency[urg]["total"] += 1
+                    if sample.econ_semantic_summary.chosen_profile == "SAFE":
+                        correct_by_urgency[urg]["safe_profile"] += 1
+
+            for urg_level in ["critical", "high", "moderate", "none"]:
+                if urg_level in correct_by_urgency:
+                    data = correct_by_urgency[urg_level]
+                    safe_pct = 100 * data["safe_profile"] / data["total"] if data["total"] > 0 else 0
+                    print(f"  {urg_level}: {data['total']} samples, {safe_pct:.1f}% use SAFE profile")
+
+        # Save subset metrics
+        subset_metrics = {
+            "heuristic": heur_metrics if heuristic_samples else {},
+            "econ_semantic": econ_metrics if econ_semantic_samples else {},
+        }
+        with open(save_dir / "subset_metrics.json", "w") as f:
+            json.dump(subset_metrics, f, indent=2)
+        print(f"\nSaved subset metrics to {save_dir / 'subset_metrics.json'}")
 
 
 if __name__ == "__main__":

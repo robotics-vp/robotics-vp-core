@@ -1,6 +1,9 @@
 from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, field
 import numpy as np
+import math
+import os
+import json
 
 from src.valuation.datapack_repo import DataPackRepo
 from src.valuation.datapack_schema import DataPackMeta, ObjectiveProfile
@@ -80,6 +83,41 @@ class DatapackSignals:
     def from_dict(cls, d: Dict[str, Any]) -> "DatapackSignals":
         """Create from dictionary."""
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+    @classmethod
+    def from_raw_dict(cls, raw: Dict[str, Any]) -> "DatapackSignals":
+        """Lenient constructor that clamps fractions into [0,1] and defaults NaNs to 0."""
+        filtered = {k: raw.get(k) for k in cls.__dataclass_fields__.keys()}
+        frac_fields = [
+            "positive_fraction",
+            "negative_fraction",
+            "tier0_fraction",
+            "tier1_fraction",
+            "tier2_fraction",
+            "vla_annotation_fraction",
+            "guidance_annotation_fraction",
+        ]
+        for key in frac_fields:
+            if filtered.get(key) is None:
+                filtered[key] = 0.0
+            else:
+                try:
+                    val = float(filtered[key])
+                    if math.isnan(val):
+                        val = 0.0
+                    filtered[key] = min(1.0, max(0.0, val))
+                except Exception:
+                    filtered[key] = 0.0
+        for key, val in filtered.items():
+            if isinstance(val, float):
+                try:
+                    if math.isnan(val):
+                        filtered[key] = 0.0
+                except Exception:
+                    filtered[key] = 0.0
+            if val is None and key not in frac_fields:
+                filtered[key] = 0.0 if key not in ["data_gaps", "recommended_collection_focus"] else filtered[key]
+        return cls(**{k: v for k, v in filtered.items() if k in cls.__dataclass_fields__})
 
 
 class DatapackEngine:

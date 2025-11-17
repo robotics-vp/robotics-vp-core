@@ -4,9 +4,13 @@ Run the orchestration transformer in advisory mode to propose an econ plan.
 
 No RL/reward changes; this is planning/logging only.
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import argparse
 import json
-import os
 import numpy as np
 import torch
 

@@ -20,6 +20,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.valuation.datapack_repo import DataPackRepo
+from src.valuation.datapack_validators import validate_datapack_meta
 
 
 def load_all_datapacks(repo_dir: str):
@@ -36,6 +37,25 @@ def load_all_datapacks(repo_dir: str):
             pass  # Env type may not exist
 
     return datapacks
+
+
+def log_validation_warnings(datapacks):
+    """Print lightweight schema warnings without interrupting analysis."""
+    total_warnings = 0
+    for dp in datapacks:
+        warnings = validate_datapack_meta(dp)
+        if warnings:
+            total_warnings += len(warnings)
+    if total_warnings:
+        print(f"\n[validation] Detected {total_warnings} datapack field warnings (schema/optional fields).")
+        sample_shown = 0
+        for dp in datapacks:
+            warnings = validate_datapack_meta(dp)
+            if warnings:
+                print(f"  datapack={dp.pack_id}: {warnings}")
+                sample_shown += 1
+            if sample_shown >= 5:
+                break
 
 
 def group_by_context(datapacks):
@@ -295,6 +315,8 @@ def main():
     if not datapacks:
         print("\nNo datapacks found. Run eval scripts first to generate data.")
         return
+
+    log_validation_warnings(datapacks)
 
     # Group by context
     groups = group_by_context(datapacks)

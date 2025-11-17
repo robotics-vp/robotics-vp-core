@@ -2,6 +2,11 @@
 """
 Deterministic Pareto frontier smoke test.
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.orchestrator.economic_controller import EconomicController
 from types import SimpleNamespace
 

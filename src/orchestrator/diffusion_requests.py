@@ -129,3 +129,104 @@ def build_diffusion_requests_from_guidance(pairs):
     for dp, gp in pairs:
         prompts.append(build_diffusion_prompt_from_guidance(dp, gp))
     return prompts
+
+
+# ==============================================================================
+# Integration with VideoDiffusionStub (Stage 1/4)
+# ==============================================================================
+
+def prompt_to_diffusion_stub_input(prompt: DiffusionPromptSpec) -> Dict[str, Any]:
+    """
+    Convert DiffusionPromptSpec to inputs for VideoDiffusionStub.
+
+    This bridges the orchestrator's prompt generation with the diffusion stub's API.
+    """
+    # Derive objective preset from objective vector
+    obj_vec = prompt.objective_vector
+    if len(obj_vec) >= 4:
+        if obj_vec[0] > 1.5:  # High MPL weight
+            objective_preset = "throughput"
+        elif obj_vec[3] > 1.5:  # High safety weight
+            objective_preset = "safety"
+        elif obj_vec[2] > 1.5:  # High energy weight
+            objective_preset = "energy_saver"
+        else:
+            objective_preset = "balanced"
+    else:
+        objective_preset = "balanced"
+
+    # Derive energy profile from customer segment
+    if prompt.customer_segment == "energy_saver":
+        energy_profile = "SAVER"
+    elif prompt.customer_segment == "premium_safety":
+        energy_profile = "SAFE"
+    elif prompt.customer_segment == "throughput_focused":
+        energy_profile = "BOOST"
+    else:
+        energy_profile = "BASE"
+
+    # Build econ context
+    econ_context = {
+        "wage_human": 18.0,  # Default
+        "energy_price_kWh": 0.12,  # Default
+        "customer_segment": prompt.customer_segment,
+        "target_delta_mpl": prompt.target_economic_effect.get("delta_mpl", 0.0),
+        "target_delta_error": prompt.target_economic_effect.get("delta_error", 0.0),
+    }
+
+    return {
+        "episode_id": prompt.request_id,
+        "media_refs": prompt.source_datapack_ids,
+        "semantic_tags": prompt.semantic_tags,
+        "objective_preset": objective_preset,
+        "energy_profile": energy_profile,
+        "econ_context": econ_context,
+    }
+
+
+def generate_proposals_from_prompts(
+    prompts: List[DiffusionPromptSpec],
+    diffusion_stub=None,
+) -> List[Dict[str, Any]]:
+    """
+    Generate diffusion proposals from orchestrator prompts using VideoDiffusionStub.
+
+    Args:
+        prompts: List of DiffusionPromptSpec from orchestrator
+        diffusion_stub: Optional VideoDiffusionStub instance (creates if None)
+
+    Returns:
+        List of proposal dicts in datapack-like format
+    """
+    if diffusion_stub is None:
+        from src.diffusion.real_video_diffusion_stub import VideoDiffusionStub
+        diffusion_stub = VideoDiffusionStub()
+
+    all_proposals = []
+
+    for prompt in prompts:
+        stub_input = prompt_to_diffusion_stub_input(prompt)
+
+        proposals = diffusion_stub.propose_augmented_clips(
+            episode_id=stub_input["episode_id"],
+            media_refs=stub_input["media_refs"],
+            semantic_tags=stub_input["semantic_tags"],
+            objective_preset=stub_input["objective_preset"],
+            energy_profile=stub_input["energy_profile"],
+            econ_context=stub_input["econ_context"],
+            num_proposals=2,
+        )
+
+        # Convert proposals to datapack-like JSON format
+        for proposal in proposals:
+            from src.diffusion.real_video_diffusion_stub import proposal_to_dict
+            proposal_dict = proposal_to_dict(proposal)
+
+            # Add orchestrator context
+            proposal_dict["orchestrator_request_id"] = prompt.request_id
+            proposal_dict["orchestrator_rationale"] = prompt.rationale
+            proposal_dict["target_economic_effect"] = prompt.target_economic_effect
+
+            all_proposals.append(proposal_dict)
+
+    return all_proposals
