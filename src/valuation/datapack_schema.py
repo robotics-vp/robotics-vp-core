@@ -210,6 +210,9 @@ class SimaAnnotation:
     # Optional: derived skill plan inferred from SIMA trajectory
     derived_skill_plan: List[int] = field(default_factory=list)
 
+    # Optional: VLA crossover references
+    vla_references: Optional[Dict[str, Any]] = None
+
     # Metadata
     narration_count: int = 0
     average_narration_length: float = 0.0
@@ -365,6 +368,9 @@ class DataPackMeta:
     # Optional orchestration guidance
     guidance_profile: Optional["GuidanceProfile"] = None
 
+    # Optional VLA action summary
+    vla_action_summary: Optional[Dict[str, Any]] = None
+
     # For negative datapacks: counterfactual plan
     counterfactual_plan: Optional[Dict[str, Any]] = None
     # e.g., {
@@ -410,6 +416,7 @@ class DataPackMeta:
             'episode_index': self.episode_index,
             'raw_data_path': self.raw_data_path,
             'guidance_profile': self.guidance_profile.to_dict() if self.guidance_profile else None,
+            'vla_action_summary': self.vla_action_summary,
         }
         return d
 
@@ -457,6 +464,7 @@ class DataPackMeta:
             episode_index=d.get('episode_index'),
             raw_data_path=d.get('raw_data_path'),
             guidance_profile=GuidanceProfile.from_dict(d['guidance_profile']) if d.get('guidance_profile') else None,
+            vla_action_summary=d.get('vla_action_summary'),
         )
 
     @classmethod

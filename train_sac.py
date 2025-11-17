@@ -351,6 +351,11 @@ if __name__ == "__main__":
     parser.add_argument("--episodes", type=int, default=1000)
     parser.add_argument("--econ-preset", type=str, default="toy", choices=["toy", "realistic"])
     parser.add_argument("--engine-type", type=str, default="pybullet")
+    parser.add_argument("--objective-preset", type=str, default="throughput",
+                        choices=["throughput", "energy_saver", "balanced", "safety_first", "custom"])
+    parser.add_argument("--constraint-mpl-human", type=float, default=None)
+    parser.add_argument("--constraint-energy-budget", type=float, default=None)
+    parser.add_argument("--constraint-error-max", type=float, default=None)
     args = parser.parse_args()
 
     if args.engine_type != "pybullet":

@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, asdict
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from src.valuation.datapack_schema import DataPackMeta
 from src.valuation.guidance_profile import GuidanceProfile
@@ -24,6 +24,7 @@ class DiffusionPromptSpec:
     target_economic_effect: Dict[str, float]
 
     source_datapack_ids: List[str]
+    vla_hint: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -51,6 +52,11 @@ def build_diffusion_prompt_from_guidance(
         "delta_energy_Wh": guidance.delta_energy_Wh,
         "delta_J": guidance.delta_J,
     }
+    vla_hint = None
+    if dp.vla_action_summary and dp.vla_action_summary.get("action_7dof"):
+        raw = dp.vla_action_summary["action_7dof"]
+        desc = f"approx dx={raw[0]:.2f}, dy={raw[1]:.2f}, dz={raw[2]:.2f}, gripper={raw[6]:.2f}"
+        vla_hint = {"instruction": guidance.main_driver, "action_desc": desc}
     return DiffusionPromptSpec(
         request_id=str(uuid.uuid4()),
         env_name=guidance.env_name,
@@ -65,6 +71,7 @@ def build_diffusion_prompt_from_guidance(
         rationale=rationale,
         target_economic_effect=target_effect,
         source_datapack_ids=[dp.pack_id],
+        vla_hint=vla_hint,
     )
 
 

@@ -8,6 +8,8 @@ ToolName = Literal[
     "SET_DATA_MIX",           # weights over real / synthetic / hybrid
     "QUERY_DATAPACKS",        # filter datapacks for context
     "QUERY_ENERGY_SURFACE",   # query EnergyResponseModel for candidate profiles
+    "CALL_VLA_SINGLE_STEP",   # run OpenVLA on a frame + instruction
+    "CALL_VLA_FOR_DATAPACK_CLASS",  # prototype action for datapack/guidance class
 ]
 
 
