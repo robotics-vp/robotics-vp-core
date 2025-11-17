@@ -16,8 +16,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional, Literal
 from datetime import datetime
 
-from src.valuation.guidance_profile import GuidanceProfile
-
+from src.utils.json_safe import to_json_safe
 from src.valuation.guidance_profile import GuidanceProfile
 
 # Unified schema version - aligns with existing 2.0-energy format
@@ -190,6 +189,13 @@ class AttributionProfile:
     attributable_spread_capture: float = 0.0
     data_premium: float = 0.0
 
+    # Data tier (0=redundant, 1=context-novel, 2=causal-novel/frontier)
+    tier: int = 1
+
+    # Additional fields for compatibility
+    env_name: Optional[str] = None
+    engine_type: Optional[str] = None
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
@@ -337,6 +343,11 @@ class DataPackMeta:
     semantic_tags: List[str] = field(default_factory=list)
     # e.g., ["fragile glassware", "multi-object", "low-light", "top drawer"]
 
+    # Optional econ/semantic advisory tags
+    econ_semantic_tags: Optional[List[str]] = None
+    # Advisory-only semantic quality score in [0, 1]
+    semantic_quality: Optional[float] = None
+
     # Energy driver tags (from energy_tags.py)
     energy_driver_tags: List[str] = field(default_factory=list)
     # e.g., ["energy_driver:long_reach", "energy_driver:fragility_cautious", ...]
@@ -413,27 +424,29 @@ class DataPackMeta:
             'brick_id': self.brick_id,
             'bucket': self.bucket,
             'semantic_tags': self.semantic_tags,
+            'econ_semantic_tags': self.econ_semantic_tags,
+            'semantic_quality': self.semantic_quality,
             'energy_driver_tags': self.energy_driver_tags,
             'condition': self.condition.to_dict(),
             'attribution': self.attribution.to_dict(),
             'energy': self.energy.to_dict(),
-            'agent_profile': self.agent_profile,
-            'skill_trace': self.skill_trace,
-            'episode_metrics': self.episode_metrics,
+            'agent_profile': to_json_safe(self.agent_profile),
+            'skill_trace': to_json_safe(self.skill_trace),
+            'episode_metrics': to_json_safe(self.episode_metrics),
             'sima_annotation': self.sima_annotation.to_dict() if self.sima_annotation else None,
-            'vla_plan': self.vla_plan,
+            'vla_plan': to_json_safe(self.vla_plan),
             'objective_profile': self.objective_profile.to_dict() if self.objective_profile else None,
-            'counterfactual_plan': self.counterfactual_plan,
+            'counterfactual_plan': to_json_safe(self.counterfactual_plan),
             'counterfactual_source': self.counterfactual_source,
             'created_at': self.created_at,
             'episode_id': self.episode_id,
             'episode_index': self.episode_index,
             'raw_data_path': self.raw_data_path,
             'guidance_profile': self.guidance_profile.to_dict() if self.guidance_profile else None,
-            'vla_action_summary': self.vla_action_summary,
-            'episode_embedding': self.episode_embedding,
+            'vla_action_summary': to_json_safe(self.vla_action_summary),
+            'episode_embedding': to_json_safe(self.episode_embedding),
         }
-        return d
+        return to_json_safe(d)
 
     @classmethod
     def from_dict(cls, d):
@@ -462,6 +475,8 @@ class DataPackMeta:
             brick_id=d.get('brick_id'),
             bucket=d.get('bucket', 'positive'),
             semantic_tags=d.get('semantic_tags', []),
+            econ_semantic_tags=d.get('econ_semantic_tags'),
+            semantic_quality=d.get('semantic_quality'),
             energy_driver_tags=d.get('energy_driver_tags', []),
             condition=condition,
             attribution=attribution,
@@ -542,6 +557,8 @@ class DataPackMeta:
             brick_id=legacy_dict.get('brick_id'),
             bucket=bucket,
             semantic_tags=legacy_dict.get('tags', []),
+            econ_semantic_tags=legacy_dict.get('econ_semantic_tags'),
+            semantic_quality=legacy_dict.get('semantic_quality'),
             energy_driver_tags=legacy_dict.get('semantic_energy_drivers', []),
             condition=condition,
             attribution=attribution,

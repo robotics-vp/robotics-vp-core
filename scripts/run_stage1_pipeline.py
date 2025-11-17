@@ -187,13 +187,36 @@ def create_datapack_from_pipeline(
         energy_price_kWh=diffusion_proposal.econ_context.get("energy_price_kWh", 0.12),
     )
 
+    # Determine quality and main driver from semantic tags and objective
+    is_good = diffusion_proposal.estimated_novelty > 0.4
+    quality_label = "high_value" if diffusion_proposal.estimated_novelty > 0.6 else "medium"
+
+    # Determine main driver from semantic tags
+    if "safety" in semantic_tags:
+        main_driver = "safety_margin"
+    elif "energy_efficient" in semantic_tags:
+        main_driver = "energy_efficiency"
+    elif "high_speed" in semantic_tags or "throughput" in objective_preset:
+        main_driver = "throughput_gain"
+    else:
+        main_driver = "error_reduction"
+
     guidance_profile = GuidanceProfile(
+        is_good=is_good,
+        quality_label=quality_label,
         env_name=video_ref.get("task_type", "drawer_vase"),
         engine_type="pybullet",
+        task_type=video_ref.get("task_type", "drawer_vase"),
+        customer_segment=diffusion_proposal.econ_context.get("customer_segment", "balanced"),
+        objective_vector=objective_vector,
+        main_driver=main_driver,
+        delta_mpl=diffusion_proposal.estimated_novelty * 5.0,
+        delta_error=-0.01 if "safety" in semantic_tags else 0.0,
+        delta_energy_Wh=-0.5 if "energy_efficient" in semantic_tags else 0.0,
+        delta_J=diffusion_proposal.estimated_novelty * 2.0,
         semantic_tags=semantic_tags,
-        focus_areas=[diffusion_proposal.augmentation_type],
-        priority="high" if "safety" in semantic_tags else "medium",
-        sampling_weight=diffusion_proposal.confidence,
+        orchestrator_plan_id=None,
+        orchestrator_step_index=None,
     )
 
     # Attribution based on diffusion novelty and VLA confidence
@@ -204,6 +227,13 @@ def create_datapack_from_pipeline(
     else:
         mean_conf = 0.5  # Default
 
+    tier = 2 if diffusion_proposal.estimated_novelty > 0.6 else 1
+
+    econ_semantic_tags = list(semantic_tags)
+    econ_semantic_tags.append(f"objective:{objective_preset}")
+    econ_semantic_tags.append(f"aug:{diffusion_proposal.augmentation_type}")
+    semantic_quality = float(max(0.0, min(1.0, diffusion_proposal.estimated_novelty)))
+
     attribution_profile = AttributionProfile(
         env_name=video_ref.get("task_type", "drawer_vase"),
         engine_type="pybullet",
@@ -212,7 +242,7 @@ def create_datapack_from_pipeline(
         delta_J=diffusion_proposal.estimated_novelty * 2.0,
         trust_score=mean_conf,
         w_econ=0.8,
-        tier=2 if diffusion_proposal.estimated_novelty > 0.6 else 1,
+        tier=tier,
     )
 
     datapack = DataPackMeta(
@@ -222,10 +252,15 @@ def create_datapack_from_pipeline(
         schema_version="2.0-stage1",
         condition=condition_profile,
         objective_profile=objective_profile,
-        guidance=guidance_profile,
+        guidance_profile=guidance_profile,
         attribution=attribution_profile,
-        source_type="stage1_diffusion_vla",
-        tags=semantic_tags + [f"vla_skill_{s}" for s in vla_plan.skill_sequence[:3]],
+        semantic_tags=semantic_tags + [f"vla_skill_{s}" for s in vla_plan.skill_sequence[:3]],
+        econ_semantic_tags=econ_semantic_tags,
+        semantic_quality=semantic_quality,
+        agent_profile={
+            "policy": "stage1_vla",
+            "source_type": "stage1_diffusion_vla",
+        },
     )
 
     return datapack
@@ -309,24 +344,25 @@ def run_stage1_pipeline(
     # Save outputs
     # 1. Datapacks
     datapacks_path = os.path.join(output_dir, "datapacks.json")
-    datapacks_data = [
-        {
-            "pack_id": dp.pack_id,
-            "task_name": dp.task_name,
-            "env_type": dp.env_type,
-            "schema_version": dp.schema_version,
-            "source_type": dp.source_type,
-            "tags": dp.tags,
-            "condition": asdict(dp.condition),
-            "objective_profile": asdict(dp.objective_profile),
-            "guidance": asdict(dp.guidance),
-            "attribution": asdict(dp.attribution),
-        }
-        for dp in all_datapacks
-    ]
+    # Use the to_dict method for proper serialization
+    datapacks_data = [dp.to_dict() for dp in all_datapacks]
     with open(datapacks_path, "w") as f:
         json.dump(datapacks_data, f, indent=2)
     print(f"\nSaved {len(all_datapacks)} datapacks to {datapacks_path}")
+
+    # 1b. Econ/Semantic advisory tags
+    econ_semantic_path = os.path.join(output_dir, "stage1_econ_semantic_tags.jsonl")
+    with open(econ_semantic_path, "w") as f:
+        for dp in all_datapacks:
+            line = {
+                "pack_id": dp.pack_id,
+                "econ_semantic_tags": dp.econ_semantic_tags or [],
+                "semantic_quality": dp.semantic_quality if dp.semantic_quality is not None else (
+                    dp.attribution.trust_score if dp.attribution else None
+                ),
+            }
+            f.write(json.dumps(line) + "\n")
+    print(f"Saved econ/semantic tag advisory file to {econ_semantic_path}")
 
     # 2. Pipeline log
     log_path = os.path.join(output_dir, "pipeline_log.json")

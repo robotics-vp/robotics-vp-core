@@ -13,6 +13,7 @@ import random
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 
+from src.utils.json_safe import to_json_safe
 
 @dataclass
 class DiffusionProposal:
@@ -224,12 +225,13 @@ class VideoDiffusionStub:
 
 def proposal_to_dict(proposal: DiffusionProposal) -> Dict[str, Any]:
     """Convert DiffusionProposal to JSON-serializable dict."""
-    return asdict(proposal)
+    return to_json_safe(proposal)
 
 
 def synthetic_episode_to_dict(episode: SyntheticEpisodeProposal) -> Dict[str, Any]:
     """Convert SyntheticEpisodeProposal to JSON-serializable dict."""
-    d = asdict(episode)
-    # Ensure nested proposals are properly serialized
-    d["diffusion_proposals"] = [proposal_to_dict(p) for p in episode.diffusion_proposals]
+    d = to_json_safe(episode)
+    if isinstance(d, dict):
+        # Ensure nested proposals are properly serialized
+        d["diffusion_proposals"] = [proposal_to_dict(p) for p in episode.diffusion_proposals]
     return d

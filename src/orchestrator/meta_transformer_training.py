@@ -14,6 +14,8 @@ from typing import List, Dict, Any, Optional, Tuple
 
 import numpy as np
 
+from src.utils.json_safe import to_json_safe
+
 try:
     import torch
     import torch.nn as nn
@@ -378,7 +380,11 @@ def load_meta_transformer_dataset(path: str) -> List[MetaTransformerSample]:
 # Training Loop (Placeholder)
 # =============================================================================
 
-def forward_pass_test(model: MetaTransformerNet, batch_size: int = 4) -> Dict[str, Any]:
+def forward_pass_test(
+    model: MetaTransformerNet,
+    batch_size: int = 4,
+    include_shared_repr: bool = False,
+) -> Dict[str, Any]:
     """
     Test forward pass through meta-transformer.
 
@@ -396,7 +402,7 @@ def forward_pass_test(model: MetaTransformerNet, batch_size: int = 4) -> Dict[st
     with torch.no_grad():
         outputs = model(vla_emb, dino_emb)
 
-    return {
+    result = {
         "policy_state_shape": list(outputs["policy_state"].shape),
         "diffusion_cond_shape": list(outputs["diffusion_cond"].shape),
         "token_logits_shape": list(outputs["token_logits"].shape),
@@ -404,6 +410,9 @@ def forward_pass_test(model: MetaTransformerNet, batch_size: int = 4) -> Dict[st
         "shared_repr_norm": float(outputs["shared_repr"].norm().item()),
         "authority_probs": outputs["authority_logits"].softmax(-1).mean(0).tolist(),
     }
+    if include_shared_repr:
+        result["shared_repr"] = to_json_safe(outputs["shared_repr"], include_tensors=True)
+    return result
 
 
 def compute_loss(

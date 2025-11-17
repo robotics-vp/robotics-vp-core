@@ -26,9 +26,11 @@ def load_stage1_datapacks() -> List[DataPackMeta]:
     if isinstance(raw, list):
         for entry in raw:
             try:
-                dp = DataPackMeta(**entry)
+                # Use from_dict method to properly reconstruct nested objects
+                dp = DataPackMeta.from_dict(entry)
                 dps.append(dp)
-            except Exception:
+            except Exception as e:
+                print(f"Warning: Failed to load datapack: {e}")
                 continue
     return dps
 
@@ -98,9 +100,14 @@ def main():
     descriptors = [datapack_to_rl_episode_descriptor(dp) for dp in dps]
 
     for desc in descriptors:
-        assert "objective_vector" in desc
-        assert "condition_profile" in desc
-        assert "guidance_profile" in desc
+        # Check new descriptor format fields
+        assert "objective_vector" in desc, "Missing objective_vector"
+        assert "env_name" in desc, "Missing env_name"
+        assert "backend" in desc, "Missing backend"
+        assert "tier" in desc, "Missing tier"
+        assert "trust_score" in desc, "Missing trust_score"
+        assert "sampling_weight" in desc, "Missing sampling_weight"
+
         flat_desc = convert_for_json(desc)
         flat_str = json.dumps(flat_desc, default=str)
         assert flat_str

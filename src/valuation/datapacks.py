@@ -25,6 +25,8 @@ def build_datapack_from_episode(
     env_type: str = "dishwashing",
     extra_tags: Optional[list] = None,
     semantic_energy_drivers: Optional[list] = None,
+    econ_semantic_tags: Optional[List[str]] = None,
+    semantic_quality: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Build a standardized datapack record for valuation across Phase B/C tasks.
@@ -58,6 +60,8 @@ def build_datapack_from_episode(
         "condition_profile": condition_profile,
         "agent_profile": agent_profile,
         "tags": tags,
+        "econ_semantic_tags": econ_semantic_tags,
+        "semantic_quality": max(0.0, min(1.0, semantic_quality)) if semantic_quality is not None else None,
         "attribution": {
             "delta_mpl": metrics.get("mpl_episode"),
             "delta_error": metrics.get("error_rate_episode"),
@@ -99,6 +103,8 @@ def build_datapack_meta_from_episode(
     baseline_error: Optional[float] = None,
     baseline_ep: Optional[float] = None,
     objective_profile: Optional[ObjectiveProfile] = None,
+    econ_semantic_tags: Optional[List[str]] = None,
+    semantic_quality: Optional[float] = None,
 ) -> DataPackMeta:
     """
     Build a DataPackMeta object from episode info (unified schema).
@@ -122,6 +128,8 @@ def build_datapack_meta_from_episode(
         baseline_error: Baseline error rate for ΔJ computation
         baseline_ep: Baseline energy productivity for ΔJ computation
         objective_profile: Optional ObjectiveProfile for DL econ hyperparameters
+        econ_semantic_tags: Optional econ/semantic advisory tags
+        semantic_quality: Optional advisory quality score in [0, 1]
 
     Returns:
         DataPackMeta object ready for DataPackRepo
@@ -197,6 +205,8 @@ def build_datapack_meta_from_episode(
         brick_id=brick_id,
         bucket=bucket,
         semantic_tags=tags,
+        econ_semantic_tags=econ_semantic_tags,
+        semantic_quality=max(0.0, min(1.0, semantic_quality)) if semantic_quality is not None else None,
         energy_driver_tags=energy_tags,
         condition=cond,
         attribution=attr,
