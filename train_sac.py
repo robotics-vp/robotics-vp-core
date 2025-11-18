@@ -25,6 +25,7 @@ from src.utils.logger import CsvLogger
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
 from src.rl.reward_shaping import compute_econ_reward
+from src.physics.backends.factory import make_backend
 from src.rl.episode_sampling import (
     DataPackRLSampler,
     load_episode_descriptors_from_jsonl,
@@ -124,6 +125,7 @@ def train_sac(
     checkpoint_path: str = "checkpoints/sac_final.pt",
     sampler: DataPackRLSampler = None,
     curriculum: DataPackCurriculum = None,
+    physics_backend: str = "pybullet",
 ):
     """Train SAC agent with economic objectives."""
 
@@ -161,8 +163,9 @@ def train_sac(
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
 
-    # Environment
-    env = DishwashingEnv(econ_params)
+    # Environment / physics backend
+    backend = make_backend(physics_backend, {"econ_preset": econ_preset})
+    env = backend.env if hasattr(backend, "env") else DishwashingEnv(econ_params)
 
     # Encoder (with auxiliary heads)
     obs_dim = 4
@@ -507,6 +510,7 @@ if __name__ == "__main__":
     parser.add_argument("--descriptors-path", type=str, default="", help="Optional JSONL of existing RL episode descriptors")
     parser.add_argument("--curriculum-total-steps", type=int, default=None, help="Override total steps for curriculum phase boundaries")
     parser.add_argument("--curriculum-config", type=str, default="", help="Optional JSON file overriding curriculum boundaries/mix")
+    parser.add_argument("--physics-backend", type=str, default="pybullet", choices=["pybullet", "isaac_stub"], help="Physics backend selection (pybullet default)")
     parser.add_argument("--log-path", type=str, default="logs/sac_train.csv")
     parser.add_argument("--checkpoint-path", type=str, default="checkpoints/sac_final.pt")
     args = parser.parse_args()
@@ -526,4 +530,5 @@ if __name__ == "__main__":
         curriculum_config_path=args.curriculum_config,
         log_path=args.log_path,
         checkpoint_path=args.checkpoint_path,
+        physics_backend=args.physics_backend,
     )

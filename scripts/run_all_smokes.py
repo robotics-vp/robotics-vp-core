@@ -28,6 +28,12 @@ SMOKES = [
     ["python3", "scripts/smoke_test_ontology_store.py"],
     ["python3", "scripts/smoke_test_ontology_adapters.py"],
     ["python3", "scripts/smoke_test_episode_logging_and_econ_vector.py"],
+    ["python3", "scripts/smoke_test_econ_reports.py"],
+    ["python3", "scripts/smoke_test_stage3_ontology_integration.py"],
+    ["python3", "scripts/smoke_test_physics_backend_contract.py"],
+    ["python3", "scripts/smoke_test_semantic_aggregator.py"],
+    ["python3", "scripts/smoke_test_semantic_orchestrator_v2.py"],
+    ["python3", "scripts/smoke_test_stage3_orchestrator_integration.py"],
 ]
 
 OPTIONAL = [

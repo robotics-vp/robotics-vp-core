@@ -19,6 +19,7 @@ from src.rl.episode_descriptor_validator import (
     normalize_and_validate,
 )
 from src.utils.json_safe import to_json_safe
+from src.orchestrator.semantic_orchestrator_v2 import OrchestratorAdvisory
 
 
 def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
@@ -177,11 +178,13 @@ class DataPackRLSampler:
         existing_descriptors: Optional[Iterable[Dict[str, Any]]] = None,
         default_strategy: str = "balanced",
         tier_ratios: Optional[Dict[int, float]] = None,
+        advisory: Optional[OrchestratorAdvisory] = None,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
         self.enrichment_map = self._build_enrichment_map(enrichments)
         self._episodes: List[Dict[str, Any]] = []
+        self.advisory = advisory
 
         if datapacks:
             for dp in datapacks:
@@ -212,7 +215,7 @@ class DataPackRLSampler:
         if batch_size <= 0:
             return []
 
-        strategy_name = (strategy or self.default_strategy).lower()
+        strategy_name = self._select_strategy(strategy)
         rng = random.Random(seed)
 
         if strategy_name == "balanced":
@@ -246,6 +249,16 @@ class DataPackRLSampler:
             "sources": sources,
         }
 
+    def _select_strategy(self, strategy: Optional[str]) -> str:
+        if strategy:
+            return strategy.lower()
+        if self.advisory and self.advisory.sampler_strategy_overrides:
+            weights = self.advisory.sampler_strategy_overrides
+            # Deterministic choice: highest weight then lexicographic
+            ordered = sorted(weights.items(), key=lambda kv: (-kv[1], kv[0]))
+            return ordered[0][0]
+        return self.default_strategy.lower()
+
     def _add_episode(self, descriptor: Dict[str, Any], source: str) -> None:
         normalized, errors = normalize_and_validate(descriptor)
         if errors:
@@ -257,6 +270,7 @@ class DataPackRLSampler:
             "descriptor": normalized,
             "enrichment": enrichment,
             "source": source,
+            "advisory": self.advisory,
         }
         episode["novelty_score"] = _extract_max_novelty(enrichment)
         episode["expected_mpl_gain"] = _extract_expected_mpl_gain(enrichment)
@@ -457,7 +471,13 @@ def _balanced_weight(episode: Dict[str, Any]) -> float:
     trust = float(desc.get("trust_score", 0.5))
     sampling_weight = float(desc.get("sampling_weight", 1.0))
     novelty = float(episode.get("novelty_score", 0.0))
-    return max(0.1, 0.4 * sampling_weight + 0.4 * trust + 0.2 * novelty)
+    base = max(0.1, 0.4 * sampling_weight + 0.4 * trust + 0.2 * novelty)
+    advisory = episode.get("advisory")
+    if advisory and getattr(advisory, "datapack_priority_tags", None):
+        tags = desc.get("semantic_tags", []) or []
+        if any(tag in advisory.datapack_priority_tags for tag in tags):
+            base *= 1.2
+    return base
 
 
 def _weighted_sample_without_replacement(

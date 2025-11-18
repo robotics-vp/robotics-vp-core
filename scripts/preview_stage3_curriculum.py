@@ -23,6 +23,7 @@ from src.rl.episode_sampling import (
 )
 from src.rl.curriculum import DataPackCurriculum
 from src.valuation.datapack_schema import DataPackMeta
+from src.orchestrator.semantic_orchestrator_v2 import load_latest_advisory
 
 
 def _load_datapacks(path: Path) -> List[DataPackMeta]:
@@ -80,6 +81,8 @@ def main():
     parser.add_argument("--total-steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=6)
     parser.add_argument("--seed", type=int, default=0, help="Base seed for curriculum sampling")
+    parser.add_argument("--task-id", type=str, default="task_curriculum")
+    parser.add_argument("--use-orchestrator-advisories", action="store_true")
     args = parser.parse_args()
 
     datapack_path = Path(args.stage1_datapacks)
@@ -96,11 +99,13 @@ def main():
         print("[preview_stage3_curriculum] No datapacks/descriptors found; generating a tiny synthetic pool.")
         datapacks = [DataPackMeta()]
 
-    sampler = DataPackRLSampler(datapacks=datapacks, enrichments=enrichments, existing_descriptors=existing_descriptors)
+    advisory = load_latest_advisory(args.task_id) if args.use_orchestrator_advisories else None
+    sampler = DataPackRLSampler(datapacks=datapacks, enrichments=enrichments, existing_descriptors=existing_descriptors, advisory=advisory)
     curriculum = DataPackCurriculum(
         sampler=sampler,
         total_steps=args.total_steps,
         config={"base_seed": args.seed},
+        advisory=advisory,
     )
 
     print("[preview_stage3_curriculum] Pool summary:", sampler.pool_summary())

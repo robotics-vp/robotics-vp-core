@@ -25,6 +25,7 @@ from src.rl.episode_sampling import (
     load_enrichments_from_jsonl,
     load_episode_descriptors_from_jsonl,
 )
+from src.orchestrator.semantic_orchestrator_v2 import load_latest_advisory
 from src.valuation.datapack_schema import DataPackMeta
 
 
@@ -87,6 +88,8 @@ def main():
     )
     parser.add_argument("--batch-size", type=int, default=6)
     parser.add_argument("--seed", type=int, default=17)
+    parser.add_argument("--task-id", type=str, default="task_preview")
+    parser.add_argument("--use-orchestrator-advisories", action="store_true")
     args = parser.parse_args()
 
     datapack_path = Path(args.stage1_datapacks)
@@ -104,10 +107,12 @@ def main():
         synthetic_dp = DataPackMeta()
         datapacks = [synthetic_dp]
 
+    advisory = load_latest_advisory(args.task_id) if args.use_orchestrator_advisories else None
     sampler = DataPackRLSampler(
         datapacks=datapacks,
         enrichments=enrichments,
         existing_descriptors=existing_descriptors,
+        advisory=advisory,
     )
 
     print("[preview_stage3_sampling] Pool summary:", sampler.pool_summary())

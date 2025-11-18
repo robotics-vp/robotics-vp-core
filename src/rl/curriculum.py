@@ -41,6 +41,7 @@ class DataPackCurriculum:
         sampler: DataPackRLSampler,
         total_steps: int,
         config: Optional[Dict[str, Any]] = None,
+        advisory: Optional[Any] = None,
     ) -> None:
         self.sampler = sampler
         self.total_steps = max(1, int(total_steps))
@@ -48,6 +49,7 @@ class DataPackCurriculum:
         self.boundaries = self._build_boundaries(self.config.get("phase_boundaries"))
         self.mix = self._build_mix(self.config.get("phase_mix"))
         self.base_seed = int(self.config.get("base_seed", 0))
+        self.advisory = advisory
 
     def get_phase(self, step: int) -> str:
         """Return phase name for a given training step."""
@@ -69,6 +71,8 @@ class DataPackCurriculum:
         phase = self.get_phase(step)
         seed = self.base_seed + int(step)
         rng = random.Random(seed)
+        if self.advisory and getattr(self.sampler, "advisory", None) is None:
+            self.sampler.advisory = self.advisory
         if phase == "warmup":
             batch = self._sample_single("balanced", batch_size, seed)
         elif phase == "skill_building":
@@ -96,6 +100,7 @@ class DataPackCurriculum:
     def _sample_mixed(
         self, mix: Dict[str, float], batch_size: int, base_seed: int, rng: random.Random
     ) -> List[Dict[str, Any]]:
+        mix = self._apply_advisory_mix(mix)
         # Compute counts per strategy with a deterministic rounding order
         strategies = sorted(mix.items(), key=lambda kv: (-kv[1], kv[0]))
         counts: Dict[str, int] = {}
@@ -122,6 +127,18 @@ class DataPackCurriculum:
 
         rng.shuffle(combined)
         return combined[:batch_size]
+
+    def _apply_advisory_mix(self, mix: Dict[str, float]) -> Dict[str, float]:
+        if not self.advisory or not getattr(self.advisory, "sampler_strategy_overrides", None):
+            return mix
+        overrides = self.advisory.sampler_strategy_overrides
+        adjusted = {}
+        for k, v in mix.items():
+            adjusted[k] = max(0.0, v * overrides.get(k, 1.0))
+        total = sum(adjusted.values())
+        if total <= 0:
+            return mix
+        return {k: v / total for k, v in adjusted.items()}
 
     def _build_boundaries(self, overrides: Optional[Dict[str, float]]) -> Dict[str, float]:
         if not overrides:
