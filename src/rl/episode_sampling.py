@@ -1,16 +1,24 @@
 """
 Episode sampling scaffolding (advisory-only).
 
-Provides a minimal descriptor conversion from datapacks to an RL episode
-template. Does not alter any training loops.
+Stage 3 extends the simple Stage 1 → RL descriptor conversion with an
+advisory sampler that can balance tiers, prioritize frontier datapacks,
+and weight by economic urgency without modifying reward math or training
+algorithms.
 """
-from typing import Dict, Any, List, Optional
+import copy
+import json
+import random
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Iterable, Tuple
 
 from src.valuation.datapack_schema import DataPackMeta
 from src.rl.episode_descriptor_validator import (
     normalize_episode_descriptor,
     validate_episode_descriptor,
+    normalize_and_validate,
 )
+from src.utils.json_safe import to_json_safe
 
 
 def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
@@ -147,3 +155,395 @@ def sampler_stub(datapacks: List[DataPackMeta]) -> Dict[str, Any]:
     Real sampling logic is intentionally omitted.
     """
     return {dp.pack_id: datapack_to_rl_episode_descriptor(dp) for dp in datapacks}
+
+
+class DataPackRLSampler:
+    """
+    Advisory RL sampler over Stage 1 datapack descriptors + Stage 2 enrichments.
+
+    Strategies (flagged at call time):
+    - balanced: tier-aware, lightly trust-weighted stratified sampling
+    - frontier_prioritized: weight by ΔMPL/ΔJ + novelty/expected MPL gains
+    - econ_urgency: weight by economic urgency and supervision hints
+
+    Deterministic for a given seed and configuration; returns JSON-safe
+    descriptors without mutating objectives or reward math.
+    """
+
+    def __init__(
+        self,
+        datapacks: Optional[List[DataPackMeta]] = None,
+        enrichments: Optional[Iterable[Dict[str, Any]]] = None,
+        existing_descriptors: Optional[Iterable[Dict[str, Any]]] = None,
+        default_strategy: str = "balanced",
+        tier_ratios: Optional[Dict[int, float]] = None,
+    ) -> None:
+        self.default_strategy = default_strategy
+        self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
+        self.enrichment_map = self._build_enrichment_map(enrichments)
+        self._episodes: List[Dict[str, Any]] = []
+
+        if datapacks:
+            for dp in datapacks:
+                desc = datapack_to_rl_episode_descriptor(dp)
+                self._add_episode(desc, source="stage1_datapack")
+
+        if existing_descriptors:
+            for desc in existing_descriptors:
+                self._add_episode(desc, source="existing_descriptor")
+
+        self._episodes.sort(key=lambda e: e["descriptor"].get("pack_id", ""))
+
+        if not self._episodes:
+            raise ValueError("DataPackRLSampler requires at least one episode descriptor")
+
+    def sample_batch(
+        self,
+        batch_size: int,
+        seed: int = 0,
+        strategy: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Sample a batch of episode descriptors using the requested strategy.
+
+        Deterministic for a given seed, strategy, and input pool. Returns
+        JSON-safe descriptors that include enrichment metadata for inspection.
+        """
+        if batch_size <= 0:
+            return []
+
+        strategy_name = (strategy or self.default_strategy).lower()
+        rng = random.Random(seed)
+
+        if strategy_name == "balanced":
+            selected = self._sample_balanced(batch_size, rng)
+        elif strategy_name == "frontier_prioritized":
+            selected = self._sample_frontier_prioritized(batch_size, rng)
+        elif strategy_name == "econ_urgency":
+            selected = self._sample_econ_urgency(batch_size, rng)
+        else:
+            raise ValueError(f"Unknown sampling strategy: {strategy_name}")
+
+        rng.shuffle(selected)  # Deterministic shuffle for batch decorrelation
+        return [self._format_output(ep, strategy_name) for ep in selected]
+
+    def pool_summary(self) -> Dict[str, Any]:
+        """Lightweight summary of the sampler pool for debugging/preview."""
+        tiers: Dict[int, int] = {}
+        presets: Dict[str, int] = {}
+        sources: Dict[str, int] = {}
+        for ep in self._episodes:
+            desc = ep["descriptor"]
+            tier = desc.get("tier", 0)
+            preset = desc.get("objective_preset", "balanced")
+            tiers[tier] = tiers.get(tier, 0) + 1
+            presets[preset] = presets.get(preset, 0) + 1
+            sources[ep["source"]] = sources.get(ep["source"], 0) + 1
+        return {
+            "num_episodes": len(self._episodes),
+            "tiers": tiers,
+            "objective_presets": presets,
+            "sources": sources,
+        }
+
+    def _add_episode(self, descriptor: Dict[str, Any], source: str) -> None:
+        normalized, errors = normalize_and_validate(descriptor)
+        if errors:
+            raise ValueError(f"Episode descriptor validation failed: {errors}")
+        pack_id = normalized.get("pack_id") or normalized.get("episode_id") or f"desc_{len(self._episodes)}"
+        enrichment = self.enrichment_map.get(pack_id, _normalize_enrichment(descriptor.get("enrichment")))
+
+        episode = {
+            "descriptor": normalized,
+            "enrichment": enrichment,
+            "source": source,
+        }
+        episode["novelty_score"] = _extract_max_novelty(enrichment)
+        episode["expected_mpl_gain"] = _extract_expected_mpl_gain(enrichment)
+        episode["frontier_score"] = self._compute_frontier_score(episode)
+        episode["econ_urgency_score"] = self._compute_econ_urgency_score(episode)
+
+        self._episodes.append(episode)
+
+    def _build_enrichment_map(
+        self, enrichments: Optional[Iterable[Dict[str, Any]]]
+    ) -> Dict[str, Dict[str, Any]]:
+        if not enrichments:
+            return {}
+        mapping: Dict[str, Dict[str, Any]] = {}
+        for record in enrichments:
+            if not isinstance(record, dict):
+                continue
+            key = record.get("episode_id") or record.get("pack_id") or record.get("id")
+            enrichment_payload = record.get("enrichment", record)
+            if key:
+                mapping[str(key)] = _normalize_enrichment(enrichment_payload)
+        return mapping
+
+    def _sample_balanced(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
+        """Tier-aware sampling that lightly respects trust_score without over-concentrating."""
+        tier_groups: Dict[int, List[Dict[str, Any]]] = {}
+        for ep in self._episodes:
+            tier = ep["descriptor"].get("tier", 0)
+            tier_groups.setdefault(tier, []).append(ep)
+
+        counts: Dict[int, int] = {}
+        total_assigned = 0
+        for tier, ratio in self.tier_ratios.items():
+            count = int(round(batch_size * ratio))
+            counts[tier] = min(count, len(tier_groups.get(tier, [])))
+            total_assigned += counts[tier]
+
+        # Allocate remaining slots deterministically to tiers with headroom
+        remaining = batch_size - total_assigned
+        tier_order = sorted(self.tier_ratios.keys(), key=lambda t: (-self.tier_ratios[t], t))
+        while remaining > 0:
+            allocated = False
+            for tier in tier_order:
+                if len(tier_groups.get(tier, [])) > counts.get(tier, 0):
+                    counts[tier] = counts.get(tier, 0) + 1
+                    remaining -= 1
+                    allocated = True
+                    if remaining == 0:
+                        break
+            if not allocated:
+                break
+
+        selected: List[Dict[str, Any]] = []
+        for tier in sorted(tier_groups.keys()):
+            pool = tier_groups[tier]
+            need = counts.get(tier, 0)
+            weights = [_balanced_weight(ep) for ep in pool]
+            selected.extend(_weighted_sample_without_replacement(pool, weights, need, rng))
+
+        # Fill any shortfall from the remaining pool with uniform coverage
+        if len(selected) < batch_size:
+            remaining_pool = [ep for ep in self._episodes if ep not in selected]
+            weights = [_balanced_weight(ep) for ep in remaining_pool]
+            selected.extend(
+                _weighted_sample_without_replacement(
+                    remaining_pool, weights, batch_size - len(selected), rng
+                )
+            )
+        return selected[:batch_size]
+
+    def _sample_frontier_prioritized(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
+        """Bias sampling toward high ΔMPL/ΔJ datapacks while keeping diversity."""
+        scores = [ep["frontier_score"] for ep in self._episodes]
+        threshold = _percentile(scores, 0.65)
+        urgent = [ep for ep in self._episodes if ep["frontier_score"] >= threshold]
+        non_urgent = [ep for ep in self._episodes if ep["frontier_score"] < threshold]
+
+        urgent_count = min(max(int(batch_size * 0.7), 1), len(urgent))
+        weights_urgent = [max(ep["frontier_score"], 1e-3) for ep in urgent]
+        selected = _weighted_sample_without_replacement(urgent, weights_urgent, urgent_count, rng)
+
+        remaining = batch_size - len(selected)
+        if remaining > 0:
+            fallback_pool = non_urgent if non_urgent else [ep for ep in urgent if ep not in selected]
+            weights_fallback = [_balanced_weight(ep) for ep in fallback_pool]
+            selected.extend(_weighted_sample_without_replacement(fallback_pool, weights_fallback, remaining, rng))
+        return selected[:batch_size]
+
+    def _sample_econ_urgency(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
+        """Weight by economic urgency and novelty, with a diversity buffer."""
+        scores = [ep["econ_urgency_score"] for ep in self._episodes]
+        threshold = _percentile(scores, 0.6)
+        urgent = [ep for ep in self._episodes if ep["econ_urgency_score"] >= threshold]
+        baseline = [ep for ep in self._episodes if ep["econ_urgency_score"] < threshold]
+
+        urgent_count = min(max(int(batch_size * 0.65), 1), len(urgent))
+        critical = [ep for ep in urgent if (ep["enrichment"].get("supervision_hints", {}) or {}).get("priority_level", "").lower() == "critical"]
+        critical_sorted = sorted(critical, key=lambda ep: ep["econ_urgency_score"], reverse=True)
+        critical_selection = critical_sorted[: min(len(critical_sorted), urgent_count)]
+        selected = list(critical_selection)
+
+        remaining_urgent = [ep for ep in urgent if ep not in selected]
+        weights_urgent = [max(ep["econ_urgency_score"], 1e-3) for ep in remaining_urgent]
+        selected.extend(_weighted_sample_without_replacement(remaining_urgent, weights_urgent, urgent_count - len(selected), rng))
+
+        remaining = batch_size - len(selected)
+        if remaining > 0:
+            pool = baseline if baseline else [ep for ep in urgent if ep not in selected]
+            weights = [_balanced_weight(ep) for ep in pool]
+            selected.extend(_weighted_sample_without_replacement(pool, weights, remaining, rng))
+        return selected[:batch_size]
+
+    def _compute_frontier_score(self, episode: Dict[str, Any]) -> float:
+        desc = episode["descriptor"]
+        enrichment = episode["enrichment"]
+        tier_weight = {0: 0.8, 1: 1.0, 2: 1.3}.get(desc.get("tier", 1), 1.0)
+        trust = float(desc.get("trust_score", 0.5))
+        delta_mpl = _safe_float(desc.get("delta_mpl"), 0.0)
+        delta_J = _safe_float(desc.get("delta_J"), 0.0)
+        novelty = _extract_max_novelty(enrichment)
+        expected_gain = _extract_expected_mpl_gain(enrichment)
+
+        base = max(delta_mpl, 0.0) + 0.7 * max(delta_J, 0.0) + 0.5 * expected_gain
+        novelty_boost = 1.0 + 0.5 * novelty
+        trust_boost = 0.7 + 0.6 * trust
+        return max(base, 0.0) * tier_weight * novelty_boost * trust_boost
+
+    def _compute_econ_urgency_score(self, episode: Dict[str, Any]) -> float:
+        desc = episode["descriptor"]
+        enrichment = episode["enrichment"]
+        novelty = _extract_max_novelty(enrichment)
+        expected_gain = _extract_expected_mpl_gain(enrichment)
+        coherence = _safe_float(enrichment.get("coherence_score"), 0.0)
+        hints = enrichment.get("supervision_hints", {}) or {}
+        priority_level = (hints.get("priority_level") or "medium").lower()
+        priority_boost = {"low": 0.8, "medium": 1.0, "high": 1.1, "critical": 1.2}.get(priority_level, 1.0)
+        weight_mult = _safe_float(hints.get("suggested_weight_multiplier"), 1.0)
+        trust = float(desc.get("trust_score", 0.5))
+        tier_weight = {0: 0.8, 1: 1.0, 2: 1.15}.get(desc.get("tier", 1), 1.0)
+
+        econ_signal = 0.45 * novelty + 0.45 * min(expected_gain / 10.0, 1.0) + 0.1 * coherence
+        econ_signal *= priority_boost * weight_mult
+        econ_signal *= (0.6 + 0.4 * trust) * tier_weight
+        return max(econ_signal, 0.0)
+
+    def _format_output(self, episode: Dict[str, Any], strategy: str) -> Dict[str, Any]:
+        descriptor = copy.deepcopy(episode["descriptor"])
+        descriptor["enrichment"] = copy.deepcopy(episode["enrichment"])
+        descriptor["sampling_metadata"] = {
+            "strategy": strategy,
+            "source": episode["source"],
+            "frontier_score": episode["frontier_score"],
+            "econ_urgency_score": episode["econ_urgency_score"],
+            "novelty_score": episode["novelty_score"],
+            "expected_mpl_gain": episode["expected_mpl_gain"],
+        }
+        return to_json_safe(descriptor)
+
+
+def _normalize_enrichment(enrichment: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Ensure enrichment payload from Stage 2 is JSON-safe and keyed."""
+    base = {
+        "novelty_tags": [],
+        "fragility_tags": [],
+        "risk_tags": [],
+        "affordance_tags": [],
+        "efficiency_tags": [],
+        "intervention_tags": [],
+        "semantic_conflicts": [],
+        "coherence_score": 0.0,
+        "supervision_hints": {
+            "prioritize_for_training": False,
+            "priority_level": "medium",
+            "suggested_weight_multiplier": 1.0,
+            "suggested_replay_frequency": "standard",
+            "requires_human_review": False,
+            "safety_critical": False,
+            "curriculum_stage": "mid",
+            "prerequisite_tags": [],
+        },
+        "confidence": 0.0,
+    }
+    if enrichment is None:
+        return copy.deepcopy(base)
+
+    merged = copy.deepcopy(base)
+    payload = enrichment.get("enrichment", enrichment) if isinstance(enrichment, dict) else {}
+    for key, value in payload.items():
+        if key == "supervision_hints" and isinstance(value, dict):
+            merged["supervision_hints"].update(value)
+        elif key in merged:
+            merged[key] = value if value is not None else merged[key]
+    return to_json_safe(merged)
+
+
+def _balanced_weight(episode: Dict[str, Any]) -> float:
+    desc = episode["descriptor"]
+    trust = float(desc.get("trust_score", 0.5))
+    sampling_weight = float(desc.get("sampling_weight", 1.0))
+    novelty = float(episode.get("novelty_score", 0.0))
+    return max(0.1, 0.4 * sampling_weight + 0.4 * trust + 0.2 * novelty)
+
+
+def _weighted_sample_without_replacement(
+    items: List[Dict[str, Any]],
+    weights: List[float],
+    count: int,
+    rng: random.Random,
+) -> List[Dict[str, Any]]:
+    if not items or count <= 0:
+        return []
+    available: List[Tuple[Dict[str, Any], float]] = []
+    for item, w in zip(items, weights):
+        available.append((item, max(float(w), 0.0)))
+    selected: List[Dict[str, Any]] = []
+    count = min(count, len(available))
+    for _ in range(count):
+        total = sum(w if w > 0 else 1e-6 for _, w in available)
+        r = rng.random() * total
+        cumulative = 0.0
+        choice_idx = 0
+        for idx, (item, weight) in enumerate(available):
+            cumulative += (weight if weight > 0 else 1e-6)
+            if cumulative >= r:
+                choice_idx = idx
+                break
+        item, _ = available.pop(choice_idx)
+        selected.append(item)
+    return selected
+
+
+def _extract_max_novelty(enrichment: Dict[str, Any]) -> float:
+    max_score = 0.0
+    for tag in enrichment.get("novelty_tags", []) or []:
+        try:
+            max_score = max(max_score, float(tag.get("novelty_score", 0.0)))
+        except Exception:
+            continue
+    return max_score
+
+
+def _extract_expected_mpl_gain(enrichment: Dict[str, Any]) -> float:
+    total_gain = 0.0
+    for tag in enrichment.get("novelty_tags", []) or []:
+        try:
+            total_gain += float(tag.get("expected_mpl_gain", 0.0))
+        except Exception:
+            continue
+    return total_gain
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _percentile(values: List[float], quantile: float) -> float:
+    if not values:
+        return 0.0
+    values_sorted = sorted(values)
+    idx = int(max(0, min(len(values_sorted) - 1, quantile * (len(values_sorted) - 1))))
+    return float(values_sorted[idx])
+
+
+def load_episode_descriptors_from_jsonl(path: Path) -> List[Dict[str, Any]]:
+    """Load JSONL descriptors (Stage 1 or existing) with validation."""
+    descriptors: List[Dict[str, Any]] = []
+    with path.open("r") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            normalized, errors = normalize_and_validate(record)
+            if errors:
+                raise ValueError(f"Invalid descriptor in {path}: {errors}")
+            descriptors.append(normalized)
+    return descriptors
+
+
+def load_enrichments_from_jsonl(path: Path) -> List[Dict[str, Any]]:
+    """Load Stage 2 semantic enrichments from JSONL."""
+    enrichments: List[Dict[str, Any]] = []
+    with path.open("r") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            enrichments.append(json.loads(line))
+    return enrichments
