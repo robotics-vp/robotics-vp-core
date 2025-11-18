@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from src.ontology.store import OntologyStore
 from src.ontology.models import Task, Episode, EconVector, Datapack
+from src.policies.registry import build_all_policies
 
 
 def _percentiles(values: List[float], ps=(10, 50, 90)) -> Dict[str, float]:
@@ -136,28 +137,28 @@ def compute_datapack_mix_summary(store: OntologyStore, task_id: str) -> Dict[str
 def compute_pricing_snapshot(store: OntologyStore, task_id: str) -> Dict[str, Any]:
     task_summary = compute_task_econ_summary(store, task_id)
     dp_summary = compute_datapack_mix_summary(store, task_id)
-    task = store.get_task(task_id)
-    human_unit_cost = None
-    robot_unit_cost = None
-    if task:
-        human_unit_cost = task.human_wage_per_hour / max(task.human_mpl_units_per_hour, 1e-6)
-    mpl_mean = task_summary.get("mpl", {}).get("mean", 0.0)
-    wage_parity_mean = task_summary.get("wage_parity", {}).get("mean", 0.0)
-    if mpl_mean:
-        robot_unit_cost = (task.human_wage_per_hour * wage_parity_mean) / mpl_mean
-    spread = None
-    if human_unit_cost is not None and robot_unit_cost is not None:
-        spread = human_unit_cost - robot_unit_cost
-    datapack_price_floor = None
-    if spread is not None:
-        datapack_price_floor = max(0.0, 0.1 * spread)
+    policies = build_all_policies()
+    datapacks = store.list_datapacks(task_id=task_id)
+    valuations = []
+    for dp in datapacks:
+        feats = policies.data_valuation.build_features(dp)
+        score = policies.data_valuation.score(feats)
+        valuations.append(float(score.get("valuation_score", 0.0)))
+    datapack_value = sum(valuations) / len(valuations) if valuations else 0.0
 
+    pricing_features = policies.pricing.build_features(
+        task_econ=task_summary,
+        datapack_value=datapack_value,
+        semantic_context={"datapack_mix": dp_summary},
+    )
+    pricing = policies.pricing.evaluate(pricing_features)
+    metadata = pricing.get("metadata", {}) if isinstance(pricing, dict) else {}
     return {
         "task_id": task_id,
-        "human_unit_cost": human_unit_cost or 0.0,
-        "robot_unit_cost": robot_unit_cost or 0.0,
-        "implied_spread_per_unit": spread or 0.0,
-        "datapack_price_floor": datapack_price_floor or 0.0,
+        "human_unit_cost": metadata.get("human_unit_cost", 0.0),
+        "robot_unit_cost": metadata.get("robot_unit_cost", 0.0),
+        "implied_spread_per_unit": metadata.get("spread_per_unit", 0.0),
+        "datapack_price_floor": metadata.get("datapack_price_floor", 0.0),
         "task_summary": task_summary,
         "datapack_mix": dp_summary,
     }

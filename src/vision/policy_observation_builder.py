@@ -22,7 +22,12 @@ class PolicyObservationBuilder:
         self.backbone = backbone
 
     def build(self, frame: VisionFrame, state_summary: Dict[str, Any]) -> PolicyObservation:
-        latent = self.backbone.encode_frame(frame)
+        if hasattr(self.backbone, "encode_frame"):
+            latent = self.backbone.encode_frame(frame)
+        elif hasattr(self.backbone, "encode"):
+            latent = self.backbone.encode(frame)
+        else:
+            raise TypeError("Backbone must implement encode_frame(frame) or encode(frame)")
         return PolicyObservation(
             task_id=frame.task_id,
             episode_id=frame.episode_id,

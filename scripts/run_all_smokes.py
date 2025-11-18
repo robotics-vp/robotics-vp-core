@@ -9,6 +9,9 @@ import sys
 
 
 SMOKES = [
+    ["python3", "scripts/smoke_test_policy_registry.py"],
+    ["python3", "scripts/smoke_test_policy_heuristics.py"],
+    ["python3", "scripts/smoke_test_policy_datasets.py"],
     ["python3", "scripts/smoke_test_dependency_hierarchy.py"],
     ["python3", "scripts/smoke_test_pareto_frontier.py"],
     ["python3", "scripts/smoke_test_semantic_feedback_loop.py"],

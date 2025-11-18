@@ -8,13 +8,15 @@ from typing import Any, Dict, List, Tuple
 from datetime import datetime
 
 from src.ontology.models import Task, Robot, Episode, EpisodeEvent, EconVector
+from src.policies.registry import build_all_policies
 
 
 class RewardEngine:
-    def __init__(self, task: Task, robot: Robot, config: Dict[str, Any]):
+    def __init__(self, task: Task, robot: Robot, config: Dict[str, Any], policies=None):
         self.task = task
         self.robot = robot
         self.config = config or {}
+        self.policies = policies or build_all_policies()
 
     def step_reward(
         self,
@@ -46,6 +48,17 @@ class RewardEngine:
         wage_parity = self._safe_float(self.config.get("wage_parity_stub"), 1.0)
         energy_cost = sum(e.reward_components.get("energy_penalty", 0.0) for e in events)
         damage_cost = sum(e.reward_components.get("collision_penalty", 0.0) for e in events)
+        try:
+            if self.policies:
+                energy_feats = self.policies.energy_cost.build_features(events)
+                energy_eval = self.policies.energy_cost.evaluate(energy_feats)
+                energy_cost = self._safe_float(energy_eval.get("energy_cost", energy_cost), energy_cost)
+                safety_feats = self.policies.safety_risk.build_features(events)
+                safety_eval = self.policies.safety_risk.evaluate(safety_feats)
+                damage_cost = self._safe_float(safety_eval.get("damage_estimate", damage_cost), damage_cost)
+        except Exception:
+            # Preserve existing behavior on any policy failure
+            pass
         novelty_delta = max(e.reward_components.get("novelty_bonus", 0.0) for e in events) if events else 0.0
         components_agg: Dict[str, float] = {}
         for e in events:

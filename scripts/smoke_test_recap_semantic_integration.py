@@ -16,7 +16,7 @@ from src.ontology.models import Task, Robot, Episode, EconVector
 from src.sima2.ontology_proposals import OntologyUpdateProposal, ProposalType
 from src.sima2.task_graph_proposals import TaskGraphRefinementProposal, RefinementType
 from src.sima2.tags.semantic_tags import SemanticEnrichmentProposal, SupervisionHints
-from src.orchestrator.semantic_orchestrator_v2 import SemanticOrchestratorV2
+from src.policies.registry import build_all_policies
 
 
 def _build_store(root: Path) -> OntologyStore:
@@ -76,10 +76,12 @@ def main():
     d = snapshot.to_dict()
     snapshot_rt = SemanticSnapshot.from_dict(d)
     assert snapshot_rt.metadata.get("recap", {}).get("mean_goodness", 0) > 0
-    orch = SemanticOrchestratorV2(config={"write_to_file": False})
-    advisory = orch.propose(snapshot_rt)
+    orch = build_all_policies().orchestrator
+    if hasattr(orch, "_impl"):
+        orch._impl.write_to_file = False
+    advisory = orch.advise(snapshot_rt)
     assert "recap_top" in advisory.datapack_priority_tags
-    adv2 = orch.propose(snapshot_rt)
+    adv2 = orch.advise(snapshot_rt)
     assert advisory.to_json() == adv2.to_json()
     print("[smoke_test_recap_semantic_integration] All tests passed.")
 

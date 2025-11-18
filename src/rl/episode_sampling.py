@@ -10,7 +10,7 @@ import copy
 import json
 import random
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Iterable, Tuple
+from typing import Dict, Any, List, Optional, Iterable, Tuple, TYPE_CHECKING
 
 from src.valuation.datapack_schema import DataPackMeta
 from src.rl.episode_descriptor_validator import (
@@ -20,6 +20,9 @@ from src.rl.episode_descriptor_validator import (
 )
 from src.utils.json_safe import to_json_safe
 from src.orchestrator.semantic_orchestrator_v2 import OrchestratorAdvisory
+
+if TYPE_CHECKING:
+    from src.policies.registry import PolicyBundle
 
 
 def _load_recap_scores(path: Optional[str]) -> Dict[str, float]:
@@ -42,6 +45,11 @@ def _load_recap_scores(path: Optional[str]) -> Dict[str, float]:
             except Exception:
                 continue
     return scores
+
+
+def _episode_key(episode: Dict[str, Any]) -> str:
+    desc = episode.get("descriptor", {})
+    return str(desc.get("pack_id") or desc.get("episode_id") or desc.get("id") or "")
 
 
 def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
@@ -204,6 +212,7 @@ class DataPackRLSampler:
         use_recap_weights: bool = False,
         recap_scores: Optional[Dict[str, float]] = None,
         recap_scores_path: Optional[str] = None,
+        policies: Optional["PolicyBundle"] = None,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
@@ -211,6 +220,9 @@ class DataPackRLSampler:
         self._episodes: List[Dict[str, Any]] = []
         self.advisory = advisory
         self.use_recap_weights = bool(use_recap_weights)
+        from src.policies.registry import build_all_policies
+
+        self.policies = policies or build_all_policies()
         provided_scores = recap_scores or {}
         path_scores = _load_recap_scores(recap_scores_path)
         self.recap_scores = {**path_scores, **provided_scores}
@@ -325,6 +337,20 @@ class DataPackRLSampler:
                 mapping[str(key)] = _normalize_enrichment(enrichment_payload)
         return mapping
 
+    def _compute_weights(self, episodes: List[Dict[str, Any]], strategy: str) -> List[float]:
+        if not episodes:
+            return []
+        policy = getattr(self, "policies", None)
+        if policy and getattr(policy, "sampler_weights", None):
+            features = policy.sampler_weights.build_features(episodes)
+            weight_map = policy.sampler_weights.evaluate(features, strategy=strategy)
+            return [float(weight_map.get(_episode_key(ep), 0.0)) for ep in episodes]
+        if strategy == "frontier_prioritized":
+            return [max(ep["frontier_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
+        if strategy == "econ_urgency":
+            return [max(ep["econ_urgency_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
+        return [_balanced_weight(ep) for ep in episodes]
+
     def _sample_balanced(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
         """Tier-aware sampling that lightly respects trust_score without over-concentrating."""
         tier_groups: Dict[int, List[Dict[str, Any]]] = {}
@@ -358,13 +384,13 @@ class DataPackRLSampler:
         for tier in sorted(tier_groups.keys()):
             pool = tier_groups[tier]
             need = counts.get(tier, 0)
-            weights = [_balanced_weight(ep) for ep in pool]
+            weights = self._compute_weights(pool, strategy="balanced")
             selected.extend(_weighted_sample_without_replacement(pool, weights, need, rng))
 
         # Fill any shortfall from the remaining pool with uniform coverage
         if len(selected) < batch_size:
             remaining_pool = [ep for ep in self._episodes if ep not in selected]
-            weights = [_balanced_weight(ep) for ep in remaining_pool]
+            weights = self._compute_weights(remaining_pool, strategy="balanced")
             selected.extend(
                 _weighted_sample_without_replacement(
                     remaining_pool, weights, batch_size - len(selected), rng
@@ -380,13 +406,13 @@ class DataPackRLSampler:
         non_urgent = [ep for ep in self._episodes if ep["frontier_score"] < threshold]
 
         urgent_count = min(max(int(batch_size * 0.7), 1), len(urgent))
-        weights_urgent = [max(ep["frontier_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in urgent]
+        weights_urgent = self._compute_weights(urgent, strategy="frontier_prioritized")
         selected = _weighted_sample_without_replacement(urgent, weights_urgent, urgent_count, rng)
 
         remaining = batch_size - len(selected)
         if remaining > 0:
             fallback_pool = non_urgent if non_urgent else [ep for ep in urgent if ep not in selected]
-            weights_fallback = [_balanced_weight(ep) for ep in fallback_pool]
+            weights_fallback = self._compute_weights(fallback_pool, strategy="balanced")
             selected.extend(_weighted_sample_without_replacement(fallback_pool, weights_fallback, remaining, rng))
         return selected[:batch_size]
 
@@ -404,13 +430,13 @@ class DataPackRLSampler:
         selected = list(critical_selection)
 
         remaining_urgent = [ep for ep in urgent if ep not in selected]
-        weights_urgent = [max(ep["econ_urgency_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in remaining_urgent]
+        weights_urgent = self._compute_weights(remaining_urgent, strategy="econ_urgency")
         selected.extend(_weighted_sample_without_replacement(remaining_urgent, weights_urgent, urgent_count - len(selected), rng))
 
         remaining = batch_size - len(selected)
         if remaining > 0:
             pool = baseline if baseline else [ep for ep in urgent if ep not in selected]
-            weights = [_balanced_weight(ep) for ep in pool]
+            weights = self._compute_weights(pool, strategy="balanced")
             selected.extend(_weighted_sample_without_replacement(pool, weights, remaining, rng))
         return selected[:batch_size]
 

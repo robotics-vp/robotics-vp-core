@@ -9,6 +9,10 @@ import argparse
 import numpy as np
 import torch
 from pathlib import Path
+import sys
+
+repo_root = Path(__file__).parent.parent
+sys.path.insert(0, str(repo_root))
 
 from src.envs.dishwashing_env import DishwashingEnv
 from src.rl.sac import SACAgent
@@ -17,6 +21,7 @@ from src.economics.reward_engine import RewardEngine
 from src.logging.episode_logger import EpisodeLogger
 from src.ontology.models import Task, Robot
 from src.ontology.store import OntologyStore
+from src.config.econ_params import EconParams
 
 
 def main():
@@ -31,7 +36,25 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    env = DishwashingEnv()
+    econ_params = EconParams(
+        price_per_unit=0.3,
+        damage_cost=1.0,
+        energy_Wh_per_attempt=0.05,
+        time_step_s=60.0,
+        base_rate=2.0,
+        p_min=0.02,
+        k_err=0.12,
+        q_speed=1.2,
+        q_care=1.5,
+        care_cost=0.25,
+        max_steps=240,
+        max_catastrophic_errors=3,
+        max_error_rate_sla=0.12,
+        min_steps_for_sla=5,
+        zero_throughput_patience=10,
+        preset="toy",
+    )
+    env = DishwashingEnv(econ_params)
     obs_dim = 4
     latent_dim = 128
     encoder = EncoderWithAuxiliaries(

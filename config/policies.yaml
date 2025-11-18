@@ -1,0 +1,9 @@
+data_valuation: heuristic
+pricing: heuristic
+safety_risk: heuristic
+energy_cost: heuristic
+episode_quality: heuristic
+sampler_weights: heuristic
+orchestrator: heuristic
+meta_advisor: heuristic
+vision_encoder: heuristic

@@ -11,11 +11,13 @@ from src.orchestrator.meta_transformer import MetaTransformerOutputs
 from src.sima2.ontology_proposals import OntologyUpdateProposal
 from src.sima2.task_graph_proposals import TaskGraphRefinementProposal
 from src.sima2.tags.semantic_tags import SemanticEnrichmentProposal as SemanticTag
+from src.policies.registry import build_all_policies
 
 
 class SemanticAggregator:
-    def __init__(self, ontology_store: OntologyStore):
+    def __init__(self, ontology_store: OntologyStore, policies=None):
         self.store = ontology_store
+        self.policies = policies or build_all_policies()
 
     def build_snapshot(
         self,
@@ -84,9 +86,18 @@ class SemanticAggregator:
     def _build_recap_summary(self, task_id: str, recap_scores: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         if not recap_scores:
             return {}
+        policy = getattr(self.policies, "episode_quality", None)
         task_eps = [ep for ep in recap_scores.values() if ep.get("episode_id", "").startswith("")]  # no-op filter for determinism
-        goodness = [float(ep.get("recap_goodness_score", 0.0)) for ep in task_eps]
-        mean_goodness = float(sum(goodness) / len(goodness)) if goodness else 0.0
+        goodness_vals = []
+        for ep in task_eps:
+            score = float(ep.get("recap_goodness_score", 0.0))
+            if policy:
+                feats = policy.build_features([], [], [], {"recap_goodness_score": score})
+                evaluated = policy.evaluate(feats)
+                score = float(evaluated.get("quality_score", score))
+            goodness_vals.append(score)
+            ep["recap_goodness_score"] = score
+        mean_goodness = float(sum(goodness_vals) / len(goodness_vals)) if goodness_vals else 0.0
         top = sorted(task_eps, key=lambda e: e.get("recap_goodness_score", 0.0), reverse=True)[:5]
         return {
             "task_id": task_id,
