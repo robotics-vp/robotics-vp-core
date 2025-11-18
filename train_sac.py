@@ -8,6 +8,8 @@ End-to-end deep learning:
 - Economic reward + Lagrangian constraint
 """
 import argparse
+import json
+from pathlib import Path
 import numpy as np
 import torch
 
@@ -23,9 +25,106 @@ from src.utils.logger import CsvLogger
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
 from src.rl.reward_shaping import compute_econ_reward
+from src.rl.episode_sampling import (
+    DataPackRLSampler,
+    load_episode_descriptors_from_jsonl,
+    load_enrichments_from_jsonl,
+)
+from src.rl.curriculum import DataPackCurriculum
+from src.valuation.datapack_schema import DataPackMeta
 
 
-def train_sac(episodes=1000, seed=42, econ_preset="toy"):
+def _load_datapacks(path: Path):
+    """Load datapacks from JSON/JSONL; returns [] if missing."""
+    datapacks = []
+    if not path or not path.exists():
+        return datapacks
+    if path.suffix == ".jsonl":
+        with path.open("r") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                datapacks.append(DataPackMeta.from_dict(json.loads(line)))
+    else:
+        with path.open("r") as f:
+            data = json.load(f)
+            for dp in data:
+                datapacks.append(DataPackMeta.from_dict(dp))
+    return datapacks
+
+
+def _build_stage3_components(
+    use_datapack_curriculum: bool,
+    sampler_mode: str,
+    episodes: int,
+    seed: int,
+    datapacks_path: str,
+    enrichments_path: str,
+    descriptors_path: str,
+    curriculum_total_steps: int,
+    curriculum_config_path: str,
+):
+    """Optionally construct sampler/curriculum; returns (sampler, curriculum) or (None, None)."""
+    if not use_datapack_curriculum:
+        return None, None
+
+    datapacks = _load_datapacks(Path(datapacks_path)) if datapacks_path else []
+    enrichments_path_obj = Path(enrichments_path) if enrichments_path else None
+    descriptors_path_obj = Path(descriptors_path) if descriptors_path else None
+    enrichments = load_enrichments_from_jsonl(enrichments_path_obj) if enrichments_path_obj and enrichments_path_obj.exists() else []
+    descriptors = load_episode_descriptors_from_jsonl(descriptors_path_obj) if descriptors_path_obj and descriptors_path_obj.exists() else []
+
+    if not datapacks and not descriptors:
+        print("[stage3] No datapacks/descriptors found; datapack curriculum disabled.")
+        return None, None
+
+    sampler = DataPackRLSampler(
+        datapacks=datapacks or None,
+        enrichments=enrichments or None,
+        existing_descriptors=descriptors or None,
+        default_strategy=sampler_mode or "balanced",
+    )
+
+    curriculum = None
+    if sampler_mode is None:
+        config = {}
+        if curriculum_config_path:
+            try:
+                with open(curriculum_config_path, "r") as f:
+                    config = json.load(f)
+            except Exception as e:
+                print(f"[stage3] Failed to load curriculum config ({e}); using defaults.")
+        config["base_seed"] = seed
+        curriculum = DataPackCurriculum(
+            sampler=sampler,
+            total_steps=curriculum_total_steps or episodes,
+            config=config,
+        )
+
+    print(f"[stage3] Datapack sampler initialized: {sampler.pool_summary()}")
+    if curriculum:
+        print("[stage3] Curriculum enabled.")
+    elif sampler_mode:
+        print(f"[stage3] Static sampler strategy: {sampler_mode}")
+    return sampler, curriculum
+
+
+def train_sac(
+    episodes=1000,
+    seed=42,
+    econ_preset="toy",
+    use_datapack_curriculum: bool = False,
+    sampler_mode: str = None,
+    curriculum_total_steps: int = None,
+    datapacks_path: str = "",
+    enrichments_path: str = "",
+    descriptors_path: str = "",
+    curriculum_config_path: str = "",
+    log_path: str = "logs/sac_train.csv",
+    checkpoint_path: str = "checkpoints/sac_final.pt",
+    sampler: DataPackRLSampler = None,
+    curriculum: DataPackCurriculum = None,
+):
     """Train SAC agent with economic objectives."""
 
     # Setup
@@ -91,7 +190,7 @@ def train_sac(episodes=1000, seed=42, econ_preset="toy"):
     )
 
     # Logger
-    logger = CsvLogger('logs/sac_train.csv')
+    logger = CsvLogger(log_path)
 
     # Dual variable
     lam = lambda_init
@@ -125,6 +224,21 @@ def train_sac(episodes=1000, seed=42, econ_preset="toy"):
     print(f"Device: {device}")
     print(f"Initial human wage: ${wh:.2f}/hr\n")
 
+    # Stage 3 sampling/curriculum (advisory-only, flag-gated)
+    sampler_obj, curriculum_obj = sampler, curriculum
+    if sampler_obj is None and curriculum_obj is None:
+        sampler_obj, curriculum_obj = _build_stage3_components(
+            use_datapack_curriculum=use_datapack_curriculum,
+            sampler_mode=sampler_mode,
+            episodes=episodes,
+            seed=seed,
+            datapacks_path=datapacks_path,
+            enrichments_path=enrichments_path,
+            descriptors_path=descriptors_path,
+            curriculum_total_steps=curriculum_total_steps or episodes,
+            curriculum_config_path=curriculum_config_path,
+        )
+
     # Training loop
     for ep in range(episodes):
         # Update wage index periodically (deterministic stub for reproducibility)
@@ -148,6 +262,28 @@ def train_sac(episodes=1000, seed=42, econ_preset="toy"):
         actions_taken = []
         terminated_reason = None
         info_history = []
+        descriptor = None
+        sampler_strategy = ""
+        curriculum_phase = ""
+
+        if curriculum_obj:
+            batch = curriculum_obj.sample_batch(step=ep, batch_size=1)
+            if batch:
+                descriptor = batch[0]
+                meta = descriptor.get("sampling_metadata", {})
+                sampler_strategy = meta.get("strategy", "")
+                curriculum_phase = meta.get("phase", "")
+        elif sampler_obj:
+            batch = sampler_obj.sample_batch(
+                batch_size=1,
+                seed=seed + ep,
+                strategy=sampler_mode or sampler_obj.default_strategy,
+            )
+            if batch:
+                descriptor = batch[0]
+                meta = descriptor.get("sampling_metadata", {})
+                sampler_strategy = meta.get("strategy", sampler_mode or sampler_obj.default_strategy)
+                curriculum_phase = meta.get("phase", "")
 
         # Collect episode
         while not done:
@@ -324,7 +460,12 @@ def train_sac(episodes=1000, seed=42, econ_preset="toy"):
             # Wage indexing and customer pricing
             w_h_indexed=round(wh, 4),
             customer_cost=round(customer_cost, 4),
-            consumer_surplus=round(consumer_surplus, 4)
+            consumer_surplus=round(consumer_surplus, 4),
+            # Stage 3 advisory metadata
+            sampler_strategy=sampler_strategy,
+            curriculum_phase=curriculum_phase,
+            pack_id=descriptor.get("pack_id", "") if descriptor else "",
+            objective_preset=descriptor.get("objective_preset", "") if descriptor else "",
         )
 
         # Print progress
@@ -337,9 +478,10 @@ def train_sac(episodes=1000, seed=42, econ_preset="toy"):
                   f"α={train_metrics.get('alpha', 0.0):.3f}")
 
     # Save final model
-    agent.save('checkpoints/sac_final.pt')
-    print(f"\n✅ Training complete: logs/sac_train.csv")
-    print(f"✅ Model saved: checkpoints/sac_final.pt\n")
+    Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+    agent.save(checkpoint_path)
+    print(f"\n✅ Training complete: {log_path}")
+    print(f"✅ Model saved: {checkpoint_path}\n")
 
 
 if __name__ == "__main__":
@@ -356,8 +498,32 @@ if __name__ == "__main__":
     parser.add_argument("--constraint-mpl-human", type=float, default=None)
     parser.add_argument("--constraint-energy-budget", type=float, default=None)
     parser.add_argument("--constraint-error-max", type=float, default=None)
+    parser.add_argument("--seed", type=int, default=42)
+    # Stage 3 curriculum flags (advisory-only)
+    parser.add_argument("--use-datapack-curriculum", action="store_true", help="Enable Stage 3 datapack sampler/curriculum (advisory-only)")
+    parser.add_argument("--sampler-mode", type=str, default=None, choices=["balanced", "frontier_prioritized", "econ_urgency"], help="Static sampler mode when curriculum is not used (requires --use-datapack-curriculum)")
+    parser.add_argument("--datapacks-path", type=str, default="results/stage1_pipeline/datapacks.json", help="Path to Stage 1 datapacks JSON/JSONL")
+    parser.add_argument("--enrichments-path", type=str, default="results/stage2_semantic/semantic_enrichments.jsonl", help="Path to Stage 2 semantic enrichments JSONL")
+    parser.add_argument("--descriptors-path", type=str, default="", help="Optional JSONL of existing RL episode descriptors")
+    parser.add_argument("--curriculum-total-steps", type=int, default=None, help="Override total steps for curriculum phase boundaries")
+    parser.add_argument("--curriculum-config", type=str, default="", help="Optional JSON file overriding curriculum boundaries/mix")
+    parser.add_argument("--log-path", type=str, default="logs/sac_train.csv")
+    parser.add_argument("--checkpoint-path", type=str, default="checkpoints/sac_final.pt")
     args = parser.parse_args()
 
     if args.engine_type != "pybullet":
         raise NotImplementedError("Only pybullet engine supported in this script.")
-    train_sac(episodes=args.episodes, econ_preset=args.econ_preset)
+    train_sac(
+        episodes=args.episodes,
+        seed=args.seed,
+        econ_preset=args.econ_preset,
+        use_datapack_curriculum=args.use_datapack_curriculum,
+        sampler_mode=args.sampler_mode,
+        curriculum_total_steps=args.curriculum_total_steps,
+        datapacks_path=args.datapacks_path,
+        enrichments_path=args.enrichments_path,
+        descriptors_path=args.descriptors_path,
+        curriculum_config_path=args.curriculum_config,
+        log_path=args.log_path,
+        checkpoint_path=args.checkpoint_path,
+    )
