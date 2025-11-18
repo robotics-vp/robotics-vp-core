@@ -6,7 +6,7 @@ it does not mutate any global ontology state.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence, Set
+from typing import Any, Dict, List, Sequence, Set, Tuple
 
 
 @dataclass
@@ -21,6 +21,25 @@ class SemanticPrimitive:
     success_rate: float
     avg_steps: float
     source: str = "sima2"
+
+    def validate(self) -> Tuple[bool, List[str]]:
+        """Lightweight validation for primitives."""
+        errors: List[str] = []
+        if not self.primitive_id:
+            errors.append("primitive_id is required")
+        if not self.task_type:
+            errors.append("task_type is required")
+        if not self.tags:
+            errors.append("tags must be non-empty")
+        if self.risk_level not in {"low", "medium", "high"}:
+            errors.append(f"risk_level '{self.risk_level}' must be one of low/medium/high")
+        if self.energy_intensity is None:
+            errors.append("energy_intensity is required")
+        if not 0.0 <= float(self.success_rate) <= 1.0:
+            errors.append("success_rate must be within [0,1]")
+        if self.avg_steps <= 0:
+            errors.append("avg_steps must be > 0")
+        return (len(errors) == 0, errors)
 
 
 def _split_to_tags(value: str) -> List[str]:
@@ -130,7 +149,7 @@ def extract_primitives_from_rollout(rollout: Dict[str, Any]) -> List[SemanticPri
         )
 
     if primitives:
-        return primitives
+        return _sort_primitives_deterministically(primitives)
 
     fallback_tags = base_tags or {"generic"}
     primitives.append(
@@ -145,7 +164,7 @@ def extract_primitives_from_rollout(rollout: Dict[str, Any]) -> List[SemanticPri
             source=str(rollout.get("source", "sima2")),
         )
     )
-    return primitives
+    return _sort_primitives_deterministically(primitives)
 
 
 def primitive_to_ontology_update(primitive: SemanticPrimitive) -> Dict[str, Any]:
@@ -167,3 +186,14 @@ def primitive_to_ontology_update(primitive: SemanticPrimitive) -> Dict[str, Any]
             "avg_steps": primitive.avg_steps,
         },
     }
+
+
+def _sort_primitives_deterministically(primitives: List[SemanticPrimitive]) -> List[SemanticPrimitive]:
+    """Return primitives sorted for deterministic ordering."""
+    return sorted(
+        primitives,
+        key=lambda p: (
+            p.task_type or "",
+            p.primitive_id or "",
+        ),
+    )

@@ -2,8 +2,10 @@
 """
 Smoke test for SIMA-2 semantic primitive extraction and ontology proposals.
 """
+import json
 import os
 import sys
+from dataclasses import asdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -47,10 +49,16 @@ def main():
     rollouts = _make_rollouts()
     for idx, rollout in enumerate(rollouts):
         primitives = extract_primitives_from_rollout(rollout)
+        primitives_2 = extract_primitives_from_rollout(rollout)
+        assert json.dumps([asdict(p) for p in primitives]) == json.dumps(
+            [asdict(p) for p in primitives_2]
+        ), "Primitive extraction must be deterministic"
         assert primitives, f"Expected primitives for rollout {idx}"
         for primitive in primitives:
             assert isinstance(primitive, SemanticPrimitive)
             assert primitive.tags, "Primitive tags should not be empty"
+            ok, errors = primitive.validate()
+            assert ok, f"Primitive validation failed: {errors}"
             # Risk rules: fragile -> high, collisions/energy bump -> medium, otherwise low
             if "fragile" in primitive.tags:
                 assert primitive.risk_level == "high", f"Fragile primitive should be high risk, got {primitive.risk_level}"

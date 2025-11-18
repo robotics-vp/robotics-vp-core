@@ -7,7 +7,7 @@ state. SemanticOrchestrator decides whether/how to apply them.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 
 class ProposalType(Enum):
@@ -114,3 +114,32 @@ class OntologyUpdateProposal:
             tags=d.get("tags", []),
             metadata=d.get("metadata", {}),
         )
+
+    def validate(self) -> Tuple[bool, List[str]]:
+        """Light validation of required fields and forbidden keys."""
+        errors: List[str] = []
+        if not self.proposal_id:
+            errors.append("proposal_id is required")
+        if not isinstance(self.proposal_type, ProposalType):
+            errors.append("proposal_type must be ProposalType")
+        if not isinstance(self.priority, ProposalPriority):
+            errors.append("priority must be ProposalPriority")
+        if not self.source_primitive_id:
+            errors.append("source_primitive_id is required")
+        if not isinstance(self.proposed_changes, dict):
+            errors.append("proposed_changes must be a dict")
+
+        forbidden_keys = {
+            "price_per_unit",
+            "damage_cost",
+            "tier",
+            "data_premium",
+            "w_econ",
+            "sampling_weight",
+            "reward_vector",
+            "objective_weights",
+        }
+        if any(k in self.proposed_changes for k in forbidden_keys):
+            errors.append("proposed_changes contains forbidden economic/datapack fields")
+
+        return (len(errors) == 0, errors)

@@ -8,7 +8,6 @@ IMPORTANT:
 - Respects econ/datapack/ontology/DAG constraints
 """
 
-import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -71,10 +70,14 @@ class TaskGraphRefiner:
         Returns:
             List of TaskGraphRefinementProposals (advisory-only)
         """
+        self._proposal_counter = 0  # reset per generation for determinism
         refinements = []
 
         # 1. Process ontology proposals
-        for ont_prop in ontology_proposals:
+        for ont_prop in sorted(
+            ontology_proposals,
+            key=lambda p: (getattr(p, "priority", None) and p.priority.value or "", p.proposal_id),
+        ):
             # ADD_SKILL_GATE → INSERT_CHECKPOINT (mandatory)
             if ont_prop.proposal_type == OntologyProposalType.ADD_SKILL_GATE:
                 refinements.extend(self._insert_checkpoint_from_gate(ont_prop))
@@ -93,7 +96,7 @@ class TaskGraphRefiner:
 
         # 2. Process primitives (efficiency hints)
         if primitives:
-            for prim in primitives:
+            for prim in sorted(primitives, key=lambda p: (p.task_type or "", p.primitive_id or "")):
                 # Low energy primitives → REORDER_TASKS
                 if prim.energy_intensity < 0.5 and self.econ_signals.energy_urgency > 0.3:
                     refinements.extend(self._reorder_for_energy(prim))
@@ -109,12 +112,12 @@ class TaskGraphRefiner:
         if self.econ_signals.mpl_urgency > 0.5:
             refinements.extend(self._parallelize_for_throughput())
 
-        return refinements
+        return self._sort_refinements_deterministically(refinements)
 
     def _make_proposal_id(self) -> str:
-        """Generate unique proposal ID."""
+        """Generate unique deterministic proposal ID."""
         self._proposal_counter += 1
-        return f"tgr_{self._proposal_counter:06d}_{uuid.uuid4().hex[:6]}"
+        return f"tgr_{self._proposal_counter:06d}"
 
     def _insert_checkpoint_from_gate(
         self, ont_prop: OntologyUpdateProposal
@@ -131,7 +134,7 @@ class TaskGraphRefiner:
             return refinements
 
         # Find task nodes with this skill_id
-        for node in self.task_graph.get_all_nodes():
+        for node in sorted(self.task_graph.get_all_nodes(), key=lambda n: n.task_id):
             if node.skill_id == gated_skill_id:
                 # Insert checkpoint before this task
                 checkpoint_task = {
@@ -186,7 +189,7 @@ class TaskGraphRefiner:
         # (Heuristic: tasks with "pull", "move", "place" near fragile objects)
         fragile_task_names = ["pull", "move", "place", "lift"]
 
-        for node in self.task_graph.get_all_nodes():
+        for node in sorted(self.task_graph.get_all_nodes(), key=lambda n: n.task_id):
             if any(name in node.name.lower() for name in fragile_task_names):
                 # Split into: pre-check → slow execution → post-verify
                 sub_tasks = [
@@ -255,7 +258,8 @@ class TaskGraphRefiner:
 
         # Find tasks that need reordering
         skill_tasks = [
-            node for node in self.task_graph.get_all_nodes()
+            node
+            for node in sorted(self.task_graph.get_all_nodes(), key=lambda n: n.task_id)
             if node.skill_id in affected_skills
         ]
 
@@ -311,7 +315,7 @@ class TaskGraphRefiner:
             return refinements  # Risk not high enough
 
         # Find tasks with elevated risk (heuristic: match tags)
-        for node in self.task_graph.get_all_nodes():
+        for node in sorted(self.task_graph.get_all_nodes(), key=lambda n: n.task_id):
             if any(tag in ont_prop.tags for tag in ["fragile", "vase", "glass"]):
                 recovery_task = {
                     "task_id": f"recovery_{node.task_id}",
@@ -359,7 +363,7 @@ class TaskGraphRefiner:
 
         # Find tasks that could be reordered
         # (Simplified: suggest moving low-energy skills earlier)
-        all_skill_tasks = self.task_graph.get_skill_nodes()
+        all_skill_tasks = sorted(self.task_graph.get_skill_nodes(), key=lambda n: n.task_id)
 
         if len(all_skill_tasks) < 2:
             return refinements
@@ -409,7 +413,7 @@ class TaskGraphRefiner:
 
         # Find adjacent tasks with same skill type
         # (Simplified: merge "approach" + "grasp" into "approach_and_grasp")
-        all_tasks = self.task_graph.get_all_nodes()
+        all_tasks = sorted(self.task_graph.get_all_nodes(), key=lambda n: n.task_id)
 
         for i, node in enumerate(all_tasks[:-1]):
             next_node = all_tasks[i + 1]
@@ -458,7 +462,7 @@ class TaskGraphRefiner:
         """
         refinements = []
 
-        for node in self.task_graph.get_all_nodes():
+        for node in sorted(self.task_graph.get_all_nodes(), key=lambda n: n.task_id):
             if node.task_type == TaskType.CHECKPOINT:
                 current_priority = node.metadata.get("semantic_priority", "medium")
 
@@ -496,7 +500,7 @@ class TaskGraphRefiner:
         refinements = []
 
         # Find tasks with no dependencies on each other
-        all_tasks = self.task_graph.get_all_nodes()
+        all_tasks = sorted(self.task_graph.get_all_nodes(), key=lambda n: n.task_id)
 
         # Simplified: find pairs of tasks with disjoint preconditions
         for i, task_a in enumerate(all_tasks):
@@ -636,3 +640,22 @@ class TaskGraphRefiner:
             return False
 
         return True
+
+    def _sort_refinements_deterministically(
+        self, refinements: List[TaskGraphRefinementProposal]
+    ) -> List[TaskGraphRefinementProposal]:
+        """Deterministic ordering for refinements."""
+        priority_order = {
+            RefinementPriority.CRITICAL: 0,
+            RefinementPriority.HIGH: 1,
+            RefinementPriority.MEDIUM: 2,
+            RefinementPriority.LOW: 3,
+        }
+        return sorted(
+            refinements,
+            key=lambda r: (
+                priority_order.get(r.priority, 4),
+                r.refinement_type.value if isinstance(r.refinement_type, RefinementType) else "",
+                r.proposal_id,
+            ),
+        )

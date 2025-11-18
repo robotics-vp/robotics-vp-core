@@ -6,7 +6,7 @@ These are advisory-only and JSON-safe; they do not mutate the task graph.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 
 class RefinementType(Enum):
@@ -115,3 +115,36 @@ class TaskGraphRefinementProposal:
             tags=d.get("tags", []),
             metadata=d.get("metadata", {}),
         )
+
+    def validate(self) -> Tuple[bool, List[str]]:
+        """Light validation of required fields and forbidden keys."""
+        errors: List[str] = []
+        if not self.proposal_id:
+            errors.append("proposal_id is required")
+        if not isinstance(self.refinement_type, RefinementType):
+            errors.append("refinement_type must be RefinementType")
+        if not isinstance(self.priority, RefinementPriority):
+            errors.append("priority must be RefinementPriority")
+        if not isinstance(self.proposed_changes, dict):
+            errors.append("proposed_changes must be a dict")
+        if not self.rationale:
+            errors.append("rationale is required")
+
+        forbidden_keys = {
+            "price_per_unit",
+            "damage_cost",
+            "tier",
+            "data_premium",
+            "w_econ",
+            "sampling_weight",
+            "reward_vector",
+            "objective_weights",
+        }
+        if any(k in self.proposed_changes for k in forbidden_keys):
+            errors.append("proposed_changes contains forbidden economic/datapack fields")
+
+        if self.refinement_type not in {RefinementType.SPLIT_TASK, RefinementType.MERGE_TASKS}:
+            if "delete_task" in self.proposed_changes:
+                errors.append("delete_task not allowed for this refinement type")
+
+        return (len(errors) == 0, errors)

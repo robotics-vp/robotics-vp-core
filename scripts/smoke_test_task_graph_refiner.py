@@ -132,6 +132,8 @@ def main():
         assert isinstance(ref_dict, dict), "Refinement to_dict() should return dict"
         json_str = json.dumps(ref_dict)
         assert json_str, "Refinement should be JSON-serializable"
+        ok, errors = ref.validate()
+        assert ok, f"Refinement validation failed: {errors}"
     print(f"[TEST 2 PASS] All {len(refinements)} refinements are JSON-safe")
 
     # Test 3: Required fields
@@ -209,10 +211,10 @@ def main():
     # Test 10: Determinism
     refinements_2 = refiner.generate_refinements(ontology_proposals, primitives)
     assert len(refinements_2) == len(refinements), "Determinism check: same input → same count"
-    types_1 = sorted([r.refinement_type.value for r in refinements])
-    types_2 = sorted([r.refinement_type.value for r in refinements_2])
-    assert types_1 == types_2, "Determinism check: same refinement types"
-    print(f"[TEST 10 PASS] Determinism validated")
+    json_1 = json.dumps([r.to_dict() for r in refinements])
+    json_2 = json.dumps([r.to_dict() for r in refinements_2])
+    assert json_1 == json_2, "Determinism check: refinements must be identical"
+    print(f"[TEST 10 PASS] Determinism validated (stable ordering and content)")
 
     # Test 11: No DAG cycles (validation check)
     # All valid refinements should preserve DAG topology

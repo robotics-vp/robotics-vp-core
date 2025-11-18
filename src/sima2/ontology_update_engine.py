@@ -6,8 +6,6 @@ mutating ontology or reward logic. All outputs are JSON-safe and respect
 economic/datapack/task-graph constraints.
 """
 
-import uuid
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from src.sima2.semantic_primitive_extractor import SemanticPrimitive
@@ -65,9 +63,10 @@ class OntologyUpdateEngine:
         Returns:
             List of OntologyUpdateProposals (advisory-only)
         """
+        self._proposal_counter = 0  # reset per generation for determinism
         proposals: List[OntologyUpdateProposal] = []
 
-        for prim in primitives:
+        for prim in sorted(primitives, key=lambda p: (p.task_type or "", p.primitive_id or "")):
             # 1. Affordance proposals
             proposals.extend(self._propose_affordances(prim))
 
@@ -77,21 +76,24 @@ class OntologyUpdateEngine:
             # 3. Fragility inference proposals
             proposals.extend(self._propose_fragility_inference(prim))
 
-            # 4. Skill gating proposals
+            # 4. Safety constraints / clearance
+            proposals.extend(self._propose_safety_constraints(prim))
+
+            # 5. Skill gating proposals
             proposals.extend(self._propose_skill_gates(prim))
 
-            # 5. Energy heuristic proposals
+            # 6. Energy heuristic proposals
             proposals.extend(self._propose_energy_heuristics(prim))
 
-            # 6. Semantic tag proposals
+            # 7. Semantic tag proposals
             proposals.extend(self._propose_semantic_tags(prim))
 
-        return proposals
+        return self._sort_proposals_deterministically(proposals)
 
     def _make_proposal_id(self) -> str:
-        """Generate unique proposal ID."""
+        """Generate unique deterministic proposal ID."""
         self._proposal_counter += 1
-        return f"prop_{self._proposal_counter:06d}_{uuid.uuid4().hex[:6]}"
+        return f"prop_{self._proposal_counter:06d}"
 
     def _propose_affordances(
         self, prim: SemanticPrimitive
@@ -141,6 +143,25 @@ class OntologyUpdateEngine:
                 proposals.append(proposal)
 
         return proposals
+
+    def _sort_proposals_deterministically(
+        self, proposals: List[OntologyUpdateProposal]
+    ) -> List[OntologyUpdateProposal]:
+        """Deterministic ordering for proposals."""
+        priority_order = {
+            ProposalPriority.CRITICAL: 0,
+            ProposalPriority.HIGH: 1,
+            ProposalPriority.MEDIUM: 2,
+            ProposalPriority.LOW: 3,
+        }
+        return sorted(
+            proposals,
+            key=lambda p: (
+                priority_order.get(p.priority, 4),
+                p.proposal_type.value if isinstance(p.proposal_type, ProposalType) else "",
+                p.proposal_id,
+            ),
+        )
 
     def _propose_risk_adjustments(
         self, prim: SemanticPrimitive
@@ -236,6 +257,34 @@ class OntologyUpdateEngine:
                 )
 
                 proposals.append(proposal)
+
+        return proposals
+
+    def _propose_safety_constraints(
+        self, prim: SemanticPrimitive
+    ) -> List[OntologyUpdateProposal]:
+        """
+        Propose safety constraints (clearance/collision avoidance) for fragile interactions.
+        """
+        proposals: List[OntologyUpdateProposal] = []
+
+        if "fragile" in prim.tags or "vase" in prim.tags:
+            proposal = OntologyUpdateProposal(
+                proposal_id=self._make_proposal_id(),
+                proposal_type=ProposalType.ADD_SAFETY_CONSTRAINT,
+                priority=ProposalPriority.HIGH,
+                source_primitive_id=prim.primitive_id,
+                source=prim.source,
+                proposed_changes={
+                    "constraint_type": "collision_avoidance",
+                    "objects": ["vase"],
+                    "applies_to_skills": [2, 5],
+                },
+                rationale="Fragile object interaction requires collision avoidance",
+                confidence=0.9,
+                tags=prim.tags + ["collision_avoidance"],
+            )
+            proposals.append(proposal)
 
         return proposals
 

@@ -90,6 +90,8 @@ def main():
         assert isinstance(prop_dict, dict), "Proposal to_dict() should return dict"
         json_str = json.dumps(prop_dict)
         assert json_str, "Proposal should be JSON-serializable"
+        ok, errors = prop.validate()
+        assert ok, f"Proposal validation failed: {errors}"
     print(f"[TEST 2 PASS] All {len(proposals)} proposals are JSON-safe")
 
     # Test 3: Required fields
@@ -163,11 +165,10 @@ def main():
     # Test 10: Determinism
     proposals_2 = engine.generate_proposals(primitives)
     assert len(proposals_2) == len(proposals), "Determinism check: same input → same count"
-    # Note: proposal_ids will differ (UUID), but types/counts should match
-    types_1 = sorted([p.proposal_type.value for p in proposals])
-    types_2 = sorted([p.proposal_type.value for p in proposals_2])
-    assert types_1 == types_2, "Determinism check: same proposal types"
-    print(f"[TEST 10 PASS] Determinism validated")
+    json_1 = json.dumps([p.to_dict() for p in proposals])
+    json_2 = json.dumps([p.to_dict() for p in proposals_2])
+    assert json_1 == json_2, "Determinism check: proposals must be identical"
+    print(f"[TEST 10 PASS] Determinism validated (stable ordering and content)")
 
     print("[smoke_test_ontology_update_engine] All tests passed!")
 
