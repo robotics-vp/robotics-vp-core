@@ -102,6 +102,9 @@ class MetaAdvisorPolicy(Protocol):
 
 
 class VisionEncoderPolicy(Protocol):
+    mode: str  # "stub" | "neural"
+    backbone_name: Optional[str]
+
     def encode(self, frame: Any) -> Any:
         """Return a deterministic VisionLatent for the given VisionFrame."""
 
@@ -119,4 +122,32 @@ class RewardModelPolicy(Protocol):
     ) -> RewardModelEpisodeScores:
         """
         Deterministically score an episode using econ, tags, and optional recap.
+        """
+
+
+class DatapackAuditorPolicy(Protocol):
+    def build_features(
+        self,
+        datapack: Any,
+        semantic_tags: Optional[Sequence[Any]] = None,
+        econ_slice: Optional[Dict[str, Any]] = None,
+        recap_scores: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Build features for auditing a datapack before RL sampling.
+        """
+
+    def evaluate(self, features: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Return audit result:
+        {
+            "rating": str,  # "AAA", "AA", "A", "BBB", "JUNK"
+            "predicted_econ": {
+                "expected_delta_mpl": float,
+                "expected_energy_wh": float,
+                "expected_damage_cost": float,
+                "risk_score": float
+            },
+            "metadata": {...}
+        }
         """

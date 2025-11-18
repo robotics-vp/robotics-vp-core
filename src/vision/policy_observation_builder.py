@@ -12,22 +12,22 @@ same task/episode/timestep identifiers.
 from typing import Dict, Any
 
 from src.vision.interfaces import VisionFrame, PolicyObservation
-from src.vision.backbone_stub import VisionBackboneStub
+from src.policies.interfaces import VisionEncoderPolicy
 
 
 class PolicyObservationBuilder:
     """Single entry point for building PolicyObservation objects."""
 
-    def __init__(self, backbone: VisionBackboneStub):
-        self.backbone = backbone
+    def __init__(self, encoder: VisionEncoderPolicy):
+        self.encoder = encoder
 
     def build(self, frame: VisionFrame, state_summary: Dict[str, Any]) -> PolicyObservation:
-        if hasattr(self.backbone, "encode_frame"):
-            latent = self.backbone.encode_frame(frame)
-        elif hasattr(self.backbone, "encode"):
-            latent = self.backbone.encode(frame)
-        else:
-            raise TypeError("Backbone must implement encode_frame(frame) or encode(frame)")
+        if hasattr(self.encoder, "encode_frame"):
+            latent = self.encoder.encode_frame(frame)  # type: ignore
+        elif hasattr(self.encoder, "encode"):
+            latent = self.encoder.encode(frame)  # type: ignore
+        else:  # pragma: no cover - defensive
+            raise TypeError("Encoder must implement encode(frame)")
         return PolicyObservation(
             task_id=frame.task_id,
             episode_id=frame.episode_id,

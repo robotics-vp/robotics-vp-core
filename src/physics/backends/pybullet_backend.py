@@ -10,6 +10,7 @@ from src.envs.dishwashing_env import DishwashingEnv
 from src.config.econ_params import EconParams, load_econ_params
 from src.config.internal_profile import get_internal_experiment_profile
 from src.vision.interfaces import VisionFrame
+from src.vision.config import load_vision_config
 
 
 class PyBulletBackend(PhysicsBackend):
@@ -61,13 +62,21 @@ class PyBulletBackend(PhysicsBackend):
 
     def build_vision_frame(self, task_id: str, episode_id: str, timestep: int) -> VisionFrame:
         """Create a canonical VisionFrame placeholder for PyBullet."""
+        cfg = load_vision_config()
         state = self.get_state_summary()
         state_digest = hashlib.sha256(str(sorted(state.items())).encode("utf-8")).hexdigest()
+        width, height = cfg.get("input_resolution", [224, 224])
         return VisionFrame(
             backend=self.backend_name,
             task_id=task_id,
             episode_id=episode_id,
             timestep=timestep,
+            width=int(width),
+            height=int(height),
+            channels=int(cfg.get("channels", 3)),
+            dtype=str(cfg.get("dtype", "uint8")),
+            camera_pose={"pose": "stub", "timestep": timestep},
+            camera_intrinsics={"resolution": cfg.get("input_resolution", [224, 224])},
             rgb_path=None,
             depth_path=None,
             segmentation_path=None,

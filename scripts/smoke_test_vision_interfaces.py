@@ -26,6 +26,7 @@ def main():
     latent_py = vision_encoder.encode(frame_py)
     obs_py = builder.build(frame_py, pyb.get_state_summary())
     assert obs_py.to_dict()["latent"]["backend"] == "pybullet"
+    assert frame_py.width > 0 and frame_py.height > 0
     # Round-trip
     rt_py = PolicyObservation.from_dict(obs_py.to_dict())
     assert rt_py.to_dict() == obs_py.to_dict()
@@ -40,6 +41,7 @@ def main():
     rt_stub = PolicyObservation.from_dict(obs_stub.to_dict())
     assert rt_stub.to_dict() == obs_stub.to_dict()
     assert obs_stub.latent.backend == "isaac_stub"
+    assert frame_stub.width > 0 and frame_stub.height > 0
     assert obs_stub.to_dict() == builder.build(frame_stub, stub.get_state_summary()).to_dict()
 
     # Determinism

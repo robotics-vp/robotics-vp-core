@@ -47,6 +47,8 @@ SMOKES = [
     ["python3", "scripts/smoke_test_vla_recap_training.py"],
     ["python3", "scripts/smoke_test_semantic_econ_correlations.py"],
     ["python3", "scripts/smoke_test_vision_interfaces.py"],
+    ["python3", "scripts/smoke_test_vision_encoder_policy.py"],
+    ["python3", "scripts/smoke_test_vision_dataset_builder.py"],
     ["python3", "scripts/smoke_test_recap_inference.py"],
     ["python3", "scripts/smoke_test_recap_semantic_integration.py"],
     ["python3", "scripts/smoke_test_recap_sampler_weights.py"],

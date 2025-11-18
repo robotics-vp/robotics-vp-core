@@ -13,6 +13,12 @@ class VisionFrame:
     task_id: str
     episode_id: str
     timestep: int
+    width: int = 0
+    height: int = 0
+    channels: int = 3
+    dtype: str = "uint8"
+    camera_pose: Dict[str, Any] = field(default_factory=dict)
+    camera_intrinsics: Dict[str, Any] = field(default_factory=dict)
     rgb_path: Optional[str] = None
     depth_path: Optional[str] = None
     segmentation_path: Optional[str] = None

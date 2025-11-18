@@ -7,6 +7,7 @@ from typing import Any, Dict, Tuple
 from src.physics.backends.base import PhysicsBackend
 from src.physics.backends.mobility import MobilityContext
 from src.vision.interfaces import VisionFrame
+from src.vision.config import load_vision_config
 
 
 class IsaacStubBackend(PhysicsBackend):
@@ -45,11 +46,19 @@ class IsaacStubBackend(PhysicsBackend):
 
     def build_vision_frame(self, task_id: str, episode_id: str, timestep: int) -> VisionFrame:
         """Construct a stub VisionFrame aligning with base contract."""
+        cfg = load_vision_config()
+        width, height = cfg.get("input_resolution", [224, 224])
         return VisionFrame(
             backend=self.backend_name,
             task_id=task_id,
             episode_id=episode_id,
             timestep=timestep,
+            width=int(width),
+            height=int(height),
+            channels=int(cfg.get("channels", 3)),
+            dtype=str(cfg.get("dtype", "uint8")),
+            camera_pose={"pose": "isaac_stub"},
+            camera_intrinsics={"resolution": cfg.get("input_resolution", [224, 224])},
             camera_name="isaac_stub_cam",
             metadata={"status": "stub", "message": "Isaac vision stub"},
         )
