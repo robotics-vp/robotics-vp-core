@@ -511,7 +511,7 @@ if __name__ == "__main__":
     parser.add_argument("--descriptors-path", type=str, default="", help="Optional JSONL of existing RL episode descriptors")
     parser.add_argument("--curriculum-total-steps", type=int, default=None, help="Override total steps for curriculum phase boundaries")
     parser.add_argument("--curriculum-config", type=str, default="", help="Optional JSON file overriding curriculum boundaries/mix")
-    parser.add_argument("--physics-backend", type=str, default="pybullet", choices=["pybullet", "isaac_stub"], help="Physics backend selection (pybullet default)")
+    parser.add_argument("--physics-backend", type=str, default="pybullet", choices=["pybullet", "isaac_stub", "isaac"], help="Physics backend selection (pybullet default)")
     parser.add_argument("--use-mobility-policy", action="store_true", help="Enable advisory mobility micro-policy in physics backends")
     parser.add_argument("--log-path", type=str, default="logs/sac_train.csv")
     parser.add_argument("--checkpoint-path", type=str, default="checkpoints/sac_final.pt")

@@ -6,14 +6,15 @@ from typing import Any, Dict, Tuple
 
 from src.physics.backends.base import PhysicsBackend
 from src.physics.backends.mobility import MobilityContext
-from src.vision.interfaces import VisionFrame
+from src.vision.interfaces import VisionFrame, compute_state_digest
 from src.vision.config import load_vision_config
 
 
 class IsaacStubBackend(PhysicsBackend):
-    def __init__(self, mobility_policy=None):
+    def __init__(self, mobility_policy=None, backend_id: str = "isaac_stub"):
         self._logger = logging.getLogger("IsaacStubBackend")
         self.mobility_policy = mobility_policy
+        self._backend_id = backend_id
 
     def reset(self, seed: None = None) -> Dict[str, Any]:
         self._logger.warning("Isaac stub reset called - not implemented.")
@@ -42,14 +43,18 @@ class IsaacStubBackend(PhysicsBackend):
 
     @property
     def backend_name(self) -> str:
-        return "isaac_stub"
+        return self._backend_id
 
     def build_vision_frame(self, task_id: str, episode_id: str, timestep: int) -> VisionFrame:
         """Construct a stub VisionFrame aligning with base contract."""
         cfg = load_vision_config()
         width, height = cfg.get("input_resolution", [224, 224])
+        state = self.get_state_summary()
+        state_digest = compute_state_digest(state)
+        self._logger.warning("Isaac stub returning placeholder VisionFrame; intrinsics/extrinsics are faked.")
         return VisionFrame(
             backend=self.backend_name,
+            backend_id="isaac_stub",
             task_id=task_id,
             episode_id=episode_id,
             timestep=timestep,
@@ -58,7 +63,19 @@ class IsaacStubBackend(PhysicsBackend):
             channels=int(cfg.get("channels", 3)),
             dtype=str(cfg.get("dtype", "uint8")),
             camera_pose={"pose": "isaac_stub"},
-            camera_intrinsics={"resolution": cfg.get("input_resolution", [224, 224])},
+            camera_intrinsics={
+                "resolution": [int(width), int(height)],
+                "fov_deg": float(cfg.get("fov_deg", 90.0)),
+                "principal_point": [int(width) / 2.0, int(height) / 2.0],
+            },
+            camera_extrinsics={"frame": "world", "translation": [0.0, 0.0, 1.5], "rotation_rpy": [0.0, 0.0, 0.0]},
             camera_name="isaac_stub_cam",
-            metadata={"status": "stub", "message": "Isaac vision stub"},
+            state_digest=state_digest,
+            metadata={
+                "status": "stub",
+                "message": "Isaac vision stub",
+                "shim_backend_id": "isaac_stub",
+                "state": state,
+                "state_digest": state_digest,
+            },
         )

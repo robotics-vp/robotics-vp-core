@@ -2,6 +2,7 @@
 Deterministic vision backbone stub (DINO placeholder).
 """
 import hashlib
+import json
 from typing import List, Optional
 
 from src.vision.interfaces import VisionFrame, VisionLatent
@@ -15,11 +16,8 @@ class VisionBackboneStub:
         self.latent_dim = latent_dim or int(cfg.get("latent_dim", 16))
 
     def encode_frame(self, frame: VisionFrame) -> VisionLatent:
-        digest_src = (
-            f"{frame.backend}|{frame.task_id}|{frame.episode_id}|{frame.timestep}|"
-            f"{frame.width}x{frame.height}x{frame.channels}|{frame.dtype}|{frame.rgb_path}|"
-            f"{frame.camera_name}|{sorted(frame.metadata.items())}"
-        )
+        frame_payload = frame.to_dict()
+        digest_src = json.dumps(frame_payload, sort_keys=True, separators=(",", ":"))
         digest = hashlib.sha256(digest_src.encode("utf-8")).digest()
         latent_vals: List[float] = []
         for i in range(self.latent_dim):

@@ -15,11 +15,18 @@ def main():
     parser.add_argument("--task-id", type=str, required=True)
     parser.add_argument("--output-path", type=str, default="")
     parser.add_argument("--max-episodes", type=int, default=1000)
+    parser.add_argument("--use-vision-features", action="store_true", help="Include vision-derived features when available")
     args = parser.parse_args()
 
     output_path = args.output_path or f"results/recap/recap_dataset_{args.task_id}.jsonl"
     store = OntologyStore(root_dir=args.ontology_root)
-    build_recap_dataset(store, task_id=args.task_id, output_path=output_path, max_episodes=args.max_episodes)
+    build_recap_dataset(
+        store,
+        task_id=args.task_id,
+        output_path=output_path,
+        max_episodes=args.max_episodes,
+        use_vision_features=bool(args.use_vision_features),
+    )
     print(f"[build_vla_recap_dataset] Wrote dataset to {output_path}")
 
 

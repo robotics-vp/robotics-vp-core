@@ -6,9 +6,10 @@ Purely functional conversions; no side-effects.
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from src.ontology.models import Datapack
+from src.ontology.models import Datapack, Episode
+from src.vision.interfaces import VisionFrame, compute_state_digest
 
 
 def _deterministic_id(prefix: str, payload: Dict[str, Any]) -> str:
@@ -154,3 +155,47 @@ def datapack_from_stage2_enrichment(enrichment: Dict[str, Any], task_id: str) ->
         auditor_predicted_econ=auditor.get("auditor_predicted_econ"),
         created_at=created_at,
     )
+
+
+def build_vision_metadata(frame: VisionFrame, conditions: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Construct a JSON-safe metadata payload from a VisionFrame.
+    """
+    return {
+        "backend": frame.backend,
+        "backend_id": frame.backend_id or frame.backend,
+        "camera_name": frame.camera_name,
+        "camera_intrinsics": frame.camera_intrinsics,
+        "camera_extrinsics": frame.camera_extrinsics,
+        "state_digest": frame.state_digest or compute_state_digest(frame.metadata.get("state", {})),
+        "conditions": conditions or {},
+    }
+
+
+def attach_vision_metadata_to_episode(episode: Episode, frame: VisionFrame, conditions: Optional[Dict[str, Any]] = None) -> Episode:
+    """
+    Attach vision metadata to an Episode in-place and return it for chaining.
+    """
+    vision_meta = build_vision_metadata(frame, conditions=conditions)
+    episode.vision_config = {
+        "backend": vision_meta["backend"],
+        "backend_id": vision_meta["backend_id"],
+        "camera_name": vision_meta["camera_name"],
+        "camera_intrinsics": vision_meta["camera_intrinsics"],
+        "camera_extrinsics": vision_meta["camera_extrinsics"],
+    }
+    if conditions:
+        episode.vision_conditions = dict(conditions)
+    episode.metadata = dict(episode.metadata or {})
+    episode.metadata["vision_metadata"] = vision_meta
+    return episode
+
+
+def attach_vision_metadata_to_datapack(datapack: Datapack, frame: VisionFrame, conditions: Optional[Dict[str, Any]] = None) -> Datapack:
+    """
+    Attach a lightweight vision summary into datapack tags.
+    """
+    vision_meta = build_vision_metadata(frame, conditions=conditions)
+    datapack.tags = dict(datapack.tags or {})
+    datapack.tags["vision_metadata"] = vision_meta
+    return datapack

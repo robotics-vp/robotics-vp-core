@@ -11,7 +11,7 @@ same task/episode/timestep identifiers.
 """
 from typing import Dict, Any
 
-from src.vision.interfaces import VisionFrame, PolicyObservation
+from src.vision.interfaces import VisionFrame, PolicyObservation, VisionLatent
 from src.policies.interfaces import VisionEncoderPolicy
 
 
@@ -21,18 +21,48 @@ class PolicyObservationBuilder:
     def __init__(self, encoder: VisionEncoderPolicy):
         self.encoder = encoder
 
-    def build(self, frame: VisionFrame, state_summary: Dict[str, Any]) -> PolicyObservation:
+    def encode_frame(self, frame: VisionFrame) -> VisionLatent:
+        """
+        Centralized VisionFrame -> VisionLatent path used by all policy heads.
+        """
         if hasattr(self.encoder, "encode_frame"):
-            latent = self.encoder.encode_frame(frame)  # type: ignore
-        elif hasattr(self.encoder, "encode"):
-            latent = self.encoder.encode(frame)  # type: ignore
-        else:  # pragma: no cover - defensive
-            raise TypeError("Encoder must implement encode(frame)")
+            return self.encoder.encode_frame(frame)  # type: ignore[attr-defined]
+        if hasattr(self.encoder, "encode"):
+            return self.encoder.encode(frame)  # type: ignore[attr-defined]
+        raise TypeError("Encoder must implement encode(frame)")
+
+    def build(self, frame: VisionFrame, state_summary: Dict[str, Any]) -> PolicyObservation:
+        latent = self.encode_frame(frame)
         return PolicyObservation(
             task_id=frame.task_id,
             episode_id=frame.episode_id,
             timestep=frame.timestep,
             latent=latent,
             state_summary=state_summary,
-            metadata={"backend": frame.backend},
+            metadata={
+                "backend": frame.backend,
+                "backend_id": frame.backend_id,
+                "state_digest": frame.state_digest,
+                "camera_intrinsics": frame.camera_intrinsics,
+                "camera_extrinsics": frame.camera_extrinsics,
+            },
         )
+
+    def build_policy_features(self, frame: VisionFrame, state_summary: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Produce a policy-ready feature dict shared by heuristic vs neural encoders.
+        """
+        obs = self.build(frame, state_summary)
+        return {
+            "task_id": obs.task_id,
+            "episode_id": obs.episode_id,
+            "timestep": obs.timestep,
+            "backend": frame.backend,
+            "backend_id": frame.backend_id or frame.backend,
+            "state_digest": frame.state_digest,
+            "vision_latent": obs.latent.to_dict(),
+            "state_summary": state_summary,
+            "camera_intrinsics": frame.camera_intrinsics,
+            "camera_extrinsics": frame.camera_extrinsics,
+            "vision_metadata": frame.metadata,
+        }

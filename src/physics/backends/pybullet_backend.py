@@ -1,7 +1,6 @@
 """
 PyBullet wrapper backend around DishwashingEnv (placeholder physics env).
 """
-import hashlib
 from typing import Any, Dict, Tuple, Optional
 
 from src.physics.backends.base import PhysicsBackend
@@ -9,7 +8,7 @@ from src.physics.backends.mobility import MobilityPolicy, MobilityContext
 from src.envs.dishwashing_env import DishwashingEnv
 from src.config.econ_params import EconParams, load_econ_params
 from src.config.internal_profile import get_internal_experiment_profile
-from src.vision.interfaces import VisionFrame
+from src.vision.interfaces import VisionFrame, compute_state_digest
 from src.vision.config import load_vision_config
 
 
@@ -64,10 +63,12 @@ class PyBulletBackend(PhysicsBackend):
         """Create a canonical VisionFrame placeholder for PyBullet."""
         cfg = load_vision_config()
         state = self.get_state_summary()
-        state_digest = hashlib.sha256(str(sorted(state.items())).encode("utf-8")).hexdigest()
+        state_digest = compute_state_digest(state)
         width, height = cfg.get("input_resolution", [224, 224])
+        fov = float(cfg.get("fov_deg", 90.0))
         return VisionFrame(
             backend=self.backend_name,
+            backend_id=self.backend_name,
             task_id=task_id,
             episode_id=episode_id,
             timestep=timestep,
@@ -76,10 +77,20 @@ class PyBulletBackend(PhysicsBackend):
             channels=int(cfg.get("channels", 3)),
             dtype=str(cfg.get("dtype", "uint8")),
             camera_pose={"pose": "stub", "timestep": timestep},
-            camera_intrinsics={"resolution": cfg.get("input_resolution", [224, 224])},
+            camera_intrinsics={
+                "resolution": [int(width), int(height)],
+                "fov_deg": fov,
+                "principal_point": [int(width) / 2.0, int(height) / 2.0],
+            },
+            camera_extrinsics={"frame": "world", "translation": [0.0, 0.0, 1.0], "rotation_rpy": [0.0, 0.0, 0.0]},
             rgb_path=None,
             depth_path=None,
             segmentation_path=None,
             camera_name="default_cam",
-            metadata={"state": state, "state_digest": state_digest},
+            state_digest=state_digest,
+            metadata={
+                "state": state,
+                "state_digest": state_digest,
+                "backend_version": "pybullet_stub_v1",
+            },
         )

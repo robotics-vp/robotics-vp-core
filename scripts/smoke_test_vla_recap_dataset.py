@@ -47,6 +47,15 @@ def main():
     out2 = Path("results/recap/test_recap_2.jsonl")
     build_recap_dataset(store, task_id=task_id, output_path=str(out2), max_episodes=10)
     assert out.read_text() == out2.read_text()
+    # Vision feature option
+    out3 = Path("results/recap/test_recap_vision.jsonl")
+    build_recap_dataset(store, task_id=task_id, output_path=str(out3), max_episodes=10, use_vision_features=True)
+    entry3 = _json.loads(out3.read_text().splitlines()[0])
+    assert "vision_features" in entry3 and entry3["vision_features"].get("vision_backend")
+    # Deterministic vision features
+    out4 = Path("results/recap/test_recap_vision2.jsonl")
+    build_recap_dataset(store, task_id=task_id, output_path=str(out4), max_episodes=10, use_vision_features=True)
+    assert out3.read_text() == out4.read_text()
     print("[smoke_test_vla_recap_dataset] All tests passed.")
 
 

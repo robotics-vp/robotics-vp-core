@@ -105,3 +105,24 @@ class RecapFeatureConfig:
         for cats in self.categories.values():
             dim += len(cats)
         return dim
+
+
+def summarize_vision_features(policy_features: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert PolicyObservationBuilder features into compact recap-ready fields.
+    """
+    latent = (policy_features.get("vision_latent") or {}).get("latent", [])
+    backend = policy_features.get("backend")
+    stats: Dict[str, Any] = {"vision_backend": backend}
+    if latent:
+        arr = np.array(latent, dtype=float)
+        stats.update(
+            {
+                "vision_latent_mean": float(arr.mean()),
+                "vision_latent_min": float(arr.min()),
+                "vision_latent_max": float(arr.max()),
+            }
+        )
+    if policy_features.get("state_digest"):
+        stats["vision_state_digest"] = policy_features["state_digest"]
+    return stats

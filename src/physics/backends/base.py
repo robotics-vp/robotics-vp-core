@@ -46,8 +46,10 @@ class PhysicsBackend:
         Construct a canonical VisionFrame for the current backend step.
 
         VisionFrame must populate:
-        - backend (string name)
+        - backend/backend_id (string name)
         - task_id, episode_id, timestep
+        - camera intrinsics/extrinsics (JSON-safe)
+        - deterministic state_digest derived from get_state_summary()
         - optional rgb/depth/segmentation paths if available
         - metadata capturing camera_name and minimal state hashes
         """

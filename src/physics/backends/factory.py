@@ -14,7 +14,8 @@ def make_backend(name: str, config: Dict) -> PhysicsBackend:
     if name == "pybullet":
         mobility_policy = HeuristicMobilityPolicy() if config.get("use_mobility_policy") else None
         return PyBulletBackend(econ_preset=config.get("econ_preset", "toy"), mobility_policy=mobility_policy)
-    if name == "isaac_stub":
+    if name in ("isaac_stub", "isaac"):
         mobility_policy = HeuristicMobilityPolicy() if config.get("use_mobility_policy") else None
-        return IsaacStubBackend(mobility_policy=mobility_policy)
+        backend_id = "isaac" if name == "isaac" else "isaac_stub"
+        return IsaacStubBackend(mobility_policy=mobility_policy, backend_id=backend_id)
     raise ValueError(f"Unknown physics backend: {name}")

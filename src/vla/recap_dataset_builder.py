@@ -2,10 +2,15 @@
 Build RECAP-style dataset from ontology episodes/events/econ vectors.
 """
 import json
-from typing import Dict
+from typing import Dict, Optional, Callable, Any
 from pathlib import Path
 
 from src.ontology.store import OntologyStore
+from src.policies.registry import build_all_policies
+from src.vision.policy_observation_builder import PolicyObservationBuilder
+from src.vision.interfaces import VisionFrame, compute_state_digest
+from src.vision.config import load_vision_config
+from src.vla.recap_features import summarize_vision_features
 
 
 def build_recap_dataset(
@@ -13,6 +18,9 @@ def build_recap_dataset(
     task_id: str,
     output_path: str,
     max_episodes: int = 1000,
+    use_vision_features: bool = False,
+    vision_frame_provider: Optional[Callable[[Any, Any], VisionFrame]] = None,
+    vision_builder: Optional[PolicyObservationBuilder] = None,
 ) -> None:
     episodes = store.list_episodes(task_id=task_id)[:max_episodes]
     econ_map = {e.episode_id: e for e in store.list_econ_vectors()}
@@ -24,6 +32,35 @@ def build_recap_dataset(
     reward_mean = sum(rewards) / len(rewards) if rewards else 0.0
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    builder = vision_builder
+    if use_vision_features and builder is None:
+        builder = PolicyObservationBuilder(build_all_policies().vision_encoder)
+    cfg = load_vision_config() if use_vision_features else None
+
+    def _default_frame_provider(ep, evt):
+        width, height = (cfg.get("input_resolution", [224, 224]) if cfg else [224, 224])
+        channels = int(cfg.get("channels", 3)) if cfg else 3
+        dtype = str(cfg.get("dtype", "uint8")) if cfg else "uint8"
+        return VisionFrame(
+            backend="recap_stub",
+            backend_id="recap_stub",
+            task_id=task_id,
+            episode_id=ep.episode_id,
+            timestep=evt.timestep,
+            width=int(width),
+            height=int(height),
+            channels=channels,
+            dtype=dtype,
+            camera_intrinsics={
+                "resolution": [int(width), int(height)],
+                "fov_deg": float(cfg.get("fov_deg", 90.0)) if cfg else 90.0,
+            },
+            camera_extrinsics={"frame": "world", "translation": [0.0, 0.0, 1.0], "rotation_rpy": [0.0, 0.0, 0.0]},
+            state_digest=compute_state_digest(evt.state_summary or {"timestep": evt.timestep}),
+            metadata={"source": "recap_dataset_builder"},
+        )
+
+    provider = vision_frame_provider or _default_frame_provider
     with open(output_path, "w") as f:
         for ep in episodes:
             econ = econ_map.get(ep.episode_id)
@@ -50,5 +87,9 @@ def build_recap_dataset(
                 mob_meta = evt.metadata.get("mobility_adjustment", {}) if hasattr(evt, "metadata") else {}
                 if mob_meta:
                     entry["mobility_adjustment"] = mob_meta
+                if use_vision_features and builder is not None:
+                    frame = provider(ep, evt)
+                    policy_feats = builder.build_policy_features(frame, evt.state_summary or {})
+                    entry["vision_features"] = summarize_vision_features(policy_feats)
                 f.write(json.dumps(entry, sort_keys=True))
                 f.write("\n")

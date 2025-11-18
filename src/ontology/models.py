@@ -56,6 +56,8 @@ class Episode:
     ended_at: Optional[datetime] = None
     status: str = "running"  # "running" | "success" | "failure"
     metadata: Dict = field(default_factory=dict)
+    vision_config: Dict = field(default_factory=dict)
+    vision_conditions: Dict = field(default_factory=dict)
 
 
 @dataclass

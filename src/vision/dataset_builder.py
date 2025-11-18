@@ -11,7 +11,7 @@ import numpy as np
 from src.ontology.store import OntologyStore
 from src.vision.backbone_stub import VisionBackboneStub
 from src.vision.config import load_vision_config
-from src.vision.interfaces import VisionFrame
+from src.vision.interfaces import VisionFrame, compute_state_digest
 
 
 def _deterministic_frame_array(width: int, height: int, channels: int, episode_id: str, timestep: int, dtype: str):
@@ -54,6 +54,7 @@ def build_frame_dataset_from_ontology(
                     return {"frames": count}
                 frame = VisionFrame(
                     backend="dataset_builder",
+                    backend_id="dataset_builder",
                     task_id=task_id,
                     episode_id=ep.episode_id,
                     timestep=ev.timestep,
@@ -62,9 +63,18 @@ def build_frame_dataset_from_ontology(
                     channels=channels,
                     dtype=dtype,
                     camera_pose={"pose": "synthetic"},
-                    camera_intrinsics={"resolution": [width, height]},
+                    camera_intrinsics={
+                        "resolution": [width, height],
+                        "fov_deg": float(cfg.get("fov_deg", 90.0)),
+                        "principal_point": [width / 2.0, height / 2.0],
+                    },
+                    camera_extrinsics={"frame": "world", "translation": [0.0, 0.0, 1.0], "rotation_rpy": [0.0, 0.0, 0.0]},
                     rgb_path=str(frames_dir / f"frame_{count:06d}.npy"),
-                    metadata={"event_digest": hashlib.sha256(json.dumps(ev.state_summary, sort_keys=True, default=str).encode("utf-8")).hexdigest()},
+                    state_digest=compute_state_digest(ev.state_summary),
+                    metadata={
+                        "event_digest": hashlib.sha256(json.dumps(ev.state_summary, sort_keys=True, default=str).encode("utf-8")).hexdigest(),
+                        "state_summary": ev.state_summary,
+                    },
                 )
                 array = _deterministic_frame_array(int(width), int(height), channels, ep.episode_id, ev.timestep, dtype)
                 np.save(frame.rgb_path, array)
