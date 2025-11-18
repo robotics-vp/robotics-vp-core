@@ -27,6 +27,7 @@ SMOKES = [
     ["python3", "scripts/smoke_test_stage3_training_integration.py"],
     ["python3", "scripts/smoke_test_ontology_store.py"],
     ["python3", "scripts/smoke_test_ontology_adapters.py"],
+    ["python3", "scripts/smoke_test_episode_logging_and_econ_vector.py"],
 ]
 
 OPTIONAL = [
