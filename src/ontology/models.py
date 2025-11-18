@@ -40,6 +40,9 @@ class Datapack:
     novelty_score: float = 0.0
     quality_score: float = 0.0
     tags: Dict = field(default_factory=dict)
+    auditor_rating: Optional[str] = None
+    auditor_score: Optional[float] = None
+    auditor_predicted_econ: Optional[Dict[str, float]] = None
     created_at: datetime = field(default_factory=datetime.utcnow)
 
 

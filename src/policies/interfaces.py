@@ -142,6 +142,7 @@ class DatapackAuditorPolicy(Protocol):
         Return audit result:
         {
             "rating": str,  # "AAA", "AA", "A", "BBB", "JUNK"
+            "score": float,  # normalized risk/quality score
             "predicted_econ": {
                 "expected_delta_mpl": float,
                 "expected_energy_wh": float,

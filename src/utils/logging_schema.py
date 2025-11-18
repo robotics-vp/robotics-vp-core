@@ -11,3 +11,14 @@ LOG_FIELDS = {
     "pack_id": "pack_id",
     "backend": "backend",
 }
+
+POLICY_LOG_FIELDS = {
+    "policy_name": "policy",
+    "input_features": "features",
+    "output": "target",
+    "meta": "meta",
+    "timestamp": "timestamp",
+    "task_id": "task_id",
+    "episode_id": "episode_id",
+    "datapack_id": "datapack_id",
+}

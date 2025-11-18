@@ -32,6 +32,7 @@ def main():
     parser.add_argument("--task-id", type=str, default="task_dishwashing")
     parser.add_argument("--robot-id", type=str, default="robot_sac")
     parser.add_argument("--use-mobility-policy", action="store_true", help="Enable advisory mobility micro-policy (stub)")
+    parser.add_argument("--econ-domain", type=str, default="default", help="Econ domain calibration profile to use")
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -92,7 +93,7 @@ def main():
     store.upsert_task(task)
     store.upsert_robot(robot)
 
-    reward_engine = RewardEngine(task, robot, config={})
+    reward_engine = RewardEngine(task, robot, config={}, econ_domain_name=args.econ_domain)
     logger = EpisodeLogger(store=store, task=task, robot=robot)
 
     for ep_idx in range(args.episodes):

@@ -1,0 +1,24 @@
+default:
+  mpl_scale: 1.0
+  energy_scale: 1.0
+  damage_scale: 1.0
+  offset: {}
+  source_domain: pybullet
+  target_domain: platform_econ
+
+pybullet_smoke:
+  mpl_scale: 1.0
+  energy_scale: 0.2
+  damage_scale: 0.5
+  offset:
+    energy_cost: 0.0
+  source_domain: pybullet
+  target_domain: platform_econ
+
+isaac_stub:
+  mpl_scale: 1.0
+  energy_scale: 1.0
+  damage_scale: 1.0
+  offset: {}
+  source_domain: isaac
+  target_domain: platform_econ

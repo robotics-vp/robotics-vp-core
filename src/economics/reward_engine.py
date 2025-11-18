@@ -13,19 +13,36 @@ from src.economics.domain_adapter import EconDomainAdapter, EconDomainAdapterCon
 
 
 class RewardEngine:
-    def __init__(self, task: Task, robot: Robot, config: Dict[str, Any], policies=None):
+    def __init__(
+        self,
+        task: Task,
+        robot: Robot,
+        config: Dict[str, Any],
+        policies=None,
+        econ_domain_name: str = "default",
+    ):
         self.task = task
         self.robot = robot
         self.config = config or {}
         self.policies = policies or build_all_policies()
-        
-        # Initialize domain adapter
-        adapter_config = EconDomainAdapterConfig(
-            source_domain=self.config.get("source_domain", "pybullet"),
-            scaling=self.config.get("econ_scaling", {}),
-            offsets=self.config.get("econ_offsets", {}),
+
+        # Initialize domain adapter from YAML profile with optional overrides
+        domain_name = self.config.get("econ_domain_name", econ_domain_name or "default")
+        self.adapter = EconDomainAdapter(
+            domain_name=domain_name,
+            config_path=self.config.get("econ_domain_config_path"),
         )
-        self.adapter = EconDomainAdapter(adapter_config)
+        # Preserve legacy inline overrides without changing behavior
+        if isinstance(self.adapter.config.scaling, dict):
+            self.adapter.config.scaling.update(self.config.get("econ_scaling", {}) or {})
+        else:
+            self.adapter.config.scaling = self.config.get("econ_scaling", {}) or {}
+        if isinstance(self.adapter.config.offsets, dict):
+            self.adapter.config.offsets.update(self.config.get("econ_offsets", {}) or {})
+        else:
+            self.adapter.config.offsets = self.config.get("econ_offsets", {}) or {}
+        if self.config.get("source_domain"):
+            self.adapter.config.source_domain = self.config["source_domain"]
 
     def step_reward(
         self,

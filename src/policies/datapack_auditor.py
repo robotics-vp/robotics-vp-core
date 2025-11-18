@@ -63,8 +63,10 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
         has_recovery = len(recovery_tags) > 0
         is_ood = len(ood_tags) > 0
         
+        datapack_id = _get(datapack, "datapack_id") or _get(datapack, "pack_id") or _get(datapack, "episode_id", "unknown")
+
         return {
-            "datapack_id": getattr(datapack, "episode_id", "unknown"),
+            "datapack_id": datapack_id,
             "max_fragility": max_fragility,
             "max_risk": max_risk,
             "has_recovery": has_recovery,
@@ -130,8 +132,11 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
         elif predicted_risk_score > 0.6 and predicted_delta_mpl > 5.0:
             rating = "BBB"
             
+        score = max(0.0, predicted_delta_mpl) * (1.0 - min(1.0, predicted_risk_score))
+
         return {
             "rating": rating,
+            "score": score,
             "predicted_econ": {
                 "expected_delta_mpl": predicted_delta_mpl,
                 "expected_energy_wh": predicted_energy_wh,
@@ -140,6 +145,11 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
             },
             "metadata": {
                 "auditor_backend": "heuristic_v1",
-                "features_used": list(features.keys())
+                "features_used": list(features.keys()),
+                "datapack_id": features.get("datapack_id"),
+                "raw_score_basis": {
+                    "predicted_delta_mpl": predicted_delta_mpl,
+                    "predicted_risk_score": predicted_risk_score,
+                },
             }
         }

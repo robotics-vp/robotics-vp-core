@@ -9,7 +9,7 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 repo_root = Path(__file__).parent.parent
 import sys
@@ -21,6 +21,7 @@ from src.ontology.store import OntologyStore  # noqa: E402
 from src.policies.registry import build_all_policies  # noqa: E402
 from src.semantic.aggregator import SemanticAggregator  # noqa: E402
 from src.utils.json_safe import to_json_safe  # noqa: E402
+from src.utils.logging_schema import POLICY_LOG_FIELDS  # noqa: E402
 from src.vision.interfaces import VisionFrame  # noqa: E402
 
 DEFAULT_TIMESTAMP = datetime.utcfromtimestamp(0).isoformat()
@@ -34,14 +35,24 @@ def _write_jsonl(path: Path, records: List[Dict[str, Any]]) -> None:
             f.write("\n")
 
 
-def _record(policy: str, features: Any, target: Any, task_id: str = "", episode_id: str = "") -> Dict[str, Any]:
+def _record(
+    policy: str,
+    features: Any,
+    target: Any,
+    task_id: str = "",
+    episode_id: str = "",
+    datapack_id: str = "",
+    meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     return {
-        "policy": policy,
-        "features": to_json_safe(features),
-        "target": to_json_safe(target),
-        "task_id": task_id,
-        "episode_id": episode_id,
-        "timestamp": DEFAULT_TIMESTAMP,
+        POLICY_LOG_FIELDS["policy_name"]: policy,
+        POLICY_LOG_FIELDS["input_features"]: to_json_safe(features),
+        POLICY_LOG_FIELDS["output"]: to_json_safe(target),
+        POLICY_LOG_FIELDS["meta"]: to_json_safe(meta or {}),
+        POLICY_LOG_FIELDS["task_id"]: task_id,
+        POLICY_LOG_FIELDS["episode_id"]: episode_id,
+        POLICY_LOG_FIELDS["datapack_id"]: datapack_id,
+        POLICY_LOG_FIELDS["timestamp"]: DEFAULT_TIMESTAMP,
     }
 
 
@@ -57,13 +68,38 @@ def build_datasets(store: OntologyStore, out_dir: Path) -> None:
     datapack_values: Dict[str, float] = {}
     datapack_task: Dict[str, str] = {}
     data_val_records: List[Dict[str, Any]] = []
+    auditor_records: List[Dict[str, Any]] = []
     for dp in datapacks:
-        datapack_task[getattr(dp, "pack_id", dp.datapack_id if hasattr(dp, "datapack_id") else "")] = getattr(dp, "task_id", "")
-        feat = policies.data_valuation.build_features(dp, econ_slice=econ_summary.get(dp.task_id))
+        dp_id = getattr(dp, "pack_id", getattr(dp, "datapack_id", ""))
+        task_id = getattr(dp, "task_id", "")
+        datapack_task[dp_id] = task_id
+        feat = policies.data_valuation.build_features(dp, econ_slice=econ_summary.get(task_id))
         scored = policies.data_valuation.score(feat)
-        datapack_values[dp.pack_id] = float(scored.get("valuation_score", 0.0))
-        data_val_records.append(_record("data_valuation", feat, scored, task_id=getattr(dp, "task_id", ""), episode_id=dp.pack_id))
+        datapack_values[dp_id] = float(scored.get("valuation_score", 0.0))
+        data_val_records.append(_record("data_valuation", feat, scored, task_id=task_id, episode_id=dp_id, datapack_id=dp_id))
+        semantic_tags = []
+        if isinstance(getattr(dp, "tags", {}), dict):
+            for v in dp.tags.values():
+                if isinstance(v, list):
+                    semantic_tags.extend(v)
+        auditor_features = policies.datapack_auditor.build_features(
+            datapack=dp,
+            semantic_tags=semantic_tags,
+            econ_slice={"expected_mpl_gain": econ_summary.get(dp.task_id, {}).get("mpl", {}).get("mean", 0.0), "novelty_score": getattr(dp, "novelty_score", 0.0)},
+        )
+        auditor_eval = policies.datapack_auditor.evaluate(auditor_features)
+        auditor_records.append(
+            _record(
+                "datapack_auditor",
+                auditor_features,
+                auditor_eval,
+                task_id=getattr(dp, "task_id", ""),
+                datapack_id=getattr(dp, "datapack_id", getattr(dp, "pack_id", "")),
+                meta={"policy_backend": auditor_eval.get("metadata", {}).get("auditor_backend", "heuristic_v1")},
+            )
+        )
     _write_jsonl(out_dir / "data_valuation.jsonl", data_val_records)
+    _write_jsonl(out_dir / "datapack_auditor.jsonl", auditor_records)
 
     pricing_records: List[Dict[str, Any]] = []
     for task in tasks:
@@ -129,7 +165,15 @@ def build_datasets(store: OntologyStore, out_dir: Path) -> None:
         sampler_weights = policies.sampler_weights.evaluate(sampler_feats, strategy="balanced")
         for feat in sampler_feats:
             pid = feat.get("descriptor", {}).get("pack_id") or feat.get("descriptor", {}).get("episode_id")
-            sampler_records.append(_record("sampler_weights", feat, {"weight": sampler_weights.get(pid, 0.0)}, episode_id=str(pid)))
+            sampler_records.append(
+                _record(
+                    "sampler_weights",
+                    feat,
+                    {"weight": sampler_weights.get(pid, 0.0)},
+                    episode_id=str(pid),
+                    datapack_id=str(pid),
+                )
+            )
     _write_jsonl(out_dir / "sampler_weights.jsonl", sampler_records)
 
     orchestrator_records: List[Dict[str, Any]] = []

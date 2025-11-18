@@ -108,6 +108,21 @@ def main():
             f"  Recovery fraction={recovery.get('mean_recovery_fraction',0):.3f}, "
             f"fraction_with_recovery={recovery.get('fraction_with_recovery',0):.3f}"
         )
+    auditor = task_summary.get("auditor", {})
+    ratings = auditor.get("datapack_ratings", {})
+    if ratings:
+        print(f"  Auditor ratings (counts): {ratings.get('counts', {})}")
+        print(f"  Auditor ratings (shares): {ratings.get('shares', {})}")
+    econ_by_rating = auditor.get("econ_by_rating", {})
+    if econ_by_rating:
+        print("  Econ by auditor rating:")
+        for rating, stats in econ_by_rating.items():
+            print(
+                f"    {rating}: count={stats.get('count',0)}, "
+                f"mpl={stats.get('mean_mpl',0):.3f}, "
+                f"energy={stats.get('mean_energy_cost',0):.3f}, "
+                f"damage={stats.get('mean_damage_cost',0):.3f}"
+            )
     print()
     print("[datapack_mix]")
     sources = dp_summary.get("sources", {})
@@ -117,6 +132,8 @@ def main():
         print("  Recent datapacks:")
         for dp in dp_summary["recent"]:
             print(f"    - {dp['datapack_id']} ({dp['source_type']}, {dp['modality']}) @ {dp['created_at']}")
+    if dp_summary.get("auditor_ratings"):
+        print(f"  Auditor rating mix: {dp_summary['auditor_ratings'].get('counts', {})}")
     print()
     print("[pricing_snapshot]")
     print(f"  Human unit cost: ${pricing.get('human_unit_cost',0):.4f}")

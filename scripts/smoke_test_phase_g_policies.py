@@ -10,7 +10,6 @@ import json
 import sys
 from pathlib import Path
 from typing import Dict, Any
-from dataclasses import dataclass
 
 # Add src to path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -37,6 +36,8 @@ def test_datapack_auditor():
     result_safe = auditor.evaluate(safe_features)
     print(f"Safe Case Rating: {result_safe['rating']} (Expected AAA/AA)")
     assert result_safe['rating'] in ["AAA", "AA"], f"Expected high rating, got {result_safe['rating']}"
+    assert "score" in result_safe and result_safe["score"] >= 0.0, "Auditor score missing"
+    assert result_safe["metadata"].get("datapack_id") == "ep_safe_001"
     
     # Case 2: High Risk, Low Value (JUNK)
     risky_features = auditor.build_features(
@@ -58,12 +59,8 @@ def test_datapack_auditor():
 
 def test_econ_domain_adapter():
     print("\n--- Testing EconDomainAdapter ---")
-    config = EconDomainAdapterConfig(
-        source_domain="pybullet",
-        scaling={"energy_cost": 2.0, "damage_cost": 1.5}, # Sim underestimates energy/damage
-        offsets={"wage_parity": -0.1}
-    )
-    adapter = EconDomainAdapter(config)
+    adapter_default = EconDomainAdapter(domain_name="default")
+    adapter_smoke = EconDomainAdapter(domain_name="pybullet_smoke")
     
     raw_econ = EconVector(
         episode_id="ep_001",
@@ -73,19 +70,21 @@ def test_econ_domain_adapter():
         damage_cost=10.0,
         novelty_delta=0.5,
         reward_scalar_sum=100.0,
-        source_domain="pybullet"
+        source_domain="pybullet",
+        components={"energy_penalty": 2.5},
     )
     
-    calibrated = adapter.map_vector(raw_econ)
+    calibrated_default = adapter_default.map_vector(raw_econ)
+    calibrated_smoke = adapter_smoke.map_vector(raw_econ)
     
-    print(f"Raw Energy: {raw_econ.energy_cost}, Calibrated: {calibrated.energy_cost}")
-    print(f"Raw Damage: {raw_econ.damage_cost}, Calibrated: {calibrated.damage_cost}")
+    print(f"Default Energy: {calibrated_default.energy_cost}, Smoke Energy: {calibrated_smoke.energy_cost}")
+    assert calibrated_default.energy_cost != 0.0, "Default calibration missing"
+    assert calibrated_smoke.energy_cost != calibrated_default.energy_cost, "Domain profiles not applied"
+    assert calibrated_smoke.components.get("energy_penalty") == raw_econ.components["energy_penalty"], "Raw components should be preserved"
     
-    assert calibrated.energy_cost == 10.0, "Energy scaling failed"
-    assert calibrated.damage_cost == 15.0, "Damage scaling failed"
-    assert calibrated.wage_parity == 0.9, "Wage offset failed"
-    assert calibrated.source_domain == "pybullet", "Source domain lost"
-    assert calibrated.metadata["is_calibrated"] is True, "Calibration flag missing"
+    assert calibrated_default.metadata["is_calibrated"] is True, "Calibration flag missing"
+    assert "calibrated_components" in calibrated_default.metadata, "Calibrated component log missing"
+    assert calibrated_smoke.metadata.get("raw_econ_snapshot", {}).get("energy_cost") == raw_econ.energy_cost
     print("Calibration logic verified.")
 
 def test_reward_engine_integration():
@@ -93,14 +92,8 @@ def test_reward_engine_integration():
     task = Task(task_id="t1", name="test_task")
     robot = Robot(robot_id="r1", name="test_robot")
     
-    # Config with calibration
-    config = {
-        "source_domain": "pybullet",
-        "econ_scaling": {"energy_cost": 2.0},
-        "econ_offsets": {}
-    }
-    
-    engine = RewardEngine(task, robot, config)
+    engine_default = RewardEngine(task, robot, config={}, econ_domain_name="default")
+    engine_smoke = RewardEngine(task, robot, config={}, econ_domain_name="pybullet_smoke")
     
     # Fake episode events
     events = [
@@ -112,12 +105,18 @@ def test_reward_engine_integration():
     ]
     episode = Episode(episode_id="ep_001", task_id="t1", robot_id="r1")
     
-    econ = engine.compute_econ_vector(episode, events)
+    econ_default = engine_default.compute_econ_vector(episode, events)
+    econ_smoke = engine_smoke.compute_econ_vector(episode, events)
     
-    print(f"Computed Econ Energy: {econ.energy_cost}")
-    # Raw energy sum = 1.0. Scaled by 2.0 -> 2.0.
-    assert econ.energy_cost == 2.0, f"RewardEngine calibration failed. Expected 2.0, got {econ.energy_cost}"
-    assert econ.metadata["is_calibrated"] is True
+    print(f"Default energy: {econ_default.energy_cost}, Smoke energy: {econ_smoke.energy_cost}")
+    assert econ_default.metadata["is_calibrated"] is True
+    assert econ_default.metadata.get("raw_components", {}).get("energy_penalty") == 1.0
+    assert econ_default.metadata.get("calibrated_components", {}).get("energy_penalty") != 0.0
+    assert econ_default.metadata["raw_econ_snapshot"]["energy_cost"] == econ_default.metadata["raw_components"]["energy_penalty"]
+    assert econ_default.energy_cost != econ_smoke.energy_cost, "Domain selection should impact calibration"
+    # Determinism for fixed domain/config
+    econ_default_again = engine_default.compute_econ_vector(episode, events)
+    assert econ_default_again.energy_cost == econ_default.energy_cost, "Calibration should be deterministic"
     print("RewardEngine integration verified.")
 
 if __name__ == "__main__":

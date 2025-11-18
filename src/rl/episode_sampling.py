@@ -525,8 +525,14 @@ class DataPackRLSampler:
             "expected_mpl_gain": episode["expected_mpl_gain"],
         }
         if episode.get("auditor_result"):
-             descriptor["sampling_metadata"]["auditor_rating"] = episode["auditor_result"].get("rating")
-             descriptor["sampling_metadata"]["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")
+            descriptor["sampling_metadata"]["auditor_rating"] = episode["auditor_result"].get("rating")
+            descriptor["sampling_metadata"]["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")
+            meta = descriptor.get("metadata") if isinstance(descriptor.get("metadata"), dict) else {}
+            meta = copy.deepcopy(meta)
+            meta["auditor_rating"] = episode["auditor_result"].get("rating")
+            meta["auditor_score"] = episode["auditor_result"].get("score")
+            meta["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")
+            descriptor["metadata"] = meta
         return to_json_safe(descriptor)
 
 

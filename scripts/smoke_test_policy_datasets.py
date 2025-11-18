@@ -33,6 +33,7 @@ def main():
 
     expected_files = [
         "data_valuation.jsonl",
+        "datapack_auditor.jsonl",
         "pricing.jsonl",
         "safety_risk.jsonl",
         "energy_cost.jsonl",
@@ -49,7 +50,8 @@ def main():
         records = _load_jsonl(path)
         contents_first[fname] = records
         for rec in records:
-            assert "policy" in rec and "features" in rec and "target" in rec, f"Schema mismatch in {fname}"
+            for key in ("policy", "features", "target", "meta", "task_id", "timestamp"):
+                assert key in rec, f"Schema mismatch in {fname}: missing {key}"
     # Determinism: rebuild and compare
     build_datasets(store, out_dir)
     for fname in expected_files:

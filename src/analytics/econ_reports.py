@@ -58,6 +58,8 @@ def compute_task_econ_summary(
     episodes = store.list_episodes(task_id=task_id)
     econ_vectors = store.list_econ_vectors()
     ev_map = {e.episode_id: e for e in econ_vectors}
+    datapacks = store.list_datapacks(task_id=task_id)
+    datapack_map = {d.datapack_id: d for d in datapacks}
     mpl_vals: List[float] = []
     wage_parity_vals: List[float] = []
     energy_costs: List[float] = []
@@ -76,9 +78,16 @@ def compute_task_econ_summary(
     recovery_fractions: List[float] = []
     recovery_present = 0
     mpl_without_recovery: List[float] = []
+    datapack_rating_counts: Dict[str, int] = {}
+    econ_by_rating: Dict[str, Dict[str, List[float]]] = {}
 
     rm_scores = reward_model_scores or {}
     seg_map = segmentation_tags or {}
+
+    for dp in datapacks:
+        rating = getattr(dp, "auditor_rating", None)
+        if rating:
+            datapack_rating_counts[rating] = datapack_rating_counts.get(rating, 0) + 1
 
     for ep in episodes:
         ev = ev_map.get(ep.episode_id)
@@ -106,13 +115,31 @@ def compute_task_econ_summary(
             frac = (len(rec_events) / max(len(seg_ids), 1)) if seg_ids else 0.0
             if rec_events:
                 recovery_present += 1
-            recovery_fractions.append(frac)
+                recovery_fractions.append(frac)
             if ev:
                 mpl_without_recovery.append(ev.mpl_units_per_hour * (1.0 - frac))
         if ep.status == "success":
             successes += 1
         elif ep.status == "failure":
             failures += 1
+        dp_ref = datapack_map.get(getattr(ep, "datapack_id", None))
+        dp_rating = getattr(dp_ref, "auditor_rating", None) if dp_ref else None
+        if dp_rating and ev:
+            bucket = econ_by_rating.setdefault(
+                dp_rating,
+                {"mpl": [], "damage": [], "energy": [], "wage_parity": [], "novelty_delta": [], "score": []},
+            )
+            bucket["mpl"].append(ev.mpl_units_per_hour)
+            bucket["damage"].append(ev.damage_cost)
+            bucket["energy"].append(ev.energy_cost)
+            bucket["wage_parity"].append(ev.wage_parity)
+            bucket["novelty_delta"].append(ev.novelty_delta)
+            dp_score = getattr(dp_ref, "auditor_score", None)
+            if dp_score is not None:
+                try:
+                    bucket["score"].append(float(dp_score))
+                except Exception:
+                    pass
         md = getattr(ep, "metadata", {}) or {}
         strat = md.get("sampling_metadata", {}).get("strategy") if isinstance(md, dict) else None
         phase = md.get("curriculum_phase") if isinstance(md, dict) else None
@@ -173,7 +200,7 @@ def compute_task_econ_summary(
         summary["error_adjusted_energy_cost"] = {
             "mean": float(sum(error_adjusted_energy) / len(error_adjusted_energy)),
             **_percentiles(error_adjusted_energy),
-        }
+    }
     if recovery_fractions:
         summary["recovery_segments"] = {
             "fraction_with_recovery": float(recovery_present / max(len(recovery_fractions), 1)),
@@ -182,6 +209,29 @@ def compute_task_econ_summary(
             if mpl_without_recovery
             else 0.0,
         }
+    if datapack_rating_counts:
+        total_dp = sum(datapack_rating_counts.values())
+        shares = {k: (v / total_dp if total_dp else 0.0) for k, v in datapack_rating_counts.items()}
+        summary["auditor"] = {
+            "datapack_ratings": {"counts": dict(sorted(datapack_rating_counts.items())), "shares": dict(sorted(shares.items()))},
+        }
+    if econ_by_rating:
+        corr = {}
+        for rating, vals in econ_by_rating.items():
+            count = len(vals.get("mpl", []))
+            corr[rating] = {
+                "count": count,
+                "mean_mpl": float(sum(vals["mpl"]) / count) if count else 0.0,
+                "mean_damage_cost": float(sum(vals["damage"]) / count) if count else 0.0,
+                "mean_energy_cost": float(sum(vals["energy"]) / count) if count else 0.0,
+                "mean_wage_parity": float(sum(vals["wage_parity"]) / count) if count else 0.0,
+                "mean_novelty_delta": float(sum(vals["novelty_delta"]) / count) if count else 0.0,
+            }
+            scores = vals.get("score", [])
+            if scores:
+                corr[rating]["mean_auditor_score"] = float(sum(scores) / len(scores))
+        summary.setdefault("auditor", {})
+        summary["auditor"]["econ_by_rating"] = dict(sorted(corr.items(), key=lambda kv: kv[0]))
     return summary
 
 
@@ -199,6 +249,11 @@ def compute_datapack_mix_summary(store: OntologyStore, task_id: str) -> Dict[str
             "avg_novelty": float(sum(novelty) / len(novelty)) if novelty else 0.0,
             "avg_quality": float(sum(quality) / len(quality)) if quality else 0.0,
         }
+    rating_counts: Dict[str, int] = {}
+    for dp in datapacks:
+        rating = getattr(dp, "auditor_rating", None)
+        if rating:
+            rating_counts[rating] = rating_counts.get(rating, 0) + 1
     def _safe_dt(dt):
         if isinstance(dt, datetime):
             return dt
@@ -220,6 +275,14 @@ def compute_datapack_mix_summary(store: OntologyStore, task_id: str) -> Dict[str
             }
             for dp in recent
         ],
+        "auditor_ratings": {
+            "counts": dict(sorted(rating_counts.items())),
+            "shares": {
+                k: (v / sum(rating_counts.values()) if rating_counts else 0.0) for k, v in sorted(rating_counts.items())
+            },
+        }
+        if rating_counts
+        else {},
     }
 
 
