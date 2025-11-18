@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Protocol, Sequence
 
+from src.ontology.models import Episode, EconVector
+from src.policies.reward_model_types import RewardModelEpisodeScores
+from src.vla.recap_inference import RecapEpisodeScores
 
 class DataValuationPolicy(Protocol):
     def build_features(
@@ -104,3 +107,16 @@ class VisionEncoderPolicy(Protocol):
 
     def batch_encode(self, frames: Sequence[Any]) -> List[Any]:
         """Vectorized encoding helper with deterministic ordering."""
+
+
+class RewardModelPolicy(Protocol):
+    def score_episode(
+        self,
+        episode: Episode,
+        econ: EconVector,
+        tags: Dict[str, Any],
+        recap_scores: Optional[RecapEpisodeScores] = None,
+    ) -> RewardModelEpisodeScores:
+        """
+        Deterministically score an episode using econ, tags, and optional recap.
+        """

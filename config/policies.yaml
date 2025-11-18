@@ -7,3 +7,4 @@ sampler_weights: heuristic
 orchestrator: heuristic
 meta_advisor: heuristic
 vision_encoder: heuristic
+reward_model: heuristic
