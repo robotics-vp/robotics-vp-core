@@ -22,6 +22,8 @@ SMOKES = [
     ["python3", "scripts/smoke_test_task_graph_refiner.py"],
     ["python3", "scripts/smoke_test_stage2_e2e_pipeline.py"],
     ["python3", "scripts/smoke_test_stage2_4_semantic_tag_propagation.py"],
+    ["python3", "scripts/smoke_test_stage3_sampler.py"],
+    ["python3", "scripts/smoke_test_stage3_curriculum.py"],
 ]
 
 OPTIONAL = [
