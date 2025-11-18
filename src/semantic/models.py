@@ -62,6 +62,9 @@ class SemanticSnapshot:
     semantic_tags: List[Any]
     econ_slice: EconSlice
     meta_slice: MetaTransformerSlice
+    num_segments: int = 0
+    segment_types: Dict[str, int] = field(default_factory=dict)
+    subtask_label_histogram: Dict[str, int] = field(default_factory=dict)
     timestamp: float = field(default_factory=lambda: time())
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -73,6 +76,9 @@ class SemanticSnapshot:
             semantic_tags=_sorted_by_id(self.semantic_tags, key_name="proposal_id"),
             econ_slice=self.econ_slice,
             meta_slice=self.meta_slice,
+            num_segments=self.num_segments,
+            segment_types=dict(self.segment_types),
+            subtask_label_histogram=dict(self.subtask_label_histogram),
             timestamp=self.timestamp,
             metadata=self.metadata,
         )
@@ -87,6 +93,9 @@ class SemanticSnapshot:
                 "semantic_tags": [t.to_dict() if hasattr(t, "to_dict") else t for t in snap.semantic_tags],
                 "econ_slice": snap.econ_slice.to_dict(),
                 "meta_slice": snap.meta_slice.to_dict(),
+                "num_segments": snap.num_segments,
+                "segment_types": snap.segment_types,
+                "subtask_label_histogram": snap.subtask_label_histogram,
                 "timestamp": snap.timestamp,
                 "metadata": snap.metadata,
             }
@@ -101,6 +110,9 @@ class SemanticSnapshot:
             semantic_tags=[t for t in d.get("semantic_tags", [])],
             econ_slice=EconSlice.from_dict(d["econ_slice"]),
             meta_slice=MetaTransformerSlice.from_dict(d["meta_slice"]),
+            num_segments=int(d.get("num_segments", 0)),
+            segment_types=d.get("segment_types", {}),
+            subtask_label_histogram=d.get("subtask_label_histogram", {}),
             timestamp=d.get("timestamp", time()),
             metadata=d.get("metadata", {}),
         )

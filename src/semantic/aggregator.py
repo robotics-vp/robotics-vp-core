@@ -35,6 +35,7 @@ class SemanticAggregator:
         proposals = sorted(list(stage2_ontology_proposals), key=lambda p: p.proposal_id)
         refinements = sorted(list(stage2_task_refinements), key=lambda r: r.proposal_id)
         tags = sorted(list(stage2_tags), key=lambda t: getattr(t, "proposal_id", repr(t)))
+        segments_summary = self._build_segmentation_summary(tags)
 
         snapshot = SemanticSnapshot(
             task_id=task_id,
@@ -43,6 +44,9 @@ class SemanticAggregator:
             semantic_tags=tags,
             econ_slice=econ_slice,
             meta_slice=meta_slice,
+            num_segments=segments_summary["num_segments"],
+            segment_types=segments_summary["segment_types"],
+            subtask_label_histogram=segments_summary["subtask_label_histogram"],
             timestamp=datetime.utcnow().timestamp(),
             metadata={"recap": recap_summary} if recap_summary else {},
         )
@@ -104,4 +108,41 @@ class SemanticAggregator:
             "count": len(task_eps),
             "mean_goodness": mean_goodness,
             "top_episodes": [t.get("episode_id") for t in top],
+        }
+
+    def _build_segmentation_summary(self, tags: Sequence[Any]) -> Dict[str, Any]:
+        segment_ids = set()
+        segment_types: Dict[str, int] = {}
+        subtask_hist: Dict[str, int] = {}
+
+        for tag in tags:
+            boundaries = getattr(tag, "segment_boundary_tags", None)
+            subtasks = getattr(tag, "subtask_tags", None)
+            if boundaries is None and isinstance(tag, dict):
+                boundaries = tag.get("segment_boundary_tags")
+            if subtasks is None and isinstance(tag, dict):
+                subtasks = tag.get("subtask_tags")
+            boundaries = boundaries or []
+            subtasks = subtasks or []
+            for b in boundaries:
+                try:
+                    seg_id = getattr(b, "segment_id", None) or b.get("segment_id")
+                    reason = getattr(b, "reason", None) or b.get("reason")
+                    if seg_id:
+                        segment_ids.add(seg_id)
+                    if reason:
+                        segment_types[reason] = segment_types.get(reason, 0) + 1
+                except Exception:
+                    continue
+            for s in subtasks:
+                try:
+                    label = getattr(s, "subtask_label", None) or s.get("subtask_label")
+                    if label:
+                        subtask_hist[label] = subtask_hist.get(label, 0) + 1
+                except Exception:
+                    continue
+        return {
+            "num_segments": len(segment_ids),
+            "segment_types": dict(sorted(segment_types.items(), key=lambda kv: kv[0])),
+            "subtask_label_histogram": dict(sorted(subtask_hist.items(), key=lambda kv: kv[0])),
         }

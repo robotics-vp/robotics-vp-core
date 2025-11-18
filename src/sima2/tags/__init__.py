@@ -7,8 +7,10 @@ from .semantic_tags import (
     InterventionTag,
     NoveltyTag,
     RiskTag,
+    SegmentBoundaryTag,
     SemanticConflict,
     SemanticEnrichmentProposal,
+    SubtaskTag,
     SupervisionHints,
 )
 
@@ -19,7 +21,9 @@ __all__ = [
     "InterventionTag",
     "NoveltyTag",
     "RiskTag",
+    "SegmentBoundaryTag",
     "SemanticConflict",
     "SemanticEnrichmentProposal",
+    "SubtaskTag",
     "SupervisionHints",
 ]

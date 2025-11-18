@@ -65,13 +65,23 @@ class SemanticOrchestratorV2:
                 priority_tags.append("recap_top")
             priority_tags = sorted(list(set(priority_tags)))
 
+        segmentation_meta = {
+            "num_segments": getattr(snapshot, "num_segments", 0),
+            "segment_types": getattr(snapshot, "segment_types", {}),
+            "subtask_label_histogram": getattr(snapshot, "subtask_label_histogram", {}),
+        }
+
         advisory = OrchestratorAdvisory(
             task_id=snapshot.task_id,
             focus_objective_presets=sorted(list(set(focus_presets))),
             sampler_strategy_overrides=strategy_overrides,
             datapack_priority_tags=priority_tags,
             safety_emphasis=float(min(max(safety_emphasis, 0.0), 1.0)),
-            metadata={"frontier_eps": econ.frontier_episodes, "recap": recap},
+            metadata={
+                "frontier_eps": econ.frontier_episodes,
+                "recap": recap,
+                "segmentation": segmentation_meta,
+            },
         )
         if self.write_to_file:
             self._write_advisory(advisory)

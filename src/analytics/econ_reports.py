@@ -21,7 +21,37 @@ def _percentiles(values: List[float], ps=(10, 50, 90)) -> Dict[str, float]:
     return out
 
 
-def compute_task_econ_summary(store: OntologyStore, task_id: str) -> Dict[str, Any]:
+def _quality_grade(score: float) -> str:
+    if score >= 0.8:
+        return "GRADE_5"
+    if score >= 0.5:
+        return "GRADE_3"
+    return "FAILED"
+
+
+def _extract_segmentation_boundaries(seg_record: Any) -> List[Dict[str, Any]]:
+    if not seg_record:
+        return []
+    if isinstance(seg_record, dict):
+        if "segment_boundary_tags" in seg_record:
+            return seg_record.get("segment_boundary_tags", []) or []
+        if "enrichment" in seg_record:
+            return seg_record.get("enrichment", {}).get("segment_boundary_tags", []) or []
+    return []
+
+
+def _boundary_reason(boundary: Any) -> str:
+    if isinstance(boundary, dict):
+        return str(boundary.get("reason", "")).lower()
+    return str(getattr(boundary, "reason", "")).lower()
+
+
+def compute_task_econ_summary(
+    store: OntologyStore,
+    task_id: str,
+    reward_model_scores: Optional[Dict[str, Any]] = None,
+    segmentation_tags: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     task = store.get_task(task_id)
     if not task:
         return {"task_id": task_id, "error": "task_not_found"}
@@ -37,6 +67,16 @@ def compute_task_econ_summary(store: OntologyStore, task_id: str) -> Dict[str, A
     phase_counts: Dict[str, int] = {}
     successes = 0
     failures = 0
+    quality_adjusted_mpl: List[float] = []
+    error_adjusted_energy: List[float] = []
+    grade_counts: Dict[str, int] = {}
+    recovery_fractions: List[float] = []
+    recovery_present = 0
+    mpl_without_recovery: List[float] = []
+
+    rm_scores = reward_model_scores or {}
+    seg_map = segmentation_tags or {}
+
     for ep in episodes:
         ev = ev_map.get(ep.episode_id)
         if ev:
@@ -45,6 +85,24 @@ def compute_task_econ_summary(store: OntologyStore, task_id: str) -> Dict[str, A
             energy_costs.append(ev.energy_cost)
             damage_costs.append(ev.damage_cost)
             rewards.append(ev.reward_scalar_sum)
+            rm = rm_scores.get(ep.episode_id, {})
+            qual = float(rm.get("quality_score", rm.get("quality", 0.0))) if rm else 0.0
+            err_prob = float(rm.get("error_probability", 0.0)) if rm else 0.0
+            if rm:
+                quality_adjusted_mpl.append(ev.mpl_units_per_hour * max(0.0, min(1.0, qual)))
+                error_adjusted_energy.append(ev.energy_cost * (1.0 + max(0.0, min(1.0, err_prob))))
+                grade = _quality_grade(qual)
+                grade_counts[grade] = grade_counts.get(grade, 0) + 1
+            seg_rec = seg_map.get(ep.episode_id, {})
+            boundaries = _extract_segmentation_boundaries(seg_rec)
+            seg_ids = {b.get("segment_id", "") if isinstance(b, dict) else getattr(b, "segment_id", "") for b in boundaries}
+            rec_events = [b for b in boundaries if _boundary_reason(b) in {"recovery", "failure"}]
+            frac = (len(rec_events) / max(len(seg_ids), 1)) if seg_ids else 0.0
+            if rec_events:
+                recovery_present += 1
+            recovery_fractions.append(frac)
+            if ev:
+                mpl_without_recovery.append(ev.mpl_units_per_hour * (1.0 - frac))
         if ep.status == "success":
             successes += 1
         elif ep.status == "failure":
@@ -93,6 +151,25 @@ def compute_task_econ_summary(store: OntologyStore, task_id: str) -> Dict[str, A
         "sampler_counts": sampler_counts,
         "curriculum_phase_counts": phase_counts,
     }
+    if quality_adjusted_mpl:
+        summary["quality_adjusted_mpl"] = {
+            "mean": float(sum(quality_adjusted_mpl) / len(quality_adjusted_mpl)),
+            **_percentiles(quality_adjusted_mpl),
+        }
+        summary["quality_grades"] = dict(sorted(grade_counts.items(), key=lambda kv: kv[0]))
+    if error_adjusted_energy:
+        summary["error_adjusted_energy_cost"] = {
+            "mean": float(sum(error_adjusted_energy) / len(error_adjusted_energy)),
+            **_percentiles(error_adjusted_energy),
+        }
+    if recovery_fractions:
+        summary["recovery_segments"] = {
+            "fraction_with_recovery": float(recovery_present / max(len(recovery_fractions), 1)),
+            "mean_recovery_fraction": float(sum(recovery_fractions) / len(recovery_fractions)),
+            "mpl_without_recovery_mean": float(sum(mpl_without_recovery) / len(mpl_without_recovery))
+            if mpl_without_recovery
+            else 0.0,
+        }
     return summary
 
 
@@ -134,8 +211,13 @@ def compute_datapack_mix_summary(store: OntologyStore, task_id: str) -> Dict[str
     }
 
 
-def compute_pricing_snapshot(store: OntologyStore, task_id: str) -> Dict[str, Any]:
-    task_summary = compute_task_econ_summary(store, task_id)
+def compute_pricing_snapshot(
+    store: OntologyStore,
+    task_id: str,
+    reward_model_scores: Optional[Dict[str, Any]] = None,
+    segmentation_tags: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    task_summary = compute_task_econ_summary(store, task_id, reward_model_scores=reward_model_scores, segmentation_tags=segmentation_tags)
     dp_summary = compute_datapack_mix_summary(store, task_id)
     policies = build_all_policies()
     datapacks = store.list_datapacks(task_id=task_id)

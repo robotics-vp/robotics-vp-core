@@ -7,7 +7,7 @@ economics, rewards, or task graph state.
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 _FRAGILITY_LEVELS = {"low", "medium", "high", "critical"}
 _RISK_SEVERITY = {"low", "medium", "high", "critical"}
@@ -20,6 +20,7 @@ _NOVELTY_TYPES = {
 _REPLAY_FREQUENCY = {"standard", "frequent", "rare"}
 _CURRICULUM_STAGES = {"early", "mid", "late", "advanced"}
 _PRIORITY_LEVELS = {"low", "medium", "high", "critical"}
+_SEGMENT_REASONS = {"start", "end", "failure", "recovery"}
 
 
 def _as_json_dict(data):
@@ -199,6 +200,53 @@ class SupervisionHints:
 
 
 @dataclass
+class SegmentBoundaryTag:
+    """Marks boundaries of semantic sub-segments within an episode."""
+
+    episode_id: str
+    segment_id: str
+    timestep: int
+    reason: str  # "start" | "end" | "failure" | "recovery"
+    subtask_label: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if self.reason not in _SEGMENT_REASONS:
+            raise ValueError(f"Invalid segment boundary reason: {self.reason}")
+        if self.timestep < 0:
+            self.timestep = 0
+
+    def to_dict(self) -> dict:
+        return _as_json_dict(self)
+
+    def validate(self) -> None:
+        if self.reason not in _SEGMENT_REASONS:
+            raise ValueError(f"Invalid reason: {self.reason}")
+        if self.timestep < 0:
+            raise ValueError("timestep must be non-negative")
+
+
+@dataclass
+class SubtaskTag:
+    """Labels a semantic subtask grouping for a segment."""
+
+    episode_id: str
+    segment_id: str
+    subtask_label: str
+    parent_segment_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if not self.subtask_label:
+            raise ValueError("subtask_label is required")
+
+    def to_dict(self) -> dict:
+        return _as_json_dict(self)
+
+    def validate(self) -> None:
+        if not self.subtask_label:
+            raise ValueError("subtask_label is required")
+
+
+@dataclass
 class SemanticEnrichmentProposal:
     """Complete semantic enrichment (advisory-only) for a datapack episode."""
 
@@ -214,6 +262,8 @@ class SemanticEnrichmentProposal:
     efficiency_tags: List[EfficiencyTag] = field(default_factory=list)
     novelty_tags: List[NoveltyTag] = field(default_factory=list)
     intervention_tags: List[InterventionTag] = field(default_factory=list)
+    segment_boundary_tags: List[SegmentBoundaryTag] = field(default_factory=list)
+    subtask_tags: List[SubtaskTag] = field(default_factory=list)
 
     semantic_conflicts: List[SemanticConflict] = field(default_factory=list)
     coherence_score: float = 0.0
@@ -236,6 +286,12 @@ class SemanticEnrichmentProposal:
             raise ValueError("validation_status must be pending|passed|failed")
         if self.supervision_hints is None:
             raise ValueError("supervision_hints is required")
+        for tag in self.segment_boundary_tags:
+            if hasattr(tag, "validate"):
+                tag.validate()
+        for tag in self.subtask_tags:
+            if hasattr(tag, "validate"):
+                tag.validate()
 
     def to_jsonl_enrichment(self) -> dict:
         """Convert to merge-ready JSONL enrichment record."""
@@ -248,6 +304,8 @@ class SemanticEnrichmentProposal:
                 "efficiency_tags": [t.to_dict() for t in self.efficiency_tags],
                 "novelty_tags": [t.to_dict() for t in self.novelty_tags],
                 "intervention_tags": [t.to_dict() for t in self.intervention_tags],
+                "segment_boundary_tags": [t.to_dict() for t in self.segment_boundary_tags],
+                "subtask_tags": [t.to_dict() for t in self.subtask_tags],
                 "semantic_conflicts": [c.to_dict() for c in self.semantic_conflicts],
                 "coherence_score": self.coherence_score,
                 "supervision_hints": self.supervision_hints.to_dict(),

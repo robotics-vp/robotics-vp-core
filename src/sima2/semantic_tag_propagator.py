@@ -18,8 +18,10 @@ from src.sima2.tags import (
     InterventionTag,
     NoveltyTag,
     RiskTag,
+    SegmentBoundaryTag,
     SemanticConflict,
     SemanticEnrichmentProposal,
+    SubtaskTag,
     SupervisionHints,
 )
 
@@ -483,12 +485,158 @@ class SupervisionHintsGenerator:
         return " + ".join(reasons) if reasons else "standard training episode"
 
 
+class SegmentationBuilder:
+    """Builds deterministic segment boundaries and subtask tags."""
+
+    def build(self, datapack: Dict[str, Any]) -> Tuple[List[SegmentBoundaryTag], List[SubtaskTag]]:
+        episode_id = datapack.get("episode_id", "")
+        primitives = self._extract_primitives(datapack)
+        if not primitives:
+            primitives = [{"timestep": 0, "object": "unknown", "risk": "low"}]
+        primitives = sorted(primitives, key=lambda p: p.get("timestep", 0))
+
+        segment_boundary_tags: List[SegmentBoundaryTag] = []
+        subtask_tags: List[SubtaskTag] = []
+
+        current_segment = 0
+        current_label = self._label_for_primitive(primitives[0])
+        start_ts = primitives[0].get("timestep", 0)
+        segment_id = self._segment_id(episode_id, current_segment)
+        segment_boundary_tags.append(
+            SegmentBoundaryTag(
+                episode_id=episode_id,
+                segment_id=segment_id,
+                timestep=start_ts,
+                reason="start",
+                subtask_label=current_label,
+            )
+        )
+
+        last_ts = start_ts
+        for idx in range(1, len(primitives)):
+            prim = primitives[idx]
+            ts = prim.get("timestep", last_ts + 1)
+            label = self._label_for_primitive(prim)
+            risk = str(prim.get("risk", "")).lower()
+            risk_jump = risk in {"high", "critical"} and prim.get("risk") != primitives[idx - 1].get("risk")
+            object_change = label != current_label
+            status = str(prim.get("status", "")).lower()
+
+            if object_change or risk_jump:
+                segment_boundary_tags.append(
+                    SegmentBoundaryTag(
+                        episode_id=episode_id,
+                        segment_id=segment_id,
+                        timestep=max(last_ts, ts),
+                        reason="end",
+                        subtask_label=current_label,
+                    )
+                )
+                subtask_tags.append(
+                    SubtaskTag(
+                        episode_id=episode_id,
+                        segment_id=segment_id,
+                        subtask_label=current_label or "unknown_subtask",
+                        parent_segment_id=None,
+                    )
+                )
+                current_segment += 1
+                segment_id = self._segment_id(episode_id, current_segment)
+                segment_boundary_tags.append(
+                    SegmentBoundaryTag(
+                        episode_id=episode_id,
+                        segment_id=segment_id,
+                        timestep=ts,
+                        reason="start",
+                        subtask_label=label,
+                    )
+                )
+                current_label = label
+
+            if status == "failure":
+                segment_boundary_tags.append(
+                    SegmentBoundaryTag(
+                        episode_id=episode_id,
+                        segment_id=segment_id,
+                        timestep=ts,
+                        reason="failure",
+                        subtask_label=current_label,
+                    )
+                )
+            if status == "recovery":
+                segment_boundary_tags.append(
+                    SegmentBoundaryTag(
+                        episode_id=episode_id,
+                        segment_id=segment_id,
+                        timestep=ts,
+                        reason="recovery",
+                        subtask_label=current_label,
+                    )
+                )
+            last_ts = ts
+
+        segment_boundary_tags.append(
+            SegmentBoundaryTag(
+                episode_id=episode_id,
+                segment_id=segment_id,
+                timestep=last_ts if primitives else 0,
+                reason="end",
+                subtask_label=current_label,
+            )
+        )
+        subtask_tags.append(
+            SubtaskTag(
+                episode_id=episode_id,
+                segment_id=segment_id,
+                subtask_label=current_label or "unknown_subtask",
+                parent_segment_id=None,
+            )
+        )
+
+        segment_boundary_tags = sorted(
+            segment_boundary_tags, key=lambda t: (t.timestep, t.segment_id, t.reason)
+        )
+        subtask_tags = sorted(subtask_tags, key=lambda t: (t.segment_id, t.subtask_label))
+        return segment_boundary_tags, subtask_tags
+
+    def _extract_primitives(self, datapack: Dict[str, Any]) -> List[Dict[str, Any]]:
+        primitives = datapack.get("primitives") or datapack.get("primitive_events")
+        if isinstance(primitives, list):
+            return [p for p in primitives if isinstance(p, dict)]
+        metadata = datapack.get("metadata", {}) or {}
+        timeline = metadata.get("semantic_primitives") or metadata.get("primitive_events")
+        if isinstance(timeline, list):
+            return [p for p in timeline if isinstance(p, dict)]
+        return []
+
+    def _label_for_primitive(self, prim: Dict[str, Any]) -> str:
+        obj = str(prim.get("object") or prim.get("focus") or prim.get("object_focus") or "")
+        action = str(prim.get("action") or prim.get("primitive") or "")
+        label_parts: List[str] = []
+        if obj:
+            label_parts.append(obj)
+        if action:
+            label_parts.append(action)
+        label = "_".join([p for p in label_parts if p])
+        if "drawer" in obj:
+            return "drawer_interaction" if not action else f"drawer_{action}"
+        if "vase" in obj:
+            return "vase_handling" if not action else f"vase_{action}"
+        if label:
+            return label
+        return "generic_segment"
+
+    def _segment_id(self, episode_id: str, idx: int) -> str:
+        return f"{episode_id}_seg{idx}"
+
+
 class SemanticTagPropagator:
     """Generates semantic enrichments for datapacks (advisory-only)."""
 
     def __init__(self) -> None:
         self.coherence_checker = CoherenceChecker()
         self.hints_generator = SupervisionHintsGenerator()
+        self.segmentation_builder = SegmentationBuilder()
 
     def generate_proposals(
         self,
@@ -537,6 +685,7 @@ class SemanticTagPropagator:
             efficiency_tags, task_eff_ids = task_graph_matcher.match_efficiencies(datapack_copy)
             novelty_tags = economics_matcher.match_novelty(datapack_copy)
             intervention_tags = self._detect_interventions(datapack_copy)
+            segment_boundary_tags, subtask_tags = self.segmentation_builder.build(datapack_copy)
         except Exception as exc:  # pragma: no cover - defensive
             return self._create_failed_proposal(
                 episode_id, video_id, task, f"Tag generation failed: {exc}"
@@ -548,6 +697,8 @@ class SemanticTagPropagator:
         efficiency_tags.sort(key=lambda t: (t.metric, -t.score))
         novelty_tags.sort(key=lambda t: (-t.novelty_score, t.novelty_type))
         intervention_tags.sort(key=lambda t: t.frame_range[0])
+        segment_boundary_tags.sort(key=lambda t: (t.timestep, t.segment_id, t.reason))
+        subtask_tags.sort(key=lambda t: (t.segment_id, t.subtask_label))
 
         preliminary_hints = self.hints_generator.generate(
             task, fragility_tags, risk_tags, novelty_tags, [], 1.0
@@ -581,6 +732,8 @@ class SemanticTagPropagator:
             "efficiency_tags": [t.to_dict() for t in efficiency_tags],
             "novelty_tags": [t.to_dict() for t in novelty_tags],
             "intervention_tags": [t.to_dict() for t in intervention_tags],
+            "segment_boundary_tags": [t.to_dict() for t in segment_boundary_tags],
+            "subtask_tags": [t.to_dict() for t in subtask_tags],
             "semantic_conflicts": [c.to_dict() for c in conflicts],
             "coherence_score": coherence_score,
             "supervision_hints": supervision_hints.to_dict(),
@@ -605,6 +758,8 @@ class SemanticTagPropagator:
             efficiency_tags=efficiency_tags,
             novelty_tags=novelty_tags,
             intervention_tags=intervention_tags,
+            segment_boundary_tags=segment_boundary_tags,
+            subtask_tags=subtask_tags,
             semantic_conflicts=conflicts,
             coherence_score=coherence_score,
             supervision_hints=supervision_hints,

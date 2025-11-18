@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any
 
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
@@ -32,6 +32,25 @@ def _load_recap_scores(path: Path) -> List[Dict]:
     return scores
 
 
+def _load_jsonl_map(path: Path) -> Dict[str, Any]:
+    if not path or not path.exists():
+        return {}
+    records: Dict[str, Any] = {}
+    with path.open("r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+                ep_id = rec.get("episode_id") or rec.get("episode")
+                if ep_id:
+                    records[str(ep_id)] = rec
+            except Exception:
+                continue
+    return records
+
+
 def _bucket_scores(scores: List[Dict]) -> Dict[str, List[Dict]]:
     buckets = {"low": [], "mid": [], "high": []}
     for s in scores:
@@ -51,12 +70,16 @@ def main():
     parser.add_argument("--task-id", type=str, required=True)
     parser.add_argument("--output-json", type=str, default="")
     parser.add_argument("--recap-scores", type=str, default="", help="Optional path to RECAP episode_scores.jsonl")
+    parser.add_argument("--reward-model-scores", type=str, default="", help="Optional reward model scores JSONL")
+    parser.add_argument("--segmentation-tags", type=str, default="", help="Optional segmentation tags JSONL")
     args = parser.parse_args()
 
     store = OntologyStore(root_dir=args.ontology_root)
-    task_summary = compute_task_econ_summary(store, args.task_id)
+    rm_scores = _load_jsonl_map(Path(args.reward_model_scores)) if args.reward_model_scores else {}
+    seg_tags = _load_jsonl_map(Path(args.segmentation_tags)) if args.segmentation_tags else {}
+    task_summary = compute_task_econ_summary(store, args.task_id, reward_model_scores=rm_scores, segmentation_tags=seg_tags)
     dp_summary = compute_datapack_mix_summary(store, args.task_id)
-    pricing = compute_pricing_snapshot(store, args.task_id)
+    pricing = compute_pricing_snapshot(store, args.task_id, reward_model_scores=rm_scores, segmentation_tags=seg_tags)
     recap_scores = _load_recap_scores(Path(args.recap_scores)) if args.recap_scores else []
 
     print(f"[pricing_report] Task: {task_summary.get('task', {}).get('name', '')} (task_id={args.task_id})")
@@ -67,6 +90,18 @@ def main():
     wp = task_summary.get("wage_parity", {})
     print(f"  Wage parity: mean={wp.get('mean',0):.2f}, p10={wp.get('p10',0):.2f}, p90={wp.get('p90',0):.2f}")
     print(f"  Reward scalar sum mean={task_summary.get('reward_scalar_sum',{}).get('mean',0):.2f}")
+    qa_mpl = task_summary.get("quality_adjusted_mpl", {})
+    if qa_mpl:
+        print(f"  Quality-adjusted MPL: mean={qa_mpl.get('mean',0):.2f}")
+    grades = task_summary.get("quality_grades", {})
+    if grades:
+        print(f"  Quality grade buckets: {grades}")
+    recovery = task_summary.get("recovery_segments", {})
+    if recovery:
+        print(
+            f"  Recovery fraction={recovery.get('mean_recovery_fraction',0):.3f}, "
+            f"fraction_with_recovery={recovery.get('fraction_with_recovery',0):.3f}"
+        )
     print()
     print("[datapack_mix]")
     sources = dp_summary.get("sources", {})
@@ -99,6 +134,8 @@ def main():
                     "datapack_mix": dp_summary,
                     "pricing_snapshot": pricing,
                     "recap_scores": recap_scores,
+                    "reward_model_scores": rm_scores,
+                    "segmentation_tags": seg_tags,
                 },
                 f,
                 indent=2,
