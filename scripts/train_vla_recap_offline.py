@@ -25,6 +25,16 @@ from src.vla.recap_heads import (
     DistributionalValueConfig,
     DistributionalValueHead,
 )
+from src.vla.recap_features import (
+    set_seeds,
+    load_recap_jsonl,
+    infer_metrics,
+    collect_categories,
+    compute_metric_stats,
+    build_feature_vector,
+    quantize_metric,
+    RecapFeatureConfig,
+)
 
 
 @dataclass
@@ -75,75 +85,6 @@ class RecapHeadsModel(nn.Module):
         }
 
 
-def set_seeds(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-
-def _load_recap_jsonl(paths: List[str]) -> List[Dict]:
-    records: List[Dict] = []
-    for path in sorted(paths):
-        with open(path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                records.append(json.loads(line))
-    # Deterministic ordering by (episode_id, timestep, sampler_strategy)
-    records.sort(key=lambda r: (r.get("episode_id", ""), r.get("timestep", 0), r.get("sampler_strategy") or ""))
-    return records
-
-
-def _infer_metrics(records: List[Dict], override: List[str] = None) -> List[str]:
-    if override:
-        return list(override)
-    metrics = set()
-    for rec in records:
-        metrics.update(rec.get("metrics", {}).keys())
-    return sorted(metrics)
-
-
-def _collect_categories(records: List[Dict], field: str) -> List[str]:
-    vals = sorted({rec.get(field) for rec in records if rec.get(field) is not None})
-    return [str(v) for v in vals]
-
-
-def _build_feature_vector(
-    rec: Dict,
-    metrics: List[str],
-    metric_stats: Dict[str, Dict[str, float]],
-    categories: Dict[str, List[str]],
-) -> List[float]:
-    features: List[float] = []
-    metric_values = rec.get("metrics", {}) or {}
-    for m in metrics:
-        stats = metric_stats[m]
-        val = float(metric_values.get(m, 0.0))
-        rng = stats["max"] - stats["min"]
-        norm = 0.0 if rng == 0 else (val - stats["mean"]) / max(rng, 1e-6)
-        features.append(norm)
-
-    for field, cats in categories.items():
-        one_hot = [0.0] * len(cats)
-        if cats:
-            val = rec.get(field)
-            if val is not None and str(val) in cats:
-                idx = cats.index(str(val))
-                one_hot[idx] = 1.0
-        features.extend(one_hot)
-    return features
-
-
-def _quantize_metric(value: float, support: Tuple[float, float], num_atoms: int) -> int:
-    lo, hi = support
-    if hi == lo:
-        return 0
-    pos = (value - lo) / max(hi - lo, 1e-6)
-    pos = min(max(pos, 0.0), 1.0)
-    return int(round(pos * (num_atoms - 1)))
-
-
 def prepare_examples(
     records: List[Dict],
     metrics: List[str],
@@ -151,32 +92,24 @@ def prepare_examples(
     value_config: DistributionalValueConfig,
 ) -> Tuple[List[RecapExample], Dict[str, List[float]]]:
     # Metric stats for normalization and supports
-    metric_stats: Dict[str, Dict[str, float]] = {}
-    for m in metrics:
-        vals = [float((rec.get("metrics", {}) or {}).get(m, 0.0)) for rec in records]
-        vals = vals or [0.0]
-        metric_stats[m] = {
-            "min": min(vals),
-            "max": max(vals),
-            "mean": float(sum(vals) / len(vals)),
-        }
+    metric_stats: Dict[str, Dict[str, float]] = compute_metric_stats(records, metrics)
 
     categories = {
-        "sampler_strategy": _collect_categories(records, "sampler_strategy"),
-        "curriculum_phase": _collect_categories(records, "curriculum_phase"),
-        "objective_preset": _collect_categories(records, "objective_preset"),
+        "sampler_strategy": collect_categories(records, "sampler_strategy"),
+        "curriculum_phase": collect_categories(records, "curriculum_phase"),
+        "objective_preset": collect_categories(records, "objective_preset"),
     }
 
     examples: List[RecapExample] = []
     for rec in records:
-        features = _build_feature_vector(rec, metrics, metric_stats, categories)
+        features = build_feature_vector(rec, metrics, metric_stats, categories)
         adv = float(rec.get("advantage", 0.0))
         adv_bin = advantage_config.compute_bin(adv)
         metric_targets: List[int] = []
         metric_vals = rec.get("metrics", {}) or {}
         for m in metrics:
             support = value_config.value_supports.get(m, (metric_stats[m]["min"], metric_stats[m]["max"]))
-            metric_targets.append(_quantize_metric(float(metric_vals.get(m, 0.0)), support, value_config.num_atoms))
+            metric_targets.append(quantize_metric(float(metric_vals.get(m, 0.0)), support, value_config.num_atoms))
         examples.append(RecapExample(features=features, advantage=adv, advantage_bin=adv_bin, metric_targets=metric_targets))
     return examples, categories
 
@@ -221,12 +154,12 @@ def train_offline(
 ) -> Dict[str, Any]:
     set_seeds(seed)
     device = torch.device("cpu")
-    records = _load_recap_jsonl(dataset_paths)
+    records = load_recap_jsonl(dataset_paths)
     if not records:
         raise ValueError("No records found in provided datasets.")
 
     advantage_bins = advantage_bins or [-1.0, 0.0, 1.0]
-    metrics = _infer_metrics(records, metrics)
+    metrics = infer_metrics(records, metrics)
     adv_config = AdvantageConditioningConfig(advantage_bins=advantage_bins)
 
     # Supports for each metric derived from dataset values
@@ -241,6 +174,8 @@ def train_offline(
 
     dataset = RecapDataset(examples)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, generator=torch.Generator().manual_seed(seed))
+
+    feature_config = RecapFeatureConfig(metrics=metrics, categories=categories, value_supports=supports, num_atoms=num_atoms)
 
     adv_head = AdvantageConditioningHead(adv_config, input_dim=feature_dim, hidden_dim=hidden_dim)
     val_head = DistributionalValueHead(value_config, input_dim=feature_dim, hidden_dim=hidden_dim)
@@ -314,6 +249,8 @@ def train_offline(
             "num_atoms": num_atoms,
             "categories": categories,
             "feature_dim": feature_dim,
+            "value_supports": supports,
+            "hidden_dim": hidden_dim,
             "history": metrics_history,
         },
         ckpt_path,

@@ -51,6 +51,11 @@ def _load_advisories(path: Path) -> List[Dict]:
     return _read_jsonl(path)
 
 
+def _load_recap_scores(path: Path) -> Dict[str, Dict]:
+    scores = _read_jsonl(path)
+    return {s.get("episode_id"): s for s in scores if s.get("episode_id")}
+
+
 def _econ_rows(store: OntologyStore, task_id: str = None) -> List[Dict]:
     episodes = store.list_episodes(task_id=task_id)
     econ_map = {e.episode_id: e for e in store.list_econ_vectors()}
@@ -156,21 +161,34 @@ def run_report(
     semantic_tags_path: str = None,
     advisories_path: str = None,
     output_dir: str = "results/semantic_econ",
+    recap_scores_path: str = None,
 ):
     store = OntologyStore(root_dir=ontology_root)
     rows = _econ_rows(store, task_id=task_id)
     tags_by_ep = _load_semantic_tags(Path(semantic_tags_path)) if semantic_tags_path else {}
     advisories = _load_advisories(Path(advisories_path)) if advisories_path else []
+    recap_scores = _load_recap_scores(Path(recap_scores_path)) if recap_scores_path else {}
     labeled = _label_rows_by_semantics(rows, tags_by_ep)
     advisory_labeled = _label_rows_by_advisory(rows, advisories)
+    recap_buckets = {"high": [], "mid": [], "low": []}
+    for row in rows:
+        score = float(recap_scores.get(row["episode_id"], {}).get("recap_goodness_score", 0.0))
+        if score >= 1.0:
+            recap_buckets["high"].append(row)
+        elif score <= -1.0:
+            recap_buckets["low"].append(row)
+        else:
+            recap_buckets["mid"].append(row)
 
     tag_stats = {k: _summarize(v) for k, v in sorted(labeled.items(), key=lambda kv: kv[0])}
     advisory_stats = {k: _summarize(v) for k, v in sorted(advisory_labeled.items(), key=lambda kv: kv[0])}
+    recap_stats = {k: _summarize(v) for k, v in recap_buckets.items() if v}
     summary = {
         "task_id": task_id,
         "total_episodes": len(rows),
         "tag_summaries": tag_stats,
         "advisory_summaries": advisory_stats,
+        "recap_summaries": recap_stats,
     }
 
     out_dir = Path(output_dir)
@@ -197,6 +215,7 @@ def parse_args():
     parser.add_argument("--semantic-tags", help="Path to Stage 2.4 semantic tag enrichments (JSONL).")
     parser.add_argument("--advisories", help="Path to SemanticOrchestratorV2 advisories (JSONL).")
     parser.add_argument("--output-dir", default="results/semantic_econ", help="Report output directory.")
+    parser.add_argument("--recap-scores", help="Path to RECAP episode_scores.jsonl", default=None)
     return parser.parse_args()
 
 
@@ -208,6 +227,7 @@ def main():
         semantic_tags_path=args.semantic_tags,
         advisories_path=args.advisories,
         output_dir=args.output_dir,
+        recap_scores_path=args.recap_scores,
     )
 
 

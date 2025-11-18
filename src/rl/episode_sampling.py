@@ -22,6 +22,28 @@ from src.utils.json_safe import to_json_safe
 from src.orchestrator.semantic_orchestrator_v2 import OrchestratorAdvisory
 
 
+def _load_recap_scores(path: Optional[str]) -> Dict[str, float]:
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    scores: Dict[str, float] = {}
+    with p.open("r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+                ep = rec.get("episode_id") or rec.get("pack_id")
+                if ep is not None:
+                    scores[str(ep)] = float(rec.get("recap_goodness_score", 0.0))
+            except Exception:
+                continue
+    return scores
+
+
 def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
     """
     Convert a datapack into a lightweight descriptor suitable for an RL sampler.
@@ -179,12 +201,19 @@ class DataPackRLSampler:
         default_strategy: str = "balanced",
         tier_ratios: Optional[Dict[int, float]] = None,
         advisory: Optional[OrchestratorAdvisory] = None,
+        use_recap_weights: bool = False,
+        recap_scores: Optional[Dict[str, float]] = None,
+        recap_scores_path: Optional[str] = None,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
         self.enrichment_map = self._build_enrichment_map(enrichments)
         self._episodes: List[Dict[str, Any]] = []
         self.advisory = advisory
+        self.use_recap_weights = bool(use_recap_weights)
+        provided_scores = recap_scores or {}
+        path_scores = _load_recap_scores(recap_scores_path)
+        self.recap_scores = {**path_scores, **provided_scores}
 
         if datapacks:
             for dp in datapacks:
@@ -271,11 +300,13 @@ class DataPackRLSampler:
             "enrichment": enrichment,
             "source": source,
             "advisory": self.advisory,
+            "recap_goodness_score": self.recap_scores.get(pack_id),
         }
         episode["novelty_score"] = _extract_max_novelty(enrichment)
         episode["expected_mpl_gain"] = _extract_expected_mpl_gain(enrichment)
         episode["frontier_score"] = self._compute_frontier_score(episode)
         episode["econ_urgency_score"] = self._compute_econ_urgency_score(episode)
+        episode["recap_weight_multiplier"] = self._recap_weight_multiplier(episode)
 
         self._episodes.append(episode)
 
@@ -349,7 +380,7 @@ class DataPackRLSampler:
         non_urgent = [ep for ep in self._episodes if ep["frontier_score"] < threshold]
 
         urgent_count = min(max(int(batch_size * 0.7), 1), len(urgent))
-        weights_urgent = [max(ep["frontier_score"], 1e-3) for ep in urgent]
+        weights_urgent = [max(ep["frontier_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in urgent]
         selected = _weighted_sample_without_replacement(urgent, weights_urgent, urgent_count, rng)
 
         remaining = batch_size - len(selected)
@@ -373,7 +404,7 @@ class DataPackRLSampler:
         selected = list(critical_selection)
 
         remaining_urgent = [ep for ep in urgent if ep not in selected]
-        weights_urgent = [max(ep["econ_urgency_score"], 1e-3) for ep in remaining_urgent]
+        weights_urgent = [max(ep["econ_urgency_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in remaining_urgent]
         selected.extend(_weighted_sample_without_replacement(remaining_urgent, weights_urgent, urgent_count - len(selected), rng))
 
         remaining = batch_size - len(selected)
@@ -415,6 +446,19 @@ class DataPackRLSampler:
         econ_signal *= priority_boost * weight_mult
         econ_signal *= (0.6 + 0.4 * trust) * tier_weight
         return max(econ_signal, 0.0)
+
+    def _recap_weight_multiplier(self, episode: Dict[str, Any]) -> float:
+        if not self.use_recap_weights:
+            return 1.0
+        score = episode.get("recap_goodness_score")
+        if score is None:
+            desc = episode.get("descriptor", {})
+            pid = desc.get("pack_id") or desc.get("episode_id")
+            score = self.recap_scores.get(pid)
+        if score is None:
+            return 1.0
+        norm = max(-1.0, min(1.0, float(score) / 5.0))
+        return max(0.8, min(1.2, 1.0 + 0.2 * norm))
 
     def _format_output(self, episode: Dict[str, Any], strategy: str) -> Dict[str, Any]:
         descriptor = copy.deepcopy(episode["descriptor"])
@@ -477,6 +521,7 @@ def _balanced_weight(episode: Dict[str, Any]) -> float:
         tags = desc.get("semantic_tags", []) or []
         if any(tag in advisory.datapack_priority_tags for tag in tags):
             base *= 1.2
+    base *= episode.get("recap_weight_multiplier", 1.0)
     return base
 
 

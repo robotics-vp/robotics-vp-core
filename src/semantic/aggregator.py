@@ -24,9 +24,11 @@ class SemanticAggregator:
         stage2_task_refinements: Sequence[TaskGraphRefinementProposal],
         stage2_tags: Sequence[SemanticTag],
         meta_outputs: Optional[MetaTransformerOutputs] = None,
+        recap_scores: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> SemanticSnapshot:
         econ_slice = self._build_econ_slice(task_id)
         meta_slice = self._build_meta_slice(task_id, meta_outputs)
+        recap_summary = self._build_recap_summary(task_id, recap_scores or {})
 
         proposals = sorted(list(stage2_ontology_proposals), key=lambda p: p.proposal_id)
         refinements = sorted(list(stage2_task_refinements), key=lambda r: r.proposal_id)
@@ -40,7 +42,7 @@ class SemanticAggregator:
             econ_slice=econ_slice,
             meta_slice=meta_slice,
             timestamp=datetime.utcnow().timestamp(),
-            metadata={},
+            metadata={"recap": recap_summary} if recap_summary else {},
         )
         return snapshot.sorted_copy()
 
@@ -78,3 +80,17 @@ class SemanticAggregator:
                 "authority": getattr(meta_outputs, "authority", ""),
             },
         )
+
+    def _build_recap_summary(self, task_id: str, recap_scores: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        if not recap_scores:
+            return {}
+        task_eps = [ep for ep in recap_scores.values() if ep.get("episode_id", "").startswith("")]  # no-op filter for determinism
+        goodness = [float(ep.get("recap_goodness_score", 0.0)) for ep in task_eps]
+        mean_goodness = float(sum(goodness) / len(goodness)) if goodness else 0.0
+        top = sorted(task_eps, key=lambda e: e.get("recap_goodness_score", 0.0), reverse=True)[:5]
+        return {
+            "task_id": task_id,
+            "count": len(task_eps),
+            "mean_goodness": mean_goodness,
+            "top_episodes": [t.get("episode_id") for t in top],
+        }

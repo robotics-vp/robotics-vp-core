@@ -41,6 +41,7 @@ class SemanticOrchestratorV2:
 
         safety_emphasis = 0.3
         priority_tags: List[str] = []
+        recap = snapshot.metadata.get("recap", {}) if snapshot.metadata else {}
         for tag in snapshot.semantic_tags:
             try:
                 enrichment = tag.to_dict()
@@ -54,6 +55,15 @@ class SemanticOrchestratorV2:
             except Exception:
                 continue
         priority_tags = sorted(list(set(priority_tags)))
+        if recap:
+            mean_good = float(recap.get("mean_goodness", 0.0))
+            if mean_good > 0:
+                strategy_overrides["frontier_prioritized"] = min(1.0, strategy_overrides.get("frontier_prioritized", 0.3) + 0.1)
+            if mean_good < 0:
+                strategy_overrides["balanced"] = min(1.0, strategy_overrides.get("balanced", 0.5) + 0.1)
+            if recap.get("top_episodes"):
+                priority_tags.append("recap_top")
+            priority_tags = sorted(list(set(priority_tags)))
 
         advisory = OrchestratorAdvisory(
             task_id=snapshot.task_id,
@@ -61,7 +71,7 @@ class SemanticOrchestratorV2:
             sampler_strategy_overrides=strategy_overrides,
             datapack_priority_tags=priority_tags,
             safety_emphasis=float(min(max(safety_emphasis, 0.0), 1.0)),
-            metadata={"frontier_eps": econ.frontier_episodes},
+            metadata={"frontier_eps": econ.frontier_episodes, "recap": recap},
         )
         if self.write_to_file:
             self._write_advisory(advisory)

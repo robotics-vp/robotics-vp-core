@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Dict, List
 
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
@@ -18,17 +19,45 @@ from src.analytics.econ_reports import (
 from src.ontology.store import OntologyStore
 
 
+def _load_recap_scores(path: Path) -> List[Dict]:
+    if not path or not path.exists():
+        return []
+    scores = []
+    with path.open("r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            scores.append(json.loads(line))
+    return scores
+
+
+def _bucket_scores(scores: List[Dict]) -> Dict[str, List[Dict]]:
+    buckets = {"low": [], "mid": [], "high": []}
+    for s in scores:
+        val = float(s.get("recap_goodness_score", 0.0))
+        if val >= 1.0:
+            buckets["high"].append(s)
+        elif val <= -1.0:
+            buckets["low"].append(s)
+        else:
+            buckets["mid"].append(s)
+    return buckets
+
+
 def main():
     parser = argparse.ArgumentParser(description="Report task pricing and performance from ontology")
     parser.add_argument("--ontology-root", type=str, default="data/ontology")
     parser.add_argument("--task-id", type=str, required=True)
     parser.add_argument("--output-json", type=str, default="")
+    parser.add_argument("--recap-scores", type=str, default="", help="Optional path to RECAP episode_scores.jsonl")
     args = parser.parse_args()
 
     store = OntologyStore(root_dir=args.ontology_root)
     task_summary = compute_task_econ_summary(store, args.task_id)
     dp_summary = compute_datapack_mix_summary(store, args.task_id)
     pricing = compute_pricing_snapshot(store, args.task_id)
+    recap_scores = _load_recap_scores(Path(args.recap_scores)) if args.recap_scores else []
 
     print(f"[pricing_report] Task: {task_summary.get('task', {}).get('name', '')} (task_id={args.task_id})")
     task = task_summary.get("task", {})
@@ -53,6 +82,14 @@ def main():
     print(f"  Robot unit cost: ${pricing.get('robot_unit_cost',0):.4f}")
     print(f"  Implied spread: ${pricing.get('implied_spread_per_unit',0):.4f} per unit")
     print(f"  Rough datapack price floor: ${pricing.get('datapack_price_floor',0):.4f}")
+    if recap_scores:
+        buckets = _bucket_scores(recap_scores)
+        print("\n[recap_alignment]")
+        for name, rows in buckets.items():
+            if not rows:
+                continue
+            mean_score = sum(float(r.get("recap_goodness_score", 0.0)) for r in rows) / len(rows)
+            print(f"  bucket={name}: count={len(rows)}, mean_recap_goodness={mean_score:.4f}")
 
     if args.output_json:
         with open(args.output_json, "w") as f:
@@ -61,6 +98,7 @@ def main():
                     "task_summary": task_summary,
                     "datapack_mix": dp_summary,
                     "pricing_snapshot": pricing,
+                    "recap_scores": recap_scores,
                 },
                 f,
                 indent=2,
