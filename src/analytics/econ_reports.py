@@ -63,6 +63,9 @@ def compute_task_econ_summary(
     energy_costs: List[float] = []
     damage_costs: List[float] = []
     rewards: List[float] = []
+    mobility_penalties: List[float] = []
+    precision_bonuses: List[float] = []
+    stability_risks: List[float] = []
     sampler_counts: Dict[str, int] = {}
     phase_counts: Dict[str, int] = {}
     successes = 0
@@ -85,6 +88,9 @@ def compute_task_econ_summary(
             energy_costs.append(ev.energy_cost)
             damage_costs.append(ev.damage_cost)
             rewards.append(ev.reward_scalar_sum)
+            mobility_penalties.append(getattr(ev, "mobility_penalty", 0.0))
+            precision_bonuses.append(getattr(ev, "precision_bonus", 0.0))
+            stability_risks.append(getattr(ev, "stability_risk_score", 0.0))
             rm = rm_scores.get(ep.episode_id, {})
             qual = float(rm.get("quality_score", rm.get("quality", 0.0))) if rm else 0.0
             err_prob = float(rm.get("error_probability", 0.0)) if rm else 0.0
@@ -151,6 +157,12 @@ def compute_task_econ_summary(
         "sampler_counts": sampler_counts,
         "curriculum_phase_counts": phase_counts,
     }
+    if mobility_penalties:
+        summary["mobility_penalty"] = {"mean": float(sum(mobility_penalties) / len(mobility_penalties)), **_percentiles(mobility_penalties)}
+    if precision_bonuses:
+        summary["precision_bonus"] = {"mean": float(sum(precision_bonuses) / len(precision_bonuses)), **_percentiles(precision_bonuses)}
+    if stability_risks:
+        summary["stability_risk_score"] = {"mean": float(sum(stability_risks) / len(stability_risks)), **_percentiles(stability_risks)}
     if quality_adjusted_mpl:
         summary["quality_adjusted_mpl"] = {
             "mean": float(sum(quality_adjusted_mpl) / len(quality_adjusted_mpl)),

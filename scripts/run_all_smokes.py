@@ -35,6 +35,7 @@ SMOKES = [
     ["python3", "scripts/smoke_test_episode_logging_and_econ_vector.py"],
     ["python3", "scripts/smoke_test_econ_reports.py"],
     ["python3", "scripts/smoke_test_reward_model_econ_integration.py"],
+    ["python3", "scripts/smoke_test_mobility_policies.py"],
     ["python3", "scripts/smoke_test_stage3_ontology_integration.py"],
     ["python3", "scripts/smoke_test_physics_backend_contract.py"],
     ["python3", "scripts/smoke_test_semantic_aggregator.py"],

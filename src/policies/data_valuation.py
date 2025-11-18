@@ -68,6 +68,10 @@ class HeuristicDataValuationPolicy(DataValuationPolicy):
         trust_score = _safe_float(features.get("trust_score"), 0.0)
         w_econ = _safe_float(features.get("w_econ"), 0.0)
         valuation = quality_score if quality_score is not None else trust_score * w_econ
+        econ_slice = features.get("econ_slice") or {}
+        mobility_penalty = _safe_float(econ_slice.get("mobility_penalty", {}).get("mean") if isinstance(econ_slice, dict) else 0.0)
+        if mobility_penalty:
+            valuation = max(0.0, valuation - 0.1 * mobility_penalty)
         valuation = _safe_float(valuation)
         metadata = {
             "novelty_score": _safe_float(features.get("novelty_score")),

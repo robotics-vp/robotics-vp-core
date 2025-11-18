@@ -126,6 +126,7 @@ def train_sac(
     sampler: DataPackRLSampler = None,
     curriculum: DataPackCurriculum = None,
     physics_backend: str = "pybullet",
+    use_mobility_policy: bool = False,
 ):
     """Train SAC agent with economic objectives."""
 
@@ -164,7 +165,7 @@ def train_sac(
     print(f"Using device: {device}")
 
     # Environment / physics backend
-    backend = make_backend(physics_backend, {"econ_preset": econ_preset})
+    backend = make_backend(physics_backend, {"econ_preset": econ_preset, "use_mobility_policy": use_mobility_policy})
     env = backend.env if hasattr(backend, "env") else DishwashingEnv(econ_params)
 
     # Encoder (with auxiliary heads)
@@ -511,6 +512,7 @@ if __name__ == "__main__":
     parser.add_argument("--curriculum-total-steps", type=int, default=None, help="Override total steps for curriculum phase boundaries")
     parser.add_argument("--curriculum-config", type=str, default="", help="Optional JSON file overriding curriculum boundaries/mix")
     parser.add_argument("--physics-backend", type=str, default="pybullet", choices=["pybullet", "isaac_stub"], help="Physics backend selection (pybullet default)")
+    parser.add_argument("--use-mobility-policy", action="store_true", help="Enable advisory mobility micro-policy in physics backends")
     parser.add_argument("--log-path", type=str, default="logs/sac_train.csv")
     parser.add_argument("--checkpoint-path", type=str, default="checkpoints/sac_final.pt")
     args = parser.parse_args()
@@ -531,4 +533,5 @@ if __name__ == "__main__":
         log_path=args.log_path,
         checkpoint_path=args.checkpoint_path,
         physics_backend=args.physics_backend,
+        use_mobility_policy=args.use_mobility_policy,
     )

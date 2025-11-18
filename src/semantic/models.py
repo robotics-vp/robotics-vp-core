@@ -65,6 +65,8 @@ class SemanticSnapshot:
     num_segments: int = 0
     segment_types: Dict[str, int] = field(default_factory=dict)
     subtask_label_histogram: Dict[str, int] = field(default_factory=dict)
+    mobility_drift_rate: float = 0.0
+    recovery_segment_fraction: float = 0.0
     timestamp: float = field(default_factory=lambda: time())
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -79,6 +81,8 @@ class SemanticSnapshot:
             num_segments=self.num_segments,
             segment_types=dict(self.segment_types),
             subtask_label_histogram=dict(self.subtask_label_histogram),
+            mobility_drift_rate=self.mobility_drift_rate,
+            recovery_segment_fraction=self.recovery_segment_fraction,
             timestamp=self.timestamp,
             metadata=self.metadata,
         )
@@ -96,6 +100,8 @@ class SemanticSnapshot:
                 "num_segments": snap.num_segments,
                 "segment_types": snap.segment_types,
                 "subtask_label_histogram": snap.subtask_label_histogram,
+                "mobility_drift_rate": snap.mobility_drift_rate,
+                "recovery_segment_fraction": snap.recovery_segment_fraction,
                 "timestamp": snap.timestamp,
                 "metadata": snap.metadata,
             }
@@ -113,6 +119,8 @@ class SemanticSnapshot:
             num_segments=int(d.get("num_segments", 0)),
             segment_types=d.get("segment_types", {}),
             subtask_label_histogram=d.get("subtask_label_histogram", {}),
+            mobility_drift_rate=float(d.get("mobility_drift_rate", 0.0)),
+            recovery_segment_fraction=float(d.get("recovery_segment_fraction", 0.0)),
             timestamp=d.get("timestamp", time()),
             metadata=d.get("metadata", {}),
         )

@@ -36,6 +36,7 @@ class SemanticAggregator:
         refinements = sorted(list(stage2_task_refinements), key=lambda r: r.proposal_id)
         tags = sorted(list(stage2_tags), key=lambda t: getattr(t, "proposal_id", repr(t)))
         segments_summary = self._build_segmentation_summary(tags)
+        mobility_summary = self._build_mobility_summary(tags, segments_summary)
 
         snapshot = SemanticSnapshot(
             task_id=task_id,
@@ -47,6 +48,8 @@ class SemanticAggregator:
             num_segments=segments_summary["num_segments"],
             segment_types=segments_summary["segment_types"],
             subtask_label_histogram=segments_summary["subtask_label_histogram"],
+            mobility_drift_rate=mobility_summary["mobility_drift_rate"],
+            recovery_segment_fraction=mobility_summary["recovery_segment_fraction"],
             timestamp=datetime.utcnow().timestamp(),
             metadata={"recap": recap_summary} if recap_summary else {},
         )
@@ -145,4 +148,25 @@ class SemanticAggregator:
             "num_segments": len(segment_ids),
             "segment_types": dict(sorted(segment_types.items(), key=lambda kv: kv[0])),
             "subtask_label_histogram": dict(sorted(subtask_hist.items(), key=lambda kv: kv[0])),
+        }
+
+    def _build_mobility_summary(self, tags: Sequence[Any], segments_summary: Dict[str, Any]) -> Dict[str, float]:
+        drift_rates = []
+        recoveries = segments_summary.get("segment_types", {}).get("recovery", 0)
+        total_segments = max(segments_summary.get("num_segments", 0), 1)
+
+        for tag in tags:
+            mobility_tags = getattr(tag, "precision_tolerance_tags", None)
+            if mobility_tags is None and isinstance(tag, dict):
+                mobility_tags = tag.get("precision_tolerance_tags")
+            mobility_tags = mobility_tags or []
+            for mt in mobility_tags:
+                achieved = getattr(mt, "achieved_mm", None) or (mt.get("achieved_mm") if isinstance(mt, dict) else 0.0)
+                target = getattr(mt, "target_mm", None) or (mt.get("target_mm") if isinstance(mt, dict) else 1.0)
+                drift = max(float(achieved) - float(target), 0.0)
+                drift_rates.append(drift / max(float(target), 1.0))
+        drift_rate = float(sum(drift_rates) / len(drift_rates)) if drift_rates else 0.0
+        return {
+            "mobility_drift_rate": drift_rate,
+            "recovery_segment_fraction": float(recoveries / total_segments) if total_segments else 0.0,
         }

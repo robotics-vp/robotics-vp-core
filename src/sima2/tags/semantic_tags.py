@@ -21,6 +21,9 @@ _REPLAY_FREQUENCY = {"standard", "frequent", "rare"}
 _CURRICULUM_STAGES = {"early", "mid", "late", "advanced"}
 _PRIORITY_LEVELS = {"low", "medium", "high", "critical"}
 _SEGMENT_REASONS = {"start", "end", "failure", "recovery"}
+_MOBILITY_RISK = {"LOW", "MEDIUM", "HIGH"}
+_CONTACT_QUALITY = {"GOOD", "UNCERTAIN", "POOR"}
+_PRECISION_GRADES = {"GRADE_3", "GRADE_5", "FAILED"}
 
 
 def _as_json_dict(data):
@@ -247,6 +250,72 @@ class SubtaskTag:
 
 
 @dataclass
+class MobilityRiskTag:
+    level: str  # "LOW" | "MEDIUM" | "HIGH"
+    reason: str
+    stability_margin_mean: float
+    stability_margin_min: float
+
+    def __post_init__(self) -> None:
+        if self.level not in _MOBILITY_RISK:
+            raise ValueError(f"Invalid mobility risk level: {self.level}")
+        self.stability_margin_mean = float(max(min(self.stability_margin_mean, 1.0), 0.0))
+        self.stability_margin_min = float(max(min(self.stability_margin_min, 1.0), 0.0))
+
+    def to_dict(self) -> dict:
+        return _as_json_dict(self)
+
+
+@dataclass
+class ContactQualityTag:
+    quality: str  # "GOOD" | "UNCERTAIN" | "POOR"
+    slip_frequency: float
+    grasp_fail_rate: float
+
+    def __post_init__(self) -> None:
+        if self.quality not in _CONTACT_QUALITY:
+            raise ValueError(f"Invalid contact quality: {self.quality}")
+        self.slip_frequency = float(max(self.slip_frequency, 0.0))
+        self.grasp_fail_rate = float(max(self.grasp_fail_rate, 0.0))
+
+    def to_dict(self) -> dict:
+        return _as_json_dict(self)
+
+
+@dataclass
+class PrecisionToleranceTag:
+    target_mm: float
+    achieved_mm: float
+    grade: str  # "GRADE_3" | "GRADE_5" | "FAILED"
+    economic_importance: float
+
+    def __post_init__(self) -> None:
+        if self.grade not in _PRECISION_GRADES:
+            raise ValueError(f"Invalid precision grade: {self.grade}")
+        self.target_mm = float(max(self.target_mm, 0.0))
+        self.achieved_mm = float(max(self.achieved_mm, 0.0))
+        self.economic_importance = float(max(self.economic_importance, 0.0))
+
+    def to_dict(self) -> dict:
+        return _as_json_dict(self)
+
+
+@dataclass
+class RecoveryPatternTag:
+    recovery_rate: float
+    catastrophic_recovery_rate: float
+    mean_recovery_time_steps: float
+
+    def __post_init__(self) -> None:
+        self.recovery_rate = float(max(self.recovery_rate, 0.0))
+        self.catastrophic_recovery_rate = float(max(self.catastrophic_recovery_rate, 0.0))
+        self.mean_recovery_time_steps = float(max(self.mean_recovery_time_steps, 0.0))
+
+    def to_dict(self) -> dict:
+        return _as_json_dict(self)
+
+
+@dataclass
 class SemanticEnrichmentProposal:
     """Complete semantic enrichment (advisory-only) for a datapack episode."""
 
@@ -264,6 +333,10 @@ class SemanticEnrichmentProposal:
     intervention_tags: List[InterventionTag] = field(default_factory=list)
     segment_boundary_tags: List[SegmentBoundaryTag] = field(default_factory=list)
     subtask_tags: List[SubtaskTag] = field(default_factory=list)
+    mobility_risk_tags: List[MobilityRiskTag] = field(default_factory=list)
+    contact_quality_tags: List[ContactQualityTag] = field(default_factory=list)
+    precision_tolerance_tags: List[PrecisionToleranceTag] = field(default_factory=list)
+    recovery_pattern_tags: List[RecoveryPatternTag] = field(default_factory=list)
 
     semantic_conflicts: List[SemanticConflict] = field(default_factory=list)
     coherence_score: float = 0.0
@@ -306,6 +379,10 @@ class SemanticEnrichmentProposal:
                 "intervention_tags": [t.to_dict() for t in self.intervention_tags],
                 "segment_boundary_tags": [t.to_dict() for t in self.segment_boundary_tags],
                 "subtask_tags": [t.to_dict() for t in self.subtask_tags],
+                "mobility_risk_tags": [t.to_dict() for t in self.mobility_risk_tags],
+                "contact_quality_tags": [t.to_dict() for t in self.contact_quality_tags],
+                "precision_tolerance_tags": [t.to_dict() for t in self.precision_tolerance_tags],
+                "recovery_pattern_tags": [t.to_dict() for t in self.recovery_pattern_tags],
                 "semantic_conflicts": [c.to_dict() for c in self.semantic_conflicts],
                 "coherence_score": self.coherence_score,
                 "supervision_hints": self.supervision_hints.to_dict(),

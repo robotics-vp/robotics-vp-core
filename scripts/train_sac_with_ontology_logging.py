@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--ontology-root", type=str, default="data/ontology")
     parser.add_argument("--task-id", type=str, default="task_dishwashing")
     parser.add_argument("--robot-id", type=str, default="robot_sac")
+    parser.add_argument("--use-mobility-policy", action="store_true", help="Enable advisory mobility micro-policy (stub)")
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)

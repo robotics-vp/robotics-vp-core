@@ -30,15 +30,25 @@ def build_recap_dataset(
             events = events_by_ep.get(ep.episode_id, [])
             for evt in events:
                 advantage = float(evt.reward_scalar - reward_mean)
+                metrics = dict(evt.reward_components)
+                metrics["mobility_penalty"] = getattr(econ, "mobility_penalty", 0.0) if econ else 0.0
+                metrics["precision_bonus"] = getattr(econ, "precision_bonus", 0.0) if econ else 0.0
+                metrics["stability_risk_score"] = getattr(econ, "stability_risk_score", 0.0) if econ else 0.0
                 entry = {
                     "task_id": task_id,
                     "episode_id": ep.episode_id,
                     "timestep": evt.timestep,
                     "advantage": advantage,
-                    "metrics": evt.reward_components,
+                    "metrics": metrics,
                     "sampler_strategy": ep.metadata.get("sampling_metadata", {}).get("strategy") if ep.metadata else None,
                     "curriculum_phase": ep.metadata.get("metadata", {}).get("curriculum_phase") if hasattr(ep, "metadata") else None,
                     "objective_preset": ep.metadata.get("objective_preset") if ep.metadata else None,
+                    "mobility_penalty": getattr(econ, "mobility_penalty", 0.0) if econ else 0.0,
+                    "precision_bonus": getattr(econ, "precision_bonus", 0.0) if econ else 0.0,
+                    "stability_risk_score": getattr(econ, "stability_risk_score", 0.0) if econ else 0.0,
                 }
+                mob_meta = evt.metadata.get("mobility_adjustment", {}) if hasattr(evt, "metadata") else {}
+                if mob_meta:
+                    entry["mobility_adjustment"] = mob_meta
                 f.write(json.dumps(entry, sort_keys=True))
                 f.write("\n")

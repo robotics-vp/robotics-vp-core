@@ -23,6 +23,10 @@ from src.sima2.tags import (
     SemanticEnrichmentProposal,
     SubtaskTag,
     SupervisionHints,
+    MobilityRiskTag,
+    ContactQualityTag,
+    PrecisionToleranceTag,
+    RecoveryPatternTag,
 )
 
 FORBIDDEN_FIELDS = {
@@ -649,6 +653,7 @@ class SemanticTagPropagator:
         ontology_matcher = OntologyMatcher(ontology_proposals)
         task_graph_matcher = TaskGraphMatcher(task_graph_proposals)
         economics_matcher = EconomicsMatcher(economics_outputs)
+        segmentation_builder = self.segmentation_builder
 
         proposals: List[SemanticEnrichmentProposal] = []
         for datapack in sorted_datapacks:
@@ -686,6 +691,7 @@ class SemanticTagPropagator:
             novelty_tags = economics_matcher.match_novelty(datapack_copy)
             intervention_tags = self._detect_interventions(datapack_copy)
             segment_boundary_tags, subtask_tags = self.segmentation_builder.build(datapack_copy)
+            mobility_risk_tags, contact_quality_tags, precision_tolerance_tags, recovery_pattern_tags = self._infer_mobility_tags(datapack_copy, segment_boundary_tags)
         except Exception as exc:  # pragma: no cover - defensive
             return self._create_failed_proposal(
                 episode_id, video_id, task, f"Tag generation failed: {exc}"
@@ -699,6 +705,10 @@ class SemanticTagPropagator:
         intervention_tags.sort(key=lambda t: t.frame_range[0])
         segment_boundary_tags.sort(key=lambda t: (t.timestep, t.segment_id, t.reason))
         subtask_tags.sort(key=lambda t: (t.segment_id, t.subtask_label))
+        mobility_risk_tags.sort(key=lambda t: t.level)
+        contact_quality_tags.sort(key=lambda t: t.quality)
+        precision_tolerance_tags.sort(key=lambda t: (t.grade, t.target_mm))
+        recovery_pattern_tags.sort(key=lambda t: t.recovery_rate)
 
         preliminary_hints = self.hints_generator.generate(
             task, fragility_tags, risk_tags, novelty_tags, [], 1.0
@@ -734,6 +744,10 @@ class SemanticTagPropagator:
             "intervention_tags": [t.to_dict() for t in intervention_tags],
             "segment_boundary_tags": [t.to_dict() for t in segment_boundary_tags],
             "subtask_tags": [t.to_dict() for t in subtask_tags],
+            "mobility_risk_tags": [t.to_dict() for t in mobility_risk_tags],
+            "contact_quality_tags": [t.to_dict() for t in contact_quality_tags],
+            "precision_tolerance_tags": [t.to_dict() for t in precision_tolerance_tags],
+            "recovery_pattern_tags": [t.to_dict() for t in recovery_pattern_tags],
             "semantic_conflicts": [c.to_dict() for c in conflicts],
             "coherence_score": coherence_score,
             "supervision_hints": supervision_hints.to_dict(),
@@ -760,6 +774,10 @@ class SemanticTagPropagator:
             intervention_tags=intervention_tags,
             segment_boundary_tags=segment_boundary_tags,
             subtask_tags=subtask_tags,
+            mobility_risk_tags=mobility_risk_tags,
+            contact_quality_tags=contact_quality_tags,
+            precision_tolerance_tags=precision_tolerance_tags,
+            recovery_pattern_tags=recovery_pattern_tags,
             semantic_conflicts=conflicts,
             coherence_score=coherence_score,
             supervision_hints=supervision_hints,
@@ -955,6 +973,78 @@ class SemanticTagPropagator:
             parts.append(f"{high_novelty[0].novelty_type} novelty")
         parts.append(f"priority={hints.priority_level}")
         return ", ".join(parts)
+
+    def _infer_mobility_tags(
+        self, datapack: Dict[str, Any], segment_boundaries: List[SegmentBoundaryTag]
+    ) -> Tuple[List[MobilityRiskTag], List[ContactQualityTag], List[PrecisionToleranceTag], List[RecoveryPatternTag]]:
+        md = datapack.get("metadata", {}) or {}
+        mobility_meta = md.get("mobility", {})
+        stability_history = mobility_meta.get("stability_margins", [])
+        slip_history = mobility_meta.get("slip_rates", [])
+        precision_target = float(mobility_meta.get("target_precision_mm", 5.0))
+        achieved_precision = float(mobility_meta.get("achieved_precision_mm", precision_target))
+        recovery_flags = mobility_meta.get("recovery_flags", [])
+
+        stability_mean = float(sum(stability_history) / len(stability_history)) if stability_history else 1.0
+        stability_min = float(min(stability_history)) if stability_history else 1.0
+        level = "LOW"
+        if stability_min < 0.3:
+            level = "HIGH"
+        elif stability_min < 0.6:
+            level = "MEDIUM"
+        mobility_risk_tags = [
+            MobilityRiskTag(
+                level=level,
+                reason="stability_margin",
+                stability_margin_mean=stability_mean,
+                stability_margin_min=stability_min,
+            )
+        ]
+
+        slip_freq = float(sum(1 for s in slip_history if s > 0.1) / max(len(slip_history), 1)) if slip_history else 0.0
+        grasp_fail_rate = float(mobility_meta.get("grasp_fail_rate", 0.0))
+        quality = "GOOD"
+        if slip_freq > 0.3 or grasp_fail_rate > 0.2:
+            quality = "POOR"
+        elif slip_freq > 0.1:
+            quality = "UNCERTAIN"
+        contact_quality_tags = [
+            ContactQualityTag(
+                quality=quality,
+                slip_frequency=slip_freq,
+                grasp_fail_rate=grasp_fail_rate,
+            )
+        ]
+
+        grade = "FAILED"
+        if achieved_precision <= precision_target:
+            grade = "GRADE_5" if precision_target <= 5.0 else "GRADE_3"
+        elif achieved_precision <= precision_target * 1.5:
+            grade = "GRADE_3"
+        precision_tolerance_tags = [
+            PrecisionToleranceTag(
+                target_mm=precision_target,
+                achieved_mm=achieved_precision,
+                grade=grade,
+                economic_importance=float(mobility_meta.get("economic_importance", 1.0)),
+            )
+        ]
+
+        recovery_events = [b for b in segment_boundaries if b.reason in {"recovery", "failure"}]
+        seg_ids = {b.segment_id for b in segment_boundaries} or {""}
+        recovery_rate = float(len(recovery_events) / max(len(seg_ids), 1))
+        catastrophic_recovery_rate = float(sum(1 for b in recovery_events if b.reason == "failure") / max(len(seg_ids), 1))
+        recovery_pattern_tags = [
+            RecoveryPatternTag(
+                recovery_rate=recovery_rate,
+                catastrophic_recovery_rate=catastrophic_recovery_rate,
+                mean_recovery_time_steps=float(sum(b.timestep for b in recovery_events) / max(len(recovery_events), 1))
+                if recovery_events
+                else 0.0,
+            )
+        ]
+
+        return mobility_risk_tags, contact_quality_tags, precision_tolerance_tags, recovery_pattern_tags
 
     def _create_failed_proposal(
         self, episode_id: str, video_id: str, task: str, error: str

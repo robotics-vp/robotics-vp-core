@@ -61,9 +61,30 @@ class RewardEngine:
             pass
         novelty_delta = max(e.reward_components.get("novelty_bonus", 0.0) for e in events) if events else 0.0
         components_agg: Dict[str, float] = {}
+        mobility_penalty = 0.0
+        precision_bonus = 0.0
+        stability_risk_score = 0.0
+        stability_vals = []
+        recovery_events = 0
         for e in events:
             for k, v in e.reward_components.items():
                 components_agg[k] = components_agg.get(k, 0.0) + self._safe_float(v)
+            md = getattr(e, "metadata", {}) or {}
+            mobility = md.get("mobility_adjustment", {}) if isinstance(md, dict) else {}
+            recovery_required = mobility.get("recovery_required") if isinstance(mobility, dict) else None
+            stability_margin = mobility.get("metadata", {}).get("stability_margin") if isinstance(mobility, dict) else None
+            precision_gate = mobility.get("precision_gate_passed") if isinstance(mobility, dict) else None
+            if recovery_required:
+                mobility_penalty += 1.0
+                recovery_events += 1
+            if stability_margin is not None:
+                stability_vals.append(self._safe_float(stability_margin))
+            if precision_gate is False:
+                mobility_penalty += 0.5
+            if precision_gate is True and mobility.get("metadata", {}).get("drift_mm") is not None:
+                precision_bonus += max(0.0, 1.0 - self._safe_float(mobility.get("metadata", {}).get("drift_mm") / 10.0))
+        if stability_vals:
+            stability_risk_score = 1.0 - min(1.0, sum(stability_vals) / len(stability_vals))
 
         return EconVector(
             episode_id=episode.episode_id,
@@ -73,11 +94,15 @@ class RewardEngine:
             damage_cost=damage_cost,
             novelty_delta=novelty_delta,
             reward_scalar_sum=reward_scalar_sum,
+            mobility_penalty=mobility_penalty,
+            precision_bonus=precision_bonus,
+            stability_risk_score=stability_risk_score,
             components=components_agg,
             metadata={
                 "task_id": episode.task_id,
                 "robot_id": episode.robot_id,
                 "computed_at": datetime.utcnow().isoformat(),
+                "recovery_events": recovery_events,
             },
         )
 

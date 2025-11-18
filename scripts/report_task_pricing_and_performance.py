@@ -96,6 +96,12 @@ def main():
     grades = task_summary.get("quality_grades", {})
     if grades:
         print(f"  Quality grade buckets: {grades}")
+    if task_summary.get("mobility_penalty"):
+        print(f"  Mobility penalty mean={task_summary['mobility_penalty'].get('mean',0):.3f}")
+    if task_summary.get("precision_bonus"):
+        print(f"  Precision bonus mean={task_summary['precision_bonus'].get('mean',0):.3f}")
+    if task_summary.get("stability_risk_score"):
+        print(f"  Stability risk mean={task_summary['stability_risk_score'].get('mean',0):.3f}")
     recovery = task_summary.get("recovery_segments", {})
     if recovery:
         print(

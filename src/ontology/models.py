@@ -64,6 +64,9 @@ class EconVector:
     damage_cost: float
     novelty_delta: float
     reward_scalar_sum: float
+    mobility_penalty: float = 0.0
+    precision_bonus: float = 0.0
+    stability_risk_score: float = 0.0
     components: Dict[str, float] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
 

@@ -69,7 +69,14 @@ class SemanticOrchestratorV2:
             "num_segments": getattr(snapshot, "num_segments", 0),
             "segment_types": getattr(snapshot, "segment_types", {}),
             "subtask_label_histogram": getattr(snapshot, "subtask_label_histogram", {}),
+            "mobility_drift_rate": getattr(snapshot, "mobility_drift_rate", 0.0),
+            "recovery_segment_fraction": getattr(snapshot, "recovery_segment_fraction", 0.0),
         }
+        mobility_priority = "MEDIUM"
+        if segmentation_meta["recovery_segment_fraction"] > 0.2 or segmentation_meta["mobility_drift_rate"] > 0.5:
+            mobility_priority = "HIGH"
+        if segmentation_meta["mobility_drift_rate"] < 0.1:
+            mobility_priority = "LOW"
 
         advisory = OrchestratorAdvisory(
             task_id=snapshot.task_id,
@@ -81,6 +88,7 @@ class SemanticOrchestratorV2:
                 "frontier_eps": econ.frontier_episodes,
                 "recap": recap,
                 "segmentation": segmentation_meta,
+                "mobility_priority": mobility_priority,
             },
         )
         if self.write_to_file:
