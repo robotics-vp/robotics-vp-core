@@ -197,3 +197,28 @@ def _sort_primitives_deterministically(primitives: List[SemanticPrimitive]) -> L
             p.primitive_id or "",
         ),
     )
+
+
+class SemanticPrimitiveExtractor:
+    """Lightweight wrapper to extract primitives from multiple rollouts."""
+
+    def extract(self, rollouts: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        primitives: List[Dict[str, Any]] = []
+        for rollout in rollouts:
+            prims = extract_primitives_from_rollout(rollout)
+            for prim in prims:
+                primitives.append(
+                    {
+                        "episode_id": rollout.get("episode_id"),
+                        "task": rollout.get("task"),
+                        "primitive_id": prim.primitive_id,
+                        "task_type": prim.task_type,
+                        "tags": prim.tags,
+                        "risk_level": prim.risk_level,
+                        "energy_intensity": prim.energy_intensity,
+                        "success_rate": prim.success_rate,
+                        "avg_steps": prim.avg_steps,
+                        "source": prim.source,
+                    }
+                )
+        return sorted(primitives, key=lambda p: (p.get("episode_id", ""), p.get("primitive_id", "")))
