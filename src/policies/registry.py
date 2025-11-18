@@ -20,7 +20,9 @@ from src.policies.orchestrator_policy import HeuristicOrchestratorPolicy
 from src.policies.sampler_weights import HeuristicSamplerWeightPolicy
 from src.policies.meta_advisor import HeuristicMetaAdvisorPolicy
 from src.policies.vision_encoder import HeuristicVisionEncoderPolicy
+from src.policies.vision_encoder import HeuristicVisionEncoderPolicy
 from src.policies.reward_model_heuristic import HeuristicRewardModelPolicy
+from src.policies.datapack_auditor import HeuristicDatapackAuditor
 
 
 DEFAULT_POLICY_CONFIG: Dict[str, str] = {
@@ -34,6 +36,7 @@ DEFAULT_POLICY_CONFIG: Dict[str, str] = {
     "meta_advisor": "heuristic",
     "vision_encoder": "heuristic",
     "reward_model": "heuristic",
+    "datapack_auditor": "heuristic",
 }
 
 
@@ -49,6 +52,7 @@ class PolicyBundle:
     meta_advisor: Any
     vision_encoder: Any
     reward_model: Any
+    datapack_auditor: Any
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -93,4 +97,5 @@ def build_all_policies(config_path: Optional[str] = None) -> PolicyBundle:
         meta_advisor=_select_policy(cfg.get("meta_advisor", "heuristic"), HeuristicMetaAdvisorPolicy),
         vision_encoder=_select_policy(cfg.get("vision_encoder", "heuristic"), HeuristicVisionEncoderPolicy),
         reward_model=_select_policy(cfg.get("reward_model", "heuristic"), HeuristicRewardModelPolicy),
+        datapack_auditor=_select_policy(cfg.get("datapack_auditor", "heuristic"), HeuristicDatapackAuditor),
     )

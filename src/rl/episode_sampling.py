@@ -213,6 +213,7 @@ class DataPackRLSampler:
         recap_scores: Optional[Dict[str, float]] = None,
         recap_scores_path: Optional[str] = None,
         policies: Optional["PolicyBundle"] = None,
+        use_datapack_auditor: bool = False,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
@@ -220,6 +221,7 @@ class DataPackRLSampler:
         self._episodes: List[Dict[str, Any]] = []
         self.advisory = advisory
         self.use_recap_weights = bool(use_recap_weights)
+        self.use_datapack_auditor = bool(use_datapack_auditor)
         from src.policies.registry import build_all_policies
 
         self.policies = policies or build_all_policies()
@@ -319,6 +321,31 @@ class DataPackRLSampler:
         episode["frontier_score"] = self._compute_frontier_score(episode)
         episode["econ_urgency_score"] = self._compute_econ_urgency_score(episode)
         episode["recap_weight_multiplier"] = self._recap_weight_multiplier(episode)
+        
+        # Auditor Integration
+        episode["auditor_result"] = None
+        episode["auditor_weight_multiplier"] = 1.0
+        if self.use_datapack_auditor and getattr(self.policies, "datapack_auditor", None):
+            try:
+                # Build features
+                auditor_features = self.policies.datapack_auditor.build_features(
+                    datapack=descriptor, # passing dict as datapack proxy
+                    semantic_tags=enrichment.get("novelty_tags", []) + enrichment.get("fragility_tags", []) + enrichment.get("risk_tags", []), # Flatten tags roughly
+                    econ_slice={"expected_mpl_gain": episode["expected_mpl_gain"], "novelty_score": episode["novelty_score"]},
+                    recap_scores={"quality_score": episode.get("recap_goodness_score", 0.5)}
+                )
+                # Evaluate
+                audit = self.policies.datapack_auditor.evaluate(auditor_features)
+                episode["auditor_result"] = audit
+                
+                # Compute mild weight multiplier based on rating
+                rating = audit.get("rating", "BBB")
+                # AAA -> 1.2, AA -> 1.1, A -> 1.0, BBB -> 1.0, JUNK -> 0.8
+                rating_mult = {"AAA": 1.2, "AA": 1.1, "A": 1.0, "BBB": 1.0, "JUNK": 0.8}
+                episode["auditor_weight_multiplier"] = rating_mult.get(rating, 1.0)
+            except Exception:
+                # Fail gracefully to identity
+                episode["auditor_weight_multiplier"] = 1.0
 
         self._episodes.append(episode)
 
@@ -497,6 +524,9 @@ class DataPackRLSampler:
             "novelty_score": episode["novelty_score"],
             "expected_mpl_gain": episode["expected_mpl_gain"],
         }
+        if episode.get("auditor_result"):
+             descriptor["sampling_metadata"]["auditor_rating"] = episode["auditor_result"].get("rating")
+             descriptor["sampling_metadata"]["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")
         return to_json_safe(descriptor)
 
 
@@ -548,6 +578,7 @@ def _balanced_weight(episode: Dict[str, Any]) -> float:
         if any(tag in advisory.datapack_priority_tags for tag in tags):
             base *= 1.2
     base *= episode.get("recap_weight_multiplier", 1.0)
+    base *= episode.get("auditor_weight_multiplier", 1.0)
     return base
 
 

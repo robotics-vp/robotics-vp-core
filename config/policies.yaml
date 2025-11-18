@@ -8,3 +8,4 @@ orchestrator: heuristic
 meta_advisor: heuristic
 vision_encoder: heuristic
 reward_model: heuristic
+datapack_auditor: heuristic

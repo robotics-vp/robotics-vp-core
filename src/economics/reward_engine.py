@@ -9,6 +9,7 @@ from datetime import datetime
 
 from src.ontology.models import Task, Robot, Episode, EpisodeEvent, EconVector
 from src.policies.registry import build_all_policies
+from src.economics.domain_adapter import EconDomainAdapter, EconDomainAdapterConfig
 
 
 class RewardEngine:
@@ -17,6 +18,14 @@ class RewardEngine:
         self.robot = robot
         self.config = config or {}
         self.policies = policies or build_all_policies()
+        
+        # Initialize domain adapter
+        adapter_config = EconDomainAdapterConfig(
+            source_domain=self.config.get("source_domain", "pybullet"),
+            scaling=self.config.get("econ_scaling", {}),
+            offsets=self.config.get("econ_offsets", {}),
+        )
+        self.adapter = EconDomainAdapter(adapter_config)
 
     def step_reward(
         self,
@@ -86,7 +95,7 @@ class RewardEngine:
         if stability_vals:
             stability_risk_score = 1.0 - min(1.0, sum(stability_vals) / len(stability_vals))
 
-        return EconVector(
+        raw_econ = EconVector(
             episode_id=episode.episode_id,
             mpl_units_per_hour=mpl_units_per_hour,
             wage_parity=wage_parity,
@@ -104,7 +113,12 @@ class RewardEngine:
                 "computed_at": datetime.utcnow().isoformat(),
                 "recovery_events": recovery_events,
             },
+            source_domain=self.adapter.config.source_domain,
         )
+        
+        # Apply calibration
+        calibrated_econ = self.adapter.map_vector(raw_econ)
+        return calibrated_econ
 
     def _safe_float(self, value: Any, default: float = 0.0) -> float:
         try:

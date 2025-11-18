@@ -68,6 +68,8 @@ class EconVector:
     precision_bonus: float = 0.0
     stability_risk_score: float = 0.0
     components: Dict[str, float] = field(default_factory=dict)
+    source_domain: str = "pybullet"  # "pybullet", "isaac", "real_lab"
+    calibration_version: Optional[str] = None
     metadata: Dict = field(default_factory=dict)
 
 
