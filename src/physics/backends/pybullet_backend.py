@@ -1,6 +1,7 @@
 """
 PyBullet wrapper backend around DishwashingEnv (placeholder physics env).
 """
+import hashlib
 from typing import Any, Dict, Tuple, Optional
 
 from src.physics.backends.base import PhysicsBackend
@@ -17,6 +18,7 @@ class PyBulletBackend(PhysicsBackend):
         self.env = DishwashingEnv(params)
 
     def reset(self, seed: Optional[int] = None) -> Dict[str, Any]:
+        """Deterministically reset the PyBullet environment."""
         if seed is not None:
             import numpy as np
             np.random.seed(seed)
@@ -28,6 +30,10 @@ class PyBulletBackend(PhysicsBackend):
         return obs, reward, bool(done), info if isinstance(info, dict) else {}
 
     def get_state_summary(self) -> Dict[str, Any]:
+        """
+        Compact snapshot used by downstream logging/vision.
+        Must remain JSON-safe (floats/lists/ints only).
+        """
         return self.env._obs()
 
     @property
@@ -35,7 +41,9 @@ class PyBulletBackend(PhysicsBackend):
         return "pybullet"
 
     def build_vision_frame(self, task_id: str, episode_id: str, timestep: int) -> VisionFrame:
-        """Optional helper to create a VisionFrame placeholder."""
+        """Create a canonical VisionFrame placeholder for PyBullet."""
+        state = self.get_state_summary()
+        state_digest = hashlib.sha256(str(sorted(state.items())).encode("utf-8")).hexdigest()
         return VisionFrame(
             backend=self.backend_name,
             task_id=task_id,
@@ -45,5 +53,5 @@ class PyBulletBackend(PhysicsBackend):
             depth_path=None,
             segmentation_path=None,
             camera_name="default_cam",
-            metadata={"state": self.get_state_summary()},
+            metadata={"state": state, "state_digest": state_digest},
         )

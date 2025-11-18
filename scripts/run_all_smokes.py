@@ -34,6 +34,9 @@ SMOKES = [
     ["python3", "scripts/smoke_test_semantic_aggregator.py"],
     ["python3", "scripts/smoke_test_semantic_orchestrator_v2.py"],
     ["python3", "scripts/smoke_test_stage3_orchestrator_integration.py"],
+    ["python3", "scripts/smoke_test_vla_recap_training.py"],
+    ["python3", "scripts/smoke_test_semantic_econ_correlations.py"],
+    ["python3", "scripts/smoke_test_vision_interfaces.py"],
 ]
 
 OPTIONAL = [

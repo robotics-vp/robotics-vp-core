@@ -21,6 +21,7 @@ def main():
 
     # PyBullet frame
     pyb = PyBulletBackend()
+    pyb.reset(seed=0)
     frame_py = pyb.build_vision_frame(task_id="task_vis", episode_id="ep_vis", timestep=0)
     latent_py = backbone.encode_frame(frame_py)
     obs_py = builder.build(frame_py, pyb.get_state_summary())
@@ -28,6 +29,8 @@ def main():
     # Round-trip
     rt_py = PolicyObservation.from_dict(obs_py.to_dict())
     assert rt_py.to_dict() == obs_py.to_dict()
+    # Deterministic PolicyObservation serialization
+    assert obs_py.to_dict() == builder.build(frame_py, pyb.get_state_summary()).to_dict()
 
     # Isaac stub frame
     stub = IsaacStubBackend()
@@ -37,6 +40,7 @@ def main():
     rt_stub = PolicyObservation.from_dict(obs_stub.to_dict())
     assert rt_stub.to_dict() == obs_stub.to_dict()
     assert obs_stub.latent.backend == "isaac_stub"
+    assert obs_stub.to_dict() == builder.build(frame_stub, stub.get_state_summary()).to_dict()
 
     # Determinism
     latent_again = backbone.encode_frame(frame_py)
