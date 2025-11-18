@@ -18,6 +18,7 @@ SMOKES = [
     ["python3", "scripts/smoke_test_stage1_pipeline.py"],
     ["python3", "scripts/smoke_test_stage1_to_rl_sampling.py"],
     ["python3", "scripts/smoke_test_sima2_semantic_extraction.py"],
+    ["python3", "scripts/smoke_test_ontology_update_engine.py"],
 ]
 
 OPTIONAL = [
