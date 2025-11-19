@@ -6,7 +6,7 @@ and per-step events. JSON-serializable and deterministic.
 """
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -40,6 +40,10 @@ class Datapack:
     novelty_score: float = 0.0
     quality_score: float = 0.0
     tags: Dict = field(default_factory=dict)
+    metadata: Dict = field(default_factory=dict)
+    sima2_backend_id: Optional[str] = None
+    sima2_model_version: Optional[str] = None
+    sima2_task_spec: Dict[str, Any] = field(default_factory=dict)
     auditor_rating: Optional[str] = None
     auditor_score: Optional[float] = None
     auditor_predicted_econ: Optional[Dict[str, float]] = None
@@ -58,6 +62,9 @@ class Episode:
     metadata: Dict = field(default_factory=dict)
     vision_config: Dict = field(default_factory=dict)
     vision_conditions: Dict = field(default_factory=dict)
+    sima2_backend_id: Optional[str] = None
+    sima2_model_version: Optional[str] = None
+    sima2_task_spec: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

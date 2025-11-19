@@ -27,6 +27,9 @@ def _components(event: Any) -> Dict[str, Any]:
 
 
 class HeuristicSafetyRiskPolicy(SafetyRiskPolicy):
+    def __init__(self, trust_matrix: Dict[str, Any] = None):
+        self.trust_matrix = trust_matrix or {}
+
     def build_features(self, events: Sequence[Any]) -> Dict[str, Any]:
         damage_terms = []
         collision_counts = 0
@@ -50,12 +53,24 @@ class HeuristicSafetyRiskPolicy(SafetyRiskPolicy):
             risk_level = "medium"
         if total_damage < -5.0 or collision_counts > 2:
             risk_level = "high"
+        trust_score = self._trust_score("RiskTag")
+        if trust_score < 0.3 and risk_level == "high":
+            risk_level = "medium"
         metadata = {
             "total_damage_cost": total_damage,
             "collision_counts": collision_counts,
+            "trust_score": trust_score,
+            "trust_weighted_damage": total_damage * max(trust_score, 0.0),
         }
         return {
             "risk_level": risk_level,
             "damage_estimate": total_damage,
             "metadata": to_json_safe(metadata),
         }
+
+    def _trust_score(self, tag: str) -> float:
+        entry = self.trust_matrix.get(tag, {})
+        try:
+            return float(entry.get("trust_score", 1.0))
+        except Exception:
+            return 1.0

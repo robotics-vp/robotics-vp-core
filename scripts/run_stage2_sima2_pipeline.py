@@ -19,6 +19,7 @@ from src.sima2.task_graph_refiner import TaskGraphRefiner
 from src.sima2.semantic_tag_propagator import SemanticTagPropagator
 from src.sima2.ontology_proposals import OntologyUpdateProposal, ProposalType, ProposalPriority
 from src.sima2.task_graph_proposals import TaskGraphRefinementProposal, RefinementType, RefinementPriority
+from src.sima2.segmentation_engine import SegmentationEngine
 from src.orchestrator.ontology import EnvironmentOntology
 from src.orchestrator.task_graph import TaskGraph, TaskNode, TaskType
 from src.orchestrator.economic_controller import EconSignals
@@ -54,8 +55,18 @@ def main():
 
     rollouts = _load_rollouts(Path(args.rollouts_path))
 
+    seg_engine = SegmentationEngine()
+    segmented_rollouts = []
+    segmented_boundaries = []
+    seg_segments = []
+    for rollout in rollouts:
+        seg_out = seg_engine.segment_rollout(rollout)
+        segmented_rollouts.append(seg_out["rollout"])
+        segmented_boundaries.extend([getattr(b, "to_dict", lambda: b)() for b in seg_out["segment_boundaries"]])
+        seg_segments.extend([s.to_dict() if hasattr(s, "to_dict") else s for s in seg_out["segments"]])
+
     primitive_extractor = SemanticPrimitiveExtractor()
-    primitives = primitive_extractor.extract(rollouts)
+    primitives = primitive_extractor.extract(segmented_rollouts)
 
     ontology = EnvironmentOntology(ontology_id="sima2_stub", name="sima2_stub")
     task_graph = TaskGraph(TaskNode(task_id="root", name="root", task_type=TaskType.ROOT))
@@ -108,13 +119,15 @@ def main():
 
     propagator = SemanticTagPropagator()
     econ_outputs = {p.get("episode_id"): {"novelty_delta": 0.0} for p in primitives}
-    tags = propagator.generate_proposals(primitives, ontology_proposals, task_graph_proposals, econ_outputs)
+    tags = propagator.generate_proposals(segmented_rollouts, ontology_proposals, task_graph_proposals, econ_outputs)
 
     out_dir = Path(args.output_dir)
     _write_jsonl(out_dir / "sima2_primitives.jsonl", primitives)
     _write_jsonl(out_dir / "sima2_ontology_proposals.jsonl", ontology_proposals)
     _write_jsonl(out_dir / "sima2_task_refinements.jsonl", task_graph_proposals)
     _write_jsonl(out_dir / "sima2_semantic_tags.jsonl", tags)
+    _write_jsonl(out_dir / "sima2_segments.jsonl", seg_segments)
+    _write_jsonl(out_dir / "sima2_segment_boundaries.jsonl", segmented_boundaries)
 
     print(f"[run_stage2_sima2_pipeline] primitives={len(primitives)}, ontology_proposals={len(ontology_proposals)}, task_refinements={len(task_graph_proposals)}, tags={len(tags)}")
 

@@ -11,6 +11,7 @@ import hashlib
 import json
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from src.sima2.config import get_segmentation_config
 from src.sima2.tags import (
     AffordanceTag,
     EfficiencyTag,
@@ -492,6 +493,14 @@ class SupervisionHintsGenerator:
 class SegmentationBuilder:
     """Builds deterministic segment boundaries and subtask tags."""
 
+    def __init__(self, segmentation_config: Optional[Dict[str, Any]] = None):
+        cfg = get_segmentation_config(segmentation_config)
+        self.min_segment_length = int(cfg.get("min_segment_length", 1))
+        self.max_idle_gap = int(cfg.get("max_idle_gap", 0))
+        self.max_segment_length = int(cfg.get("max_segment_length", 1_000_000))
+        self.risk_jump_delta = float(cfg.get("risk_jump_delta", 0))
+        self.allow_risk_jumps = bool(cfg.get("allow_risk_jumps", True))
+
     def build(self, datapack: Dict[str, Any]) -> Tuple[List[SegmentBoundaryTag], List[SubtaskTag]]:
         episode_id = datapack.get("episode_id", "")
         primitives = self._extract_primitives(datapack)
@@ -505,6 +514,7 @@ class SegmentationBuilder:
         current_segment = 0
         current_label = self._label_for_primitive(primitives[0])
         start_ts = primitives[0].get("timestep", 0)
+        current_risk = self._risk_level(str(primitives[0].get("risk", "low")))
         segment_id = self._segment_id(episode_id, current_segment)
         segment_boundary_tags.append(
             SegmentBoundaryTag(
@@ -521,12 +531,18 @@ class SegmentationBuilder:
             prim = primitives[idx]
             ts = prim.get("timestep", last_ts + 1)
             label = self._label_for_primitive(prim)
-            risk = str(prim.get("risk", "")).lower()
-            risk_jump = risk in {"high", "critical"} and prim.get("risk") != primitives[idx - 1].get("risk")
+            risk_val = self._risk_level(str(prim.get("risk", "low")))
             object_change = label != current_label
             status = str(prim.get("status", "")).lower()
+            gap = ts - last_ts
+            duration = max(last_ts, ts) - start_ts
 
-            if object_change or risk_jump:
+            risk_jump = self.allow_risk_jumps and abs(risk_val - current_risk) >= self.risk_jump_delta
+            long_gap = gap > self.max_idle_gap if self.max_idle_gap >= 0 else False
+            exceeded_length = duration >= self.max_segment_length
+            ready_to_split = duration >= self.min_segment_length
+
+            if (ready_to_split and (object_change or risk_jump or long_gap)) or exceeded_length:
                 segment_boundary_tags.append(
                     SegmentBoundaryTag(
                         episode_id=episode_id,
@@ -556,6 +572,8 @@ class SegmentationBuilder:
                     )
                 )
                 current_label = label
+                start_ts = ts
+                duration = 0
 
             if status == "failure":
                 segment_boundary_tags.append(
@@ -578,6 +596,7 @@ class SegmentationBuilder:
                     )
                 )
             last_ts = ts
+            current_risk = risk_val
 
         segment_boundary_tags.append(
             SegmentBoundaryTag(
@@ -612,6 +631,10 @@ class SegmentationBuilder:
         if isinstance(timeline, list):
             return [p for p in timeline if isinstance(p, dict)]
         return []
+
+    def _risk_level(self, risk: str) -> int:
+        levels = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        return levels.get(risk.lower(), 0)
 
     def _label_for_primitive(self, prim: Dict[str, Any]) -> str:
         obj = str(prim.get("object") or prim.get("focus") or prim.get("object_focus") or "")

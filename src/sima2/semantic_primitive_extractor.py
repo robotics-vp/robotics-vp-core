@@ -5,8 +5,10 @@ This stays dependency-light and only emits advisory ontology update proposals;
 it does not mutate any global ontology state.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Sequence, Set, Tuple
+
+from src.sima2.config import extract_provenance
 
 
 @dataclass
@@ -21,6 +23,7 @@ class SemanticPrimitive:
     success_rate: float
     avg_steps: float
     source: str = "sima2"
+    provenance: Dict[str, Any] = field(default_factory=dict)
 
     def validate(self) -> Tuple[bool, List[str]]:
         """Lightweight validation for primitives."""
@@ -62,6 +65,31 @@ def _collect_event_tags(event: Dict[str, Any]) -> Set[str]:
         if key in event and event[key]:
             tags.update(_split_to_tags(str(event[key])))
     return tags
+
+
+def _events_from_segments(segments: Sequence[Any]) -> List[Dict[str, Any]]:
+    """Convert segments into primitive-like events for downstream extraction."""
+    events: List[Dict[str, Any]] = []
+    for seg in segments or []:
+        seg_dict = seg.to_dict() if hasattr(seg, "to_dict") else seg
+        if not isinstance(seg_dict, dict):
+            continue
+        events.append(
+            {
+                "primitive_id": seg_dict.get("segment_id") or seg_dict.get("id"),
+                "action": seg_dict.get("label"),
+                "object": seg_dict.get("object") or seg_dict.get("label"),
+                "timestep": seg_dict.get("start_t", 0),
+                "end_timestep": seg_dict.get("end_t"),
+                "success": str(seg_dict.get("outcome", "")).lower() in {"success", "recovered"},
+                "status": seg_dict.get("outcome"),
+                "tags": [seg_dict.get("label"), seg_dict.get("outcome")],
+                "risk": seg_dict.get("metadata", {}).get("risk_level") if isinstance(seg_dict.get("metadata"), dict) else None,
+                "metadata": seg_dict.get("metadata", {}),
+                "segment_id": seg_dict.get("segment_id") or seg_dict.get("id"),
+            }
+        )
+    return events
 
 
 def _infer_risk_level(tags: Sequence[str], metrics: Dict[str, Any]) -> str:
@@ -118,12 +146,13 @@ def extract_primitives_from_rollout(rollout: Dict[str, Any]) -> List[SemanticPri
 
     Uses simple deterministic rules so tests remain stable without SIMA-2 deps.
     """
-    task_type = str(rollout.get("task_type", "unknown"))
-    events = rollout.get("events") or []
+    task_type = str(rollout.get("task_type") or rollout.get("task") or "unknown")
+    events = rollout.get("events") or _events_from_segments(rollout.get("segments", []))
     metrics = rollout.get("metrics") or {}
     base_tags: Set[str] = set(_split_to_tags(task_type))
     for tag in rollout.get("tags", []) or []:
         base_tags.update(_split_to_tags(str(tag)))
+    provenance = extract_provenance(rollout)
 
     primitives: List[SemanticPrimitive] = []
     for idx, event in enumerate(events):
@@ -144,7 +173,8 @@ def extract_primitives_from_rollout(rollout: Dict[str, Any]) -> List[SemanticPri
                 energy_intensity=_infer_energy_intensity(event, metrics, avg_steps),
                 success_rate=_infer_success_rate(event, metrics),
                 avg_steps=avg_steps,
-                source=str(rollout.get("source", "sima2")),
+                source=str(provenance.get("sima2_backend_id") or rollout.get("source", "sima2")),
+                provenance=provenance,
             )
         )
 
@@ -161,7 +191,8 @@ def extract_primitives_from_rollout(rollout: Dict[str, Any]) -> List[SemanticPri
             energy_intensity=_infer_energy_intensity({}, metrics, len(events)),
             success_rate=_infer_success_rate({}, metrics),
             avg_steps=_infer_avg_steps({}, metrics, len(events)),
-            source=str(rollout.get("source", "sima2")),
+            source=str(provenance.get("sima2_backend_id") or rollout.get("source", "sima2")),
+            provenance=provenance,
         )
     )
     return _sort_primitives_deterministically(primitives)
@@ -173,7 +204,7 @@ def primitive_to_ontology_update(primitive: SemanticPrimitive) -> Dict[str, Any]
 
     The update is advisory-only; the orchestrator can merge or reject it.
     """
-    return {
+    update = {
         "action": "add_or_update_skill",
         "skill_name": primitive.task_type or primitive.primitive_id,
         "primitive_id": primitive.primitive_id,
@@ -186,6 +217,9 @@ def primitive_to_ontology_update(primitive: SemanticPrimitive) -> Dict[str, Any]
             "avg_steps": primitive.avg_steps,
         },
     }
+    if primitive.provenance:
+        update["provenance"] = primitive.provenance
+    return update
 
 
 def _sort_primitives_deterministically(primitives: List[SemanticPrimitive]) -> List[SemanticPrimitive]:
@@ -207,6 +241,7 @@ class SemanticPrimitiveExtractor:
         for rollout in rollouts:
             prims = extract_primitives_from_rollout(rollout)
             for prim in prims:
+                prov = prim.provenance or extract_provenance(rollout)
                 primitives.append(
                     {
                         "episode_id": rollout.get("episode_id"),
@@ -219,6 +254,11 @@ class SemanticPrimitiveExtractor:
                         "success_rate": prim.success_rate,
                         "avg_steps": prim.avg_steps,
                         "source": prim.source,
+                        "provenance": prov,
+                        "sima2_backend_id": prov.get("sima2_backend_id"),
+                        "sima2_model_version": prov.get("sima2_model_version"),
+                        "sima2_task_spec": prov.get("sima2_task_spec"),
+                        "sima2_backend_mode": prov.get("sima2_backend_mode"),
                     }
                 )
         return sorted(primitives, key=lambda p: (p.get("episode_id", ""), p.get("primitive_id", "")))

@@ -1,0 +1,35 @@
+backend_mode: stub
+backend:
+  id: sima2_stub
+  model_version: sima2_stub_v1
+  endpoint: local_stub
+
+task_distribution:
+  stress_mix_v1:
+    total_episodes: 10000
+    distribution:
+      drawer_open: 0.4
+      dish_place: 0.4
+      noise: 0.2
+    params:
+      failure_rate: 0.3
+      recovery_rate: 0.1
+      ood_rate: 0.05
+  edge_cases_v1:
+    total_episodes: 1000
+    distribution:
+      empty: 0.25
+      long_horizon: 0.25
+      invalid_utf8: 0.25
+      future_timestamp: 0.25
+    params:
+      max_steps: 1000000
+      include_invalid_strings: true
+      include_future_timestamps: true
+
+segmentation:
+  min_segment_length: 2
+  max_idle_gap: 3
+  max_segment_length: 120
+  risk_jump_delta: 1
+  allow_risk_jumps: true

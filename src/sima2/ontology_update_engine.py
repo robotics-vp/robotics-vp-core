@@ -88,6 +88,7 @@ class OntologyUpdateEngine:
             # 7. Semantic tag proposals
             proposals.extend(self._propose_semantic_tags(prim))
 
+        self._inject_provenance(proposals, primitives)
         return self._sort_proposals_deterministically(proposals)
 
     def _make_proposal_id(self) -> str:
@@ -162,6 +163,22 @@ class OntologyUpdateEngine:
                 p.proposal_id,
             ),
         )
+
+    def _inject_provenance(
+        self, proposals: List[OntologyUpdateProposal], primitives: List[SemanticPrimitive]
+    ) -> None:
+        """Attach SIMA-2 provenance to every proposal."""
+        prov_map = {p.primitive_id: getattr(p, "provenance", {}) or {} for p in primitives}
+        for prop in proposals:
+            prov = prov_map.get(prop.source_primitive_id, {})
+            if not prov:
+                continue
+            metadata = dict(getattr(prop, "metadata", {}) or {})
+            metadata.setdefault("provenance", prov)
+            metadata.setdefault("sima2_backend_id", prov.get("sima2_backend_id"))
+            metadata.setdefault("sima2_model_version", prov.get("sima2_model_version"))
+            metadata.setdefault("sima2_task_spec", prov.get("sima2_task_spec"))
+            prop.metadata = metadata
 
     def _propose_risk_adjustments(
         self, prim: SemanticPrimitive
