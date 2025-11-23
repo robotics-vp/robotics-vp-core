@@ -41,6 +41,17 @@ def _condition_summary(condition_vector: Optional[Any]) -> Optional[Dict[str, An
         summary["curriculum_phase"] = str(phase)
     if fingerprint:
         summary["fingerprint"] = fingerprint
+
+    # Include TFD metadata if present in condition vector metadata
+    try:
+        metadata = getattr(condition_vector, "metadata", {})
+        if metadata and isinstance(metadata, dict):
+            tfd_metadata = metadata.get("tfd_metadata")
+            if tfd_metadata:
+                summary["tfd_metadata"] = tfd_metadata
+    except Exception:
+        pass
+
     return summary or None
 
 

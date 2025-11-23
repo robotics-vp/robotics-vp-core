@@ -161,9 +161,15 @@ class ObservationAdapter:
         trust_summary: Optional[Dict[str, Any]] = None,
         episode_metadata: Optional[Dict[str, Any]] = None,
         advisory_context: Optional[Dict[str, Any]] = None,
+        tfd_instruction: Optional[Dict[str, Any]] = None,
+        enable_tfd_integration: bool = False,
     ) -> Optional[ConditionVector]:
         """
         Public helper: fuse task/econ/semantic metadata into a ConditionVector.
+
+        TFD integration (flag-gated):
+        - tfd_instruction: TFDInstruction dict or object
+        - enable_tfd_integration: if True, TFD fields affect condition vector
         """
         if self.condition_builder is None:
             return None
@@ -181,6 +187,8 @@ class ObservationAdapter:
             trust_summary=trust_summary,
             episode_metadata=episode_metadata,
             advisory_context=advisory_context,
+            tfd_instruction=tfd_instruction,
+            enable_tfd_integration=enable_tfd_integration,
         )
 
     def build_observation_and_condition(
