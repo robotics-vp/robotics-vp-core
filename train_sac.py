@@ -33,6 +33,7 @@ from src.rl.episode_sampling import (
 )
 from src.rl.curriculum import DataPackCurriculum
 from src.valuation.datapack_schema import DataPackMeta
+from src.observation.condition_vector_builder import ConditionVectorBuilder
 
 
 def _load_datapacks(path: Path):
@@ -64,6 +65,7 @@ def _build_stage3_components(
     descriptors_path: str,
     curriculum_total_steps: int,
     curriculum_config_path: str,
+    use_condition_vector: bool = False,
 ):
     """Optionally construct sampler/curriculum; returns (sampler, curriculum) or (None, None)."""
     if not use_datapack_curriculum:
@@ -84,6 +86,7 @@ def _build_stage3_components(
         enrichments=enrichments or None,
         existing_descriptors=descriptors or None,
         default_strategy=sampler_mode or "balanced",
+        use_condition_vector=use_condition_vector,
     )
 
     curriculum = None
@@ -96,6 +99,7 @@ def _build_stage3_components(
             except Exception as e:
                 print(f"[stage3] Failed to load curriculum config ({e}); using defaults.")
         config["base_seed"] = seed
+        config["use_condition_vector"] = use_condition_vector
         curriculum = DataPackCurriculum(
             sampler=sampler,
             total_steps=curriculum_total_steps or episodes,
@@ -127,6 +131,7 @@ def train_sac(
     curriculum: DataPackCurriculum = None,
     physics_backend: str = "pybullet",
     use_mobility_policy: bool = False,
+    use_condition_vector: bool = False,
 ):
     """Train SAC agent with economic objectives."""
 
@@ -241,7 +246,9 @@ def train_sac(
             descriptors_path=descriptors_path,
             curriculum_total_steps=curriculum_total_steps or episodes,
             curriculum_config_path=curriculum_config_path,
+            use_condition_vector=use_condition_vector,
         )
+    condition_builder = ConditionVectorBuilder() if use_condition_vector else None
 
     # Training loop
     for ep in range(episodes):
@@ -269,6 +276,7 @@ def train_sac(
         descriptor = None
         sampler_strategy = ""
         curriculum_phase = ""
+        condition_vector = None
 
         if curriculum_obj:
             batch = curriculum_obj.sample_batch(step=ep, batch_size=1)
@@ -410,6 +418,36 @@ def train_sac(
             customer_cost=customer_cost
         )
 
+        if condition_builder is not None:
+            semantic_tags = descriptor.get("semantic_tags", {}) if descriptor else {}
+            advisory_context = descriptor.get("sampling_metadata", {}) if descriptor else {"strategy": sampler_strategy}
+            episode_md = {
+                "episode_id": descriptor.get("episode_id", descriptor.get("pack_id", f"ep_{ep}")) if descriptor else f"ep_{ep}",
+                "sampler_strategy": sampler_strategy,
+                "curriculum_phase": curriculum_phase or "warmup",
+                "timestep": next_obs_dict.get("t"),
+            }
+            econ_slice = {
+                "mpl": mp_r,
+                "wage_parity": wage_parity,
+                "energy_wh": summary.energy_Wh if hasattr(summary, "energy_Wh") else 0.0,
+                "damage_cost": error_cost,
+            }
+            condition_vector = condition_builder.build(
+                episode_config=descriptor or {"task_id": "dishwashing", "env_id": "dishwashing_env", "backend": physics_backend, "objective_preset": "balanced"},
+                econ_state={"target_mpl": mp_r, "current_wage_parity": wage_parity, "energy_budget_wh": summary.energy_Wh if hasattr(summary, "energy_Wh") else 0.0},
+                curriculum_phase=curriculum_phase or "warmup",
+                sima2_trust=None,
+                datapack_metadata=descriptor.get("metadata", {}) if descriptor else {},
+                episode_step=episode_steps,
+                econ_slice=econ_slice,
+                semantic_tags=semantic_tags if isinstance(semantic_tags, dict) else {str(t): 1.0 for t in semantic_tags},
+                recap_scores=None,
+                trust_summary=None,
+                episode_metadata=episode_md,
+                advisory_context=advisory_context,
+            )
+
         # Log
         logger.log(
             episode=ep,
@@ -470,6 +508,8 @@ def train_sac(
             curriculum_phase=curriculum_phase,
             pack_id=descriptor.get("pack_id", "") if descriptor else "",
             objective_preset=descriptor.get("objective_preset", "") if descriptor else "",
+            condition_skill_mode=getattr(condition_vector, "skill_mode", ""),
+            condition_phase=getattr(condition_vector, "curriculum_phase", ""),
         )
 
         # Print progress
@@ -515,6 +555,7 @@ if __name__ == "__main__":
     parser.add_argument("--use-mobility-policy", action="store_true", help="Enable advisory mobility micro-policy in physics backends")
     parser.add_argument("--log-path", type=str, default="logs/sac_train.csv")
     parser.add_argument("--checkpoint-path", type=str, default="checkpoints/sac_final.pt")
+    parser.add_argument("--use-condition-vector", action="store_true", help="Build/log ConditionVector without affecting SAC behavior")
     args = parser.parse_args()
 
     if args.engine_type != "pybullet":
@@ -534,4 +575,5 @@ if __name__ == "__main__":
         checkpoint_path=args.checkpoint_path,
         physics_backend=args.physics_backend,
         use_mobility_policy=args.use_mobility_policy,
+        use_condition_vector=args.use_condition_vector,
     )

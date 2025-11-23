@@ -19,6 +19,7 @@ from src.rl.episode_descriptor_validator import (
     normalize_and_validate,
 )
 from src.utils.json_safe import to_json_safe
+from src.observation.condition_vector_builder import select_skill_mode
 from src.orchestrator.semantic_orchestrator_v2 import OrchestratorAdvisory
 
 if TYPE_CHECKING:
@@ -214,6 +215,8 @@ class DataPackRLSampler:
         recap_scores_path: Optional[str] = None,
         policies: Optional["PolicyBundle"] = None,
         use_datapack_auditor: bool = False,
+        trust_matrix: Optional[Dict[str, Any]] = None,
+        use_condition_vector: bool = False,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
@@ -222,6 +225,8 @@ class DataPackRLSampler:
         self.advisory = advisory
         self.use_recap_weights = bool(use_recap_weights)
         self.use_datapack_auditor = bool(use_datapack_auditor)
+        self.trust_matrix = trust_matrix or {}
+        self.use_condition_vector = bool(use_condition_vector)
         from src.policies.registry import build_all_policies
 
         self.policies = policies or build_all_policies()
@@ -524,6 +529,15 @@ class DataPackRLSampler:
             "novelty_score": episode["novelty_score"],
             "expected_mpl_gain": episode["expected_mpl_gain"],
         }
+        if self.use_condition_vector:
+            tags = descriptor.get("semantic_tags") or {}
+            tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
+            descriptor["sampling_metadata"]["skill_mode"] = select_skill_mode(
+                tags=tag_map,
+                trust_matrix=self.trust_matrix,
+                curriculum_phase=descriptor["sampling_metadata"].get("phase", "warmup"),
+                advisory=descriptor["sampling_metadata"],
+            )
         if episode.get("auditor_result"):
             descriptor["sampling_metadata"]["auditor_rating"] = episode["auditor_result"].get("rating")
             descriptor["sampling_metadata"]["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")

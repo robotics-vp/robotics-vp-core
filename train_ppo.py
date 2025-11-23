@@ -28,6 +28,9 @@ from src.data_value.novelty_diffusion import (
     recon_gap,
     gaussian_noise_sampler
 )
+from src.observation.condition_vector_builder import ConditionVectorBuilder
+
+USE_CONDITION_VECTOR = os.environ.get("USE_CONDITION_VECTOR", "0") == "1"
 
 
 def load_config(path="src/configs/dishwashing.yaml"):
@@ -101,6 +104,20 @@ class DataValueRegressor:
         return np.mean(self.y_history[-50:])
 
 
+def _maybe_build_condition_vector(builder, episode_idx: int, sampler_strategy: str = "balanced"):
+    if builder is None:
+        return None
+    return builder.build(
+        episode_config={"task_id": "dishwashing", "env_id": "dishwashing_env", "backend": "ppo_stub", "objective_preset": "balanced"},
+        econ_state={"target_mpl": 0.0, "current_wage_parity": 1.0, "energy_budget_wh": 0.0},
+        curriculum_phase="warmup",
+        sima2_trust=None,
+        datapack_metadata={"tags": ["ppo_training"]},
+        episode_step=episode_idx,
+        episode_metadata={"episode_id": f"ppo_ep_{episode_idx}", "sampler_strategy": sampler_strategy},
+    )
+
+
 def run():
     # Config
     cfg = load_config()
@@ -164,11 +181,13 @@ def run():
     eval_every = int(cfg["train"]["eval_every"])
     max_secs = int(cfg["train"]["max_seconds_per_episode"])
     logger = CsvLogger("logs/ppo_training.csv")
+    condition_builder = ConditionVectorBuilder() if USE_CONDITION_VECTOR else None
 
     # Training loop
     mp_r_prev = 1e-8
 
     for ep in range(episodes):
+        _ = _maybe_build_condition_vector(condition_builder, ep)
         obs = env.reset()
         done = False
         episode_reward = 0
@@ -191,33 +210,33 @@ def run():
             update_stats=True
         ).item()
 
-    profile = get_internal_experiment_profile("dishwashing")
-    alpha_mpl, alpha_error, alpha_ep, _ = profile.get("default_objective_vector", [1.0, 1.0, 1.0, 0.0])
+        profile = get_internal_experiment_profile("dishwashing")
+        alpha_mpl, alpha_error, alpha_ep, _ = profile.get("default_objective_vector", [1.0, 1.0, 1.0, 0.0])
 
         last_reward_components = {}
         # Episode rollout
-    while env.t < max_secs:
-        # Select action with novelty signal
-        action, logprob, value = agent.select_action(obs, novelty=novelty)
+        while env.t < max_secs:
+            # Select action with novelty signal
+            action, logprob, value = agent.select_action(obs, novelty=novelty)
 
             # Step environment
             obs_next, info, done = env.step(action[0])
 
-        # Compute economic reward (per-step MPL/EP/error)
-        mpl_t = info.get("mpl_t", 0.0)
-        ep_t = info.get("ep_t", 0.0)
-        err_term = info.get("delta_errors", 0.0)
+            # Compute economic reward (per-step MPL/EP/error)
+            mpl_t = info.get("mpl_t", 0.0)
+            ep_t = info.get("ep_t", 0.0)
+            err_term = info.get("delta_errors", 0.0)
 
-        reward, reward_components = compute_econ_reward(
-            mpl=mpl_t,
-            ep=ep_t,
-            error_rate=err_term,
-            wage_parity=None,
-            alpha_mpl=alpha_mpl,
-            alpha_error=alpha_error,
-            alpha_ep=alpha_ep,
-        )
-        last_reward_components = reward_components
+            reward, reward_components = compute_econ_reward(
+                mpl=mpl_t,
+                ep=ep_t,
+                error_rate=err_term,
+                wage_parity=None,
+                alpha_mpl=alpha_mpl,
+                alpha_error=alpha_error,
+                alpha_ep=alpha_ep,
+            )
+            last_reward_components = reward_components
 
             # Store transition
             agent.store_transition(reward, done)

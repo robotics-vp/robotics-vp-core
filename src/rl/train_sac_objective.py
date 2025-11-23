@@ -28,6 +28,7 @@ from src.valuation.reward_builder import (
     combine_reward,
     default_objective_vector,
 )
+from src.observation.condition_vector_builder import ConditionVectorBuilder
 
 
 def extract_step_summary(info: Dict[str, Any]) -> EpisodeInfoSummary:
@@ -72,6 +73,7 @@ def train_episode_with_objective(
     econ_params: EconParams,
     objective_vector: list,
     use_objective_reward: bool = False,
+    condition_builder: Optional[ConditionVectorBuilder] = None,
 ) -> Dict[str, Any]:
     """
     Run single training episode with objective-conditioned reward.
@@ -135,6 +137,28 @@ def train_episode_with_objective(
     episode_reward_terms = build_reward_terms(episode_summary, econ_params)
     episode_J = combine_reward(objective_vector, episode_reward_terms)
 
+    condition_vector = None
+    if condition_builder is not None:
+        condition_vector = condition_builder.build(
+            episode_config={
+                "task_id": getattr(backend, "task_id", "sac_objective_stub"),
+                "env_id": getattr(backend, "env_id", "objective_env"),
+                "backend": getattr(backend, "engine_type", "stub"),
+                "objective_preset": "custom",
+                "objective_vector": objective_vector,
+            },
+            econ_state={
+                "target_mpl": episode_summary.mpl_episode,
+                "current_wage_parity": episode_summary.wage_parity if episode_summary.wage_parity is not None else 1.0,
+                "energy_budget_wh": episode_summary.energy_Wh,
+            },
+            curriculum_phase="warmup",
+            sima2_trust=None,
+            datapack_metadata={"tags": ["objective_stub"]},
+            episode_step=step_count,
+            episode_metadata={"episode_id": getattr(backend, "episode_id", "stub_episode")},
+        )
+
     return {
         "steps": step_count,
         "total_raw_reward": total_raw_reward,
@@ -147,6 +171,7 @@ def train_episode_with_objective(
         "energy_Wh": episode_summary.energy_Wh,
         "wage_parity": episode_summary.wage_parity,
         "termination_reason": episode_summary.termination_reason,
+        "condition_vector": condition_vector.to_dict() if condition_builder and condition_vector else None,
         # Correlation between reward types
         "reward_correlation": np.corrcoef(raw_rewards, objective_rewards)[0, 1]
         if len(raw_rewards) > 1
@@ -178,6 +203,11 @@ def main():
         help="Enable objective-conditioned reward (default: use raw reward)",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--use-condition-vector",
+        action="store_true",
+        help="Build a stub ConditionVector for determinism checks (no behavior change)",
+    )
     args = parser.parse_args()
 
     # Load objective vector
@@ -226,6 +256,26 @@ def main():
     else:
         print("\n  [i] OBJECTIVE REWARD DISABLED (default)")
         print("      Using raw environment reward (no behavior change)")
+
+    if args.use_condition_vector:
+        cv_builder = ConditionVectorBuilder()
+        stub_cv = cv_builder.build(
+            episode_config={
+                "task_id": args.env,
+                "env_id": args.env,
+                "backend": args.engine_type,
+                "objective_preset": args.objective_preset or "balanced",
+                "objective_vector": objective_vector,
+            },
+            econ_state={"target_mpl": 0.0, "current_wage_parity": 1.0, "energy_budget_wh": 0.0},
+            curriculum_phase="warmup",
+            sima2_trust=None,
+            datapack_metadata={"tags": ["objective_stub"]},
+            episode_step=0,
+            episode_metadata={"episode_id": "stub_episode", "sampler_strategy": "balanced"},
+        )
+        print("\n[ConditionVector] Stub build (JSON-safe):")
+        print(stub_cv.to_dict())
 
     print("\nTo enable objective-conditioned reward:")
     print("  python -m src.rl.train_sac_objective --use-objective-reward")

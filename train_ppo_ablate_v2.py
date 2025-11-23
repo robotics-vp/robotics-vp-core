@@ -11,6 +11,7 @@ Usage:
     python train_ppo_ablate_v2.py B  # No constraint
     python train_ppo_ablate_v2.py C  # Full model
 """
+import os
 import sys
 import yaml
 import torch
@@ -24,6 +25,23 @@ from src.economics.wage import implied_robot_wage
 from src.rl.reward_shaping import compute_econ_reward
 from src.config.internal_profile import get_internal_experiment_profile
 from src.utils.logger import CsvLogger
+from src.observation.condition_vector_builder import ConditionVectorBuilder
+
+USE_CONDITION_VECTOR = os.environ.get("USE_CONDITION_VECTOR", "0") == "1"
+
+
+def _maybe_build_condition_vector(builder, episode_idx: int, sampler_strategy: str = "balanced"):
+    if builder is None:
+        return None
+    return builder.build(
+        episode_config={"task_id": "dishwashing", "env_id": "dishwashing_env", "backend": "ppo_ablate_v2", "objective_preset": "balanced"},
+        econ_state={"target_mpl": 0.0, "current_wage_parity": 1.0, "energy_budget_wh": 0.0},
+        curriculum_phase="warmup",
+        sima2_trust=None,
+        datapack_metadata={"tags": ["ppo_ablation"]},
+        episode_step=episode_idx,
+        episode_metadata={"episode_id": f"ppo_ablate_v2_ep_{episode_idx}", "sampler_strategy": sampler_strategy},
+    )
 
 
 def run_ablation(mode, episodes=1000):
@@ -100,6 +118,7 @@ def run_ablation(mode, episodes=1000):
 
     # Logger
     logger = CsvLogger(log_path)
+    condition_builder = ConditionVectorBuilder() if USE_CONDITION_VECTOR else None
 
     # Dual variable
     lam = lambda_init
@@ -108,6 +127,7 @@ def run_ablation(mode, episodes=1000):
 
     # Training loop
     for ep in range(episodes):
+        _ = _maybe_build_condition_vector(condition_builder, ep)
         # Curriculum: anneal error target from 10% → 6%
         err_target = np.interp(ep, [0, curriculum_eps],
                               [err_target_init, err_target_final])

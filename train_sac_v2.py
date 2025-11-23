@@ -31,6 +31,23 @@ from src.utils.logger import CsvLogger
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
 from src.rl.reward_shaping import compute_econ_reward
+from src.observation.condition_vector_builder import ConditionVectorBuilder
+
+USE_CONDITION_VECTOR = os.environ.get("USE_CONDITION_VECTOR", "0") == "1"
+
+
+def _maybe_build_condition_vector(builder, episode_idx: int, sampler_strategy: str = "balanced"):
+    if builder is None:
+        return None
+    return builder.build(
+        episode_config={"task_id": "dishwashing", "env_id": "dishwashing_env", "backend": "sac_v2", "objective_preset": "balanced"},
+        econ_state={"target_mpl": 0.0, "current_wage_parity": 1.0, "energy_budget_wh": 0.0},
+        curriculum_phase="warmup",
+        sima2_trust=None,
+        datapack_metadata={"tags": ["sac_v2"]},
+        episode_step=episode_idx,
+        episode_metadata={"episode_id": f"sac_v2_ep_{episode_idx}", "sampler_strategy": sampler_strategy},
+    )
 
 
 def make_env(cfg, econ_params=None):
@@ -244,6 +261,7 @@ def train_sac(config_path, episodes=None, seed=42, econ_preset=None):
     log_prefix = log_config.get('prefix', 'sac')
     log_path = f"logs/{log_prefix}_train.csv"
     logger = CsvLogger(log_path)
+    condition_builder = ConditionVectorBuilder() if USE_CONDITION_VECTOR else None
 
     # Dual variable
     lam = lambda_init
@@ -284,6 +302,7 @@ def train_sac(config_path, episodes=None, seed=42, econ_preset=None):
 
     # Training loop
     for ep in range(episodes):
+        _ = _maybe_build_condition_vector(condition_builder, ep)
         # Update wage index periodically
         if ep > 0 and ep % episodes_per_update == 0:
             market_wage_stub = wh_initial * (1.0 + 0.005 * (ep // episodes_per_update))

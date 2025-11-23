@@ -49,12 +49,14 @@ class TrunkNet(nn.Module):
         condition_dim: int = 32,
         hidden_dim: int = 256,
         use_condition_film: bool = True,
+        use_condition_vector: bool = True,
     ) -> None:
         super().__init__()
         self.vision_dim = vision_dim
         self.state_dim = state_dim
         self.condition_dim = condition_dim
         self.use_condition_film = use_condition_film
+        self.use_condition_vector = use_condition_vector
 
         self.vision_proj = nn.Linear(max(1, vision_dim), hidden_dim)
         self.state_proj = nn.Linear(max(1, state_dim), hidden_dim)
@@ -65,8 +67,11 @@ class TrunkNet(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
         )
 
-    def forward(self, obs: Any, condition: Optional[ConditionVector] = None) -> torch.Tensor:
+    def forward(self, obs: Any, condition: Optional[ConditionVector] = None, use_condition: Optional[bool] = None) -> torch.Tensor:
         device = next(self.parameters()).device
+        use_condition = self.use_condition_vector if use_condition is None else use_condition
+        if not use_condition:
+            condition = None
         vision_vec = self._extract_vision(obs, device)
         state_vec = self._extract_state(obs, device)
         condition_vec = self._extract_condition(condition, device)

@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from src.rl.episode_sampling import DataPackRLSampler
 from src.utils.json_safe import to_json_safe
+from src.observation.condition_vector_builder import select_skill_mode
 
 
 class DataPackCurriculum:
@@ -50,6 +51,7 @@ class DataPackCurriculum:
         self.mix = self._build_mix(self.config.get("phase_mix"))
         self.base_seed = int(self.config.get("base_seed", 0))
         self.advisory = advisory
+        self.use_condition_vector = bool(self.config.get("use_condition_vector", False))
 
     def get_phase(self, step: int) -> str:
         """Return phase name for a given training step."""
@@ -89,6 +91,15 @@ class DataPackCurriculum:
             meta["phase"] = phase
             meta["step"] = step
             meta["total_steps"] = self.total_steps
+            if self.use_condition_vector:
+                tags = item.get("semantic_tags") or {}
+                tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
+                meta["skill_mode"] = select_skill_mode(
+                    tags=tag_map,
+                    trust_matrix=getattr(self.sampler, "trust_matrix", None),
+                    curriculum_phase=phase,
+                    advisory=item.get("sampling_metadata", {}),
+                )
             annotated_item = copy.deepcopy(item)
             annotated_item["sampling_metadata"] = meta
             annotated.append(to_json_safe(annotated_item))

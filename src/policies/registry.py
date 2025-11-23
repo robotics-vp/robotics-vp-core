@@ -120,8 +120,14 @@ class PolicyRegistry:
     Backwards-compatible: existing heuristic bundle remains unchanged.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, register_test_policy: bool = True) -> None:
         self.policies: Dict[str, RegisteredPolicy] = {}
+        if register_test_policy:
+            try:
+                self._register_hydra_test_policy()
+            except Exception:
+                # Best-effort registration; failures should not block callers
+                pass
 
     def register_hydra_policy(
         self,
@@ -178,3 +184,44 @@ class PolicyRegistry:
             for pid, entry in self.policies.items()
             if not entry.backend_support or backend_id in entry.backend_support
         ]
+
+    def _register_hydra_test_policy(self) -> None:
+        """
+        Minimal deterministic Hydra policy used for smoke tests.
+        """
+        import torch.nn as nn
+        from src.rl.trunk_net import TrunkNet
+
+        hidden_dim = 16
+        condition_dim = 16
+        trunk = TrunkNet(
+            vision_dim=4,
+            state_dim=4,
+            condition_dim=condition_dim,
+            hidden_dim=hidden_dim,
+            use_condition_film=False,
+            use_condition_vector=True,
+        )
+
+        class _StubHead(nn.Module):
+            def __init__(self, head_bias: float) -> None:
+                super().__init__()
+                self.linear = nn.Linear(hidden_dim, 2)
+                nn.init.constant_(self.linear.weight, head_bias)
+                nn.init.constant_(self.linear.bias, head_bias)
+
+            def forward(self, trunk_features, condition=None):
+                return self.linear(trunk_features)
+
+        heads = {
+            "default": _StubHead(0.0),
+            "frontier_exploration": _StubHead(0.1),
+            "recovery_heavy": _StubHead(-0.1),
+        }
+        self.register_hydra_policy(
+            policy_id="hydra_test_policy",
+            trunk=trunk,
+            heads=heads,
+            backend_support=["any"],
+            default_skill_mode="default",
+        )

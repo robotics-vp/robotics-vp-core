@@ -9,7 +9,7 @@ Required VisionFrame fields:
 PolicyObservation enriches the VisionLatent with state_summary and mirrors the
 same task/episode/timestep identifiers.
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from src.vision.interfaces import VisionFrame, PolicyObservation, VisionLatent
 from src.observation.adapter import ObservationAdapter
@@ -60,6 +60,7 @@ class PolicyObservationBuilder:
         observation_adapter: ObservationAdapter = None,
         adapter_kwargs: Dict[str, Any] = None,
         condition_kwargs: Dict[str, Any] = None,
+        use_condition_vector: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Produce a policy-ready feature dict shared by heuristic vs neural encoders.
@@ -87,7 +88,12 @@ class PolicyObservationBuilder:
             return features
 
         adapter_payload = adapter_kwargs or {}
-        if condition_kwargs:
+        condition_payload = dict(condition_kwargs or {})
+        if use_condition_vector is None:
+            use_condition_vector = bool(condition_payload) or getattr(adapter, "use_condition_vector", False)
+        condition_payload["enable_condition"] = bool(use_condition_vector)
+
+        if condition_payload.get("enable_condition"):
             observation, condition = adapter.build_observation_and_condition(
                 vision_frame=frame,
                 vision_latent=obs.latent,
@@ -99,7 +105,7 @@ class PolicyObservationBuilder:
                 descriptor=adapter_payload.get("descriptor"),
                 episode_metadata=adapter_payload.get("episode_metadata", {}),
                 raw_env_obs=adapter_payload.get("raw_env_obs"),
-                condition_kwargs=condition_kwargs,
+                condition_kwargs=condition_payload,
             )
         else:
             observation = adapter.build_observation(
@@ -115,7 +121,11 @@ class PolicyObservationBuilder:
                 raw_env_obs=adapter_payload.get("raw_env_obs"),
             )
             condition = None
-        tensor = adapter.to_policy_tensor(observation, condition=condition, include_condition=condition is not None)
+        tensor = adapter.to_policy_tensor(
+            observation,
+            condition=condition,
+            include_condition=use_condition_vector and condition is not None,
+        )
         features.update(
             {
                 "adapter_observation": observation,

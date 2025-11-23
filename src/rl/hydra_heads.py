@@ -45,7 +45,7 @@ class HydraActor(nn.Module):
         self.default_skill_mode = default_skill_mode
         self.strict = strict
 
-    def forward(self, obs, condition: ConditionVector):
+    def forward(self, obs, condition: Optional[ConditionVector] = None):
         head_key = self._resolve_head_key(condition)
         if head_key not in self.heads:
             if self.strict:
@@ -58,7 +58,7 @@ class HydraActor(nn.Module):
         trunk_features = _call_module(self.trunk, obs, condition)
         return _call_module(head, trunk_features, condition)
 
-    def _resolve_head_key(self, condition: ConditionVector) -> str:
+    def _resolve_head_key(self, condition: Optional[ConditionVector]) -> str:
         if condition and getattr(condition, "skill_mode", None):
             return str(condition.skill_mode)
         if self.default_skill_mode:
@@ -84,7 +84,7 @@ class HydraCritic(nn.Module):
         self.default_skill_mode = default_skill_mode
         self.strict = strict
 
-    def forward(self, obs, condition: ConditionVector):
+    def forward(self, obs, condition: Optional[ConditionVector] = None):
         head_key = self._resolve_head_key(condition)
         if head_key not in self.heads:
             if self.strict:
@@ -97,7 +97,7 @@ class HydraCritic(nn.Module):
         trunk_features = _call_module(self.trunk, obs, condition)
         return _call_module(head, trunk_features, condition)
 
-    def _resolve_head_key(self, condition: ConditionVector) -> str:
+    def _resolve_head_key(self, condition: Optional[ConditionVector]) -> str:
         if condition and getattr(condition, "skill_mode", None):
             return str(condition.skill_mode)
         if self.default_skill_mode:

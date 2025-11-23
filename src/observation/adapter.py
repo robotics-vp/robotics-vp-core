@@ -90,6 +90,7 @@ class ObservationAdapter:
         recap_loader=None,
         config: Optional[Dict[str, Any]] = None,
         condition_builder: Optional[ConditionVectorBuilder] = None,
+        use_condition_vector: bool = False,
     ):
         self.policies = policy_registry
         self.trust_matrix = trust_matrix_loader() if callable(trust_matrix_loader) else {}
@@ -97,6 +98,7 @@ class ObservationAdapter:
         self.condition_builder = condition_builder
 
         cfg = config or {}
+        self.use_condition_vector = bool(use_condition_vector or cfg.get("use_condition_vector", False))
         self.semantic_tag_order: List[str] = list(cfg.get("semantic_tag_order") or sorted(self.trust_matrix.keys()))
         self.econ_component_order: List[str] = list(cfg.get("econ_component_order") or self.DEFAULT_REWARD_COMPONENT_ORDER)
         self.recap_metric_order: List[str] = list(cfg.get("recap_metric_order") or [])
@@ -151,6 +153,12 @@ class ObservationAdapter:
         datapack_metadata: Optional[Dict[str, Any]] = None,
         episode_step: int = 0,
         overrides: Optional[Dict[str, Any]] = None,
+        econ_slice: Optional[Any] = None,
+        semantic_tags: Optional[Dict[str, float]] = None,
+        recap_scores: Optional[Any] = None,
+        trust_summary: Optional[Dict[str, Any]] = None,
+        episode_metadata: Optional[Dict[str, Any]] = None,
+        advisory_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[ConditionVector]:
         """
         Public helper: fuse task/econ/semantic metadata into a ConditionVector.
@@ -165,6 +173,12 @@ class ObservationAdapter:
             datapack_metadata=datapack_metadata,
             episode_step=episode_step,
             overrides=overrides,
+            econ_slice=econ_slice,
+            semantic_tags=semantic_tags,
+            recap_scores=recap_scores,
+            trust_summary=trust_summary,
+            episode_metadata=episode_metadata,
+            advisory_context=advisory_context,
         )
 
     def build_observation_and_condition(
@@ -199,8 +213,18 @@ class ObservationAdapter:
         )
         condition_kwargs = condition_kwargs or {}
         condition = None
-        if condition_kwargs:
-            condition = self.build_condition_vector(**condition_kwargs)
+        enable_condition = condition_kwargs.pop("enable_condition", None)
+        if enable_condition is None:
+            enable_condition = self.use_condition_vector or bool(condition_kwargs)
+        if enable_condition and self.condition_builder is not None:
+            builder_inputs = self._condition_inputs_from_observation(
+                observation=observation,
+                descriptor=descriptor,
+                episode_metadata=episode_metadata,
+                raw_env_obs=raw_env_obs,
+                condition_kwargs=condition_kwargs,
+            )
+            condition = self.condition_builder.build(**builder_inputs)
         return observation, condition
 
     def to_policy_tensor(
@@ -452,6 +476,80 @@ class ObservationAdapter:
             return [float(x) for x in vec.tolist()]
         except Exception:
             return []
+
+    def _condition_inputs_from_observation(
+        self,
+        *,
+        observation: Observation,
+        descriptor: Optional[Dict[str, Any]],
+        episode_metadata: Dict[str, Any],
+        raw_env_obs: Optional[Dict[str, Any]],
+        condition_kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Assemble ConditionVectorBuilder kwargs from the observation slices and metadata.
+        """
+        descriptor = descriptor or {}
+        control = observation.control or ControlSlice()
+        econ_slice = observation.econ
+        semantics = observation.semantics
+        recap_slice = observation.recap
+
+        builder_inputs = dict(condition_kwargs)
+        overrides = dict(builder_inputs.get("overrides") or {})
+        builder_inputs["overrides"] = overrides
+
+        combined_episode_md = dict(episode_metadata or {})
+        if isinstance(descriptor, dict):
+            if descriptor.get("episode_id"):
+                combined_episode_md.setdefault("episode_id", descriptor.get("episode_id"))
+            if descriptor.get("pack_id"):
+                combined_episode_md.setdefault("pack_id", descriptor.get("pack_id"))
+            if descriptor.get("sampler_strategy"):
+                combined_episode_md.setdefault("sampler_strategy", descriptor.get("sampler_strategy"))
+        if getattr(control, "curriculum_phase", None):
+            combined_episode_md.setdefault("curriculum_phase", control.curriculum_phase)
+        if getattr(control, "sampler_strategy", None):
+            combined_episode_md.setdefault("sampler_strategy", control.sampler_strategy)
+        if raw_env_obs:
+            combined_episode_md.setdefault("timestep", raw_env_obs.get("t"))
+
+        sampling_md = descriptor.get("sampling_metadata", {}) if isinstance(descriptor, dict) else {}
+        advisory_context = {
+            "frontier_score": sampling_md.get("frontier_score"),
+            "priority": sampling_md.get("priority"),
+            "strategy": sampling_md.get("strategy"),
+        }
+        if "skill_mode" in sampling_md:
+            advisory_context["skill_mode"] = sampling_md.get("skill_mode")
+        if sampling_md.get("strategy") and "sampler_strategy" not in combined_episode_md:
+            combined_episode_md["sampler_strategy"] = sampling_md.get("strategy")
+
+        builder_inputs.setdefault("episode_config", descriptor or episode_metadata or {})
+        builder_inputs.setdefault("econ_state", econ_slice or {})
+        builder_inputs.setdefault(
+            "curriculum_phase",
+            getattr(control, "curriculum_phase", None) or sampling_md.get("phase") or combined_episode_md.get("curriculum_phase", "warmup"),
+        )
+        builder_inputs.setdefault("sima2_trust", getattr(semantics, "trust_scores", None))
+        datapack_md = descriptor.get("metadata", {}) if isinstance(descriptor, dict) else {}
+        if isinstance(descriptor, dict) and descriptor.get("semantic_tags") is not None:
+            meta_copy = dict(datapack_md) if isinstance(datapack_md, dict) else {}
+            meta_copy.setdefault("tags", descriptor.get("semantic_tags"))
+            datapack_md = meta_copy
+        if isinstance(descriptor, dict) and descriptor.get("pack_id") is not None:
+            meta_copy = dict(datapack_md) if isinstance(datapack_md, dict) else {}
+            meta_copy.setdefault("pack_id", descriptor.get("pack_id"))
+            datapack_md = meta_copy
+        builder_inputs.setdefault("datapack_metadata", datapack_md)
+        builder_inputs.setdefault("episode_step", combined_episode_md.get("timestep", 0))
+        builder_inputs.setdefault("econ_slice", econ_slice)
+        builder_inputs.setdefault("semantic_tags", getattr(semantics, "tags", {}) if semantics else {})
+        builder_inputs.setdefault("recap_scores", recap_slice)
+        builder_inputs.setdefault("trust_summary", getattr(semantics, "trust_scores", None) if semantics else None)
+        builder_inputs.setdefault("episode_metadata", combined_episode_md)
+        builder_inputs.setdefault("advisory_context", advisory_context)
+        return builder_inputs
 
     # --- semantic helpers ----------------------------------------------
     def _extract_semantic_tags(self, snapshot: SemanticSnapshot) -> Dict[str, float]:
