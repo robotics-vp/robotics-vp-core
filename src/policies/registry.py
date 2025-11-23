@@ -5,9 +5,9 @@ Loads config/policies.yaml and instantiates the heuristic implementations.
 Default behavior remains unchanged; "neural"/"stub" values are ignored for
 now and routed to the heuristic versions to preserve current outputs.
 """
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -59,6 +59,17 @@ class PolicyBundle:
         return asdict(self)
 
 
+@dataclass
+class RegisteredPolicy:
+    policy_id: str
+    type: str  # "monolithic" | "hydra"
+    trunk: Any = None
+    heads: Optional[Dict[str, Any]] = None
+    model: Any = None
+    backend_support: List[str] = field(default_factory=list)
+    default_skill_mode: Optional[str] = None
+
+
 def _load_config(path: Optional[str] = None) -> Dict[str, str]:
     cfg_path = Path(path) if path else Path(__file__).resolve().parents[2] / "config" / "policies.yaml"
     if not cfg_path.exists():
@@ -101,3 +112,69 @@ def build_all_policies(config_path: Optional[str] = None) -> PolicyBundle:
         reward_model=_select_policy(cfg.get("reward_model", "heuristic"), HeuristicRewardModelPolicy),
         datapack_auditor=_select_policy(cfg.get("datapack_auditor", "heuristic"), HeuristicDatapackAuditor),
     )
+
+
+class PolicyRegistry:
+    """
+    Lightweight registry for Hydra/monolithic policies (RL/VLA-facing).
+    Backwards-compatible: existing heuristic bundle remains unchanged.
+    """
+
+    def __init__(self) -> None:
+        self.policies: Dict[str, RegisteredPolicy] = {}
+
+    def register_hydra_policy(
+        self,
+        policy_id: str,
+        trunk: Any,
+        heads: Dict[str, Any],
+        backend_support: Optional[List[str]] = None,
+        default_skill_mode: Optional[str] = None,
+    ) -> None:
+        self.policies[policy_id] = RegisteredPolicy(
+            policy_id=policy_id,
+            type="hydra",
+            trunk=trunk,
+            heads=heads,
+            backend_support=backend_support or [],
+            default_skill_mode=default_skill_mode,
+        )
+
+    def register_monolithic_policy(
+        self,
+        policy_id: str,
+        model: Any,
+        backend_support: Optional[List[str]] = None,
+    ) -> None:
+        self.policies[policy_id] = RegisteredPolicy(
+            policy_id=policy_id,
+            type="monolithic",
+            model=model,
+            backend_support=backend_support or [],
+        )
+
+    def get_policy(self, policy_id: str, skill_mode: Optional[str] = None) -> Any:
+        if policy_id not in self.policies:
+            raise KeyError(f"Policy {policy_id} not registered")
+        entry = self.policies[policy_id]
+        if entry.type == "hydra":
+            if skill_mode is None:
+                raise ValueError(f"Hydra policy {policy_id} requires skill_mode")
+            from src.rl.hydra_heads import HydraPolicy  # Local import to avoid circulars
+
+            head = (entry.heads or {}).get(skill_mode)
+            if head is None:
+                head = (entry.heads or {}).get(entry.default_skill_mode)
+            if head is None:
+                raise KeyError(f"No head found for skill_mode={skill_mode}")
+            return HydraPolicy(entry.trunk, head)
+        return entry.model
+
+    def list_policies(self, backend_id: Optional[str] = None) -> List[str]:
+        if backend_id is None:
+            return list(self.policies.keys())
+        return [
+            pid
+            for pid, entry in self.policies.items()
+            if not entry.backend_support or backend_id in entry.backend_support
+        ]
