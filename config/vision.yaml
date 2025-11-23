@@ -6,3 +6,7 @@ normalize_mean: [0.485, 0.456, 0.406]
 normalize_std: [0.229, 0.224, 0.225]
 latent_dim: 16
 model_name: vision-stub
+backbone: "stub"
+use_bifpn: false
+use_spatial_rnn: false
+regnet_feature_dim: 8

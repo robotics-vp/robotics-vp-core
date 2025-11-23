@@ -8,6 +8,7 @@ deterministic defaults when fields are missing.
 from typing import Any, Dict, Optional, Sequence
 
 from src.observation.condition_vector import ConditionVector, _flatten_sequence
+from src.rl.skill_mode_resolver import SkillModeResolver, resolve_skill_mode
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -40,6 +41,10 @@ class ConditionVectorBuilder:
             "recovery_heavy",
             "default",
         ]
+        self.skill_resolver = SkillModeResolver(
+            default_mode=self.DEFAULT_SKILL_MODE,
+            mode_order=self.skill_mode_order,
+        )
 
     def build(
         self,
@@ -71,23 +76,26 @@ class ConditionVectorBuilder:
         tags = self._merge_tags(meta.get("tags"), semantic_tags)
         trust_score = self._summarize_trust(trust_summary, sima2_trust)
 
+        recap_bucket = overrides.get("recap_goodness_bucket")
+        if recap_bucket is None:
+            recap_bucket = self._bucketize_recap(recap_scores)
+
+        sampler_strategy = episode_metadata.get("sampler_strategy") or meta.get("sampler_strategy")
+
         skill_mode = overrides.get("skill_mode") or advisory_context.get("skill_mode")
         if not skill_mode:
-            skill_mode = select_skill_mode(
+            skill_mode = self.skill_resolver.resolve(
                 tags=tags,
                 trust_matrix=trust_summary,
                 curriculum_phase=phase,
-                default=self.DEFAULT_SKILL_MODE,
                 advisory=advisory_context,
-                skill_mode_order=self.skill_mode_order,
+                econ_slice=econ_slice if isinstance(econ_slice, dict) else None,
+                recap_bucket=recap_bucket,
+                strategy=sampler_strategy,
             )
 
         objective_vector = overrides.get("objective_vector") or _get(episode_config, "objective_vector")
         objective_vector = _flatten_sequence(objective_vector) if objective_vector is not None else None
-
-        recap_bucket = overrides.get("recap_goodness_bucket")
-        if recap_bucket is None:
-            recap_bucket = self._bucketize_recap(recap_scores)
 
         novelty_tier = overrides.get("novelty_tier")
         if novelty_tier is None:
@@ -97,7 +105,6 @@ class ConditionVectorBuilder:
         if episode_step_val is None:
             episode_step_val = episode_metadata.get("timestep", episode_metadata.get("step", episode_step))
 
-        sampler_strategy = episode_metadata.get("sampler_strategy") or meta.get("sampler_strategy")
         wage_parity = overrides.get("current_wage_parity", _get(econ_state, "current_wage_parity", 0.0))
         wage_parity = self._safe_float(wage_parity, self._safe_float(_get(econ_slice, "wage_parity", None)))
 
@@ -283,52 +290,30 @@ def select_skill_mode(
     default: str = ConditionVectorBuilder.DEFAULT_SKILL_MODE,
     advisory: Optional[Dict[str, Any]] = None,
     skill_mode_order: Optional[Sequence[str]] = None,
+    econ_slice: Optional[Dict[str, Any]] = None,
+    recap_bucket: Optional[str] = None,
+    strategy: Optional[str] = None,
+    use_condition_vector: bool = True,
 ) -> str:
     """
     Deterministic skill_mode resolver shared by samplers and ConditionVector.
     """
-    advisory = advisory or {}
-    if advisory.get("skill_mode"):
-        return str(advisory["skill_mode"])
-
-    skill_mode_order = list(skill_mode_order or [])
-    tags = tags or {}
-    phase = (curriculum_phase or "warmup").lower()
-
-    frontier_flag = advisory.get("frontier") or advisory.get("is_frontier")
-    frontier_flag = frontier_flag or any("frontier" in str(k) for k in tags.keys())
-    if frontier_flag or phase == "frontier":
-        return _coerce_skill_mode("frontier_exploration", skill_mode_order, default)
-
-    safety_flag = advisory.get("safety_critical") or any("fragile" in str(k) or "damage" in str(k) for k in tags.keys())
-    if safety_flag:
-        return _coerce_skill_mode("safety_critical", skill_mode_order, default)
-
-    trust_score = 0.0
-    if trust_matrix:
-        try:
-            vals = [float(v) for v in trust_matrix.values() if isinstance(v, (int, float))]
-            if vals:
-                trust_score = sum(vals) / len(vals)
-        except Exception:
-            trust_score = 0.0
-    if advisory.get("trust_score") is not None:
-        try:
-            trust_score = float(advisory["trust_score"])
-        except Exception:
-            pass
-
-    if trust_score > 0.8 and phase in {"skill_building", "frontier", "fine_tuning"}:
-        return _coerce_skill_mode("efficiency_throughput", skill_mode_order, default)
-    if trust_score < 0.5 or any("recovery" in str(k) for k in tags.keys()):
-        return _coerce_skill_mode("recovery_heavy", skill_mode_order, default)
-
-    return _coerce_skill_mode(default, skill_mode_order, default)
-
-
-def _coerce_skill_mode(candidate: str, order: Sequence[str], default: str) -> str:
-    if candidate in order:
-        return candidate
-    if default in order:
-        return default
-    return str(candidate or default)
+    default_order = skill_mode_order or [
+        "frontier_exploration",
+        "safety_critical",
+        "efficiency_throughput",
+        "recovery_heavy",
+        "default",
+    ]
+    return resolve_skill_mode(
+        tags=tags,
+        trust_matrix=trust_matrix,
+        curriculum_phase=curriculum_phase,
+        advisory=advisory,
+        default_mode=default,
+        mode_order=default_order,
+        econ_slice=econ_slice,
+        recap_bucket=recap_bucket,
+        strategy=strategy,
+        use_condition_vector=use_condition_vector,
+    )

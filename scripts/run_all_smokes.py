@@ -56,6 +56,10 @@ SMOKES = [
     ["python3", "scripts/smoke_test_recap_inference.py"],
     ["python3", "scripts/smoke_test_recap_semantic_integration.py"],
     ["python3", "scripts/smoke_test_recap_sampler_weights.py"],
+    ["python3", "scripts/smoke_test_skill_mode_resolver.py"],
+    ["python3", "scripts/smoke_test_observation_components.py"],
+    ["python3", "scripts/smoke_test_regnet_bifpn_stub.py"],
+    ["python3", "scripts/smoke_test_spatial_rnn_stub.py"],
 ]
 
 OPTIONAL = [

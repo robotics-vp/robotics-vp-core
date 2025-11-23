@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from src.rl.episode_sampling import DataPackRLSampler
 from src.utils.json_safe import to_json_safe
-from src.observation.condition_vector_builder import select_skill_mode
+from src.rl.skill_mode_resolver import SkillModeResolver
 from src.rl.episode_sampling import summarize_condition_metadata
 
 
@@ -53,6 +53,11 @@ class DataPackCurriculum:
         self.base_seed = int(self.config.get("base_seed", 0))
         self.advisory = advisory
         self.use_condition_vector = bool(self.config.get("use_condition_vector", False))
+        self.skill_resolver = SkillModeResolver(
+            default_mode="efficiency_throughput",
+            mode_order=self.config.get("skill_mode_order")
+            or ["frontier_exploration", "safety_critical", "efficiency_throughput", "recovery_heavy", "default"],
+        )
 
     def get_phase(self, step: int) -> str:
         """Return phase name for a given training step."""
@@ -95,11 +100,13 @@ class DataPackCurriculum:
             if self.use_condition_vector:
                 tags = item.get("semantic_tags") or {}
                 tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
-                skill_mode = select_skill_mode(
+                skill_mode = self.skill_resolver.resolve(
                     tags=tag_map,
                     trust_matrix=getattr(self.sampler, "trust_matrix", None),
                     curriculum_phase=phase,
                     advisory=item.get("sampling_metadata", {}),
+                    strategy=item.get("sampling_metadata", {}).get("strategy"),
+                    use_condition_vector=self.use_condition_vector,
                 )
                 meta["skill_mode"] = skill_mode
                 meta["condition_metadata"] = summarize_condition_metadata(skill_mode, tag_map, phase)

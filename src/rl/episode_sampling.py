@@ -20,7 +20,7 @@ from src.rl.episode_descriptor_validator import (
     normalize_and_validate,
 )
 from src.utils.json_safe import to_json_safe
-from src.observation.condition_vector_builder import select_skill_mode
+from src.rl.skill_mode_resolver import SkillModeResolver
 from src.orchestrator.semantic_orchestrator_v2 import OrchestratorAdvisory
 
 if TYPE_CHECKING:
@@ -246,6 +246,16 @@ class DataPackRLSampler:
         self.use_datapack_auditor = bool(use_datapack_auditor)
         self.trust_matrix = trust_matrix or {}
         self.use_condition_vector = bool(use_condition_vector)
+        self.skill_resolver = SkillModeResolver(
+            default_mode="efficiency_throughput",
+            mode_order=[
+                "frontier_exploration",
+                "safety_critical",
+                "efficiency_throughput",
+                "recovery_heavy",
+                "default",
+            ],
+        )
         from src.policies.registry import build_all_policies
 
         self.policies = policies or build_all_policies()
@@ -551,11 +561,15 @@ class DataPackRLSampler:
         if self.use_condition_vector:
             tags = descriptor.get("semantic_tags") or {}
             tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
-            skill_mode = select_skill_mode(
+            skill_mode = self.skill_resolver.resolve(
                 tags=tag_map,
                 trust_matrix=self.trust_matrix,
                 curriculum_phase=descriptor["sampling_metadata"].get("phase", "warmup"),
                 advisory=descriptor["sampling_metadata"],
+                econ_slice=None,
+                recap_bucket=None,
+                strategy=strategy,
+                use_condition_vector=self.use_condition_vector,
             )
             descriptor["sampling_metadata"]["skill_mode"] = skill_mode
             descriptor["sampling_metadata"]["condition_metadata"] = _summarize_condition_metadata(

@@ -11,6 +11,7 @@ import numpy as np
 
 from src.observation.condition_vector import ConditionVector
 from src.observation.condition_vector_builder import ConditionVectorBuilder
+from src.observation.components import ObservationComponents
 from src.observation.models import Observation, VisionSlice, SemanticSlice, EconSlice, RecapSlice, ControlSlice
 from src.utils.json_safe import to_json_safe
 from src.vla.recap_features import summarize_vision_features
@@ -99,6 +100,7 @@ class ObservationAdapter:
 
         cfg = config or {}
         self.use_condition_vector = bool(use_condition_vector or cfg.get("use_condition_vector", False))
+        self.use_observation_components = bool(cfg.get("use_observation_components", False))
         self.semantic_tag_order: List[str] = list(cfg.get("semantic_tag_order") or sorted(self.trust_matrix.keys()))
         self.econ_component_order: List[str] = list(cfg.get("econ_component_order") or self.DEFAULT_REWARD_COMPONENT_ORDER)
         self.recap_metric_order: List[str] = list(cfg.get("recap_metric_order") or [])
@@ -226,6 +228,59 @@ class ObservationAdapter:
             )
             condition = self.condition_builder.build(**builder_inputs)
         return observation, condition
+
+    def build_observation_and_components(
+        self,
+        *,
+        vision_frame: Optional[VisionFrame],
+        vision_latent: Optional[VisionLatent],
+        reward_scalar: float,
+        reward_components: Dict[str, float],
+        econ_vector: Optional[EconVector],
+        semantic_snapshot: Optional[SemanticSnapshot],
+        recap_scores: Optional[RecapEpisodeScores],
+        descriptor: Optional[Dict[str, Any]],
+        episode_metadata: Dict[str, Any],
+        raw_env_obs: Optional[Dict[str, Any]] = None,
+        condition_kwargs: Optional[Dict[str, Any]] = None,
+        include_condition: bool = False,
+        use_components: Optional[bool] = None,
+    ) -> Tuple[Observation, Optional[ConditionVector], np.ndarray, ObservationComponents]:
+        """
+        Build observation/condition and return policy tensor plus components.
+        """
+        condition_payload = dict(condition_kwargs or {})
+        if "enable_condition" not in condition_payload:
+            condition_payload["enable_condition"] = include_condition
+        enable_condition = condition_payload.get("enable_condition")
+        observation, condition = self.build_observation_and_condition(
+            vision_frame=vision_frame,
+            vision_latent=vision_latent,
+            reward_scalar=reward_scalar,
+            reward_components=reward_components,
+            econ_vector=econ_vector,
+            semantic_snapshot=semantic_snapshot,
+            recap_scores=recap_scores,
+            descriptor=descriptor,
+            episode_metadata=episode_metadata,
+            raw_env_obs=raw_env_obs,
+            condition_kwargs=condition_payload,
+        )
+        if enable_condition is None:
+            enable_condition = self.use_condition_vector or bool(condition_payload)
+        include_condition_flag = bool(enable_condition) and condition is not None
+        tensor = self.to_policy_tensor(
+            observation,
+            condition=condition,
+            include_condition=include_condition_flag,
+        )
+        components = self._build_components(
+            observation=observation,
+            condition=condition if include_condition_flag else None,
+            include_condition=include_condition_flag,
+            use_components=use_components if use_components is not None else self.use_observation_components,
+        )
+        return observation, condition, tensor, components
 
     def to_policy_tensor(
         self,
@@ -380,6 +435,36 @@ class ObservationAdapter:
         )
 
     # --- feature helpers ------------------------------------------------
+    def _build_components(
+        self,
+        *,
+        observation: Observation,
+        condition: Optional[ConditionVector],
+        include_condition: bool,
+        use_components: bool,
+    ) -> ObservationComponents:
+        if not use_components:
+            return ObservationComponents()
+        vision_features = np.asarray(self._vision_features(observation), dtype=np.float32)
+        proprio = np.asarray(self._raw_env_features(observation), dtype=np.float32)
+        env_state = np.asarray(self._control_features(observation), dtype=np.float32)
+        econ_slice = observation.econ.to_dict() if observation.econ else None
+        semantic_slice = observation.semantics.to_dict() if observation.semantics else None
+        condition_vec = None
+        if include_condition and condition is not None:
+            try:
+                condition_vec = condition.to_vector()
+            except Exception:
+                condition_vec = None
+        return ObservationComponents(
+            vision_features=vision_features,
+            proprio=proprio,
+            env_state=env_state,
+            econ_slice=econ_slice,
+            semantic_slice=semantic_slice,
+            condition_vector=condition_vec,
+        )
+
     def _maybe_initialize_orders(self, obs: Observation) -> None:
         if self._vision_latent_dim is None and obs.vision and obs.vision.latent:
             self._vision_latent_dim = len(obs.vision.latent)

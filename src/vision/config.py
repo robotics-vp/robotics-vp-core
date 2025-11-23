@@ -15,6 +15,10 @@ _DEFAULT_CFG = {
     "normalize_std": [0.229, 0.224, 0.225],
     "latent_dim": 16,
     "model_name": "vision-stub",
+    "backbone": "stub",
+    "use_bifpn": False,
+    "use_spatial_rnn": False,
+    "regnet_feature_dim": 8,
 }
 
 
@@ -35,6 +39,10 @@ def load_vision_config(path: str = "") -> Dict[str, Any]:
         merged["dtype"] = str(merged.get("dtype", "uint8"))
         merged["crop_type"] = str(merged.get("crop_type", "center"))
         merged["model_name"] = str(merged.get("model_name", "vision-stub"))
+        merged["backbone"] = str(merged.get("backbone", "stub"))
+        merged["use_bifpn"] = bool(merged.get("use_bifpn", False))
+        merged["use_spatial_rnn"] = bool(merged.get("use_spatial_rnn", False))
+        merged["regnet_feature_dim"] = int(merged.get("regnet_feature_dim", 8))
         return merged
     except Exception:
         return dict(_DEFAULT_CFG)

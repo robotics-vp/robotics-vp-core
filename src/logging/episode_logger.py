@@ -61,8 +61,9 @@ class EpisodeLogger:
     ) -> Episode:
         episode_id = _deterministic_episode_id(self.task.task_id, self.robot.robot_id, datapack.datapack_id if datapack else None)
         meta = dict(metadata or {})
-        if skill_mode:
-            meta.setdefault("skill_mode", str(skill_mode))
+        resolved_skill_mode = skill_mode or getattr(condition_vector, "skill_mode", None)
+        if resolved_skill_mode:
+            meta.setdefault("skill_mode", str(resolved_skill_mode))
         cond_summary = _condition_summary(condition_vector)
         if cond_summary:
             meta.setdefault("condition_vector_summary", cond_summary)
