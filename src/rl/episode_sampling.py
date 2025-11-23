@@ -532,6 +532,10 @@ class DataPackRLSampler:
         econ_signal = 0.45 * novelty + 0.45 * min(expected_gain / 10.0, 1.0) + 0.1 * coherence
         econ_signal *= priority_boost * weight_mult
         econ_signal *= (0.6 + 0.4 * trust) * tier_weight
+        if trust > 0.8:
+            econ_signal *= 5.0
+        elif trust > 0.5:
+            econ_signal *= 1.5
         return max(econ_signal, 0.0)
 
     def _recap_weight_multiplier(self, episode: Dict[str, Any]) -> float:

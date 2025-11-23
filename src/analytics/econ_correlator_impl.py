@@ -11,7 +11,7 @@ import numpy as np
 from collections import defaultdict
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 DEFAULT_TRUST_MATRIX_PATH = Path(__file__).resolve().parents[2] / "results" / "sima2" / "trust_matrix.json"
 
@@ -25,6 +25,8 @@ class TrustEntry:
     trust_score: float = 0.0
     correlation_strength: str = "unknown"
     economic_impact: str = "unknown"
+    trust_tier: str = "untrusted"
+    sampling_multiplier: float = 1.0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -102,6 +104,7 @@ class EconCorrelator:
             trust_score = self._compute_trust_score(tag, mean_damage, success_rate)
             correlation_strength = self._classify_correlation(trust_score)
             economic_impact = self._describe_impact(tag, mean_damage, mean_mpl, success_rate)
+            trust_tier, sampling_multiplier = self._trust_tier_and_multiplier(trust_score)
 
             trust_matrix[tag] = TrustEntry(
                 tag=tag,
@@ -111,6 +114,8 @@ class EconCorrelator:
                 trust_score=trust_score,
                 correlation_strength=correlation_strength,
                 economic_impact=economic_impact,
+                trust_tier=trust_tier,
+                sampling_multiplier=sampling_multiplier,
             ).to_dict()
 
         return trust_matrix
@@ -139,6 +144,13 @@ class EconCorrelator:
         elif "RecoveryTag" in tag:
             return f"resilience_marker"
         return "unknown"
+
+    def _trust_tier_and_multiplier(self, trust_score: float) -> Tuple[str, float]:
+        if trust_score > 0.8:
+            return "trusted", 5.0
+        if trust_score > 0.5:
+            return "provisional", 1.5
+        return "untrusted", 1.0
 
     def save_trust_matrix(self, trust_matrix: Dict[str, Any], path: Optional[str] = None) -> Path:
         """Save TrustMatrix to JSON."""

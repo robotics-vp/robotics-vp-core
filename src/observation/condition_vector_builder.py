@@ -62,6 +62,7 @@ class ConditionVectorBuilder:
         trust_summary: Optional[Dict[str, Any]] = None,
         episode_metadata: Optional[Dict[str, Any]] = None,
         advisory_context: Optional[Dict[str, Any]] = None,
+        tfd_instruction: Optional[Dict[str, Any]] = None,
     ) -> ConditionVector:
         """
         Construct a ConditionVector with deterministic fallbacks.
@@ -71,6 +72,9 @@ class ConditionVectorBuilder:
         semantic_tags = semantic_tags or {}
         episode_metadata = episode_metadata or {}
         advisory_context = advisory_context or {}
+        if tfd_instruction:
+            episode_metadata = dict(episode_metadata)
+            episode_metadata["tfd_instruction"] = tfd_instruction
 
         phase = str(overrides.get("curriculum_phase", curriculum_phase or "warmup"))
         tags = self._merge_tags(meta.get("tags"), semantic_tags)
@@ -180,10 +184,12 @@ class ConditionVectorBuilder:
         sampler_strategy: Optional[str],
     ) -> Dict[str, Any]:
         # Keep only JSON-safe, low-risk fields
-        allowed_keys = ["tags", "datapack_id", "backend_id", "phase", "pack_tier", "pack_id"]
+        allowed_keys = ["tags", "datapack_id", "backend_id", "phase", "pack_tier", "pack_id", "tfd_instruction"]
         meta: Dict[str, Any] = {k: v for k, v in (datapack_metadata or {}).items() if k in allowed_keys}
         if episode_metadata.get("episode_id"):
             meta["episode_id"] = episode_metadata["episode_id"]
+        if episode_metadata.get("tfd_instruction") is not None:
+            meta["tfd_instruction"] = episode_metadata.get("tfd_instruction")
         if sampler_strategy:
             meta["sampler_strategy"] = sampler_strategy
         if advisory_context:

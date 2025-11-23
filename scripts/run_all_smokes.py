@@ -32,6 +32,9 @@ SMOKES = [
     ["python3", "scripts/smoke_test_stage2_4_semantic_tag_propagation.py"],
     ["python3", "scripts/smoke_test_segmentation_tags.py"],
     ["python3", "scripts/smoke_test_segmentation_semantic_snapshot.py"],
+    ["python3", "scripts/smoke_test_sima2_tags.py"],
+    ["python3", "scripts/smoke_test_sima2_contract.py"],
+    ["python3", "scripts/smoke_test_sima2_stress_small.py"],
     ["python3", "scripts/smoke_test_stage3_sampler.py"],
     ["python3", "scripts/smoke_test_stage3_curriculum.py"],
     ["python3", "scripts/smoke_test_stage3_training_integration.py"],
@@ -56,10 +59,13 @@ SMOKES = [
     ["python3", "scripts/smoke_test_recap_inference.py"],
     ["python3", "scripts/smoke_test_recap_semantic_integration.py"],
     ["python3", "scripts/smoke_test_recap_sampler_weights.py"],
+    ["python3", "scripts/smoke_test_trust_matrix_sampler.py"],
+    ["python3", "scripts/smoke_test_tfd.py"],
     ["python3", "scripts/smoke_test_skill_mode_resolver.py"],
     ["python3", "scripts/smoke_test_observation_components.py"],
     ["python3", "scripts/smoke_test_regnet_bifpn_stub.py"],
     ["python3", "scripts/smoke_test_spatial_rnn_stub.py"],
+    ["python3", "scripts/smoke_test_econ_correlator_impl.py"],
 ]
 
 OPTIONAL = [

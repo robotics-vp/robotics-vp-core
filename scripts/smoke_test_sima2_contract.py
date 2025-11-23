@@ -33,6 +33,8 @@ def _seed_rollouts(client: Sima2Client):
             "status": "recovery",
         }
     )
+    base.setdefault("metadata", {})
+    base["metadata"]["embedding_distance"] = 0.96
     alt = client.run_episode({"task_id": "dish_place", "episode_index": 1})
     return [base, alt]
 
@@ -101,7 +103,11 @@ def main():
         for src_id in getattr(prop, "source_ontology_proposal_ids", []) or []:
             assert src_id in ontology_prop_ids, "Task graph proposal references unknown ontology proposal"
 
-    propagator = SemanticTagPropagator()
+    trust_matrix = {
+        "OODTag": {"trust_score": 0.9},
+        "RecoveryTag": {"trust_score": 0.9},
+    }
+    propagator = SemanticTagPropagator(trust_matrix=trust_matrix, enable_ood_recovery_tags=True)
     econ_outputs = {p["episode_id"]: {"novelty_delta": 0.0} for p in primitives}
     enrichment = propagator.generate_proposals(segmented_rollouts, ontology_props, task_graph_props, econ_outputs)
 
@@ -115,6 +121,10 @@ def main():
             segref = getattr(rec, "segment_id", None)
             if segref:
                 assert segref in valid_segment_ids, "Recovery tag references unknown segment"
+        if proposal.ood_tags:
+            assert all(t.get("trust_score", 0) > 0.5 for t in proposal.ood_tags)
+        if proposal.recovery_tags:
+            assert all(t.get("trust_score", 0) > 0.5 for t in proposal.recovery_tags)
 
     print("[smoke_test_sima2_contract] PASS")
 

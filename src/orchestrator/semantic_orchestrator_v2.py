@@ -27,6 +27,7 @@ class SemanticOrchestratorV2:
         self.config = config or {}
         self.output_dir = self.config.get("output_dir", "results/orchestrator")
         self.write_to_file = self.config.get("write_to_file", True)
+        self.trust_matrix = self.config.get("trust_matrix", {}) or {}
 
     def propose(self, snapshot: SemanticSnapshot) -> OrchestratorAdvisory:
         econ = snapshot.econ_slice
@@ -64,6 +65,18 @@ class SemanticOrchestratorV2:
             if recap.get("top_episodes"):
                 priority_tags.append("recap_top")
             priority_tags = sorted(list(set(priority_tags)))
+
+        # Trust-aware safety emphasis
+        ood_trust = float(self.trust_matrix.get("OODTag", {}).get("trust_score", 0.0))
+        max_ood_sev = 0.0
+        if snapshot.metadata:
+            max_ood_sev = float(snapshot.metadata.get("max_ood_severity", snapshot.metadata.get("ood_severity", 0.0)))
+        if ood_trust > 0.8 and max_ood_sev > 0.9:
+            safety_emphasis = 1.0
+            priority_tags.append("safety_stop")
+        elif ood_trust > 0.5 and max_ood_sev > 0.9:
+            priority_tags.append("ood_warning")
+        priority_tags = sorted(list(set(priority_tags)))
 
         segmentation_meta = {
             "num_segments": getattr(snapshot, "num_segments", 0),

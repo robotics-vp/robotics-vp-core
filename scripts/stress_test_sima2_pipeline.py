@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
 """
 Synthetic stress test for SIMA-2 pipeline with optional policy dataset export.
+
+Implements SIMA2_SCALING_AND_STRESS_TESTS.md:
+- Deterministic 10k rollout benchmark (batched)
+- OOM-safe (streaming JSONL writes)
+- Ontology write-amplification guardrails
+- Tag frequency analytics and proposal explosion detection
+- Performance counters (throughput/latency)
 """
 import argparse
+import gc
 import json
+import random
+import time
 from datetime import datetime
 from pathlib import Path
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence, Tuple
 
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
@@ -33,8 +43,10 @@ from scripts.build_policy_datasets import build_datasets
 
 
 def _write_jsonl(path: Path, records: List[Any]) -> None:
+    if not records:
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
+    with path.open("a") as f:
         for rec in records:
             obj = rec.to_dict() if hasattr(rec, "to_dict") else rec
             f.write(json.dumps(obj, sort_keys=True))
@@ -49,8 +61,12 @@ def _task_sequence(distribution: Dict[str, float], total: int) -> List[str]:
     for task, weight in normalized.items():
         count = int(round(weight * total))
         tasks.extend([task] * max(count, 1))
+    # Deterministic padding if rounding left gaps
     while len(tasks) < total:
-        tasks.extend(list(normalized.keys()))
+        for task in sorted(normalized.keys()):
+            tasks.append(task)
+            if len(tasks) >= total:
+                break
     return tasks[:total]
 
 
@@ -88,21 +104,88 @@ def _econ_vector(episode_id: str, task_id: str, primitives: List[Dict[str, Any]]
     )
 
 
+def _noise_rollout(task_id: str, idx: int) -> Dict[str, Any]:
+    """Generate a lightweight noise rollout for robustness testing."""
+    return {
+        "episode_id": f"{task_id}_ep_{idx}",
+        "task": task_id,
+        "primitives": [
+            {"timestep": 0, "object": "noise", "action": "noop", "risk": "low", "contact": False},
+            {"timestep": 1, "object": "noise", "action": "wiggle", "risk": "medium", "contact": bool(idx % 2)},
+        ],
+        "events": [{"timestep": 1, "event_type": "primitive", "payload": {"action": "wiggle"}}],
+        "metadata": {"objects_present": ["noise"], "debug_mode": False},
+    }
+
+
+def _template_for_task(idx: int) -> str:
+    """Deterministic template schedule to cover success/failure/recovery."""
+    if idx % 10 == 0:
+        return "failure"
+    if idx % 7 == 0:
+        return "recovery"
+    if idx % 13 == 0:
+        return "mixed"
+    return "success"
+
+
+def _maybe_gc(batch_idx: int) -> None:
+    if batch_idx % 2 == 0:
+        gc.collect()
+
+
+def _p99(latencies: Sequence[float]) -> float:
+    if not latencies:
+        return 0.0
+    vals = sorted(latencies)
+    k = int(0.99 * (len(vals) - 1))
+    return float(vals[k])
+
+
+def _guardrails(
+    ontology_props: Sequence[Any],
+    task_graph_props: Sequence[Any],
+    rollouts_in_batch: int,
+    max_write_multiplier: float,
+) -> None:
+    if rollouts_in_batch <= 0:
+        return
+    if len(ontology_props) > max_write_multiplier * rollouts_in_batch:
+        raise AssertionError(
+            f"Ontology write amplification too high: {len(ontology_props)} props for {rollouts_in_batch} rollouts"
+        )
+    if len(task_graph_props) > max_write_multiplier * rollouts_in_batch:
+        raise AssertionError(
+            f"Task graph refinement explosion: {len(task_graph_props)} props for {rollouts_in_batch} rollouts"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Stress test SIMA-2 pipeline")
-    parser.add_argument("--num-rollouts", type=int, default=100)
-    parser.add_argument("--task-distribution", type=str, default="stress_mix_v1")
+    parser.add_argument("--num-rollouts", type=int, default=10000)
+    parser.add_argument("--batch-size", type=int, default=500)
+    parser.add_argument("--task-distribution", type=str, default="dataset_stress_mix_v1")
     parser.add_argument("--output-dir", type=str, default="results/sima2_stress")
     parser.add_argument("--ontology-root", type=str, default="results/sima2_stress/ontology_store")
     parser.add_argument("--emit-policy-datasets", action="store_true")
     parser.add_argument("--policy-dataset-dir", type=str, default="results/policy_datasets_sima2_stress")
+    parser.add_argument("--max-write-multiplier", type=float, default=50.0)
     args = parser.parse_args()
 
     cfg = load_sima2_config()
-    preset = cfg.get("task_distribution", {}).get(args.task_distribution, {})
+    dataset_presets = {
+        "dataset_stress_mix_v1": {
+            "distribution": {"drawer_open": 0.4, "dish_place": 0.4, "noise": 0.2},
+            "params": {"failure_rate": 0.3, "recovery_rate": 0.1, "ood_rate": 0.05},
+        },
+        "dataset_edge_cases_v1": {"distribution": {"noise": 1.0}},
+    }
+    preset = dataset_presets.get(args.task_distribution) or cfg.get("task_distribution", {}).get(args.task_distribution, {})
     if not preset:
-        preset = {"drawer_open": 0.5, "dish_place": 0.5}
+        preset = {"distribution": {"drawer_open": 0.5, "dish_place": 0.5}}
     tasks = _task_sequence(preset.get("distribution", preset), args.num_rollouts)
+    rng = random.Random(0)
+    rng.shuffle(tasks)
 
     client = Sima2Client(task_id=tasks[0] if tasks else "drawer_open")
     seg_engine = SegmentationEngine(segmentation_config=cfg)
@@ -120,71 +203,118 @@ def main():
     store.upsert_robot(Robot(robot_id="sima2_stub_robot", name="sima2_stub_robot"))
     trust_matrix = load_trust_matrix()
 
-    primitives: List[Dict[str, Any]] = []
-    primitive_models: List[SemanticPrimitive] = []
-    segmented_rollouts: List[Dict[str, Any]] = []
-    ontology_proposals: List[OntologyUpdateProposal] = []
-    task_graph_proposals: List[TaskGraphRefinementProposal] = []
-
     result_dir = Path(args.output_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
+    primitives_path = result_dir / "primitives.jsonl"
+    ontology_path = result_dir / "ontology_proposals.jsonl"
+    task_graph_path = result_dir / "task_graph_proposals.jsonl"
+    tags_path = result_dir / "semantic_tags.jsonl"
 
-    for idx, task_id in enumerate(tasks):
-        store.upsert_task(Task(task_id=task_id, name=task_id, environment_id="sima2"))
-        rollout = client.run_episode({"task_id": task_id, "episode_index": idx})
-        seg_out = seg_engine.segment_rollout(rollout)
-        seg_rollout = seg_out["rollout"]
-        segmented_rollouts.append(seg_rollout)
+    total_rollouts = 0
+    total_primitives = 0
+    total_ontology_props = 0
+    total_task_graph_props = 0
+    total_tags = 0
+    tag_frequency: Dict[str, int] = {}
+    per_rollout_latencies: List[float] = []
+    start_time = time.perf_counter()
 
-        prims = primitive_extractor.extract([seg_rollout])
-        primitives.extend(prims)
-        primitive_models.extend(
-            [
-                SemanticPrimitive(
-                    primitive_id=p.get("primitive_id", f"{task_id}_prim_{idx}"),
-                    task_type=p.get("task_type", task_id),
-                    tags=p.get("tags", []),
-                    risk_level=p.get("risk_level", "low"),
-                    energy_intensity=float(p.get("energy_intensity", 0.0)),
-                    success_rate=float(p.get("success_rate", 1.0)),
-                    avg_steps=float(p.get("avg_steps", 1.0)),
-                    source=p.get("source", "sima2"),
-                    provenance=p.get("provenance", {}),
+    for batch_idx in range(0, len(tasks), args.batch_size):
+        batch_tasks = tasks[batch_idx : batch_idx + args.batch_size]
+        batch_primitives: List[Dict[str, Any]] = []
+        batch_primitive_models: List[SemanticPrimitive] = []
+        batch_segmented_rollouts: List[Dict[str, Any]] = []
+        batch_latency: List[float] = []
+
+        for local_idx, task_id in enumerate(batch_tasks):
+            idx = batch_idx + local_idx
+            store.upsert_task(Task(task_id=task_id, name=task_id, environment_id="sima2"))
+            template = _template_for_task(idx)
+            t0 = time.perf_counter()
+            if task_id in {"noise", "random_noise"}:
+                rollout = _noise_rollout(task_id, idx)
+            else:
+                rollout = client.run_episode({"task_id": task_id, "episode_index": idx, "template": template})
+            seg_out = seg_engine.segment_rollout(rollout)
+            seg_rollout = seg_out["rollout"]
+            batch_segmented_rollouts.append(seg_rollout)
+
+            prims = primitive_extractor.extract([seg_rollout])
+            batch_primitives.extend(prims)
+            batch_primitive_models.extend(
+                [
+                    SemanticPrimitive(
+                        primitive_id=p.get("primitive_id", f"{task_id}_prim_{idx}"),
+                        task_type=p.get("task_type", task_id),
+                        tags=p.get("tags", []),
+                        risk_level=p.get("risk_level", "low"),
+                        energy_intensity=float(p.get("energy_intensity", 0.0)),
+                        success_rate=float(p.get("success_rate", 1.0)),
+                        avg_steps=float(p.get("avg_steps", 1.0)),
+                        source=p.get("source", "sima2"),
+                        provenance=p.get("provenance", {}),
+                    )
+                    for p in prims
+                ]
+            )
+
+            dp = datapack_from_sima2_rollout(seg_rollout, task_id)
+            if isinstance(dp, Datapack):
+                store.append_datapacks([dp])
+
+            prov = extract_provenance(seg_rollout, cfg)
+            ep = Episode(
+                episode_id=seg_rollout.get("episode_id", f"{task_id}_ep_{idx}"),
+                task_id=task_id,
+                robot_id="sima2_stub_robot",
+                datapack_id=getattr(dp, "datapack_id", None) if isinstance(dp, Datapack) else None,
+                status="success",
+                metadata={"segmented": True, "sima2_provenance": prov},
+                sima2_backend_id=prov.get("sima2_backend_id"),
+                sima2_model_version=prov.get("sima2_model_version"),
+                sima2_task_spec=prov.get("sima2_task_spec", {}),
+            )
+            store.upsert_episode(ep)
+            store.append_events(_episode_events(ep.episode_id, seg_rollout))
+            econ_vec = _econ_vector(ep.episode_id, task_id, prims)
+            store.upsert_econ_vector(econ_vec)
+            batch_latency.append(time.perf_counter() - t0)
+
+        ontology_proposals = ontology_engine.generate_proposals(batch_primitive_models)
+        task_graph_proposals = refiner.generate_refinements(ontology_proposals, primitives=batch_primitive_models)
+        econ_outputs = {
+            r.get("episode_id"): {"novelty_delta": 0.0, "trust_matrix": trust_matrix} for r in batch_segmented_rollouts
+        }
+        tag_enrichments = propagator.generate_proposals(
+            batch_segmented_rollouts, ontology_proposals, task_graph_proposals, econ_outputs
+        )
+
+        _guardrails(ontology_proposals, task_graph_proposals, len(batch_tasks), args.max_write_multiplier)
+
+        _write_jsonl(primitives_path, batch_primitives)
+        _write_jsonl(ontology_path, ontology_proposals)
+        _write_jsonl(task_graph_path, task_graph_proposals)
+        _write_jsonl(tags_path, tag_enrichments)
+
+        total_rollouts += len(batch_tasks)
+        total_primitives += len(batch_primitives)
+        total_ontology_props += len(ontology_proposals)
+        total_task_graph_props += len(task_graph_proposals)
+        total_tags += len(tag_enrichments)
+        per_rollout_latencies.extend(batch_latency)
+
+        for proposal in tag_enrichments:
+            try:
+                # Count tag types directly
+                tag_frequency["risk_tags"] = tag_frequency.get("risk_tags", 0) + len(proposal.risk_tags)
+                tag_frequency["recovery_tags"] = tag_frequency.get("recovery_tags", 0) + len(
+                    getattr(proposal, "recovery_tags", [])
                 )
-                for p in prims
-            ]
-        )
+                tag_frequency["ood_tags"] = tag_frequency.get("ood_tags", 0) + len(getattr(proposal, "ood_tags", []))
+            except Exception:
+                continue
 
-        dp = datapack_from_sima2_rollout(seg_rollout, task_id)
-        if isinstance(dp, Datapack):
-            store.append_datapacks([dp])
-
-        prov = extract_provenance(seg_rollout, cfg)
-        ep = Episode(
-            episode_id=seg_rollout.get("episode_id", f"{task_id}_ep_{idx}"),
-            task_id=task_id,
-            robot_id="sima2_stub_robot",
-            datapack_id=getattr(dp, "datapack_id", None) if isinstance(dp, Datapack) else None,
-            status="success",
-            metadata={"segmented": True, "sima2_provenance": prov},
-            sima2_backend_id=prov.get("sima2_backend_id"),
-            sima2_model_version=prov.get("sima2_model_version"),
-            sima2_task_spec=prov.get("sima2_task_spec", {}),
-        )
-        store.upsert_episode(ep)
-        store.append_events(_episode_events(ep.episode_id, seg_rollout))
-        econ_vec = _econ_vector(ep.episode_id, task_id, prims)
-        store.upsert_econ_vector(econ_vec)
-
-    ontology_proposals = ontology_engine.generate_proposals(primitive_models)
-    task_graph_proposals = refiner.generate_refinements(ontology_proposals, primitives=primitive_models)
-    econ_outputs = {r.get("episode_id"): {"novelty_delta": 0.0, "trust_matrix": trust_matrix} for r in segmented_rollouts}
-    tag_enrichments = propagator.generate_proposals(segmented_rollouts, ontology_proposals, task_graph_proposals, econ_outputs)
-
-    _write_jsonl(result_dir / "primitives.jsonl", primitives)
-    _write_jsonl(result_dir / "ontology_proposals.jsonl", ontology_proposals)
-    _write_jsonl(result_dir / "task_graph_proposals.jsonl", task_graph_proposals)
-    _write_jsonl(result_dir / "semantic_tags.jsonl", tag_enrichments)
+        _maybe_gc(batch_idx // args.batch_size)
 
     if args.emit_policy_datasets:
         out_dir = Path(args.policy_dataset_dir)
@@ -193,12 +323,47 @@ def main():
         assert shards, "Expected at least one policy dataset shard"
         print(f"[stress_test_sima2_pipeline] policy datasets written to {out_dir}")
 
+    elapsed = max(time.perf_counter() - start_time, 1e-6)
+    throughput = total_rollouts / elapsed
+    p99_latency = _p99(per_rollout_latencies)
+    rss_mb = 0.0
+    try:
+        import resource  # Unix only
+
+        rss_mb = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
+    except Exception:
+        rss_mb = 0.0
+
+    metrics = {
+        "rollouts": total_rollouts,
+        "primitives": total_primitives,
+        "ontology_proposals": total_ontology_props,
+        "task_graph_proposals": total_task_graph_props,
+        "tag_enrichments": total_tags,
+        "throughput_rps": throughput,
+        "latency_p99_s": p99_latency,
+        "rss_mb": rss_mb,
+        "tag_frequency": tag_frequency,
+        "params": {
+            "num_rollouts": args.num_rollouts,
+            "batch_size": args.batch_size,
+            "task_distribution": args.task_distribution,
+        },
+    }
+
+    # Basic performance assertions per spec (soft thresholds for smoke)
+    if args.num_rollouts >= 1000:
+        assert throughput > 10.0, f"Throughput too low: {throughput:.2f} rps"
+    assert args.max_write_multiplier >= 1.0
+
+    metrics_path = result_dir / "metrics.json"
+    with metrics_path.open("w") as f:
+        json.dump(metrics, f, indent=2, sort_keys=True)
+
     print(
-        (
-            f"[stress_test_sima2_pipeline] rollouts={len(tasks)} primitives={len(primitives)} "
-            f"ontology_proposals={len(ontology_proposals)} task_graph_proposals={len(task_graph_proposals)} "
-            f"tags={len(tag_enrichments)}"
-        )
+        f"[stress_test_sima2_pipeline] rollouts={total_rollouts} primitives={total_primitives} "
+        f"ontology_proposals={total_ontology_props} task_graph_proposals={total_task_graph_props} "
+        f"tags={total_tags} throughput={throughput:.2f}rps p99={p99_latency:.4f}s rss_mb={rss_mb:.2f}"
     )
 
 

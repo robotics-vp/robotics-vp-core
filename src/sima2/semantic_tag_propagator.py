@@ -29,6 +29,7 @@ from src.sima2.tags import (
     PrecisionToleranceTag,
     RecoveryPatternTag,
 )
+from src.sima2.tags.ood_recovery_tags import detect_ood_from_segment, detect_recovery_from_segments
 
 FORBIDDEN_FIELDS = {
     "rewards",
@@ -660,10 +661,13 @@ class SegmentationBuilder:
 class SemanticTagPropagator:
     """Generates semantic enrichments for datapacks (advisory-only)."""
 
-    def __init__(self) -> None:
+    def __init__(self, trust_matrix: Optional[Dict[str, Any]] = None, enable_ood_recovery_tags: bool = False) -> None:
         self.coherence_checker = CoherenceChecker()
         self.hints_generator = SupervisionHintsGenerator()
-        self.segmentation_builder = SegmentationBuilder()
+        self.segmentation_config = get_segmentation_config({})
+        self.segmentation_builder = SegmentationBuilder(self.segmentation_config)
+        self.trust_matrix = trust_matrix or {}
+        self.enable_ood_recovery_tags = bool(enable_ood_recovery_tags)
 
     def generate_proposals(
         self,
@@ -732,6 +736,30 @@ class SemanticTagPropagator:
         contact_quality_tags.sort(key=lambda t: t.quality)
         precision_tolerance_tags.sort(key=lambda t: (t.grade, t.target_mm))
         recovery_pattern_tags.sort(key=lambda t: t.recovery_rate)
+        ood_tags_payload: List[Dict[str, Any]] = []
+        recovery_tags_payload: List[Dict[str, Any]] = []
+        if self.enable_ood_recovery_tags:
+            segments_for_detection = self._segments_for_detection(segment_boundary_tags, subtask_tags, datapack_copy)
+            detection_cfg = {
+                "trust_matrix": self.trust_matrix,
+                "visual_threshold": self.segmentation_config.get("visual_threshold", 0.7),
+                "mean_durations": self.segmentation_config.get("mean_durations", {}),
+                "training_stats": self.segmentation_config.get("training_stats", {}),
+            }
+            for seg in segments_for_detection:
+                ood_tag = detect_ood_from_segment(seg, config=detection_cfg)
+                if ood_tag:
+                    wrapped = self._wrap_trust_tag("OODTag", ood_tag.to_dict())
+                    if wrapped:
+                        ood_tags_payload.append(wrapped)
+            recovery_cfg = {
+                "trust_matrix": self.trust_matrix,
+                "base_power_per_timestep": detection_cfg.get("base_power_per_timestep", 0.5),
+            }
+            for rec_tag in detect_recovery_from_segments(segments_for_detection, config=recovery_cfg):
+                wrapped = self._wrap_trust_tag("RecoveryTag", rec_tag.to_dict())
+                if wrapped:
+                    recovery_tags_payload.append(wrapped)
 
         preliminary_hints = self.hints_generator.generate(
             task, fragility_tags, risk_tags, novelty_tags, [], 1.0
@@ -801,6 +829,8 @@ class SemanticTagPropagator:
             contact_quality_tags=contact_quality_tags,
             precision_tolerance_tags=precision_tolerance_tags,
             recovery_pattern_tags=recovery_pattern_tags,
+            ood_tags=ood_tags_payload,
+            recovery_tags=recovery_tags_payload,
             semantic_conflicts=conflicts,
             coherence_score=coherence_score,
             supervision_hints=supervision_hints,
@@ -810,6 +840,82 @@ class SemanticTagPropagator:
             validation_status=validation_status,
             validation_errors=validation_errors,
         )
+
+    def _segments_for_detection(
+        self,
+        boundaries: List[SegmentBoundaryTag],
+        subtask_tags: List[SubtaskTag],
+        datapack: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Reconstruct lightweight segments from boundary tags for tag detection."""
+        subtask_lookup = {st.segment_id: st.subtask_label for st in subtask_tags}
+        segments: Dict[str, Dict[str, Any]] = {}
+        for b in boundaries:
+            seg = segments.setdefault(
+                b.segment_id,
+                {"start": b.timestep, "end": b.timestep, "failure": False, "recovery": False, "label": b.subtask_label},
+            )
+            if b.reason == "start":
+                seg["start"] = min(seg["start"], b.timestep)
+            seg["end"] = max(seg["end"], b.timestep)
+            if b.reason == "failure":
+                seg["failure"] = True
+            if b.reason == "recovery":
+                seg["recovery"] = True
+            if not seg.get("label"):
+                seg["label"] = subtask_lookup.get(b.segment_id)
+
+        objects_present = (datapack.get("metadata", {}) or {}).get("objects_present", [])
+        seg_list: List[Dict[str, Any]] = []
+        for idx, (seg_id, seg_meta) in enumerate(sorted(segments.items(), key=lambda item: item[0])):
+            start = int(seg_meta.get("start", 0))
+            end = int(seg_meta.get("end", start))
+            duration = max(0, end - start)
+            outcome = "success"
+            if seg_meta.get("failure") and seg_meta.get("recovery"):
+                outcome = "recovered"
+            elif seg_meta.get("failure"):
+                outcome = "failure"
+            elif seg_meta.get("recovery"):
+                outcome = "recovery"
+            seg_metadata = {
+                "objects_present": list(objects_present),
+                "segment_index": idx,
+                "recovery_observed": bool(seg_meta.get("recovery")),
+                "failure_observed": bool(seg_meta.get("failure")),
+                "duration": duration,
+                "label": seg_meta.get("label") or subtask_lookup.get(seg_id) or "segment",
+            }
+            seg_metadata.update(datapack.get("metadata", {}) or {})
+            seg_list.append(
+                {
+                    "segment_id": seg_id,
+                    "episode_id": datapack.get("episode_id"),
+                    "label": seg_meta.get("label") or subtask_lookup.get(seg_id) or "segment",
+                    "start_t": start,
+                    "end_t": end,
+                    "outcome": outcome,
+                    "metadata": seg_metadata,
+                }
+            )
+        return seg_list
+
+    def _wrap_trust_tag(self, tag_type: str, tag_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Apply trust-tier semantics for tag inclusion."""
+        trust_score = float(self.trust_matrix.get(tag_type, {}).get("trust_score", 1.0))
+        if trust_score <= 0.5:
+            return None
+        payload = dict(tag_data)
+        payload.setdefault("tag_type", tag_type)
+        payload["trust_score"] = trust_score
+        if trust_score > 0.8:
+            payload["trust_tier"] = "Tier1_Trusted"
+            payload["confidence"] = 0.9
+        else:
+            payload["trust_tier"] = "Tier2_Provisional"
+            payload["confidence"] = 0.6
+            payload["warning"] = "Tag has provisional trust; verify manually"
+        return payload
 
     def aggregate_for_task(
         self, enrichments: List[SemanticEnrichmentProposal], task: Optional[str] = None

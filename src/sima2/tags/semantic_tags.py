@@ -7,7 +7,7 @@ economics, rewards, or task graph state.
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional
 
 _FRAGILITY_LEVELS = {"low", "medium", "high", "critical"}
 _RISK_SEVERITY = {"low", "medium", "high", "critical"}
@@ -337,6 +337,9 @@ class SemanticEnrichmentProposal:
     contact_quality_tags: List[ContactQualityTag] = field(default_factory=list)
     precision_tolerance_tags: List[PrecisionToleranceTag] = field(default_factory=list)
     recovery_pattern_tags: List[RecoveryPatternTag] = field(default_factory=list)
+    # Optional SIMA-2 hardening tags (flag-gated)
+    ood_tags: List[Dict[str, Any]] = field(default_factory=list)
+    recovery_tags: List[Dict[str, Any]] = field(default_factory=list)
 
     semantic_conflicts: List[SemanticConflict] = field(default_factory=list)
     coherence_score: float = 0.0
@@ -383,6 +386,8 @@ class SemanticEnrichmentProposal:
                 "contact_quality_tags": [t.to_dict() for t in self.contact_quality_tags],
                 "precision_tolerance_tags": [t.to_dict() for t in self.precision_tolerance_tags],
                 "recovery_pattern_tags": [t.to_dict() for t in self.recovery_pattern_tags],
+                "ood_tags": [dict(t) for t in self.ood_tags],
+                "recovery_tags": [dict(t) for t in self.recovery_tags],
                 "semantic_conflicts": [c.to_dict() for c in self.semantic_conflicts],
                 "coherence_score": self.coherence_score,
                 "supervision_hints": self.supervision_hints.to_dict(),
