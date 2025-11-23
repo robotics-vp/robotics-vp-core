@@ -11,6 +11,7 @@ import json
 import random
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Iterable, Tuple, TYPE_CHECKING
+import hashlib
 
 from src.valuation.datapack_schema import DataPackMeta
 from src.rl.episode_descriptor_validator import (
@@ -51,6 +52,24 @@ def _load_recap_scores(path: Optional[str]) -> Dict[str, float]:
 def _episode_key(episode: Dict[str, Any]) -> str:
     desc = episode.get("descriptor", {})
     return str(desc.get("pack_id") or desc.get("episode_id") or desc.get("id") or "")
+
+
+def _summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase: str) -> Dict[str, Any]:
+    """Compact, JSON-safe summary of condition inputs for logging."""
+    tag_items = [f"{str(k)}:{float(v):.4f}" for k, v in sorted(tags.items(), key=lambda kv: str(kv[0]))]
+    payload = f"{skill_mode}|{phase}|" + "|".join(tag_items)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+    return {
+        "skill_mode": skill_mode,
+        "curriculum_phase": phase,
+        "tag_fingerprint": digest,
+        "tag_count": len(tags),
+    }
+
+
+def summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase: str) -> Dict[str, Any]:
+    """Public wrapper for condition metadata summaries."""
+    return _summarize_condition_metadata(skill_mode, tags, phase)
 
 
 def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
@@ -532,12 +551,17 @@ class DataPackRLSampler:
         if self.use_condition_vector:
             tags = descriptor.get("semantic_tags") or {}
             tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
-            descriptor["sampling_metadata"]["skill_mode"] = select_skill_mode(
+            skill_mode = select_skill_mode(
                 tags=tag_map,
                 trust_matrix=self.trust_matrix,
                 curriculum_phase=descriptor["sampling_metadata"].get("phase", "warmup"),
                 advisory=descriptor["sampling_metadata"],
             )
+            descriptor["sampling_metadata"]["skill_mode"] = skill_mode
+            descriptor["sampling_metadata"]["condition_metadata"] = _summarize_condition_metadata(
+                skill_mode, tag_map, descriptor["sampling_metadata"].get("phase", "warmup")
+            )
+            descriptor["condition_metadata"] = descriptor["sampling_metadata"]["condition_metadata"]
         if episode.get("auditor_result"):
             descriptor["sampling_metadata"]["auditor_rating"] = episode["auditor_result"].get("rating")
             descriptor["sampling_metadata"]["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")

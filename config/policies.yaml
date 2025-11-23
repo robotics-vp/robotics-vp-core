@@ -9,3 +9,7 @@ meta_advisor: heuristic
 vision_encoder: heuristic
 reward_model: heuristic
 datapack_auditor: heuristic
+use_condition_vector_for_policy: false
+condition_film_hidden_dim: 64
+condition_context_dim: 64
+condition_fusion_mode: film

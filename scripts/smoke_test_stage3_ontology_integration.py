@@ -56,7 +56,12 @@ def main():
         "objective_vector": [1, 1, 1, 1, 0],
         "tier": 2,
         "trust_score": 0.9,
-        "sampling_metadata": {"strategy": "frontier_prioritized", "phase": "frontier"},
+        "sampling_metadata": {
+            "strategy": "frontier_prioritized",
+            "phase": "frontier",
+            "skill_mode": "frontier_exploration",
+            "condition_metadata": {"skill_mode": "frontier_exploration", "curriculum_phase": "frontier", "tag_fingerprint": "abc", "tag_count": 1},
+        },
         "semantic_tags": ["fragile"],
     }
     episode = episode_from_descriptor(descriptor, task_id=task.task_id, robot_id=robot.robot_id)
@@ -82,6 +87,8 @@ def main():
     assert ep_loaded.datapack_id == dp.datapack_id
     assert ep_loaded.metadata.get("curriculum_phase") == "frontier"
     assert ep_loaded.metadata.get("sampler_strategy") == "frontier_prioritized"
+    assert ep_loaded.metadata.get("skill_mode") == "frontier_exploration"
+    assert ep_loaded.metadata.get("condition_vector_summary", {}).get("skill_mode") == "frontier_exploration"
     print("[smoke_test_stage3_ontology_integration] All tests passed.")
 
 

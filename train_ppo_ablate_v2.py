@@ -17,6 +17,7 @@ import yaml
 import torch
 import numpy as np
 from pathlib import Path
+import argparse
 
 from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
 from src.rl.ppo import PPOAgent
@@ -26,8 +27,10 @@ from src.rl.reward_shaping import compute_econ_reward
 from src.config.internal_profile import get_internal_experiment_profile
 from src.utils.logger import CsvLogger
 from src.observation.condition_vector_builder import ConditionVectorBuilder
+from src.rl.trunk_net import TrunkNet
 
 USE_CONDITION_VECTOR = os.environ.get("USE_CONDITION_VECTOR", "0") == "1"
+USE_CONDITION_VECTOR_FOR_POLICY = os.environ.get("USE_CONDITION_VECTOR_FOR_POLICY", "0") == "1"
 
 
 def _maybe_build_condition_vector(builder, episode_idx: int, sampler_strategy: str = "balanced"):
@@ -44,7 +47,7 @@ def _maybe_build_condition_vector(builder, episode_idx: int, sampler_strategy: s
     )
 
 
-def run_ablation(mode, episodes=1000):
+def run_ablation(mode, episodes=1000, use_condition_vector_for_policy: bool = False):
     """Run training with specified ablation mode."""
 
     # Config
@@ -119,6 +122,20 @@ def run_ablation(mode, episodes=1000):
     # Logger
     logger = CsvLogger(log_path)
     condition_builder = ConditionVectorBuilder() if USE_CONDITION_VECTOR else None
+    policy_conditioner = None
+    if (use_condition_vector_for_policy or USE_CONDITION_VECTOR_FOR_POLICY) and condition_builder is not None:
+        policy_conditioner = TrunkNet(
+            vision_dim=1,
+            state_dim=1,
+            condition_dim=32,
+            hidden_dim=state_dim,
+            use_condition_film=False,
+            use_condition_vector=True,
+            use_condition_vector_for_policy=True,
+            condition_fusion_mode="film",
+            condition_film_hidden_dim=state_dim,
+            condition_context_dim=state_dim,
+        ).to(agent.device)
 
     # Dual variable
     lam = lambda_init
@@ -127,7 +144,14 @@ def run_ablation(mode, episodes=1000):
 
     # Training loop
     for ep in range(episodes):
-        _ = _maybe_build_condition_vector(condition_builder, ep)
+        condition_vector = _maybe_build_condition_vector(condition_builder, ep)
+        policy_condition_norm = 0.0
+        if policy_conditioner is not None and condition_vector is not None:
+            with torch.no_grad():
+                base_latent = torch.zeros(1, state_dim, device=agent.device)
+                conditioned_latent = policy_conditioner.condition_policy_features(base_latent, condition_vector)
+                if conditioned_latent is not None:
+                    policy_condition_norm = float(conditioned_latent.abs().sum().item())
         # Curriculum: anneal error target from 10% → 6%
         err_target = np.interp(ep, [0, curriculum_eps],
                               [err_target_init, err_target_final])
@@ -231,7 +255,10 @@ def run_ablation(mode, episodes=1000):
             kl_divergence=round(train_metrics['kl_divergence'], 6),
             novelty=round(novelty if novelty else 0.0, 4),
             mean_weight=round(train_metrics.get('mean_weight', 1.0), 4),
-            p90_weight=round(train_metrics.get('p90_weight', 1.0), 4)
+            p90_weight=round(train_metrics.get('p90_weight', 1.0), 4),
+            condition_skill_mode=getattr(condition_vector, "skill_mode", "") if condition_vector else "",
+            condition_phase=getattr(condition_vector, "curriculum_phase", "") if condition_vector else "",
+            policy_condition_norm=round(policy_condition_norm, 6),
         )
 
         # Print progress
@@ -245,12 +272,18 @@ def run_ablation(mode, episodes=1000):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python train_ppo_ablate_v2.py [A|B|C]")
-        print("  A: Baseline (weights=1)")
-        print("  B: No constraint (λ=0)")
-        print("  C: Full model")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="PPO ablation runner (v2)")
+    parser.add_argument("mode", choices=["A", "B", "C"], help="A: baseline, B: no constraint, C: full model")
+    parser.add_argument("--episodes", type=int, default=1000, help="Number of training episodes")
+    parser.add_argument(
+        "--use-condition-vector-for-policy",
+        action="store_true",
+        help="Feed ConditionVector through the policy conditioning block (default off; zero-init keeps outputs unchanged).",
+    )
+    args = parser.parse_args()
 
-    mode = sys.argv[1].upper()
-    run_ablation(mode, episodes=1000)
+    run_ablation(
+        args.mode.upper(),
+        episodes=args.episodes,
+        use_condition_vector_for_policy=args.use_condition_vector_for_policy,
+    )

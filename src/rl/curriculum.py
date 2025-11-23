@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from src.rl.episode_sampling import DataPackRLSampler
 from src.utils.json_safe import to_json_safe
 from src.observation.condition_vector_builder import select_skill_mode
+from src.rl.episode_sampling import summarize_condition_metadata
 
 
 class DataPackCurriculum:
@@ -94,14 +95,18 @@ class DataPackCurriculum:
             if self.use_condition_vector:
                 tags = item.get("semantic_tags") or {}
                 tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
-                meta["skill_mode"] = select_skill_mode(
+                skill_mode = select_skill_mode(
                     tags=tag_map,
                     trust_matrix=getattr(self.sampler, "trust_matrix", None),
                     curriculum_phase=phase,
                     advisory=item.get("sampling_metadata", {}),
                 )
+                meta["skill_mode"] = skill_mode
+                meta["condition_metadata"] = summarize_condition_metadata(skill_mode, tag_map, phase)
             annotated_item = copy.deepcopy(item)
             annotated_item["sampling_metadata"] = meta
+            if self.use_condition_vector:
+                annotated_item["condition_metadata"] = meta.get("condition_metadata")
             annotated.append(to_json_safe(annotated_item))
         return annotated
 

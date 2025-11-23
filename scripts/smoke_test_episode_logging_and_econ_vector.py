@@ -13,6 +13,7 @@ from src.logging.episode_logger import EpisodeLogger
 from src.economics.reward_engine import RewardEngine
 from src.ontology.models import Task, Robot
 from src.ontology.store import OntologyStore
+from src.observation.condition_vector_builder import ConditionVectorBuilder
 
 
 def main():
@@ -35,8 +36,17 @@ def main():
 
     logger = EpisodeLogger(store=store, task=task, robot=robot)
     reward_engine = RewardEngine(task=task, robot=robot, config={"wage_parity_stub": 0.9})
+    condition = ConditionVectorBuilder().build(
+        episode_config={"task_id": task.task_id, "env_id": "env", "backend": "logger_backend", "objective_preset": "balanced"},
+        econ_state={"target_mpl": 0.0, "current_wage_parity": 1.0, "energy_budget_wh": 0.0},
+        curriculum_phase="warmup",
+        sima2_trust=None,
+        datapack_metadata={"tags": ["logging_smoke"]},
+        episode_step=0,
+        episode_metadata={"episode_id": "ep_logging"},
+    )
 
-    episode = logger.start_episode()
+    episode = logger.start_episode(condition_vector=condition, skill_mode=condition.skill_mode)
     # Fake steps
     for t in range(3):
         scalar, components = reward_engine.step_reward(
@@ -63,6 +73,9 @@ def main():
     assert econ_loaded is not None
     assert econ_loaded.reward_scalar_sum > 0
     assert econ_loaded.mpl_units_per_hour > 0
+    cv_summary = ep_loaded.metadata.get("condition_vector_summary")
+    assert cv_summary and cv_summary.get("skill_mode") == condition.skill_mode
+    assert ep_loaded.metadata.get("skill_mode") == condition.skill_mode
     # Deterministic ID check
     episode2 = logger.start_episode()
     logger.finalize()

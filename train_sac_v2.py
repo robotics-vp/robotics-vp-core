@@ -32,8 +32,10 @@ from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
 from src.rl.reward_shaping import compute_econ_reward
 from src.observation.condition_vector_builder import ConditionVectorBuilder
+from src.rl.trunk_net import TrunkNet
 
 USE_CONDITION_VECTOR = os.environ.get("USE_CONDITION_VECTOR", "0") == "1"
+USE_CONDITION_VECTOR_FOR_POLICY = os.environ.get("USE_CONDITION_VECTOR_FOR_POLICY", "0") == "1"
 
 
 def _maybe_build_condition_vector(builder, episode_idx: int, sampler_strategy: str = "balanced"):
@@ -113,7 +115,7 @@ def make_env(cfg, econ_params=None):
         raise ValueError(f"Unknown env type: {env_type}")
 
 
-def train_sac(config_path, episodes=None, seed=42, econ_preset=None):
+def train_sac(config_path, episodes=None, seed=42, econ_preset=None, use_condition_vector_for_policy: bool = False):
     """
     Train SAC agent with economic objectives.
 
@@ -166,6 +168,7 @@ def train_sac(config_path, episodes=None, seed=42, econ_preset=None):
 
     # Device
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    use_policy_conditioning = bool((use_condition_vector_for_policy or USE_CONDITION_VECTOR_FOR_POLICY) and USE_CONDITION_VECTOR)
     print(f"Using device: {device}")
 
     # Environment (state or video)
@@ -255,6 +258,20 @@ def train_sac(config_path, episodes=None, seed=42, econ_preset=None):
         target_entropy=-2.0,
         device=device
     )
+    policy_conditioner = None
+    if use_policy_conditioning:
+        policy_conditioner = TrunkNet(
+            vision_dim=1,
+            state_dim=1,
+            condition_dim=32,
+            hidden_dim=latent_dim,
+            use_condition_film=False,
+            use_condition_vector=True,
+            use_condition_vector_for_policy=True,
+            condition_fusion_mode="film",
+            condition_film_hidden_dim=latent_dim,
+            condition_context_dim=latent_dim,
+        ).to(device)
 
     # Logger
     log_config = cfg.get('logging', {})
@@ -302,7 +319,14 @@ def train_sac(config_path, episodes=None, seed=42, econ_preset=None):
 
     # Training loop
     for ep in range(episodes):
-        _ = _maybe_build_condition_vector(condition_builder, ep)
+        condition_vector = _maybe_build_condition_vector(condition_builder, ep)
+        policy_condition_norm = 0.0
+        if policy_conditioner is not None and condition_vector is not None:
+            with torch.no_grad():
+                base_latent = torch.zeros(1, latent_dim, device=device)
+                conditioned_latent = policy_conditioner.condition_policy_features(base_latent, condition_vector)
+                if conditioned_latent is not None:
+                    policy_condition_norm = float(conditioned_latent.abs().sum().item())
         # Update wage index periodically
         if ep > 0 and ep % episodes_per_update == 0:
             market_wage_stub = wh_initial * (1.0 + 0.005 * (ep // episodes_per_update))
@@ -581,7 +605,10 @@ def train_sac(config_path, episodes=None, seed=42, econ_preset=None):
             # Wage indexing and pricing
             w_h_indexed=round(wh, 4),
             customer_cost=round(customer_cost, 4),
-            consumer_surplus=round(consumer_surplus, 4)
+            consumer_surplus=round(consumer_surplus, 4),
+            condition_skill_mode=getattr(condition_vector, "skill_mode", "") if condition_vector else "",
+            condition_phase=getattr(condition_vector, "curriculum_phase", "") if condition_vector else "",
+            policy_condition_norm=round(policy_condition_norm, 6),
         )
 
         # Print progress
@@ -607,6 +634,11 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--econ-preset', type=str, default=None, choices=['toy', 'realistic'],
                         help='Economic parameter preset override')
+    parser.add_argument(
+        '--use-condition-vector-for-policy',
+        action='store_true',
+        help='Feed ConditionVector through the policy conditioning block (default off; zero-init keeps outputs unchanged).',
+    )
 
     args = parser.parse_args()
 
@@ -615,4 +647,10 @@ if __name__ == "__main__":
     os.makedirs('logs', exist_ok=True)
 
     # Train
-    train_sac(args.config, episodes=args.episodes, seed=args.seed, econ_preset=args.econ_preset)
+    train_sac(
+        args.config,
+        episodes=args.episodes,
+        seed=args.seed,
+        econ_preset=args.econ_preset,
+        use_condition_vector_for_policy=args.use_condition_vector_for_policy,
+    )

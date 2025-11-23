@@ -8,7 +8,7 @@ Integrates:
 - Economic metrics (MPL, profit, wage parity)
 - Data valuation (ΔMPL regression → pricing)
 """
-import os, yaml, random
+import os, yaml, random, argparse
 import numpy as np
 import torch
 from sklearn.linear_model import Ridge
@@ -29,15 +29,19 @@ from src.data_value.novelty_diffusion import (
     gaussian_noise_sampler
 )
 from src.observation.condition_vector_builder import ConditionVectorBuilder
+from src.rl.trunk_net import TrunkNet
 
 USE_CONDITION_VECTOR = os.environ.get("USE_CONDITION_VECTOR", "0") == "1"
+USE_CONDITION_VECTOR_FOR_POLICY = os.environ.get("USE_CONDITION_VECTOR_FOR_POLICY", "0") == "1"
 
 
 def load_config(path="src/configs/dishwashing.yaml"):
     import sys
-    # Allow override via command line
-    if len(sys.argv) > 1:
+    # Allow override via command line when no explicit path is provided
+    if path is None and len(sys.argv) > 1:
         path = sys.argv[1]
+    if path is None:
+        path = "src/configs/dishwashing.yaml"
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
@@ -118,9 +122,9 @@ def _maybe_build_condition_vector(builder, episode_idx: int, sampler_strategy: s
     )
 
 
-def run():
+def run(config_path=None, use_condition_vector_for_policy: bool = False):
     # Config
-    cfg = load_config()
+    cfg = load_config(config_path)
     random.seed(cfg["seed"])
     np.random.seed(cfg["seed"])
     torch.manual_seed(cfg["seed"])
@@ -182,12 +186,33 @@ def run():
     max_secs = int(cfg["train"]["max_seconds_per_episode"])
     logger = CsvLogger("logs/ppo_training.csv")
     condition_builder = ConditionVectorBuilder() if USE_CONDITION_VECTOR else None
+    policy_conditioner = None
+    if (use_condition_vector_for_policy or USE_CONDITION_VECTOR_FOR_POLICY) and condition_builder is not None:
+        policy_conditioner = TrunkNet(
+            vision_dim=1,
+            state_dim=1,
+            condition_dim=32,
+            hidden_dim=max(obs_dim, 4),
+            use_condition_film=False,
+            use_condition_vector=True,
+            use_condition_vector_for_policy=True,
+            condition_fusion_mode="film",
+            condition_film_hidden_dim=max(obs_dim, 4),
+            condition_context_dim=max(obs_dim, 4),
+        ).to(agent.device)
 
     # Training loop
     mp_r_prev = 1e-8
 
     for ep in range(episodes):
-        _ = _maybe_build_condition_vector(condition_builder, ep)
+        condition_vector = _maybe_build_condition_vector(condition_builder, ep)
+        policy_condition_norm = 0.0
+        if policy_conditioner is not None and condition_vector is not None:
+            with torch.no_grad():
+                base_latent = torch.zeros(1, max(obs_dim, 4), device=agent.device)
+                conditioned_latent = policy_conditioner.condition_policy_features(base_latent, condition_vector)
+                if conditioned_latent is not None:
+                    policy_condition_norm = float(conditioned_latent.abs().sum().item())
         obs = env.reset()
         done = False
         episode_reward = 0
@@ -344,7 +369,10 @@ def run():
             delta_mpl=round(delta_mpl, 6),
             predicted_delta_mpl=round(predicted_delta_mpl, 6),
             data_value=round(data_value, 6),
-            nonshare_premium=round(nonshare_premium, 6)
+            nonshare_premium=round(nonshare_premium, 6),
+            condition_skill_mode=getattr(condition_vector, "skill_mode", "") if condition_vector else "",
+            condition_phase=getattr(condition_vector, "curriculum_phase", "") if condition_vector else "",
+            policy_condition_norm=round(policy_condition_norm, 6),
         )
 
         mp_r_prev = mp_r
@@ -366,4 +394,12 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description="Train PPO with novelty + econ logging")
+    parser.add_argument("--config", type=str, default="src/configs/dishwashing.yaml", help="Path to PPO config YAML")
+    parser.add_argument(
+        "--use-condition-vector-for-policy",
+        action="store_true",
+        help="Feed ConditionVector through the policy conditioning block (default off; zero-init keeps outputs unchanged).",
+    )
+    args = parser.parse_args()
+    run(config_path=args.config, use_condition_vector_for_policy=args.use_condition_vector_for_policy)

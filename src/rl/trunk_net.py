@@ -50,6 +50,10 @@ class TrunkNet(nn.Module):
         hidden_dim: int = 256,
         use_condition_film: bool = True,
         use_condition_vector: bool = True,
+        use_condition_vector_for_policy: bool = False,
+        condition_fusion_mode: str = "film",
+        condition_film_hidden_dim: int = 64,
+        condition_context_dim: Optional[int] = None,
     ) -> None:
         super().__init__()
         self.vision_dim = vision_dim
@@ -57,6 +61,9 @@ class TrunkNet(nn.Module):
         self.condition_dim = condition_dim
         self.use_condition_film = use_condition_film
         self.use_condition_vector = use_condition_vector
+        self.use_condition_vector_for_policy = use_condition_vector_for_policy
+        self.condition_fusion_mode = (condition_fusion_mode or "film").lower()
+        self.condition_context_dim = condition_context_dim or hidden_dim
 
         self.vision_proj = nn.Linear(max(1, vision_dim), hidden_dim)
         self.state_proj = nn.Linear(max(1, state_dim), hidden_dim)
@@ -66,10 +73,35 @@ class TrunkNet(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
+        self.condition_film = nn.Sequential(
+            nn.Linear(max(1, condition_dim), condition_film_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(condition_film_hidden_dim, hidden_dim * 2),
+        )
+        self.condition_context = nn.Sequential(
+            nn.Linear(max(1, condition_dim), condition_film_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(condition_film_hidden_dim, self.condition_context_dim),
+        )
+        # Zero-init conditioning heads so enabling the flag keeps outputs identical until trained
+        for layer in (self.condition_film[-1], self.condition_context[-1]):
+            if hasattr(layer, "weight"):
+                nn.init.zeros_(layer.weight)
+            if hasattr(layer, "bias") and layer.bias is not None:
+                nn.init.zeros_(layer.bias)
 
-    def forward(self, obs: Any, condition: Optional[ConditionVector] = None, use_condition: Optional[bool] = None) -> torch.Tensor:
+    def forward(
+        self,
+        obs: Any,
+        condition: Optional[ConditionVector] = None,
+        use_condition: Optional[bool] = None,
+        use_condition_vector_for_policy: Optional[bool] = None,
+    ) -> torch.Tensor:
         device = next(self.parameters()).device
         use_condition = self.use_condition_vector if use_condition is None else use_condition
+        use_policy_condition = (
+            self.use_condition_vector_for_policy if use_condition_vector_for_policy is None else use_condition_vector_for_policy
+        )
         if not use_condition:
             condition = None
         vision_vec = self._extract_vision(obs, device)
@@ -86,7 +118,12 @@ class TrunkNet(nn.Module):
             state_embed = state_embed * gating
 
         fused = torch.cat([vision_embed, state_embed, condition_embed], dim=-1)
-        return self.fusion(fused)
+        trunk_features = self.fusion(fused)
+
+        if use_policy_condition and condition is not None:
+            conditioned = self._condition_policy_features(trunk_features, condition_embed)
+            return trunk_features, conditioned
+        return trunk_features
 
     def _extract_vision(self, obs: Any, device: torch.device) -> torch.Tensor:
         latent = getattr(obs, "latent", None)
@@ -121,3 +158,26 @@ class TrunkNet(nn.Module):
             return torch.as_tensor(vec, device=device, dtype=torch.float32).flatten()
         except Exception:
             return torch.zeros(self.condition_dim, device=device, dtype=torch.float32)
+
+    def _condition_policy_features(self, trunk_features: torch.Tensor, condition_embed: torch.Tensor) -> torch.Tensor:
+        if not self.use_condition_vector_for_policy:
+            return trunk_features
+        if self.condition_fusion_mode == "concat":
+            context = self.condition_context(condition_embed)
+            return torch.cat([trunk_features, context], dim=-1)
+        # Default: FiLM
+        gamma_beta = self.condition_film(condition_embed)
+        gamma, beta = torch.chunk(gamma_beta, 2, dim=-1)
+        return trunk_features * (1 + gamma) + beta
+
+    def condition_policy_features(self, trunk_features: torch.Tensor, condition: Optional[ConditionVector]) -> Optional[torch.Tensor]:
+        """
+        Apply the conditioning block to externally computed trunk features.
+        Returns None if conditioning is disabled or no condition vector is provided.
+        """
+        if not self.use_condition_vector_for_policy or condition is None:
+            return None
+        device = trunk_features.device
+        condition_vec = self._extract_condition(condition, device)
+        condition_embed = self.condition_proj(_pad_or_trim(condition_vec, self.condition_dim))
+        return self._condition_policy_features(trunk_features, condition_embed)

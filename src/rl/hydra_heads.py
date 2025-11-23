@@ -24,6 +24,37 @@ def _call_module(module: nn.Module, *args):
         raise
 
 
+def _unpack_trunk_output(trunk_output):
+    """Support optional conditioned trunk outputs."""
+    if isinstance(trunk_output, tuple):
+        if len(trunk_output) >= 2:
+            return trunk_output[0], trunk_output[1]
+        if len(trunk_output) == 1:
+            return trunk_output[0], None
+    if isinstance(trunk_output, dict):
+        base = trunk_output.get("features") or trunk_output.get("trunk_features")
+        conditioned = trunk_output.get("conditioned_features")
+        if base is None and "output" in trunk_output:
+            base = trunk_output["output"]
+        if base is None:
+            base = trunk_output
+        return base, conditioned
+    return trunk_output, None
+
+
+def _call_head(head: nn.Module, trunk_features, condition, conditioned_features=None):
+    """Dispatch head with optional conditioned features fallback."""
+    if conditioned_features is not None:
+        try:
+            return head(trunk_features, condition, conditioned_features)
+        except TypeError:
+            pass
+    try:
+        return head(trunk_features, condition)
+    except TypeError:
+        return head(trunk_features)
+
+
 class HydraActor(nn.Module):
     """
     Shared trunk + multiple skill heads.
@@ -55,8 +86,9 @@ class HydraActor(nn.Module):
         if head is None:
             raise KeyError("HydraActor has no registered heads.")
 
-        trunk_features = _call_module(self.trunk, obs, condition)
-        return _call_module(head, trunk_features, condition)
+        trunk_output = _call_module(self.trunk, obs, condition)
+        trunk_features, conditioned_features = _unpack_trunk_output(trunk_output)
+        return _call_head(head, trunk_features, condition, conditioned_features)
 
     def _resolve_head_key(self, condition: Optional[ConditionVector]) -> str:
         if condition and getattr(condition, "skill_mode", None):
@@ -94,8 +126,9 @@ class HydraCritic(nn.Module):
         if head is None:
             raise KeyError("HydraCritic has no registered heads.")
 
-        trunk_features = _call_module(self.trunk, obs, condition)
-        return _call_module(head, trunk_features, condition)
+        trunk_output = _call_module(self.trunk, obs, condition)
+        trunk_features, conditioned_features = _unpack_trunk_output(trunk_output)
+        return _call_head(head, trunk_features, condition, conditioned_features)
 
     def _resolve_head_key(self, condition: Optional[ConditionVector]) -> str:
         if condition and getattr(condition, "skill_mode", None):
@@ -116,5 +149,6 @@ class HydraPolicy(nn.Module):
         self.head = head
 
     def forward(self, obs, condition: Optional[ConditionVector] = None):
-        trunk_features = _call_module(self.trunk, obs, condition)
-        return _call_module(self.head, trunk_features, condition)
+        trunk_output = _call_module(self.trunk, obs, condition)
+        trunk_features, conditioned_features = _unpack_trunk_output(trunk_output)
+        return _call_head(self.head, trunk_features, condition, conditioned_features)

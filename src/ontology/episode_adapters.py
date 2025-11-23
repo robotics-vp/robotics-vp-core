@@ -40,6 +40,11 @@ def episode_from_descriptor(descriptor: Dict[str, Any], task_id: str, robot_id: 
         "curriculum_phase": sampling_md.get("phase"),
         "sampler_strategy": sampling_md.get("strategy"),
     }
+    if sampling_md.get("skill_mode"):
+        metadata["skill_mode"] = sampling_md.get("skill_mode")
+    condition_meta = descriptor.get("condition_metadata") or sampling_md.get("condition_metadata")
+    if condition_meta:
+        metadata["condition_vector_summary"] = condition_meta
 
     return Episode(
         episode_id=episode_id,

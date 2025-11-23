@@ -34,6 +34,7 @@ from src.rl.episode_sampling import (
 from src.rl.curriculum import DataPackCurriculum
 from src.valuation.datapack_schema import DataPackMeta
 from src.observation.condition_vector_builder import ConditionVectorBuilder
+from src.rl.trunk_net import TrunkNet
 
 
 def _load_datapacks(path: Path):
@@ -132,6 +133,7 @@ def train_sac(
     physics_backend: str = "pybullet",
     use_mobility_policy: bool = False,
     use_condition_vector: bool = False,
+    use_condition_vector_for_policy: bool = False,
 ):
     """Train SAC agent with economic objectives."""
 
@@ -197,6 +199,20 @@ def train_sac(
         target_entropy=-2.0,
         device=device
     )
+    policy_conditioner = None
+    if use_condition_vector and use_condition_vector_for_policy:
+        policy_conditioner = TrunkNet(
+            vision_dim=1,
+            state_dim=1,
+            condition_dim=32,
+            hidden_dim=latent_dim,
+            use_condition_film=False,
+            use_condition_vector=True,
+            use_condition_vector_for_policy=True,
+            condition_fusion_mode="film",
+            condition_film_hidden_dim=latent_dim,
+            condition_context_dim=latent_dim,
+        ).to(device)
 
     # Logger
     logger = CsvLogger(log_path)
@@ -277,6 +293,7 @@ def train_sac(
         sampler_strategy = ""
         curriculum_phase = ""
         condition_vector = None
+        policy_condition_norm = 0.0
 
         if curriculum_obj:
             batch = curriculum_obj.sample_batch(step=ep, batch_size=1)
@@ -447,6 +464,12 @@ def train_sac(
                 episode_metadata=episode_md,
                 advisory_context=advisory_context,
             )
+            if policy_conditioner is not None:
+                with torch.no_grad():
+                    base_latent = torch.zeros(1, agent.latent_dim, device=device)
+                    conditioned_latent = policy_conditioner.condition_policy_features(base_latent, condition_vector)
+                    if conditioned_latent is not None:
+                        policy_condition_norm = float(conditioned_latent.abs().sum().item())
 
         # Log
         logger.log(
@@ -510,6 +533,7 @@ def train_sac(
             objective_preset=descriptor.get("objective_preset", "") if descriptor else "",
             condition_skill_mode=getattr(condition_vector, "skill_mode", ""),
             condition_phase=getattr(condition_vector, "curriculum_phase", ""),
+            policy_condition_norm=round(policy_condition_norm, 6),
         )
 
         # Print progress
@@ -556,6 +580,11 @@ if __name__ == "__main__":
     parser.add_argument("--log-path", type=str, default="logs/sac_train.csv")
     parser.add_argument("--checkpoint-path", type=str, default="checkpoints/sac_final.pt")
     parser.add_argument("--use-condition-vector", action="store_true", help="Build/log ConditionVector without affecting SAC behavior")
+    parser.add_argument(
+        "--use-condition-vector-for-policy",
+        action="store_true",
+        help="Feed ConditionVector through the policy conditioning block (default off; zero-init keeps outputs unchanged).",
+    )
     args = parser.parse_args()
 
     if args.engine_type != "pybullet":
@@ -576,4 +605,5 @@ if __name__ == "__main__":
         physics_backend=args.physics_backend,
         use_mobility_policy=args.use_mobility_policy,
         use_condition_vector=args.use_condition_vector,
+        use_condition_vector_for_policy=args.use_condition_vector_for_policy,
     )

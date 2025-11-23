@@ -192,8 +192,19 @@ class PolicyRegistry:
         import torch.nn as nn
         from src.rl.trunk_net import TrunkNet
 
+        cfg = _load_config()
         hidden_dim = 16
         condition_dim = 16
+        try:
+            condition_hidden = int(cfg.get("condition_film_hidden_dim", hidden_dim))
+        except Exception:
+            condition_hidden = hidden_dim
+        try:
+            condition_context_dim = int(cfg.get("condition_context_dim", hidden_dim))
+        except Exception:
+            condition_context_dim = hidden_dim
+        use_policy_condition = str(cfg.get("use_condition_vector_for_policy", "false")).lower() in ("1", "true", "yes")
+        condition_fusion_mode = str(cfg.get("condition_fusion_mode", "film"))
         trunk = TrunkNet(
             vision_dim=4,
             state_dim=4,
@@ -201,6 +212,10 @@ class PolicyRegistry:
             hidden_dim=hidden_dim,
             use_condition_film=False,
             use_condition_vector=True,
+            use_condition_vector_for_policy=use_policy_condition,
+            condition_fusion_mode=condition_fusion_mode,
+            condition_film_hidden_dim=condition_hidden,
+            condition_context_dim=condition_context_dim,
         )
 
         class _StubHead(nn.Module):

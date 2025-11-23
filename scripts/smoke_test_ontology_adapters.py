@@ -54,7 +54,7 @@ def main():
         "objective_vector": [1, 1, 1, 1, 0],
         "tier": 1,
         "trust_score": 0.8,
-        "sampling_metadata": {"strategy": "balanced"},
+        "sampling_metadata": {"strategy": "balanced", "skill_mode": "efficiency_throughput", "condition_metadata": {"skill_mode": "efficiency_throughput", "curriculum_phase": "warmup", "tag_fingerprint": "123", "tag_count": 1}},
         "semantic_tags": ["fragile"],
     }
 
@@ -78,6 +78,8 @@ def main():
     assert ep_loaded is not None
     assert ep_loaded.task_id == task_id
     assert ep_loaded.robot_id == robot_id
+    assert ep_loaded.metadata.get("skill_mode") == "efficiency_throughput"
+    assert ep_loaded.metadata.get("condition_vector_summary", {}).get("skill_mode") == "efficiency_throughput"
 
     print("[smoke_test_ontology_adapters] All tests passed.")
 
