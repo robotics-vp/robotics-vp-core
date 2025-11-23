@@ -330,14 +330,31 @@ class ConditionVectorBuilder:
 
     def _extract_tfd_condition_vector(self, tfd_instruction: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Extract TFDConditionVector from TFDInstruction and convert to dict.
+        Extract TFDConditionVector from TFDInstruction or TFDSession and convert to dict.
 
         Returns a dict with TFD advisory fields that can override ConditionVector fields.
+
+        Handles three cases:
+        1. TFDSession object (get canonical instruction)
+        2. TFDInstruction object or dict
+        3. Raw dict with condition_vector field
         """
         if not tfd_instruction:
             return None
 
-        # Handle both TFDInstruction and raw dicts
+        # Case 1: Handle TFDSession (get canonical instruction)
+        if hasattr(tfd_instruction, "get_canonical_condition_vector"):
+            try:
+                tfd_cv = tfd_instruction.get_canonical_condition_vector()
+                if tfd_cv is not None:
+                    if hasattr(tfd_cv, "to_dict"):
+                        return tfd_cv.to_dict()
+                    elif isinstance(tfd_cv, dict):
+                        return tfd_cv
+            except Exception:
+                pass
+
+        # Case 2 & 3: Handle TFDInstruction or raw dict
         if isinstance(tfd_instruction, dict):
             condition_vector = tfd_instruction.get("condition_vector")
             if condition_vector is None:
@@ -358,24 +375,50 @@ class ConditionVectorBuilder:
         Build compact TFD metadata for logging in ConditionVector.metadata and episode logs.
 
         Returns JSON-safe dict with intent_type, status, and key parsed parameters.
+
+        Handles both TFDSession and TFDInstruction.
         """
         if not tfd_instruction:
             return None
 
         metadata = {}
 
+        # Handle TFDSession (get canonical instruction and session summary)
+        if hasattr(tfd_instruction, "get_session_summary"):
+            try:
+                session_summary = tfd_instruction.get_session_summary()
+                if session_summary:
+                    metadata.update(session_summary)
+                    # Get canonical instruction for detailed metadata
+                    canonical_inst = tfd_instruction.get_canonical_instruction()
+                    if canonical_inst:
+                        tfd_instruction = canonical_inst
+                    else:
+                        return metadata if metadata else None
+            except Exception:
+                pass
+
+        # Extract from TFDInstruction (handles both object and dict)
+        if hasattr(tfd_instruction, "to_dict"):
+            try:
+                inst_dict = tfd_instruction.to_dict()
+                if inst_dict:
+                    tfd_instruction = inst_dict
+            except Exception:
+                pass
+
         # Extract status
-        status = tfd_instruction.get("status")
+        status = tfd_instruction.get("status") if isinstance(tfd_instruction, dict) else None
         if status:
             metadata["status"] = str(status)
 
         # Extract raw text
-        raw_text = tfd_instruction.get("raw_text")
+        raw_text = tfd_instruction.get("raw_text") if isinstance(tfd_instruction, dict) else None
         if raw_text:
             metadata["raw_text"] = str(raw_text)
 
         # Extract parsed intent if present
-        parsed_intent = tfd_instruction.get("parsed_intent")
+        parsed_intent = tfd_instruction.get("parsed_intent") if isinstance(tfd_instruction, dict) else None
         if parsed_intent:
             if isinstance(parsed_intent, dict):
                 intent_type = parsed_intent.get("intent_type")
