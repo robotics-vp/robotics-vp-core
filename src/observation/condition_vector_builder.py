@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Sequence
 import time
 
 from src.observation.condition_vector import ConditionVector, _flatten_sequence
+from src.utils.json_safe import to_json_safe
 from src.rl.skill_mode_resolver import SkillModeResolver, resolve_skill_mode
 
 
@@ -686,6 +687,55 @@ class ConditionVectorBuilder:
         priority = 0.3 + (high_value_ratio * 0.7)
 
         return min(1.0, max(0.0, priority))
+
+    def to_training_features(self, condition: ConditionVector) -> Dict[str, Any]:
+        """
+        Export Phase I training features.
+
+        Returns JSON-safe payload containing only:
+        - econ slice (target_mpl/current_wage_parity/energy_budget_wh + metadata econ_slice if present)
+        - OOD severity (ood_risk_level)
+        - recovery_priority
+        - novelty_tier
+        - tfd fields (if present in metadata)
+        - phase H fields (exploration_uplift, skill_roi_estimate)
+        """
+        econ_meta = {}
+        if condition.metadata.get("econ_slice"):
+            econ_meta = {
+                "mpl": self._safe_float(condition.metadata["econ_slice"].get("mpl")),
+                "energy_wh": self._safe_float(condition.metadata["econ_slice"].get("energy_wh")),
+                "wage_parity": self._safe_float(condition.metadata["econ_slice"].get("wage_parity")),
+                "damage_cost": self._safe_float(condition.metadata["econ_slice"].get("damage_cost")),
+            }
+        econ_slice = {
+            "target_mpl": float(condition.target_mpl),
+            "current_wage_parity": float(condition.current_wage_parity),
+            "energy_budget_wh": float(condition.energy_budget_wh),
+        }
+        econ_slice.update({k: v for k, v in econ_meta.items() if v is not None})
+
+        tfd_fields = None
+        if condition.metadata.get("tfd_metadata"):
+            tfd_fields = condition.metadata.get("tfd_metadata")
+        elif condition.metadata.get("tfd_instruction"):
+            tfd_fields = condition.metadata.get("tfd_instruction")
+
+        phase_h_fields = {}
+        if condition.exploration_uplift is not None:
+            phase_h_fields["exploration_uplift"] = float(condition.exploration_uplift)
+        if condition.skill_roi_estimate is not None:
+            phase_h_fields["skill_roi_estimate"] = float(condition.skill_roi_estimate)
+
+        features = {
+            "econ_slice": econ_slice,
+            "ood_severity": float(condition.ood_risk_level),
+            "recovery_priority": float(condition.recovery_priority),
+            "novelty_tier": int(condition.novelty_tier),
+            "tfd": tfd_fields,
+            "phase_h": phase_h_fields or None,
+        }
+        return to_json_safe(features)
 
 
 def select_skill_mode(
