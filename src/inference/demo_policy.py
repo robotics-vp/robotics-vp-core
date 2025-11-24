@@ -346,32 +346,53 @@ class DemoPolicy:
         # Construct VisionFrame from raw_obs
         vision_frame = self._raw_obs_to_vision_frame(raw_obs)
 
-        # Run vision backbone
-        vision_features = self.vision_backbone(vision_frame)
-
-        # Run SIMA-2 segmenter (OOD/recovery signals)
-        sima2_output = self.sima2_segmenter(vision_frame)
-
-        # Build ConditionVector
-        condition_vector = self._build_condition_vector(raw_obs, sima2_output)
-        self._last_condition_vector = condition_vector
-
-        # Run spatial RNN
-        spatial_features, self._spatial_rnn_hidden = self.spatial_rnn(
-            vision_features, self._spatial_rnn_hidden
-        )
-
-        # Construct PolicyObservation
-        policy_obs = self._build_policy_observation(
-            raw_obs, spatial_features, condition_vector
-        )
-
-        # Run Hydra policy
-        # Run Hydra policy
+        # Run neural components with AMP if enabled
         if TORCH_AVAILABLE and self.config.use_amp:
             with torch.autocast(device_type=self.config.device, dtype=torch.float16):
+                # Run vision backbone
+                vision_features = self.vision_backbone(vision_frame)
+
+                # Run SIMA-2 segmenter (OOD/recovery signals)
+                sima2_output = self.sima2_segmenter(vision_frame)
+
+                # Build ConditionVector (CPU-bound, no AMP needed but harmless)
+                condition_vector = self._build_condition_vector(raw_obs, sima2_output)
+                self._last_condition_vector = condition_vector
+
+                # Run spatial RNN
+                spatial_features, self._spatial_rnn_hidden = self.spatial_rnn(
+                    vision_features, self._spatial_rnn_hidden
+                )
+
+                # Construct PolicyObservation
+                policy_obs = self._build_policy_observation(
+                    raw_obs, spatial_features, condition_vector
+                )
+
+                # Run Hydra policy
                 action = self.hydra_policy(policy_obs, deterministic=True)
         else:
+            # Run vision backbone
+            vision_features = self.vision_backbone(vision_frame)
+
+            # Run SIMA-2 segmenter (OOD/recovery signals)
+            sima2_output = self.sima2_segmenter(vision_frame)
+
+            # Build ConditionVector
+            condition_vector = self._build_condition_vector(raw_obs, sima2_output)
+            self._last_condition_vector = condition_vector
+
+            # Run spatial RNN
+            spatial_features, self._spatial_rnn_hidden = self.spatial_rnn(
+                vision_features, self._spatial_rnn_hidden
+            )
+
+            # Construct PolicyObservation
+            policy_obs = self._build_policy_observation(
+                raw_obs, spatial_features, condition_vector
+            )
+
+            # Run Hydra policy
             action = self.hydra_policy(policy_obs, deterministic=True)
 
         # Convert to numpy if needed
