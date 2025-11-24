@@ -4,6 +4,7 @@ RewardEngine: advisory wrapper to decompose rewards and compute EconVectors.
 Does NOT alter scalar rewards used by SAC/PPO; it only mirrors existing reward
 math into logged components and episode-level EconVector aggregation.
 """
+from dataclasses import asdict
 from typing import Any, Dict, List, Tuple
 from datetime import datetime
 
@@ -135,6 +136,10 @@ class RewardEngine:
         
         # Apply calibration
         calibrated_econ = self.adapter.map_vector(raw_econ)
+        try:
+            calibrated_econ.metadata.setdefault("raw_econ_vector", asdict(raw_econ))
+        except Exception:
+            calibrated_econ.metadata.setdefault("raw_econ_vector", {})
         return calibrated_econ
 
     def _safe_float(self, value: Any, default: float = 0.0) -> float:

@@ -14,6 +14,7 @@ from typing import Dict, Any, Optional, Sequence
 import numpy as np
 
 from src.observation.adapter import ObservationAdapter
+from src.observation.condition_vector import ConditionVector
 from src.observation.config import load_observation_config
 from src.policies.interfaces import VisionEncoderPolicy
 from src.vision.bifpn_fusion import fuse_feature_pyramid
@@ -90,6 +91,7 @@ class PolicyObservationBuilder:
         use_observation_components: Optional[bool] = None,
         frame_sequence: Optional[Sequence[VisionFrame]] = None,
         vision_overrides: Optional[Dict[str, Any]] = None,
+        condition_vector: Optional[ConditionVector] = None,
     ) -> Dict[str, Any]:
         """
         Produce a policy-ready feature dict shared by heuristic vs neural encoders.
@@ -134,68 +136,71 @@ class PolicyObservationBuilder:
             features["vision_backbone"] = backbone_choice
 
         adapter_enabled = use_observation_adapter or self.use_observation_adapter
-        if not adapter_enabled:
-            return features
+        resolved_condition_vector = condition_vector
+        if adapter_enabled:
+            adapter = observation_adapter or self.observation_adapter
+            if adapter is None:
+                # Graceful fallback to legacy features for robustness
+                adapter_enabled = False
+            else:
+                adapter_payload = adapter_kwargs or {}
+                condition_payload = dict(condition_kwargs or {})
+                if use_condition_vector is None:
+                    use_condition_vector = (
+                        bool(condition_payload)
+                        or getattr(adapter, "use_condition_vector", False)
+                        or self.default_use_condition_vector
+                    )
+                if use_observation_components is None:
+                    use_observation_components = bool(
+                        getattr(adapter, "use_observation_components", False)
+                        or self.use_observation_components
+                        or adapter_payload.get("use_observation_components", False)
+                    )
+                condition_payload["enable_condition"] = bool(use_condition_vector)
 
-        adapter = observation_adapter or self.observation_adapter
-        if adapter is None:
-            # Graceful fallback to legacy features for robustness
-            return features
-
-        adapter_payload = adapter_kwargs or {}
-        condition_payload = dict(condition_kwargs or {})
-        if use_condition_vector is None:
-            use_condition_vector = (
-                bool(condition_payload)
-                or getattr(adapter, "use_condition_vector", False)
-                or self.default_use_condition_vector
-            )
-        if use_observation_components is None:
-            use_observation_components = bool(
-                getattr(adapter, "use_observation_components", False)
-                or self.use_observation_components
-                or adapter_payload.get("use_observation_components", False)
-            )
-        condition_payload["enable_condition"] = bool(use_condition_vector)
-
-        observation, condition, tensor, components = adapter.build_observation_and_components(
-            vision_frame=primary_frame,
-            vision_latent=obs.latent,
-            reward_scalar=float(adapter_payload.get("reward_scalar", 0.0)),
-            reward_components=adapter_payload.get("reward_components", {}) or {},
-            econ_vector=adapter_payload.get("econ_vector"),
-            semantic_snapshot=adapter_payload.get("semantic_snapshot"),
-            recap_scores=adapter_payload.get("recap_scores"),
-            descriptor=adapter_payload.get("descriptor"),
-            episode_metadata=adapter_payload.get("episode_metadata", {}),
-            raw_env_obs=adapter_payload.get("raw_env_obs"),
-            condition_kwargs=condition_payload,
-            include_condition=bool(use_condition_vector),
-            use_components=bool(use_observation_components),
-        )
-        features.update(
-            {
-                "adapter_observation": observation,
-                "adapter_observation_dict": observation.to_dict(),
-                "adapter_policy_tensor": tensor,
-            }
-        )
-        if condition is not None:
-            features["condition_vector"] = condition
-            features["condition_vector_dict"] = condition.to_dict()
-        if use_observation_components:
-            features["observation_components"] = components
-            features["observation_components_dict"] = components.to_dict()
+                observation, condition, tensor, components = adapter.build_observation_and_components(
+                    vision_frame=primary_frame,
+                    vision_latent=obs.latent,
+                    reward_scalar=float(adapter_payload.get("reward_scalar", 0.0)),
+                    reward_components=adapter_payload.get("reward_components", {}) or {},
+                    econ_vector=adapter_payload.get("econ_vector"),
+                    semantic_snapshot=adapter_payload.get("semantic_snapshot"),
+                    recap_scores=adapter_payload.get("recap_scores"),
+                    descriptor=adapter_payload.get("descriptor"),
+                    episode_metadata=adapter_payload.get("episode_metadata", {}),
+                    raw_env_obs=adapter_payload.get("raw_env_obs"),
+                    condition_kwargs=condition_payload,
+                    include_condition=bool(use_condition_vector),
+                    use_components=bool(use_observation_components),
+                )
+                features.update(
+                    {
+                        "adapter_observation": observation,
+                        "adapter_observation_dict": observation.to_dict(),
+                        "adapter_policy_tensor": tensor,
+                    }
+                )
+                resolved_condition_vector = condition or resolved_condition_vector
+                if use_observation_components:
+                    features["observation_components"] = components
+                    features["observation_components_dict"] = components.to_dict()
+        if resolved_condition_vector is not None:
+            features["condition_vector"] = resolved_condition_vector
+            try:
+                features["condition_vector_dict"] = resolved_condition_vector.to_dict()
+            except Exception:
+                pass
 
         if enable_conditioned_vision:
-            condition_vector = features.get("condition_vector")
+            condition_for_vision = resolved_condition_vector or features.get("condition_vector")
             adapter_cfg = {
                 "feature_dim": conditioned_feature_dim,
                 "levels": conditioned_levels or list(DEFAULT_LEVELS),
                 "enable_conditioning": conditioned_enable_flag,
             }
             vision_adapter = ConditionedVisionAdapter(config=adapter_cfg)
-            conditioned = vision_adapter.forward(primary_frame, condition_vector if condition_vector is not None else None)
+            conditioned = vision_adapter.forward(primary_frame, condition_for_vision if condition_for_vision is not None else None)
 
             # Preserve invariants: never overwrite base latent/z_v
             conditioned_flat = flatten_pyramid(conditioned.get("fused_features", {}))
@@ -205,9 +210,9 @@ class PolicyObservationBuilder:
                 conditioned_flat = flatten_pyramid(conditioned.get("z_v", {}))
 
             condition_tensor = None
-            if condition_vector is not None:
+            if condition_for_vision is not None:
                 try:
-                    condition_tensor = condition_vector.to_vector()
+                    condition_tensor = condition_for_vision.to_vector()
                 except Exception:
                     condition_tensor = None
 
@@ -220,6 +225,11 @@ class PolicyObservationBuilder:
                 "state": proprio_vector,
                 "condition": condition_tensor,
             }
+        features["backend_tags"] = {
+            "backend": primary_frame.backend,
+            "backend_id": primary_frame.backend_id or primary_frame.backend,
+            "domain_randomization": primary_frame.metadata.get("domain_randomization"),
+        }
         return features
 
     def _flatten_state_summary(self, state_summary: Dict[str, Any]) -> list:

@@ -33,6 +33,7 @@ class ROSBridgeIngestor:
         raw_messages, metadata = self._load_log(log_path)
         messages = self._normalize_messages(raw_messages)
         episode_id = self._deterministic_episode_id(log_path, messages)
+        rollout_id = episode_id
         output_dir = self._output_dir()
         frame_dir = output_dir / episode_id
         frame_dir.mkdir(parents=True, exist_ok=True)
@@ -49,7 +50,7 @@ class ROSBridgeIngestor:
             timestep = ts_to_step[ts]
             if "camera" in topic and ("rgb" in topic or "image" in topic):
                 frame = self._vision_frame_from_payload(
-                    payload, task_id=task_id, episode_id=episode_id, timestep=timestep, backend_id=backend_id, frame_dir=frame_dir
+                    payload, task_id=task_id, episode_id=episode_id, timestep=timestep, backend_id=backend_id, frame_dir=frame_dir, timestamp=ts
                 )
                 vision_frames.append(frame)
             elif "depth" in topic:
@@ -60,15 +61,16 @@ class ROSBridgeIngestor:
                     timestep=timestep,
                     backend_id=backend_id,
                     frame_dir=frame_dir,
+                    timestamp=ts,
                     is_depth=True,
                 )
                 vision_frames.append(frame)
             elif "joint_states" in topic or "joint_state" in topic:
-                proprio_frames.append(self._proprio_from_payload(payload, timestep))
+                proprio_frames.append(self._proprio_from_payload(payload, timestep, timestamp=ts))
             elif "action" in topic or "command" in topic:
-                action_frames.append(self._action_from_payload(payload, timestep))
+                action_frames.append(self._action_from_payload(payload, timestep, timestamp=ts))
             elif topic == "/tf" or "tf" in topic:
-                env_digests.append(self._env_state_from_tf(payload, timestep))
+                env_digests.append(self._env_state_from_tf(payload, timestep, timestamp=ts))
 
         # Deduplicate and sort for determinism
         vision_frames = sorted(vision_frames, key=lambda vf: (vf.timestep, vf.camera_name or "cam"))
@@ -79,11 +81,12 @@ class ROSBridgeIngestor:
         rollout = RawRollout(
             episode_id=episode_id,
             task_id=task_id,
+            rollout_id=rollout_id,
             vision_frames=vision_frames,
             proprio_frames=proprio_frames,
             action_frames=action_frames,
             env_digests=env_digests,
-            metadata={"source": backend_id, "log_path": str(log_path), **metadata},
+            metadata={"source": backend_id, "log_path": str(log_path), "timeline": timeline, "rollout_id": rollout_id, **metadata},
         )
 
         self._write_datapack(output_dir, rollout)
@@ -192,6 +195,7 @@ class ROSBridgeIngestor:
         timestep: int,
         backend_id: str,
         frame_dir: Path,
+        timestamp: Optional[float] = None,
         is_depth: bool = False,
     ) -> VisionFrame:
         data = payload.get("data") if isinstance(payload, dict) else None
@@ -242,10 +246,10 @@ class ROSBridgeIngestor:
             segmentation_path=segmentation_path,
             camera_name=str(payload.get("camera_name") or "ros_camera"),
             state_digest=state_digest,
-            metadata={"source_topic": payload.get("topic", "/camera/rgb"), "state": tf_state},
+            metadata={"source_topic": payload.get("topic", "/camera/rgb"), "state": tf_state, "timestamp": timestamp},
         )
 
-    def _proprio_from_payload(self, payload: Dict[str, Any], timestep: int) -> ProprioFrame:
+    def _proprio_from_payload(self, payload: Dict[str, Any], timestep: int, timestamp: Optional[float] = None) -> ProprioFrame:
         positions = payload.get("position") or payload.get("positions") or payload.get("joint_positions") or []
         velocities = payload.get("velocity") or payload.get("velocities") or payload.get("joint_velocities") or []
         efforts = payload.get("effort") or payload.get("joint_effort") or payload.get("joint_torques") or []
@@ -260,14 +264,18 @@ class ROSBridgeIngestor:
             contact_sensors=contacts,
             end_effector_pose=ee_pose,
             energy_estimate_Wh=energy,
-            metadata={"source_topic": payload.get("topic", "/joint_states")},
+            metadata={"source_topic": payload.get("topic", "/joint_states"), "timestamp": timestamp},
         )
 
-    def _action_from_payload(self, payload: Dict[str, Any], timestep: int) -> ActionFrame:
+    def _action_from_payload(self, payload: Dict[str, Any], timestep: int, timestamp: Optional[float] = None) -> ActionFrame:
         command = payload.get("action") or payload.get("command") or {k: v for k, v in payload.items() if k not in ("stamp", "timestamp")}
-        return ActionFrame(timestep=int(timestep), command=command, metadata={"source_topic": payload.get("topic", "action")})
+        return ActionFrame(
+            timestep=int(timestep),
+            command=command,
+            metadata={"source_topic": payload.get("topic", "action"), "timestamp": timestamp},
+        )
 
-    def _env_state_from_tf(self, payload: Dict[str, Any], timestep: int) -> EnvStateDigest:
+    def _env_state_from_tf(self, payload: Dict[str, Any], timestep: int, timestamp: Optional[float] = None) -> EnvStateDigest:
         transforms = payload.get("transforms") or payload.get("tf") or payload.get("frames") or payload
         tf_tree = {}
         if isinstance(transforms, list):
@@ -280,7 +288,7 @@ class ROSBridgeIngestor:
                 }
         elif isinstance(transforms, dict):
             tf_tree = to_json_safe(transforms)
-        return EnvStateDigest(timestep=int(timestep), tf_tree=tf_tree, metadata={"source_topic": payload.get("topic", "/tf")})
+        return EnvStateDigest(timestep=int(timestep), tf_tree=tf_tree, metadata={"source_topic": payload.get("topic", "/tf"), "timestamp": timestamp})
 
     def _estimate_energy(self, torques: Any, velocities: Any, dt: Optional[float]) -> float:
         try:

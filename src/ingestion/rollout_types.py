@@ -105,16 +105,22 @@ class EnvStateDigest:
 class RawRollout:
     episode_id: str
     task_id: str
+    rollout_id: Optional[str] = None
     vision_frames: List[VisionFrame] = field(default_factory=list)
     proprio_frames: List[ProprioFrame] = field(default_factory=list)
     action_frames: List[ActionFrame] = field(default_factory=list)
     env_digests: List[EnvStateDigest] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if self.rollout_id is None:
+            self.rollout_id = self.episode_id
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "episode_id": self.episode_id,
             "task_id": self.task_id,
+            "rollout_id": self.rollout_id,
             "vision_frames": [vf.to_dict() for vf in self.vision_frames],
             "proprio_frames": [pf.to_dict() for pf in self.proprio_frames],
             "action_frames": [af.to_dict() for af in self.action_frames],
@@ -126,6 +132,7 @@ class RawRollout:
         return {
             "episode_id": self.episode_id,
             "task_id": self.task_id,
+            "rollout_id": self.rollout_id or self.episode_id,
             "source_type": source,
             "rollout": self.to_dict(),
             "vision_frame_count": len(self.vision_frames),

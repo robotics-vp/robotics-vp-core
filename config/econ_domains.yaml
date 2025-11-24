@@ -1,24 +1,72 @@
 default:
-  mpl_scale: 1.0
-  energy_scale: 1.0
-  damage_scale: 1.0
+  scale_mpl: 1.0
+  bias_mpl: 0.0
+  scale_energy_wh: 1.0
+  bias_energy_wh: 0.0
+  scale_damage: 1.0
+  bias_damage: 0.0
   offset: {}
-  source_domain: pybullet
+  source_domain: sim_pybullet
+  target_domain: platform_econ
+
+sim_pybullet:
+  scale_mpl: 1.0
+  bias_mpl: 0.0
+  scale_energy_wh: 1.0
+  bias_energy_wh: 0.0
+  scale_damage: 1.0
+  bias_damage: 0.0
+  source_domain: sim_pybullet
+  target_domain: platform_econ
+
+sim_isaac:
+  scale_mpl: 1.0
+  bias_mpl: 0.0
+  scale_energy_wh: 1.0
+  bias_energy_wh: 0.0
+  scale_damage: 1.0
+  bias_damage: 0.0
+  source_domain: sim_isaac
+  target_domain: platform_econ
+
+real_ros:
+  scale_mpl: 0.95
+  bias_mpl: 0.0
+  scale_energy_wh: 1.2
+  bias_energy_wh: 0.0
+  scale_damage: 1.1
+  bias_damage: 0.0
+  source_domain: real_ros
+  target_domain: platform_econ
+
+real_isaac:
+  scale_mpl: 0.9
+  bias_mpl: 0.0
+  scale_energy_wh: 1.1
+  bias_energy_wh: 0.0
+  scale_damage: 1.05
+  bias_damage: 0.0
+  source_domain: real_isaac
   target_domain: platform_econ
 
 pybullet_smoke:
-  mpl_scale: 1.0
-  energy_scale: 0.2
-  damage_scale: 0.5
-  offset:
-    energy_cost: 0.0
-  source_domain: pybullet
+  scale_mpl: 1.0
+  bias_mpl: 0.0
+  scale_energy_wh: 0.2
+  bias_energy_wh: 0.0
+  scale_damage: 0.5
+  bias_damage: 0.0
+  offset: {}
+  source_domain: sim_pybullet
   target_domain: platform_econ
 
 isaac_stub:
-  mpl_scale: 1.0
-  energy_scale: 1.0
-  damage_scale: 1.0
+  scale_mpl: 1.0
+  bias_mpl: 0.0
+  scale_energy_wh: 1.0
+  bias_energy_wh: 0.0
+  scale_damage: 1.0
+  bias_damage: 0.0
   offset: {}
   source_domain: isaac
   target_domain: platform_econ

@@ -6,7 +6,7 @@ Assertions:
 - VisionFrame populates RGB/Depth/Segmentation paths
 - ProprioFrame matches schema and carries energy estimate/contact sensors
 - Deterministic outputs with fixed seed
-- Compatible with ConditionedVisionAdapter
+- Compatible with ConditionedVisionAdapter and PolicyObservationBuilder
 """
 import sys
 import tempfile
@@ -20,6 +20,23 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.env.isaac_adapter import IsaacAdapter
 from src.observation.condition_vector import ConditionVector
+from src.vision.interfaces import VisionLatent
+from src.vision.policy_observation_builder import PolicyObservationBuilder
+
+
+class StubVisionEncoder:
+    mode = "stub"
+    backbone_name = "stub"
+
+    def encode_frame(self, frame):
+        return VisionLatent(
+            backend=frame.backend,
+            task_id=frame.task_id,
+            episode_id=frame.episode_id,
+            timestep=frame.timestep,
+            latent=[float(frame.width), float(frame.height), float(frame.channels)],
+            model_name="stub_encoder",
+        )
 
 
 def make_condition() -> ConditionVector:
@@ -70,18 +87,51 @@ def main() -> int:
         vf = result_a["vision_frame"]
         assert vf.rgb_path and vf.depth_path and vf.segmentation_path, "VisionFrame should persist all modalities"
         assert vf.width > 0 and vf.height > 0, "VisionFrame dimensions should be set"
+        assert vf.backend_id == "isaac", "VisionFrame should mark backend_id=isaac"
+        assert vf.metadata.get("domain_randomization"), "Domain randomization metadata should be present"
 
         pf = result_a["proprio_frame"]
         assert len(pf.joint_positions) == 2, "ProprioFrame should carry joint positions"
         assert pf.energy_estimate_Wh > 0, "Energy estimate should be positive from torques"
         assert pf.contact_sensors, "Contact sensors should be propagated"
+        proxies = result_a.get("energy_proxies", {})
+        assert proxies.get("energy_proxy_Wh", 0.0) >= pf.energy_estimate_Wh, "Energy proxies should include energy_Wh"
 
         # Determinism
         assert vf.to_dict() == result_b["vision_frame"].to_dict(), "VisionFrame must be deterministic"
         assert pf.to_dict() == result_b["proprio_frame"].to_dict(), "ProprioFrame must be deterministic"
         assert np.allclose(result_a["vision_features"]["risk_map"], result_b["vision_features"]["risk_map"]), "Vision features should be deterministic"
 
-        # Conditioned vision compatibility
+        # Conditioned vision compatibility through policy observation builder
+        builder = PolicyObservationBuilder(
+            encoder=StubVisionEncoder(),
+            use_observation_adapter=False,
+            vision_config={"enable_conditioned_vision": True, "conditioned_vision_enable_conditioning": True},
+        )
+        state_summary = {
+            "energy_proxy_Wh": proxies.get("energy_proxy_Wh", 0.0),
+            "torque_abs_sum": proxies.get("torque_abs_sum", 0.0),
+        }
+        features_a = builder.build_policy_features(
+            vf,
+            state_summary,
+            condition_vector=condition,
+            vision_overrides={"enable_conditioned_vision": True, "conditioned_vision_enable_conditioning": True},
+        )
+        features_b = builder.build_policy_features(
+            vf,
+            state_summary,
+            condition_vector=condition,
+            vision_overrides={"enable_conditioned_vision": True, "conditioned_vision_enable_conditioning": True},
+        )
+
+        assert features_a["backend_tags"]["backend_id"] == "isaac", "Backend tags should carry isaac backend_id"
+        assert features_a["conditioned_vision_vector"] is not None, "Conditioned vision vector should be present"
+        assert np.allclose(features_a["conditioned_vision_vector"], features_b["conditioned_vision_vector"]), "Conditioned vision must be deterministic"
+        assert features_a["condition_vector_dict"]["task_id"] == "drawer", "ConditionVector should be threaded through builder"
+        assert features_a["conditioned_vision_risk_map"] is not None, "Risk map should be present"
+        assert result_a["domain_randomization"], "Domain randomization metadata should be non-empty"
+
         features = result_a["vision_features"]
         assert "z_v" in features and "risk_map" in features and "affordance_map" in features, "ConditionedVisionAdapter outputs missing keys"
 

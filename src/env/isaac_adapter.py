@@ -24,6 +24,7 @@ class IsaacAdapter:
         self.seed = int(self.config.get("seed", 0))
         self.rng = np.random.default_rng(self.seed)
         self.backend = self._select_backend(self.config)
+        self.enable_conditioned_vision = bool(self.config.get("enable_conditioned_vision", True))
         self.output_root = Path(output_root or Path("results") / "isaac_adapter")
         self.output_root.mkdir(parents=True, exist_ok=True)
         self.domain_randomization = self._build_domain_randomization()
@@ -44,8 +45,17 @@ class IsaacAdapter:
         proprio_frame = self._build_proprio_frame(observation, timestep)
         action_frame = self._build_action_frame(observation, timestep)
         env_digest = self._build_env_state(observation, timestep)
+        energy_proxies = self._energy_proxies(
+            proprio_frame.joint_torques, proprio_frame.joint_velocities, observation.get("dt", proprio_frame.metadata.get("dt", 0.0))
+        )
+        vision_frame.metadata.setdefault("energy_proxies", energy_proxies)
+        proprio_frame.metadata.setdefault("energy_proxies", energy_proxies)
+        env_digest.metadata.setdefault("energy_proxies", energy_proxies)
+        env_digest.metadata.setdefault("domain_randomization", self.domain_randomization)
 
-        vision_features = ConditionedVisionAdapter(config={"enable_conditioning": True}).forward(vision_frame, condition_vector)
+        vision_features = {}
+        if self.enable_conditioned_vision:
+            vision_features = ConditionedVisionAdapter(config={"enable_conditioning": True}).forward(vision_frame, condition_vector)
 
         return {
             "backend": self.backend,
@@ -54,7 +64,9 @@ class IsaacAdapter:
             "action_frame": action_frame,
             "env_digest": env_digest,
             "vision_features": vision_features,
+            "energy_proxies": energy_proxies,
             "domain_randomization": self.domain_randomization,
+            "state_digest": vision_frame.state_digest,
         }
 
     # ----- helpers -----
@@ -72,6 +84,8 @@ class IsaacAdapter:
         return {
             "lighting": round(lighting, 4),
             "texture_variant": texture_variant,
+            "seed": int(self.seed),
+            "env_difficulty": float(self.config.get("env_difficulty", 1.0)),
         }
 
     def _build_vision_frame(
@@ -135,6 +149,7 @@ class IsaacAdapter:
                 "backend": self.backend,
                 "domain_randomization": self.domain_randomization,
                 "tf": to_json_safe(tf_hint),
+                "state_digest": state_digest,
             },
         )
 
@@ -198,6 +213,27 @@ class IsaacAdapter:
             return float(np.sum(power) * float(dt) / 3600.0)
         except Exception:
             return 0.0
+
+    def _energy_proxies(self, torques: Any, velocities: Any, dt: float) -> Dict[str, float]:
+        """
+        Compute JSON-safe energy/torque proxies for downstream econ calibration.
+        """
+        try:
+            tau = np.asarray(torques, dtype=float)
+            vel = np.asarray(velocities, dtype=float)
+            if tau.shape != vel.shape:
+                vel = np.broadcast_to(vel, tau.shape)
+            power = np.abs(tau * vel)
+            energy_Wh = float(np.sum(power) * float(dt) / 3600.0)
+            torque_abs = float(np.sum(np.abs(tau)))
+            power_integral = float(np.sum(power) * float(dt))
+            return {
+                "energy_proxy_Wh": energy_Wh,
+                "torque_abs_sum": torque_abs,
+                "power_integral": power_integral,
+            }
+        except Exception:
+            return {"energy_proxy_Wh": 0.0, "torque_abs_sum": 0.0, "power_integral": 0.0}
 
     def _write_array(self, directory: Path, filename: str, array: Any) -> str:
         directory.mkdir(parents=True, exist_ok=True)

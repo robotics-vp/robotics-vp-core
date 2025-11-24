@@ -18,10 +18,13 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
+import yaml
+
 REPO_ROOT = Path(__file__).parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from src.analytics.econ_correlator_impl import EconCorrelator
 from src.observation.condition_vector_builder import ConditionVectorBuilder
 from src.policies.sampler_weights import HeuristicSamplerWeightPolicy
 from src.phase_h.economic_learner import EconomicLearner
@@ -65,7 +68,13 @@ def _condition_vector_checks() -> Dict[str, Any]:
     )
     cv1 = builder.build(**base_args)
     cv2 = builder.build(**base_args)
-    bounded = 0.0 <= cv1.ood_risk_level <= 1.0 and cv1.energy_budget_wh >= 0.0 and cv1.target_mpl >= 0.0
+    bounded = (
+        0.0 <= cv1.ood_risk_level <= 1.0
+        and 0.0 <= cv1.recovery_priority <= 1.0
+        and cv1.energy_budget_wh >= 0.0
+        and cv1.target_mpl >= 0.0
+        and 0.0 <= cv1.sima2_trust_score <= 1.0
+    )
     return {
         "deterministic": cv1.to_dict() == cv2.to_dict(),
         "bounded": bounded,
@@ -163,25 +172,88 @@ def _economic_learner_check() -> Dict[str, Any]:
     return {"before": before, "after": after, "ratio": ratio, "bounded_20pct": bounded, "cap_triggered": cap_triggered}
 
 
+def _trust_matrix_check() -> Dict[str, Any]:
+    datapacks = [
+        {
+            "segments": [{"metadata": {"failure_observed": True}}],
+            "econ_vector": {"damage": 8.0, "mpl": 1.0, "energy_wh": 2.0, "success": False},
+        },
+        {
+            "segments": [{"metadata": {"failure_observed": False}}],
+            "econ_vector": {"damage": 1.0, "mpl": 3.0, "energy_wh": 1.0, "success": True},
+        },
+        {
+            "segments": [{"metadata": {"failure_observed": False}}],
+            "econ_vector": {"damage": 0.5, "mpl": 2.0, "energy_wh": 0.8, "success": True},
+        },
+    ]
+    correlator = EconCorrelator(config={"min_samples_for_trust": 1})
+    tm = correlator.compute_correlations(datapacks)
+    risk_damage = tm.get("RiskTag", {}).get("mean_damage", 0.0)
+    recovery_damage = tm.get("RecoveryTag", {}).get("mean_damage", 0.0)
+    monotone = risk_damage >= recovery_damage
+    return {"trust_matrix": tm, "monotone": monotone}
+
+
+def _econ_calibration_summary() -> Dict[str, Any]:
+    cfg_path = REPO_ROOT / "config" / "econ_domains.yaml"
+    if not cfg_path.exists():
+        return {}
+    try:
+        with cfg_path.open("r") as f:
+            payload = yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+    summary: Dict[str, Any] = {}
+    for domain, profile in payload.items():
+        if not isinstance(profile, dict):
+            continue
+        summary[domain] = {k: v for k, v in profile.items() if k.startswith("scale_") or k.startswith("bias_")}
+    return summary
+
+
 def main() -> int:
     smoke_tests = [
         Path(REPO_ROOT / "scripts" / "smoke_test_ros_ingestion.py"),
         Path(REPO_ROOT / "scripts" / "smoke_test_isaac_adapter_contract.py"),
         Path(REPO_ROOT / "scripts" / "smoke_test_segmentation_real.py"),
         Path(REPO_ROOT / "scripts" / "smoke_test_econ_correlator_stage5.py"),
+        Path(REPO_ROOT / "scripts" / "smoke_test_econ_domain_calibration.py"),
+        Path(REPO_ROOT / "scripts" / "smoke_test_ros_to_stage2_pipeline.py"),
+        Path(REPO_ROOT / "scripts" / "smoke_test_tfd_condition_chain.py"),
     ]
 
     smoke_results: List[Dict[str, Any]] = [_run_script(path) for path in smoke_tests]
+    smoke_success = {Path(res["script"]).name: res.get("success", False) for res in smoke_results}
 
     report = {
         "timestamp": time.time(),
         "smoke_tests": smoke_results,
-        "condition_vector": _condition_vector_checks(),
-        "tfd_chain": _tfd_chain_check(),
-        "segmentation": _segmentation_check(),
-        "trust_sampler": _trust_sampler_check(),
-        "economic_learner": _economic_learner_check(),
+        "checks": {
+            "condition_vector": _condition_vector_checks(),
+            "tfd_chain": _tfd_chain_check(),
+            "segmentation": _segmentation_check(),
+            "trust_sampler": _trust_sampler_check(),
+            "economic_learner": _economic_learner_check(),
+            "trust_matrix": _trust_matrix_check(),
+            "econ_calibration": {"domains": _econ_calibration_summary()},
+            "vision": {
+                "isaac_adapter_smoke": smoke_success.get("smoke_test_isaac_adapter_contract.py", False),
+                "tfd_condition_chain_smoke": smoke_success.get("smoke_test_tfd_condition_chain.py", False),
+            },
+            "ros_pipeline": smoke_success.get("smoke_test_ros_to_stage2_pipeline.py", False),
+        },
     }
+    all_smokes_pass = all(res.get("success") for res in smoke_results)
+    checks = report["checks"]
+    ready_for_neuralization = (
+        all_smokes_pass
+        and checks["condition_vector"]["bounded"]
+        and checks["condition_vector"]["deterministic"]
+        and checks["tfd_chain"].get("aligned_with_tfd", False)
+        and checks["trust_matrix"].get("monotone", False)
+    )
+    report["ready_for_neuralization"] = ready_for_neuralization
 
     out_dir = REPO_ROOT / "results" / "audit"
     out_dir.mkdir(parents=True, exist_ok=True)
