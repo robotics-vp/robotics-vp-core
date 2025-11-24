@@ -18,8 +18,9 @@ from src.observation.config import load_observation_config
 from src.policies.interfaces import VisionEncoderPolicy
 from src.vision.bifpn_fusion import fuse_feature_pyramid
 from src.vision.config import load_vision_config
+from src.vision.conditioned_adapter import ConditionedVisionAdapter
 from src.vision.interfaces import VisionFrame, PolicyObservation, VisionLatent
-from src.vision.regnet_backbone import build_regnet_feature_pyramid, flatten_pyramid, pyramid_to_json_safe
+from src.vision.regnet_backbone import build_regnet_feature_pyramid, flatten_pyramid, pyramid_to_json_safe, DEFAULT_LEVELS
 from src.vision.spatial_rnn_adapter import run_spatial_rnn, tensor_to_json_safe
 
 
@@ -44,6 +45,10 @@ class PolicyObservationBuilder:
         self.vision_backbone = str(self.vision_config.get("backbone", "stub"))
         self.vision_use_bifpn = bool(self.vision_config.get("use_bifpn", False))
         self.vision_use_spatial_rnn = bool(self.vision_config.get("use_spatial_rnn", False))
+        self.enable_conditioned_vision = bool(self.vision_config.get("enable_conditioned_vision", False))
+        self.conditioned_feature_dim = int(self.vision_config.get("conditioned_vision_feature_dim", self.vision_config.get("regnet_feature_dim", 8)))
+        self.conditioned_levels = list(self.vision_config.get("conditioned_vision_levels", [])) or list(DEFAULT_LEVELS)
+        self.conditioned_enable_flag = bool(self.vision_config.get("conditioned_vision_enable_conditioning", True))
 
     def encode_frame(self, frame: VisionFrame) -> VisionLatent:
         """
@@ -110,6 +115,10 @@ class PolicyObservationBuilder:
         use_bifpn = bool(backbone_cfg.get("use_bifpn", self.vision_use_bifpn))
         use_spatial_rnn = bool(backbone_cfg.get("use_spatial_rnn", self.vision_use_spatial_rnn))
         feature_dim = int(backbone_cfg.get("feature_dim", self.vision_config.get("regnet_feature_dim", 8)))
+        enable_conditioned_vision = bool(backbone_cfg.get("enable_conditioned_vision", self.enable_conditioned_vision))
+        conditioned_levels = list(backbone_cfg.get("conditioned_vision_levels", self.conditioned_levels))
+        conditioned_feature_dim = int(backbone_cfg.get("conditioned_vision_feature_dim", self.conditioned_feature_dim))
+        conditioned_enable_flag = bool(backbone_cfg.get("conditioned_vision_enable_conditioning", self.conditioned_enable_flag))
         if backbone_choice == "regnet_bifpn_stub":
             pyramid_sequence = [build_regnet_feature_pyramid(f, feature_dim=feature_dim) for f in frames]
             fused_sequence = [fuse_feature_pyramid(pyr) if use_bifpn else pyr for pyr in pyramid_sequence]
@@ -177,4 +186,60 @@ class PolicyObservationBuilder:
         if use_observation_components:
             features["observation_components"] = components
             features["observation_components_dict"] = components.to_dict()
+
+        if enable_conditioned_vision:
+            condition_vector = features.get("condition_vector")
+            adapter_cfg = {
+                "feature_dim": conditioned_feature_dim,
+                "levels": conditioned_levels or list(DEFAULT_LEVELS),
+                "enable_conditioning": conditioned_enable_flag,
+            }
+            vision_adapter = ConditionedVisionAdapter(config=adapter_cfg)
+            conditioned = vision_adapter.forward(primary_frame, condition_vector if condition_vector is not None else None)
+
+            # Preserve invariants: never overwrite base latent/z_v
+            conditioned_flat = flatten_pyramid(conditioned.get("fused_features", {}))
+            if conditioned_flat.size == 0:
+                conditioned_flat = flatten_pyramid(conditioned.get("features_modulated", {}))
+            if conditioned_flat.size == 0 and "z_v" in conditioned:
+                conditioned_flat = flatten_pyramid(conditioned.get("z_v", {}))
+
+            condition_tensor = None
+            if condition_vector is not None:
+                try:
+                    condition_tensor = condition_vector.to_vector()
+                except Exception:
+                    condition_tensor = None
+
+            proprio_vector = self._flatten_state_summary(state_summary)
+            features["conditioned_vision"] = conditioned
+            features["conditioned_vision_vector"] = conditioned_flat.astype(np.float32) if conditioned_flat is not None else None
+            features["conditioned_vision_risk_map"] = conditioned.get("risk_map")
+            features["policy_observation"] = {
+                "vision": conditioned,
+                "state": proprio_vector,
+                "condition": condition_tensor,
+            }
         return features
+
+    def _flatten_state_summary(self, state_summary: Dict[str, Any]) -> list:
+        """
+        Deterministically flatten a state_summary dict into a numeric list.
+        """
+        if not isinstance(state_summary, dict):
+            try:
+                arr = np.asarray(state_summary, dtype=np.float32).flatten()
+                return [float(x) for x in arr.tolist()]
+            except Exception:
+                return []
+        flat: list = []
+        for key, val in sorted(state_summary.items(), key=lambda kv: str(kv[0])):
+            if isinstance(val, dict):
+                for k2, v2 in sorted(val.items(), key=lambda kv: str(kv[0])):
+                    if isinstance(v2, (int, float)):
+                        flat.append(float(v2))
+            elif isinstance(val, (list, tuple)):
+                flat.extend([float(v) if isinstance(v, (int, float)) else 0.0 for v in val])
+            elif isinstance(val, (int, float)):
+                flat.append(float(val))
+        return flat

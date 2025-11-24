@@ -10,3 +10,7 @@ backbone: "stub"
 use_bifpn: false
 use_spatial_rnn: false
 regnet_feature_dim: 8
+enable_conditioned_vision: false
+conditioned_vision_feature_dim: 8
+conditioned_vision_levels: ["P3", "P4", "P5"]
+conditioned_vision_enable_conditioning: true

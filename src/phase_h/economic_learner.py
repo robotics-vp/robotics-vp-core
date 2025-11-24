@@ -76,6 +76,8 @@ def compute_skill_roi(
     price_per_unit: float = 0.30,
     hours_deployed: int = 1000,
     energy_price_per_kwh: float = 0.12,
+    previous_roi: Optional[float] = None,
+    alpha: float = 0.3,
 ) -> float:
     """
     Compute return on investment for a skill.
@@ -101,6 +103,9 @@ def compute_skill_roi(
         roi_pct = (total_value - skill.training_cost_usd) / skill.training_cost_usd * 100.0
     else:
         roi_pct = 0.0
+
+    if previous_roi is not None:
+        roi_pct = (alpha * roi_pct) + ((1 - alpha) * float(previous_roi))
 
     return roi_pct
 
@@ -136,6 +141,7 @@ class EconomicLearner:
         self.skills: Dict[str, Skill] = {}
         self.budgets: Dict[str, ExplorationBudget] = {}
         self.returns_history: List[SkillReturns] = []
+        self.roi_history: Dict[str, float] = {}
 
     def add_skill(self, skill: Skill):
         """Add a skill to the portfolio."""
@@ -171,13 +177,7 @@ class EconomicLearner:
         roi_by_skill = {}
         for skill_id, skill in self.skills.items():
             if skill_id in returns_by_skill:
-                roi = compute_skill_roi(
-                    skill,
-                    returns_by_skill[skill_id],
-                    price_per_unit=self.price_per_unit,
-                    hours_deployed=self.hours_deployed,
-                )
-                roi_by_skill[skill_id] = roi
+                roi_by_skill[skill_id] = returns_by_skill[skill_id].roi_pct
 
         # 3. Reallocate budgets
         self._reallocate_budgets(roi_by_skill)
@@ -226,10 +226,16 @@ class EconomicLearner:
                 roi_pct=0.0,  # Will be computed
             )
 
-            # Compute ROI for this skill
+            # Compute ROI for this skill (EMA smoothed)
+            previous_roi = self.roi_history.get(skill_id)
             returns.roi_pct = compute_skill_roi(
-                skill, returns, price_per_unit=self.price_per_unit, hours_deployed=self.hours_deployed
+                skill,
+                returns,
+                price_per_unit=self.price_per_unit,
+                hours_deployed=self.hours_deployed,
+                previous_roi=previous_roi,
             )
+            self.roi_history[skill_id] = returns.roi_pct
 
             returns_by_skill[skill_id] = returns
             self.returns_history.append(returns)
@@ -241,10 +247,17 @@ class EconomicLearner:
         Reallocate exploration budget based on ROI.
 
         Strategy:
-        - High ROI skills: Increase budget by 20%
-        - Low ROI skills: Decrease budget by 30%
+        - High ROI skills: Increase budget by 20% (max)
+        - Low ROI skills: Decrease budget by 20% (max)
         - Negative ROI skills: Consider deprecation
+
+        Bounds: ±20% per cycle (Phase H requirement).
         """
+        MAX_INCREASE = 1.2
+        MAX_DECREASE = 0.8
+
+        planned_budgets: Dict[str, ExplorationBudget] = {}
+
         for skill_id, roi in roi_by_skill.items():
             if skill_id not in self.skills or skill_id not in self.budgets:
                 continue
@@ -254,20 +267,53 @@ class EconomicLearner:
 
             if roi > 50.0:
                 # High ROI: invest more
-                new_budget = current_budget * 1.2
+                new_budget = current_budget * MAX_INCREASE
             elif roi > 0.0:
                 # Positive ROI: maintain
                 new_budget = current_budget
             else:
                 # Negative ROI: reduce or deprecate
-                new_budget = current_budget * 0.7
+                new_budget = current_budget * MAX_DECREASE
 
                 if roi < -50.0:
                     skill.status = SkillStatus.DEPRECATED.value
 
-            # Update budget
             mpl_gap = max(0, skill.mpl_target - skill.mpl_current)
-            self.budgets[skill_id] = allocate_exploration_budget(skill, new_budget, mpl_gap)
+            planned_budgets[skill_id] = allocate_exploration_budget(skill, new_budget, mpl_gap)
+
+        # Enforce global exploration budget cap (20% of total budget)
+        cap = 0.2 * self.total_budget_usd
+        exploration_total = sum(
+            b.budget_usd
+            for sid, b in planned_budgets.items()
+            if self.skills.get(sid) and self.skills[sid].status == SkillStatus.EXPLORATION.value
+        )
+        if exploration_total > cap and exploration_total > 0:
+            scale = cap / exploration_total
+            for skill_id, budget in list(planned_budgets.items()):
+                skill = self.skills.get(skill_id)
+                if skill is None or skill.status != SkillStatus.EXPLORATION.value:
+                    continue
+                scaled_budget_usd = budget.budget_usd * scale
+                scaled_remaining = min(budget.remaining_usd, scaled_budget_usd)
+                max_episodes = (
+                    int(scaled_budget_usd * budget.data_collection_pct / skill.data_cost_per_episode)
+                    if skill.data_cost_per_episode > 0
+                    else 0
+                )
+                planned_budgets[skill_id] = ExplorationBudget(
+                    skill_id=budget.skill_id,
+                    budget_usd=scaled_budget_usd,
+                    spent_usd=min(budget.spent_usd, scaled_budget_usd),
+                    remaining_usd=scaled_remaining,
+                    data_collection_pct=budget.data_collection_pct,
+                    compute_training_pct=budget.compute_training_pct,
+                    human_supervision_pct=budget.human_supervision_pct,
+                    max_episodes=max_episodes,
+                )
+
+        for skill_id, budget in planned_budgets.items():
+            self.budgets[skill_id] = budget
 
     def save_artifacts(self, output_dir: Path):
         """

@@ -106,7 +106,7 @@ class TrunkNet(nn.Module):
             condition = None
         vision_vec = self._extract_vision(obs, device)
         state_vec = self._extract_state(obs, device)
-        condition_vec = self._extract_condition(condition, device)
+        condition_vec = self._extract_condition(condition, device, obs_override=obs)
 
         vision_embed = self.vision_proj(_pad_or_trim(vision_vec, self.vision_dim))
         state_embed = self.state_proj(_pad_or_trim(state_vec, self.state_dim))
@@ -126,6 +126,9 @@ class TrunkNet(nn.Module):
         return trunk_features
 
     def _extract_vision(self, obs: Any, device: torch.device) -> torch.Tensor:
+        conditioned_vec = self._extract_conditioned_vision(obs, device)
+        if conditioned_vec is not None and conditioned_vec.numel() > 0:
+            return conditioned_vec
         latent = getattr(obs, "latent", None)
         if hasattr(latent, "latent"):
             latent = getattr(latent, "latent")
@@ -134,8 +137,11 @@ class TrunkNet(nn.Module):
         return _tensor_from_iterable(latent, device, self.vision_dim)
 
     def _extract_state(self, obs: Any, device: torch.device) -> torch.Tensor:
+        if isinstance(obs, dict) and "policy_observation" in obs:
+            obs = obs.get("policy_observation") or obs
         state_summary = getattr(obs, "state_summary", None) or {}
         if isinstance(obs, dict):
+            state_summary = obs.get("state", state_summary)
             state_summary = obs.get("state_summary", state_summary)
         if isinstance(state_summary, dict):
             flat: list = []
@@ -150,14 +156,96 @@ class TrunkNet(nn.Module):
             return _tensor_from_iterable(flat, device, self.state_dim)
         return _tensor_from_iterable(state_summary, device, self.state_dim)
 
-    def _extract_condition(self, condition: Optional[ConditionVector], device: torch.device) -> torch.Tensor:
-        if condition is None:
-            return torch.zeros(self.condition_dim, device=device, dtype=torch.float32)
+    def _extract_condition(
+        self,
+        condition: Optional[ConditionVector],
+        device: torch.device,
+        obs_override: Any = None,
+    ) -> torch.Tensor:
+        candidate = condition
+        if candidate is None and isinstance(obs_override, dict):
+            policy_obs = obs_override.get("policy_observation")
+            if policy_obs and policy_obs.get("condition") is not None:
+                candidate = policy_obs.get("condition")
+            if candidate is None:
+                candidate = obs_override.get("condition_vector") or obs_override.get("condition")
+        if candidate is None and hasattr(obs_override, "condition"):
+            candidate = getattr(obs_override, "condition")
+        if isinstance(candidate, ConditionVector):
+            try:
+                vec = candidate.to_vector()
+                return torch.as_tensor(vec, device=device, dtype=torch.float32).flatten()
+            except Exception:
+                return torch.zeros(self.condition_dim, device=device, dtype=torch.float32)
+        if candidate is not None:
+            return _tensor_from_iterable(candidate, device, self.condition_dim)
+        return torch.zeros(self.condition_dim, device=device, dtype=torch.float32)
+
+    def _extract_conditioned_vision(self, obs: Any, device: torch.device) -> Optional[torch.Tensor]:
+        if isinstance(obs, dict):
+            if "conditioned_vision_vector" in obs:
+                tensor = _tensor_from_iterable(obs["conditioned_vision_vector"], device, self.vision_dim)
+                if tensor.numel() > 0:
+                    return tensor
+            container = obs.get("policy_observation") or {}
+            if container and "vision" in container:
+                tensor = self._flatten_vision_block(container.get("vision"), device)
+                if tensor is not None and tensor.numel() > 0:
+                    return tensor
+        if hasattr(obs, "policy_observation"):
+            policy_obs = getattr(obs, "policy_observation")
+            if isinstance(policy_obs, dict):
+                tensor = self._flatten_vision_block(policy_obs.get("vision"), device)
+                if tensor is not None and tensor.numel() > 0:
+                    return tensor
+        return None
+
+    def _flatten_vision_block(self, vision_block: Any, device: torch.device) -> Optional[torch.Tensor]:
+        if vision_block is None:
+            return None
+        if isinstance(vision_block, torch.Tensor):
+            tensor = vision_block.to(device=device, dtype=torch.float32).flatten()
+            return tensor if tensor.numel() > 0 else None
+        if isinstance(vision_block, dict):
+            # Prefer pre-flattened vectors if present
+            for key in ("vision_vector", "conditioned_vision_vector", "vector"):
+                if key in vision_block and vision_block[key] is not None:
+                    tensor = _tensor_from_iterable(vision_block[key], device, self.vision_dim)
+                    if tensor.numel() > 0:
+                        return tensor
+            for candidate in (
+                vision_block.get("fused_features"),
+                vision_block.get("features_modulated"),
+                vision_block.get("z_v"),
+            ):
+                tensor = self._flatten_pyramid_candidate(candidate, device)
+                if tensor is not None and tensor.numel() > 0:
+                    return tensor
+            if "risk_map" in vision_block and vision_block["risk_map"] is not None:
+                tensor = _tensor_from_iterable(vision_block["risk_map"], device, self.vision_dim)
+                if tensor.numel() > 0:
+                    return tensor
+            return None
+        return _tensor_from_iterable(vision_block, device, self.vision_dim)
+
+    def _flatten_pyramid_candidate(self, candidate: Any, device: torch.device) -> Optional[torch.Tensor]:
+        if candidate is None:
+            return None
         try:
-            vec = condition.to_vector()
-            return torch.as_tensor(vec, device=device, dtype=torch.float32).flatten()
+            if isinstance(candidate, torch.Tensor):
+                tensor = candidate.to(device=device, dtype=torch.float32).flatten()
+                return tensor if tensor.numel() > 0 else None
+            if isinstance(candidate, dict):
+                tensors = []
+                for key in sorted(candidate.keys()):
+                    tensors.append(torch.as_tensor(candidate[key], device=device, dtype=torch.float32).flatten())
+                if tensors:
+                    return torch.cat(tensors, dim=0)
+                return None
+            tensor = torch.as_tensor(candidate, device=device, dtype=torch.float32).flatten()
+            return tensor if tensor.numel() > 0 else None
         except Exception:
-            return torch.zeros(self.condition_dim, device=device, dtype=torch.float32)
+            return None
 
     def _condition_policy_features(self, trunk_features: torch.Tensor, condition_embed: torch.Tensor) -> torch.Tensor:
         if not self.use_condition_vector_for_policy:

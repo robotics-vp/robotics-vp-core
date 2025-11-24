@@ -134,10 +134,12 @@ class PhaseHAdvisory:
         skills: Dict[str, Skill],
         budgets: Dict[str, ExplorationBudget],
         returns: List[SkillReturns],
+        expiration_timestamp: Optional[float] = None,
     ):
         self.skills = skills
         self.budgets = budgets
         self.returns = returns
+        self.expiration_timestamp = expiration_timestamp
 
         # Precompute advisory signals
         self.skill_multipliers = self._compute_skill_multipliers()

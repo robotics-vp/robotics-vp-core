@@ -22,6 +22,7 @@ from src.phase_h.advisory_integration import (
     MAX_ROUTING_DELTA,
 )
 from src.phase_h.models import Skill, ExplorationBudget, SkillReturns
+from src.observation.condition_vector_builder import ConditionVectorBuilder
 from src.orchestrator.semantic_orchestrator_v2 import OrchestratorAdvisory
 
 
@@ -381,6 +382,51 @@ def test_load_phase_h_advisory():
         print("✓ Phase H advisory loads from ontology")
 
 
+def test_expired_advisory_ttl():
+    """Test that expired advisories are ignored by ConditionVectorBuilder."""
+    skills = {
+        "ttl_skill": Skill(
+            "ttl_skill",
+            "TTL Skill",
+            "Test",
+            10.0,
+            11.0,
+            15.0,
+            100.0,
+            1.0,
+            0.7,
+            0.3,
+            0.6,
+            0.7,
+            0.3,
+            1.0,
+            120,
+            "2025-01-01T00:00:00Z",
+            "training",
+        )
+    }
+    budgets = {"ttl_skill": ExplorationBudget("ttl_skill", 500.0, 100.0, 400.0, 0.5, 0.4, 0.1, 400)}
+    returns = [SkillReturns("ttl_skill", 1.0, 10.0, 5.0, 1.0, 1.0, 0.0, 0.1, 1, 10.0)]
+    advisory = PhaseHAdvisory(skills, budgets, returns, expiration_timestamp=0.0)  # Expired epoch
+
+    builder = ConditionVectorBuilder()
+    cv = builder.build(
+        episode_config={"task_id": "task", "env_id": "env", "backend_id": "backend"},
+        econ_state={"target_mpl": 60.0, "current_wage_parity": 1.0, "energy_budget_wh": 100.0},
+        curriculum_phase="warmup",
+        sima2_trust=0.5,
+        datapack_metadata={"tags": ["frontier"]},
+        episode_step=1,
+        episode_metadata={"skill_id": "ttl_skill"},
+        enable_phase_h_advisories=True,
+        phase_h_advisory=advisory,
+    )
+
+    assert cv.exploration_uplift is None
+    assert cv.skill_roi_estimate is None
+    print("✓ Expired advisories do not influence ConditionVector")
+
+
 def run_all_tests():
     """Run all smoke tests."""
     print("\n=== Phase H Advisory Integration Smoke Tests ===\n")
@@ -393,6 +439,7 @@ def run_all_tests():
     test_condition_fields_only_when_enabled()
     test_determinism()
     test_json_safe_export()
+    test_expired_advisory_ttl()
     test_load_phase_h_advisory()
 
     print("\n=== All Tests Passed ===\n")

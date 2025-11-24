@@ -34,6 +34,25 @@ def create_test_frame() -> VisionFrame:
     )
 
 
+def make_condition_vector(skill_mode: str, *, ood_risk_level: float = 0.5, novelty_tier: int = 1) -> ConditionVector:
+    """Construct a fully populated ConditionVector for tests."""
+    return ConditionVector(
+        task_id="test",
+        env_id="test_env",
+        backend_id="test_backend",
+        target_mpl=60.0,
+        current_wage_parity=1.0,
+        energy_budget_wh=50.0,
+        skill_mode=skill_mode,
+        ood_risk_level=ood_risk_level,
+        recovery_priority=0.0,
+        novelty_tier=novelty_tier,
+        sima2_trust_score=0.5,
+        recap_goodness_bucket="bronze",
+        objective_preset="balanced",
+    )
+
+
 def test_regime_differences():
     """Test that three regimes produce different outputs."""
     print("Testing regime differences...")
@@ -42,28 +61,13 @@ def test_regime_differences():
     adapter = ConditionedVisionAdapter()
 
     # Safety regime
-    cv_safety = ConditionVector(
-        task_id="test",
-        env_id="test",
-        skill_mode="safety_critical",
-        ood_risk_level=0.2,
-    )
+    cv_safety = make_condition_vector("safety_critical", ood_risk_level=0.2)
 
     # Exploration regime
-    cv_explore = ConditionVector(
-        task_id="test",
-        env_id="test",
-        skill_mode="frontier_exploration",
-        novelty_tier=2,
-    )
+    cv_explore = make_condition_vector("frontier_exploration", novelty_tier=2, ood_risk_level=0.4)
 
     # Efficiency regime
-    cv_efficient = ConditionVector(
-        task_id="test",
-        env_id="test",
-        skill_mode="efficiency_throughput",
-        energy_budget_wh=50.0,
-    )
+    cv_efficient = make_condition_vector("efficiency_throughput", ood_risk_level=0.6)
 
     out_safety = adapter.forward(frame, cv_safety)
     out_explore = adapter.forward(frame, cv_explore)
@@ -95,12 +99,7 @@ def test_flag_gating():
     # Adapter with conditioning disabled
     adapter_off = ConditionedVisionAdapter(config={"enable_conditioning": False})
 
-    cv = ConditionVector(
-        task_id="test",
-        env_id="test",
-        skill_mode="safety_critical",
-        ood_risk_level=0.2,
-    )
+    cv = make_condition_vector("safety_critical", ood_risk_level=0.2)
 
     out_on = adapter_on.forward(frame, cv)
     out_off = adapter_off.forward(frame, cv)
@@ -124,12 +123,7 @@ def test_determinism():
     frame = create_test_frame()
     adapter = ConditionedVisionAdapter()
 
-    cv = ConditionVector(
-        task_id="test",
-        env_id="test",
-        skill_mode="safety_critical",
-        ood_risk_level=0.3,
-    )
+    cv = make_condition_vector("safety_critical", ood_risk_level=0.3)
 
     # Run twice
     out1 = adapter.forward(frame, cv)
@@ -154,12 +148,7 @@ def test_bounded_scales():
     adapter = ConditionedVisionAdapter()
 
     # Extreme condition vector (should still be bounded)
-    cv_extreme = ConditionVector(
-        task_id="test",
-        env_id="test",
-        skill_mode="safety_critical",
-        ood_risk_level=1.0,  # Maximum risk
-    )
+    cv_extreme = make_condition_vector("safety_critical", ood_risk_level=1.0)
 
     out = adapter.forward(frame, cv_extreme)
 
@@ -183,9 +172,9 @@ def test_z_v_invariance():
     adapter = ConditionedVisionAdapter()
 
     # Different condition vectors
-    cv1 = ConditionVector(task_id="test", env_id="test", skill_mode="safety_critical")
-    cv2 = ConditionVector(task_id="test", env_id="test", skill_mode="frontier_exploration")
-    cv3 = ConditionVector(task_id="test", env_id="test", skill_mode="efficiency_throughput")
+    cv1 = make_condition_vector("safety_critical", ood_risk_level=0.3)
+    cv2 = make_condition_vector("frontier_exploration", ood_risk_level=0.5)
+    cv3 = make_condition_vector("efficiency_throughput", ood_risk_level=0.7)
 
     out1 = adapter.forward(frame, cv1)
     out2 = adapter.forward(frame, cv2)

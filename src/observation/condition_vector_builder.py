@@ -7,6 +7,8 @@ deterministic defaults when fields are missing.
 """
 from typing import Any, Dict, Optional, Sequence
 
+import time
+
 from src.observation.condition_vector import ConditionVector, _flatten_sequence
 from src.rl.skill_mode_resolver import SkillModeResolver, resolve_skill_mode
 
@@ -94,6 +96,9 @@ class ConditionVectorBuilder:
         tfd_cv = None
         if enable_tfd_integration and tfd_instruction:
             tfd_cv = self._extract_tfd_condition_vector(tfd_instruction)
+            if tfd_cv and tfd_cv.get("risk_tolerance") is not None:
+                overrides = dict(overrides)
+                overrides.setdefault("ood_risk_level", tfd_cv.get("risk_tolerance"))
 
         phase = str(overrides.get("curriculum_phase", curriculum_phase or "warmup"))
         tags = self._merge_tags(meta.get("tags"), semantic_tags)
@@ -164,14 +169,16 @@ class ConditionVectorBuilder:
         exploration_uplift = None
         skill_roi_estimate = None
         if enable_phase_h_advisories and phase_h_advisory is not None:
-            from src.phase_h.advisory_integration import build_phase_h_condition_fields
-            phase_h_fields = build_phase_h_condition_fields(
-                phase_h_advisory,
-                skill_id=episode_metadata.get("skill_id"),
-                enable_phase_h_advisories=True,
-            )
-            exploration_uplift = phase_h_fields.get("exploration_uplift")
-            skill_roi_estimate = phase_h_fields.get("skill_roi_estimate")
+            expires_at = getattr(phase_h_advisory, "expiration_timestamp", None)
+            if expires_at is None or float(expires_at) > time.time():
+                from src.phase_h.advisory_integration import build_phase_h_condition_fields
+                phase_h_fields = build_phase_h_condition_fields(
+                    phase_h_advisory,
+                    skill_id=episode_metadata.get("skill_id"),
+                    enable_phase_h_advisories=True,
+                )
+                exploration_uplift = phase_h_fields.get("exploration_uplift")
+                skill_roi_estimate = phase_h_fields.get("skill_roi_estimate")
 
         return ConditionVector(
             task_id=str(overrides.get("task_id") or _get(episode_config, "task_id", "")),
@@ -377,6 +384,16 @@ class ConditionVectorBuilder:
                 pass
 
         # Case 2 & 3: Handle TFDInstruction or raw dict
+        if hasattr(tfd_instruction, "condition_vector"):
+            cv_obj = getattr(tfd_instruction, "condition_vector")
+            if cv_obj is not None:
+                if hasattr(cv_obj, "to_dict"):
+                    try:
+                        return cv_obj.to_dict()
+                    except Exception:
+                        pass
+                if isinstance(cv_obj, dict):
+                    return cv_obj
         if isinstance(tfd_instruction, dict):
             condition_vector = tfd_instruction.get("condition_vector")
             if condition_vector is None:

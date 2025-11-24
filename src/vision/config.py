@@ -19,6 +19,10 @@ _DEFAULT_CFG = {
     "use_bifpn": False,
     "use_spatial_rnn": False,
     "regnet_feature_dim": 8,
+    "enable_conditioned_vision": False,
+    "conditioned_vision_feature_dim": 8,
+    "conditioned_vision_levels": ["P3", "P4", "P5"],
+    "conditioned_vision_enable_conditioning": True,
 }
 
 
@@ -43,6 +47,16 @@ def load_vision_config(path: str = "") -> Dict[str, Any]:
         merged["use_bifpn"] = bool(merged.get("use_bifpn", False))
         merged["use_spatial_rnn"] = bool(merged.get("use_spatial_rnn", False))
         merged["regnet_feature_dim"] = int(merged.get("regnet_feature_dim", 8))
+        merged["enable_conditioned_vision"] = bool(merged.get("enable_conditioned_vision", False))
+        merged["conditioned_vision_feature_dim"] = int(
+            merged.get("conditioned_vision_feature_dim", merged.get("regnet_feature_dim", 8))
+        )
+        merged["conditioned_vision_levels"] = _coerce_str_list(
+            merged.get("conditioned_vision_levels", _DEFAULT_CFG["conditioned_vision_levels"])
+        )
+        merged["conditioned_vision_enable_conditioning"] = bool(
+            merged.get("conditioned_vision_enable_conditioning", True)
+        )
         return merged
     except Exception:
         return dict(_DEFAULT_CFG)
@@ -58,5 +72,12 @@ def _coerce_int_list(vals, default: List[int]) -> List[int]:
 def _coerce_float_list(vals, default: List[float]) -> List[float]:
     try:
         return [float(x) for x in vals]
+    except Exception:
+        return list(default)
+
+
+def _coerce_str_list(vals, default: List[str]) -> List[str]:
+    try:
+        return [str(x) for x in vals]
     except Exception:
         return list(default)
