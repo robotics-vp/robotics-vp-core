@@ -1,0 +1,58 @@
+# Pipeline configuration for Stage 6+ training
+
+# Canonical task for Phase I training
+# This task_id is used across all Phase I data generation and training pipelines
+canonical_task_id: "drawer_open"
+
+# Phase I data generation settings
+phase1:
+  sima2_stress:
+    enabled: true
+    output_dir: "results/sima2_phase1"
+    num_episodes: 100  # Small default for initial runs
+
+  ros_stage2:
+    enabled: true
+    auto_detect: true  # Automatically detect ROS logs; fall back silently if not found
+    output_dir: "results/stage2_phase1"
+
+  isaac_adapter:
+    enabled: true
+    num_rollouts: 1  # Single rollout for Phase I
+    output_dir: "results/isaac_phase1"
+
+  manifest:
+    output_path: "results/phase1_manifest.json"
+
+# Training settings (Stage 6)
+training:
+  vision_backbone:
+    use_neural: false  # Flag-gated neural training (default off)
+    checkpoint_path: "checkpoints/vision_backbone.pt"
+    freeze_after_training: true
+
+  spatial_rnn:
+    use_neural: false  # Flag-gated (default off)
+    checkpoint_path: "checkpoints/spatial_rnn.pt"
+
+  sima2_segmenter:
+    use_neural: false  # Flag-gated (default off)
+    checkpoint_path: "checkpoints/sima2_segmenter.pt"
+    f1_activation_threshold: 0.85
+
+  hydra_policy:
+    use_neural: false  # Flag-gated (default off)
+    checkpoint_path: "checkpoints/hydra_policy.pt"
+
+# Determinism settings
+determinism:
+  default_seed: 0
+  enforce_cuda_determinism: true
+  warn_on_nondeterminism: true
+
+# Safety settings
+safety:
+  clip_gradients: true
+  max_gradient_norm: 1.0
+  check_for_nans: true
+  fail_on_inf: true
