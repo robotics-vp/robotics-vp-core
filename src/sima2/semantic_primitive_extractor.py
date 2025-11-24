@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Sequence, Set, Tuple
 
 from src.sima2.config import extract_provenance
+from src.sima2.heuristic_segmenter import HeuristicSegmenter
 
 
 @dataclass
@@ -92,6 +93,36 @@ def _events_from_segments(segments: Sequence[Any]) -> List[Dict[str, Any]]:
     return events
 
 
+def _segments_from_heuristics(rollout: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Run the heuristic segmenter when no explicit segments are provided."""
+    segmenter = HeuristicSegmenter({"use_heuristic_segmenter": True})
+    detected = segmenter.segment(dict(rollout))
+    episode_id = rollout.get("episode_id") or rollout.get("task") or "sima2_episode"
+    segments: List[Dict[str, Any]] = []
+    for idx, prim in enumerate(detected):
+        seg_id = f"{episode_id}_heur_{idx}"
+        meta = prim.metadata or {}
+        meta.update(
+            {
+                "failure_observed": prim.failure,
+                "recovery_observed": prim.recovery,
+                "object_name": prim.object_name,
+            }
+        )
+        segments.append(
+            {
+                "segment_id": seg_id,
+                "episode_id": episode_id,
+                "label": prim.label,
+                "start_t": int(prim.start_t),
+                "end_t": int(prim.end_t),
+                "outcome": "recovered" if prim.recovery else ("failure" if prim.failure else "success"),
+                "metadata": meta,
+            }
+        )
+    return segments
+
+
 def _infer_risk_level(tags: Sequence[str], metrics: Dict[str, Any]) -> str:
     """Derive a simple categorical risk level."""
     tag_set = {t.lower() for t in tags}
@@ -147,7 +178,13 @@ def extract_primitives_from_rollout(rollout: Dict[str, Any]) -> List[SemanticPri
     Uses simple deterministic rules so tests remain stable without SIMA-2 deps.
     """
     task_type = str(rollout.get("task_type") or rollout.get("task") or "unknown")
-    events = rollout.get("events") or _events_from_segments(rollout.get("segments", []))
+    segments = rollout.get("segments")
+    if not segments:
+        segments = _segments_from_heuristics(rollout)
+        if segments:
+            rollout = dict(rollout)
+            rollout["segments"] = segments
+    events = rollout.get("events") or _events_from_segments(segments)
     metrics = rollout.get("metrics") or {}
     base_tags: Set[str] = set(_split_to_tags(task_type))
     for tag in rollout.get("tags", []) or []:

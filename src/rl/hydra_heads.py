@@ -55,6 +55,14 @@ def _call_head(head: nn.Module, trunk_features, condition, conditioned_features=
         return head(trunk_features)
 
 
+def _module_get(module_dict: nn.ModuleDict, key: str) -> Optional[nn.Module]:
+    """Safe retrieval from ModuleDict without raising KeyError."""
+    try:
+        return module_dict[key]
+    except KeyError:
+        return None
+
+
 class HydraActor(nn.Module):
     """
     Shared trunk + multiple skill heads.
@@ -82,7 +90,7 @@ class HydraActor(nn.Module):
             if self.strict:
                 raise KeyError(f"Missing Hydra head for skill_mode={head_key}")
             head_key = self.default_skill_mode or (sorted(self.heads.keys()) or [None])[0]
-        head = self.heads.get(head_key)
+        head = _module_get(self.heads, head_key)
         if head is None:
             raise KeyError("HydraActor has no registered heads.")
 
@@ -122,7 +130,7 @@ class HydraCritic(nn.Module):
             if self.strict:
                 raise KeyError(f"Missing Hydra critic head for skill_mode={head_key}")
             head_key = self.default_skill_mode or (sorted(self.heads.keys()) or [None])[0]
-        head = self.heads.get(head_key)
+        head = _module_get(self.heads, head_key)
         if head is None:
             raise KeyError("HydraCritic has no registered heads.")
 

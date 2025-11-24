@@ -77,8 +77,10 @@ class SegmentationEngine:
         if self.use_heuristic and self.heuristic_segmenter:
             # Heuristic mode: detect from raw physics
             detected_prims = self.heuristic_segmenter.segment(rollout_copy)
-            segments = self._segments_from_detected(detected_prims, episode_id, provenance, rollout_copy.get("metadata", {}))
-            boundaries = []  # Not used in heuristic mode
+            segments = self._segments_from_detected(
+                detected_prims, episode_id, provenance, rollout_copy.get("metadata", {})
+            )
+            boundaries = self._boundaries_from_segments(segments)
             subtask_tags = []
         else:
             # Compatibility mode: use existing builder
@@ -233,3 +235,47 @@ class SegmentationEngine:
                 }
             )
         return events
+
+    def _boundaries_from_segments(self, segments: List[Segment]) -> List[SegmentBoundaryTag]:
+        boundaries: List[SegmentBoundaryTag] = []
+        for seg in segments:
+            boundaries.append(
+                SegmentBoundaryTag(
+                    episode_id=seg.episode_id,
+                    segment_id=seg.segment_id,
+                    timestep=seg.start_t,
+                    reason="start",
+                    subtask_label=seg.label,
+                )
+            )
+            boundaries.append(
+                SegmentBoundaryTag(
+                    episode_id=seg.episode_id,
+                    segment_id=seg.segment_id,
+                    timestep=seg.end_t,
+                    reason="end",
+                    subtask_label=seg.label,
+                )
+            )
+            meta = seg.metadata or {}
+            if meta.get("failure_observed") or seg.outcome == "failure":
+                boundaries.append(
+                    SegmentBoundaryTag(
+                        episode_id=seg.episode_id,
+                        segment_id=seg.segment_id,
+                        timestep=seg.end_t,
+                        reason="failure",
+                        subtask_label=seg.label,
+                    )
+                )
+            if meta.get("recovery_observed") or seg.outcome in {"recovery", "recovered"}:
+                boundaries.append(
+                    SegmentBoundaryTag(
+                        episode_id=seg.episode_id,
+                        segment_id=seg.segment_id,
+                        timestep=seg.end_t,
+                        reason="recovery",
+                        subtask_label=seg.label,
+                    )
+                )
+        return sorted(boundaries, key=lambda b: (b.timestep, b.segment_id, b.reason))

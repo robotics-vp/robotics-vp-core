@@ -1,14 +1,19 @@
 """
 Heuristic-based segmentation from raw robot state.
 
-Detects semantic primitives from physical signals:
-- Gripper width changes -> grasp/release
-- Contact changes -> approach/contact/lift
-- Velocity patterns -> move/static
-- Event markers -> failure/recovery
+Detects semantic primitives from physical signals with deterministic rules:
+- Velocity thresholds:
+  * low velocity + gripper open  -> approach
+  * high velocity + contact      -> pull
+- Contact state changes:
+  * start_contact/end_contact    -> hard segment boundary
+- Gripper width transitions:
+  * width decreasing             -> grasp
+  * width increasing             -> release
+- Temporal decay window prevents micro-segments
 """
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -52,7 +57,10 @@ class HeuristicSegmenter:
         cfg = config or {}
         self.gripper_close_threshold = float(cfg.get("gripper_close_threshold", 0.04))
         self.gripper_open_threshold = float(cfg.get("gripper_open_threshold", 0.06))
-        self.velocity_threshold = float(cfg.get("velocity_threshold", 0.05))
+        self.velocity_low_threshold = float(cfg.get("velocity_low_threshold", cfg.get("velocity_threshold", 0.02)))
+        self.velocity_high_threshold = float(cfg.get("velocity_high_threshold", cfg.get("velocity_threshold", 0.08)))
+        self.width_delta_threshold = float(cfg.get("width_delta_threshold", 0.005))
+        self.temporal_decay_window = int(cfg.get("temporal_decay_window", 2))
         self.min_segment_duration = int(cfg.get("min_segment_duration", 2))
 
     def segment(self, rollout: Dict[str, Any]) -> List[DetectedPrimitive]:
@@ -62,28 +70,35 @@ class HeuristicSegmenter:
         Returns:
             List of DetectedPrimitive objects
         """
-        primitives_raw = rollout.get("primitives", [])
-        events = rollout.get("events", [])
-
-        # Extract physics signals from primitives (which now contain raw state)
-        signals = self._extract_signals(primitives_raw)
+        events = rollout.get("events", []) or []
+        # Extract physics signals from any available source; we intentionally
+        # ignore client-provided primitive labels.
+        signals = self._extract_signals(rollout)
 
         # Detect boundaries using heuristics
         detected = self._detect_primitives_from_signals(signals, events)
 
         return detected
 
-    def _extract_signals(self, primitives: List[Dict[str, Any]]) -> List[PhysicsSignal]:
-        """Extract physics signals from primitive dicts."""
-        signals = []
-        for p in primitives:
+    def _extract_signals(self, rollout: Dict[str, Any]) -> List[PhysicsSignal]:
+        """Extract physics signals from rollout primitives or metadata."""
+        primitive_sources = (
+            rollout.get("primitives")
+            or rollout.get("primitive_events")
+            or rollout.get("metadata", {}).get("semantic_primitives")
+            or []
+        )
+        signals: List[PhysicsSignal] = []
+        for p in primitive_sources:
+            if not isinstance(p, dict):
+                continue
             sig = PhysicsSignal(
-                timestep=p.get("timestep", 0),
-                gripper_width=float(p.get("gripper_width", 0.08)),
-                ee_velocity=float(p.get("ee_velocity", 0.0)),
+                timestep=int(p.get("timestep", len(signals))),
+                gripper_width=float(p.get("gripper_width", rollout.get("gripper_width", 0.08) or 0.08)),
+                ee_velocity=float(p.get("ee_velocity", p.get("velocity", rollout.get("ee_velocity", 0.0) or 0.0))),
                 contact=bool(p.get("contact", False)),
                 force=p.get("force"),
-                object_name=p.get("object", "unknown"),
+                object_name=str(p.get("object") or p.get("object_name") or "unknown"),
             )
             signals.append(sig)
         return sorted(signals, key=lambda s: s.timestep)
@@ -95,126 +110,128 @@ class HeuristicSegmenter:
         Main detection logic.
 
         State machine:
-        1. Track gripper state (open/closed)
-        2. Track contact state
-        3. Detect transitions
-        4. Label segments based on transition patterns
+        1. Track gripper width deltas for grasp/release
+        2. Track contact transitions for boundaries
+        3. Velocity-based labeling (approach/pull)
+        4. Temporal decay window suppresses micro-segments
         """
         if not signals:
             return []
 
         primitives: List[DetectedPrimitive] = []
+        event_lookup = {int(e.get("timestep", -1)): e for e in events if isinstance(e, dict)}
 
-        # Build event lookup
-        event_lookup = {e.get("timestep", -1): e for e in events}
-
-        # State tracking
-        gripper_closed = False
-        in_contact = False
+        prev_width = signals[0].gripper_width
+        prev_contact = signals[0].contact
         current_segment_start = signals[0].timestep
-        current_label = "approach"  # Default initial state
         current_object = signals[0].object_name
+        current_label = self._label_for_signal(signals[0], None, prev_contact, None)
+        last_switch_t = current_segment_start
 
-        for i, sig in enumerate(signals):
-            # Check for events at this timestep
-            event = event_lookup.get(sig.timestep)
+        for sig in signals[1:]:
+            candidate_label = self._label_for_signal(sig, prev_width, prev_contact, current_label)
+            contact_changed = sig.contact != prev_contact
+            label_changed = candidate_label != current_label
+            should_split = contact_changed or label_changed
+            since_switch = sig.timestep - last_switch_t
 
-            # Detect gripper transitions
-            new_gripper_closed = sig.gripper_width < self.gripper_close_threshold
-            new_in_contact = sig.contact
+            # Temporal decay window suppresses rapid oscillations unless contact toggles
+            if should_split and not contact_changed and since_switch < self.temporal_decay_window:
+                candidate_label = current_label
+                label_changed = False
+                should_split = False
 
-            # Detect state change
-            changed = False
-            new_label = current_label
+            if should_split:
+                end_t = sig.timestep
+                duration = end_t - current_segment_start
+                if duration >= 1 and (duration >= self.min_segment_duration or contact_changed):
+                    primitives.append(
+                        self._build_detected_primitive(
+                            start_t=current_segment_start,
+                            end_t=end_t,
+                            label=current_label,
+                            object_name=current_object,
+                            contact_state=prev_contact,
+                            event_lookup=event_lookup,
+                        )
+                    )
+                    current_segment_start = sig.timestep
+                    last_switch_t = sig.timestep
+                current_label = candidate_label
 
-            # Gripper close -> grasp
-            if not gripper_closed and new_gripper_closed and new_in_contact:
-                new_label = "grasp"
-                changed = True
-
-            # Contact lost (not a release) -> slip/failure
-            elif in_contact and not new_in_contact and gripper_closed:
-                new_label = "slip"
-                changed = True
-
-            # Gripper open (after slip or normal) -> release
-            elif gripper_closed and not new_gripper_closed:
-                # Only mark as release if not slipping
-                if current_label != "slip":
-                    new_label = "release"
-                    changed = True
-
-            # Contact established -> contact action
-            elif not in_contact and new_in_contact and gripper_closed:
-                new_label = "pull" if "drawer" in current_object else "lift"
-                changed = True
-
-            # Movement with object -> transport
-            elif gripper_closed and new_in_contact and sig.ee_velocity > self.velocity_threshold:
-                if current_label not in ["pull", "lift", "transport"]:
-                    new_label = "transport"
-                    changed = True
-
-            # Approaching without contact
-            elif not new_in_contact and sig.ee_velocity > self.velocity_threshold:
-                if current_label != "approach":
-                    new_label = "approach"
-                    changed = True
-
-            # Recovery action detection
-            if event and event.get("event_type") == "recovery_start":
-                new_label = event.get("payload", {}).get("strategy", "regrasp")
-                changed = True
-
-            # If state changed, finalize current segment
-            if changed and i > 0:
-                # Finalize previous segment
-                duration = sig.timestep - current_segment_start
-                if duration >= self.min_segment_duration or current_label in ["slip", "regrasp", "pick_from_drop"]:
-                    failure = self._check_failure(current_segment_start, sig.timestep, event_lookup) or current_label == "slip"
-                    recovery = self._check_recovery(current_segment_start, sig.timestep, event_lookup) or current_label in ["regrasp", "pick_from_drop"]
-
-                    primitives.append(DetectedPrimitive(
-                        start_t=current_segment_start,
-                        end_t=sig.timestep,
-                        label=current_label,
-                        object_name=current_object,
-                        confidence=0.9,
-                        failure=failure,
-                        recovery=recovery,
-                        metadata={"duration": duration}
-                    ))
-
-                # Start new segment
-                current_segment_start = sig.timestep
-                current_label = new_label
-
-            # Update state
-            gripper_closed = new_gripper_closed
-            in_contact = new_in_contact
             if sig.object_name and sig.object_name != "unknown":
                 current_object = sig.object_name
+            prev_width = sig.gripper_width
+            prev_contact = sig.contact
 
-        # Finalize last segment
-        if signals:
-            last_sig = signals[-1]
-            duration = last_sig.timestep - current_segment_start
-            if duration >= 1 or current_label in ["slip", "regrasp", "pick_from_drop"]:
-                failure = self._check_failure(current_segment_start, last_sig.timestep + 1, event_lookup) or current_label == "slip"
-                recovery = self._check_recovery(current_segment_start, last_sig.timestep + 1, event_lookup) or current_label in ["regrasp", "pick_from_drop"]
-
-                primitives.append(DetectedPrimitive(
+        # Finalize last segment (inclusive of final timestep)
+        last_sig = signals[-1]
+        end_t = last_sig.timestep + 1
+        duration = end_t - current_segment_start
+        if duration >= 1:
+            primitives.append(
+                self._build_detected_primitive(
                     start_t=current_segment_start,
-                    end_t=last_sig.timestep + 1,
+                    end_t=end_t,
                     label=current_label,
                     object_name=current_object,
-                    confidence=0.9,
-                    failure=failure,
-                    recovery=recovery,
-                    metadata={"duration": duration}
-                ))
+                    contact_state=prev_contact,
+                    event_lookup=event_lookup,
+                )
+            )
 
         return primitives
+
+    def _label_for_signal(
+        self,
+        sig: PhysicsSignal,
+        prev_width: Optional[float],
+        prev_contact: bool,
+        current_label: Optional[str],
+    ) -> str:
+        width_delta = 0.0 if prev_width is None else float(prev_width - sig.gripper_width)
+        if prev_width is not None and width_delta > self.width_delta_threshold:
+            return "grasp"
+        if prev_width is not None and width_delta < -self.width_delta_threshold:
+            return "release"
+        if sig.contact and sig.ee_velocity >= self.velocity_high_threshold:
+            return "pull"
+        if not sig.contact and sig.ee_velocity <= self.velocity_low_threshold and sig.gripper_width >= self.gripper_open_threshold:
+            return "approach"
+        if sig.contact and not prev_contact:
+            return "contact"
+        if not sig.contact and prev_contact:
+            return "depart"
+        if sig.contact:
+            return current_label or "manipulate"
+        return current_label or "move"
+
+    def _build_detected_primitive(
+        self,
+        start_t: int,
+        end_t: int,
+        label: str,
+        object_name: str,
+        contact_state: bool,
+        event_lookup: Dict[int, Any],
+    ) -> DetectedPrimitive:
+        failure = self._check_failure(start_t, end_t, event_lookup)
+        recovery = self._check_recovery(start_t, end_t, event_lookup)
+        metadata = {
+            "duration": end_t - start_t,
+            "contact": contact_state,
+        }
+        confidence = 0.95 if contact_state else 0.85
+        return DetectedPrimitive(
+            start_t=start_t,
+            end_t=end_t,
+            label=label,
+            object_name=object_name,
+            confidence=confidence,
+            failure=failure,
+            recovery=recovery,
+            metadata=metadata,
+        )
 
     def _check_failure(self, start_t: int, end_t: int, event_lookup: Dict[int, Any]) -> bool:
         """Check if this segment contains a failure event."""
