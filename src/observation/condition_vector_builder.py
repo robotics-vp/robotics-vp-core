@@ -64,12 +64,19 @@ class ConditionVectorBuilder:
         advisory_context: Optional[Dict[str, Any]] = None,
         tfd_instruction: Optional[Dict[str, Any]] = None,
         enable_tfd_integration: bool = False,
+        phase_h_advisory: Optional[Any] = None,
+        enable_phase_h_advisories: bool = False,
     ) -> ConditionVector:
         """
         Construct a ConditionVector with deterministic fallbacks.
 
         Flag-gated TFD integration:
         - enable_tfd_integration: if True, TFD fields influence condition vector
+        - Default False preserves existing behavior
+
+        Flag-gated Phase H integration:
+        - enable_phase_h_advisories: if True, Phase H economic learner fields are added
+        - phase_h_advisory: PhaseHAdvisory object (from advisory_integration)
         - Default False preserves existing behavior
         """
         overrides = overrides or {}
@@ -153,6 +160,19 @@ class ConditionVectorBuilder:
         if tfd_cv and tfd_cv.get("energy_budget_wh") is not None:
             energy_budget_val = self._safe_float(tfd_cv.get("energy_budget_wh"))
 
+        # Extract Phase H fields if enabled
+        exploration_uplift = None
+        skill_roi_estimate = None
+        if enable_phase_h_advisories and phase_h_advisory is not None:
+            from src.phase_h.advisory_integration import build_phase_h_condition_fields
+            phase_h_fields = build_phase_h_condition_fields(
+                phase_h_advisory,
+                skill_id=episode_metadata.get("skill_id"),
+                enable_phase_h_advisories=True,
+            )
+            exploration_uplift = phase_h_fields.get("exploration_uplift")
+            skill_roi_estimate = phase_h_fields.get("skill_roi_estimate")
+
         return ConditionVector(
             task_id=str(overrides.get("task_id") or _get(episode_config, "task_id", "")),
             env_id=str(overrides.get("env_id") or _get(episode_config, "env_id", "")),
@@ -180,6 +200,8 @@ class ConditionVectorBuilder:
             objective_vector=objective_vector,
             episode_step=int(episode_step_val or 0),
             curriculum_phase=str(phase),
+            exploration_uplift=exploration_uplift,
+            skill_roi_estimate=skill_roi_estimate,
             metadata=self._build_metadata(
                 datapack_metadata=meta,
                 episode_metadata=episode_metadata,

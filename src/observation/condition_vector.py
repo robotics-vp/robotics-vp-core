@@ -60,6 +60,10 @@ class ConditionVector:
     episode_step: int = 0
     curriculum_phase: str = "warmup"
 
+    # Phase H economic learner signals (flag-gated)
+    exploration_uplift: Optional[float] = None
+    skill_roi_estimate: Optional[float] = None
+
     # Free-form metadata (not consumed by policies)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -84,6 +88,11 @@ class ConditionVector:
             "curriculum_phase": self.curriculum_phase,
             "metadata": to_json_safe(self.metadata),
         }
+        # Phase H fields (only if present)
+        if self.exploration_uplift is not None:
+            payload["exploration_uplift"] = float(self.exploration_uplift)
+        if self.skill_roi_estimate is not None:
+            payload["skill_roi_estimate"] = float(self.skill_roi_estimate)
         return payload
 
     @classmethod
@@ -106,6 +115,8 @@ class ConditionVector:
             objective_vector=_flatten_sequence(data.get("objective_vector")),
             episode_step=int(data.get("episode_step", 0)),
             curriculum_phase=str(data.get("curriculum_phase") or "warmup"),
+            exploration_uplift=float(data["exploration_uplift"]) if "exploration_uplift" in data else None,
+            skill_roi_estimate=float(data["skill_roi_estimate"]) if "skill_roi_estimate" in data else None,
             metadata=to_json_safe(data.get("metadata") or {}),
         )
 
