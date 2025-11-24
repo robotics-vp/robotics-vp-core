@@ -215,6 +215,8 @@ def train_epoch(
     run_name: str,
     log_file: str,
     config_digest: str,
+    sentinel: FailureSentinel,
+    log_gpu_stats: bool,
 ) -> Dict[str, float]:
     """Train one epoch."""
     contrastive_head = models['contrastive_head']
@@ -242,67 +244,69 @@ def train_epoch(
 
         optimizer.zero_grad(set_to_none=True)
 
-        # Forward pass with AMP
-        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
-            # Project to contrastive space
-            z1 = contrastive_head(aug1)  # [1, proj_dim]
-            z2 = contrastive_head(aug2)  # [1, proj_dim]
+        # Wrap training step with sentinel
+        with sentinel.monitor(epoch_idx * len(dataset) + idx, models):
+            # Forward pass with AMP
+            with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+                # Project to contrastive space
+                z1 = contrastive_head(aug1)  # [1, proj_dim]
+                z2 = contrastive_head(aug2)  # [1, proj_dim]
 
-            # Contrastive loss
-            contrastive_loss = nt_xent_loss(z1, z2, temperature=temperature)
-
-            # Reconstruction loss (optional)
-            reconstruction_loss = torch.tensor(0.0, device=device)
-            if use_reconstruction and reconstruction_head is not None:
-                # Reconstruct original features from projections
-                recon1 = reconstruction_head(z1)
-                recon2 = reconstruction_head(z2)
-                reconstruction_loss = F.mse_loss(recon1, features) + F.mse_loss(recon2, features)
-
-            # Total loss
-            loss = contrastive_loss + 0.1 * reconstruction_loss
-
-        # NaN/Inf guard
-        if torch.isnan(loss) or torch.isinf(loss):
-            print(f"[WARN] NaN/Inf detected at step {idx}. Retrying in FP32...")
-            # Retry in FP32
-            with torch.autocast(enabled=False):
-                z1 = contrastive_head(aug1.float())
-                z2 = contrastive_head(aug2.float())
+                # Contrastive loss
                 contrastive_loss = nt_xent_loss(z1, z2, temperature=temperature)
+
+                # Reconstruction loss (optional)
                 reconstruction_loss = torch.tensor(0.0, device=device)
                 if use_reconstruction and reconstruction_head is not None:
+                    # Reconstruct original features from projections
                     recon1 = reconstruction_head(z1)
                     recon2 = reconstruction_head(z2)
-                    reconstruction_loss = F.mse_loss(recon1, features.float()) + F.mse_loss(recon2, features.float())
-                loss = contrastive_loss + 0.1 * reconstruction_loss
-            
-            if torch.isnan(loss) or torch.isinf(loss):
-                print(f"[ERROR] Loss still NaN/Inf in FP32 at step {idx}. Skipping batch.")
-                continue
+                    reconstruction_loss = F.mse_loss(recon1, features) + F.mse_loss(recon2, features)
 
-        # Backward pass
-        if scaler is not None and use_amp:
-            scaler.scale(loss).backward()
-            
-            # Unscale for gradient clipping
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(
-                list(contrastive_head.parameters()) +
-                (list(reconstruction_head.parameters()) if reconstruction_head else []),
-                max_norm=1.0
-            )
-            
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(
-                list(contrastive_head.parameters()) +
-                (list(reconstruction_head.parameters()) if reconstruction_head else []),
-                max_norm=1.0
-            )
-            optimizer.step()
+                # Total loss
+                loss = contrastive_loss + 0.1 * reconstruction_loss
+
+            # NaN/Inf guard
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"[WARN] NaN/Inf detected at step {idx}. Retrying in FP32...")
+                # Retry in FP32
+                with torch.autocast(enabled=False):
+                    z1 = contrastive_head(aug1.float())
+                    z2 = contrastive_head(aug2.float())
+                    contrastive_loss = nt_xent_loss(z1, z2, temperature=temperature)
+                    reconstruction_loss = torch.tensor(0.0, device=device)
+                    if use_reconstruction and reconstruction_head is not None:
+                        recon1 = reconstruction_head(z1)
+                        recon2 = reconstruction_head(z2)
+                        reconstruction_loss = F.mse_loss(recon1, features.float()) + F.mse_loss(recon2, features.float())
+                    loss = contrastive_loss + 0.1 * reconstruction_loss
+                
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"[ERROR] Loss still NaN/Inf in FP32 at step {idx}. Skipping batch.")
+                    continue
+
+            # Backward pass
+            if scaler is not None and use_amp:
+                scaler.scale(loss).backward()
+                
+                # Unscale for gradient clipping
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    list(contrastive_head.parameters()) +
+                    (list(reconstruction_head.parameters()) if reconstruction_head else []),
+                    max_norm=1.0
+                )
+                
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    list(contrastive_head.parameters()) +
+                    (list(reconstruction_head.parameters()) if reconstruction_head else []),
+                    max_norm=1.0
+                )
+                optimizer.step()
 
         total_contrastive_loss += contrastive_loss.item()
         total_reconstruction_loss += reconstruction_loss.item()
@@ -310,6 +314,14 @@ def train_epoch(
 
         # Log step (every 10 steps)
         if idx % 10 == 0:
+            gpu_mem_mb = None
+            gpu_util_pct = None
+            if log_gpu_stats and torch.cuda.is_available():
+                mem_info = get_gpu_memory_info()
+                if mem_info:
+                    gpu_mem_mb = mem_info["allocated_mb"]
+                gpu_util_pct = get_gpu_utilization()
+
             log_entry = make_training_log_entry(
                 run_name=run_name,
                 step=epoch_idx * len(dataset) + idx,
@@ -321,8 +333,8 @@ def train_epoch(
                 seed=seed_offset,
                 config_digest=config_digest,
                 amp_enabled=use_amp,
-                gpu_mem_mb=torch.cuda.memory_allocated() // (1024 * 1024) if torch.cuda.is_available() else 0,
-                gpu_util_pct=get_gpu_utilization(),
+                gpu_mem_mb=gpu_mem_mb,
+                gpu_util_pct=gpu_util_pct,
                 extra={
                     "contrastive_loss": contrastive_loss.item(),
                     "reconstruction_loss": reconstruction_loss.item()

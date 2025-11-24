@@ -39,6 +39,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints")
     parser.add_argument("--use-mixed-precision", action="store_true", help="Enable mixed precision training (AMP)")
+    parser.add_argument("--log-gpu-stats", action="store_true", help="Log GPU memory and utilization")
     return parser.parse_args(argv)
 
 
@@ -89,6 +90,7 @@ def run_training(
     run_name: str = "hydra_policy",
     log_file: str = "results/training_logs/hydra_policy.jsonl",
     config_digest: str = "",
+    log_gpu_stats: bool = False,
 ) -> Dict[str, Any]:
     optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
     loss_fn = torch.nn.MSELoss()
@@ -97,6 +99,7 @@ def run_training(
     digests: List[float] = []
     
     device = next(policy.parameters()).device
+    sentinel = FailureSentinel()
 
     for sample in dataset:
         if steps >= max_steps:
@@ -111,40 +114,49 @@ def run_training(
         
         optimizer.zero_grad(set_to_none=True)
 
-        # Forward pass with AMP
-        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
-            pred = policy(obs, condition).view(-1)
-            loss = loss_fn(pred, target)
+        with sentinel.monitor(steps, policy):
+            # Forward pass with AMP
+            with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+                pred = policy(obs, condition).view(-1)
+                loss = loss_fn(pred, target)
 
-        # NaN/Inf guard
-        if torch.isnan(loss) or torch.isinf(loss):
-            print(f"[WARN] NaN/Inf detected at step {steps}. Retrying in FP32...")
-            # Retry in FP32
-            with torch.autocast(enabled=False):
-                pred = policy(obs.float(), condition).view(-1)
-                loss = loss_fn(pred, target.float())
-            
+            # NaN/Inf guard
             if torch.isnan(loss) or torch.isinf(loss):
-                print(f"[ERROR] Loss still NaN/Inf in FP32 at step {steps}. Skipping batch.")
-                continue
+                print(f"[WARN] NaN/Inf detected at step {steps}. Retrying in FP32...")
+                # Retry in FP32
+                with torch.autocast(enabled=False):
+                    pred = policy(obs.float(), condition).view(-1)
+                    loss = loss_fn(pred, target.float())
+                
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"[ERROR] Loss still NaN/Inf in FP32 at step {steps}. Skipping batch.")
+                    continue
 
-        # Backward pass
-        if scaler is not None and use_amp:
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
-            optimizer.step()
+            # Backward pass
+            if scaler is not None and use_amp:
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
+                optimizer.step()
 
         total_loss += float(loss.item())
         digests.append(float(pred.sum().item()))
         
         # Log step (every 10 steps)
         if steps % 10 == 0:
+            gpu_mem_mb = None
+            gpu_util_pct = None
+            if log_gpu_stats and torch.cuda.is_available():
+                mem_info = get_gpu_memory_info()
+                if mem_info:
+                    gpu_mem_mb = mem_info["allocated_mb"]
+                gpu_util_pct = get_gpu_utilization()
+
             log_entry = make_training_log_entry(
                 run_name=run_name,
                 step=steps,
@@ -156,8 +168,8 @@ def run_training(
                 seed=0, # Should pass seed
                 config_digest=config_digest,
                 amp_enabled=use_amp,
-                gpu_mem_mb=torch.cuda.memory_allocated() // (1024 * 1024) if torch.cuda.is_available() else 0,
-                gpu_util_pct=get_gpu_utilization(),
+                gpu_mem_mb=gpu_mem_mb,
+                gpu_util_pct=gpu_util_pct,
                 extra={
                     "policy_digest": float(pred.sum().item())
                 }

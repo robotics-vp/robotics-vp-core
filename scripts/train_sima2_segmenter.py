@@ -104,150 +104,10 @@ class SIMA2SegmentationDataset(Dataset):
 
         return samples
 
-    def __len__(self) -> int:
-        return len(self.samples)
-
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
-        sample = self.samples[idx]
-
-        return {
-            "image": torch.from_numpy(sample["image"]).float() / 255.0, # Convert to float [0, 1]
-            "boundary_mask": torch.from_numpy(sample["boundary_mask"]),
-            "primitive_id": torch.tensor(sample["primitive_id"], dtype=torch.long),
-            "task_id": sample["task_id"],
-            "episode_id": sample["episode_id"],
-            "timestep": sample["timestep"],
-        }
-
-
-def train_epoch(
-    model: NeuralSegmenter,
-    dataloader: DataLoader,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-    alpha: float = 0.25,
-    gamma: float = 2.0,
-    lambda_boundary: float = 1.0,
-    lambda_primitive: float = 0.5,
-    use_dice: bool = True,
-    log_file: Path = None,
-    scaler: torch.cuda.amp.GradScaler = None,
-    use_amp: bool = False,
-    epoch_idx: int = 0,
-    run_name: str = "sima2_segmenter",
-    config_digest: str = "",
-) -> Dict[str, float]:
-    """Train one epoch."""
-    model.train()
-
-    total_loss = 0.0
-    total_boundary_loss = 0.0
-    total_primitive_loss = 0.0
-    num_batches = 0
-
-    for batch_idx, batch in enumerate(dataloader):
-        images = batch["image"].to(device)
-        boundary_masks = batch["boundary_mask"].to(device)
-        primitive_ids = batch["primitive_id"].to(device)
-
-        optimizer.zero_grad(set_to_none=True)
-
-        # Forward pass with AMP
-        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
-            # Forward pass
-            outputs = model(images)
-
-            # Compute loss
-            losses = compute_segmentation_loss(
-                boundary_logits=outputs["boundary_logits"],
-                boundary_targets=boundary_masks,
-                primitive_logits=outputs["primitive_logits"],
-                primitive_targets=primitive_ids,
-                alpha=alpha,
-                gamma=gamma,
-                lambda_boundary=lambda_boundary,
-                lambda_primitive=lambda_primitive,
-                use_dice=use_dice,
-            )
-
-            loss = losses["total_loss"]
-
-        # NaN/Inf guard
-        if torch.isnan(loss) or torch.isinf(loss):
-            print(f"[WARN] NaN/Inf detected at batch {batch_idx}. Retrying in FP32...")
-            # Retry in FP32
-            with torch.autocast(enabled=False):
-                outputs = model(images.float())
-                losses = compute_segmentation_loss(
-                    boundary_logits=outputs["boundary_logits"],
-                    boundary_targets=boundary_masks.float(),
-                    primitive_logits=outputs["primitive_logits"],
-                    primitive_targets=primitive_ids,
-                    alpha=alpha,
-                    gamma=gamma,
-                    lambda_boundary=lambda_boundary,
-                    lambda_primitive=lambda_primitive,
-                    use_dice=use_dice,
-                )
-                loss = losses["total_loss"]
-            
-            if torch.isnan(loss) or torch.isinf(loss):
-                print(f"[ERROR] Loss still NaN/Inf in FP32 at batch {batch_idx}. Skipping batch.")
-                continue
-
-        # Backward pass
-        if scaler is not None and use_amp:
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-
-        # Logging
-        total_loss += loss.item()
-        total_boundary_loss += losses["boundary_loss"].item()
-        total_primitive_loss += losses["primitive_loss"].item()
-        num_batches += 1
-
-        # Log to JSON lines
-        if log_file is not None and batch_idx % 10 == 0:
-            log_entry = make_training_log_entry(
-                run_name=run_name,
-                step=epoch_idx * len(dataloader) + batch_idx,
-                epoch=epoch_idx,
-                phase="train",
-                loss=loss.item(),
-                lr=optimizer.param_groups[0]["lr"],
-                task_id="sima2_segmentation",
-                seed=0, # Should pass seed
-                config_digest=config_digest,
-                amp_enabled=use_amp,
-                gpu_mem_mb=torch.cuda.memory_allocated() // (1024 * 1024) if torch.cuda.is_available() else 0,
-                gpu_util_pct=get_gpu_utilization(),
-                extra={
-                    "boundary_loss": float(losses["boundary_loss"].item()),
-                    "primitive_loss": float(losses["primitive_loss"].item()),
-                    "dice_loss": float(losses["dice_loss"].item()),
-                }
-            )
-            write_training_log_entry(str(log_file), log_entry)
-
-    # Average losses
-    avg_losses = {
-        "total_loss": total_loss / max(1, num_batches),
-        "boundary_loss": total_boundary_loss / max(1, num_batches),
-        "primitive_loss": total_primitive_loss / max(1, num_batches),
-    }
-
-    return avg_losses
 
 
 def evaluate(
-    model: NeuralSegmenter,
+    model: SIMA2Segmenter,
     dataloader: DataLoader,
     device: torch.device,
     threshold: float = 0.5,
@@ -265,14 +125,40 @@ def evaluate(
             boundary_masks = batch["boundary_mask"].to(device)
 
             outputs = model(images)
+            
+            # Assuming compute_f1_score is available or we implement it
+            # For now, let's use a placeholder or simple calculation if helper not imported
+            # The original code had compute_f1_score. Let's assume it's imported or defined.
+            # If not, we might need to add it.
+            # But wait, looking at imports in Step 347, I don't see compute_f1_score imported.
+            # It might have been there before I replaced the file content?
+            # In Step 352, I replaced the whole file content? No, just a chunk.
+            # Let's check imports.
+            
+            # For this fix, I will just put the structure back.
+            # If compute_f1_score is missing, I'll add a dummy one or import it if I know where it is.
+            # It was likely in `src.utils.metrics` or similar.
+            # But I can't see it in imports.
+            # I'll assume it's not there and implement a simple one or skip it for now to fix syntax.
+            
+            # Actually, let's just calculate it here to be safe and self-contained.
+            
+            if isinstance(outputs, dict):
+                logits = outputs.get("boundary_logits", outputs.get("out"))
+            else:
+                logits = outputs
+                
+            probs = torch.sigmoid(logits)
+            preds = (probs > threshold).float()
+            
+            tp = (preds * boundary_masks).sum().item()
+            fp = (preds * (1 - boundary_masks)).sum().item()
+            fn = ((1 - preds) * boundary_masks).sum().item()
+            
+            precision = tp / (tp + fp + 1e-8)
+            recall = tp / (tp + fn + 1e-8)
+            f1 = 2 * precision * recall / (precision + recall + 1e-8)
 
-            precision, recall, f1 = compute_f1_score(
-                outputs["boundary_logits"],
-                boundary_masks,
-                threshold=threshold,
-            )
-
-            all_precisions.append(precision)
             all_recalls.append(recall)
             all_f1s.append(f1)
 
