@@ -36,6 +36,10 @@ from src.sima2.segmenter_nn import (
     save_checkpoint,
 )
 from src.utils.json_safe import to_json_safe
+from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
+from src.utils.gpu_env import get_gpu_utilization
+from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
+import hashlib
 
 
 class SIMA2SegmentationDataset(Dataset):
@@ -70,8 +74,9 @@ class SIMA2SegmentationDataset(Dataset):
         samples = []
 
         for i in range(self.num_samples):
-            # Synthetic image
-            image = np.random.randn(3, self.image_size, self.image_size).astype(np.float32)
+            # Synthetic image (uint8 to save memory)
+            # Random noise in [0, 255]
+            image = np.random.randint(0, 256, (3, self.image_size, self.image_size), dtype=np.uint8)
 
             # Synthetic boundary mask (random blobs)
             mask = np.zeros((1, self.image_size, self.image_size), dtype=np.float32)
@@ -106,7 +111,7 @@ class SIMA2SegmentationDataset(Dataset):
         sample = self.samples[idx]
 
         return {
-            "image": torch.from_numpy(sample["image"]),
+            "image": torch.from_numpy(sample["image"]).float() / 255.0, # Convert to float [0, 1]
             "boundary_mask": torch.from_numpy(sample["boundary_mask"]),
             "primitive_id": torch.tensor(sample["primitive_id"], dtype=torch.long),
             "task_id": sample["task_id"],
@@ -126,6 +131,11 @@ def train_epoch(
     lambda_primitive: float = 0.5,
     use_dice: bool = True,
     log_file: Path = None,
+    scaler: torch.cuda.amp.GradScaler = None,
+    use_amp: bool = False,
+    epoch_idx: int = 0,
+    run_name: str = "sima2_segmenter",
+    config_digest: str = "",
 ) -> Dict[str, float]:
     """Train one epoch."""
     model.train()
@@ -140,29 +150,62 @@ def train_epoch(
         boundary_masks = batch["boundary_mask"].to(device)
         primitive_ids = batch["primitive_id"].to(device)
 
-        # Forward pass
-        outputs = model(images)
+        optimizer.zero_grad(set_to_none=True)
 
-        # Compute loss
-        losses = compute_segmentation_loss(
-            boundary_logits=outputs["boundary_logits"],
-            boundary_targets=boundary_masks,
-            primitive_logits=outputs["primitive_logits"],
-            primitive_targets=primitive_ids,
-            alpha=alpha,
-            gamma=gamma,
-            lambda_boundary=lambda_boundary,
-            lambda_primitive=lambda_primitive,
-            use_dice=use_dice,
-        )
+        # Forward pass with AMP
+        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+            # Forward pass
+            outputs = model(images)
 
-        loss = losses["total_loss"]
+            # Compute loss
+            losses = compute_segmentation_loss(
+                boundary_logits=outputs["boundary_logits"],
+                boundary_targets=boundary_masks,
+                primitive_logits=outputs["primitive_logits"],
+                primitive_targets=primitive_ids,
+                alpha=alpha,
+                gamma=gamma,
+                lambda_boundary=lambda_boundary,
+                lambda_primitive=lambda_primitive,
+                use_dice=use_dice,
+            )
+
+            loss = losses["total_loss"]
+
+        # NaN/Inf guard
+        if torch.isnan(loss) or torch.isinf(loss):
+            print(f"[WARN] NaN/Inf detected at batch {batch_idx}. Retrying in FP32...")
+            # Retry in FP32
+            with torch.autocast(enabled=False):
+                outputs = model(images.float())
+                losses = compute_segmentation_loss(
+                    boundary_logits=outputs["boundary_logits"],
+                    boundary_targets=boundary_masks.float(),
+                    primitive_logits=outputs["primitive_logits"],
+                    primitive_targets=primitive_ids,
+                    alpha=alpha,
+                    gamma=gamma,
+                    lambda_boundary=lambda_boundary,
+                    lambda_primitive=lambda_primitive,
+                    use_dice=use_dice,
+                )
+                loss = losses["total_loss"]
+            
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"[ERROR] Loss still NaN/Inf in FP32 at batch {batch_idx}. Skipping batch.")
+                continue
 
         # Backward pass
-        optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
+        if scaler is not None and use_amp:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
 
         # Logging
         total_loss += loss.item()
@@ -172,17 +215,26 @@ def train_epoch(
 
         # Log to JSON lines
         if log_file is not None and batch_idx % 10 == 0:
-            log_entry = {
-                "event": "train_step",
-                "batch": batch_idx,
-                "loss": float(loss.item()),
-                "boundary_loss": float(losses["boundary_loss"].item()),
-                "focal_loss": float(losses["focal_loss"].item()),
-                "dice_loss": float(losses["dice_loss"].item()),
-                "primitive_loss": float(losses["primitive_loss"].item()),
-            }
-            with open(log_file, "a") as f:
-                f.write(json.dumps(to_json_safe(log_entry)) + "\n")
+            log_entry = make_training_log_entry(
+                run_name=run_name,
+                step=epoch_idx * len(dataloader) + batch_idx,
+                epoch=epoch_idx,
+                phase="train",
+                loss=loss.item(),
+                lr=optimizer.param_groups[0]["lr"],
+                task_id="sima2_segmentation",
+                seed=0, # Should pass seed
+                config_digest=config_digest,
+                amp_enabled=use_amp,
+                gpu_mem_mb=torch.cuda.memory_allocated() // (1024 * 1024) if torch.cuda.is_available() else 0,
+                gpu_util_pct=get_gpu_utilization(),
+                extra={
+                    "boundary_loss": float(losses["boundary_loss"].item()),
+                    "primitive_loss": float(losses["primitive_loss"].item()),
+                    "dice_loss": float(losses["dice_loss"].item()),
+                }
+            )
+            write_training_log_entry(str(log_file), log_entry)
 
     # Average losses
     avg_losses = {
@@ -250,6 +302,7 @@ def main():
     parser.add_argument("--use_dice", action="store_true", help="Use Dice loss")
     parser.add_argument("--freeze_encoder", action="store_true", help="Freeze encoder")
     parser.add_argument("--f1_threshold", type=float, default=0.85, help="F1 threshold for activation")
+    parser.add_argument("--use-mixed-precision", action="store_true", help="Enable mixed precision training (AMP)")
     args = parser.parse_args()
 
     # Set seeds
@@ -279,8 +332,8 @@ def main():
         image_size=args.image_size,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, pin_memory=True)
 
     print(f"Train dataset: {len(train_dataset)} samples")
     print(f"Val dataset: {len(val_dataset)} samples")
@@ -322,7 +375,14 @@ def main():
         print(f"\nEpoch {epoch + 1}/{args.epochs}")
 
         # Train
-        train_losses = train_epoch(
+        # Train
+        # AMP Setup
+        use_amp = args.use_mixed_precision or should_use_amp({"training": {"amp": args.use_mixed_precision}})
+        scaler = torch.cuda.amp.GradScaler() if use_amp and torch.cuda.is_available() else None
+        config_digest = hashlib.md5(json.dumps(vars(args), sort_keys=True).encode()).hexdigest()[:8]
+
+        train_losses = run_with_oom_recovery(
+            train_epoch,
             model=model,
             dataloader=train_loader,
             optimizer=optimizer,
@@ -333,6 +393,11 @@ def main():
             lambda_primitive=args.lambda_primitive,
             use_dice=args.use_dice,
             log_file=log_file,
+            scaler=scaler,
+            use_amp=use_amp,
+            epoch_idx=epoch,
+            run_name=f"sima2_segmenter_{args.seed}",
+            config_digest=config_digest,
         )
 
         # Evaluate

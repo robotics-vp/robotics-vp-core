@@ -118,7 +118,9 @@ if TORCH_AVAILABLE:
             feature_dim: int,
             levels: Sequence[str] = ("P3", "P4", "P5"),
             mode: str = "convgru",
+            mode: str = "convgru",
             seed: int = 0,
+            use_checkpointing: bool = False,
         ):
             """
             Args:
@@ -139,6 +141,7 @@ if TORCH_AVAILABLE:
             self.feature_dim = feature_dim
             self.levels = list(levels)
             self.mode = mode
+            self.use_checkpointing = use_checkpointing
 
             if mode == "convgru":
                 # Create ConvGRU cell per level
@@ -195,7 +198,28 @@ if TORCH_AVAILABLE:
                             continue
                         feat = item[level]
                         feat_tensor = torch.from_numpy(np.asarray(feat, dtype=np.float32)).unsqueeze(0).to(device)
-                        hidden_states[level] = self.cells[level](feat_tensor, hidden_states.get(level))
+                        if self.use_checkpointing:
+                            from src.utils.training_env import checkpoint_if_enabled
+                            # Need to ensure hidden state requires grad for checkpointing to work if it's the only input
+                            # But here feat_tensor requires grad (usually) or is leaf.
+                            # Checkpoint requires at least one input with requires_grad=True.
+                            # feat_tensor is created from numpy, so it doesn't require grad by default unless we set it.
+                            # But in training loop, we might be backpropagating through it?
+                            # Actually, in SpatialRNN training, inputs are features from dataset, so they are leaves.
+                            # But if we are training end-to-end, they might come from backbone.
+                            # In Phase I, we are training SpatialRNN on pre-extracted features?
+                            # scripts/train_spatial_rnn.py uses SpatialRNNDataset which yields numpy arrays.
+                            # So inputs are leaves.
+                            # If inputs are leaves and don't require grad, checkpointing will fail or do nothing useful.
+                            # But wait, we are training the RNN parameters.
+                            # Checkpointing saves memory by not storing intermediate activations.
+                            # If inputs don't require grad, we can still checkpoint the module to save its internal activations.
+                            # But torch.utils.checkpoint requires at least one input to have requires_grad=True.
+                            # We can force feat_tensor.requires_grad_(True).
+                            feat_tensor.requires_grad_(True)
+                            hidden_states[level] = checkpoint_if_enabled(self.cells[level], feat_tensor, hidden_states.get(level), enabled=True)
+                        else:
+                            hidden_states[level] = self.cells[level](feat_tensor, hidden_states.get(level))
                 else:
                     # Flat vector - split across levels
                     feat = np.asarray(item, dtype=np.float32).flatten()
@@ -273,7 +297,12 @@ if TORCH_AVAILABLE:
                             continue
                         feat = current[level]
                         feat_tensor = torch.from_numpy(np.asarray(feat, dtype=np.float32)).unsqueeze(0).to(device)
-                        hidden_states[level] = self.cells[level](feat_tensor, hidden_states.get(level))
+                        if self.use_checkpointing:
+                            from src.utils.training_env import checkpoint_if_enabled
+                            feat_tensor.requires_grad_(True)
+                            hidden_states[level] = checkpoint_if_enabled(self.cells[level], feat_tensor, hidden_states.get(level), enabled=True)
+                        else:
+                            hidden_states[level] = self.cells[level](feat_tensor, hidden_states.get(level))
                 else:
                     # Flat vector mode (simplified)
                     feat = np.asarray(current, dtype=np.float32).flatten()

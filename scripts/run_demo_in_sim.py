@@ -33,6 +33,12 @@ if str(ROOT) not in sys.path:
 
 from src.inference.demo_policy import DemoPolicy, DemoPolicyConfig
 from src.utils.json_safe import to_json_safe
+from src.utils.gpu_env import get_gpu_env_summary, get_gpu_utilization
+from src.utils.logging_schema import (
+    make_demo_episode_log_entry,
+    make_demo_step_log_entry,
+    write_demo_log_entry,
+)
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -81,6 +87,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--render",
         action="store_true",
         help="Enable rendering (if supported by env)",
+    )
+    parser.add_argument(
+        "--use-mixed-precision",
+        action="store_true",
+        help="Enable mixed precision inference (AMP)",
     )
     return parser.parse_args(argv)
 
@@ -252,29 +263,33 @@ def run_episode(
         econ_summary["energy_sum"] += info.get("energy_proxy", 1.0)
         econ_summary["error_count"] += info.get("error_count", 0)
 
-        # Log step
+        # Log step (using standardized schema with extra fields)
         if log_steps:
-            step_log = {
-                "episode_id": episode_idx,
-                "step": step_idx,
-                "action_summary": {
-                    "action_norm": float(np.linalg.norm(action)),
-                    "action_mean": float(np.mean(action)),
-                },
-                "ood_step_flags": {
-                    "ood_risk_level": float(ood_risk),
-                    "is_ood": ood_risk > 0.3,
-                },
-                "recovery_step_flags": {
-                    "recovery_priority": float(recovery_priority),
-                    "is_recovery": recovery_priority > 0.3,
-                },
-                "reward_scalar": float(reward),
-                "econ_step_summary": {
-                    "mpl_proxy": float(info.get("mpl_proxy", 1.0)),
-                    "energy_proxy": float(info.get("energy_proxy", 1.0)),
-                },
-            }
+            step_log = make_demo_step_log_entry(
+                episode_id=episode_idx,
+                t=step_idx,
+                action=action.tolist() if hasattr(action, 'tolist') else list(action),
+                reward=reward,
+                done=done,
+                extra={
+                    "action_summary": {
+                        "action_norm": float(np.linalg.norm(action)),
+                        "action_mean": float(np.mean(action)),
+                    },
+                    "ood_step_flags": {
+                        "ood_risk_level": float(ood_risk),
+                        "is_ood": ood_risk > 0.3,
+                    },
+                    "recovery_step_flags": {
+                        "recovery_priority": float(recovery_priority),
+                        "is_recovery": recovery_priority > 0.3,
+                    },
+                    "econ_step_summary": {
+                        "mpl_proxy": float(info.get("mpl_proxy", 1.0)),
+                        "energy_proxy": float(info.get("energy_proxy", 1.0)),
+                    },
+                }
+            )
             steps_log.append(step_log)
 
         # Check done
@@ -282,34 +297,45 @@ def run_episode(
             success = info.get("success", False)
             break
 
-    # Episode summary
+    # Episode summary (using standardized schema with extra fields)
     episode_elapsed = time.time() - episode_start_time
     num_steps = step_idx + 1
 
-    episode_summary = {
-        "episode_id": episode_idx,
-        "seed": episode_seed,
-        "success": success,
-        "steps": num_steps,
-        "total_reward": float(total_reward),
-        "elapsed_seconds": float(episode_elapsed),
-        "econ_summary": {
-            "avg_mpl": float(econ_summary["mpl_sum"] / num_steps),
-            "avg_energy": float(econ_summary["energy_sum"] / num_steps),
-            "total_errors": int(econ_summary["error_count"]),
-        },
-        "ood_stats": {
-            "max_ood_risk": float(ood_stats["max_ood"]),
-            "ood_step_count": int(ood_stats["ood_steps"]),
-            "ood_step_fraction": float(ood_stats["ood_steps"] / num_steps),
-        },
-        "recovery_stats": {
-            "max_recovery_priority": float(recovery_stats["max_recovery"]),
-            "recovery_step_count": int(recovery_stats["recovery_steps"]),
-            "recovery_step_fraction": float(recovery_stats["recovery_steps"] / num_steps),
-        },
-        "skill_mode_counts": skill_mode_counts,
-    }
+    # Backend from env
+    backend = getattr(env, 'backend', 'unknown')
+
+    episode_summary = make_demo_episode_log_entry(
+        episode_id=episode_idx,
+        success=success,
+        total_reward=total_reward,
+        backend=backend,
+        seed=episode_seed,
+        mpl_estimate=float(econ_summary["mpl_sum"] / num_steps),
+        energy_wh=float(econ_summary["energy_sum"] / num_steps),  # proxy value
+        ood_events=int(ood_stats["ood_steps"]),
+        recovery_events=int(recovery_stats["recovery_steps"]),
+        extra={
+            "steps": num_steps,
+            "elapsed_seconds": float(episode_elapsed),
+            "econ_summary": {
+                "avg_mpl": float(econ_summary["mpl_sum"] / num_steps),
+                "avg_energy": float(econ_summary["energy_sum"] / num_steps),
+                "total_errors": int(econ_summary["error_count"]),
+            },
+            "ood_stats": {
+                "max_ood_risk": float(ood_stats["max_ood"]),
+                "ood_step_count": int(ood_stats["ood_steps"]),
+                "ood_step_fraction": float(ood_stats["ood_steps"] / num_steps),
+            },
+            "recovery_stats": {
+                "max_recovery_priority": float(recovery_stats["max_recovery"]),
+                "recovery_step_count": int(recovery_stats["recovery_steps"]),
+                "recovery_step_fraction": float(recovery_stats["recovery_steps"] / num_steps),
+            },
+            "skill_mode_counts": skill_mode_counts,
+            "gpu_util_pct": get_gpu_utilization(),
+        }
+    )
 
     return {
         "summary": episode_summary,
@@ -329,12 +355,19 @@ def main(argv: Optional[List[str]] = None) -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Log GPU environment once at startup
+    gpu_env = get_gpu_env_summary()
+    gpu_log_path = output_dir / "gpu_env.json"
+    with open(gpu_log_path, "w") as f:
+        json.dump({"event": "gpu_env", "summary": gpu_env}, f, indent=2)
+
     print(f"[run_demo_in_sim] Starting demo simulation")
     print(f"  Backend: {args.env_backend}")
     print(f"  Episodes: {args.num_episodes}")
     print(f"  Max steps: {args.max_steps}")
     print(f"  Seed: {args.seed}")
     print(f"  Output: {output_dir}")
+    print(f"  GPU: {gpu_env['device_name_0'] or 'CPU-only'}")
     print()
 
     # Create environment
@@ -349,7 +382,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     policy_config = DemoPolicyConfig.from_dict({
         "backend": args.env_backend,
         "canonical_task_id": args.task_id,
+        "canonical_task_id": args.task_id,
         "seed": args.seed,
+        "use_amp": args.use_mixed_precision,
     })
     policy = DemoPolicy(config=policy_config)
 
@@ -374,10 +409,10 @@ def main(argv: Optional[List[str]] = None) -> None:
 
         # Print episode summary
         summary = episode_result["summary"]
-        print(f"  Steps: {summary['steps']}")
+        print(f"  Steps: {summary.get('steps', summary.get('extra', {}).get('steps', '?'))}")
         print(f"  Success: {summary['success']}")
-        print(f"  Avg MPL: {summary['econ_summary']['avg_mpl']:.3f}")
-        print(f"  Avg Energy: {summary['econ_summary']['avg_energy']:.3f}")
+        print(f"  Avg MPL: {summary.get('extra', {}).get('econ_summary', {}).get('avg_mpl', summary.get('mpl_estimate', 0.0)):.3f}")
+        print(f"  Avg Energy: {summary.get('extra', {}).get('econ_summary', {}).get('avg_energy', summary.get('energy_wh', 0.0)):.3f}")
         print()
 
     # Write outputs
@@ -393,9 +428,9 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Compute aggregate stats
     num_success = sum(1 for ep in all_episodes if ep["success"])
-    avg_steps = np.mean([ep["steps"] for ep in all_episodes])
-    avg_mpl = np.mean([ep["econ_summary"]["avg_mpl"] for ep in all_episodes])
-    avg_energy = np.mean([ep["econ_summary"]["avg_energy"] for ep in all_episodes])
+    avg_steps = np.mean([ep.get("extra", {}).get("steps", 0) for ep in all_episodes])
+    avg_mpl = np.mean([ep.get("mpl_estimate", 0.0) for ep in all_episodes])
+    avg_energy = np.mean([ep.get("energy_wh", 0.0) for ep in all_episodes])
 
     # Print summary
     print(f"{'='*80}")

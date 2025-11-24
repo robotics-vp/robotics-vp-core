@@ -102,9 +102,12 @@ if TORCH_AVAILABLE:
             feature_dims: Dict[str, int] = None,
             levels: Sequence[str] = DEFAULT_LEVELS,
             groups: int = 8,
-            seed: int = 0
+            groups: int = 8,
+            seed: int = 0,
+            use_checkpointing: bool = False,
         ):
             super().__init__()
+            self.use_checkpointing = use_checkpointing
 
             # Set seed for deterministic initialization
             torch.manual_seed(seed)
@@ -165,8 +168,15 @@ if TORCH_AVAILABLE:
             x = self.stem(x)
 
             # Progressive stages (each consumes output of previous)
+            # Progressive stages (each consumes output of previous)
             for level in self.levels:
-                x = self.stages[level](x)
+                if self.use_checkpointing:
+                    from src.utils.training_env import checkpoint_if_enabled
+                    # Checkpoint the whole stage
+                    x = checkpoint_if_enabled(self.stages[level], x, enabled=True)
+                else:
+                    x = self.stages[level](x)
+                
                 # Clamp to prevent NaN/Inf
                 x = torch.clamp(x, min=-1e6, max=1e6)
                 features[level] = x

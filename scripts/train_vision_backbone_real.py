@@ -40,6 +40,9 @@ from src.datasets.base import set_deterministic_seeds
 from src.utils.json_safe import to_json_safe
 from src.vision.regnet_backbone import RegNetBackbone
 from src.vision.bifpn_fusion import fuse_feature_pyramid
+from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
+from src.utils.gpu_env import get_gpu_utilization
+from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -57,6 +60,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints")
     parser.add_argument("--force-neural", action="store_true", help="Force neural mode (override config)")
+    parser.add_argument("--use-mixed-precision", action="store_true", help="Enable mixed precision training (AMP)")
     return parser.parse_args(argv)
 
 
@@ -205,6 +209,12 @@ def train_epoch(
     use_reconstruction: bool,
     device: torch.device,
     seed_offset: int,
+    scaler: Optional[torch.cuda.amp.GradScaler],
+    use_amp: bool,
+    epoch_idx: int,
+    run_name: str,
+    log_file: str,
+    config_digest: str,
 ) -> Dict[str, float]:
     """Train one epoch."""
     contrastive_head = models['contrastive_head']
@@ -230,40 +240,95 @@ def train_epoch(
         aug1 = simple_augment(features, seed=seed_offset + idx * 2)
         aug2 = simple_augment(features, seed=seed_offset + idx * 2 + 1)
 
-        # Project to contrastive space
-        z1 = contrastive_head(aug1)  # [1, proj_dim]
-        z2 = contrastive_head(aug2)  # [1, proj_dim]
+        optimizer.zero_grad(set_to_none=True)
 
-        # Contrastive loss
-        contrastive_loss = nt_xent_loss(z1, z2, temperature=temperature)
+        # Forward pass with AMP
+        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+            # Project to contrastive space
+            z1 = contrastive_head(aug1)  # [1, proj_dim]
+            z2 = contrastive_head(aug2)  # [1, proj_dim]
 
-        # Reconstruction loss (optional)
-        reconstruction_loss = torch.tensor(0.0, device=device)
-        if use_reconstruction and reconstruction_head is not None:
-            # Reconstruct original features from projections
-            recon1 = reconstruction_head(z1)
-            recon2 = reconstruction_head(z2)
-            reconstruction_loss = F.mse_loss(recon1, features) + F.mse_loss(recon2, features)
+            # Contrastive loss
+            contrastive_loss = nt_xent_loss(z1, z2, temperature=temperature)
 
-        # Total loss
-        loss = contrastive_loss + 0.1 * reconstruction_loss
+            # Reconstruction loss (optional)
+            reconstruction_loss = torch.tensor(0.0, device=device)
+            if use_reconstruction and reconstruction_head is not None:
+                # Reconstruct original features from projections
+                recon1 = reconstruction_head(z1)
+                recon2 = reconstruction_head(z2)
+                reconstruction_loss = F.mse_loss(recon1, features) + F.mse_loss(recon2, features)
+
+            # Total loss
+            loss = contrastive_loss + 0.1 * reconstruction_loss
+
+        # NaN/Inf guard
+        if torch.isnan(loss) or torch.isinf(loss):
+            print(f"[WARN] NaN/Inf detected at step {idx}. Retrying in FP32...")
+            # Retry in FP32
+            with torch.autocast(enabled=False):
+                z1 = contrastive_head(aug1.float())
+                z2 = contrastive_head(aug2.float())
+                contrastive_loss = nt_xent_loss(z1, z2, temperature=temperature)
+                reconstruction_loss = torch.tensor(0.0, device=device)
+                if use_reconstruction and reconstruction_head is not None:
+                    recon1 = reconstruction_head(z1)
+                    recon2 = reconstruction_head(z2)
+                    reconstruction_loss = F.mse_loss(recon1, features.float()) + F.mse_loss(recon2, features.float())
+                loss = contrastive_loss + 0.1 * reconstruction_loss
+            
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"[ERROR] Loss still NaN/Inf in FP32 at step {idx}. Skipping batch.")
+                continue
 
         # Backward pass
-        optimizer.zero_grad()
-        loss.backward()
-
-        # Gradient clipping (safety)
-        torch.nn.utils.clip_grad_norm_(
-            list(contrastive_head.parameters()) +
-            (list(reconstruction_head.parameters()) if reconstruction_head else []),
-            max_norm=1.0
-        )
-
-        optimizer.step()
+        if scaler is not None and use_amp:
+            scaler.scale(loss).backward()
+            
+            # Unscale for gradient clipping
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(
+                list(contrastive_head.parameters()) +
+                (list(reconstruction_head.parameters()) if reconstruction_head else []),
+                max_norm=1.0
+            )
+            
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                list(contrastive_head.parameters()) +
+                (list(reconstruction_head.parameters()) if reconstruction_head else []),
+                max_norm=1.0
+            )
+            optimizer.step()
 
         total_contrastive_loss += contrastive_loss.item()
         total_reconstruction_loss += reconstruction_loss.item()
         num_batches += 1
+
+        # Log step (every 10 steps)
+        if idx % 10 == 0:
+            log_entry = make_training_log_entry(
+                run_name=run_name,
+                step=epoch_idx * len(dataset) + idx,
+                epoch=epoch_idx,
+                phase="train",
+                loss=loss.item(),
+                lr=optimizer.param_groups[0]["lr"],
+                task_id="vision_backbone",
+                seed=seed_offset,
+                config_digest=config_digest,
+                amp_enabled=use_amp,
+                gpu_mem_mb=torch.cuda.memory_allocated() // (1024 * 1024) if torch.cuda.is_available() else 0,
+                gpu_util_pct=get_gpu_utilization(),
+                extra={
+                    "contrastive_loss": contrastive_loss.item(),
+                    "reconstruction_loss": reconstruction_loss.item()
+                }
+            )
+            write_training_log_entry(log_file, log_entry)
 
     return {
         'contrastive_loss': total_contrastive_loss / max(1, num_batches),
@@ -360,12 +425,24 @@ def main(argv: Optional[List[str]] = None) -> None:
         params.extend(model.parameters())
     optimizer = torch.optim.Adam(params, lr=args.lr)
 
+    # AMP Setup
+    training_config = get_training_config()
+    use_amp = args.use_mixed_precision or should_use_amp({"training": {"amp": args.use_mixed_precision}})
+    scaler = torch.cuda.amp.GradScaler() if use_amp and torch.cuda.is_available() else None
+    print(f"[train_vision_backbone_real] AMP Enabled: {use_amp}")
+
+    # Logging Setup
+    run_name = f"vision_backbone_{args.seed}"
+    log_file = f"results/training_logs/{run_name}.jsonl"
+    config_digest = hashlib.md5(json.dumps(vars(args), sort_keys=True).encode()).hexdigest()[:8]
+
     # Training loop
     print(f"[train_vision_backbone_real] Starting training for {args.epochs} epochs...")
 
     all_metrics = []
     for epoch in range(args.epochs):
-        metrics = train_epoch(
+        metrics = run_with_oom_recovery(
+            train_epoch,
             dataset=dataset,
             models=models,
             optimizer=optimizer,
@@ -373,6 +450,12 @@ def main(argv: Optional[List[str]] = None) -> None:
             use_reconstruction=args.use_reconstruction,
             device=device,
             seed_offset=args.seed + epoch * 1000,
+            scaler=scaler,
+            use_amp=use_amp,
+            epoch_idx=epoch,
+            run_name=run_name,
+            log_file=log_file,
+            config_digest=config_digest,
         )
 
         all_metrics.append(metrics)

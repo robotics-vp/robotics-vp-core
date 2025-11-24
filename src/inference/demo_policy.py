@@ -59,6 +59,7 @@ class DemoPolicyConfig:
     enable_condition_vector: bool = True
     enable_phase_h: bool = False  # Advisory only, default off
     seed: Optional[int] = None
+    use_amp: bool = False
 
     # Internal metadata (auto-populated, don't set manually)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -84,7 +85,9 @@ class DemoPolicyConfig:
             backend=config.get("backend", "pybullet"),
             enable_condition_vector=config.get("enable_condition_vector", True),
             enable_phase_h=config.get("enable_phase_h", False),
+            enable_phase_h=config.get("enable_phase_h", False),
             seed=config.get("seed"),
+            use_amp=config.get("use_amp", False),
         )
 
 
@@ -364,7 +367,12 @@ class DemoPolicy:
         )
 
         # Run Hydra policy
-        action = self.hydra_policy(policy_obs, deterministic=True)
+        # Run Hydra policy
+        if TORCH_AVAILABLE and self.config.use_amp:
+            with torch.autocast(device_type=self.config.device, dtype=torch.float16):
+                action = self.hydra_policy(policy_obs, deterministic=True)
+        else:
+            action = self.hydra_policy(policy_obs, deterministic=True)
 
         # Convert to numpy if needed
         if TORCH_AVAILABLE and isinstance(action, torch.Tensor):

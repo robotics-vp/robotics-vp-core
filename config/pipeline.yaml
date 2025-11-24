@@ -44,6 +44,13 @@ training:
     use_neural: false  # Flag-gated (default off)
     checkpoint_path: "checkpoints/hydra_policy.pt"
 
+  # General training settings
+  amp: false
+  activation_checkpointing: false
+  vram_safety: true
+  max_resolution: 224
+  auto_downscale: true
+
 # Determinism settings
 determinism:
   default_seed: 0

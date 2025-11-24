@@ -23,6 +23,9 @@ from src.datasets.base import set_deterministic_seeds
 from src.observation.condition_vector import ConditionVector
 from src.rl.hydra_heads import HydraActor
 from src.utils.json_safe import to_json_safe
+from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
+from src.utils.gpu_env import get_gpu_utilization
+from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -35,6 +38,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--max-steps", type=int, default=32)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints")
+    parser.add_argument("--use-mixed-precision", action="store_true", help="Enable mixed precision training (AMP)")
     return parser.parse_args(argv)
 
 
@@ -76,28 +80,92 @@ def _model_checksum(policy: HydraActor) -> float:
     return float(checksum)
 
 
-def run_training(dataset: HydraPolicyDataset, policy: HydraActor, max_steps: int) -> Dict[str, Any]:
+def run_training(
+    dataset: HydraPolicyDataset,
+    policy: HydraActor,
+    max_steps: int,
+    scaler: Optional[torch.cuda.amp.GradScaler] = None,
+    use_amp: bool = False,
+    run_name: str = "hydra_policy",
+    log_file: str = "results/training_logs/hydra_policy.jsonl",
+    config_digest: str = "",
+) -> Dict[str, Any]:
     optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
     loss_fn = torch.nn.MSELoss()
     steps = 0
     total_loss = 0.0
     digests: List[float] = []
+    
+    device = next(policy.parameters()).device
+
     for sample in dataset:
         if steps >= max_steps:
             break
         condition = None
         if sample.get("condition_vector"):
             condition = ConditionVector.from_dict(sample["condition_vector"])
-        obs = _condition_obs(sample)
-        target = _condition_targets(sample)
-        pred = policy(obs, condition).view(-1)
-        loss = loss_fn(pred, target)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        
+        # Move data to device
+        obs = _condition_obs(sample).to(device)
+        target = _condition_targets(sample).to(device)
+        
+        optimizer.zero_grad(set_to_none=True)
+
+        # Forward pass with AMP
+        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+            pred = policy(obs, condition).view(-1)
+            loss = loss_fn(pred, target)
+
+        # NaN/Inf guard
+        if torch.isnan(loss) or torch.isinf(loss):
+            print(f"[WARN] NaN/Inf detected at step {steps}. Retrying in FP32...")
+            # Retry in FP32
+            with torch.autocast(enabled=False):
+                pred = policy(obs.float(), condition).view(-1)
+                loss = loss_fn(pred, target.float())
+            
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"[ERROR] Loss still NaN/Inf in FP32 at step {steps}. Skipping batch.")
+                continue
+
+        # Backward pass
+        if scaler is not None and use_amp:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
+            optimizer.step()
+
         total_loss += float(loss.item())
         digests.append(float(pred.sum().item()))
+        
+        # Log step (every 10 steps)
+        if steps % 10 == 0:
+            log_entry = make_training_log_entry(
+                run_name=run_name,
+                step=steps,
+                epoch=0, # Hydra policy stub is 1 epoch essentially
+                phase="train",
+                loss=loss.item(),
+                lr=optimizer.param_groups[0]["lr"],
+                task_id="hydra_policy",
+                seed=0, # Should pass seed
+                config_digest=config_digest,
+                amp_enabled=use_amp,
+                gpu_mem_mb=torch.cuda.memory_allocated() // (1024 * 1024) if torch.cuda.is_available() else 0,
+                gpu_util_pct=get_gpu_utilization(),
+                extra={
+                    "policy_digest": float(pred.sum().item())
+                }
+            )
+            write_training_log_entry(log_file, log_entry)
+
         steps += 1
+        
     return {
         "processed": steps,
         "mean_loss": float(total_loss / max(1, steps)),
@@ -133,7 +201,29 @@ def main(argv: Optional[List[str]] = None) -> None:
     skill_modes = [cv.get("skill_mode", "default") for cv in (s.get("condition_vector", {}) for s in dataset)]
     policy = build_hydra_policy(skill_modes)
 
-    metrics = run_training(dataset, policy, max_steps=args.max_steps)
+    # AMP Setup
+    use_amp = args.use_mixed_precision or should_use_amp({"training": {"amp": args.use_mixed_precision}})
+    scaler = torch.cuda.amp.GradScaler() if use_amp and torch.cuda.is_available() else None
+    
+    # Move policy to device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    policy = policy.to(device)
+
+    config_digest = hashlib.md5(json.dumps(vars(args), sort_keys=True).encode()).hexdigest()[:8]
+    run_name = f"hydra_policy_{args.seed}"
+    log_file = f"results/training_logs/{run_name}.jsonl"
+
+    metrics = run_with_oom_recovery(
+        run_training,
+        dataset, 
+        policy, 
+        max_steps=args.max_steps,
+        scaler=scaler,
+        use_amp=use_amp,
+        run_name=run_name,
+        log_file=log_file,
+        config_digest=config_digest
+    )
     digest_src = json.dumps({"metrics": metrics, "seed": args.seed, "count": len(dataset), "policy_checksum": metrics.get("policy_checksum")}, sort_keys=True)
     payload = {
         "dataset_samples": len(dataset),

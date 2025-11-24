@@ -1,0 +1,68 @@
+# RunPod-friendly Dockerfile for Stage 6 Training and Sim Demo
+# Base image: CUDA 12.1 on Ubuntu 22.04
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    git \
+    curl \
+    build-essential \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.11 as default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+
+# Upgrade pip
+RUN python3 -m pip install --upgrade pip setuptools wheel
+
+# Set working directory
+WORKDIR /workspace/robotics-vp-core
+
+# Copy repository files
+COPY . /workspace/robotics-vp-core/
+
+# Install Python dependencies
+# First install core dependencies
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Then install project requirements
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir nvidia-ml-py3
+
+# Install development requirements (optional, may fail gracefully)
+RUN pip install --no-cache-dir -r requirements-dev.txt || echo "Dev requirements installation skipped"
+
+# Set environment variables
+ENV PYTHONPATH=/workspace/robotics-vp-core
+ENV PYTHONUNBUFFERED=1
+
+# Run GPU environment check (non-blocking)
+RUN python3 scripts/check_gpu_env.py || echo "GPU check completed (may be CPU-only in build)"
+
+# TODO: Isaac Gym integration
+# Isaac Gym requires manual installation due to licensing:
+# 1. Download IsaacGym from NVIDIA
+# 2. Extract to /workspace/isaac-gym
+# 3. Install: cd /workspace/isaac-gym/python && pip install -e .
+# 4. Uncomment the following lines:
+# COPY isaac-gym /workspace/isaac-gym
+# RUN cd /workspace/isaac-gym/python && pip install -e .
+
+# Create results directories
+RUN mkdir -p results/training_logs results/demo_runs results/plots results/monitoring
+
+# Default command: print help message
+CMD ["bash", "-c", "echo 'RunPod robotics v-p environment ready. Run training with: python3 scripts/run_stage6_train_all.py --seed 0' && bash"]
