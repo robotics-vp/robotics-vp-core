@@ -6,10 +6,15 @@ normalize_mean: [0.485, 0.456, 0.406]
 normalize_std: [0.229, 0.224, 0.225]
 latent_dim: 16
 model_name: vision-stub
-backbone: "stub"
+backbone: "stub"  # Options: "stub", "regnet_bifpn"
 use_bifpn: false
 use_spatial_rnn: false
 regnet_feature_dim: 8
+regnet_levels: ["P3", "P4", "P5"]
+regnet_use_neural: false  # Flag to enable neural RegNet (defaults off)
+bifpn_layers: 2
+bifpn_epsilon: 1.0e-4
+bifpn_use_neural: false  # Flag to enable neural BiFPN (defaults off)
 enable_conditioned_vision: false
 conditioned_vision_feature_dim: 8
 conditioned_vision_levels: ["P3", "P4", "P5"]

@@ -62,6 +62,46 @@ class SegmentationEngine:
         )
         self.heuristic_segmenter = HeuristicSegmenter(self.segmentation_config) if self.use_heuristic else None
 
+        # Flag-gated neural segmenter (defaults to False)
+        self.use_neural_segmenter = bool(
+            self.raw_segmentation_config.get("use_neural_segmenter", False) or
+            self.segmentation_config.get("use_neural_segmenter", False)
+        )
+        self.neural_segmenter = None
+        self.neural_segmenter_checkpoint = None
+        if self.use_neural_segmenter:
+            checkpoint_path = (
+                self.raw_segmentation_config.get("neural_segmenter_checkpoint") or
+                self.segmentation_config.get("neural_segmenter_checkpoint")
+            )
+            if checkpoint_path:
+                self._load_neural_segmenter(checkpoint_path)
+
+    def _load_neural_segmenter(self, checkpoint_path: str):
+        """Load neural segmenter from checkpoint."""
+        try:
+            from src.sima2.segmenter_nn import NeuralSegmenter, load_checkpoint
+            import torch
+
+            checkpoint = load_checkpoint(checkpoint_path)
+            config = checkpoint.get("config", {})
+
+            self.neural_segmenter = NeuralSegmenter(
+                in_channels=3,
+                num_primitives=config.get("num_primitives", 10),
+                freeze_encoder=config.get("freeze_encoder", False),
+                seed=config.get("seed", 0),
+            )
+            self.neural_segmenter.load_state_dict(checkpoint["model_state_dict"])
+            self.neural_segmenter.eval()
+            self.neural_segmenter_checkpoint = checkpoint_path
+
+            print(f"Loaded neural segmenter from {checkpoint_path}")
+        except Exception as e:
+            print(f"Failed to load neural segmenter: {e}")
+            self.use_neural_segmenter = False
+            self.neural_segmenter = None
+
     def segment_rollout(self, rollout: Dict[str, Any]) -> Dict[str, Any]:
         """
         Segment a rollout and return enriched rollout plus segment artifacts.
