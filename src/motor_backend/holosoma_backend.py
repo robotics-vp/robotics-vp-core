@@ -10,6 +10,7 @@ from typing import Any, Mapping, Protocol, Sequence
 from src.economics.econ_meter import EconomicMeter
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
 from src.motor_backend.datapacks import DatapackBundle, DatapackConfig, DatapackProvider, MotionClipSpec
+from src.motor_backend.holosoma_reward_terms import analyze_anti_reward_hacking
 from src.objectives.economic_objective import (
     CompiledRewardOverlay,
     EconomicObjectiveSpec,
@@ -293,6 +294,14 @@ class DefaultHolosomaRunner:
             )
         if metrics.get("success_rate") is not None:
             metrics.setdefault("error_rate", max(0.0, 1.0 - metrics["success_rate"]))
+        anti_report = analyze_anti_reward_hacking(metrics)
+        if anti_report.summary_metrics:
+            for key, value in anti_report.summary_metrics.items():
+                metrics.setdefault(key, value)
+        if anti_report.is_suspicious:
+            metrics["anti_reward_hacking_suspicious"] = 1.0
+            if anti_report.reasons:
+                metrics["anti_reward_hacking_reason"] = "; ".join(anti_report.reasons)
         return metrics
 
     def _find_latest_log(self, run_dir: Path) -> Path | None:
@@ -397,6 +406,7 @@ class HolosomaBackend:
         datapack_bundle = self._datapack_provider.resolve(task_id, datapack_ids, datapack_configs)
         result = self._runner.train(task_spec, overlay, datapack_bundle, num_envs, max_steps, seed)
         econ_metrics = self._econ_meter.summarize(result.raw_metrics)
+        econ_metrics = _apply_anti_reward_hacking_flags(econ_metrics, result.raw_metrics)
         return MotorTrainingResult(
             policy_id=result.policy_id,
             raw_metrics=result.raw_metrics,
@@ -416,6 +426,7 @@ class HolosomaBackend:
         overlay = compile_economic_overlay(objective)
         result = self._runner.evaluate(policy_id, task_spec, overlay, num_episodes, seed)
         econ_metrics = self._econ_meter.summarize(result.raw_metrics)
+        econ_metrics = _apply_anti_reward_hacking_flags(econ_metrics, result.raw_metrics)
         return MotorEvalResult(
             policy_id=result.policy_id,
             raw_metrics=result.raw_metrics,
@@ -501,3 +512,22 @@ def _estimate_step_dt(config: Any) -> float:
     except Exception:
         return 0.0
     return 0.0
+
+
+def _apply_anti_reward_hacking_flags(
+    econ_metrics: Mapping[str, float],
+    raw_metrics: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    if not raw_metrics:
+        return econ_metrics
+    suspicious = raw_metrics.get("anti_reward_hacking_suspicious")
+    if suspicious is None:
+        return econ_metrics
+    merged: dict[str, Any] = dict(econ_metrics)
+    try:
+        merged["anti_reward_hacking_suspicious"] = float(suspicious)
+    except (TypeError, ValueError):
+        merged["anti_reward_hacking_suspicious"] = 1.0 if suspicious else 0.0
+    if "anti_reward_hacking_reason" in raw_metrics:
+        merged["anti_reward_hacking_reason"] = raw_metrics.get("anti_reward_hacking_reason")
+    return merged
