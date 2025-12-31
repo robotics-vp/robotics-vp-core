@@ -11,6 +11,10 @@ def make_motor_backend(name: str, econ_meter: EconomicMeter, store: OntologyStor
         from src.motor_backend.holosoma_backend import HolosomaBackend
 
         return HolosomaBackend(econ_meter=econ_meter, datapack_provider=DatapackProvider(store))
+    if name == "synthetic":
+        from src.motor_backend.synthetic_backend import SyntheticBackend
+
+        return SyntheticBackend(econ_meter=econ_meter)
     if name == "dummy":
         return None
     raise ValueError(f"Unknown motor backend: {name}")

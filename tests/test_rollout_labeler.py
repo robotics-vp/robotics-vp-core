@@ -1,4 +1,4 @@
-"""Tests for rollout labeler stub."""
+"""Tests for rollout labeler."""
 from pathlib import Path
 
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
@@ -6,7 +6,7 @@ from src.motor_backend.rollout_capture import EpisodeMetadata, EpisodeRollout, R
 from src.vla.rollout_labeler import label_rollouts_with_vla
 
 
-def test_stub_rollout_labeler_appends_tag(tmp_path: Path):
+def test_rollout_labeler_appends_tags(tmp_path: Path):
     base = DatapackConfig(
         id="dp_base",
         description="Base",
@@ -28,5 +28,5 @@ def test_stub_rollout_labeler_appends_tag(tmp_path: Path):
     labeled = label_rollouts_with_vla(bundle, base_datapack=base)
     assert labeled
     assert labeled[0].id == "dp_base_vla"
-    assert "vla_stub" in labeled[0].tags
+    assert "vla_labeled" in labeled[0].tags
     assert "auto_labeled" in labeled[0].tags

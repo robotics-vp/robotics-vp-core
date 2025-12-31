@@ -46,6 +46,44 @@ def _boundary_reason(boundary: Any) -> str:
     return str(getattr(boundary, "reason", "")).lower()
 
 
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _arh_penalty_from_components(components: Dict[str, float], default_penalty: float = 0.5) -> float:
+    if not components:
+        return 0.0
+    if "mpl_units_per_hour_adjusted" in components:
+        return 0.0
+    penalty = _safe_float(components.get("anti_reward_hacking_penalty"))
+    if penalty > 0.0:
+        return max(0.0, min(1.0, penalty))
+    suspicious = _safe_float(components.get("anti_reward_hacking_suspicious"))
+    if suspicious > 0.0:
+        return max(0.0, min(1.0, default_penalty))
+    return 0.0
+
+
+def _adjusted_mpl(ev: EconVector) -> float:
+    components = ev.components or {}
+    if "mpl_units_per_hour_adjusted" in components:
+        return _safe_float(components.get("mpl_units_per_hour_adjusted"))
+    penalty = _arh_penalty_from_components(components)
+    if penalty <= 0.0:
+        return ev.mpl_units_per_hour
+    return ev.mpl_units_per_hour * max(0.0, 1.0 - penalty)
+
+
+def _adjusted_wage_parity(ev: EconVector, adjusted_mpl: float) -> float:
+    if ev.mpl_units_per_hour <= 0.0:
+        return ev.wage_parity
+    scale = adjusted_mpl / max(ev.mpl_units_per_hour, 1e-6)
+    return ev.wage_parity * scale
+
+
 def compute_task_econ_summary(
     store: OntologyStore,
     task_id: str,
@@ -61,7 +99,9 @@ def compute_task_econ_summary(
     datapacks = store.list_datapacks(task_id=task_id)
     datapack_map = {d.datapack_id: d for d in datapacks}
     mpl_vals: List[float] = []
+    mpl_raw_vals: List[float] = []
     wage_parity_vals: List[float] = []
+    wage_parity_raw_vals: List[float] = []
     energy_costs: List[float] = []
     damage_costs: List[float] = []
     rewards: List[float] = []
@@ -92,8 +132,12 @@ def compute_task_econ_summary(
     for ep in episodes:
         ev = ev_map.get(ep.episode_id)
         if ev:
-            mpl_vals.append(ev.mpl_units_per_hour)
-            wage_parity_vals.append(ev.wage_parity)
+            mpl_val = _adjusted_mpl(ev)
+            wage_parity_val = _adjusted_wage_parity(ev, mpl_val)
+            mpl_vals.append(mpl_val)
+            mpl_raw_vals.append(ev.mpl_units_per_hour)
+            wage_parity_vals.append(wage_parity_val)
+            wage_parity_raw_vals.append(ev.wage_parity)
             energy_costs.append(ev.energy_cost)
             damage_costs.append(ev.damage_cost)
             rewards.append(ev.reward_scalar_sum)
@@ -104,7 +148,7 @@ def compute_task_econ_summary(
             qual = float(rm.get("quality_score", rm.get("quality", 0.0))) if rm else 0.0
             err_prob = float(rm.get("error_probability", 0.0)) if rm else 0.0
             if rm:
-                quality_adjusted_mpl.append(ev.mpl_units_per_hour * max(0.0, min(1.0, qual)))
+                quality_adjusted_mpl.append(mpl_val * max(0.0, min(1.0, qual)))
                 error_adjusted_energy.append(ev.energy_cost * (1.0 + max(0.0, min(1.0, err_prob))))
                 grade = _quality_grade(qual)
                 grade_counts[grade] = grade_counts.get(grade, 0) + 1
@@ -117,7 +161,7 @@ def compute_task_econ_summary(
                 recovery_present += 1
                 recovery_fractions.append(frac)
             if ev:
-                mpl_without_recovery.append(ev.mpl_units_per_hour * (1.0 - frac))
+                mpl_without_recovery.append(mpl_val * (1.0 - frac))
         if ep.status == "success":
             successes += 1
         elif ep.status == "failure":
@@ -129,10 +173,11 @@ def compute_task_econ_summary(
                 dp_rating,
                 {"mpl": [], "damage": [], "energy": [], "wage_parity": [], "novelty_delta": [], "score": []},
             )
-            bucket["mpl"].append(ev.mpl_units_per_hour)
+            adj_mpl = _adjusted_mpl(ev)
+            bucket["mpl"].append(adj_mpl)
             bucket["damage"].append(ev.damage_cost)
             bucket["energy"].append(ev.energy_cost)
-            bucket["wage_parity"].append(ev.wage_parity)
+            bucket["wage_parity"].append(_adjusted_wage_parity(ev, adj_mpl))
             bucket["novelty_delta"].append(ev.novelty_delta)
             dp_score = getattr(dp_ref, "auditor_score", None)
             if dp_score is not None:
@@ -184,6 +229,16 @@ def compute_task_econ_summary(
         "sampler_counts": sampler_counts,
         "curriculum_phase_counts": phase_counts,
     }
+    if mpl_raw_vals:
+        summary["mpl_raw"] = {
+            "mean": float(sum(mpl_raw_vals) / len(mpl_raw_vals)),
+            **_percentiles(mpl_raw_vals),
+        }
+    if wage_parity_raw_vals:
+        summary["wage_parity_raw"] = {
+            "mean": float(sum(wage_parity_raw_vals) / len(wage_parity_raw_vals)),
+            **_percentiles(wage_parity_raw_vals),
+        }
     if mobility_penalties:
         summary["mobility_penalty"] = {"mean": float(sum(mobility_penalties) / len(mobility_penalties)), **_percentiles(mobility_penalties)}
     if precision_bonuses:

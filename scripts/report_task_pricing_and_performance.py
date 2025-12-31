@@ -141,7 +141,7 @@ def main():
     parser = argparse.ArgumentParser(description="Report task pricing and performance from ontology")
     parser.add_argument("--ontology-root", type=str, default="data/ontology")
     parser.add_argument("--task-id", type=str, required=True)
-    parser.add_argument("--motor-backend", type=str, default="dummy", help="Motor backend (dummy, holosoma)")
+    parser.add_argument("--motor-backend", type=str, default="dummy", help="Motor backend (dummy, holosoma, synthetic)")
     parser.add_argument("--objective-config", type=str, default="", help="Objective config YAML/JSON path")
     parser.add_argument("--objective-name", type=str, default="", help="Friendly name for the objective config")
     parser.add_argument("--datapacks", nargs="*", default=[], help="Datapack YAML config paths")
