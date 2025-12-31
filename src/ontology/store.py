@@ -6,11 +6,13 @@ Performance is not a concern; files are rewritten on each upsert.
 """
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Type, TypeVar, Iterable
+from typing import Dict, List, Optional, Type, TypeVar, Iterable, Mapping, Any, TYPE_CHECKING
 from datetime import datetime
 from dataclasses import asdict, is_dataclass
 
 from src.ontology.models import Task, Robot, Datapack, Episode, EconVector, EpisodeEvent
+if TYPE_CHECKING:
+    from src.scenarios.metadata import ScenarioMetadata
 
 T = TypeVar("T")
 
@@ -65,6 +67,7 @@ class OntologyStore:
             "episodes": self.root / "episodes.jsonl",
             "econ_vectors": self.root / "econ_vectors.jsonl",
             "events": self.root / "events.jsonl",
+            "scenarios": self.root / "scenarios.jsonl",
         }
 
     # Tasks
@@ -166,9 +169,55 @@ class OntologyStore:
         events = [EpisodeEvent(**r) for r in records if r.get("episode_id") == episode_id]
         return events
 
+    # Scenarios
+    def record_scenario(
+        self,
+        scenario: "ScenarioMetadata",
+        train_metrics: Mapping[str, Any],
+        eval_metrics: Mapping[str, Any],
+    ) -> None:
+        records = _load_jsonl(self.paths["scenarios"])
+        existing = {r.get("scenario_id"): r for r in records if r.get("scenario_id")}
+
+        record: Dict[str, Any] = {
+            "scenario_id": scenario.scenario_id,
+            "task_id": scenario.task_id,
+            "motor_backend": scenario.motor_backend,
+            "objective_name": scenario.objective_name,
+            "objective_weights": dict(scenario.objective_weights),
+            "datapack_ids": list(scenario.datapack_ids),
+            "datapack_tags": list(scenario.datapack_tags),
+            "task_tags": list(scenario.task_tags),
+            "robot_families": list(scenario.robot_families),
+            "notes": scenario.notes,
+            "train_metrics": dict(train_metrics),
+            "eval_metrics": dict(eval_metrics),
+        }
+        record.update(_flatten_metrics("train_metrics", train_metrics))
+        record.update(_flatten_metrics("eval_metrics", eval_metrics))
+
+        existing[scenario.scenario_id] = record
+        ordered = [existing[k] for k in sorted(existing.keys())]
+        _write_jsonl(self.paths["scenarios"], ordered)
+
+    def list_scenarios(self) -> List[Dict[str, Any]]:
+        return _load_jsonl(self.paths["scenarios"])
+
     # Helpers
     def _matches_filters(self, obj, filters: Dict) -> bool:
         for key, value in filters.items():
             if getattr(obj, key, None) != value:
                 return False
         return True
+
+
+def _flatten_metrics(prefix: str, metrics: Mapping[str, Any]) -> Dict[str, Any]:
+    flattened: Dict[str, Any] = {}
+    for key, value in metrics.items():
+        if key is None:
+            continue
+        clean_key = str(key).strip().replace(" ", "_").replace("/", "_")
+        if not clean_key:
+            continue
+        flattened[f"{prefix}_{clean_key}"] = value
+    return flattened
