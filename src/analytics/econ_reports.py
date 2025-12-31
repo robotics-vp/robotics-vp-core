@@ -3,6 +3,7 @@ Economics reports over ontology artifacts.
 """
 from __future__ import annotations
 import math
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +13,10 @@ from src.economics.arh_config import ARHPenaltyConfig, current_arh_config
 from src.ontology.store import OntologyStore
 from src.ontology.models import Task, Episode, EconVector, Datapack
 from src.policies.registry import build_all_policies
+from src.vision.motion_hierarchy.metrics import (
+    compute_motion_hierarchy_summary_from_raw,
+    compute_motion_hierarchy_summary_from_stats,
+)
 
 
 def _percentiles(values: List[float], ps=(10, 50, 90)) -> Dict[str, float]:
@@ -71,26 +76,56 @@ def compute_motion_hierarchy_summary(episode_motion_hierarchy: Dict[str, Any]) -
     - per-node residual magnitude stats
     - optionally a 'structural difficulty' score
     """
-    if not episode_motion_hierarchy:
+    if not episode_motion_hierarchy or not isinstance(episode_motion_hierarchy, dict):
         return {}
 
-    tree_stats = episode_motion_hierarchy.get("tree_stats") or episode_motion_hierarchy.get("stats") or {}
+    hierarchy = episode_motion_hierarchy.get("hierarchy")
     resid_stats = episode_motion_hierarchy.get("delta_resid_stats") or {}
 
-    mean_depth = _safe_float(tree_stats.get("mean_tree_depth"))
-    mean_branch = _safe_float(tree_stats.get("mean_branch_factor"))
-    resid_mean = _mean_list(resid_stats.get("mean", []))
-    resid_std = _mean_list(resid_stats.get("std", []))
+    if hierarchy is not None:
+        try:
+            summary = compute_motion_hierarchy_summary_from_raw(hierarchy, resid_stats)
+            return asdict(summary)
+        except Exception:
+            pass
 
-    structural_difficulty = mean_depth * (1.0 + resid_mean)
+    tree_stats = episode_motion_hierarchy.get("tree_stats") or episode_motion_hierarchy.get("stats") or {}
+    mean_depth = _safe_float(
+        episode_motion_hierarchy.get("mean_tree_depth", tree_stats.get("mean_tree_depth"))
+    )
+    mean_branch = _safe_float(
+        episode_motion_hierarchy.get("mean_branch_factor", tree_stats.get("mean_branch_factor"))
+    )
 
-    return {
-        "mean_tree_depth": mean_depth,
-        "mean_branch_factor": mean_branch,
-        "residual_mean": resid_mean,
-        "residual_std": resid_std,
-        "structural_difficulty": structural_difficulty,
-    }
+    if "residual_mean" in episode_motion_hierarchy:
+        resid_mean = _safe_float(episode_motion_hierarchy.get("residual_mean"))
+    elif "residual_mean" in resid_stats:
+        resid_mean = _safe_float(resid_stats.get("residual_mean"))
+    else:
+        mean_payload = resid_stats.get("mean", [])
+        if isinstance(mean_payload, (list, tuple, np.ndarray)):
+            resid_mean = _mean_list(list(mean_payload))
+        else:
+            resid_mean = _safe_float(mean_payload)
+
+    if "residual_std" in episode_motion_hierarchy:
+        resid_std = _safe_float(episode_motion_hierarchy.get("residual_std"))
+    elif "residual_std" in resid_stats:
+        resid_std = _safe_float(resid_stats.get("residual_std"))
+    else:
+        std_payload = resid_stats.get("std", [])
+        if isinstance(std_payload, (list, tuple, np.ndarray)):
+            resid_std = _mean_list(list(std_payload))
+        else:
+            resid_std = _safe_float(std_payload)
+
+    summary = compute_motion_hierarchy_summary_from_stats(
+        mean_tree_depth=mean_depth,
+        mean_branch_factor=mean_branch,
+        residual_mean=resid_mean,
+        residual_std=resid_std,
+    )
+    return asdict(summary)
 
 
 def _arh_penalty_from_components(components: Dict[str, float], config: ARHPenaltyConfig) -> float:
@@ -705,6 +740,7 @@ def compute_lsd_vector_scene_summary(
             "residual_mean",
             "residual_std",
             "structural_difficulty",
+            "plausibility_score",
         ):
             vals = [s[key] for s in motion_hierarchy_summaries if key in s]
             if vals:
