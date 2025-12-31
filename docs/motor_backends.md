@@ -24,6 +24,39 @@ pip install -r requirements-holosoma.txt
 
 The backend maps task IDs to Holosoma presets in `src/motor_backend/holosoma_backend.py`.
 
+## OpenVLA / VLA Labeling
+
+Rollout labeling can optionally call OpenVLA when enabled. It is safe to run with OpenVLA disabled; the labeler falls back to stub tags and never raises.
+
+Enablement env vars:
+
+- `OPENVLA_ENABLE=1` (or `VLA_ENABLE=1`)
+- `OPENVLA_MODEL_NAME` (alias: `OPENVLA_MODEL`)
+- `OPENVLA_DEVICE` (e.g. `cuda:0`, `cpu`)
+- `OPENVLA_DTYPE` (e.g. `bfloat16`, `float16`)
+
+Expected RGB inputs:
+
+- `EpisodeRollout.rgb_video_path` should point to an RGB video or image file.
+- Frames are treated as HxW with channels-last in RGB order (uint8 0–255).
+- The labeler uses the first frame as the OpenVLA visual input.
+
+Minimal frame-to-OpenVLA flow:
+
+```
+from PIL import Image
+import imageio.v2 as imageio
+
+episode = rollouts.episodes[0]
+reader = imageio.get_reader(str(episode.rgb_video_path))
+frame = reader.get_data(0)
+reader.close()
+image = Image.fromarray(frame)
+action = controller.predict_action(image, instruction)
+```
+
+If OpenVLA is enabled but unavailable or misconfigured, the labeler logs a warning, emits a `vla_error` tag, and continues with stub labels.
+
 ## Objective Overlay
 
 Economic objectives are declared via `EconomicObjectiveSpec` and compiled into reward overlays:
@@ -83,6 +116,31 @@ python scripts/report_task_pricing_and_performance.py \
 ```
 
 Use `--eval-episodes` to add an evaluation run after training.
+
+## Synthetic Backend
+
+`synthetic_backend` is a deterministic backend for tests and smoke runs. It generates stable metrics without any simulator.
+
+Pricing report example:
+
+```
+python scripts/report_task_pricing_and_performance.py \
+  --task-id humanoid_locomotion_g1 \
+  --motor-backend synthetic \
+  --objective-config configs/objectives/example_holosoma_objective.yaml \
+  --datapacks configs/datapacks/example_holosoma_datapack.yaml
+```
+
+Semantic runner example:
+
+```
+python scripts/semantic_run.py \
+  --intent "synthetic sanity check" \
+  --tags warehouse logging \
+  --robot-family G1 \
+  --task-id humanoid_locomotion_g1 \
+  --motor-backend synthetic
+```
 
 ## Semantic Simulation API
 
