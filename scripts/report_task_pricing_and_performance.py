@@ -25,6 +25,7 @@ from src.objectives.economic_objective import EconomicObjectiveSpec
 from src.objectives.loader import load_objective_spec
 from src.ontology.models import Datapack, Episode, Robot
 from src.ontology.store import OntologyStore
+from src.scenarios.metadata import build_scenario_metadata
 
 
 def _load_recap_scores(path: Path) -> List[Dict]:
@@ -113,6 +114,10 @@ def _ensure_datapacks(store: OntologyStore, task_id: str, datapack_configs: Sequ
                     "description": cfg.description,
                     "randomization": dict(cfg.domain_randomization),
                     "curriculum": dict(cfg.curriculum),
+                    "tags": list(cfg.tags),
+                    "task_tags": list(cfg.task_tags),
+                    "robot_families": list(cfg.robot_families),
+                    "objective_hint": cfg.objective_hint,
                     "source_path": cfg.source_path,
                 },
             )
@@ -169,7 +174,9 @@ def main():
     parser.add_argument("--task-id", type=str, required=True)
     parser.add_argument("--motor-backend", type=str, default="dummy", help="Motor backend (dummy, holosoma)")
     parser.add_argument("--objective-config", type=str, default="", help="Objective config YAML/JSON path")
+    parser.add_argument("--objective-name", type=str, default="", help="Friendly name for the objective config")
     parser.add_argument("--datapacks", nargs="*", default=[], help="Datapack YAML config paths")
+    parser.add_argument("--notes", type=str, default="", help="Optional scenario notes")
     parser.add_argument("--robot-id", type=str, default="robot_default")
     parser.add_argument("--num-envs", type=int, default=1024)
     parser.add_argument("--max-steps", type=int, default=10000)
@@ -187,6 +194,8 @@ def main():
     objective_spec = load_objective_spec(args.objective_config) if args.objective_config else EconomicObjectiveSpec()
     datapack_paths = _normalize_datapack_paths(args.datapacks)
     datapack_configs = load_datapack_configs(datapack_paths) if datapack_paths else []
+    run_id = str(uuid.uuid4())
+    objective_name = args.objective_name or (Path(args.objective_config).stem if args.objective_config else "default")
 
     if args.motor_backend != "dummy":
         task = store.get_task(args.task_id)
@@ -198,6 +207,15 @@ def main():
         if backend is None:
             raise ValueError(f"Motor backend '{args.motor_backend}' is not configured.")
         _ensure_datapacks(store, args.task_id, datapack_configs)
+        scenario = build_scenario_metadata(
+            run_id=run_id,
+            task_id=args.task_id,
+            motor_backend=args.motor_backend,
+            objective_name=objective_name,
+            objective=objective_spec,
+            datapacks=datapack_configs,
+            notes=args.notes or None,
+        )
         train_result = backend.train_policy(
             task_id=args.task_id,
             objective=objective_spec,
@@ -207,6 +225,7 @@ def main():
             max_steps=args.max_steps,
             seed=args.seed,
         )
+        eval_metrics: Mapping[str, float] = {}
         _record_backend_result(
             store,
             econ_meter,
@@ -228,6 +247,7 @@ def main():
                 num_episodes=eval_episodes,
                 seed=args.seed,
             )
+            eval_metrics = eval_result.econ_metrics
             _record_backend_result(
                 store,
                 econ_meter,
@@ -241,6 +261,11 @@ def main():
                 eval_result.econ_metrics,
                 label="eval",
             )
+        store.record_scenario(
+            scenario=scenario,
+            train_metrics=train_result.econ_metrics,
+            eval_metrics=eval_metrics,
+        )
 
     rm_scores = _load_jsonl_map(Path(args.reward_model_scores)) if args.reward_model_scores else {}
     seg_tags = _load_jsonl_map(Path(args.segmentation_tags)) if args.segmentation_tags else {}

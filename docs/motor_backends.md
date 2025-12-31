@@ -76,6 +76,8 @@ python scripts/report_task_pricing_and_performance.py \
   --motor-backend holosoma \
   --objective-config configs/objectives/example_holosoma_objective.yaml \
   --datapacks configs/datapacks/example_holosoma_datapack.yaml \
+  --objective-name "baseline_logging_error_min" \
+  --notes "G1/T1 warehouse logging baseline with high error penalty" \
   --num-envs 2048 \
   --max-steps 50000
 ```
