@@ -60,6 +60,13 @@ class LSDVectorSceneConfig:
     # Episode limits (will merge with EconParams)
     max_steps: int = 500
 
+    # NAG (Neural Atlas-Graph) overlay settings
+    enable_nag_overlay: bool = False
+    nag_atlas_size: tuple[int, int] = (256, 256)
+    nag_max_nodes: int = 8
+    nag_fit_iters: int = 200
+    nag_num_counterfactuals: int = 3
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
         return {
@@ -82,6 +89,11 @@ class LSDVectorSceneConfig:
             "use_simple_policy": self.use_simple_policy,
             "random_seed": self.random_seed,
             "max_steps": self.max_steps,
+            "enable_nag_overlay": self.enable_nag_overlay,
+            "nag_atlas_size": list(self.nag_atlas_size),
+            "nag_max_nodes": self.nag_max_nodes,
+            "nag_fit_iters": self.nag_fit_iters,
+            "nag_num_counterfactuals": self.nag_num_counterfactuals,
         }
 
     def to_json(self) -> str:
@@ -95,6 +107,11 @@ class LSDVectorSceneConfig:
         material_mix = data.get("material_mix", ("metal", "plastic", "wood"))
         if isinstance(material_mix, list):
             material_mix = tuple(material_mix)
+
+        # Handle nag_atlas_size as list or tuple
+        nag_atlas_size = data.get("nag_atlas_size", (256, 256))
+        if isinstance(nag_atlas_size, list):
+            nag_atlas_size = tuple(nag_atlas_size)
 
         return cls(
             topology_type=data.get("topology_type", "WAREHOUSE_AISLES"),
@@ -116,6 +133,11 @@ class LSDVectorSceneConfig:
             use_simple_policy=data.get("use_simple_policy", True),
             random_seed=data.get("random_seed", 0),
             max_steps=data.get("max_steps", 500),
+            enable_nag_overlay=data.get("enable_nag_overlay", False),
+            nag_atlas_size=nag_atlas_size,
+            nag_max_nodes=data.get("nag_max_nodes", 8),
+            nag_fit_iters=data.get("nag_fit_iters", 200),
+            nag_num_counterfactuals=data.get("nag_num_counterfactuals", 3),
         )
 
     @classmethod

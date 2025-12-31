@@ -6,6 +6,8 @@ import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+
 from src.economics.arh_config import ARHPenaltyConfig, current_arh_config
 from src.ontology.store import OntologyStore
 from src.ontology.models import Task, Episode, EconVector, Datapack
@@ -648,3 +650,195 @@ def compute_lsd_vector_scene_summary(
 
     base_summary["lsd_vector_scene"] = lsd_summary
     return base_summary
+
+
+def compute_nag_edit_surface_summary(
+    nag_datapacks: List[Dict[str, Any]],
+    baseline_mpl: Optional[float] = None,
+) -> Dict[str, Any]:
+    """
+    Summarize MPL / success / cost as a function of NAG edit vectors.
+
+    Analyzes counterfactual NAG datapacks to understand how different
+    edit types affect performance metrics.
+
+    Args:
+        nag_datapacks: List of NAG datapack dicts with:
+            - nag_edit_vector: List of edit dicts
+            - difficulty_features: Dict with nag_* features
+            - lsd_metadata: Optional dict with base_mpl
+        baseline_mpl: Optional baseline MPL for comparison
+
+    Returns:
+        Dict with analysis results:
+            - edit_type_stats: Stats per edit type
+            - magnitude_correlations: How edit magnitude affects metrics
+            - counterfactual_impact: Overall impact summary
+    """
+    if not nag_datapacks:
+        return {"error": "no_datapacks", "edit_type_stats": {}}
+
+    # Aggregate stats by edit type
+    edit_type_counts: Dict[str, int] = {}
+    edit_type_magnitude_sum: Dict[str, float] = {}
+
+    # Per-edit-type difficulty adjustments
+    difficulty_by_edit: Dict[str, List[Dict[str, float]]] = {}
+
+    for dp in nag_datapacks:
+        edits = dp.get("nag_edit_vector", [])
+        difficulty = dp.get("difficulty_features", {})
+
+        for edit in edits:
+            edit_type = edit.get("edit_type", "unknown")
+            edit_type_counts[edit_type] = edit_type_counts.get(edit_type, 0) + 1
+
+            # Track magnitude if available
+            params = edit.get("parameters", {})
+            if "delta_translation" in params:
+                trans = params["delta_translation"]
+                if isinstance(trans, list):
+                    mag = sum(x**2 for x in trans) ** 0.5
+                    edit_type_magnitude_sum[edit_type] = edit_type_magnitude_sum.get(edit_type, 0) + mag
+
+            if edit_type not in difficulty_by_edit:
+                difficulty_by_edit[edit_type] = []
+
+            # Extract NAG-specific difficulty features
+            nag_features = {
+                k: v for k, v in difficulty.items()
+                if k.startswith("nag_") or k in ["graph_density", "tilt"]
+            }
+            difficulty_by_edit[edit_type].append(nag_features)
+
+    # Compute average difficulty per edit type
+    edit_type_stats: Dict[str, Dict[str, Any]] = {}
+    for edit_type, count in edit_type_counts.items():
+        stats: Dict[str, Any] = {
+            "count": count,
+            "avg_magnitude": edit_type_magnitude_sum.get(edit_type, 0) / max(count, 1),
+        }
+
+        # Average NAG difficulty features
+        features = difficulty_by_edit.get(edit_type, [])
+        if features:
+            all_keys = set()
+            for f in features:
+                all_keys.update(f.keys())
+
+            for key in all_keys:
+                vals = [f.get(key, 0) for f in features if key in f]
+                if vals:
+                    stats[f"avg_{key}"] = sum(vals) / len(vals)
+
+        edit_type_stats[edit_type] = stats
+
+    # Overall counterfactual impact summary
+    total_counterfactuals = len(nag_datapacks)
+    total_edits = sum(edit_type_counts.values())
+
+    # Compute removal vs addition balance
+    removals = edit_type_counts.get("remove", 0)
+    duplications = edit_type_counts.get("duplicate", 0)
+    pose_shifts = edit_type_counts.get("pose", 0)
+    color_shifts = edit_type_counts.get("color_shift", 0)
+
+    counterfactual_impact = {
+        "total_counterfactuals": total_counterfactuals,
+        "total_edits": total_edits,
+        "avg_edits_per_counterfactual": total_edits / max(total_counterfactuals, 1),
+        "removal_rate": removals / max(total_edits, 1),
+        "duplication_rate": duplications / max(total_edits, 1),
+        "pose_shift_rate": pose_shifts / max(total_edits, 1),
+        "color_shift_rate": color_shifts / max(total_edits, 1),
+    }
+
+    if baseline_mpl is not None:
+        counterfactual_impact["baseline_mpl"] = baseline_mpl
+
+    return {
+        "edit_type_stats": edit_type_stats,
+        "counterfactual_impact": counterfactual_impact,
+        "edit_type_distribution": edit_type_counts,
+    }
+
+
+def compute_nag_counterfactual_mpl_analysis(
+    base_episodes: List[Dict[str, Any]],
+    counterfactual_episodes: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Analyze MPL changes between base episodes and NAG counterfactuals.
+
+    Args:
+        base_episodes: List of base episode dicts with mpl_units_per_hour
+        counterfactual_episodes: List of counterfactual dicts with:
+            - base_episode_id: Reference to base episode
+            - nag_edit_vector: Applied edits
+            - estimated_mpl_impact: Optional estimated MPL change
+
+    Returns:
+        Analysis of counterfactual effectiveness
+    """
+    if not base_episodes or not counterfactual_episodes:
+        return {"error": "insufficient_data"}
+
+    # Index base episodes
+    base_mpl_by_id: Dict[str, float] = {}
+    for ep in base_episodes:
+        ep_id = ep.get("episode_id") or ep.get("scene_id", "")
+        mpl = _safe_float(ep.get("mpl_units_per_hour", 0))
+        if ep_id and mpl > 0:
+            base_mpl_by_id[ep_id] = mpl
+
+    # Analyze counterfactuals
+    mpl_changes: List[float] = []
+    edit_mpl_impact: Dict[str, List[float]] = {}
+
+    for cf in counterfactual_episodes:
+        base_id = cf.get("base_episode_id", "")
+        if base_id not in base_mpl_by_id:
+            continue
+
+        base_mpl = base_mpl_by_id[base_id]
+        cf_mpl = _safe_float(cf.get("estimated_mpl", base_mpl))  # Use base if no estimate
+
+        # Estimate MPL change based on edit complexity
+        edits = cf.get("nag_edit_vector", [])
+        difficulty = cf.get("difficulty_features", {})
+
+        # Simple heuristic: each removal reduces MPL slightly, duplications increase complexity
+        num_removed = difficulty.get("nag_objects_removed", 0)
+        num_added = difficulty.get("nag_objects_added", 0)
+        num_pose = difficulty.get("nag_pose_perturbations", 0)
+
+        # Estimate change (heuristic - in production would be measured)
+        estimated_change = -num_removed * 0.5 + num_added * 0.3 - num_pose * 0.2
+        mpl_changes.append(estimated_change)
+
+        # Track by edit type
+        for edit in edits:
+            edit_type = edit.get("edit_type", "unknown")
+            if edit_type not in edit_mpl_impact:
+                edit_mpl_impact[edit_type] = []
+            edit_mpl_impact[edit_type].append(estimated_change / max(len(edits), 1))
+
+    # Aggregate results
+    avg_mpl_change = sum(mpl_changes) / len(mpl_changes) if mpl_changes else 0
+
+    edit_type_impact: Dict[str, Dict[str, float]] = {}
+    for edit_type, impacts in edit_mpl_impact.items():
+        if impacts:
+            edit_type_impact[edit_type] = {
+                "count": len(impacts),
+                "avg_impact": sum(impacts) / len(impacts),
+                "min_impact": min(impacts),
+                "max_impact": max(impacts),
+            }
+
+    return {
+        "num_counterfactuals_analyzed": len(mpl_changes),
+        "avg_mpl_change": avg_mpl_change,
+        "mpl_change_std": float(np.std(mpl_changes)) if mpl_changes else 0,
+        "edit_type_impact": edit_type_impact,
+    }
