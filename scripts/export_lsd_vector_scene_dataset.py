@@ -58,6 +58,7 @@ class ExportConfig:
     save_rgb: bool = False
     save_depth: bool = False
     seed: int = 42
+    enable_motion_hierarchy: bool = False
 
     # Scene parameter ranges for sampling
     topology_types: List[str] = None
@@ -89,8 +90,39 @@ def sample_scene_config(rng: random.Random, export_config: ExportConfig) -> Dict
         "num_forklifts": rng.randint(*export_config.num_forklifts_range),
         "tilt": rng.uniform(*export_config.tilt_range),
         "use_simple_policy": True,
+        "enable_motion_hierarchy": export_config.enable_motion_hierarchy,
         "max_steps": export_config.max_steps,
         "random_seed": rng.randint(0, 2**31),
+    }
+
+
+def _serialize_agent_trajectories(trajectories: List[Any], graph) -> Dict[str, Any]:
+    if not trajectories or graph is None:
+        return {}
+
+    label_map: Dict[int, str] = {}
+    for obj in graph.objects:
+        class_name = obj.class_id.name.lower() if hasattr(obj.class_id, "name") else str(obj.class_id).lower()
+        agent_index = obj.attributes.get("agent_index") if obj.attributes else None
+        suffix = agent_index if agent_index is not None else obj.id
+        label_map[obj.id] = f"{class_name}_{suffix}"
+
+    serialized = []
+    for traj in trajectories:
+        positions = [[float(x), float(y), float(z)] for x, y, z in traj.positions]
+        timestamps = [float(t) for t in traj.timestamps]
+        serialized.append(
+            {
+                "agent_id": int(traj.agent_id),
+                "label": label_map.get(traj.agent_id, f"agent_{traj.agent_id}"),
+                "positions": positions,
+                "timestamps": timestamps,
+            }
+        )
+
+    return {
+        "agent_trajectories": serialized,
+        "agent_labels": [entry["label"] for entry in serialized],
     }
 
 
@@ -98,6 +130,10 @@ def run_episode(
     env,
     max_steps: int,
     policy_fn=None,
+    *,
+    enable_motion_hierarchy: bool = False,
+    motion_hierarchy_model=None,
+    motion_hierarchy_config=None,
 ) -> Dict[str, Any]:
     """
     Run a single episode and collect data.
@@ -144,7 +180,7 @@ def run_episode(
     # Get episode log
     episode_log = env.get_episode_log(info_history)
 
-    return {
+    episode_data = {
         "episode_id": f"{env.scene_id}_{step_count}_{int(time.time() * 1000) % 10000}",
         "scene_id": env.scene_id,
         "trajectory": trajectory,
@@ -154,6 +190,26 @@ def run_episode(
         "mpl_metrics": episode_log["mpl_metrics"],
         "difficulty_features": episode_log["difficulty_features"],
     }
+
+    if enable_motion_hierarchy:
+        agent_payload = _serialize_agent_trajectories(env.get_agent_trajectories(), env.graph)
+        if agent_payload:
+            episode_data.update(agent_payload)
+        if agent_payload and motion_hierarchy_model and motion_hierarchy_config:
+            from src.envs.lsd3d_env.motion_hierarchy_integration import compute_motion_hierarchy_for_lsd_episode
+
+            mh_output = compute_motion_hierarchy_for_lsd_episode(
+                {"episode_id": episode_data["episode_id"], "trajectory_data": agent_payload},
+                model=motion_hierarchy_model,
+                config=motion_hierarchy_config,
+            )
+            if isinstance(mh_output.get("hierarchy"), np.ndarray):
+                mh_output["hierarchy"] = mh_output["hierarchy"].tolist()
+            elif hasattr(mh_output.get("hierarchy"), "tolist"):
+                mh_output["hierarchy"] = mh_output["hierarchy"].tolist()
+            episode_data["motion_hierarchy"] = mh_output
+
+    return episode_data
 
 
 def serialize_scene_graph(graph) -> Dict[str, Any]:
@@ -244,6 +300,15 @@ def export_dataset(
     episode_count = 0
     start_time = time.time()
 
+    motion_hierarchy_model = None
+    motion_hierarchy_config = None
+    if export_config.enable_motion_hierarchy:
+        from src.vision.motion_hierarchy.config import MotionHierarchyConfig
+        from src.vision.motion_hierarchy.motion_hierarchy_node import MotionHierarchyNode
+
+        motion_hierarchy_config = MotionHierarchyConfig()
+        motion_hierarchy_model = MotionHierarchyNode(motion_hierarchy_config)
+
     for scene_idx in range(export_config.num_scenes):
         # Sample scene config
         scene_config_dict = sample_scene_config(rng, export_config)
@@ -276,7 +341,13 @@ def export_dataset(
         env = LSDVectorSceneEnv(env_config)
 
         # Run first episode to get scene data
-        episode_data = run_episode(env, export_config.max_steps)
+        episode_data = run_episode(
+            env,
+            export_config.max_steps,
+            enable_motion_hierarchy=export_config.enable_motion_hierarchy,
+            motion_hierarchy_model=motion_hierarchy_model,
+            motion_hierarchy_config=motion_hierarchy_config,
+        )
         scene_id = episode_data["scene_id"]
 
         # Store scene data (only once per scene)
@@ -296,7 +367,13 @@ def export_dataset(
 
         # Run additional episodes for this scene
         for ep_idx in range(1, export_config.episodes_per_scene):
-            episode_data = run_episode(env, export_config.max_steps)
+            episode_data = run_episode(
+                env,
+                export_config.max_steps,
+                enable_motion_hierarchy=export_config.enable_motion_hierarchy,
+                motion_hierarchy_model=motion_hierarchy_model,
+                motion_hierarchy_config=motion_hierarchy_config,
+            )
             episode_data["scene_config"] = scene_config_dict
             all_episodes.append(episode_data)
             episode_count += 1
@@ -447,6 +524,11 @@ def main() -> int:
         help="Random seed",
     )
     parser.add_argument(
+        "--enable-motion-hierarchy",
+        action="store_true",
+        help="If set, enable Motion Hierarchy Node computation for each LSD episode.",
+    )
+    parser.add_argument(
         "--config-path",
         type=str,
         default=None,
@@ -468,6 +550,7 @@ def main() -> int:
         output_path=args.output_path,
         shard_size=args.shard_size,
         seed=args.seed,
+        enable_motion_hierarchy=args.enable_motion_hierarchy,
     )
 
     # Load config from YAML if provided
