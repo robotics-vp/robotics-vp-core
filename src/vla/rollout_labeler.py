@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, Tuple
 
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
 from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
 from src.sima2.semantic_primitive_extractor import extract_primitives_from_rollout
+
+logger = logging.getLogger(__name__)
 
 
 def label_rollouts_with_vla(
@@ -30,7 +33,14 @@ def label_rollouts_with_vla(
     vla_tags: set[str] = set()
 
     openvla_enabled = _openvla_enabled()
-    controller = _get_openvla_controller() if openvla_enabled else None
+    controller = None
+    vla_error_reason = None
+    if openvla_enabled:
+        try:
+            controller, vla_error_reason = _get_openvla_controller()
+        except Exception as exc:
+            vla_error_reason = str(exc)
+            logger.warning("OpenVLA initialization failed; falling back to stub labels: %s", exc)
 
     for episode in rollouts.episodes:
         derived_motion_clips.append(MotionClipSpec(path=str(episode.trajectory_path), weight=1.0))
@@ -45,15 +55,19 @@ def label_rollouts_with_vla(
             derived_task_tags.update(_select_task_tags(prim.tags))
 
         if controller is not None:
-            vla_action = _try_openvla_action(controller, episode, base_datapack)
+            vla_action, vla_action_error = _try_openvla_action(controller, episode, base_datapack)
             if vla_action:
                 vla_tags.update(_tags_from_vla_action(vla_action))
+            if vla_action_error:
+                vla_error_reason = vla_action_error
 
         if derived_objective_hint is None:
             derived_objective_hint = _derive_objective_hint(primitives, episode.metrics)
 
     derived_tags.update(primitive_tags)
     derived_tags.update(vla_tags)
+    if vla_error_reason:
+        derived_tags.add("vla_error")
 
     description = base_datapack.description or ""
     if primitive_tags:
@@ -166,43 +180,51 @@ def _openvla_enabled() -> bool:
 
 _OPENVLA_CONTROLLER = None
 _OPENVLA_INITIALIZED = False
+_OPENVLA_ERROR: str | None = None
 
 
-def _get_openvla_controller():
-    global _OPENVLA_CONTROLLER, _OPENVLA_INITIALIZED
+def _get_openvla_controller() -> Tuple[Any | None, str | None]:
+    global _OPENVLA_CONTROLLER, _OPENVLA_INITIALIZED, _OPENVLA_ERROR
     if _OPENVLA_INITIALIZED:
-        return _OPENVLA_CONTROLLER
+        return _OPENVLA_CONTROLLER, _OPENVLA_ERROR
     _OPENVLA_INITIALIZED = True
     try:
         from src.vla.openvla_controller import OpenVLAConfig, OpenVLAController
-    except Exception:
-        return None
+    except Exception as exc:
+        logger.warning("OpenVLA import failed; falling back to stub labels: %s", exc)
+        _OPENVLA_ERROR = str(exc)
+        return None, _OPENVLA_ERROR
+    model_name = os.getenv("OPENVLA_MODEL_NAME") or os.getenv("OPENVLA_MODEL") or "openvla/openvla-7b"
     cfg = OpenVLAConfig(
-        model_name=os.getenv("OPENVLA_MODEL", "openvla/openvla-7b"),
+        model_name=model_name,
         device=os.getenv("OPENVLA_DEVICE", "cuda:0"),
         dtype=os.getenv("OPENVLA_DTYPE", "bfloat16"),
     )
     controller = OpenVLAController(cfg)
     controller.load_model()
     if not controller.available:
-        return None
+        logger.warning("OpenVLA unavailable; falling back to stub labels.")
+        _OPENVLA_ERROR = "OpenVLA unavailable"
+        return None, _OPENVLA_ERROR
     _OPENVLA_CONTROLLER = controller
-    return controller
+    _OPENVLA_ERROR = None
+    return controller, None
 
 
 def _try_openvla_action(
     controller: Any,
     episode: EpisodeRollout,
     base_datapack: DatapackConfig,
-) -> Mapping[str, Any] | None:
+) -> Tuple[Mapping[str, Any] | None, str | None]:
     frame = _load_first_frame(episode)
     if frame is None:
-        return None
+        return None, None
     instruction = base_datapack.objective_hint or base_datapack.description or "Execute the task safely."
     try:
-        return controller.predict_action(frame, instruction)
-    except Exception:
-        return None
+        return controller.predict_action(frame, instruction), None
+    except Exception as exc:
+        logger.warning("OpenVLA inference failed; falling back to stub labels: %s", exc)
+        return None, str(exc)
 
 
 def _load_first_frame(episode: EpisodeRollout):
