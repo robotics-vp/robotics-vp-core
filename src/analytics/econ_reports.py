@@ -1,10 +1,12 @@
 """
 Economics reports over ontology artifacts.
 """
+from __future__ import annotations
 import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from src.economics.arh_config import ARHPenaltyConfig, current_arh_config
 from src.ontology.store import OntologyStore
 from src.ontology.models import Task, Episode, EconVector, Datapack
 from src.policies.registry import build_all_policies
@@ -53,7 +55,7 @@ def _safe_float(value: Any) -> float:
         return 0.0
 
 
-def _arh_penalty_from_components(components: Dict[str, float], default_penalty: float = 0.5) -> float:
+def _arh_penalty_from_components(components: Dict[str, float], config: ARHPenaltyConfig) -> float:
     if not components:
         return 0.0
     if "mpl_units_per_hour_adjusted" in components:
@@ -63,18 +65,29 @@ def _arh_penalty_from_components(components: Dict[str, float], default_penalty: 
         return max(0.0, min(1.0, penalty))
     suspicious = _safe_float(components.get("anti_reward_hacking_suspicious"))
     if suspicious > 0.0:
-        return max(0.0, min(1.0, default_penalty))
+        return max(0.0, min(1.0, config.suspicious_penalty_factor))
     return 0.0
 
 
-def _adjusted_mpl(ev: EconVector) -> float:
+def _arh_score_from_components(components: Dict[str, float]) -> float | None:
+    for key in ("anti_reward_hacking_score", "arh_score", "reward_hacking_score"):
+        if key in components and components[key] is not None:
+            return _safe_float(components.get(key))
+    return None
+
+
+def _adjusted_mpl(ev: EconVector, config: ARHPenaltyConfig) -> tuple[float, bool, bool]:
     components = ev.components or {}
+    suspicious = _safe_float(components.get("anti_reward_hacking_suspicious")) > 0.0
+    score = _arh_score_from_components(components)
+    if config.hard_exclusion_threshold is not None and score is not None and score > config.hard_exclusion_threshold:
+        return 0.0, suspicious, True
     if "mpl_units_per_hour_adjusted" in components:
-        return _safe_float(components.get("mpl_units_per_hour_adjusted"))
-    penalty = _arh_penalty_from_components(components)
+        return _safe_float(components.get("mpl_units_per_hour_adjusted")), suspicious, False
+    penalty = _arh_penalty_from_components(components, config)
     if penalty <= 0.0:
-        return ev.mpl_units_per_hour
-    return ev.mpl_units_per_hour * max(0.0, 1.0 - penalty)
+        return ev.mpl_units_per_hour, suspicious, False
+    return ev.mpl_units_per_hour * max(0.0, 1.0 - penalty), suspicious, False
 
 
 def _adjusted_wage_parity(ev: EconVector, adjusted_mpl: float) -> float:
@@ -120,9 +133,12 @@ def compute_task_econ_summary(
     mpl_without_recovery: List[float] = []
     datapack_rating_counts: Dict[str, int] = {}
     econ_by_rating: Dict[str, Dict[str, List[float]]] = {}
+    arh_suspicious_count = 0
+    arh_excluded_count = 0
 
     rm_scores = reward_model_scores or {}
     seg_map = segmentation_tags or {}
+    arh_config = current_arh_config()
 
     for dp in datapacks:
         rating = getattr(dp, "auditor_rating", None)
@@ -132,7 +148,7 @@ def compute_task_econ_summary(
     for ep in episodes:
         ev = ev_map.get(ep.episode_id)
         if ev:
-            mpl_val = _adjusted_mpl(ev)
+            mpl_val, arh_suspicious, arh_excluded = _adjusted_mpl(ev, arh_config)
             wage_parity_val = _adjusted_wage_parity(ev, mpl_val)
             mpl_vals.append(mpl_val)
             mpl_raw_vals.append(ev.mpl_units_per_hour)
@@ -147,6 +163,10 @@ def compute_task_econ_summary(
             rm = rm_scores.get(ep.episode_id, {})
             qual = float(rm.get("quality_score", rm.get("quality", 0.0))) if rm else 0.0
             err_prob = float(rm.get("error_probability", 0.0)) if rm else 0.0
+            if arh_suspicious:
+                arh_suspicious_count += 1
+            if arh_excluded:
+                arh_excluded_count += 1
             if rm:
                 quality_adjusted_mpl.append(mpl_val * max(0.0, min(1.0, qual)))
                 error_adjusted_energy.append(ev.energy_cost * (1.0 + max(0.0, min(1.0, err_prob))))
@@ -173,7 +193,7 @@ def compute_task_econ_summary(
                 dp_rating,
                 {"mpl": [], "damage": [], "energy": [], "wage_parity": [], "novelty_delta": [], "score": []},
             )
-            adj_mpl = _adjusted_mpl(ev)
+            adj_mpl, _, _ = _adjusted_mpl(ev, arh_config)
             bucket["mpl"].append(adj_mpl)
             bucket["damage"].append(ev.damage_cost)
             bucket["energy"].append(ev.energy_cost)
@@ -238,6 +258,16 @@ def compute_task_econ_summary(
         summary["wage_parity_raw"] = {
             "mean": float(sum(wage_parity_raw_vals) / len(wage_parity_raw_vals)),
             **_percentiles(wage_parity_raw_vals),
+        }
+    if mpl_raw_vals:
+        total = len(mpl_raw_vals)
+        summary["arh"] = {
+            "suspicious_count": arh_suspicious_count,
+            "excluded_count": arh_excluded_count,
+            "suspicious_fraction": float(arh_suspicious_count / total) if total else 0.0,
+            "excluded_fraction": float(arh_excluded_count / total) if total else 0.0,
+            "suspicious_flag": 1.0 if arh_suspicious_count > 0 else 0.0,
+            "excluded_flag": 1.0 if arh_excluded_count > 0 else 0.0,
         }
     if mobility_penalties:
         summary["mobility_penalty"] = {"mean": float(sum(mobility_penalties) / len(mobility_penalties)), **_percentiles(mobility_penalties)}

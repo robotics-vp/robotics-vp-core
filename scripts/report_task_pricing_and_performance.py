@@ -248,9 +248,21 @@ def main():
     print(f"  Human MPL: {task.get('human_mpl_units_per_hour', 0)} units/hr @ ${task.get('human_wage_per_hour', 0):.2f}/hr")
     mpl = task_summary.get("mpl", {})
     print(f"  Robot MPL: mean={mpl.get('mean',0):.2f}, p10={mpl.get('p10',0):.2f}, p90={mpl.get('p90',0):.2f}")
+    mpl_raw = task_summary.get("mpl_raw", {})
+    if mpl_raw:
+        print(f"  Robot MPL raw: mean={mpl_raw.get('mean',0):.2f}, p10={mpl_raw.get('p10',0):.2f}, p90={mpl_raw.get('p90',0):.2f}")
     wp = task_summary.get("wage_parity", {})
     print(f"  Wage parity: mean={wp.get('mean',0):.2f}, p10={wp.get('p10',0):.2f}, p90={wp.get('p90',0):.2f}")
+    wp_raw = task_summary.get("wage_parity_raw", {})
+    if wp_raw:
+        print(f"  Wage parity raw: mean={wp_raw.get('mean',0):.2f}, p10={wp_raw.get('p10',0):.2f}, p90={wp_raw.get('p90',0):.2f}")
     print(f"  Reward scalar sum mean={task_summary.get('reward_scalar_sum',{}).get('mean',0):.2f}")
+    arh = task_summary.get("arh", {})
+    if arh:
+        print(
+            f"  ARH flags: suspicious={arh.get('suspicious_flag',0)}, "
+            f"excluded={arh.get('excluded_flag',0)}"
+        )
     qa_mpl = task_summary.get("quality_adjusted_mpl", {})
     if qa_mpl:
         print(f"  Quality-adjusted MPL: mean={qa_mpl.get('mean',0):.2f}")

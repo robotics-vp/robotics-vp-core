@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from src.economics.arh_config import current_arh_config
 from src.motor_backend.datapacks import DatapackConfig
 from src.scenarios.metadata import ScenarioMetadata
 
@@ -11,9 +12,22 @@ def apply_arh_penalty(
     econ_metrics: Mapping[str, float],
     *,
     suspicious_key: str = "anti_reward_hacking_suspicious",
-    penalty_factor: float = 0.5,
+    penalty_factor: float | None = None,
+    hard_exclusion_threshold: float | None = None,
 ) -> dict[str, float]:
+    if penalty_factor is None or hard_exclusion_threshold is None:
+        cfg = current_arh_config()
+        if penalty_factor is None:
+            penalty_factor = cfg.suspicious_penalty_factor
+        if hard_exclusion_threshold is None:
+            hard_exclusion_threshold = cfg.hard_exclusion_threshold
     metrics = dict(econ_metrics)
+    arh_score = _extract_arh_score(metrics)
+    if hard_exclusion_threshold is not None and arh_score is not None and arh_score > hard_exclusion_threshold:
+        metrics["mpl_units_per_hour_adjusted"] = 0.0
+        metrics["arh_excluded"] = 1.0
+        return metrics
+
     suspicious = metrics.get(suspicious_key, 0.0)
     try:
         suspicious_val = float(suspicious)
@@ -27,9 +41,10 @@ def apply_arh_penalty(
         mpl_val = float(mpl)
     except (TypeError, ValueError):
         mpl_val = 0.0
-    adjusted = mpl_val * max(0.0, min(1.0, 1.0 - penalty_factor))
+    adjusted = mpl_val * max(0.0, min(1.0, 1.0 - (penalty_factor or 0.0)))
     metrics["mpl_units_per_hour_adjusted"] = adjusted
-    metrics["anti_reward_hacking_penalty"] = penalty_factor
+    if penalty_factor is not None:
+        metrics["anti_reward_hacking_penalty"] = penalty_factor
     return metrics
 
 
@@ -148,3 +163,13 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _extract_arh_score(metrics: Mapping[str, Any]) -> float | None:
+    for key in ("anti_reward_hacking_score", "arh_score", "reward_hacking_score"):
+        if key in metrics and metrics[key] is not None:
+            try:
+                return float(metrics[key])
+            except (TypeError, ValueError):
+                return None
+    return None
