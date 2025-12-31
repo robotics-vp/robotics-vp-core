@@ -1,6 +1,11 @@
 """Tests for semantic policy helpers."""
-from src.orchestrator.semantic_policy import apply_arh_penalty, detect_semantic_gaps
-from src.ontology.store import OntologyStore
+from src.motor_backend.datapacks import DatapackConfig
+from src.orchestrator.semantic_policy import (
+    MissingScenarioSpec,
+    apply_arh_penalty,
+    detect_semantic_gaps,
+    select_datapacks_for_intent,
+)
 from src.scenarios.metadata import ScenarioMetadata
 
 
@@ -11,8 +16,7 @@ def test_apply_arh_penalty_adjusts_mpl():
     assert adjusted["anti_reward_hacking_penalty"] == 0.2
 
 
-def test_detect_semantic_gaps(tmp_path):
-    store = OntologyStore(root_dir=tmp_path / "ontology")
+def test_detect_semantic_gaps():
     scenario = ScenarioMetadata(
         scenario_id="holosoma:task:obj:run",
         task_id="task",
@@ -22,9 +26,32 @@ def test_detect_semantic_gaps(tmp_path):
         datapack_ids=["dp1"],
         datapack_tags=["humanoid"],
         task_tags=[],
-        robot_families=[],
+        robot_families=["G1"],
     )
-    store.record_scenario(scenario, train_metrics={}, eval_metrics={})
+    missing = detect_semantic_gaps(["humanoid", "warehouse"], "G1", [scenario])
+    assert missing == [MissingScenarioSpec(tags=["warehouse"], robot_family="G1")]
 
-    missing = detect_semantic_gaps(store, ["humanoid", "warehouse"])
-    assert missing == ["warehouse"]
+
+def test_select_datapacks_prefers_non_arh():
+    candidates = [
+        DatapackConfig(id="dp1", description="", tags=["humanoid", "warehouse"]),
+        DatapackConfig(id="dp2", description="", tags=["humanoid", "warehouse"]),
+    ]
+    scenarios = [
+        {
+            "datapack_ids": ["dp1"],
+            "datapack_tags": ["humanoid", "warehouse"],
+            "robot_families": ["G1"],
+            "train_metrics_anti_reward_hacking_suspicious": 1.0,
+        }
+    ]
+
+    selected = select_datapacks_for_intent(
+        tags=["humanoid", "warehouse"],
+        robot_family="G1",
+        objective_hint=None,
+        candidates=candidates,
+        scenarios=scenarios,
+    )
+    assert selected
+    assert selected[0].id == "dp2"
