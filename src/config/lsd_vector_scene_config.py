@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional
 import json
 
+from src.vision.motion_hierarchy.config import MotionHierarchyConfig
 
 @dataclass(frozen=True)
 class LSDVectorSceneConfig:
@@ -68,6 +69,10 @@ class LSDVectorSceneConfig:
     nag_num_counterfactuals: int = 3
     nag_use_stub_renderer: bool = True  # Set False for production (requires renderer)
 
+    # Motion hierarchy (MHN) settings
+    enable_motion_hierarchy: bool = False
+    motion_hierarchy_config: MotionHierarchyConfig = field(default_factory=MotionHierarchyConfig)
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
         return {
@@ -96,6 +101,8 @@ class LSDVectorSceneConfig:
             "nag_fit_iters": self.nag_fit_iters,
             "nag_num_counterfactuals": self.nag_num_counterfactuals,
             "nag_use_stub_renderer": self.nag_use_stub_renderer,
+            "enable_motion_hierarchy": self.enable_motion_hierarchy,
+            "motion_hierarchy_config": self.motion_hierarchy_config.to_dict(),
         }
 
     def to_json(self) -> str:
@@ -114,6 +121,14 @@ class LSDVectorSceneConfig:
         nag_atlas_size = data.get("nag_atlas_size", (256, 256))
         if isinstance(nag_atlas_size, list):
             nag_atlas_size = tuple(nag_atlas_size)
+
+        motion_hierarchy_config = data.get("motion_hierarchy_config")
+        if isinstance(motion_hierarchy_config, MotionHierarchyConfig):
+            mh_config = motion_hierarchy_config
+        elif isinstance(motion_hierarchy_config, dict):
+            mh_config = MotionHierarchyConfig.from_dict(motion_hierarchy_config)
+        else:
+            mh_config = MotionHierarchyConfig()
 
         return cls(
             topology_type=data.get("topology_type", "WAREHOUSE_AISLES"),
@@ -141,6 +156,8 @@ class LSDVectorSceneConfig:
             nag_fit_iters=data.get("nag_fit_iters", 200),
             nag_num_counterfactuals=data.get("nag_num_counterfactuals", 3),
             nag_use_stub_renderer=data.get("nag_use_stub_renderer", True),
+            enable_motion_hierarchy=data.get("enable_motion_hierarchy", False),
+            motion_hierarchy_config=mh_config,
         )
 
     @classmethod

@@ -28,6 +28,7 @@ from src.motor_backend.rollout_capture import (
     start_rollout_capture,
 )
 from src.objectives.economic_objective import EconomicObjectiveSpec
+from src.scene.vector_scene.graph import SceneGraph
 
 
 @dataclass
@@ -45,6 +46,37 @@ class LSDVectorSceneEpisodeResult:
     difficulty_features: Dict[str, float]
     scene_config: Dict[str, Any]
     trajectory_data: Optional[Dict[str, Any]] = None
+    motion_hierarchy: Optional[Dict[str, Any]] = None
+
+
+def _serialize_agent_trajectories(trajectories: List[Any], graph: SceneGraph) -> Dict[str, Any]:
+    if not trajectories:
+        return {}
+
+    label_map: Dict[int, str] = {}
+    for obj in graph.objects:
+        class_name = obj.class_id.name.lower() if hasattr(obj.class_id, "name") else str(obj.class_id).lower()
+        agent_index = obj.attributes.get("agent_index") if obj.attributes else None
+        suffix = agent_index if agent_index is not None else obj.id
+        label_map[obj.id] = f"{class_name}_{suffix}"
+
+    serialized = []
+    for traj in trajectories:
+        positions = [[float(x), float(y), float(z)] for x, y, z in traj.positions]
+        timestamps = [float(t) for t in traj.timestamps]
+        serialized.append(
+            {
+                "agent_id": int(traj.agent_id),
+                "label": label_map.get(traj.agent_id, f"agent_{traj.agent_id}"),
+                "positions": positions,
+                "timestamps": timestamps,
+            }
+        )
+
+    return {
+        "agent_trajectories": serialized,
+        "agent_labels": [entry["label"] for entry in serialized],
+    }
 
 
 @dataclass
@@ -325,6 +357,32 @@ class LSDVectorSceneBackend:
         # Build episode ID
         episode_id = f"{policy_id}_ep{episode_idx:03d}_{env.scene_id[:8]}"
 
+        trajectory_data: Dict[str, Any] = {"trajectory": trajectory}
+        if env.graph is not None:
+            trajectory_data.update(_serialize_agent_trajectories(env.get_agent_trajectories(), env.graph))
+
+        motion_hierarchy_data = None
+        if getattr(config, "enable_motion_hierarchy", False) and trajectory_data.get("agent_trajectories"):
+            try:
+                from src.envs.lsd3d_env.motion_hierarchy_integration import compute_motion_hierarchy_for_lsd_episode
+                from src.vision.motion_hierarchy.config import MotionHierarchyConfig
+                from src.vision.motion_hierarchy.motion_hierarchy_node import MotionHierarchyNode
+
+                mh_config = config.motion_hierarchy_config
+                if isinstance(mh_config, dict):
+                    mh_config = MotionHierarchyConfig.from_dict(mh_config)
+
+                mh_model = MotionHierarchyNode(mh_config)
+                motion_hierarchy_data = compute_motion_hierarchy_for_lsd_episode(
+                    {"episode_id": episode_id, "trajectory_data": trajectory_data},
+                    model=mh_model,
+                    config=mh_config,
+                )
+                trajectory_data["motion_hierarchy"] = motion_hierarchy_data
+            except Exception as exc:
+                motion_hierarchy_data = {"error": str(exc)}
+                trajectory_data["motion_hierarchy"] = motion_hierarchy_data
+
         return LSDVectorSceneEpisodeResult(
             episode_id=episode_id,
             scene_id=env.scene_id,
@@ -336,7 +394,8 @@ class LSDVectorSceneBackend:
             reward_sum=total_reward,
             difficulty_features=episode_log["difficulty_features"],
             scene_config=config.to_dict(),
-            trajectory_data={"trajectory": trajectory},
+            trajectory_data=trajectory_data,
+            motion_hierarchy=motion_hierarchy_data,
         )
 
     def _get_action(self, obs: Dict[str, Any], objective: EconomicObjectiveSpec) -> np.ndarray:

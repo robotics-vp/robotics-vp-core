@@ -57,6 +57,42 @@ def _safe_float(value: Any) -> float:
         return 0.0
 
 
+def _mean_list(values: List[Any]) -> float:
+    cleaned = [_safe_float(v) for v in values if v is not None]
+    return float(sum(cleaned) / len(cleaned)) if cleaned else 0.0
+
+
+def compute_motion_hierarchy_summary(episode_motion_hierarchy: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Given motion hierarchy outputs for an episode, compute summary features:
+
+    - mean_tree_depth
+    - mean_branch_factor
+    - per-node residual magnitude stats
+    - optionally a 'structural difficulty' score
+    """
+    if not episode_motion_hierarchy:
+        return {}
+
+    tree_stats = episode_motion_hierarchy.get("tree_stats") or episode_motion_hierarchy.get("stats") or {}
+    resid_stats = episode_motion_hierarchy.get("delta_resid_stats") or {}
+
+    mean_depth = _safe_float(tree_stats.get("mean_tree_depth"))
+    mean_branch = _safe_float(tree_stats.get("mean_branch_factor"))
+    resid_mean = _mean_list(resid_stats.get("mean", []))
+    resid_std = _mean_list(resid_stats.get("std", []))
+
+    structural_difficulty = mean_depth * (1.0 + resid_mean)
+
+    return {
+        "mean_tree_depth": mean_depth,
+        "mean_branch_factor": mean_branch,
+        "residual_mean": resid_mean,
+        "residual_std": resid_std,
+        "structural_difficulty": structural_difficulty,
+    }
+
+
 def _arh_penalty_from_components(components: Dict[str, float], config: ARHPenaltyConfig) -> float:
     if not components:
         return 0.0
@@ -583,6 +619,7 @@ def compute_lsd_vector_scene_summary(
     episodes_with_difficulty: List[Dict[str, Any]] = []
     env_type_counts: Dict[str, int] = {}
     lsd_configs: List[Dict[str, Any]] = []
+    motion_hierarchy_summaries: List[Dict[str, Any]] = []
 
     arh_config = current_arh_config()
 
@@ -598,10 +635,22 @@ def compute_lsd_vector_scene_summary(
             env_type = metadata.get("env_type") or components.get("env_type")
             difficulty = metadata.get("difficulty_features") or {}
             lsd_config = metadata.get("lsd_config") or {}
+            motion_hierarchy_payload = (
+                metadata.get("motion_hierarchy")
+                or metadata.get("motion_hierarchy_summary")
+            )
         else:
             env_type = components.get("env_type")
             difficulty = {}
             lsd_config = {}
+            motion_hierarchy_payload = None
+
+        if motion_hierarchy_payload is None:
+            motion_hierarchy_payload = components.get("motion_hierarchy") or components.get("motion_hierarchy_summary")
+        if isinstance(motion_hierarchy_payload, dict):
+            mh_summary = compute_motion_hierarchy_summary(motion_hierarchy_payload)
+            if mh_summary:
+                motion_hierarchy_summaries.append(mh_summary)
 
         if env_type:
             env_type_counts[str(env_type)] = env_type_counts.get(str(env_type), 0) + 1
@@ -647,6 +696,21 @@ def compute_lsd_vector_scene_summary(
             topo = cfg.get("topology_type", "unknown")
             topology_counts[topo] = topology_counts.get(topo, 0) + 1
         lsd_summary["topology_distribution"] = topology_counts
+
+    if motion_hierarchy_summaries:
+        mh_agg: Dict[str, float] = {}
+        for key in (
+            "mean_tree_depth",
+            "mean_branch_factor",
+            "residual_mean",
+            "residual_std",
+            "structural_difficulty",
+        ):
+            vals = [s[key] for s in motion_hierarchy_summaries if key in s]
+            if vals:
+                mh_agg[key] = float(sum(vals) / len(vals))
+        mh_agg["episode_count"] = float(len(motion_hierarchy_summaries))
+        lsd_summary["motion_hierarchy"] = mh_agg
 
     base_summary["lsd_vector_scene"] = lsd_summary
     return base_summary
