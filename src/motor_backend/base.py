@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Sequence
 
+from src.motor_backend.datapacks import DatapackConfig
 from src.objectives.economic_objective import EconomicObjectiveSpec
 
 
@@ -36,6 +37,7 @@ class MotorBackend(Protocol):
         datapack_ids: Sequence[str],
         num_envs: int,
         max_steps: int,
+        datapack_configs: Sequence[DatapackConfig] | None = None,
         seed: int | None = None,
     ) -> MotorTrainingResult:
         ...
