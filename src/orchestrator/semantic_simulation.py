@@ -81,15 +81,18 @@ def run_semantic_simulation(
         result = OrchestratedRunResult(status="deferred", scenario=None, reason=str(exc))
         _append_run_log(
             run_log_path,
-            {
-                "run_id": run_id,
-                "intent": intent,
-                "tags": list(tags or []),
-                "robot_family": robot_family,
-                "objective_hint": objective_hint,
-                "status": result.status,
-                "reason": result.reason,
-            },
+            _build_run_log_payload(
+                intent=intent,
+                tags=tags,
+                robot_family=robot_family,
+                objective_hint=objective_hint,
+                scenario=None,
+                simulation=None,
+                status=result.status,
+                reason=result.reason,
+                motor_backend=motor_backend,
+                vla_mode="disabled",
+            ),
         )
         return result
 
@@ -98,6 +101,7 @@ def run_semantic_simulation(
     status: Literal["completed", "deferred", "failed"] = "failed"
     reason: str | None = None
     steps_used = 0
+    vla_mode = "disabled"
 
     try:
         datapack_records = find_datapacks(
@@ -228,6 +232,7 @@ def run_semantic_simulation(
                 save_datapack_config(cfg, datapack_output_dir)
             register_datapack_configs(store, resolved_task_id, labeled)
             labeled_datapacks = list(labeled)
+            vla_mode = _infer_vla_mode(labeled_datapacks)
             scenario = build_scenario_metadata(
                 run_id=run_id,
                 task_id=resolved_task_id,
@@ -267,6 +272,8 @@ def run_semantic_simulation(
                 simulation=simulation,
                 status=status,
                 reason=reason,
+                motor_backend=motor_backend,
+                vla_mode=vla_mode,
             ),
         )
 
@@ -367,6 +374,8 @@ def _build_run_log_payload(
     simulation: SemanticSimulationResult | None,
     status: str,
     reason: str | None,
+    motor_backend: str,
+    vla_mode: str,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "timestamp": datetime.utcnow().isoformat(),
@@ -374,6 +383,8 @@ def _build_run_log_payload(
         "tags": list(tags or []),
         "robot_family": robot_family,
         "objective_hint": objective_hint,
+        "motor_backend": motor_backend,
+        "vla_mode": vla_mode,
         "status": status,
         "reason": reason,
         "scenario_id": scenario.scenario_id if scenario else None,
@@ -395,4 +406,47 @@ def _select_core_metrics(metrics: Mapping[str, float]) -> dict[str, float]:
             out[key] = float(metrics[key])
     if "anti_reward_hacking_suspicious" in metrics:
         out["anti_reward_hacking_suspicious"] = float(metrics["anti_reward_hacking_suspicious"])
+    if "arh_excluded" in metrics:
+        out["arh_excluded"] = float(metrics["arh_excluded"])
     return out
+
+
+def _infer_vla_mode(datapacks: Sequence[DatapackConfig]) -> str:
+    tags: set[str] = set()
+    for cfg in datapacks:
+        tags.update([str(tag) for tag in cfg.tags])
+    if "vla_error" in tags:
+        return "error_fallback"
+    if "vla:available" in tags:
+        return "openvla"
+    return "stub"
+
+
+def get_recent_runs(
+    path: str | Path,
+    *,
+    limit: int = 20,
+    status: str | None = None,
+    backend: str | None = None,
+) -> list[dict[str, Any]]:
+    log_path = Path(path)
+    if not log_path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    with log_path.open("r") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except Exception:
+                continue
+            if status and record.get("status") != status:
+                continue
+            if backend and record.get("motor_backend") != backend:
+                continue
+            records.append(record)
+    if limit <= 0:
+        return records
+    return records[-limit:]
