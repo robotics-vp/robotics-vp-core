@@ -5,8 +5,10 @@ Pricing/performance report for a task from the ontology store.
 import argparse
 import json
 import sys
+import uuid
+from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any, Dict, List, Mapping, Sequence
 
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
@@ -16,6 +18,10 @@ from src.analytics.econ_reports import (
     compute_datapack_mix_summary,
     compute_pricing_snapshot,
 )
+from src.economics.econ_meter import EconomicMeter
+from src.motor_backend.datapacks import DatapackProvider
+from src.objectives.economic_objective import EconomicObjectiveSpec, load_economic_objective_spec
+from src.ontology.models import Datapack, Episode, Robot
 from src.ontology.store import OntologyStore
 
 
@@ -64,10 +70,104 @@ def _bucket_scores(scores: List[Dict]) -> Dict[str, List[Dict]]:
     return buckets
 
 
+def _parse_datapack_ids(raw: str) -> List[str]:
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _ensure_robot(store: OntologyStore, robot_id: str, energy_cost_per_wh: float) -> Robot:
+    robot = store.get_robot(robot_id)
+    if robot:
+        return robot
+    robot = Robot(robot_id=robot_id, name=robot_id, energy_cost_per_wh=energy_cost_per_wh)
+    store.upsert_robot(robot)
+    return robot
+
+
+def _ensure_datapacks(store: OntologyStore, task_id: str, datapack_ids: Sequence[str]) -> None:
+    if not datapack_ids:
+        return
+    existing = {dp.datapack_id: dp for dp in store.list_datapacks()}
+    missing = [dp_id for dp_id in datapack_ids if dp_id not in existing]
+    if not missing:
+        return
+    stubs = [
+        Datapack(
+            datapack_id=dp_id,
+            source_type="holosoma",
+            task_id=task_id,
+            modality="motion",
+            storage_uri="",
+        )
+        for dp_id in missing
+    ]
+    store.append_datapacks(stubs)
+
+
+def _record_backend_result(
+    store: OntologyStore,
+    econ_meter: EconomicMeter,
+    task_id: str,
+    robot_id: str,
+    backend_name: str,
+    objective_spec: EconomicObjectiveSpec,
+    datapack_ids: Sequence[str],
+    policy_id: str,
+    raw_metrics: Mapping[str, float],
+    econ_metrics: Mapping[str, float],
+    label: str,
+) -> None:
+    episode_id = f"{backend_name}_{label}_{uuid.uuid4().hex[:8]}"
+    episode = Episode(
+        episode_id=episode_id,
+        task_id=task_id,
+        robot_id=robot_id,
+        datapack_id=datapack_ids[0] if datapack_ids else None,
+        status="success",
+        metadata={
+            "motor_backend": backend_name,
+            "policy_id": policy_id,
+            "objective": asdict(objective_spec),
+            "datapack_ids": list(datapack_ids),
+            "raw_metrics": dict(raw_metrics),
+            "econ_metrics": dict(econ_metrics),
+        },
+    )
+    store.upsert_episode(episode)
+    merged = dict(raw_metrics)
+    merged.update(econ_metrics)
+    econ_vec = econ_meter.to_econ_vector(
+        episode_id=episode_id,
+        raw_metrics=merged,
+        metadata={"policy_id": policy_id, "motor_backend": backend_name, "label": label},
+        source_domain=backend_name,
+    )
+    store.upsert_econ_vector(econ_vec)
+
+
+def make_motor_backend(name: str, econ_meter: EconomicMeter, store: OntologyStore):
+    if name == "holosoma":
+        from src.motor_backend.holosoma_backend import HolosomaBackend
+
+        return HolosomaBackend(econ_meter=econ_meter, datapack_provider=DatapackProvider(store))
+    if name == "dummy":
+        return None
+    raise ValueError(f"Unknown motor backend: {name}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Report task pricing and performance from ontology")
     parser.add_argument("--ontology-root", type=str, default="data/ontology")
     parser.add_argument("--task-id", type=str, required=True)
+    parser.add_argument("--motor-backend", type=str, default="dummy", help="Motor backend (dummy, holosoma)")
+    parser.add_argument("--objective-config", type=str, default="", help="Objective config YAML/JSON path")
+    parser.add_argument("--datapacks", type=str, default="", help="Comma-separated datapack IDs")
+    parser.add_argument("--robot-id", type=str, default="robot_default")
+    parser.add_argument("--num-envs", type=int, default=1024)
+    parser.add_argument("--max-steps", type=int, default=10000)
+    parser.add_argument("--num-episodes", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output-json", type=str, default="")
     parser.add_argument("--recap-scores", type=str, default="", help="Optional path to RECAP episode_scores.jsonl")
     parser.add_argument("--reward-model-scores", type=str, default="", help="Optional reward model scores JSONL")
@@ -75,6 +175,62 @@ def main():
     args = parser.parse_args()
 
     store = OntologyStore(root_dir=args.ontology_root)
+    objective_spec = load_economic_objective_spec(Path(args.objective_config)) if args.objective_config else EconomicObjectiveSpec()
+    datapack_ids = _parse_datapack_ids(args.datapacks)
+
+    if args.motor_backend != "dummy":
+        task = store.get_task(args.task_id)
+        if not task:
+            raise ValueError(f"Task '{args.task_id}' not found in ontology. Create it before running a motor backend.")
+        robot = _ensure_robot(store, args.robot_id, task.default_energy_cost_per_wh)
+        econ_meter = EconomicMeter(task=task, robot=robot)
+        backend = make_motor_backend(args.motor_backend, econ_meter, store)
+        if backend is None:
+            raise ValueError(f"Motor backend '{args.motor_backend}' is not configured.")
+        _ensure_datapacks(store, args.task_id, datapack_ids)
+        train_result = backend.train_policy(
+            task_id=args.task_id,
+            objective=objective_spec,
+            datapack_ids=datapack_ids,
+            num_envs=args.num_envs,
+            max_steps=args.max_steps,
+            seed=args.seed,
+        )
+        _record_backend_result(
+            store,
+            econ_meter,
+            args.task_id,
+            robot.robot_id,
+            args.motor_backend,
+            objective_spec,
+            datapack_ids,
+            train_result.policy_id,
+            train_result.raw_metrics,
+            train_result.econ_metrics,
+            label="train",
+        )
+        if args.num_episodes > 0:
+            eval_result = backend.evaluate_policy(
+                policy_id=train_result.policy_id,
+                task_id=args.task_id,
+                objective=objective_spec,
+                num_episodes=args.num_episodes,
+                seed=args.seed,
+            )
+            _record_backend_result(
+                store,
+                econ_meter,
+                args.task_id,
+                robot.robot_id,
+                args.motor_backend,
+                objective_spec,
+                datapack_ids,
+                eval_result.policy_id,
+                eval_result.raw_metrics,
+                eval_result.econ_metrics,
+                label="eval",
+            )
+
     rm_scores = _load_jsonl_map(Path(args.reward_model_scores)) if args.reward_model_scores else {}
     seg_tags = _load_jsonl_map(Path(args.segmentation_tags)) if args.segmentation_tags else {}
     task_summary = compute_task_econ_summary(store, args.task_id, reward_model_scores=rm_scores, segmentation_tags=seg_tags)
