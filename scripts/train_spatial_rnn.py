@@ -15,7 +15,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -36,8 +36,8 @@ except ImportError:
 from src.vision.spatial_rnn import SpatialRNN
 from src.utils.json_safe import to_json_safe
 from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
-from src.utils.gpu_env import get_gpu_utilization
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
+from src.utils.failure_sentinel import FailureSentinel
 import hashlib
 
 
@@ -126,6 +126,160 @@ def compute_temporal_smoothness_loss(hidden_sequence: List[torch.Tensor]) -> tor
     # Mean L2 norm of deltas
     loss = torch.mean(torch.stack([torch.norm(d) for d in deltas]))
     return loss
+
+
+def compute_prediction_loss(
+    model: SpatialRNN,
+    input_seq: List[Any],
+    target_seq: List[Any],
+    device: torch.device,
+) -> torch.Tensor:
+    if len(input_seq) != len(target_seq):
+        raise ValueError(f"Sequence and targets must have same length, got {len(input_seq)} vs {len(target_seq)}")
+
+    hidden_states = {level: None for level in model.levels}
+    total_loss = torch.tensor(0.0, device=device)
+    num_steps = len(input_seq)
+
+    for t in range(num_steps - 1):
+        current = input_seq[t]
+        target_next = target_seq[t + 1]
+
+        if isinstance(current, dict):
+            for level in model.levels:
+                if level not in current:
+                    continue
+                feat = current[level]
+                feat_tensor = torch.as_tensor(np.asarray(feat, dtype=np.float32), device=device).unsqueeze(0)
+                if model.use_checkpointing:
+                    from src.utils.training_env import checkpoint_if_enabled
+                    feat_tensor.requires_grad_(True)
+                    hidden_states[level] = checkpoint_if_enabled(model.cells[level], feat_tensor, hidden_states.get(level), enabled=True)
+                else:
+                    hidden_states[level] = model.cells[level](feat_tensor, hidden_states.get(level))
+        else:
+            feat = np.asarray(current, dtype=np.float32).flatten()
+            feat_per_level = len(feat) // len(model.levels)
+            for i, level in enumerate(model.levels):
+                start = i * feat_per_level
+                end = start + feat_per_level if i < len(model.levels) - 1 else len(feat)
+                level_feat = feat[start:end]
+                if len(level_feat) < model.feature_dim:
+                    level_feat = np.pad(level_feat, (0, model.feature_dim - len(level_feat)))
+                level_feat = level_feat[:model.feature_dim]
+                feat_tensor = torch.as_tensor(level_feat, device=device).unsqueeze(0)
+                hidden_states[level] = model.cells[level](feat_tensor, hidden_states.get(level))
+
+        if isinstance(target_next, dict):
+            for level in model.levels:
+                if level not in target_next or hidden_states.get(level) is None:
+                    continue
+                pred = hidden_states[level].mean(dim=[2, 3])
+                target_feat = torch.as_tensor(np.asarray(target_next[level], dtype=np.float32), device=device)
+                if target_feat.dim() == 1:
+                    target_feat = target_feat.unsqueeze(0)
+                if target_feat.shape[1] < model.hidden_dim:
+                    target_feat = F.pad(target_feat, (0, model.hidden_dim - target_feat.shape[1]))
+                target_feat = target_feat[:, :model.hidden_dim]
+                total_loss = total_loss + F.mse_loss(pred, target_feat)
+        else:
+            target_feat = torch.as_tensor(np.asarray(target_next, dtype=np.float32).flatten(), device=device)
+            pred_parts = []
+            for level in model.levels:
+                if hidden_states.get(level) is not None:
+                    pred_parts.append(hidden_states[level].mean(dim=[2, 3]))
+            if pred_parts:
+                pred = torch.cat(pred_parts, dim=1).flatten()
+                min_len = min(pred.numel(), target_feat.numel())
+                total_loss = total_loss + F.mse_loss(pred[:min_len], target_feat[:min_len])
+
+    return total_loss / max(1, num_steps - 1)
+
+
+def train_epoch(
+    model: SpatialRNN,
+    dataset: SpatialRNNDataset,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    alpha_prediction: float,
+    alpha_smoothness: float,
+    log_file: str,
+    scaler: Optional[torch.cuda.amp.GradScaler],
+    use_amp: bool,
+    epoch_idx: int,
+    run_name: str,
+    config_digest: str,
+    sentinel: FailureSentinel,
+) -> Dict[str, float]:
+    """Train one epoch."""
+    model.train()
+    total_prediction_loss = 0.0
+    total_smoothness_loss = 0.0
+    total_loss_val = 0.0
+    num_sequences = 0
+
+    for idx, sample in enumerate(dataset):
+        features = sample.get("features", [])
+        if len(features) < 2:
+            continue
+
+        optimizer.zero_grad(set_to_none=True)
+
+        with sentinel.monitor(epoch_idx * len(dataset) + idx, model):
+            with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+                # Split into input sequence (0 to T-1) and targets (1 to T)
+                input_seq = features[:-1]
+                target_seq = features[1:]
+
+                # Compute prediction loss
+                prediction_loss = compute_prediction_loss(model, input_seq, target_seq, device)
+                smoothness_loss = torch.tensor(0.0, device=device)
+                loss = alpha_prediction * prediction_loss + alpha_smoothness * smoothness_loss
+
+            # Backward pass
+            if scaler is not None and use_amp:
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+
+        total_prediction_loss += prediction_loss.item()
+        total_smoothness_loss += smoothness_loss.item()
+        total_loss_val += loss.item()
+        num_sequences += 1
+
+        # Log step (every 10 steps)
+        if idx % 10 == 0:
+            log_entry = make_training_log_entry(
+                run_name=run_name,
+                step=epoch_idx * len(dataset) + idx,
+                epoch=epoch_idx,
+                phase="train",
+                loss=loss.item(),
+                lr=optimizer.param_groups[0]["lr"],
+                task_id="spatial_rnn",
+                seed=0,
+                config_digest=config_digest,
+                amp_enabled=use_amp,
+                gpu_mem_mb=None,
+                gpu_util_pct=None,
+                extra={
+                    "prediction_loss": prediction_loss.item(),
+                    "smoothness_loss": smoothness_loss.item()
+                }
+            )
+            write_training_log_entry(log_file, log_entry)
+
+    return {
+        "prediction_loss": total_prediction_loss / max(1, num_sequences),
+        "smoothness_loss": total_smoothness_loss / max(1, num_sequences),
+        "total_loss": total_loss_val / max(1, num_sequences),
+    }
 
 
 
@@ -223,6 +377,7 @@ def main():
             epoch_idx=epoch,
             run_name=f"spatial_rnn_{args.seed}",
             config_digest=config_digest,
+            sentinel=FailureSentinel(),
         )
 
         print(f"  Prediction Loss: {losses['prediction_loss']:.6f}")

@@ -11,7 +11,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -37,8 +37,8 @@ from src.sima2.segmenter_nn import (
 )
 from src.utils.json_safe import to_json_safe
 from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
-from src.utils.gpu_env import get_gpu_utilization
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
+from src.utils.failure_sentinel import FailureSentinel
 import hashlib
 
 
@@ -104,10 +104,110 @@ class SIMA2SegmentationDataset(Dataset):
 
         return samples
 
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        return self.samples[idx]
+
+
+def train_epoch(
+    model: NeuralSegmenter,
+    dataloader: DataLoader,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    alpha: float,
+    gamma: float,
+    lambda_boundary: float,
+    lambda_primitive: float,
+    use_dice: bool,
+    log_file: str,
+    scaler: Optional[torch.cuda.amp.GradScaler],
+    use_amp: bool,
+    epoch_idx: int,
+    run_name: str,
+    config_digest: str,
+    sentinel: FailureSentinel,
+) -> Dict[str, float]:
+    """Train one epoch."""
+    model.train()
+    total_loss = 0.0
+    total_boundary_loss = 0.0
+    total_primitive_loss = 0.0
+    num_batches = 0
+
+    for idx, batch in enumerate(dataloader):
+        images = batch["image"].to(device).float() / 255.0
+        boundary_masks = batch["boundary_mask"].to(device).float()
+        primitive_ids = batch["primitive_id"].to(device).long()
+
+        optimizer.zero_grad(set_to_none=True)
+
+        with sentinel.monitor(epoch_idx * len(dataloader) + idx, model):
+            with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+                outputs = model(images)
+                
+                loss_dict = compute_segmentation_loss(
+                    boundary_logits=outputs["boundary_logits"],
+                    boundary_targets=boundary_masks,
+                    primitive_logits=outputs["primitive_logits"],
+                    primitive_targets=primitive_ids,
+                    alpha=alpha,
+                    gamma=gamma,
+                    lambda_boundary=lambda_boundary,
+                    lambda_primitive=lambda_primitive,
+                    use_dice=use_dice,
+                )
+                loss = loss_dict["total_loss"]
+
+            if scaler is not None and use_amp:
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+
+        total_loss += loss.item()
+        total_boundary_loss += loss_dict["boundary_loss"].item()
+        total_primitive_loss += loss_dict["primitive_loss"].item()
+        num_batches += 1
+
+        # Log step (every 10 steps)
+        if idx % 10 == 0:
+            log_entry = make_training_log_entry(
+                run_name=run_name,
+                step=epoch_idx * len(dataloader) + idx,
+                epoch=epoch_idx,
+                phase="train",
+                loss=loss.item(),
+                lr=optimizer.param_groups[0]["lr"],
+                task_id="sima2_segmenter",
+                seed=0,
+                config_digest=config_digest,
+                amp_enabled=use_amp,
+                gpu_mem_mb=None,
+                gpu_util_pct=None,
+                extra={
+                    "boundary_loss": loss_dict["boundary_loss"].item(),
+                    "primitive_loss": loss_dict["primitive_loss"].item()
+                }
+            )
+            write_training_log_entry(log_file, log_entry)
+
+    return {
+        "total_loss": total_loss / max(1, num_batches),
+        "boundary_loss": total_boundary_loss / max(1, num_batches),
+        "primitive_loss": total_primitive_loss / max(1, num_batches),
+    }
+
 
 
 def evaluate(
-    model: SIMA2Segmenter,
+    model: NeuralSegmenter,
     dataloader: DataLoader,
     device: torch.device,
     threshold: float = 0.5,
@@ -173,21 +273,21 @@ def evaluate(
 
 def main():
     parser = argparse.ArgumentParser(description="Train Neural SIMA-2 Segmenter")
-    parser.add_argument("--data_dir", type=str, default="data/sima2_segmentation", help="Data directory")
-    parser.add_argument("--output_dir", type=str, default="checkpoints/sima2_segmenter", help="Output directory")
-    parser.add_argument("--num_primitives", type=int, default=10, help="Number of primitive classes")
-    parser.add_argument("--image_size", type=int, default=224, help="Input image size")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
+    parser.add_argument("--data-dir", type=str, default="data/sima2_segmentation", help="Data directory")
+    parser.add_argument("--output-dir", type=str, default="checkpoints/sima2_segmenter", help="Output directory")
+    parser.add_argument("--num-primitives", type=int, default=10, help="Number of primitive classes")
+    parser.add_argument("--image-size", type=int, default=224, help="Input image size")
+    parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
     parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--alpha", type=float, default=0.25, help="Focal loss alpha")
     parser.add_argument("--gamma", type=float, default=2.0, help="Focal loss gamma")
-    parser.add_argument("--lambda_boundary", type=float, default=1.0, help="Boundary loss weight")
-    parser.add_argument("--lambda_primitive", type=float, default=0.5, help="Primitive loss weight")
-    parser.add_argument("--use_dice", action="store_true", help="Use Dice loss")
-    parser.add_argument("--freeze_encoder", action="store_true", help="Freeze encoder")
-    parser.add_argument("--f1_threshold", type=float, default=0.85, help="F1 threshold for activation")
+    parser.add_argument("--lambda-boundary", type=float, default=1.0, help="Boundary loss weight")
+    parser.add_argument("--lambda-primitive", type=float, default=0.5, help="Primitive loss weight")
+    parser.add_argument("--use-dice", action="store_true", help="Use Dice loss")
+    parser.add_argument("--freeze-encoder", action="store_true", help="Freeze encoder")
+    parser.add_argument("--f1-threshold", type=float, default=0.85, help="F1 threshold for activation")
     parser.add_argument("--use-mixed-precision", action="store_true", help="Enable mixed precision training (AMP)")
     args = parser.parse_args()
 
@@ -284,6 +384,7 @@ def main():
             epoch_idx=epoch,
             run_name=f"sima2_segmenter_{args.seed}",
             config_digest=config_digest,
+            sentinel=FailureSentinel(),
         )
 
         # Evaluate

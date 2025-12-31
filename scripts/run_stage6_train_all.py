@@ -4,6 +4,7 @@ Master orchestration script for Stage 6 training.
 Runs all component training scripts in sequence with appropriate flags.
 """
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ def main():
     parser.add_argument("--skip-sima2", action="store_true", help="Skip SIMA-2 training")
     parser.add_argument("--skip-spatial", action="store_true", help="Skip Spatial RNN training")
     parser.add_argument("--skip-hydra", action="store_true", help="Skip Hydra policy training")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs (default: 10)")
     args = parser.parse_args()
 
     base_cmd = [sys.executable]
@@ -36,7 +38,7 @@ def main():
     if not args.skip_vision:
         print("\n=== Training Vision Backbone ===")
         cmd = base_cmd + ["scripts/train_vision_backbone_real.py"] + common_flags + [
-            "--epochs=10",
+            f"--epochs={args.epochs}",
             "--batch-size=32"
         ]
         run_command(cmd)
@@ -45,7 +47,7 @@ def main():
     if not args.skip_sima2:
         print("\n=== Training SIMA-2 Segmenter ===")
         cmd = base_cmd + ["scripts/train_sima2_segmenter.py"] + common_flags + [
-            "--epochs=10",
+            f"--epochs={args.epochs}",
             "--batch-size=32"
         ]
         run_command(cmd)
@@ -54,8 +56,8 @@ def main():
     if not args.skip_spatial:
         print("\n=== Training Spatial RNN ===")
         cmd = base_cmd + ["scripts/train_spatial_rnn.py"] + common_flags + [
-            "--epochs=10",
-            "--sequence-length=16"
+            f"--epochs={args.epochs}",
+            "--sequence_length=16"
         ]
         run_command(cmd)
 
@@ -67,7 +69,14 @@ def main():
         ]
         run_command(cmd)
 
-    print("\n[RunStage6] All components trained successfully.")
+    # Write success marker
+    output_dir = Path("results/stage6")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    success_marker = output_dir / "success.json"
+    with open(success_marker, "w") as f:
+        json.dump({"status": "success", "seed": args.seed, "amp": args.use_mixed_precision}, f)
+
+    print(f"\n[RunStage6] All components trained successfully. Marker written to {success_marker}")
 
 if __name__ == "__main__":
     main()

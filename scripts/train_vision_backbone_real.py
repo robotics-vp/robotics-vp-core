@@ -41,8 +41,8 @@ from src.utils.json_safe import to_json_safe
 from src.vision.regnet_backbone import RegNetBackbone
 from src.vision.bifpn_fusion import fuse_feature_pyramid
 from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
-from src.utils.gpu_env import get_gpu_utilization
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
+from src.utils.failure_sentinel import FailureSentinel
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -216,7 +216,6 @@ def train_epoch(
     log_file: str,
     config_digest: str,
     sentinel: FailureSentinel,
-    log_gpu_stats: bool,
 ) -> Dict[str, float]:
     """Train one epoch."""
     contrastive_head = models['contrastive_head']
@@ -314,14 +313,6 @@ def train_epoch(
 
         # Log step (every 10 steps)
         if idx % 10 == 0:
-            gpu_mem_mb = None
-            gpu_util_pct = None
-            if log_gpu_stats and torch.cuda.is_available():
-                mem_info = get_gpu_memory_info()
-                if mem_info:
-                    gpu_mem_mb = mem_info["allocated_mb"]
-                gpu_util_pct = get_gpu_utilization()
-
             log_entry = make_training_log_entry(
                 run_name=run_name,
                 step=epoch_idx * len(dataset) + idx,
@@ -333,8 +324,8 @@ def train_epoch(
                 seed=seed_offset,
                 config_digest=config_digest,
                 amp_enabled=use_amp,
-                gpu_mem_mb=gpu_mem_mb,
-                gpu_util_pct=gpu_util_pct,
+                gpu_mem_mb=None,
+                gpu_util_pct=None,
                 extra={
                     "contrastive_loss": contrastive_loss.item(),
                     "reconstruction_loss": reconstruction_loss.item()
@@ -468,6 +459,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             run_name=run_name,
             log_file=log_file,
             config_digest=config_digest,
+            sentinel=FailureSentinel(),
         )
 
         all_metrics.append(metrics)

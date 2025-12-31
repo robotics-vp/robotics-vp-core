@@ -118,7 +118,6 @@ if TORCH_AVAILABLE:
             feature_dim: int,
             levels: Sequence[str] = ("P3", "P4", "P5"),
             mode: str = "convgru",
-            mode: str = "convgru",
             seed: int = 0,
             use_checkpointing: bool = False,
         ):

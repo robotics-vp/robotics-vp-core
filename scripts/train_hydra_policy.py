@@ -24,8 +24,8 @@ from src.observation.condition_vector import ConditionVector
 from src.rl.hydra_heads import HydraActor
 from src.utils.json_safe import to_json_safe
 from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
-from src.utils.gpu_env import get_gpu_utilization
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
+from src.utils.failure_sentinel import FailureSentinel
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -39,7 +39,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints")
     parser.add_argument("--use-mixed-precision", action="store_true", help="Enable mixed precision training (AMP)")
-    parser.add_argument("--log-gpu-stats", action="store_true", help="Log GPU memory and utilization")
     return parser.parse_args(argv)
 
 
@@ -90,7 +89,6 @@ def run_training(
     run_name: str = "hydra_policy",
     log_file: str = "results/training_logs/hydra_policy.jsonl",
     config_digest: str = "",
-    log_gpu_stats: bool = False,
 ) -> Dict[str, Any]:
     optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
     loss_fn = torch.nn.MSELoss()
@@ -149,14 +147,6 @@ def run_training(
         
         # Log step (every 10 steps)
         if steps % 10 == 0:
-            gpu_mem_mb = None
-            gpu_util_pct = None
-            if log_gpu_stats and torch.cuda.is_available():
-                mem_info = get_gpu_memory_info()
-                if mem_info:
-                    gpu_mem_mb = mem_info["allocated_mb"]
-                gpu_util_pct = get_gpu_utilization()
-
             log_entry = make_training_log_entry(
                 run_name=run_name,
                 step=steps,
@@ -168,8 +158,8 @@ def run_training(
                 seed=0, # Should pass seed
                 config_digest=config_digest,
                 amp_enabled=use_amp,
-                gpu_mem_mb=gpu_mem_mb,
-                gpu_util_pct=gpu_util_pct,
+                gpu_mem_mb=None,
+                gpu_util_pct=None,
                 extra={
                     "policy_digest": float(pred.sum().item())
                 }
@@ -234,7 +224,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         use_amp=use_amp,
         run_name=run_name,
         log_file=log_file,
-        config_digest=config_digest
+        config_digest=config_digest,
     )
     digest_src = json.dumps({"metrics": metrics, "seed": args.seed, "count": len(dataset), "policy_checksum": metrics.get("policy_checksum")}, sort_keys=True)
     payload = {
