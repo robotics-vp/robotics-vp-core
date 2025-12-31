@@ -1,5 +1,5 @@
 id: logging_v1_base
-description: "Baseline logging humanoid task"
+description: "Baseline humanoid logging task in warehouse-like environment"
 motion_clips:
   - path: data/mocap/logging_clip_01.npz
     weight: 1.0
@@ -9,3 +9,14 @@ domain_randomization:
 curriculum:
   initial_difficulty: 0.1
   max_difficulty: 1.0
+tags:
+  - humanoid
+  - logging
+  - warehouse
+task_tags:
+  - reach
+  - locomotion
+robot_families:
+  - G1
+  - T1
+objective_hint: "prioritize error reduction over speed"

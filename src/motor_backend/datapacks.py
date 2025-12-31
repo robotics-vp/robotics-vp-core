@@ -10,6 +10,10 @@ Schema (YAML):
       weight: <float>
   domain_randomization: <mapping>
   curriculum: <mapping>
+  tags: [<string>]
+  task_tags: [<string>]
+  robot_families: [<string>]
+  objective_hint: <string>
 """
 
 from dataclasses import dataclass, field
@@ -34,6 +38,10 @@ class DatapackConfig:
     motion_clips: Sequence[MotionClipSpec] = field(default_factory=list)
     domain_randomization: Mapping[str, Any] = field(default_factory=dict)
     curriculum: Mapping[str, Any] = field(default_factory=dict)
+    tags: Sequence[str] = field(default_factory=list)
+    task_tags: Sequence[str] = field(default_factory=list)
+    robot_families: Sequence[str] = field(default_factory=list)
+    objective_hint: str | None = None
     source_path: str | None = None
 
 
@@ -69,6 +77,10 @@ def load_datapack_configs(paths: Sequence[str | Path]) -> list[DatapackConfig]:
                 motion_clips=_parse_motion_clips(payload.get("motion_clips") or []),
                 domain_randomization=payload.get("domain_randomization", {}) or {},
                 curriculum=payload.get("curriculum", {}) or {},
+                tags=_parse_string_list(payload.get("tags") or []),
+                task_tags=_parse_string_list(payload.get("task_tags") or []),
+                robot_families=_parse_string_list(payload.get("robot_families") or []),
+                objective_hint=_parse_optional_str(payload.get("objective_hint")),
                 source_path=str(p),
             )
         )
@@ -92,6 +104,24 @@ def _parse_motion_clips(raw: Sequence[Any]) -> list[MotionClipSpec]:
                 weight_val = 1.0
             clips.append(MotionClipSpec(path=str(path), weight=weight_val))
     return clips
+
+
+def _parse_string_list(raw: Sequence[Any]) -> list[str]:
+    values: list[str] = []
+    for entry in raw:
+        if entry is None:
+            continue
+        text = str(entry).strip()
+        if text:
+            values.append(text)
+    return values
+
+
+def _parse_optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text else None
 
 
 class DatapackProvider:
