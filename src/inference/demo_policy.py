@@ -85,7 +85,6 @@ class DemoPolicyConfig:
             backend=config.get("backend", "pybullet"),
             enable_condition_vector=config.get("enable_condition_vector", True),
             enable_phase_h=config.get("enable_phase_h", False),
-            enable_phase_h=config.get("enable_phase_h", False),
             seed=config.get("seed"),
             use_amp=config.get("use_amp", False),
         )

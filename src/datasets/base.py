@@ -119,6 +119,9 @@ class Phase1DatasetBase:
     def __len__(self) -> int:
         return len(self.samples)
 
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        return self.samples[idx]
+
     def __iter__(self):
         for sample in self.samples:
             yield sample

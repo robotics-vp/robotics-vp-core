@@ -382,7 +382,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     policy_config = DemoPolicyConfig.from_dict({
         "backend": args.env_backend,
         "canonical_task_id": args.task_id,
-        "canonical_task_id": args.task_id,
         "seed": args.seed,
         "use_amp": args.use_mixed_precision,
     })

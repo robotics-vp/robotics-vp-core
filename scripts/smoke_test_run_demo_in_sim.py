@@ -140,11 +140,11 @@ def test_run_demo_in_sim():
         step = steps[0]
         step_fields = [
             "episode_id",
-            "step",
+            "t",
             "action_summary",
             "ood_step_flags",
             "recovery_step_flags",
-            "reward_scalar",
+            "reward",
             "econ_step_summary",
         ]
         for field in step_fields:
