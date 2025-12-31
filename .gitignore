@@ -23,3 +23,6 @@ tmp/
 tmp_*.json
 *.json.tmp
 *.png
+
+# local env
+.venv/
