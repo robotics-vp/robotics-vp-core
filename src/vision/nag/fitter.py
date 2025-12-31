@@ -41,7 +41,23 @@ def _check_torch() -> None:
 
 @dataclass
 class FitterConfig:
-    """Configuration for NAG fitting."""
+    """Configuration for NAG fitting.
+
+    Attributes:
+        max_iters: Maximum optimization iterations
+        lr: Learning rate for Adam optimizer
+        atlas_size: (H, W) resolution for per-node atlas textures
+        default_depth: Default depth estimate for objects
+        background_depth: Depth for the background plane
+        photometric_weight: Weight for L1 photometric loss
+        mask_weight: Weight for mask consistency loss
+        pose_smoothness_weight: Weight for trajectory smoothness regularization
+        flow_regularization_weight: Weight for optical flow regularization (unused)
+        batch_frames: Number of frames to sample per iteration
+        log_interval: Iterations between log messages
+        early_stop_loss: Stop if total loss drops below this threshold
+        nan_check_interval: Check for NaN every N iterations
+    """
     max_iters: int = 500
     lr: float = 1e-3
     atlas_size: Tuple[int, int] = (256, 256)
@@ -57,6 +73,41 @@ class FitterConfig:
     # Training
     batch_frames: int = 4
     log_interval: int = 50
+    early_stop_loss: float = 0.001
+    nan_check_interval: int = 25
+
+    def __post_init__(self) -> None:
+        # Validate atlas_size
+        if not isinstance(self.atlas_size, tuple) or len(self.atlas_size) != 2:
+            raise ValueError(f"atlas_size must be (H, W) tuple, got {self.atlas_size}")
+        if self.atlas_size[0] < 8 or self.atlas_size[1] < 8:
+            raise ValueError(f"atlas_size too small: {self.atlas_size}")
+        if self.max_iters < 1:
+            raise ValueError(f"max_iters must be positive, got {self.max_iters}")
+        if self.lr <= 0:
+            raise ValueError(f"lr must be positive, got {self.lr}")
+
+
+@dataclass
+class FitStats:
+    """Statistics from NAG fitting.
+
+    Attributes:
+        final_loss: Final total loss value
+        final_photo_loss: Final photometric loss
+        final_mask_loss: Final mask consistency loss
+        num_iterations: Number of iterations completed
+        converged: Whether fitting converged (early stopped or completed)
+        had_nan: Whether NaN was encountered during fitting
+        per_node_error: Per-node reconstruction error (if computed)
+    """
+    final_loss: float
+    final_photo_loss: float
+    final_mask_loss: float
+    num_iterations: int
+    converged: bool
+    had_nan: bool = False
+    per_node_error: Optional[Dict[str, float]] = None
 
 
 def estimate_depth_from_box(
@@ -196,6 +247,57 @@ def create_background_mask(
     return bg_mask
 
 
+def _validate_fit_inputs(
+    frames: torch.Tensor,
+    masks: Dict[NAGNodeId, torch.Tensor],
+    boxes: Dict[NAGNodeId, torch.Tensor],
+    camera: CameraParams,
+) -> None:
+    """Validate inputs to fit_nag_to_sequence."""
+    # Validate frames
+    if frames.dim() != 4:
+        raise ValueError(f"frames must be 4D (T, C, H, W), got {frames.dim()}D")
+    T, C, H, W = frames.shape
+    if C != 3:
+        raise ValueError(f"frames must have 3 channels, got {C}")
+    if T < 1:
+        raise ValueError(f"frames must have at least 1 frame, got {T}")
+
+    # Validate camera matches frame size
+    if camera.height != H or camera.width != W:
+        raise ValueError(
+            f"Camera size ({camera.height}, {camera.width}) doesn't match "
+            f"frame size ({H}, {W})"
+        )
+
+    # Validate masks and boxes
+    for node_id in masks.keys():
+        mask = masks[node_id]
+        if mask.dim() != 4 or mask.shape[0] != T:
+            raise ValueError(
+                f"Mask for {node_id} has wrong shape: {mask.shape}, expected (T={T}, 1, H, W)"
+            )
+        if mask.shape[2] != H or mask.shape[3] != W:
+            raise ValueError(
+                f"Mask for {node_id} has wrong spatial size: {mask.shape[2:]}, expected ({H}, {W})"
+            )
+
+        if node_id not in boxes:
+            raise ValueError(f"Missing box for node {node_id}")
+
+        box = boxes[node_id]
+        if box.dim() != 2 or box.shape[0] != T or box.shape[1] != 4:
+            raise ValueError(
+                f"Box for {node_id} has wrong shape: {box.shape}, expected ({T}, 4)"
+            )
+
+        # Check for degenerate boxes
+        for t in range(T):
+            x1, y1, x2, y2 = box[t].tolist()
+            if x2 <= x1 or y2 <= y1:
+                logger.warning(f"Degenerate box for {node_id} at frame {t}: {box[t].tolist()}")
+
+
 def fit_nag_to_sequence(
     frames: torch.Tensor,
     masks: Dict[NAGNodeId, torch.Tensor],
@@ -206,7 +308,8 @@ def fit_nag_to_sequence(
     lr: float = 1e-3,
     config: Optional[FitterConfig] = None,
     verbose: bool = True,
-) -> NAGScene:
+    return_stats: bool = False,
+) -> "NAGScene | Tuple[NAGScene, FitStats]":
     """
     Fit a NAGScene to a video sequence with object masks/boxes.
 
@@ -220,13 +323,21 @@ def fit_nag_to_sequence(
         lr: Learning rate
         config: Optional detailed configuration
         verbose: Whether to log progress
+        return_stats: If True, return (scene, FitStats) tuple
 
     Returns:
-        Fitted NAGScene
+        Fitted NAGScene, or (NAGScene, FitStats) if return_stats=True
+
+    Raises:
+        ValueError: If inputs are invalid
+        RuntimeError: If fitting fails catastrophically (NaN explosion)
     """
     _check_torch()
 
     config = config or FitterConfig(max_iters=max_iters, lr=lr)
+
+    # Validate inputs
+    _validate_fit_inputs(frames, masks, boxes, camera)
 
     frames = frames.to(device)
     T, C, H, W = frames.shape
@@ -270,6 +381,12 @@ def fit_nag_to_sequence(
 
     # Training loop
     time_steps = torch.linspace(0, 1, T, device=device)
+
+    had_nan = False
+    converged = False
+    final_photo_loss = 0.0
+    final_mask_loss = 0.0
+    actual_iters = 0
 
     for iteration in range(config.max_iters):
         optimizer.zero_grad()
@@ -336,8 +453,19 @@ def fit_nag_to_sequence(
             config.pose_smoothness_weight * smooth_loss
         )
 
+        # Check for NaN
+        if (iteration + 1) % config.nan_check_interval == 0 or iteration == 0:
+            if torch.isnan(total_loss) or torch.isinf(total_loss):
+                logger.error(f"Iter {iteration + 1}: NaN/Inf detected in loss")
+                had_nan = True
+                break
+
         total_loss.backward()
         optimizer.step()
+
+        actual_iters = iteration + 1
+        final_photo_loss = float(photo_loss.item())
+        final_mask_loss = float(mask_loss.item())
 
         if verbose and (iteration + 1) % config.log_interval == 0:
             logger.info(
@@ -347,8 +475,28 @@ def fit_nag_to_sequence(
                 f"mask={mask_loss.item():.4f}"
             )
 
-    scene.metadata["fit_iters"] = config.max_iters
-    scene.metadata["final_loss"] = float(total_loss.item())
+        # Early stopping
+        if total_loss.item() < config.early_stop_loss:
+            logger.info(f"Early stopping at iter {iteration + 1}: loss={total_loss.item():.6f}")
+            converged = True
+            break
+
+    final_loss_val = float(total_loss.item()) if not had_nan else float("inf")
+    scene.metadata["fit_iters"] = actual_iters
+    scene.metadata["final_loss"] = final_loss_val
+    scene.metadata["converged"] = converged
+    scene.metadata["had_nan"] = had_nan
+
+    if return_stats:
+        stats = FitStats(
+            final_loss=final_loss_val,
+            final_photo_loss=final_photo_loss,
+            final_mask_loss=final_mask_loss,
+            num_iterations=actual_iters,
+            converged=converged or (actual_iters == config.max_iters),
+            had_nan=had_nan,
+        )
+        return scene, stats
 
     return scene
 

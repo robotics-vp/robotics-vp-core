@@ -360,7 +360,19 @@ def apply_color_shift(
 
 @dataclass
 class NAGEditPolicy:
-    """Policy for generating random edits."""
+    """Policy for generating random edits.
+
+    Attributes:
+        prob_remove: Probability of removing an object
+        prob_duplicate: Probability of duplicating an object
+        prob_pose_shift: Probability of shifting object pose
+        prob_color_shift: Probability of color adjustment
+        translation_range: Range for random translation offsets
+        rotation_range: Range for random rotation offsets (radians)
+        brightness_range: Range for brightness shift
+        saturation_range: Range for saturation scale
+        hue_range: Range for hue shift (radians)
+    """
     prob_remove: float = 0.1
     prob_duplicate: float = 0.2
     prob_pose_shift: float = 0.3
@@ -371,6 +383,29 @@ class NAGEditPolicy:
     rotation_range: Tuple[float, float] = (-0.2, 0.2)
     brightness_range: Tuple[float, float] = (-0.1, 0.1)
     saturation_range: Tuple[float, float] = (0.8, 1.2)
+    hue_range: Tuple[float, float] = (-0.1, 0.1)
+
+    @classmethod
+    def from_config(cls, config: Any) -> "NAGEditPolicy":
+        """Create NAGEditPolicy from NAGEditPolicyConfig.
+
+        Args:
+            config: NAGEditPolicyConfig (or any object with matching attributes)
+
+        Returns:
+            NAGEditPolicy instance
+        """
+        return cls(
+            prob_remove=getattr(config, "prob_remove", cls.prob_remove),
+            prob_duplicate=getattr(config, "prob_duplicate", cls.prob_duplicate),
+            prob_pose_shift=getattr(config, "prob_pose_shift", cls.prob_pose_shift),
+            prob_color_shift=getattr(config, "prob_color_shift", cls.prob_color_shift),
+            translation_range=getattr(config, "translation_range", cls.translation_range),
+            rotation_range=getattr(config, "rotation_range", cls.rotation_range),
+            brightness_range=getattr(config, "brightness_range", cls.brightness_range),
+            saturation_range=getattr(config, "saturation_range", cls.saturation_range),
+            hue_range=getattr(config, "hue_range", (-0.1, 0.1)),
+        )
 
 
 def apply_random_edits(
@@ -378,6 +413,7 @@ def apply_random_edits(
     policy: NAGEditPolicy,
     rng: Optional[np.random.Generator] = None,
     max_edits: int = 3,
+    seed: Optional[int] = None,
 ) -> List[NAGEditVector]:
     """
     Apply random edits to a scene according to a policy.
@@ -385,15 +421,29 @@ def apply_random_edits(
     Args:
         scene: NAGScene to edit (modified in-place)
         policy: Edit policy with probabilities and magnitudes
-        rng: Random number generator
+        rng: Random number generator. If None and seed provided, creates one from seed.
         max_edits: Maximum number of edits to apply
+        seed: Optional random seed for reproducible edits. Ignored if rng is provided.
 
     Returns:
         List of NAGEditVectors describing applied edits
+
+    Note:
+        To get deterministic edits, either pass a seeded rng or pass seed parameter.
+        Example:
+            # Option 1: seeded rng
+            rng = np.random.default_rng(42)
+            edits = apply_random_edits(scene, policy, rng=rng)
+
+            # Option 2: seed parameter
+            edits = apply_random_edits(scene, policy, seed=42)
     """
     _check_torch()
 
-    rng = rng or np.random.default_rng()
+    # Create RNG from seed if not provided
+    if rng is None:
+        rng = np.random.default_rng(seed)  # seed=None gives non-deterministic
+
     edits = []
 
     foreground_nodes = scene.get_foreground_nodes()
@@ -442,11 +492,17 @@ def apply_random_edits(
             edits.append(edit)
 
         elif edit_roll < policy.prob_remove + policy.prob_duplicate + policy.prob_pose_shift + policy.prob_color_shift:
-            # Color shift
+            # Color shift with hue
             brightness = rng.uniform(*policy.brightness_range)
             saturation = rng.uniform(*policy.saturation_range)
+            hue = rng.uniform(*policy.hue_range)
 
-            edit = apply_color_shift(scene, node_id, brightness_shift=brightness, saturation_scale=saturation)
+            edit = apply_color_shift(
+                scene, node_id,
+                hue_shift=hue,
+                brightness_shift=brightness,
+                saturation_scale=saturation,
+            )
             edits.append(edit)
 
     return edits

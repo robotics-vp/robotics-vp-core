@@ -43,6 +43,9 @@ class CameraParams:
     Follows the convention: world_from_cam transforms points from
     camera space to world space.
 
+    Supports both static cameras (single extrinsic) and time-varying
+    cameras (per-frame extrinsics array).
+
     Attributes:
         fx: Focal length x (pixels)
         fy: Focal length y (pixels)
@@ -53,6 +56,7 @@ class CameraParams:
         world_from_cam: (T, 4, 4) or (4, 4) extrinsics transforms
         near: Near clipping plane
         far: Far clipping plane
+        camera_id: Optional identifier for multi-camera setups
     """
     fx: float
     fy: float
@@ -63,17 +67,28 @@ class CameraParams:
     world_from_cam: np.ndarray  # (T, 4, 4) or (4, 4)
     near: float = 0.01
     far: float = 100.0
+    camera_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         self.world_from_cam = np.asarray(self.world_from_cam, dtype=np.float32)
         if self.world_from_cam.ndim == 2:
             # Single frame - add time dimension
             self.world_from_cam = self.world_from_cam[np.newaxis, ...]
+        # Validate shape
+        if self.world_from_cam.ndim != 3 or self.world_from_cam.shape[1:] != (4, 4):
+            raise ValueError(
+                f"world_from_cam must be (T, 4, 4), got shape {self.world_from_cam.shape}"
+            )
 
     @property
     def num_frames(self) -> int:
         """Number of frames in the sequence."""
         return self.world_from_cam.shape[0]
+
+    @property
+    def is_static(self) -> bool:
+        """Whether camera has static (single-frame) extrinsics."""
+        return self.num_frames == 1
 
     @property
     def K(self) -> np.ndarray:
@@ -135,6 +150,116 @@ class CameraParams:
 
         return origins, dirs_world
 
+    def get_position(self, t: int = 0) -> np.ndarray:
+        """Get camera position at time t."""
+        t = min(t, self.num_frames - 1)
+        return self.world_from_cam[t, :3, 3].copy()
+
+    def get_look_direction(self, t: int = 0) -> np.ndarray:
+        """Get camera look direction (negative Z in camera space) at time t."""
+        t = min(t, self.num_frames - 1)
+        return -self.world_from_cam[t, :3, 2].copy()
+
+    def interpolate_pose(self, t_normalized: float) -> np.ndarray:
+        """
+        Interpolate camera pose at normalized time t in [0, 1].
+
+        For multi-frame cameras, linearly interpolates between poses.
+        For single-frame cameras, returns the static pose.
+
+        Args:
+            t_normalized: Time in [0, 1]
+
+        Returns:
+            (4, 4) world_from_cam transform
+        """
+        if self.num_frames == 1:
+            return self.world_from_cam[0].copy()
+
+        t_normalized = np.clip(t_normalized, 0.0, 1.0)
+        t_scaled = t_normalized * (self.num_frames - 1)
+        t_floor = int(np.floor(t_scaled))
+        t_ceil = min(t_floor + 1, self.num_frames - 1)
+        alpha = t_scaled - t_floor
+
+        # Linear interpolation (could upgrade to SLERP for rotation)
+        pose = (1 - alpha) * self.world_from_cam[t_floor] + alpha * self.world_from_cam[t_ceil]
+        return pose
+
+    @classmethod
+    def from_single_pose(
+        cls,
+        position: Tuple[float, float, float],
+        look_at: Tuple[float, float, float],
+        up: Tuple[float, float, float],
+        fov_deg: float,
+        width: int,
+        height: int,
+        near: float = 0.01,
+        far: float = 100.0,
+        camera_id: Optional[str] = None,
+    ) -> "CameraParams":
+        """
+        Create static CameraParams from position/look_at/up.
+
+        This is the preferred constructor for single static cameras.
+
+        Args:
+            position: Camera position in world space
+            look_at: Point camera is looking at
+            up: Up vector
+            fov_deg: Vertical field of view in degrees
+            width: Image width
+            height: Image height
+            near: Near clip plane
+            far: Far clip plane
+            camera_id: Optional camera identifier
+        """
+        return cls.from_camera_rig(
+            positions=np.array([position], dtype=np.float32),
+            look_at=np.array([look_at], dtype=np.float32),
+            up=np.array([up], dtype=np.float32),
+            fov=fov_deg,
+            width=width,
+            height=height,
+        )
+
+    @classmethod
+    def from_poses(
+        cls,
+        poses: np.ndarray,
+        fx: float,
+        fy: float,
+        cx: float,
+        cy: float,
+        width: int,
+        height: int,
+        near: float = 0.01,
+        far: float = 100.0,
+        camera_id: Optional[str] = None,
+    ) -> "CameraParams":
+        """
+        Create CameraParams from pre-computed pose matrices.
+
+        Args:
+            poses: (T, 4, 4) world_from_cam transforms
+            fx, fy: Focal lengths
+            cx, cy: Principal point
+            width, height: Image dimensions
+            near, far: Clip planes
+            camera_id: Optional identifier
+        """
+        poses = np.asarray(poses, dtype=np.float32)
+        if poses.ndim == 2:
+            poses = poses[np.newaxis, ...]
+        return cls(
+            fx=fx, fy=fy, cx=cx, cy=cy,
+            height=height, width=width,
+            world_from_cam=poses,
+            near=near, far=far,
+            camera_id=camera_id,
+        )
+
     @classmethod
     def from_fov(
         cls,
@@ -144,6 +269,7 @@ class CameraParams:
         world_from_cam: np.ndarray,
         near: float = 0.01,
         far: float = 100.0,
+        camera_id: Optional[str] = None,
     ) -> "CameraParams":
         """Create CameraParams from field of view and resolution."""
         fy = height / (2.0 * np.tan(np.radians(fov_deg) / 2.0))
@@ -155,6 +281,7 @@ class CameraParams:
             height=height, width=width,
             world_from_cam=world_from_cam,
             near=near, far=far,
+            camera_id=camera_id,
         )
 
     @classmethod
@@ -211,7 +338,7 @@ class CameraParams:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
+        result = {
             "fx": self.fx,
             "fy": self.fy,
             "cx": self.cx,
@@ -222,6 +349,9 @@ class CameraParams:
             "near": self.near,
             "far": self.far,
         }
+        if self.camera_id is not None:
+            result["camera_id"] = self.camera_id
+        return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CameraParams":
@@ -236,6 +366,7 @@ class CameraParams:
             world_from_cam=np.array(data["world_from_cam"]),
             near=data.get("near", 0.01),
             far=data.get("far", 100.0),
+            camera_id=data.get("camera_id"),
         )
 
 

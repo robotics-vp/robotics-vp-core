@@ -66,6 +66,7 @@ class LSDVectorSceneConfig:
     nag_max_nodes: int = 8
     nag_fit_iters: int = 200
     nag_num_counterfactuals: int = 3
+    nag_use_stub_renderer: bool = True  # Set False for production (requires renderer)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
@@ -94,6 +95,7 @@ class LSDVectorSceneConfig:
             "nag_max_nodes": self.nag_max_nodes,
             "nag_fit_iters": self.nag_fit_iters,
             "nag_num_counterfactuals": self.nag_num_counterfactuals,
+            "nag_use_stub_renderer": self.nag_use_stub_renderer,
         }
 
     def to_json(self) -> str:
@@ -138,6 +140,7 @@ class LSDVectorSceneConfig:
             nag_max_nodes=data.get("nag_max_nodes", 8),
             nag_fit_iters=data.get("nag_fit_iters", 200),
             nag_num_counterfactuals=data.get("nag_num_counterfactuals", 3),
+            nag_use_stub_renderer=data.get("nag_use_stub_renderer", True),
         )
 
     @classmethod

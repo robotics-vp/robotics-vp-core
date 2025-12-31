@@ -6,11 +6,12 @@ Provides functions to:
 - Generate counterfactuals using NAG edits
 - Package edited clips into datapacks
 
-Note on rendering:
-    The render_lsd_episode_frames() function is currently a stub that generates
-    synthetic frames. For production use, either:
-    1. Pass pre_rendered_frames directly to build_nag_scene_from_lsd_rollout()
-    2. Implement a real GaussianRenderer and hook it up
+Rendering modes:
+    1. Concrete renderer: Pass a SplattingGaussianRenderer instance for real rendering
+    2. Pre-rendered frames: Pass pre_rendered_frames to bypass rendering entirely
+    3. Stub mode: Set use_stub_renderer=True for testing (generates synthetic frames)
+
+For production runs, use mode 1 or 2. Mode 3 should only be used in tests.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -35,6 +36,10 @@ from src.vision.nag.types import (
     NAGNodeId,
     make_node_id,
 )
+
+if TYPE_CHECKING:
+    from src.vision.nag.gaussian_renderer import SplattingGaussianRenderer
+    from src.envs.lsd3d_env.gaussian_scene import GaussianScene
 
 logger = logging.getLogger(__name__)
 
@@ -151,33 +156,115 @@ class NAGDatapack:
 
 
 def render_lsd_episode_frames(
-    gaussian_scene: Any,
+    gaussian_scene: Optional["GaussianScene"],
     camera_params: CameraParams,
     num_frames: int = 10,
     device: Optional["torch.device"] = None,
+    renderer: Optional["SplattingGaussianRenderer"] = None,
+    use_stub: bool = False,
 ) -> "torch.Tensor":
     """
     Render RGB frames from a GaussianScene.
 
-    NOTE: This is a STUB implementation that generates synthetic frames.
-    For production, use pre_rendered_frames parameter in build_nag_scene_from_lsd_rollout()
-    or implement a proper GaussianRenderer.
-
     Args:
-        gaussian_scene: GaussianScene from LSD backend (may be None for stub)
+        gaussian_scene: GaussianScene from LSD backend
         camera_params: Camera parameters
         num_frames: Number of frames to render
-        device: Torch device (respects incoming tensor devices)
+        device: Torch device
+        renderer: Optional concrete GaussianRenderer instance.
+            If provided and gaussian_scene is valid, uses real rendering.
+        use_stub: If True, force stub rendering (for tests only)
 
     Returns:
         (T, 3, H, W) tensor of RGB frames in [0, 1]
+
+    Raises:
+        ValueError: If no valid rendering path is available and use_stub=False
     """
     _check_torch()
 
     device = device or torch.device("cpu")
     H, W = camera_params.height, camera_params.width
 
+    # Try concrete renderer first
+    if renderer is not None and gaussian_scene is not None and not use_stub:
+        logger.debug(f"render_lsd_episode_frames: using concrete renderer for {num_frames} frames")
+        return _render_with_concrete_renderer(
+            gaussian_scene, camera_params, num_frames, device, renderer
+        )
+
+    # Stub mode - only if explicitly requested or no other option
+    if not use_stub and gaussian_scene is not None and renderer is None:
+        logger.warning(
+            "render_lsd_episode_frames: gaussian_scene provided but no renderer. "
+            "Consider passing a SplattingGaussianRenderer for production use."
+        )
+
+    if not use_stub and gaussian_scene is None and renderer is None:
+        raise ValueError(
+            "render_lsd_episode_frames: no gaussian_scene, renderer, or use_stub=True. "
+            "Cannot render frames. Either provide pre_rendered_frames, a renderer, "
+            "or explicitly set use_stub=True for testing."
+        )
+
     logger.debug(f"render_lsd_episode_frames: stub mode, generating {num_frames} synthetic frames")
+    return _render_stub_frames(gaussian_scene, camera_params, num_frames, device)
+
+
+def _render_with_concrete_renderer(
+    gaussian_scene: "GaussianScene",
+    camera_params: CameraParams,
+    num_frames: int,
+    device: "torch.device",
+    renderer: "SplattingGaussianRenderer",
+) -> "torch.Tensor":
+    """Render frames using the concrete SplattingGaussianRenderer."""
+    from src.vision.nag.gaussian_renderer import render_gaussian_scene_to_frames
+
+    # Build camera trajectory
+    positions = []
+    look_ats = []
+    ups = []
+
+    for t in range(num_frames):
+        t_norm = t / max(num_frames - 1, 1)
+        pose = camera_params.interpolate_pose(t_norm)
+
+        # Extract position and look direction
+        position = pose[:3, 3]
+        forward = -pose[:3, 2]  # Camera looks down -Z
+        up = pose[:3, 1]
+
+        positions.append(position)
+        look_ats.append(position + forward)
+        ups.append(up)
+
+    positions = np.stack(positions)
+    look_ats = np.stack(look_ats)
+    ups = np.stack(ups)
+
+    frames = render_gaussian_scene_to_frames(
+        scene=gaussian_scene,
+        camera_positions=positions,
+        camera_look_ats=look_ats,
+        camera_ups=ups,
+        fov=camera_params.fov_deg,
+        width=camera_params.width,
+        height=camera_params.height,
+        renderer=renderer,
+    )
+
+    return frames.to(device)
+
+
+def _render_stub_frames(
+    gaussian_scene: Optional["GaussianScene"],
+    camera_params: CameraParams,
+    num_frames: int,
+    device: "torch.device",
+) -> "torch.Tensor":
+    """Generate stub frames for testing."""
+    H, W = camera_params.height, camera_params.width
 
     # Stub: generate frames based on Gaussian positions if available
     if gaussian_scene is not None and hasattr(gaussian_scene, "means"):
@@ -326,6 +413,7 @@ def build_nag_scene_from_lsd_rollout(
     config: NAGFromLSDConfig,
     device: Optional["torch.device"] = None,
     pre_rendered_frames: Optional["torch.Tensor"] = None,
+    renderer: Optional["SplattingGaussianRenderer"] = None,
 ) -> "NAGScene":
     """
     Build a NAGScene from an LSD vector scene rollout.
@@ -337,17 +425,22 @@ def build_nag_scene_from_lsd_rollout(
             - num_frames: Number of frames in episode
             - episode_id: Unique episode identifier
             - difficulty_features: Dict of difficulty metrics
-        camera: Camera parameters
+            - camera_rig: Optional CameraRig for multi-frame extrinsics
+        camera: Camera parameters (used if no camera_rig in episode)
         config: NAG configuration
         device: Torch device (defaults to CPU)
         pre_rendered_frames: Optional (T, 3, H, W) pre-rendered frames.
-            If provided, skips stub renderer and uses these directly.
+            If provided, skips rendering entirely.
+        renderer: Optional SplattingGaussianRenderer for real rendering.
+            If provided with gaussian_scene, uses concrete rendering.
+            If not provided, falls back to stub (only if use_stub_renderer=True).
 
     Returns:
         Fitted NAGScene
 
     Raises:
         RuntimeError: If NAG fitting fails critically
+        ValueError: If no valid rendering path and use_stub_renderer=False
     """
     _check_torch()
 
@@ -362,9 +455,15 @@ def build_nag_scene_from_lsd_rollout(
     num_frames = backend_episode.get("num_frames", 10)
     episode_id = backend_episode.get("episode_id", "unknown")
 
+    # Check for camera rig in episode data (for time-varying camera)
+    camera_rig = backend_episode.get("camera_rig")
+    if camera_rig is not None and hasattr(camera_rig, "positions"):
+        logger.debug(f"build_nag_scene: using camera_rig with {len(camera_rig.positions)} views")
+        # Could upgrade camera here if needed
+
     logger.debug(f"build_nag_scene: episode={episode_id}, num_frames={num_frames}")
 
-    # Get frames - either pre-rendered or from stub
+    # Get frames - priority: pre_rendered > renderer > stub
     if pre_rendered_frames is not None:
         frames = pre_rendered_frames.to(device)
         if frames.shape[0] != num_frames:
@@ -372,13 +471,23 @@ def build_nag_scene_from_lsd_rollout(
                 f"pre_rendered_frames has {frames.shape[0]} frames, expected {num_frames}"
             )
             num_frames = frames.shape[0]
-    else:
-        if not config.use_stub_renderer and gaussian_scene is None:
-            logger.warning(
-                "build_nag_scene: use_stub_renderer=False but no gaussian_scene; using stub anyway"
-            )
+        logger.debug("build_nag_scene: using pre_rendered_frames")
+    elif renderer is not None and gaussian_scene is not None:
+        logger.debug("build_nag_scene: using concrete renderer")
         frames = render_lsd_episode_frames(
-            gaussian_scene, camera, num_frames=num_frames, device=device
+            gaussian_scene, camera, num_frames=num_frames, device=device,
+            renderer=renderer, use_stub=False
+        )
+    elif config.use_stub_renderer:
+        logger.debug("build_nag_scene: using stub renderer (test mode)")
+        frames = render_lsd_episode_frames(
+            gaussian_scene, camera, num_frames=num_frames, device=device,
+            renderer=None, use_stub=True
+        )
+    else:
+        raise ValueError(
+            f"build_nag_scene: no valid rendering path for episode {episode_id}. "
+            "Provide pre_rendered_frames, a renderer, or set use_stub_renderer=True."
         )
 
     # Validate frame shape
@@ -444,6 +553,8 @@ def generate_nag_counterfactuals_for_lsd_episode(
     edit_config: NAGEditPolicyConfig,
     device: Optional["torch.device"] = None,
     pre_rendered_frames: Optional["torch.Tensor"] = None,
+    renderer: Optional["SplattingGaussianRenderer"] = None,
+    seed: Optional[int] = None,
 ) -> List[NAGDatapack]:
     """
     Generate NAG counterfactuals for an LSD episode.
@@ -454,7 +565,9 @@ def generate_nag_counterfactuals_for_lsd_episode(
         nag_config: NAG scene configuration
         edit_config: Edit policy configuration
         device: Torch device
-        pre_rendered_frames: Optional pre-rendered frames (bypasses stub renderer)
+        pre_rendered_frames: Optional pre-rendered frames (bypasses rendering)
+        renderer: Optional SplattingGaussianRenderer for real rendering
+        seed: Optional random seed for reproducible edits
 
     Returns:
         List of NAGDatapack with edited clips. Each contains:
@@ -468,7 +581,7 @@ def generate_nag_counterfactuals_for_lsd_episode(
     from src.vision.nag.editor import NAGEditPolicy, apply_random_edits, render_clip
 
     device = device or torch.device("cpu")
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)
 
     base_episode_id = backend_episode.get("episode_id", str(uuid.uuid4())[:8])
     num_frames = backend_episode.get("num_frames", 10)
@@ -481,7 +594,7 @@ def generate_nag_counterfactuals_for_lsd_episode(
     # Build base NAG scene
     try:
         base_scene = build_nag_scene_from_lsd_rollout(
-            backend_episode, camera, nag_config, device, pre_rendered_frames
+            backend_episode, camera, nag_config, device, pre_rendered_frames, renderer
         )
     except Exception as e:
         logger.error(f"generate_nag_counterfactuals: failed to build base scene: {e}")
@@ -489,17 +602,8 @@ def generate_nag_counterfactuals_for_lsd_episode(
 
     times = torch.linspace(0, 1, num_frames, device=device)
 
-    # Create edit policy
-    policy = NAGEditPolicy(
-        prob_remove=edit_config.prob_remove,
-        prob_duplicate=edit_config.prob_duplicate,
-        prob_pose_shift=edit_config.prob_pose_shift,
-        prob_color_shift=edit_config.prob_color_shift,
-        translation_range=edit_config.translation_range,
-        rotation_range=edit_config.rotation_range,
-        brightness_range=edit_config.brightness_range,
-        saturation_range=edit_config.saturation_range,
-    )
+    # Create edit policy from config
+    policy = NAGEditPolicy.from_config(edit_config)
 
     datapacks: List[NAGDatapack] = []
 

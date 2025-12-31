@@ -183,8 +183,8 @@ class TestRenderLSDEpisodeFrames:
         config = NAGFromLSDConfig(image_size=(64, 64))
         camera = create_camera_from_lsd_config(config)
 
-        # No scene - should return random frames
-        frames = render_lsd_episode_frames(None, camera, num_frames=10)
+        # No scene - should return random frames (explicitly request stub mode)
+        frames = render_lsd_episode_frames(None, camera, num_frames=10, use_stub=True)
 
         # Stub should return frames with correct shape
         assert frames.shape == (10, 3, 64, 64)
