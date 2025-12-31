@@ -23,7 +23,8 @@ from src.motor_backend.datapacks import DatapackConfig, load_datapack_configs
 from src.motor_backend.factory import make_motor_backend
 from src.objectives.economic_objective import EconomicObjectiveSpec
 from src.objectives.loader import load_objective_spec
-from src.ontology.models import Datapack, Episode, Robot
+from src.ontology.datapack_registry import register_datapack_configs
+from src.ontology.models import Episode, Robot
 from src.ontology.store import OntologyStore
 from src.scenarios.metadata import build_scenario_metadata
 
@@ -92,38 +93,6 @@ def _ensure_robot(store: OntologyStore, robot_id: str, energy_cost_per_wh: float
     robot = Robot(robot_id=robot_id, name=robot_id, energy_cost_per_wh=energy_cost_per_wh)
     store.upsert_robot(robot)
     return robot
-
-
-def _ensure_datapacks(store: OntologyStore, task_id: str, datapack_configs: Sequence[DatapackConfig]) -> None:
-    if not datapack_configs:
-        return
-    existing = {dp.datapack_id: dp for dp in store.list_datapacks()}
-    stubs = []
-    for cfg in datapack_configs:
-        if cfg.id in existing:
-            continue
-        storage_uri = cfg.motion_clips[0].path if cfg.motion_clips else ""
-        stubs.append(
-            Datapack(
-                datapack_id=cfg.id,
-                source_type="holosoma",
-                task_id=task_id,
-                modality="motion",
-                storage_uri=storage_uri,
-                metadata={
-                    "description": cfg.description,
-                    "randomization": dict(cfg.domain_randomization),
-                    "curriculum": dict(cfg.curriculum),
-                    "tags": list(cfg.tags),
-                    "task_tags": list(cfg.task_tags),
-                    "robot_families": list(cfg.robot_families),
-                    "objective_hint": cfg.objective_hint,
-                    "source_path": cfg.source_path,
-                },
-            )
-        )
-    if stubs:
-        store.append_datapacks(stubs)
 
 
 def _record_backend_result(
@@ -206,7 +175,7 @@ def main():
         backend = make_motor_backend(args.motor_backend, econ_meter, store)
         if backend is None:
             raise ValueError(f"Motor backend '{args.motor_backend}' is not configured.")
-        _ensure_datapacks(store, args.task_id, datapack_configs)
+        register_datapack_configs(store, args.task_id, datapack_configs)
         scenario = build_scenario_metadata(
             run_id=run_id,
             task_id=args.task_id,

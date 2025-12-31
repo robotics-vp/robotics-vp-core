@@ -22,6 +22,7 @@ from typing import Any, Mapping, Sequence
 
 import yaml
 
+from src.ontology.models import Datapack
 from src.ontology.store import OntologyStore
 
 
@@ -122,6 +123,58 @@ def _parse_optional_str(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text if text else None
+
+
+def datapack_config_from_ontology(datapack: Datapack) -> DatapackConfig:
+    metadata = datapack.metadata or {}
+    tags = metadata.get("tags") or []
+    task_tags = metadata.get("task_tags") or []
+    robot_families = metadata.get("robot_families") or []
+    objective_hint = metadata.get("objective_hint")
+
+    if not tags and isinstance(datapack.tags, dict):
+        tags = datapack.tags.get("semantic_tags") or datapack.tags.get("tags") or []
+
+    return DatapackConfig(
+        id=datapack.datapack_id,
+        description=str(metadata.get("description") or ""),
+        motion_clips=[MotionClipSpec(path=datapack.storage_uri, weight=1.0)] if datapack.storage_uri else [],
+        domain_randomization=metadata.get("randomization", {}) or {},
+        curriculum=metadata.get("curriculum", {}) or {},
+        tags=_parse_string_list(tags),
+        task_tags=_parse_string_list(task_tags),
+        robot_families=_parse_string_list(robot_families),
+        objective_hint=_parse_optional_str(objective_hint),
+        source_path=None,
+    )
+
+
+def datapack_configs_from_ontology(datapacks: Sequence[Datapack]) -> list[DatapackConfig]:
+    return [datapack_config_from_ontology(dp) for dp in datapacks]
+
+
+def save_datapack_config(
+    config: DatapackConfig,
+    output_dir: str | Path,
+    filename: str | None = None,
+) -> Path:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    file_name = filename or f"{config.id}.yaml"
+    path = output_path / file_name
+    payload = {
+        "id": config.id,
+        "description": config.description,
+        "motion_clips": [{"path": clip.path, "weight": clip.weight} for clip in config.motion_clips],
+        "domain_randomization": dict(config.domain_randomization),
+        "curriculum": dict(config.curriculum),
+        "tags": list(config.tags),
+        "task_tags": list(config.task_tags),
+        "robot_families": list(config.robot_families),
+        "objective_hint": config.objective_hint,
+    }
+    path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    return path
 
 
 class DatapackProvider:
