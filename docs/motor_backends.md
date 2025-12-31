@@ -91,7 +91,6 @@ Programmatic entry point for orchestrator-style runs:
 ```
 from src.orchestrator.semantic_simulation import run_semantic_simulation
 from src.ontology.store import OntologyStore
-from src.motor_backend.rollout_capture import RolloutCaptureConfig
 
 store = OntologyStore(root_dir="data/ontology")
 result = run_semantic_simulation(
@@ -101,7 +100,7 @@ result = run_semantic_simulation(
     objective_hint="baseline_logging_error_min",
     notes="semantic run for warehouse logging",
     task_id="humanoid_locomotion_g1",
-    rollout_capture_config=RolloutCaptureConfig(output_dir="artifacts/rollouts"),
+    rollout_base_dir="artifacts/rollouts",
 )
 ```
 
@@ -110,3 +109,17 @@ This will:
 - Run Holosoma training/eval.
 - Persist a Scenario node into the ontology.
 - Capture rollout artifacts (stubbed for now) and label them via the VLA hook.
+
+CLI wrapper (recommended for quick runs):
+
+```
+python scripts/semantic_run.py \
+  --intent "reduce logging defects" \
+  --tags warehouse logging \
+  --robot-family G1 \
+  --objective-hint baseline_logging_error_min \
+  --task-id humanoid_locomotion_g1 \
+  --rollout-dir artifacts/rollouts
+```
+
+The legacy YAML + direct backend CLI remains supported, but the semantic entrypoint is the recommended interface for orchestration and feedback loops.

@@ -1,4 +1,4 @@
-"""Tests for semantic simulation runner."""
+"""End-to-end test for semantic simulation loop."""
 from pathlib import Path
 
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
@@ -9,14 +9,15 @@ from src.orchestrator import semantic_simulation
 from src.orchestrator.schedule import BudgetConfig, reset_budget_state, set_budget_config
 
 
-def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
+def test_semantic_simulation_e2e(monkeypatch, tmp_path: Path):
     reset_budget_state()
     set_budget_config(BudgetConfig(max_concurrent_runs=2, daily_step_budget=20_000_000, daily_run_budget=10))
+
     store = OntologyStore(root_dir=tmp_path / "ontology")
     store.upsert_task(
         Task(
-            task_id="task_a",
-            name="Task A",
+            task_id="task_logging",
+            name="Logging Task",
             human_mpl_units_per_hour=60.0,
             human_wage_per_hour=18.0,
             default_energy_cost_per_wh=0.12,
@@ -25,13 +26,13 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
     store.append_datapacks(
         [
             Datapack(
-                datapack_id="dp1",
+                datapack_id="dp_logging",
                 source_type="holosoma",
-                task_id="task_a",
+                task_id="task_logging",
                 modality="motion",
-                storage_uri="data/mocap/test.npz",
+                storage_uri="data/mocap/logging_clip.npz",
                 metadata={
-                    "tags": ["humanoid"],
+                    "tags": ["warehouse", "logging"],
                     "robot_families": ["G1"],
                     "objective_hint": "baseline",
                 },
@@ -39,19 +40,18 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
         ]
     )
 
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    policy_path = run_dir / "model.onnx"
-    policy_path.write_text("stub")
-    trajectory_path = run_dir / "trajectory.npz"
+    trajectory_path = tmp_path / "traj.npz"
     trajectory_path.write_text("stub")
 
     class DummyBackend:
         def train_policy(self, **kwargs):
             return MotorTrainingResult(
-                policy_id=str(policy_path),
-                raw_metrics={"mean_reward": 1.0},
-                econ_metrics={"mpl_units_per_hour": 50.0, "anti_reward_hacking_suspicious": 0.0},
+                policy_id=str(tmp_path / "model.onnx"),
+                raw_metrics={"train_steps": 100},
+                econ_metrics={
+                    "mpl_units_per_hour": 55.0,
+                    "anti_reward_hacking_suspicious": 1.0,
+                },
             )
 
         def evaluate_policy(self, **kwargs):
@@ -61,9 +61,9 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
                     EpisodeRollout(
                         metadata=EpisodeMetadata(
                             episode_id="ep1",
-                            task_id="task_a",
+                            task_id="task_logging",
                             robot_family="G1",
-                            seed=None,
+                            seed=42,
                             env_params={},
                         ),
                         trajectory_path=trajectory_path,
@@ -71,9 +71,9 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
                 ],
             )
             return MotorEvalResult(
-                policy_id=str(policy_path),
+                policy_id=str(tmp_path / "model.onnx"),
                 raw_metrics={"mean_reward": 1.0},
-                econ_metrics={"mpl_units_per_hour": 55.0},
+                econ_metrics={"mpl_units_per_hour": 60.0},
                 rollout_bundle=rollout_bundle,
             )
 
@@ -81,21 +81,33 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
 
     result = semantic_simulation.run_semantic_simulation(
         store=store,
-        tags=["humanoid"],
+        intent="reduce logging defects",
+        tags=["warehouse", "logging"],
         robot_family="G1",
         objective_hint="baseline",
-        task_id="task_a",
+        task_id="task_logging",
         eval_episodes=1,
         rollout_base_dir=tmp_path / "rollouts",
         datapack_output_dir=tmp_path / "datapacks",
-        run_log_path=tmp_path / "logs.jsonl",
+        run_log_path=tmp_path / "runs.jsonl",
     )
 
     assert result.status == "completed"
-    assert result.scenario.task_id == "task_a"
+    assert result.scenario is not None
     assert result.simulation is not None
     assert store.list_scenarios()
-    assert any(dp.datapack_id == "dp1_vla" for dp in store.list_datapacks())
-    assert (tmp_path / "datapacks" / "dp1_vla.yaml").exists()
+
+    scenario_record = store.list_scenarios()[0]
+    assert scenario_record.get("task_id") == "task_logging"
+    assert "train_metrics_anti_reward_hacking_suspicious" in scenario_record
+    scenario_tags = scenario_record.get("datapack_tags", [])
+    assert "auto_labeled" in scenario_tags
+    assert "warehouse" in scenario_tags
+    assert "logging" in scenario_tags
+
+    new_datapack_ids = {dp.datapack_id for dp in store.list_datapacks()}
+    assert "dp_logging_vla" in new_datapack_ids
+    labeled_dp = next(dp for dp in store.list_datapacks() if dp.datapack_id == "dp_logging_vla")
+    assert "auto_labeled" in labeled_dp.metadata.get("tags", [])
     reset_budget_state()
     set_budget_config(BudgetConfig())
