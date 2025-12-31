@@ -46,18 +46,38 @@ extra_weights:
   stability_margin: -0.1
 ```
 
+Load configs with `src/objectives/loader.py::load_objective_spec`.
+
+## Datapack YAML
+
+Minimal datapack YAML schema (see `src/motor_backend/datapacks.py`):
+
+```
+id: logging_v1_base
+description: "Baseline logging humanoid task"
+motion_clips:
+  - path: data/mocap/logging_clip_01.npz
+    weight: 1.0
+domain_randomization:
+  terrain: "flat"
+  friction_range: [0.5, 1.0]
+curriculum:
+  initial_difficulty: 0.1
+  max_difficulty: 1.0
+```
+
 ## CLI Example
 
 Run a pricing report with Holosoma training:
 
 ```
 python scripts/report_task_pricing_and_performance.py \
-  --task-id humanoid_locomotion_v1 \
+  --task-id humanoid_locomotion_g1 \
   --motor-backend holosoma \
-  --objective-config configs/objectives/locomotion.yaml \
-  --datapacks dp_loco_01,dp_loco_02 \
+  --objective-config configs/objectives/example_holosoma_objective.yaml \
+  --datapacks configs/datapacks/example_holosoma_datapack.yaml \
   --num-envs 2048 \
   --max-steps 50000
 ```
 
-Use `--num-episodes` to add an evaluation run after training.
+Use `--eval-episodes` to add an evaluation run after training.

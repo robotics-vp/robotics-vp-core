@@ -19,8 +19,10 @@ from src.analytics.econ_reports import (
     compute_pricing_snapshot,
 )
 from src.economics.econ_meter import EconomicMeter
-from src.motor_backend.datapacks import DatapackProvider
-from src.objectives.economic_objective import EconomicObjectiveSpec, load_economic_objective_spec
+from src.motor_backend.datapacks import DatapackConfig, load_datapack_configs
+from src.motor_backend.factory import make_motor_backend
+from src.objectives.economic_objective import EconomicObjectiveSpec
+from src.objectives.loader import load_objective_spec
 from src.ontology.models import Datapack, Episode, Robot
 from src.ontology.store import OntologyStore
 
@@ -70,10 +72,16 @@ def _bucket_scores(scores: List[Dict]) -> Dict[str, List[Dict]]:
     return buckets
 
 
-def _parse_datapack_ids(raw: str) -> List[str]:
-    if not raw:
-        return []
-    return [part.strip() for part in raw.split(",") if part.strip()]
+def _normalize_datapack_paths(raw: Sequence[str]) -> List[str]:
+    paths: list[str] = []
+    for entry in raw:
+        if not entry:
+            continue
+        if "," in entry:
+            paths.extend([part.strip() for part in entry.split(",") if part.strip()])
+        else:
+            paths.append(entry)
+    return paths
 
 
 def _ensure_robot(store: OntologyStore, robot_id: str, energy_cost_per_wh: float) -> Robot:
@@ -85,24 +93,32 @@ def _ensure_robot(store: OntologyStore, robot_id: str, energy_cost_per_wh: float
     return robot
 
 
-def _ensure_datapacks(store: OntologyStore, task_id: str, datapack_ids: Sequence[str]) -> None:
-    if not datapack_ids:
+def _ensure_datapacks(store: OntologyStore, task_id: str, datapack_configs: Sequence[DatapackConfig]) -> None:
+    if not datapack_configs:
         return
     existing = {dp.datapack_id: dp for dp in store.list_datapacks()}
-    missing = [dp_id for dp_id in datapack_ids if dp_id not in existing]
-    if not missing:
-        return
-    stubs = [
-        Datapack(
-            datapack_id=dp_id,
-            source_type="holosoma",
-            task_id=task_id,
-            modality="motion",
-            storage_uri="",
+    stubs = []
+    for cfg in datapack_configs:
+        if cfg.id in existing:
+            continue
+        storage_uri = cfg.motion_clips[0].path if cfg.motion_clips else ""
+        stubs.append(
+            Datapack(
+                datapack_id=cfg.id,
+                source_type="holosoma",
+                task_id=task_id,
+                modality="motion",
+                storage_uri=storage_uri,
+                metadata={
+                    "description": cfg.description,
+                    "randomization": dict(cfg.domain_randomization),
+                    "curriculum": dict(cfg.curriculum),
+                    "source_path": cfg.source_path,
+                },
+            )
         )
-        for dp_id in missing
-    ]
-    store.append_datapacks(stubs)
+    if stubs:
+        store.append_datapacks(stubs)
 
 
 def _record_backend_result(
@@ -112,7 +128,7 @@ def _record_backend_result(
     robot_id: str,
     backend_name: str,
     objective_spec: EconomicObjectiveSpec,
-    datapack_ids: Sequence[str],
+    datapack_configs: Sequence[DatapackConfig],
     policy_id: str,
     raw_metrics: Mapping[str, float],
     econ_metrics: Mapping[str, float],
@@ -123,13 +139,14 @@ def _record_backend_result(
         episode_id=episode_id,
         task_id=task_id,
         robot_id=robot_id,
-        datapack_id=datapack_ids[0] if datapack_ids else None,
+        datapack_id=datapack_configs[0].id if datapack_configs else None,
         status="success",
         metadata={
             "motor_backend": backend_name,
             "policy_id": policy_id,
             "objective": asdict(objective_spec),
-            "datapack_ids": list(datapack_ids),
+            "datapack_ids": [cfg.id for cfg in datapack_configs],
+            "datapack_configs": [asdict(cfg) for cfg in datapack_configs],
             "raw_metrics": dict(raw_metrics),
             "econ_metrics": dict(econ_metrics),
         },
@@ -146,27 +163,18 @@ def _record_backend_result(
     store.upsert_econ_vector(econ_vec)
 
 
-def make_motor_backend(name: str, econ_meter: EconomicMeter, store: OntologyStore):
-    if name == "holosoma":
-        from src.motor_backend.holosoma_backend import HolosomaBackend
-
-        return HolosomaBackend(econ_meter=econ_meter, datapack_provider=DatapackProvider(store))
-    if name == "dummy":
-        return None
-    raise ValueError(f"Unknown motor backend: {name}")
-
-
 def main():
     parser = argparse.ArgumentParser(description="Report task pricing and performance from ontology")
     parser.add_argument("--ontology-root", type=str, default="data/ontology")
     parser.add_argument("--task-id", type=str, required=True)
     parser.add_argument("--motor-backend", type=str, default="dummy", help="Motor backend (dummy, holosoma)")
     parser.add_argument("--objective-config", type=str, default="", help="Objective config YAML/JSON path")
-    parser.add_argument("--datapacks", type=str, default="", help="Comma-separated datapack IDs")
+    parser.add_argument("--datapacks", nargs="*", default=[], help="Datapack YAML config paths")
     parser.add_argument("--robot-id", type=str, default="robot_default")
     parser.add_argument("--num-envs", type=int, default=1024)
     parser.add_argument("--max-steps", type=int, default=10000)
-    parser.add_argument("--num-episodes", type=int, default=0)
+    parser.add_argument("--eval-episodes", type=int, default=0)
+    parser.add_argument("--num-episodes", type=int, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output-json", type=str, default="")
     parser.add_argument("--recap-scores", type=str, default="", help="Optional path to RECAP episode_scores.jsonl")
@@ -174,9 +182,11 @@ def main():
     parser.add_argument("--segmentation-tags", type=str, default="", help="Optional segmentation tags JSONL")
     args = parser.parse_args()
 
+    eval_episodes = args.eval_episodes if args.num_episodes is None else args.num_episodes
     store = OntologyStore(root_dir=args.ontology_root)
-    objective_spec = load_economic_objective_spec(Path(args.objective_config)) if args.objective_config else EconomicObjectiveSpec()
-    datapack_ids = _parse_datapack_ids(args.datapacks)
+    objective_spec = load_objective_spec(args.objective_config) if args.objective_config else EconomicObjectiveSpec()
+    datapack_paths = _normalize_datapack_paths(args.datapacks)
+    datapack_configs = load_datapack_configs(datapack_paths) if datapack_paths else []
 
     if args.motor_backend != "dummy":
         task = store.get_task(args.task_id)
@@ -187,11 +197,12 @@ def main():
         backend = make_motor_backend(args.motor_backend, econ_meter, store)
         if backend is None:
             raise ValueError(f"Motor backend '{args.motor_backend}' is not configured.")
-        _ensure_datapacks(store, args.task_id, datapack_ids)
+        _ensure_datapacks(store, args.task_id, datapack_configs)
         train_result = backend.train_policy(
             task_id=args.task_id,
             objective=objective_spec,
-            datapack_ids=datapack_ids,
+            datapack_ids=[cfg.id for cfg in datapack_configs],
+            datapack_configs=datapack_configs,
             num_envs=args.num_envs,
             max_steps=args.max_steps,
             seed=args.seed,
@@ -203,18 +214,18 @@ def main():
             robot.robot_id,
             args.motor_backend,
             objective_spec,
-            datapack_ids,
+            datapack_configs,
             train_result.policy_id,
             train_result.raw_metrics,
             train_result.econ_metrics,
             label="train",
         )
-        if args.num_episodes > 0:
+        if eval_episodes > 0:
             eval_result = backend.evaluate_policy(
                 policy_id=train_result.policy_id,
                 task_id=args.task_id,
                 objective=objective_spec,
-                num_episodes=args.num_episodes,
+                num_episodes=eval_episodes,
                 seed=args.seed,
             )
             _record_backend_result(
@@ -224,7 +235,7 @@ def main():
                 robot.robot_id,
                 args.motor_backend,
                 objective_spec,
-                datapack_ids,
+                datapack_configs,
                 eval_result.policy_id,
                 eval_result.raw_metrics,
                 eval_result.econ_metrics,

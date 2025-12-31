@@ -5,3 +5,4 @@ from src.motor_backend.base import (  # noqa: F401
     MotorTrainingResult,
     MotorEvalResult,
 )
+from src.motor_backend.factory import make_motor_backend  # noqa: F401
