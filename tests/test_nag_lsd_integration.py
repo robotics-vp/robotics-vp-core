@@ -31,6 +31,9 @@ class TestNAGFromLSDConfig:
         assert config.max_iters == 200
         assert config.fov_deg == 60.0
         assert config.image_size == (256, 256)
+        assert config.enable_motion_plausibility_filter is False
+        assert config.motion_plausibility_max_residual_mean == 1.5
+        assert config.motion_plausibility_min_score == 0.1
 
     def test_custom_config(self):
         from src.vision.nag.integration_lsd_backend import NAGFromLSDConfig
@@ -128,6 +131,24 @@ class TestNAGDatapack:
         assert d["frames_shape"] == [5, 3, 32, 32]
         assert d["num_edits"] == 2
         assert d["edit_types"] == ["pose", "duplicate"]
+
+    def test_datapack_motion_metadata(self):
+        from src.vision.nag.integration_lsd_backend import NAGDatapack
+
+        frames = np.random.rand(4, 3, 16, 16).astype(np.float32)
+        datapack = NAGDatapack(
+            base_episode_id="ep_004",
+            counterfactual_id="ep_004_cf0",
+            frames=frames,
+            motion_hierarchy_summary={"mean_tree_depth": 1.0},
+            motion_plausibility_flags={"is_plausible": False, "reason": "residual_mean_too_high"},
+            motion_quality_score=0.25,
+        )
+
+        d = datapack.to_dict()
+        assert d["motion_hierarchy_summary"]["mean_tree_depth"] == 1.0
+        assert d["motion_plausibility_flags"]["is_plausible"] is False
+        assert d["motion_quality_score"] == 0.25
 
 
 class TestCreateCameraFromLSDConfig:
@@ -326,6 +347,54 @@ class TestGenerateNAGCounterfactuals:
         for dp in datapacks:
             assert dp.frames.min() >= 0.0
             assert dp.frames.max() <= 1.0
+
+    def test_counterfactuals_with_motion_hierarchy_metadata(self):
+        from src.vision.nag.integration_lsd_backend import (
+            NAGFromLSDConfig,
+            NAGEditPolicyConfig,
+            generate_nag_counterfactuals_for_lsd_episode,
+            create_camera_from_lsd_config,
+        )
+
+        nag_config = NAGFromLSDConfig(
+            atlas_size=(32, 32),
+            max_iters=5,
+            image_size=(32, 32),
+            enable_motion_plausibility_filter=True,
+            motion_plausibility_max_residual_mean=0.5,
+            motion_plausibility_min_score=0.5,
+        )
+
+        policy_config = NAGEditPolicyConfig(num_counterfactuals=1)
+        camera = create_camera_from_lsd_config(nag_config)
+
+        backend_episode = {
+            "episode_id": "ep_motion_meta",
+            "gaussian_scene": None,
+            "scene_graph": None,
+            "num_frames": 3,
+            "motion_hierarchy": {
+                "hierarchy": np.eye(2, dtype=np.float32).tolist(),
+                "delta_resid_stats": {
+                    "mean": [2.0, 2.0],
+                    "std": [0.1, 0.1],
+                },
+            },
+        }
+
+        datapacks = generate_nag_counterfactuals_for_lsd_episode(
+            backend_episode=backend_episode,
+            camera=camera,
+            nag_config=nag_config,
+            edit_config=policy_config,
+        )
+
+        assert len(datapacks) == 1
+        dp = datapacks[0]
+        assert dp.motion_hierarchy_summary is not None
+        assert dp.motion_plausibility_flags is not None
+        assert dp.motion_quality_score is not None
+        assert dp.motion_plausibility_flags["is_plausible"] is False
 
 
 class TestIntegrationWithLSDConfig:

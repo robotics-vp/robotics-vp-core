@@ -110,6 +110,23 @@ def main():
         default=None,
         help="Directory to save output datapacks (optional)",
     )
+    parser.add_argument(
+        "--filter-by-motion-hierarchy",
+        action="store_true",
+        help="Drop or mark NAG clips with low motion plausibility from MHN.",
+    )
+    parser.add_argument(
+        "--mh-max-residual-mean",
+        type=float,
+        default=1.5,
+        help="Maximum residual mean for motion plausibility checks.",
+    )
+    parser.add_argument(
+        "--mh-min-plausibility-score",
+        type=float,
+        default=0.1,
+        help="Minimum plausibility score for motion plausibility checks.",
+    )
     args = parser.parse_args()
 
     try:
@@ -150,6 +167,9 @@ def main():
         image_size=(128, 128),
         fov_deg=60.0,
         use_stub_renderer=args.stub,
+        enable_motion_plausibility_filter=args.filter_by_motion_hierarchy,
+        motion_plausibility_max_residual_mean=args.mh_max_residual_mean,
+        motion_plausibility_min_score=args.mh_min_plausibility_score,
     )
     logger.info(f"NAG config: atlas_size={nag_config.atlas_size}, max_iters={nag_config.max_iters}")
 

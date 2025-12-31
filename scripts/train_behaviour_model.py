@@ -67,6 +67,8 @@ class TrainingConfig:
     save_interval: int = 5
     max_seq_len: int = 100
     num_action_bins: int = 64
+    motion_hierarchy_curriculum: bool = False
+    motion_hierarchy_curriculum_mode: str = "focus_hard"
 
 
 class TrajectoryDataset:
@@ -268,7 +270,11 @@ def create_dataloaders(
     val_indices = indices[num_train:]
 
     if TORCH_AVAILABLE:
-        from torch.utils.data import Subset
+        from torch.utils.data import WeightedRandomSampler
+        from src.analytics.econ_reports import compute_motion_hierarchy_summary
+        from src.analytics.motion_hierarchy_curriculum import (
+            compute_curriculum_weights_from_motion_hierarchy,
+        )
 
         class TorchDataset(Dataset):
             def __init__(self, base_dataset, indices):
@@ -291,10 +297,30 @@ def create_dataloaders(
         train_dataset = TorchDataset(dataset, train_indices)
         val_dataset = TorchDataset(dataset, val_indices)
 
+        sampler = None
+        if config.motion_hierarchy_curriculum:
+            mh_summaries = []
+            for episode in dataset.episodes:
+                mh_payload = episode.get("motion_hierarchy_summary") or episode.get("motion_hierarchy") or {}
+                summary = compute_motion_hierarchy_summary(mh_payload) if isinstance(mh_payload, dict) else {}
+                mh_summaries.append(summary)
+            weights = compute_curriculum_weights_from_motion_hierarchy(
+                mh_summaries,
+                mode=config.motion_hierarchy_curriculum_mode,
+            )
+            if weights.size == len(dataset):
+                train_weights = weights[train_indices]
+                sampler = WeightedRandomSampler(
+                    weights=torch.from_numpy(train_weights),
+                    num_samples=len(train_weights),
+                    replacement=True,
+                )
+
         train_loader = DataLoader(
             train_dataset,
             batch_size=config.batch_size,
-            shuffle=True,
+            shuffle=sampler is None,
+            sampler=sampler,
             drop_last=True,
         )
         val_loader = DataLoader(
@@ -305,9 +331,8 @@ def create_dataloaders(
 
         return train_loader, val_loader
 
-    else:
-        # Dummy loaders for scaffolding
-        return [], []
+    # Dummy loaders for scaffolding
+    return [], []
 
 
 def train_epoch(
@@ -615,6 +640,18 @@ def main() -> int:
         help="Tilt regularization weight (0 = disabled)",
     )
     parser.add_argument(
+        "--motion-hierarchy-curriculum",
+        action="store_true",
+        help="If set, use motion hierarchy structural difficulty to weight episode sampling.",
+    )
+    parser.add_argument(
+        "--motion-hierarchy-curriculum-mode",
+        type=str,
+        default="focus_hard",
+        choices=["focus_hard", "focus_easy", "uniform_plus_hard_tail", "focus_plausible"],
+        help="Curriculum mode for motion hierarchy difficulty.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -636,6 +673,8 @@ def main() -> int:
         lr=args.lr,
         tilt_regularization=args.tilt_regularization,
         seed=args.seed,
+        motion_hierarchy_curriculum=args.motion_hierarchy_curriculum,
+        motion_hierarchy_curriculum_mode=args.motion_hierarchy_curriculum_mode,
     )
 
     try:

@@ -65,6 +65,9 @@ class NAGFromLSDConfig:
         num_camera_views: Number of camera views (for multi-view fitting)
         interesting_classes: Object classes to include as nodes
         use_stub_renderer: If True, use synthetic frames (for testing)
+        enable_motion_plausibility_filter: Whether to compute motion plausibility flags
+        motion_plausibility_max_residual_mean: Residual mean threshold for plausibility
+        motion_plausibility_min_score: Minimum plausibility score threshold
     """
     atlas_size: Tuple[int, int] = (256, 256)
     max_iters: int = 200
@@ -79,6 +82,9 @@ class NAGFromLSDConfig:
         default_factory=lambda: ["HUMAN", "ROBOT", "FORKLIFT", "PALLET"]
     )
     use_stub_renderer: bool = True  # Set to False when real renderer available
+    enable_motion_plausibility_filter: bool = False
+    motion_plausibility_max_residual_mean: float = 1.5
+    motion_plausibility_min_score: float = 0.1
 
 
 @dataclass
@@ -131,6 +137,9 @@ class NAGDatapack:
     nag_edit_vector: List[Dict[str, Any]] = field(default_factory=list)
     difficulty_features: Dict[str, float] = field(default_factory=dict)
     lsd_metadata: Dict[str, Any] = field(default_factory=dict)
+    motion_hierarchy_summary: Optional[Dict[str, Any]] = None
+    motion_plausibility_flags: Optional[Dict[str, Any]] = None
+    motion_quality_score: Optional[float] = None
 
     def __post_init__(self) -> None:
         # Validate frame shape
@@ -141,7 +150,7 @@ class NAGDatapack:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
+        payload = {
             "base_episode_id": self.base_episode_id,
             "counterfactual_id": self.counterfactual_id,
             "frames_shape": list(self.frames.shape),
@@ -153,6 +162,13 @@ class NAGDatapack:
             "num_edits": len(self.nag_edit_vector),
             "edit_types": [e.get("edit_type", "unknown") for e in self.nag_edit_vector],
         }
+        if self.motion_hierarchy_summary is not None:
+            payload["motion_hierarchy_summary"] = self.motion_hierarchy_summary
+        if self.motion_plausibility_flags is not None:
+            payload["motion_plausibility_flags"] = self.motion_plausibility_flags
+        if self.motion_quality_score is not None:
+            payload["motion_quality_score"] = self.motion_quality_score
+        return payload
 
 
 def render_lsd_episode_frames(
@@ -605,6 +621,65 @@ def generate_nag_counterfactuals_for_lsd_episode(
     # Create edit policy from config
     policy = NAGEditPolicy.from_config(edit_config)
 
+    motion_hierarchy_summary = None
+    motion_plausibility_flags = None
+    motion_quality = None
+    mh_raw = backend_episode.get("motion_hierarchy")
+    if isinstance(mh_raw, dict) and mh_raw:
+        from dataclasses import asdict
+        from src.vision.motion_hierarchy.metrics import (
+            compute_motion_hierarchy_summary_from_raw,
+            compute_motion_hierarchy_summary_from_stats,
+            compute_motion_plausibility_flags,
+            motion_quality_score,
+        )
+
+        summary_obj = None
+        hierarchy = mh_raw.get("hierarchy")
+        if hierarchy is not None:
+            try:
+                summary_obj = compute_motion_hierarchy_summary_from_raw(
+                    hierarchy=hierarchy,
+                    delta_resid_stats=mh_raw.get("delta_resid_stats") or {},
+                )
+            except Exception as exc:
+                logger.debug(f"generate_nag_counterfactuals: MH summary failed: {exc}")
+
+        if summary_obj is None:
+            tree_stats = mh_raw.get("tree_stats") or mh_raw.get("stats") or {}
+            resid_stats = mh_raw.get("delta_resid_stats") or {}
+            mean_tree_depth = tree_stats.get("mean_tree_depth", mh_raw.get("mean_tree_depth", 0.0))
+            mean_branch_factor = tree_stats.get("mean_branch_factor", mh_raw.get("mean_branch_factor", 0.0))
+            resid_mean = mh_raw.get("residual_mean", resid_stats.get("residual_mean"))
+            if resid_mean is None:
+                mean_payload = resid_stats.get("mean", 0.0)
+                if isinstance(mean_payload, (list, tuple, np.ndarray)):
+                    resid_mean = float(np.mean(mean_payload)) if mean_payload else 0.0
+                else:
+                    resid_mean = float(mean_payload or 0.0)
+            resid_std = mh_raw.get("residual_std", resid_stats.get("residual_std"))
+            if resid_std is None:
+                std_payload = resid_stats.get("std", 0.0)
+                if isinstance(std_payload, (list, tuple, np.ndarray)):
+                    resid_std = float(np.mean(std_payload)) if std_payload else 0.0
+                else:
+                    resid_std = float(std_payload or 0.0)
+            summary_obj = compute_motion_hierarchy_summary_from_stats(
+                mean_tree_depth=mean_tree_depth,
+                mean_branch_factor=mean_branch_factor,
+                residual_mean=resid_mean,
+                residual_std=resid_std,
+            )
+
+        motion_hierarchy_summary = asdict(summary_obj)
+        motion_quality = motion_quality_score(summary_obj)
+        if nag_config.enable_motion_plausibility_filter:
+            motion_plausibility_flags = compute_motion_plausibility_flags(
+                summary_obj,
+                max_residual_mean=nag_config.motion_plausibility_max_residual_mean,
+                min_plausibility_score=nag_config.motion_plausibility_min_score,
+            )
+
     datapacks: List[NAGDatapack] = []
 
     for cf_idx in range(edit_config.num_counterfactuals):
@@ -655,6 +730,9 @@ def generate_nag_counterfactuals_for_lsd_episode(
                     "scene_graph_config": backend_episode.get("scene_graph_config", {}),
                     "base_mpl": backend_episode.get("mpl_metrics", {}).get("mpl_units_per_hour", 0),
                 },
+                motion_hierarchy_summary=motion_hierarchy_summary,
+                motion_plausibility_flags=motion_plausibility_flags,
+                motion_quality_score=motion_quality,
             )
 
             datapacks.append(datapack)
