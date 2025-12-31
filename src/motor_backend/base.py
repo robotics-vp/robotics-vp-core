@@ -7,10 +7,14 @@ from __future__ import annotations
 # - Objectives: src/config/objective_profile.py (ObjectiveVector), src/valuation/reward_builder.py (combine_reward)
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence, TYPE_CHECKING
+from pathlib import Path
 
 from src.motor_backend.datapacks import DatapackConfig
 from src.objectives.economic_objective import EconomicObjectiveSpec
+
+if TYPE_CHECKING:
+    from src.motor_backend.rollout_capture import RolloutBundle
 
 
 @dataclass
@@ -18,6 +22,7 @@ class MotorTrainingResult:
     policy_id: str
     raw_metrics: Mapping[str, float]
     econ_metrics: Mapping[str, float]
+    rollout_bundle: "RolloutBundle | None" = None
 
 
 @dataclass
@@ -25,6 +30,7 @@ class MotorEvalResult:
     policy_id: str
     raw_metrics: Mapping[str, float]
     econ_metrics: Mapping[str, float]
+    rollout_bundle: "RolloutBundle | None" = None
 
 
 class MotorBackend(Protocol):
@@ -38,6 +44,8 @@ class MotorBackend(Protocol):
         num_envs: int,
         max_steps: int,
         datapack_configs: Sequence[DatapackConfig] | None = None,
+        scenario_id: str | None = None,
+        rollout_base_dir: str | Path | None = None,
         seed: int | None = None,
     ) -> MotorTrainingResult:
         ...
@@ -48,6 +56,8 @@ class MotorBackend(Protocol):
         task_id: str,
         objective: EconomicObjectiveSpec,
         num_episodes: int,
+        scenario_id: str | None = None,
+        rollout_base_dir: str | Path | None = None,
         seed: int | None = None,
     ) -> MotorEvalResult:
         ...

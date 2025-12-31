@@ -1,47 +1,40 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Protocol, Sequence
-
-from src.motor_backend.datapacks import DatapackConfig
+from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
+from src.motor_backend.rollout_capture import RolloutBundle
 
 
-class RolloutLabeler(Protocol):
-    def label_rollouts(
-        self,
-        rollouts_dir: str | Path,
-        base_datapack: DatapackConfig | None = None,
-    ) -> Sequence[DatapackConfig]:
-        ...
+def label_rollouts_with_vla(
+    rollouts: RolloutBundle,
+    base_datapack: DatapackConfig,
+) -> list[DatapackConfig]:
+    """
+    Call into the VLA/vision stack to label rollouts and produce new datapacks.
+    """
+    if not rollouts.episodes:
+        return []
 
+    # TODO: replace this stub with real VLA integration:
+    # - Call into our VLA model / service
+    # - Use detection results to define specific motion segments & tags
+    first = rollouts.episodes[0]
+    derived_tags = list(base_datapack.tags)
+    for tag in ("auto_labeled", "vla_stub"):
+        if tag not in derived_tags:
+            derived_tags.append(tag)
 
-@dataclass(frozen=True)
-class StubRolloutLabeler:
-    """Placeholder labeler for future VLA/vision integration."""
+    derived = DatapackConfig(
+        id=f"{base_datapack.id}_vla",
+        description=f"{base_datapack.description} (auto-labeled)",
+        motion_clips=[
+            MotionClipSpec(path=str(first.trajectory_path), weight=1.0),
+        ],
+        domain_randomization=dict(base_datapack.domain_randomization),
+        curriculum=dict(base_datapack.curriculum),
+        tags=derived_tags,
+        task_tags=list(base_datapack.task_tags),
+        robot_families=list(base_datapack.robot_families),
+        objective_hint=base_datapack.objective_hint or "auto-labeled",
+    )
 
-    tag_suffix: str = "vla_stub"
-
-    def label_rollouts(
-        self,
-        rollouts_dir: str | Path,
-        base_datapack: DatapackConfig | None = None,
-    ) -> Sequence[DatapackConfig]:
-        if base_datapack is None:
-            return []
-        tags = list(base_datapack.tags)
-        if self.tag_suffix and self.tag_suffix not in tags:
-            tags.append(self.tag_suffix)
-        return [
-            DatapackConfig(
-                id=f"{base_datapack.id}_vla",
-                description=base_datapack.description,
-                motion_clips=list(base_datapack.motion_clips),
-                domain_randomization=dict(base_datapack.domain_randomization),
-                curriculum=dict(base_datapack.curriculum),
-                tags=tags,
-                task_tags=list(base_datapack.task_tags),
-                robot_families=list(base_datapack.robot_families),
-                objective_hint=base_datapack.objective_hint,
-            )
-        ]
+    return [derived]

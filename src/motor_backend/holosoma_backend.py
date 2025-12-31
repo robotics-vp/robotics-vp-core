@@ -11,6 +11,13 @@ from src.economics.econ_meter import EconomicMeter
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
 from src.motor_backend.datapacks import DatapackBundle, DatapackConfig, DatapackProvider, MotionClipSpec
 from src.motor_backend.holosoma_reward_terms import analyze_anti_reward_hacking
+from src.motor_backend.rollout_capture import (
+    EpisodeMetadata,
+    RolloutBundle,
+    finalize_rollout_bundle,
+    record_episode_rollout,
+    start_rollout_capture,
+)
 from src.objectives.economic_objective import (
     CompiledRewardOverlay,
     EconomicObjectiveSpec,
@@ -398,12 +405,16 @@ class HolosomaBackend:
         num_envs: int,
         max_steps: int,
         datapack_configs: Sequence[DatapackConfig] | None = None,
+        scenario_id: str | None = None,
+        rollout_base_dir: str | Path | None = None,
         seed: int | None = None,
     ) -> MotorTrainingResult:
         ensure_holosoma_available()
         task_spec = self._resolve_task(task_id)
         overlay = compile_economic_overlay(objective)
         datapack_bundle = self._datapack_provider.resolve(task_id, datapack_ids, datapack_configs)
+        if scenario_id and rollout_base_dir:
+            start_rollout_capture(scenario_id, Path(rollout_base_dir))
         result = self._runner.train(task_spec, overlay, datapack_bundle, num_envs, max_steps, seed)
         econ_metrics = self._econ_meter.summarize(result.raw_metrics)
         econ_metrics = _apply_anti_reward_hacking_flags(econ_metrics, result.raw_metrics)
@@ -411,6 +422,7 @@ class HolosomaBackend:
             policy_id=result.policy_id,
             raw_metrics=result.raw_metrics,
             econ_metrics=econ_metrics,
+            rollout_bundle=None,
         )
 
     def evaluate_policy(
@@ -419,18 +431,45 @@ class HolosomaBackend:
         task_id: str,
         objective: EconomicObjectiveSpec,
         num_episodes: int,
+        scenario_id: str | None = None,
+        rollout_base_dir: str | Path | None = None,
         seed: int | None = None,
     ) -> MotorEvalResult:
         ensure_holosoma_available()
         task_spec = self._resolve_task(task_id)
         overlay = compile_economic_overlay(objective)
+        rollout_bundle: RolloutBundle | None = None
+        if scenario_id and rollout_base_dir:
+            start_rollout_capture(scenario_id, Path(rollout_base_dir))
         result = self._runner.evaluate(policy_id, task_spec, overlay, num_episodes, seed)
         econ_metrics = self._econ_meter.summarize(result.raw_metrics)
         econ_metrics = _apply_anti_reward_hacking_flags(econ_metrics, result.raw_metrics)
+        if scenario_id and rollout_base_dir:
+            base_dir = Path(rollout_base_dir)
+            # TODO: replace this placeholder with real per-episode trajectories and RGB/depth captures.
+            episode_meta = EpisodeMetadata(
+                episode_id=f"{scenario_id}_eval_000",
+                task_id=task_id,
+                robot_family=None,
+                seed=seed,
+                env_params={"objective_scales": dict(overlay.reward_scales)},
+            )
+            record_episode_rollout(
+                scenario_id=scenario_id,
+                episode_idx=0,
+                metadata=episode_meta,
+                trajectory_data={"policy_id": policy_id, "summary_metrics": dict(result.raw_metrics)},
+                rgb_frames=None,
+                depth_frames=None,
+                metrics=result.raw_metrics,
+                base_dir=base_dir,
+            )
+            rollout_bundle = finalize_rollout_bundle(scenario_id, base_dir)
         return MotorEvalResult(
             policy_id=result.policy_id,
             raw_metrics=result.raw_metrics,
             econ_metrics=econ_metrics,
+            rollout_bundle=rollout_bundle,
         )
 
     def deploy_policy_handle(self, policy_id: str) -> Any:
