@@ -21,6 +21,8 @@ def economic_overlay_reward(env: Any, reward_scales: Mapping[str, float]) -> "to
         metrics = env.econ_metrics
     elif hasattr(env, "extras") and isinstance(env.extras, dict):
         metrics = env.extras.get("econ_metrics", {}) or {}
+    if hasattr(env, "log_dict") and isinstance(env.log_dict, dict):
+        metrics = {**metrics, **env.log_dict}
 
     for key, scale in reward_scales.items():
         value = metrics.get(key)

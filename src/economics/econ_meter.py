@@ -36,11 +36,18 @@ class EconomicMeter:
                 "throughput",
             ),
         )
+        if mpl_units_per_hour == 0.0:
+            mpl_units_per_hour = self._estimate_mpl_from_duration(raw_metrics, config)
         error_rate = self._extract_metric(raw_metrics, ("error_rate", "errors", "error_fraction"))
+        if error_rate == 0.0 and raw_metrics.get("success_rate") is not None:
+            try:
+                error_rate = 1.0 - float(raw_metrics.get("success_rate"))
+            except (TypeError, ValueError):
+                pass
         novelty_delta = self._extract_metric(raw_metrics, ("novelty_delta", "novelty_score", "novelty"))
         reward_scalar_sum = self._extract_metric(
             raw_metrics,
-            ("reward_scalar_sum", "episode_reward", "reward_sum", "total_reward"),
+            ("reward_scalar_sum", "episode_reward", "reward_sum", "total_reward", "mean_reward"),
         )
         damage_cost = self._extract_metric(raw_metrics, ("damage_cost",))
         if damage_cost == 0.0:
@@ -114,6 +121,16 @@ class EconomicMeter:
         if task.human_mpl_units_per_hour <= 0:
             return 0.0
         return task.human_wage_per_hour / task.human_mpl_units_per_hour
+
+    def _estimate_mpl_from_duration(self, raw_metrics: Mapping[str, Any], config: Mapping[str, Any]) -> float:
+        duration_s = self._extract_metric(raw_metrics, ("mean_episode_length_s", "episode_length_s"))
+        if duration_s <= 0.0:
+            return 0.0
+        units_per_episode = float(config.get("units_per_episode", 1.0))
+        success_rate = self._extract_metric(raw_metrics, ("success_rate",))
+        if success_rate <= 0.0:
+            success_rate = 1.0
+        return (units_per_episode * success_rate) * (3600.0 / duration_s)
 
     @staticmethod
     def _extract_metric(raw_metrics: Mapping[str, Any], keys: tuple[str, ...]) -> float:

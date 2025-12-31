@@ -9,7 +9,7 @@ from typing import Any, Mapping, Protocol, Sequence
 
 from src.economics.econ_meter import EconomicMeter
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
-from src.motor_backend.datapacks import DatapackBundle, DatapackProvider
+from src.motor_backend.datapacks import DatapackBundle, DatapackConfig, DatapackProvider, MotionClipSpec
 from src.objectives.economic_objective import (
     CompiledRewardOverlay,
     EconomicObjectiveSpec,
@@ -42,12 +42,27 @@ class HolosomaTaskSpec:
     description: str = ""
 
 
+# Holosoma experiment presets live in `holosoma.config_values.experiment.DEFAULTS` and
+# reference per-task config fragments under `holosoma/config_values/{loco,wbt}`.
+# TODO: confirm the exact preset names you want to target for each task_id.
 HOLOSOMA_TASK_MAP: dict[str, HolosomaTaskSpec] = {
-    "humanoid_locomotion_v1": HolosomaTaskSpec(
+    "humanoid_locomotion_g1": HolosomaTaskSpec(
         exp_name="g1_29dof_fast_sac",
         simulator="isaacgym",
         task_name="locomotion",
-        description="G1 locomotion (FastSAC).",
+        description="G1 locomotion (FastSAC) using holosoma.config_values.loco.g1 presets.",
+    ),
+    "humanoid_locomotion_t1": HolosomaTaskSpec(
+        exp_name="t1_29dof_fast_sac",
+        simulator="isaacgym",
+        task_name="locomotion",
+        description="T1 locomotion (FastSAC) using holosoma.config_values.loco.t1 presets.",
+    ),
+    "humanoid_wbt_g1": HolosomaTaskSpec(
+        exp_name="g1_29dof_wbt_fast_sac",
+        simulator="isaacsim",
+        task_name="wbt",
+        description="G1 whole-body tracking (FastSAC) using holosoma.config_values.wbt.g1 presets.",
     ),
 }
 
@@ -100,6 +115,7 @@ class DefaultHolosomaRunner:
         ensure_holosoma_available()
         config = self._build_experiment_config(task_spec, num_envs, max_steps, seed)
         config = self._apply_reward_overlay(config, overlay)
+        config = self._apply_datapack_overrides(config, datapack_bundle)
         config = self._apply_motion_overrides(config, datapack_bundle)
 
         project_dir = self._project_dir(config)
@@ -119,6 +135,7 @@ class DefaultHolosomaRunner:
             "train_steps": float(max_steps),
             "num_envs": float(num_envs),
         }
+        raw_metrics.update(self._collect_log_metrics(run_dir, config))
         if seed is not None:
             raw_metrics["seed"] = float(seed)
         return HolosomaRunResult(policy_id=policy_id, raw_metrics=raw_metrics)
@@ -146,12 +163,23 @@ class DefaultHolosomaRunner:
         if seed is not None:
             eval_cfg = dataclasses.replace(eval_cfg, training=dataclasses.replace(eval_cfg.training, seed=seed))
         eval_cfg = self._apply_reward_overlay(eval_cfg, overlay)
+
+        base_dir = Path(getattr(eval_cfg.logger, "base_dir", "logs"))
+        project = eval_cfg.training.project or getattr(eval_cfg.logger, "project", None) or "default_project"
+        eval_project_dir = base_dir / project
+        eval_project_dir.mkdir(parents=True, exist_ok=True)
+        before = {p for p in eval_project_dir.iterdir() if p.is_dir()}
+
         # TODO: map num_episodes into evaluation stopping criteria for Holosoma.
         run_eval_with_tyro(eval_cfg, checkpoint_cfg, saved_cfg, saved_wandb_path)
+
+        after = {p for p in eval_project_dir.iterdir() if p.is_dir()}
+        run_dir = self._resolve_new_dir(before, after) or eval_project_dir
 
         raw_metrics = {
             "num_episodes": float(num_episodes),
         }
+        raw_metrics.update(self._collect_log_metrics(run_dir, eval_cfg))
         if seed is not None:
             raw_metrics["seed"] = float(seed)
         return HolosomaRunResult(policy_id=policy_id, raw_metrics=raw_metrics)
@@ -213,8 +241,20 @@ class DefaultHolosomaRunner:
         reward_cfg = dataclasses.replace(reward_cfg, terms=terms)
         return dataclasses.replace(config, reward=reward_cfg)
 
+    def _apply_datapack_overrides(self, config: Any, datapack_bundle: DatapackBundle):
+        randomization = datapack_bundle.randomization_overrides
+        curriculum = datapack_bundle.curriculum_overrides
+
+        if randomization and hasattr(config, "randomization"):
+            updated_randomization = _apply_dataclass_overrides(config.randomization, randomization)
+            config = dataclasses.replace(config, randomization=updated_randomization)
+        if curriculum and hasattr(config, "curriculum"):
+            updated_curriculum = _apply_dataclass_overrides(config.curriculum, curriculum)
+            config = dataclasses.replace(config, curriculum=updated_curriculum)
+        return config
+
     def _apply_motion_overrides(self, config: Any, datapack_bundle: DatapackBundle):
-        if not datapack_bundle.motion_clip_paths:
+        if not datapack_bundle.motion_clips:
             return config
         command_cfg = getattr(config, "command", None)
         if command_cfg is None:
@@ -228,14 +268,38 @@ class DefaultHolosomaRunner:
         if motion_cfg is None:
             return config
 
-        primary_motion = datapack_bundle.motion_clip_paths[0]
-        motion_cfg = dataclasses.replace(motion_cfg, motion_file=primary_motion)
+        primary_motion = _select_primary_motion(datapack_bundle.motion_clips)
+        motion_cfg = dataclasses.replace(motion_cfg, motion_file=primary_motion.path)
         params["motion_config"] = motion_cfg
         motion_term = dataclasses.replace(motion_term, params=params)
         setup_terms = dict(setup_terms)
         setup_terms["motion_command"] = motion_term
         command_cfg = dataclasses.replace(command_cfg, setup_terms=setup_terms)
         return dataclasses.replace(config, command=command_cfg)
+
+    def _collect_log_metrics(self, run_dir: Path, config: Any) -> dict[str, float]:
+        metrics: dict[str, float] = {}
+        log_file = self._find_latest_log(run_dir)
+        if log_file is not None:
+            metrics.update(_parse_log_metrics(log_file))
+        step_dt = _estimate_step_dt(config)
+        if step_dt and metrics.get("mean_episode_length"):
+            metrics["mean_episode_length_s"] = metrics["mean_episode_length"] * step_dt
+        if metrics.get("mean_episode_length_s"):
+            success_rate = metrics.get("success_rate", 1.0)
+            metrics.setdefault(
+                "mpl_units_per_hour",
+                (success_rate * 3600.0) / max(metrics["mean_episode_length_s"], 1e-6),
+            )
+        if metrics.get("success_rate") is not None:
+            metrics.setdefault("error_rate", max(0.0, 1.0 - metrics["success_rate"]))
+        return metrics
+
+    def _find_latest_log(self, run_dir: Path) -> Path | None:
+        candidates = [p for p in run_dir.glob("*.log") if p.is_file()]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda p: p.stat().st_mtime)
 
     def _project_dir(self, config: Any) -> Path:
         base_dir = Path(getattr(config.logger, "base_dir", "logs"))
@@ -324,12 +388,13 @@ class HolosomaBackend:
         datapack_ids: Sequence[str],
         num_envs: int,
         max_steps: int,
+        datapack_configs: Sequence[DatapackConfig] | None = None,
         seed: int | None = None,
     ) -> MotorTrainingResult:
         ensure_holosoma_available()
         task_spec = self._resolve_task(task_id)
         overlay = compile_economic_overlay(objective)
-        datapack_bundle = self._datapack_provider.resolve(task_id, datapack_ids)
+        datapack_bundle = self._datapack_provider.resolve(task_id, datapack_ids, datapack_configs)
         result = self._runner.train(task_spec, overlay, datapack_bundle, num_envs, max_steps, seed)
         econ_metrics = self._econ_meter.summarize(result.raw_metrics)
         return MotorTrainingResult(
@@ -363,5 +428,76 @@ class HolosomaBackend:
 
     def _resolve_task(self, task_id: str) -> HolosomaTaskSpec:
         if task_id not in HOLOSOMA_TASK_MAP:
-            raise ValueError(f"Unknown Holosoma task_id: {task_id}. Known: {sorted(HOLOSOMA_TASK_MAP)}")
+            raise ValueError(
+                "Unknown Holosoma task_id: "
+                f"{task_id}. Known: {sorted(HOLOSOMA_TASK_MAP)}. "
+                "Update HOLOSOMA_TASK_MAP to add a mapping to a Holosoma experiment preset."
+            )
         return HOLOSOMA_TASK_MAP[task_id]
+
+
+def _select_primary_motion(clips: Sequence[MotionClipSpec]) -> MotionClipSpec:
+    if not clips:
+        raise ValueError("No motion clips available for Holosoma override.")
+    return max(clips, key=lambda clip: clip.weight)
+
+
+def _apply_dataclass_overrides(obj: Any, overrides: Mapping[str, Any]) -> Any:
+    if not dataclasses.is_dataclass(obj) or not overrides:
+        return obj
+    updates: dict[str, Any] = {}
+    for key, value in overrides.items():
+        if not hasattr(obj, key):
+            continue
+        current = getattr(obj, key)
+        if dataclasses.is_dataclass(current) and isinstance(value, Mapping):
+            updates[key] = _apply_dataclass_overrides(current, value)
+        else:
+            updates[key] = value
+    if not updates:
+        return obj
+    return dataclasses.replace(obj, **updates)
+
+
+def _parse_log_metrics(path: Path) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    key_val = re.compile(r"([A-Za-z0-9_./\- ]+):\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)")
+    mean_reward_re = re.compile(r"Mean reward:\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)")
+    mean_length_re = re.compile(r"Mean episode length:\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)")
+
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = mean_reward_re.search(line)
+        if match:
+            metrics["mean_reward"] = float(match.group(1))
+        match = mean_length_re.search(line)
+        if match:
+            metrics["mean_episode_length"] = float(match.group(1))
+        match = key_val.search(line)
+        if match:
+            key = match.group(1).strip()
+            try:
+                value = float(match.group(2))
+            except ValueError:
+                continue
+            metrics[key] = value
+
+    success_key = next((k for k in metrics if "success_rate" in k.lower()), None)
+    if success_key:
+        metrics.setdefault("success_rate", metrics[success_key])
+
+    return metrics
+
+
+def _estimate_step_dt(config: Any) -> float:
+    try:
+        sim_cfg = config.simulator.config.sim
+        fps = float(sim_cfg.fps)
+        control_decimation = float(sim_cfg.control_decimation)
+        if fps > 0:
+            return control_decimation / fps
+    except Exception:
+        return 0.0
+    return 0.0
