@@ -404,3 +404,247 @@ def compute_pricing_snapshot(
         "task_summary": task_summary,
         "datapack_mix": dp_summary,
     }
+
+
+def _bin_values(values: List[float], num_bins: int = 5) -> List[tuple[float, float]]:
+    """Create bin boundaries for values."""
+    if not values:
+        return []
+    sorted_vals = sorted(values)
+    bin_size = max(1, len(sorted_vals) // num_bins)
+    bins = []
+    for i in range(0, len(sorted_vals), bin_size):
+        chunk = sorted_vals[i:i + bin_size]
+        if chunk:
+            bins.append((min(chunk), max(chunk)))
+    return bins
+
+
+def compute_difficulty_mpl_analysis(
+    episodes_with_difficulty: List[Dict[str, Any]],
+    feature_names: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Analyze MPL as a function of difficulty features.
+
+    Args:
+        episodes_with_difficulty: List of dicts with 'mpl_units_per_hour' and
+            'difficulty_features' (dict of feature_name -> float)
+        feature_names: Optional list of features to analyze. If None, analyzes
+            all features found in the data.
+
+    Returns:
+        Dict with analysis results per feature:
+        - correlation: Pearson correlation with MPL
+        - binned_mpl: MPL statistics per difficulty bin
+        - trend: "positive", "negative", or "neutral"
+    """
+    if not episodes_with_difficulty:
+        return {"error": "no_data", "features": {}}
+
+    # Extract MPL values
+    mpl_values = [ep.get("mpl_units_per_hour", 0.0) for ep in episodes_with_difficulty]
+    if not any(m > 0 for m in mpl_values):
+        return {"error": "no_mpl_data", "features": {}}
+
+    # Collect all feature names if not specified
+    all_features: set[str] = set()
+    for ep in episodes_with_difficulty:
+        difficulty = ep.get("difficulty_features", {})
+        if isinstance(difficulty, dict):
+            all_features.update(difficulty.keys())
+
+    if feature_names:
+        features_to_analyze = [f for f in feature_names if f in all_features]
+    else:
+        features_to_analyze = list(all_features)
+
+    results: Dict[str, Any] = {"features": {}}
+
+    for feature in features_to_analyze:
+        # Extract feature values and corresponding MPL
+        feature_mpl_pairs = []
+        for ep in episodes_with_difficulty:
+            difficulty = ep.get("difficulty_features", {})
+            if isinstance(difficulty, dict) and feature in difficulty:
+                fval = _safe_float(difficulty[feature])
+                mpl = _safe_float(ep.get("mpl_units_per_hour", 0.0))
+                if mpl > 0:
+                    feature_mpl_pairs.append((fval, mpl))
+
+        if len(feature_mpl_pairs) < 3:
+            results["features"][feature] = {
+                "count": len(feature_mpl_pairs),
+                "error": "insufficient_data",
+            }
+            continue
+
+        feature_vals = [p[0] for p in feature_mpl_pairs]
+        mpl_vals = [p[1] for p in feature_mpl_pairs]
+
+        # Compute correlation
+        mean_f = sum(feature_vals) / len(feature_vals)
+        mean_m = sum(mpl_vals) / len(mpl_vals)
+        cov = sum((f - mean_f) * (m - mean_m) for f, m in zip(feature_vals, mpl_vals))
+        var_f = sum((f - mean_f) ** 2 for f in feature_vals)
+        var_m = sum((m - mean_m) ** 2 for m in mpl_vals)
+
+        if var_f > 0 and var_m > 0:
+            correlation = cov / (math.sqrt(var_f) * math.sqrt(var_m))
+        else:
+            correlation = 0.0
+
+        # Bin by feature value and compute MPL stats per bin
+        bins = _bin_values(feature_vals, num_bins=5)
+        binned_stats = []
+        for low, high in bins:
+            bin_mpls = [m for f, m in zip(feature_vals, mpl_vals) if low <= f <= high]
+            if bin_mpls:
+                binned_stats.append({
+                    "bin_range": [low, high],
+                    "count": len(bin_mpls),
+                    "mean_mpl": sum(bin_mpls) / len(bin_mpls),
+                    "min_mpl": min(bin_mpls),
+                    "max_mpl": max(bin_mpls),
+                })
+
+        # Determine trend
+        if correlation > 0.3:
+            trend = "positive"
+        elif correlation < -0.3:
+            trend = "negative"
+        else:
+            trend = "neutral"
+
+        results["features"][feature] = {
+            "count": len(feature_mpl_pairs),
+            "correlation": round(correlation, 4),
+            "trend": trend,
+            "feature_range": [min(feature_vals), max(feature_vals)],
+            "mpl_range": [min(mpl_vals), max(mpl_vals)],
+            "binned_mpl": binned_stats,
+        }
+
+    # Summary statistics
+    results["summary"] = {
+        "total_episodes": len(episodes_with_difficulty),
+        "features_analyzed": len(results["features"]),
+        "strongest_negative_correlation": None,
+        "strongest_positive_correlation": None,
+    }
+
+    correlations = [
+        (f, r["correlation"])
+        for f, r in results["features"].items()
+        if "correlation" in r
+    ]
+    if correlations:
+        sorted_corr = sorted(correlations, key=lambda x: x[1])
+        results["summary"]["strongest_negative_correlation"] = {
+            "feature": sorted_corr[0][0],
+            "correlation": sorted_corr[0][1],
+        }
+        results["summary"]["strongest_positive_correlation"] = {
+            "feature": sorted_corr[-1][0],
+            "correlation": sorted_corr[-1][1],
+        }
+
+    return results
+
+
+def compute_lsd_vector_scene_summary(
+    store: OntologyStore,
+    task_id: str,
+    include_difficulty_analysis: bool = True,
+) -> Dict[str, Any]:
+    """
+    Compute summary for LSD Vector Scene environment runs.
+
+    This extends the standard task summary with difficulty feature analysis.
+
+    Args:
+        store: OntologyStore with episode data
+        task_id: Task ID to analyze
+        include_difficulty_analysis: Whether to include difficulty-MPL correlations
+
+    Returns:
+        Extended summary with LSD-specific fields
+    """
+    # Get base summary
+    base_summary = compute_task_econ_summary(store, task_id)
+
+    # Get episodes with difficulty features
+    episodes = store.list_episodes(task_id=task_id)
+    econ_vectors = store.list_econ_vectors()
+    ev_map = {e.episode_id: e for e in econ_vectors}
+
+    episodes_with_difficulty: List[Dict[str, Any]] = []
+    env_type_counts: Dict[str, int] = {}
+    lsd_configs: List[Dict[str, Any]] = []
+
+    arh_config = current_arh_config()
+
+    for ep in episodes:
+        ev = ev_map.get(ep.episode_id)
+        if not ev:
+            continue
+
+        # Check for LSD-specific metadata
+        components = ev.components or {}
+        metadata = ev.metadata if hasattr(ev, "metadata") else {}
+        if isinstance(metadata, dict):
+            env_type = metadata.get("env_type") or components.get("env_type")
+            difficulty = metadata.get("difficulty_features") or {}
+            lsd_config = metadata.get("lsd_config") or {}
+        else:
+            env_type = components.get("env_type")
+            difficulty = {}
+            lsd_config = {}
+
+        if env_type:
+            env_type_counts[str(env_type)] = env_type_counts.get(str(env_type), 0) + 1
+
+        # Extract difficulty features from components if not in metadata
+        if not difficulty:
+            difficulty = {
+                k.replace("difficulty_", ""): v
+                for k, v in components.items()
+                if k.startswith("difficulty_")
+            }
+
+        if difficulty or env_type == "lsd_vector_scene":
+            mpl_val, _, _ = _adjusted_mpl(ev, arh_config)
+            episodes_with_difficulty.append({
+                "episode_id": ep.episode_id,
+                "mpl_units_per_hour": mpl_val,
+                "error_rate": _safe_float(components.get("error_rate", 0.0)),
+                "difficulty_features": difficulty,
+                "lsd_config": lsd_config,
+            })
+            if lsd_config:
+                lsd_configs.append(lsd_config)
+
+    # Add LSD-specific summary
+    lsd_summary: Dict[str, Any] = {
+        "env_type_distribution": env_type_counts,
+        "lsd_episode_count": len(episodes_with_difficulty),
+    }
+
+    # Analyze difficulty features vs MPL
+    if include_difficulty_analysis and episodes_with_difficulty:
+        difficulty_analysis = compute_difficulty_mpl_analysis(
+            episodes_with_difficulty,
+            feature_names=["graph_density", "route_length", "tilt", "num_dynamic_agents", "clutter_level"],
+        )
+        lsd_summary["difficulty_mpl_analysis"] = difficulty_analysis
+
+    # Aggregate LSD config statistics
+    if lsd_configs:
+        topology_counts: Dict[str, int] = {}
+        for cfg in lsd_configs:
+            topo = cfg.get("topology_type", "unknown")
+            topology_counts[topo] = topology_counts.get(topo, 0) + 1
+        lsd_summary["topology_distribution"] = topology_counts
+
+    base_summary["lsd_vector_scene"] = lsd_summary
+    return base_summary
