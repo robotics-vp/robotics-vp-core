@@ -27,7 +27,6 @@ def fuse_feature_pyramid(
     pyramid: Dict[str, np.ndarray],
     weights: Optional[Dict[str, float]] = None,
     epsilon: float = DEFAULT_EPSILON,
-    epsilon: float = DEFAULT_EPSILON,
     use_neural: bool = False,
     use_checkpointing: bool = False,
 ) -> Dict[str, np.ndarray]:

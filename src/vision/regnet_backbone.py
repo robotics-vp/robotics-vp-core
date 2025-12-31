@@ -102,7 +102,6 @@ if TORCH_AVAILABLE:
             feature_dims: Dict[str, int] = None,
             levels: Sequence[str] = DEFAULT_LEVELS,
             groups: int = 8,
-            groups: int = 8,
             seed: int = 0,
             use_checkpointing: bool = False,
         ):
