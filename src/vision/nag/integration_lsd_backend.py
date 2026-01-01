@@ -85,6 +85,13 @@ class NAGFromLSDConfig:
     enable_motion_plausibility_filter: bool = False
     motion_plausibility_max_residual_mean: float = 1.5
     motion_plausibility_min_score: float = 0.1
+    
+    # Scene IR Tracker integration
+    enable_scene_ir_filter: bool = False
+    scene_ir_max_mean_loss: float = 0.5
+    scene_ir_min_quality_score: float = 0.3
+    scene_ir_max_id_switch_rate: float = 10.0  # percentage
+    scene_ir_max_occlusion_rate: float = 0.5
 
 
 @dataclass
@@ -140,6 +147,11 @@ class NAGDatapack:
     motion_hierarchy_summary: Optional[Dict[str, Any]] = None
     motion_plausibility_flags: Optional[Dict[str, Any]] = None
     motion_quality_score: Optional[float] = None
+    
+    # Scene IR Tracker metadata
+    scene_ir_summary: Optional[Dict[str, Any]] = None
+    scene_ir_quality_score: Optional[float] = None
+    scene_ir_flags: Optional[Dict[str, Any]] = None
 
     def __post_init__(self) -> None:
         # Validate frame shape
@@ -168,6 +180,12 @@ class NAGDatapack:
             payload["motion_plausibility_flags"] = self.motion_plausibility_flags
         if self.motion_quality_score is not None:
             payload["motion_quality_score"] = self.motion_quality_score
+        if self.scene_ir_summary is not None:
+            payload["scene_ir_summary"] = self.scene_ir_summary
+        if self.scene_ir_quality_score is not None:
+            payload["scene_ir_quality_score"] = self.scene_ir_quality_score
+        if self.scene_ir_flags is not None:
+            payload["scene_ir_flags"] = self.scene_ir_flags
         return payload
 
 
@@ -680,6 +698,41 @@ def generate_nag_counterfactuals_for_lsd_episode(
                 min_plausibility_score=nag_config.motion_plausibility_min_score,
             )
 
+    # Extract Scene IR Tracker metadata if available
+    scene_ir_summary = None
+    scene_ir_quality_score = None
+    scene_ir_flags = None
+    sir_raw = backend_episode.get("scene_ir_summary")
+    if sir_raw is not None:
+        scene_ir_summary = sir_raw if isinstance(sir_raw, dict) else {}
+        scene_ir_quality_score = backend_episode.get(
+            "scene_ir_quality_score",
+            scene_ir_summary.get("quality_score")
+        )
+        
+        # Compute plausibility flags based on config thresholds
+        if nag_config.enable_scene_ir_filter and scene_ir_summary:
+            mean_loss = scene_ir_summary.get("ir_loss_mean", 0.0)
+            quality = scene_ir_quality_score if scene_ir_quality_score is not None else 0.5
+            id_switch_rate = scene_ir_summary.get("id_switch_rate", 0.0)
+            occlusion_rate = scene_ir_summary.get("occlusion_rate", 0.0)
+            
+            is_plausible = (
+                mean_loss <= nag_config.scene_ir_max_mean_loss and
+                quality >= nag_config.scene_ir_min_quality_score and
+                id_switch_rate <= nag_config.scene_ir_max_id_switch_rate and
+                occlusion_rate <= nag_config.scene_ir_max_occlusion_rate
+            )
+            
+            scene_ir_flags = {
+                "is_plausible": is_plausible,
+                "reason": "pass" if is_plausible else "threshold_exceeded",
+                "mean_loss": mean_loss,
+                "quality_score": quality,
+                "id_switch_rate": id_switch_rate,
+                "occlusion_rate": occlusion_rate,
+            }
+
     datapacks: List[NAGDatapack] = []
 
     for cf_idx in range(edit_config.num_counterfactuals):
@@ -733,6 +786,9 @@ def generate_nag_counterfactuals_for_lsd_episode(
                 motion_hierarchy_summary=motion_hierarchy_summary,
                 motion_plausibility_flags=motion_plausibility_flags,
                 motion_quality_score=motion_quality,
+                scene_ir_summary=scene_ir_summary,
+                scene_ir_quality_score=scene_ir_quality_score,
+                scene_ir_flags=scene_ir_flags,
             )
 
             datapacks.append(datapack)

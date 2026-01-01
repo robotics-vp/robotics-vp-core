@@ -17,6 +17,7 @@ from src.vision.motion_hierarchy.metrics import (
     compute_motion_hierarchy_summary_from_raw,
     compute_motion_hierarchy_summary_from_stats,
 )
+from src.analytics.scene_ir_summary import compute_scene_ir_summary, aggregate_scene_ir_summaries, SceneIRSummary
 
 
 def _percentiles(values: List[float], ps=(10, 50, 90)) -> Dict[str, float]:
@@ -747,6 +748,42 @@ def compute_lsd_vector_scene_summary(
                 mh_agg[key] = float(sum(vals) / len(vals))
         mh_agg["episode_count"] = float(len(motion_hierarchy_summaries))
         lsd_summary["motion_hierarchy"] = mh_agg
+
+    # Scene IR Tracker aggregation
+    scene_ir_summaries: List[SceneIRSummary] = []
+    for ep in episodes:
+        ev = ev_map.get(ep.episode_id)
+        if not ev:
+            continue
+        components = ev.components or {}
+        metadata = ev.metadata if hasattr(ev, "metadata") else {}
+        scene_tracks = None
+        if isinstance(metadata, dict):
+            scene_tracks = metadata.get("scene_tracks")
+        if scene_tracks is None and isinstance(components, dict):
+            scene_tracks = components.get("scene_tracks")
+        if scene_tracks and isinstance(scene_tracks, dict):
+            try:
+                sir_summary = compute_scene_ir_summary(scene_tracks)
+                scene_ir_summaries.append(sir_summary)
+            except Exception:
+                pass
+
+    if scene_ir_summaries:
+        agg_summary = aggregate_scene_ir_summaries(scene_ir_summaries)
+        lsd_summary["scene_ir_tracker"] = agg_summary.to_dict()
+        lsd_summary["scene_ir_tracker"]["episode_count"] = len(scene_ir_summaries)
+        
+        # Compute usable percentage (quality > threshold)
+        quality_threshold = 0.3
+        usable_count = sum(
+            1 for s in scene_ir_summaries
+            if getattr(s, "quality_score", 0.5) >= quality_threshold
+        )
+        lsd_summary["scene_ir_tracker"]["usable_pct"] = (
+            usable_count / len(scene_ir_summaries) * 100
+            if scene_ir_summaries else 0.0
+        )
 
     base_summary["lsd_vector_scene"] = lsd_summary
     return base_summary

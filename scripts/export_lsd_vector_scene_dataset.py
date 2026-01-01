@@ -59,6 +59,13 @@ class ExportConfig:
     save_depth: bool = False
     seed: int = 42
     enable_motion_hierarchy: bool = False
+    
+    # Scene IR Tracker settings
+    enable_scene_ir_tracker: bool = False
+    save_scene_tracks: bool = True  # Save when tracker enabled
+    save_scene_geometry: bool = False
+    save_scene_latents: bool = False
+    scene_tracks_version: str = "v1"
 
     # Scene parameter ranges for sampling
     topology_types: List[str] = None
@@ -134,6 +141,10 @@ def run_episode(
     enable_motion_hierarchy: bool = False,
     motion_hierarchy_model=None,
     motion_hierarchy_config=None,
+    enable_scene_ir_tracker: bool = False,
+    scene_ir_tracker=None,
+    save_scene_tracks: bool = True,
+    save_scene_latents: bool = False,
 ) -> Dict[str, Any]:
     """
     Run a single episode and collect data.
@@ -208,6 +219,37 @@ def run_episode(
             elif hasattr(mh_output.get("hierarchy"), "tolist"):
                 mh_output["hierarchy"] = mh_output["hierarchy"].tolist()
             episode_data["motion_hierarchy"] = mh_output
+
+    # Scene IR Tracker integration
+    if enable_scene_ir_tracker and scene_ir_tracker is not None:
+        from src.vision.scene_ir_tracker.serialization import (
+            serialize_scene_tracks_v1,
+            get_scene_ir_summary_dict,
+            compute_scene_ir_quality_score,
+        )
+        
+        # Run tracker on episode frames
+        # For now, use env's RGB observations if available
+        try:
+            scene_tracks = scene_ir_tracker.process_episode(
+                episode_data.get("rgb_frames", []),
+                camera_params=env.get_camera_params() if hasattr(env, "get_camera_params") else None,
+            )
+            
+            if scene_tracks and save_scene_tracks:
+                # Serialize to numpy arrays
+                tracks_dict = serialize_scene_tracks_v1(
+                    scene_tracks,
+                    include_latents=save_scene_latents,
+                )
+                episode_data["scene_tracks_v1"] = tracks_dict
+                
+                # Add summary and quality score
+                episode_data["scene_ir_summary"] = get_scene_ir_summary_dict(scene_tracks)
+                episode_data["scene_ir_quality_score"] = compute_scene_ir_quality_score(scene_tracks)
+        except Exception as e:
+            import logging
+            logging.warning(f"Scene IR Tracker failed for episode: {e}")
 
     return episode_data
 
@@ -309,6 +351,20 @@ def export_dataset(
         motion_hierarchy_config = MotionHierarchyConfig()
         motion_hierarchy_model = MotionHierarchyNode(motion_hierarchy_config)
 
+    # Scene IR Tracker setup
+    scene_ir_tracker = None
+    if export_config.enable_scene_ir_tracker:
+        from src.vision.scene_ir_tracker.scene_ir_tracker import SceneIRTracker
+        from src.vision.scene_ir_tracker.config import SceneIRTrackerConfig
+        
+        tracker_config = SceneIRTrackerConfig(
+            allow_fallbacks=False,  # Fail fast in production
+            use_stub_adapters=False,
+        )
+        scene_ir_tracker = SceneIRTracker(tracker_config)
+        if verbose:
+            print(f"Scene IR Tracker enabled (version: {export_config.scene_tracks_version})")
+
     for scene_idx in range(export_config.num_scenes):
         # Sample scene config
         scene_config_dict = sample_scene_config(rng, export_config)
@@ -347,6 +403,10 @@ def export_dataset(
             enable_motion_hierarchy=export_config.enable_motion_hierarchy,
             motion_hierarchy_model=motion_hierarchy_model,
             motion_hierarchy_config=motion_hierarchy_config,
+            enable_scene_ir_tracker=export_config.enable_scene_ir_tracker,
+            scene_ir_tracker=scene_ir_tracker,
+            save_scene_tracks=export_config.save_scene_tracks,
+            save_scene_latents=export_config.save_scene_latents,
         )
         scene_id = episode_data["scene_id"]
 
@@ -373,6 +433,10 @@ def export_dataset(
                 enable_motion_hierarchy=export_config.enable_motion_hierarchy,
                 motion_hierarchy_model=motion_hierarchy_model,
                 motion_hierarchy_config=motion_hierarchy_config,
+                enable_scene_ir_tracker=export_config.enable_scene_ir_tracker,
+                scene_ir_tracker=scene_ir_tracker,
+                save_scene_tracks=export_config.save_scene_tracks,
+                save_scene_latents=export_config.save_scene_latents,
             )
             episode_data["scene_config"] = scene_config_dict
             all_episodes.append(episode_data)
@@ -529,6 +593,56 @@ def main() -> int:
         help="If set, enable Motion Hierarchy Node computation for each LSD episode.",
     )
     parser.add_argument(
+        "--enable-scene-ir-tracker",
+        action="store_true",
+        help="Enable Scene IR Tracker for 3D entity tracking.",
+    )
+    parser.add_argument(
+        "--save-scene-tracks",
+        action="store_true",
+        default=True,
+        help="Save scene tracks to npz when tracker enabled (default: True).",
+    )
+    parser.add_argument(
+        "--no-save-scene-tracks",
+        action="store_false",
+        dest="save_scene_tracks",
+        help="Disable saving scene tracks.",
+    )
+    parser.add_argument(
+        "--save-scene-geometry",
+        action="store_true",
+        help="Save scene geometry (gaussians/meshes) when tracker enabled.",
+    )
+    parser.add_argument(
+        "--save-scene-latents",
+        action="store_true",
+        help="Save scene latent embeddings when tracker enabled.",
+    )
+    parser.add_argument(
+        "--scene-tracks-version",
+        type=str,
+        default="v1",
+        help="Scene tracks serialization version (default: v1).",
+    )
+    # Quality gating flags
+    parser.add_argument(
+        "--drop-diverged",
+        action="store_true",
+        help="Drop episodes where >50%% frames diverged.",
+    )
+    parser.add_argument(
+        "--min-quality",
+        type=float,
+        default=None,
+        help="Drop if scene_ir_quality_score < threshold.",
+    )
+    parser.add_argument(
+        "--scene-ir-hard-stop",
+        action="store_true",
+        help="Abort export if scene IR quality is too low.",
+    )
+    parser.add_argument(
         "--config-path",
         type=str,
         default=None,
@@ -551,6 +665,11 @@ def main() -> int:
         shard_size=args.shard_size,
         seed=args.seed,
         enable_motion_hierarchy=args.enable_motion_hierarchy,
+        enable_scene_ir_tracker=args.enable_scene_ir_tracker,
+        save_scene_tracks=args.save_scene_tracks,
+        save_scene_geometry=args.save_scene_geometry,
+        save_scene_latents=args.save_scene_latents,
+        scene_tracks_version=args.scene_tracks_version,
     )
 
     # Load config from YAML if provided
