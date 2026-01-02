@@ -774,6 +774,34 @@ class SemanticTagPropagator:
             preliminary_hints,
         )
         coherence_score = self.coherence_checker.compute_coherence_score(conflicts)
+
+        # Invariant 2.1: Lucky Success Detection
+        # "If RiskTag.level > threshold AND Outcome == Success AND NO RecoveryTag exists, flag as 'Lucky'."
+        has_high_risk = any(t.severity in {"high", "critical"} for t in risk_tags)
+        is_success = str(datapack.get("outcome", "")).lower() == "success" or \
+                     datapack.get("metadata", {}).get("success", False)
+        
+        has_recovery = any(t.reason == "recovery" for t in segment_boundary_tags)
+        
+        # If enabled, also check RecoveryTags from trust detection
+        if self.enable_ood_recovery_tags and not has_recovery:
+             has_recovery = bool(recovery_tags_payload)
+
+        if is_success and has_high_risk and not has_recovery:
+            # We flag this as a coherence conflict (reducing score) and add a Lucky tag if we had one.
+            # For now, we use SemanticConflict to surface it.
+            conflicts.append(
+                SemanticConflict(
+                    conflict_type="lucky_success_suspected",
+                    conflicting_tags=["outcome:success", "risk:high", "recovery:none"],
+                    severity="medium",
+                    resolution_hint="Flag episode as lucky; do not upweight.",
+                    justification="High risk success with no recovery observed.",
+                )
+            )
+            # Recompute coherence with new conflict
+            coherence_score = self.coherence_checker.compute_coherence_score(conflicts)
+
         supervision_hints = self.hints_generator.generate(
             task, fragility_tags, risk_tags, novelty_tags, conflicts, coherence_score
         )

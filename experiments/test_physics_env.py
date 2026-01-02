@@ -19,6 +19,18 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.envs.physics import DishwashingPhysicsEnv
+import pytest
+
+@pytest.fixture(scope="module")
+def env():
+    e = DishwashingPhysicsEnv(
+        frames=8,
+        image_size=(64, 64),
+        max_steps=60,
+        headless=True
+    )
+    yield e
+    e.close()
 
 
 def test_env_initialization():

@@ -47,6 +47,7 @@ class LSDVectorSceneEpisodeResult:
     scene_config: Dict[str, Any]
     trajectory_data: Optional[Dict[str, Any]] = None
     motion_hierarchy: Optional[Dict[str, Any]] = None
+    scene_tracks: Optional[Dict[str, Any]] = None
 
 
 def _serialize_agent_trajectories(trajectories: List[Any], graph: SceneGraph) -> Dict[str, Any]:
@@ -383,6 +384,73 @@ class LSDVectorSceneBackend:
                 motion_hierarchy_data = {"error": str(exc)}
                 trajectory_data["motion_hierarchy"] = motion_hierarchy_data
 
+        # Scene IR Tracker integration
+        scene_tracks_data = None
+        if getattr(config, "enable_scene_ir_tracker", False):
+            try:
+                from src.vision.scene_ir_tracker import SceneIRTracker, SceneIRTrackerConfig
+                from src.vision.nag.types import CameraParams
+
+                sirt_config = config.scene_ir_tracker_config
+                if isinstance(sirt_config, dict):
+                    sirt_config = SceneIRTrackerConfig.from_dict(sirt_config)
+
+                # Create stub camera params for tracker
+                camera = CameraParams.from_single_pose(
+                    position=(0.0, 0.0, -5.0),
+                    look_at=(0.0, 0.0, 0.0),
+                    up=(0.0, 1.0, 0.0),
+                    fov_deg=60.0,
+                    width=256,
+                    height=256,
+                )
+
+                # Generate synthetic frames and masks from trajectory
+                num_frames = min(step_count, 10)  # Limit for performance
+                frames = []
+                instance_masks = []
+                for _ in range(num_frames):
+                    frames.append(np.zeros((256, 256, 3), dtype=np.uint8))  # Stub frame
+                    instance_masks.append({})  # Empty masks for stub
+
+                tracker = SceneIRTracker(sirt_config)
+                scene_tracks = tracker.process_episode(
+                    frames=frames,
+                    instance_masks=instance_masks,
+                    camera=camera,
+                )
+
+                scene_tracks_data = scene_tracks.to_dict()
+                trajectory_data["scene_tracks"] = scene_tracks.summary()
+
+                # If MHN enabled, also run MHN on scene tracker positions
+                if motion_hierarchy_data is None and getattr(config, "enable_motion_hierarchy", False):
+                    try:
+                        import torch
+                        from src.vision.motion_hierarchy.motion_hierarchy_node import MotionHierarchyNode
+
+                        mh_config = config.motion_hierarchy_config
+                        positions = scene_tracks.get_positions_for_mhn(
+                            body_joints=config.scene_ir_tracker_config.body_joints_for_mhn
+                            if hasattr(config.scene_ir_tracker_config, "body_joints_for_mhn")
+                            else None
+                        )
+                        if positions.shape[1] > 0:  # Has entities
+                            mh_model = MotionHierarchyNode(mh_config)
+                            positions_t = torch.from_numpy(positions).unsqueeze(0)  # (1, T, N, 3)
+                            mh_out = mh_model(positions_t, return_losses=True)
+                            motion_hierarchy_data = {
+                                "hierarchy": mh_out["hierarchy"].detach().cpu().numpy().tolist(),
+                                "source": "scene_ir_tracker",
+                            }
+                            trajectory_data["motion_hierarchy"] = motion_hierarchy_data
+                    except Exception:
+                        pass  # Silently skip MHN if it fails
+
+            except Exception as exc:
+                scene_tracks_data = {"error": str(exc)}
+                trajectory_data["scene_tracks"] = scene_tracks_data
+
         return LSDVectorSceneEpisodeResult(
             episode_id=episode_id,
             scene_id=env.scene_id,
@@ -396,6 +464,7 @@ class LSDVectorSceneBackend:
             scene_config=config.to_dict(),
             trajectory_data=trajectory_data,
             motion_hierarchy=motion_hierarchy_data,
+            scene_tracks=scene_tracks_data,
         )
 
     def _get_action(self, obs: Dict[str, Any], objective: EconomicObjectiveSpec) -> np.ndarray:

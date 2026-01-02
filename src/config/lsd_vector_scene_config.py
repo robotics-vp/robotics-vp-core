@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Literal, Optional
 import json
 
 from src.vision.motion_hierarchy.config import MotionHierarchyConfig
+from src.vision.scene_ir_tracker.config import SceneIRTrackerConfig
 
 @dataclass(frozen=True)
 class LSDVectorSceneConfig:
@@ -73,6 +74,10 @@ class LSDVectorSceneConfig:
     enable_motion_hierarchy: bool = False
     motion_hierarchy_config: MotionHierarchyConfig = field(default_factory=MotionHierarchyConfig)
 
+    # Scene IR Tracker settings
+    enable_scene_ir_tracker: bool = False
+    scene_ir_tracker_config: SceneIRTrackerConfig = field(default_factory=SceneIRTrackerConfig)
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
         return {
@@ -103,6 +108,8 @@ class LSDVectorSceneConfig:
             "nag_use_stub_renderer": self.nag_use_stub_renderer,
             "enable_motion_hierarchy": self.enable_motion_hierarchy,
             "motion_hierarchy_config": self.motion_hierarchy_config.to_dict(),
+            "enable_scene_ir_tracker": self.enable_scene_ir_tracker,
+            "scene_ir_tracker_config": self.scene_ir_tracker_config.to_dict(),
         }
 
     def to_json(self) -> str:
@@ -129,6 +136,14 @@ class LSDVectorSceneConfig:
             mh_config = MotionHierarchyConfig.from_dict(motion_hierarchy_config)
         else:
             mh_config = MotionHierarchyConfig()
+
+        scene_ir_tracker_config = data.get("scene_ir_tracker_config")
+        if isinstance(scene_ir_tracker_config, SceneIRTrackerConfig):
+            sirt_config = scene_ir_tracker_config
+        elif isinstance(scene_ir_tracker_config, dict):
+            sirt_config = SceneIRTrackerConfig.from_dict(scene_ir_tracker_config)
+        else:
+            sirt_config = SceneIRTrackerConfig()
 
         return cls(
             topology_type=data.get("topology_type", "WAREHOUSE_AISLES"),
@@ -158,6 +173,8 @@ class LSDVectorSceneConfig:
             nag_use_stub_renderer=data.get("nag_use_stub_renderer", True),
             enable_motion_hierarchy=data.get("enable_motion_hierarchy", False),
             motion_hierarchy_config=mh_config,
+            enable_scene_ir_tracker=data.get("enable_scene_ir_tracker", False),
+            scene_ir_tracker_config=sirt_config,
         )
 
     @classmethod
