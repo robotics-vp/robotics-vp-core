@@ -35,7 +35,7 @@ from src.inference.demo_policy import DemoPolicy, DemoPolicyConfig
 from src.utils.json_safe import to_json_safe
 from src.utils.gpu_env import get_gpu_env_summary, get_gpu_utilization
 from src.utils.logging_schema import (
-    make_demo_episode_log_entry,
+    make_demo_episode_log_with_process_reward,
     make_demo_step_log_entry,
     write_demo_log_entry,
 )
@@ -304,7 +304,7 @@ def run_episode(
     # Backend from env
     backend = getattr(env, 'backend', 'unknown')
 
-    episode_summary = make_demo_episode_log_entry(
+    episode_summary = make_demo_episode_log_with_process_reward(
         episode_id=episode_idx,
         success=success,
         total_reward=total_reward,

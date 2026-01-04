@@ -1,8 +1,12 @@
 """
 Canonical logging field names used across samplers/curricula/ontology logs.
 Also includes standardized schemas for training and demo logs.
+
+Integration with Process Reward:
+    Use make_demo_episode_log_entry() with extra=format_log_for_training(pr_result)
+    to include process reward metrics alongside MHN/SceneIR summaries.
 """
-from typing import Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
 import json
 import os
@@ -142,6 +146,21 @@ DEMO_EPISODE_LOG_FIELDS = {
     "recovery_events": int,
     "backend": str,
     "seed": int,
+    # Process Reward fields (optional, from format_log_for_training)
+    "phi_star_mean": Optional[float],
+    "phi_star_final": Optional[float],
+    "phi_star_delta": Optional[float],
+    "conf_mean": Optional[float],
+    "conf_p10": Optional[float],
+    "r_shape_sum": Optional[float],
+    "disagreement_mean": Optional[float],
+    "entropy_mean": Optional[float],
+    "phi_B_disabled": Optional[bool],
+    # Upstream quality scores (optional)
+    "scene_ir_quality": Optional[float],
+    "motion_quality": Optional[float],
+    "mhn_plausibility": Optional[float],
+    "mhn_difficulty": Optional[float],
 }
 
 DEMO_STEP_LOG_FIELDS = {
@@ -248,3 +267,111 @@ def write_demo_log_entry(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     with open(filepath, "a") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+# ============================================================================
+# Process Reward Integration
+# ============================================================================
+
+def make_demo_episode_log_with_process_reward(
+    episode_id: int,
+    success: bool,
+    total_reward: float,
+    backend: str,
+    seed: int,
+    process_reward_result: Optional[Any] = None,
+    scene_ir_quality: Optional[float] = None,
+    motion_quality: Optional[float] = None,
+    mhn_summary: Optional[Any] = None,
+    fusion_override: Optional[Any] = None,
+    mpl_estimate: Optional[float] = None,
+    energy_wh: Optional[float] = None,
+    ood_events: int = 0,
+    recovery_events: int = 0,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Create a demo episode log entry with integrated process reward metrics.
+
+    This is the recommended way to log episodes with process reward data.
+    It merges process reward metrics with the standard demo log schema.
+
+    Args:
+        episode_id: Episode identifier
+        success: Whether episode succeeded
+        total_reward: Total reward accumulated
+        backend: Environment backend used
+        seed: Random seed
+        process_reward_result: ProcessRewardEpisodeOutput from process_reward_episode()
+        scene_ir_quality: Optional scene IR quality score
+        motion_quality: Optional motion quality score
+        mhn_summary: Optional MHNSummary object
+        fusion_override: Optional FusionOverride used
+        mpl_estimate: Marginal product estimate (optional)
+        energy_wh: Energy consumption in watt-hours (optional)
+        ood_events: Number of out-of-distribution events
+        recovery_events: Number of recovery events
+        extra: Additional fields (optional)
+
+    Returns:
+        Dictionary with all demo log fields plus process reward metrics.
+
+    Example:
+        >>> from src.process_reward import process_reward_episode, ProcessRewardConfig
+        >>> cfg = ProcessRewardConfig(online_mode=False)  # Offline eval
+        >>> pr_result = process_reward_episode(scene_tracks, "task", cfg=cfg)
+        >>> log_entry = make_demo_episode_log_with_process_reward(
+        ...     episode_id=1,
+        ...     success=True,
+        ...     total_reward=10.5,
+        ...     backend="mujoco",
+        ...     seed=42,
+        ...     process_reward_result=pr_result,
+        ...     scene_ir_quality=0.85,
+        ... )
+        >>> write_demo_log_entry("logs/episodes.jsonl", log_entry)
+    """
+    # Start with base demo log entry
+    entry = make_demo_episode_log_entry(
+        episode_id=episode_id,
+        success=success,
+        total_reward=total_reward,
+        backend=backend,
+        seed=seed,
+        mpl_estimate=mpl_estimate,
+        energy_wh=energy_wh,
+        ood_events=ood_events,
+        recovery_events=recovery_events,
+    )
+
+    # Add process reward metrics if available
+    if process_reward_result is not None:
+        try:
+            from src.process_reward.logging_utils import format_log_for_training
+            pr_log = format_log_for_training(
+                result=process_reward_result,
+                scene_ir_quality=scene_ir_quality,
+                motion_quality=motion_quality,
+                mhn_summary=mhn_summary,
+                fusion_override=fusion_override,
+            )
+            entry.update(pr_log)
+        except ImportError:
+            # Process reward module not available; skip
+            pass
+
+    # Add upstream quality scores directly if PR not provided
+    if process_reward_result is None:
+        if scene_ir_quality is not None:
+            entry["scene_ir_quality"] = scene_ir_quality
+        if motion_quality is not None:
+            entry["motion_quality"] = motion_quality
+        if mhn_summary is not None:
+            entry["mhn_plausibility"] = getattr(mhn_summary, "plausibility_score", None)
+            entry["mhn_difficulty"] = getattr(mhn_summary, "structural_difficulty", None)
+
+    # Add any extra fields
+    if extra:
+        entry.update(extra)
+
+    return entry
