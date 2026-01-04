@@ -241,6 +241,21 @@ def filter_by_tag(episodes, tag_key):
 - `allow_overlap`: `True` (episodes can satisfy multiple quotas)
 - `fallback_to_baseline`: `True` (fill unfilled quotas with baseline)
 
+#### 2.2.4 Process Reward–Aware Sampling
+
+**Strategy Strings**:
+- `process_reward_conf`
+- `process_reward_progress`
+- `process_reward_quality`
+
+**Gating**:
+- UnifiedQualityPolicy only applies process reward signals when `ProcessRewardProfile.has_data()` is true.
+- If process reward data is missing or placeholder, behavior matches balanced sampling (weights=1, eligible=True).
+
+**Safety**:
+- Weights are clamped to `>= 0`.
+- All-zero weights fall back to uniform sampling.
+
 ### 2.3 Curriculum Integration
 
 The sampler consumes a **curriculum schedule** from DataPackCurriculum:
