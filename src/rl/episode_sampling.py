@@ -166,7 +166,9 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         }
     }
     unified_weights = None
-    if datapack.process_reward_profile is not None:
+    pr_profile = datapack.process_reward_profile
+    if pr_profile is not None and getattr(pr_profile, "has_data", lambda: True)():
+        descriptor["process_reward_profile"] = pr_profile.to_dict()
         try:
             from src.policies.unified_quality import UnifiedQualityPolicy
 
@@ -440,11 +442,15 @@ class DataPackRLSampler:
         else:
             weights = [_balanced_weight(ep) for ep in episodes]
         if not self.use_unified_quality:
-            return weights
-        return [
-            float(w * max(0.0, ep.get("unified_quality_weight", 1.0)))
-            for w, ep in zip(weights, episodes)
-        ]
+            clamped = [max(0.0, float(w)) for w in weights]
+        else:
+            clamped = [
+                max(0.0, float(w * max(0.0, ep.get("unified_quality_weight", 1.0))))
+                for w, ep in zip(weights, episodes)
+            ]
+        if clamped and max(clamped) <= 0.0:
+            return [1.0] * len(clamped)
+        return clamped
 
     def _eligible_pool(self) -> List[Dict[str, Any]]:
         if not self.use_unified_quality:

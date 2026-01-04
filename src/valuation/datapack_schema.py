@@ -325,6 +325,21 @@ class ProcessRewardProfile:
             orchestrator_override=None,  # Set separately if needed
         )
 
+    def has_data(self) -> bool:
+        """Heuristic check for non-default process reward metrics."""
+        metrics = (
+            self.phi_star_mean,
+            self.phi_star_final,
+            self.phi_star_delta,
+            self.r_shape_sum,
+            self.disagreement_mean,
+            self.entropy_mean,
+        )
+        if any(abs(val) > 1e-6 for val in metrics):
+            return True
+        conf_defaults = (self.conf_mean, self.conf_p10, self.conf_min)
+        return any(abs(val - 0.5) > 1e-6 for val in conf_defaults)
+
     def quality_score(self, include_disagreement: bool = True, delta_cap: float = 1.0) -> float:
         """Compute quality score for sampling.
 

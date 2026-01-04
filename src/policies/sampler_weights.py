@@ -12,6 +12,22 @@ from src.policies.interfaces import SamplerWeightPolicy
 from src.rl import episode_sampling as sampler_utils
 
 
+def _process_reward_metric(ep: Dict[str, Any], key: str, fallback_keys: List[str], default: float) -> float:
+    for k in [key] + fallback_keys:
+        if k in ep:
+            return float(ep.get(k, default))
+    desc = ep.get("descriptor", {}) if isinstance(ep.get("descriptor"), dict) else {}
+    for k in [key] + fallback_keys:
+        if k in desc:
+            return float(desc.get(k, default))
+    pr_profile = desc.get("process_reward_profile") or ep.get("process_reward_profile")
+    if isinstance(pr_profile, dict):
+        for k in [key] + fallback_keys:
+            if k in pr_profile:
+                return float(pr_profile.get(k, default))
+    return float(default)
+
+
 def _episode_key(ep: Dict[str, Any]) -> str:
     desc = ep.get("descriptor", {})
     return str(desc.get("pack_id") or desc.get("episode_id") or desc.get("id") or "")
@@ -23,7 +39,7 @@ def _process_reward_conf_weight(ep: Dict[str, Any]) -> float:
     Higher confidence = more reliable episode for training.
     Uses conf_mean from process reward logging.
     """
-    conf = float(ep.get("conf_mean", ep.get("pr_conf_mean", 0.5)))
+    conf = _process_reward_metric(ep, "conf_mean", ["pr_conf_mean"], 0.5)
     # Avoid zero weights
     return max(conf, 0.1)
 
@@ -34,7 +50,7 @@ def _process_reward_progress_weight(ep: Dict[str, Any]) -> float:
     Higher progress = more successful trajectory.
     Uses phi_star_delta from process reward logging.
     """
-    delta = float(ep.get("phi_star_delta", ep.get("pr_phi_delta", 0.0)))
+    delta = _process_reward_metric(ep, "phi_star_delta", ["pr_phi_delta"], 0.0)
     # Scale delta to reasonable weight range [0.1, 2.0]
     # Positive delta = progress, negative = regression
     weight = 1.0 + delta  # delta in [-1, 1] → weight in [0, 2]
@@ -47,8 +63,8 @@ def _process_reward_quality_weight(ep: Dict[str, Any]) -> float:
     Quality = confidence * (1 + progress_factor)
     High confidence + good progress = high quality training data.
     """
-    conf = float(ep.get("conf_mean", ep.get("pr_conf_mean", 0.5)))
-    delta = float(ep.get("phi_star_delta", ep.get("pr_phi_delta", 0.0)))
+    conf = _process_reward_metric(ep, "conf_mean", ["pr_conf_mean"], 0.5)
+    delta = _process_reward_metric(ep, "phi_star_delta", ["pr_phi_delta"], 0.0)
 
     # Progress factor: scale delta contribution
     progress_factor = max(0.0, delta)  # Only boost for positive progress
