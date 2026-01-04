@@ -252,6 +252,139 @@ class SimaAnnotation:
 
 
 @dataclass
+class ProcessRewardProfile:
+    """
+    Process reward metrics for the datapack.
+
+    Captures PBRS potential, fusion confidence, and diagnostic signals
+    from the process reward module. Used for:
+    - Episode filtering/gating by confidence
+    - Sampling weight computation
+    - Data quality analysis
+    """
+    # Core PBRS metrics
+    phi_star_mean: float = 0.0  # Mean fused potential
+    phi_star_final: float = 0.0  # Final potential value
+    phi_star_delta: float = 0.0  # Progress: final - initial
+
+    # Confidence metrics
+    conf_mean: float = 0.5  # Mean fusion confidence
+    conf_p10: float = 0.5  # 10th percentile (conservative estimate)
+    conf_min: float = 0.5  # Minimum confidence
+
+    # Shaped reward
+    r_shape_sum: float = 0.0  # Sum of shaped rewards
+
+    # Fusion diagnostics
+    disagreement_mean: float = 0.0  # Mean perspective disagreement
+    disagreement_max: float = 0.0  # Max disagreement
+    entropy_mean: float = 0.0  # Mean fusion entropy
+    entropy_max: float = 0.0  # Max entropy
+
+    # Configuration snapshot
+    phi_B_disabled: bool = False  # Was backward perspective disabled?
+    orchestrator_override: Optional[Dict[str, Any]] = None  # FusionOverride used
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "ProcessRewardProfile":
+        """Create from dictionary."""
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+    @classmethod
+    def from_episode_output(cls, result: Any) -> "ProcessRewardProfile":
+        """Create from ProcessRewardEpisodeOutput.
+
+        Args:
+            result: ProcessRewardEpisodeOutput from process_reward_episode()
+
+        Returns:
+            ProcessRewardProfile with extracted metrics.
+        """
+        import numpy as np
+
+        phi_star = result.phi_star
+        conf = result.conf
+
+        return cls(
+            phi_star_mean=float(np.mean(phi_star)),
+            phi_star_final=float(phi_star[-1]) if len(phi_star) > 0 else 0.0,
+            phi_star_delta=float(phi_star[-1] - phi_star[0]) if len(phi_star) > 0 else 0.0,
+            conf_mean=float(np.mean(conf)),
+            conf_p10=float(np.percentile(conf, 10)) if len(conf) > 0 else 0.5,
+            conf_min=float(np.min(conf)) if len(conf) > 0 else 0.5,
+            r_shape_sum=float(np.sum(result.r_shape)),
+            disagreement_mean=float(np.mean(result.diagnostics.disagreement)),
+            disagreement_max=float(np.max(result.diagnostics.disagreement)),
+            entropy_mean=float(np.mean(result.diagnostics.entropy)),
+            entropy_max=float(np.max(result.diagnostics.entropy)),
+            phi_B_disabled=result.metadata.get("phi_B_disabled", False),
+            orchestrator_override=None,  # Set separately if needed
+        )
+
+    def quality_score(self, include_disagreement: bool = True) -> float:
+        """Compute quality score for sampling.
+
+        Formula: conf * (1 + max(0, delta)) * (1 - disagreement_penalty)
+
+        Properties:
+        - Bounded in [0, ~2] (conf in [0,1], delta clamped, disagreement penalty capped)
+        - Monotonic increasing in conf_mean
+        - Monotonic increasing in positive phi_star_delta
+        - Monotonic decreasing in disagreement_mean
+        - Negative delta doesn't penalize (avoids double-penalizing stuck episodes)
+
+        Args:
+            include_disagreement: If True, penalize high disagreement.
+
+        Returns:
+            Quality score in [0, ~2].
+        """
+        progress_factor = max(0.0, self.phi_star_delta)
+        base = self.conf_mean * (1.0 + progress_factor)
+
+        if include_disagreement:
+            # Disagreement penalty: 0 at disagreement=0, 0.3 at disagreement=1
+            disagreement_penalty = 0.3 * min(1.0, self.disagreement_mean)
+            base *= (1.0 - disagreement_penalty)
+
+        return base
+
+    def is_reliable(self, conf_threshold: float = 0.3) -> bool:
+        """Check if episode is reliable based on confidence."""
+        return self.conf_p10 >= conf_threshold
+
+    def is_stagnant(
+        self,
+        conf_min: float = 0.4,
+        delta_max: float = 0.05,
+        duration_min: int = 10,
+        num_frames: int = 0,
+    ) -> bool:
+        """Detect stagnation: high confidence but no progress.
+
+        Stagnation = well-observed episode that's stuck. These are valuable
+        for curriculum: they indicate hard cases that need targeted intervention.
+
+        Args:
+            conf_min: Minimum confidence to consider "well-observed".
+            delta_max: Maximum delta to consider "no progress".
+            duration_min: Minimum frames to consider "long enough".
+            num_frames: Actual number of frames (if known).
+
+        Returns:
+            True if episode shows stagnation pattern.
+        """
+        is_confident = self.conf_p10 >= conf_min
+        is_stuck = abs(self.phi_star_delta) <= delta_max
+        is_long = num_frames >= duration_min if num_frames > 0 else True
+        return is_confident and is_stuck and is_long
+
+
+@dataclass
 class ObjectiveProfile:
     """
     Objective and economic profile for the datapack.
@@ -386,6 +519,9 @@ class DataPackMeta:
     # Objective profile (optional) - captures DL econ hyperparameters
     objective_profile: Optional[ObjectiveProfile] = None
 
+    # Process reward profile (optional) - PBRS metrics and confidence
+    process_reward_profile: Optional[ProcessRewardProfile] = None
+
     # Optional orchestration guidance
     guidance_profile: Optional["GuidanceProfile"] = None
 
@@ -436,6 +572,7 @@ class DataPackMeta:
             'sima_annotation': self.sima_annotation.to_dict() if self.sima_annotation else None,
             'vla_plan': to_json_safe(self.vla_plan),
             'objective_profile': self.objective_profile.to_dict() if self.objective_profile else None,
+            'process_reward_profile': self.process_reward_profile.to_dict() if self.process_reward_profile else None,
             'counterfactual_plan': to_json_safe(self.counterfactual_plan),
             'counterfactual_source': self.counterfactual_source,
             'created_at': self.created_at,
@@ -467,6 +604,10 @@ class DataPackMeta:
         if d.get('objective_profile'):
             objective_profile = ObjectiveProfile.from_dict(d['objective_profile'])
 
+        process_reward_profile = None
+        if d.get('process_reward_profile'):
+            process_reward_profile = ProcessRewardProfile.from_dict(d['process_reward_profile'])
+
         return cls(
             schema_version=d.get('schema_version', DATAPACK_SCHEMA_VERSION),
             pack_id=d.get('pack_id', str(uuid.uuid4())),
@@ -487,6 +628,7 @@ class DataPackMeta:
             sima_annotation=sima_annotation,
             vla_plan=d.get('vla_plan'),
             objective_profile=objective_profile,
+            process_reward_profile=process_reward_profile,
             counterfactual_plan=d.get('counterfactual_plan'),
             counterfactual_source=d.get('counterfactual_source'),
             created_at=d.get('created_at', datetime.now().isoformat()),

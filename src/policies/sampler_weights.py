@@ -1,5 +1,10 @@
 """
 Heuristic SamplerWeightPolicy that mirrors DataPackRLSampler weighting.
+
+Includes process_reward-based sampling strategies:
+- "process_reward_conf": Weight by process reward confidence
+- "process_reward_progress": Weight by phi_star progress (delta)
+- "process_reward_quality": Weight by combined confidence and progress
 """
 from typing import Any, Dict, List, Sequence
 
@@ -12,6 +17,47 @@ def _episode_key(ep: Dict[str, Any]) -> str:
     return str(desc.get("pack_id") or desc.get("episode_id") or desc.get("id") or "")
 
 
+def _process_reward_conf_weight(ep: Dict[str, Any]) -> float:
+    """Weight based on process reward confidence.
+
+    Higher confidence = more reliable episode for training.
+    Uses conf_mean from process reward logging.
+    """
+    conf = float(ep.get("conf_mean", ep.get("pr_conf_mean", 0.5)))
+    # Avoid zero weights
+    return max(conf, 0.1)
+
+
+def _process_reward_progress_weight(ep: Dict[str, Any]) -> float:
+    """Weight based on phi_star progress (delta).
+
+    Higher progress = more successful trajectory.
+    Uses phi_star_delta from process reward logging.
+    """
+    delta = float(ep.get("phi_star_delta", ep.get("pr_phi_delta", 0.0)))
+    # Scale delta to reasonable weight range [0.1, 2.0]
+    # Positive delta = progress, negative = regression
+    weight = 1.0 + delta  # delta in [-1, 1] → weight in [0, 2]
+    return max(weight, 0.1)
+
+
+def _process_reward_quality_weight(ep: Dict[str, Any]) -> float:
+    """Combined weight using confidence AND progress.
+
+    Quality = confidence * (1 + progress_factor)
+    High confidence + good progress = high quality training data.
+    """
+    conf = float(ep.get("conf_mean", ep.get("pr_conf_mean", 0.5)))
+    delta = float(ep.get("phi_star_delta", ep.get("pr_phi_delta", 0.0)))
+
+    # Progress factor: scale delta contribution
+    progress_factor = max(0.0, delta)  # Only boost for positive progress
+
+    # Quality = confidence * (1 + progress boost)
+    quality = conf * (1.0 + progress_factor)
+    return max(quality, 0.1)
+
+
 class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
     def __init__(self, trust_matrix: Dict[str, Any] = None):
         self.trust_matrix = trust_matrix or {}
@@ -21,6 +67,23 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
         return [dict(d) for d in descriptors]
 
     def evaluate(self, features: List[Dict[str, Any]], strategy: str) -> Dict[str, float]:
+        """Evaluate sampling weights for episodes using the given strategy.
+
+        Supported strategies:
+            - "balanced": Standard balanced weighting
+            - "frontier_prioritized": Weight by frontier score
+            - "econ_urgency": Weight by economic urgency score
+            - "process_reward_conf": Weight by process reward confidence
+            - "process_reward_progress": Weight by phi_star progress (delta)
+            - "process_reward_quality": Combined confidence + progress weighting
+
+        Args:
+            features: List of episode descriptors/features.
+            strategy: Strategy name to use.
+
+        Returns:
+            Dict mapping episode keys to sampling weights.
+        """
         weights: Dict[str, float] = {}
         for ep in features:
             key = _episode_key(ep)
@@ -32,6 +95,12 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
                 weight = max(float(ep.get("frontier_score", 0.0)), 1e-6) * float(ep.get("recap_weight_multiplier", 1.0))
             elif strategy == "econ_urgency":
                 weight = max(float(ep.get("econ_urgency_score", 0.0)), 1e-6) * float(ep.get("recap_weight_multiplier", 1.0))
+            elif strategy == "process_reward_conf":
+                weight = _process_reward_conf_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
+            elif strategy == "process_reward_progress":
+                weight = _process_reward_progress_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
+            elif strategy == "process_reward_quality":
+                weight = _process_reward_quality_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
             else:
                 weight = sampler_utils._balanced_weight(ep)
             trust_scale = self._trust_scale(ep)
