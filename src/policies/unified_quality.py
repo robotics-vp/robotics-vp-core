@@ -114,6 +114,9 @@ class UnifiedQualityPolicy:
         process_reward_quality: Optional[float] = None,  # If pre-computed
         # Map-First signals
         map_first_quality: Optional[float] = None,
+        # Semantic fusion diagnostics (observability only)
+        semantic_fusion_confidence_mean: Optional[float] = None,
+        semantic_disagreement_vla_vs_map: Optional[float] = None,
         # Episode info
         num_frames: int = 0,
     ) -> UnifiedQualityWeights:
@@ -196,6 +199,11 @@ class UnifiedQualityPolicy:
         components["map_first"] = {
             "quality": w_map_first,
         }
+        if semantic_fusion_confidence_mean is not None or semantic_disagreement_vla_vs_map is not None:
+            components["semantic_fusion"] = {
+                "confidence_mean": semantic_fusion_confidence_mean,
+                "disagreement_vla_vs_map": semantic_disagreement_vla_vs_map,
+            }
 
         # --- Combined weight ---
         w_combined = w_mhn * w_scene_ir * w_process_reward * w_map_first
@@ -296,6 +304,22 @@ class UnifiedQualityPolicy:
             except Exception:
                 map_first_quality = None
 
+        sem_conf = None
+        sem_disagreement = None
+        if datapack.episode_metrics:
+            sem_conf = datapack.episode_metrics.get("semantic_fusion_confidence_mean")
+            sem_disagreement = datapack.episode_metrics.get("semantic_disagreement_vla_vs_map")
+        if sem_conf is not None:
+            try:
+                sem_conf = float(sem_conf)
+            except Exception:
+                sem_conf = None
+        if sem_disagreement is not None:
+            try:
+                sem_disagreement = float(sem_disagreement)
+            except Exception:
+                sem_disagreement = None
+
         return self.compute(
             mhn_plausibility=mhn_plausibility,
             mhn_difficulty=mhn_difficulty,
@@ -306,6 +330,8 @@ class UnifiedQualityPolicy:
             process_reward_disagreement=pr_disagreement,
             process_reward_quality=pr_quality,
             map_first_quality=map_first_quality if map_first_quality is not None else None,
+            semantic_fusion_confidence_mean=sem_conf,
+            semantic_disagreement_vla_vs_map=sem_disagreement,
             num_frames=num_frames,
         )
 

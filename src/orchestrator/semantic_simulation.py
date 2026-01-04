@@ -29,6 +29,7 @@ from src.orchestrator.semantic_policy import (
     detect_semantic_gaps,
     select_datapacks_for_intent,
 )
+from src.orchestrator.semantic_fusion_runner import run_semantic_fusion_for_rollouts
 from src.scenarios.metadata import ScenarioMetadata, build_scenario_metadata
 from src.vla.rollout_labeler import label_rollouts_with_vla
 
@@ -228,6 +229,10 @@ def run_semantic_simulation(
         labeled_datapacks: list[DatapackConfig] = []
         if rollout_base_dir and rollout_bundle and selected:
             labeled = label_rollouts_with_vla(rollout_bundle, base_datapack=selected[0])
+            run_semantic_fusion_for_rollouts(
+                rollout_bundle,
+                summary_path=Path(rollout_base_dir) / rollout_bundle.scenario_id / "semantic_fusion_summary.jsonl",
+            )
             for cfg in labeled:
                 save_datapack_config(cfg, datapack_output_dir)
             register_datapack_configs(store, resolved_task_id, labeled)
