@@ -19,6 +19,18 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.envs.physics import DishwashingPhysicsEnv
+import pytest
+
+@pytest.fixture(scope="module")
+def env():
+    e = DishwashingPhysicsEnv(
+        frames=8,
+        image_size=(64, 64),
+        max_steps=60,
+        headless=True
+    )
+    yield e
+    e.close()
 
 
 def test_env_initialization():
@@ -39,7 +51,7 @@ def test_env_initialization():
     print(f"  - Frames: {env.frames}")
     print(f"  - Image size: {env.image_height}x{env.image_width}")
 
-    return env
+    env.close()
 
 
 def test_reset(env):
@@ -60,9 +72,6 @@ def test_reset(env):
         f"Shape mismatch: {obs.shape} vs {env.observation_space_shape}"
 
     print(f"✓ Shape matches expected: {obs.shape}")
-
-    return obs
-
 
 def test_step(env, n_steps=10):
     """Test stepping with random actions."""
@@ -97,9 +106,6 @@ def test_step(env, n_steps=10):
             break
 
     print(f"✓ All steps completed successfully")
-    return obs
-
-
 def test_video_consistency(env, n_steps=5):
     """Test that video observations change over time."""
     print("\n" + "="*60)
@@ -123,9 +129,6 @@ def test_video_consistency(env, n_steps=5):
         print(f"✓ Frames are changing (good)")
     else:
         print(f"⚠ Frames appear static (may be issue)")
-
-    return obs2
-
 
 def save_sample_frames(env, n_frames=10):
     """Save sample frames to disk."""

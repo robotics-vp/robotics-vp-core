@@ -6,6 +6,9 @@ The goal is to surface consistent Stage 5-ready samples by stitching together:
 - Stage 2 segmented trajectories
 - SIMA-2 stress artifacts
 - IsaacAdapter rollouts
+- Monitor Scene Tracks (scene_tracks_v1):
+  - Shape: (T, K, D) where T=frames, K=objects, D=features (pos, vel, class, id, confidence)
+  - Loaded into sample dict as 'scene_tracks' if present.
 - ROS → Stage2 pipeline outputs (stubbed deterministically if missing)
 
 Sampling uses TrustMatrix weights with deterministic shuffling keyed by seed.
@@ -106,6 +109,7 @@ class Phase1DatasetBase:
         self.sima2_stress = self._load_sima2_stress_outputs()
         self.isaac_rollouts = self._load_isaac_rollouts()
         self.ros_outputs = self._load_ros_stage2_outputs()
+        self.scene_tracks = self._load_scene_tracks()
 
         base_samples = self._assemble_base_samples()
         weighted = self._apply_trust_weighting(base_samples)
@@ -297,9 +301,38 @@ class Phase1DatasetBase:
             outputs.append({"id": "ros_stage2_stub", "stage2_tags": ["bridge"], "task": "unknown", "source": "ros_to_stage2_stub", "stage": "ros_stage2"})
         return outputs
 
+    def _load_scene_tracks(self) -> List[Dict[str, Any]]:
+        # Check for Scene IR export
+        track_path = self.stage2_root / "scene_tracks.jsonl"
+        if not track_path.exists():
+            # Try default export location
+            track_path = Path("data") / "lsd_vector_scene_dataset" / "scene_tracks.jsonl"
+            
+        tracks: List[Dict[str, Any]] = []
+        if track_path.exists():
+             raw = _read_jsonl(track_path, limit=64)
+             for idx, row in enumerate(raw):
+                 tracks.append({
+                     "id": str(row.get("id", f"scene_track_{idx}")),
+                     "track_count": int(row.get("track_count", 0)),
+                     "scene_quality": float(row.get("scene_ir_quality", row.get("scene_quality", 0.0))),
+                     "source": "scene_ir_tracker",
+                     "stage": "scene_tracks_v1"
+                 })
+                 
+        if not tracks:
+            tracks.append({
+                "id": "scene_tracks_stub", 
+                "track_count": 0, 
+                "scene_quality": 1.0, 
+                "source": "stub",
+                "stage": "scene_tracks_v1"
+            })
+        return tracks
+
     # --- sampling ------------------------------------------------------- #
     def _assemble_base_samples(self) -> List[Dict[str, Any]]:
-        max_count = max(len(self.stage1_frames), len(self.stage2_segments), len(self.sima2_stress), len(self.isaac_rollouts), len(self.ros_outputs))
+        max_count = max(len(self.stage1_frames), len(self.stage2_segments), len(self.sima2_stress), len(self.isaac_rollouts), len(self.ros_outputs), len(self.scene_tracks))
         samples: List[Dict[str, Any]] = []
         for idx in range(max_count):
             sample = {
@@ -309,6 +342,7 @@ class Phase1DatasetBase:
                 "sima2_stress": self.sima2_stress[idx % len(self.sima2_stress)],
                 "isaac_rollout": self.isaac_rollouts[idx % len(self.isaac_rollouts)],
                 "ros_stage2": self.ros_outputs[idx % len(self.ros_outputs)],
+                "scene_tracks": self.scene_tracks[idx % len(self.scene_tracks)],
             }
             sample = self._augment_sample(sample, idx)
             sample["trust_tag"] = sample.get("trust_tag") or self._resolve_trust_tag(sample)

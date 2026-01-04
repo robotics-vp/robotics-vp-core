@@ -81,7 +81,14 @@ class ObservationAdapter:
 
     DEFAULT_REWARD_COMPONENT_ORDER = ["mpl_component", "ep_component", "error_penalty", "wage_penalty"]
     DEFAULT_CONTROL_PHASE_ORDER = ["warmup", "skill_building", "frontier", "fine_tuning"]
-    DEFAULT_SAMPLER_STRATEGY_ORDER = ["balanced", "frontier_prioritized", "econ_urgency"]
+    DEFAULT_SAMPLER_STRATEGY_ORDER = [
+        "balanced",
+        "frontier_prioritized",
+        "econ_urgency",
+        "process_reward_conf",
+        "process_reward_progress",
+        "process_reward_quality",
+    ]
     DEFAULT_OBJECTIVE_PRESET_ORDER = ["throughput", "energy_saver", "balanced", "safety_first", "custom"]
 
     def __init__(

@@ -21,6 +21,7 @@ import json
 import random
 import sys
 import time
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -35,7 +36,7 @@ from src.inference.demo_policy import DemoPolicy, DemoPolicyConfig
 from src.utils.json_safe import to_json_safe
 from src.utils.gpu_env import get_gpu_env_summary, get_gpu_utilization
 from src.utils.logging_schema import (
-    make_demo_episode_log_entry,
+    make_demo_episode_log_with_process_reward,
     make_demo_step_log_entry,
     write_demo_log_entry,
 )
@@ -92,6 +93,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--use-mixed-precision",
         action="store_true",
         help="Enable mixed precision inference (AMP)",
+    )
+    parser.add_argument(
+        "--strict-process-reward-ablation",
+        action="store_true",
+        help="Fail if process reward ablation report generation fails",
     )
     return parser.parse_args(argv)
 
@@ -304,7 +310,7 @@ def run_episode(
     # Backend from env
     backend = getattr(env, 'backend', 'unknown')
 
-    episode_summary = make_demo_episode_log_entry(
+    episode_summary = make_demo_episode_log_with_process_reward(
         episode_id=episode_idx,
         success=success,
         total_reward=total_reward,
@@ -341,6 +347,41 @@ def run_episode(
         "summary": episode_summary,
         "steps": steps_log,
     }
+
+
+def _run_process_reward_ablation(run_dir: Path, strict: bool = False) -> tuple[Optional[Path], str]:
+    episodes_path = run_dir / "episodes.jsonl"
+    if not episodes_path.exists():
+        return None, "episodes.jsonl missing"
+    if episodes_path.stat().st_size == 0:
+        return None, "episodes.jsonl empty"
+
+    script_path = ROOT / "scripts" / "report_process_reward_ablation.py"
+    if not script_path.exists():
+        message = "report_process_reward_ablation.py missing"
+        if strict:
+            raise RuntimeError(message)
+        return None, message
+
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--run-dir",
+        str(run_dir),
+    ]
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=str(ROOT),
+    )
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout or "ablation report failed").strip()
+        if strict:
+            raise RuntimeError(message)
+        return None, message
+
+    return run_dir / "artifacts" / "process_reward", "ok"
 
 
 def main(argv: Optional[List[str]] = None) -> None:
@@ -425,6 +466,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         for step in all_steps:
             f.write(json.dumps(to_json_safe(step)) + "\n")
 
+    ablation_dir, ablation_status = _run_process_reward_ablation(
+        output_dir,
+        strict=args.strict_process_reward_ablation,
+    )
+
     # Compute aggregate stats
     num_success = sum(1 for ep in all_episodes if ep["success"])
     avg_steps = np.mean([ep.get("extra", {}).get("steps", 0) for ep in all_episodes])
@@ -441,6 +487,10 @@ def main(argv: Optional[List[str]] = None) -> None:
     print(f"  Avg MPL proxy: {avg_mpl:.3f}")
     print(f"  Avg energy proxy: {avg_energy:.3f}")
     print(f"  Output written to: {output_dir}")
+    if ablation_dir is not None:
+        print(f"  Process reward ablation: {ablation_dir}")
+    else:
+        print(f"  Process reward ablation: skipped ({ablation_status})")
     print(f"{'='*80}")
 
 

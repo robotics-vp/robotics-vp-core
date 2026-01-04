@@ -104,6 +104,10 @@ class TaskGraphRefiner:
                 # High success rate → MERGE_TASKS (if redundant)
                 if prim.success_rate > 0.95:
                     refinements.extend(self._merge_redundant_tasks(prim))
+                
+                # OOD/Critical Risk → SAFETY_STOP
+                if prim.risk_level == "critical" or "ood" in prim.tags:
+                     refinements.extend(self._insert_safety_stop_for_ood(prim))
 
         # 3. Economic urgency-driven refinements
         if self.econ_signals.error_urgency > 0.6:
@@ -452,6 +456,68 @@ class TaskGraphRefiner:
                 refinements.append(refinement)
                 break  # Only merge one pair per call
 
+        return refinements
+
+    def _insert_safety_stop_for_ood(
+        self, prim: SemanticPrimitive
+    ) -> List[TaskGraphRefinementProposal]:
+        """
+        Insert Safety Stop for OOD/Critical primitives.
+        
+        Rule: If risk is critical or OOD detected, halt execution via Safety Stop node.
+        """
+        refinements = []
+        
+        # We need to find where this primitive occurred or what task it belongs to.
+        # Primitives map to tasks via task_type roughly.
+        # This is strictly advisory, so we attach it to valid tasks matching the type.
+        
+        target_tasks = [
+            node for node in self.task_graph.get_all_nodes() 
+            if prim.task_type and prim.task_type in node.name.lower()
+        ]
+        
+        if not target_tasks:
+             # Fallback: finding generic "skill" tasks if prim has generic tags
+             if "move" in prim.tags:
+                 target_tasks = [
+                     n for n in self.task_graph.get_all_nodes() 
+                     if n.task_type == TaskType.SKILL and "move" in n.name.lower()
+                 ]
+
+        for node in target_tasks:
+            stop_task = {
+                "task_id": f"safety_stop_{node.task_id}",
+                "name": f"Safety Stop (OOD Detected)",
+                "task_type": "checkpoint",
+                "preconditions": [f"{node.task_id}_started"],
+                "postconditions": ["manual_intervention_required"],
+                "metadata": {
+                    "reason": "ood_critical_risk",
+                    "source_primitive": prim.primitive_id,
+                    "risk_level": prim.risk_level
+                },
+            }
+
+            refinement = TaskGraphRefinementProposal(
+                proposal_id=self._make_proposal_id(),
+                refinement_type=RefinementType.INSERT_CHECKPOINT,
+                priority=RefinementPriority.CRITICAL,
+                source_primitive_ids=[prim.primitive_id],
+                target_task_ids=[node.task_id],
+                parent_task_id=node.parent_id,
+                proposed_changes={
+                    "checkpoint_task": stop_task,
+                    "insert_after_task_id": node.task_id, # Stop immediately after start or before next
+                    "mandatory": True,
+                    "action": "halt"
+                },
+                rationale=f"Critical OOD risk detected in primitive {prim.primitive_id}",
+                confidence=0.95,
+                tags=["safety", "ood", "halt"],
+            )
+            refinements.append(refinement)
+            
         return refinements
 
     def _adjust_priority_for_safety(self) -> List[TaskGraphRefinementProposal]:

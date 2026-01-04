@@ -165,6 +165,21 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
             "source": "stage1_diffusion_vla" if "stage1" in datapack.pack_id else "runtime",
         }
     }
+    unified_weights = None
+    pr_profile = datapack.process_reward_profile
+    if pr_profile is not None and getattr(pr_profile, "has_data", lambda: True)():
+        descriptor["process_reward_profile"] = pr_profile.to_dict()
+        try:
+            from src.policies.unified_quality import UnifiedQualityPolicy
+
+            unified_weights = UnifiedQualityPolicy().compute_from_datapack(datapack)
+        except Exception:
+            unified_weights = None
+    if unified_weights is not None:
+        descriptor["unified_quality_weight"] = max(0.0, float(unified_weights.w_combined))
+        descriptor["unified_quality_eligible"] = bool(unified_weights.is_eligible)
+        descriptor["unified_quality_reason"] = unified_weights.eligibility_reason
+        descriptor["unified_quality"] = unified_weights.to_dict()
     descriptor = normalize_episode_descriptor(descriptor)
     errors = validate_episode_descriptor(descriptor)
     if errors:
@@ -216,6 +231,9 @@ class DataPackRLSampler:
     - balanced: tier-aware, lightly trust-weighted stratified sampling
     - frontier_prioritized: weight by ΔMPL/ΔJ + novelty/expected MPL gains
     - econ_urgency: weight by economic urgency and supervision hints
+    - process_reward_conf: weight by process reward confidence (if present)
+    - process_reward_progress: weight by process reward progress (delta)
+    - process_reward_quality: weight by combined process reward signals
 
     Deterministic for a given seed and configuration; returns JSON-safe
     descriptors without mutating objectives or reward math.
@@ -236,6 +254,7 @@ class DataPackRLSampler:
         use_datapack_auditor: bool = False,
         trust_matrix: Optional[Dict[str, Any]] = None,
         use_condition_vector: bool = False,
+        use_unified_quality: bool = True,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
@@ -246,6 +265,7 @@ class DataPackRLSampler:
         self.use_datapack_auditor = bool(use_datapack_auditor)
         self.trust_matrix = trust_matrix or {}
         self.use_condition_vector = bool(use_condition_vector)
+        self.use_unified_quality = bool(use_unified_quality)
         self.skill_resolver = SkillModeResolver(
             default_mode="efficiency_throughput",
             mode_order=[
@@ -295,8 +315,14 @@ class DataPackRLSampler:
         strategy_name = self._select_strategy(strategy)
         rng = random.Random(seed)
 
-        if strategy_name == "balanced":
-            selected = self._sample_balanced(batch_size, rng)
+        if strategy_name in {
+            "balanced",
+            "process_reward_conf",
+            "process_reward_progress",
+            "process_reward_quality",
+        }:
+            weight_strategy = "balanced" if strategy_name == "balanced" else strategy_name
+            selected = self._sample_balanced(batch_size, rng, weight_strategy=weight_strategy)
         elif strategy_name == "frontier_prioritized":
             selected = self._sample_frontier_prioritized(batch_size, rng)
         elif strategy_name == "econ_urgency":
@@ -355,6 +381,9 @@ class DataPackRLSampler:
         episode["frontier_score"] = self._compute_frontier_score(episode)
         episode["econ_urgency_score"] = self._compute_econ_urgency_score(episode)
         episode["recap_weight_multiplier"] = self._recap_weight_multiplier(episode)
+        episode["unified_quality_weight"] = max(0.0, float(descriptor.get("unified_quality_weight", 1.0)))
+        episode["unified_quality_eligible"] = bool(descriptor.get("unified_quality_eligible", True))
+        episode["unified_quality_reason"] = descriptor.get("unified_quality_reason")
         
         # Auditor Integration
         episode["auditor_result"] = None
@@ -405,17 +434,35 @@ class DataPackRLSampler:
         if policy and getattr(policy, "sampler_weights", None):
             features = policy.sampler_weights.build_features(episodes)
             weight_map = policy.sampler_weights.evaluate(features, strategy=strategy)
-            return [float(weight_map.get(_episode_key(ep), 0.0)) for ep in episodes]
-        if strategy == "frontier_prioritized":
-            return [max(ep["frontier_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
-        if strategy == "econ_urgency":
-            return [max(ep["econ_urgency_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
-        return [_balanced_weight(ep) for ep in episodes]
+            weights = [float(weight_map.get(_episode_key(ep), 0.0)) for ep in episodes]
+        elif strategy == "frontier_prioritized":
+            weights = [max(ep["frontier_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
+        elif strategy == "econ_urgency":
+            weights = [max(ep["econ_urgency_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
+        else:
+            weights = [_balanced_weight(ep) for ep in episodes]
+        if not self.use_unified_quality:
+            clamped = [max(0.0, float(w)) for w in weights]
+        else:
+            clamped = [
+                max(0.0, float(w * max(0.0, ep.get("unified_quality_weight", 1.0))))
+                for w, ep in zip(weights, episodes)
+            ]
+        if clamped and max(clamped) <= 0.0:
+            return [1.0] * len(clamped)
+        return clamped
 
-    def _sample_balanced(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
+    def _eligible_pool(self) -> List[Dict[str, Any]]:
+        if not self.use_unified_quality:
+            return list(self._episodes)
+        eligible = [ep for ep in self._episodes if ep.get("unified_quality_eligible", True)]
+        return eligible if eligible else list(self._episodes)
+
+    def _sample_balanced(self, batch_size: int, rng: random.Random, weight_strategy: str = "balanced") -> List[Dict[str, Any]]:
         """Tier-aware sampling that lightly respects trust_score without over-concentrating."""
+        episodes = self._eligible_pool()
         tier_groups: Dict[int, List[Dict[str, Any]]] = {}
-        for ep in self._episodes:
+        for ep in episodes:
             tier = ep["descriptor"].get("tier", 0)
             tier_groups.setdefault(tier, []).append(ep)
 
@@ -445,13 +492,13 @@ class DataPackRLSampler:
         for tier in sorted(tier_groups.keys()):
             pool = tier_groups[tier]
             need = counts.get(tier, 0)
-            weights = self._compute_weights(pool, strategy="balanced")
+            weights = self._compute_weights(pool, strategy=weight_strategy)
             selected.extend(_weighted_sample_without_replacement(pool, weights, need, rng))
 
         # Fill any shortfall from the remaining pool with uniform coverage
         if len(selected) < batch_size:
-            remaining_pool = [ep for ep in self._episodes if ep not in selected]
-            weights = self._compute_weights(remaining_pool, strategy="balanced")
+            remaining_pool = [ep for ep in episodes if ep not in selected]
+            weights = self._compute_weights(remaining_pool, strategy=weight_strategy)
             selected.extend(
                 _weighted_sample_without_replacement(
                     remaining_pool, weights, batch_size - len(selected), rng
@@ -461,10 +508,11 @@ class DataPackRLSampler:
 
     def _sample_frontier_prioritized(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
         """Bias sampling toward high ΔMPL/ΔJ datapacks while keeping diversity."""
-        scores = [ep["frontier_score"] for ep in self._episodes]
+        episodes = self._eligible_pool()
+        scores = [ep["frontier_score"] for ep in episodes]
         threshold = _percentile(scores, 0.65)
-        urgent = [ep for ep in self._episodes if ep["frontier_score"] >= threshold]
-        non_urgent = [ep for ep in self._episodes if ep["frontier_score"] < threshold]
+        urgent = [ep for ep in episodes if ep["frontier_score"] >= threshold]
+        non_urgent = [ep for ep in episodes if ep["frontier_score"] < threshold]
 
         urgent_count = min(max(int(batch_size * 0.7), 1), len(urgent))
         weights_urgent = self._compute_weights(urgent, strategy="frontier_prioritized")
@@ -479,10 +527,11 @@ class DataPackRLSampler:
 
     def _sample_econ_urgency(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
         """Weight by economic urgency and novelty, with a diversity buffer."""
-        scores = [ep["econ_urgency_score"] for ep in self._episodes]
+        episodes = self._eligible_pool()
+        scores = [ep["econ_urgency_score"] for ep in episodes]
         threshold = _percentile(scores, 0.6)
-        urgent = [ep for ep in self._episodes if ep["econ_urgency_score"] >= threshold]
-        baseline = [ep for ep in self._episodes if ep["econ_urgency_score"] < threshold]
+        urgent = [ep for ep in episodes if ep["econ_urgency_score"] >= threshold]
+        baseline = [ep for ep in episodes if ep["econ_urgency_score"] < threshold]
 
         urgent_count = min(max(int(batch_size * 0.65), 1), len(urgent))
         critical = [ep for ep in urgent if (ep["enrichment"].get("supervision_hints", {}) or {}).get("priority_level", "").lower() == "critical"]

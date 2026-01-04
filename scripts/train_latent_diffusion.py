@@ -26,46 +26,67 @@ class ZVTransitionDataset(Dataset):
     """
     Dataset of (z_t, a_t, z_{t+1}) transitions from z_V rollouts.
     """
-    def __init__(self, npz_path):
+    def __init__(self, npz_path, use_scene_tracks=False):
         """Load transitions from npz file."""
         data = np.load(npz_path, allow_pickle=True)
 
         self.n_episodes = int(data['n_episodes'])
         self.latent_dim = int(data['latent_dim'])
+        self.use_scene_tracks = use_scene_tracks
 
         # Extract transitions
         self.z_current = []
         self.actions = []
         self.z_next = []
+        self.scene_tracks = []
         self.episode_ids = []
+
+        has_tracks = 'ep_0_scene_tracks' in data
+
+        if self.use_scene_tracks and not has_tracks:
+            print(f"WARNING: use_scene_tracks=True but 'scene_tracks' not found in {npz_path}")
 
         for ep in range(self.n_episodes):
             z_seq = data[f'ep_{ep}_z_sequence']  # (T+1, latent_dim)
             actions = data[f'ep_{ep}_actions']   # (T, action_dim)
+            
+            tracks = None
+            if self.use_scene_tracks and has_tracks:
+                 tracks = data[f'ep_{ep}_scene_tracks'] # (T+1, K, D)
 
             # Create transitions
             for t in range(len(actions)):
                 self.z_current.append(z_seq[t])
                 self.actions.append(actions[t])
                 self.z_next.append(z_seq[t + 1])
+                if self.use_scene_tracks and has_tracks:
+                    self.scene_tracks.append(tracks[t])
                 self.episode_ids.append(ep)
 
         self.z_current = np.array(self.z_current)
         self.actions = np.array(self.actions)
         self.z_next = np.array(self.z_next)
+        self.scene_tracks = np.array(self.scene_tracks) if (self.use_scene_tracks and has_tracks) else None
         self.episode_ids = np.array(self.episode_ids)
 
         print(f"Loaded {len(self)} transitions from {self.n_episodes} episodes")
+        if self.scene_tracks is not None:
+            print(f"  Includes scene tracks: {self.scene_tracks.shape}")
 
     def __len__(self):
         return len(self.z_current)
 
     def __getitem__(self, idx):
-        return (
+        item = [
             torch.FloatTensor(self.z_current[idx]),
             torch.FloatTensor(self.actions[idx]),
             torch.FloatTensor(self.z_next[idx]),
-        )
+        ]
+        
+        if self.scene_tracks is not None:
+             item.append(torch.FloatTensor(self.scene_tracks[idx]))
+             
+        return tuple(item)
 
 
 class LatentDynamicsModel(nn.Module):
@@ -229,6 +250,7 @@ def train_latent_dynamics(
     hidden_dim=256,
     save_dir='checkpoints',
     device=None,
+    use_scene_tracks=False,
 ):
     """
     Train latent dynamics model on z_V transitions.
@@ -242,9 +264,7 @@ def train_latent_dynamics(
         hidden_dim: Hidden dimension
         save_dir: Directory to save model
         device: Torch device
-
-    Returns:
-        model, save_path
+        use_scene_tracks: Whether to include scene tracks in dataset
     """
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -256,7 +276,8 @@ def train_latent_dynamics(
 
     # Load dataset
     print(f"Loading dataset from {dataset_path}...")
-    dataset = ZVTransitionDataset(dataset_path)
+    # use_scene_tracks defaults to False unless specified
+    dataset = ZVTransitionDataset(dataset_path, use_scene_tracks=use_scene_tracks)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # Create model
@@ -413,6 +434,11 @@ if __name__ == '__main__':
         default='checkpoints',
         help='Directory to save model'
     )
+    parser.add_argument(
+        '--use-scene-tracks',
+        action='store_true',
+        help='Use scene_tracks_v1 if available in dataset'
+    )
 
     args = parser.parse_args()
 
@@ -428,6 +454,7 @@ if __name__ == '__main__':
         model_type=args.model_type,
         hidden_dim=args.hidden_dim,
         save_dir=args.save_dir,
+        use_scene_tracks=args.use_scene_tracks,
     )
 
     print("\n" + "="*60)

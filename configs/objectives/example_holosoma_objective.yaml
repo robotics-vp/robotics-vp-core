@@ -1,0 +1,7 @@
+mpl_weight: 1.0
+energy_weight: 0.2
+error_weight: 3.0
+novelty_weight: 0.0
+risk_weight: 5.0
+extra_weights:
+  time_to_completion: -0.5

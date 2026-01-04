@@ -1,0 +1,52 @@
+# Smoke test configuration for LSD Vector Scene Environment
+# Warehouse layout with dynamic agents
+
+scene_graph_config:
+  topology_type: WAREHOUSE_AISLES
+  num_nodes: 10
+  num_objects: 8
+  density: 0.5
+  route_length: 40.0
+  seed: 42
+
+visual_style_config:
+  lighting: DIM_INDOOR
+  clutter_level: MEDIUM
+  material_mix:
+    - metal
+    - plastic
+    - wood
+  voxel_size: 0.2  # Coarser for faster testing
+  default_height: 3.0
+
+behaviour_config:
+  num_humans: 2
+  num_robots: 1
+  num_forklifts: 0
+  tilt: 0.0  # Neutral behaviour
+  use_simple_policy: true
+
+econ_params:
+  price_per_unit: 0.30
+  human_mp: 60.0
+  human_wage: 18.0
+  damage_cost: 1.0
+  base_rate: 2.0
+  care_cost: 0.3
+  p_min: 0.02
+  k_err: 0.15
+  q_speed: 2.0
+  q_care: 1.5
+  energy_Wh_per_attempt: 0.01
+  max_error_rate_sla: 0.15
+  max_catastrophic_errors: 3
+  min_steps_for_sla: 10
+  zero_throughput_patience: 50
+  max_steps: 100
+  time_step_s: 1.0
+
+max_steps: 50
+time_step_s: 1.0
+enable_ggds: false
+ggds_iterations: 10
+action_dim: 2
