@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Mapping, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
 from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
 from src.sima2.semantic_primitive_extractor import extract_primitives_from_rollout
+from src.vla.semantic_evidence import build_vla_semantic_evidence_stub, save_vla_semantic_evidence_npz
 
 logger = logging.getLogger(__name__)
 
@@ -49,17 +50,29 @@ def label_rollouts_with_vla(
 
         rollout_dict = _build_rollout_dict(episode, base_datapack)
         primitives = extract_primitives_from_rollout(rollout_dict)
+        episode_tags: set[str] = set()
         for prim in primitives:
             primitive_tags.update(prim.tags)
+            episode_tags.update(prim.tags)
             risk_levels.add(prim.risk_level)
             derived_task_tags.update(_select_task_tags(prim.tags))
 
+        vla_action = None
         if controller is not None:
             vla_action, vla_action_error = _try_openvla_action(controller, episode, base_datapack)
             if vla_action:
-                vla_tags.update(_tags_from_vla_action(vla_action))
+                vla_action_tags = _tags_from_vla_action(vla_action)
+                vla_tags.update(vla_action_tags)
+                episode_tags.update(vla_action_tags)
             if vla_action_error:
                 vla_error_reason = vla_action_error
+
+        _write_vla_semantic_evidence_sidecar(
+            episode=episode,
+            semantic_tags=sorted(episode_tags),
+            vla_action=vla_action,
+            instruction=base_datapack.objective_hint or base_datapack.description or "",
+        )
 
         if derived_objective_hint is None:
             derived_objective_hint = _derive_objective_hint(primitives, episode.metrics)
@@ -123,6 +136,48 @@ def _load_trajectory_payload(path: Path) -> Any:
         return payload
     except Exception:
         return None
+
+
+def _extract_scene_tracks_payload(payload: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return None
+    scene_tracks = payload.get("scene_tracks_v1") or payload.get("scene_tracks")
+    if isinstance(scene_tracks, dict):
+        return scene_tracks
+    scene_tracks_path = payload.get("scene_tracks_path") or payload.get("scene_tracks_npz")
+    if scene_tracks_path:
+        try:
+            import numpy as np
+
+            data = dict(np.load(scene_tracks_path, allow_pickle=False))
+            return data
+        except Exception:
+            return None
+    return None
+
+
+def _write_vla_semantic_evidence_sidecar(
+    *,
+    episode: EpisodeRollout,
+    semantic_tags: list[str],
+    vla_action: Optional[Mapping[str, Any]],
+    instruction: str,
+) -> None:
+    try:
+        trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
+        scene_tracks = _extract_scene_tracks_payload(trajectory_payload)
+        evidence = build_vla_semantic_evidence_stub(
+            scene_tracks=scene_tracks,
+            vla_payload=vla_action,
+            semantic_tags=semantic_tags,
+            instruction=instruction,
+        )
+        evidence_path = episode.trajectory_path.with_name(
+            f"{episode.trajectory_path.stem}_vla_semantic_evidence_v1.npz"
+        )
+        save_vla_semantic_evidence_npz(evidence_path, evidence)
+    except Exception as exc:
+        logger.warning("Failed to write VLA semantic evidence sidecar: %s", exc)
 
 
 def _select_task_tags(tags: list[str]) -> set[str]:

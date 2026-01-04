@@ -1,7 +1,7 @@
 """
 Unified Quality Gating.
 
-Combines three quality signals into a single weight used for:
+Combines quality signals into a single weight used for:
 - Dataset sampling
 - Datapack valuation
 - Training eligibility
@@ -10,9 +10,10 @@ Signals:
 1. MHN motion quality (plausibility, structural difficulty)
 2. SceneIR quality (convergence, visibility)
 3. ProcessReward quality (confidence, progress, disagreement)
+4. Map-First quality (static map coverage, dynamics stability)
 
 Formula:
-    w = w_mhn * w_scene_ir * w_process_reward
+    w = w_mhn * w_scene_ir * w_process_reward * w_map_first
 
 Each component is in [0, 1], so combined weight is also in [0, 1].
 """
@@ -29,6 +30,7 @@ class UnifiedQualityWeights:
     w_mhn: float = 1.0
     w_scene_ir: float = 1.0
     w_process_reward: float = 1.0
+    w_map_first: float = 1.0
 
     # Combined weight
     w_combined: float = 1.0
@@ -45,6 +47,7 @@ class UnifiedQualityWeights:
             "w_mhn": self.w_mhn,
             "w_scene_ir": self.w_scene_ir,
             "w_process_reward": self.w_process_reward,
+            "w_map_first": self.w_map_first,
             "w_combined": self.w_combined,
             "is_eligible": self.is_eligible,
             "eligibility_reason": self.eligibility_reason,
@@ -109,6 +112,8 @@ class UnifiedQualityPolicy:
         process_reward_delta: float = 0.0,
         process_reward_disagreement: float = 0.0,
         process_reward_quality: Optional[float] = None,  # If pre-computed
+        # Map-First signals
+        map_first_quality: Optional[float] = None,
         # Episode info
         num_frames: int = 0,
     ) -> UnifiedQualityWeights:
@@ -125,6 +130,7 @@ class UnifiedQualityPolicy:
             process_reward_delta: Phi_star progress (final - initial).
             process_reward_disagreement: Mean perspective disagreement.
             process_reward_quality: Pre-computed PR quality (overrides above).
+            map_first_quality: Optional Map-First quality score in [0, 1].
             num_frames: Number of frames (for stagnation detection).
 
         Returns:
@@ -182,8 +188,17 @@ class UnifiedQualityPolicy:
             "quality": w_process_reward,
         }
 
+        # --- Map-First weight ---
+        if map_first_quality is not None:
+            w_map_first = max(0.0, min(1.0, map_first_quality))
+        else:
+            w_map_first = 1.0
+        components["map_first"] = {
+            "quality": w_map_first,
+        }
+
         # --- Combined weight ---
-        w_combined = w_mhn * w_scene_ir * w_process_reward
+        w_combined = w_mhn * w_scene_ir * w_process_reward * w_map_first
 
         # --- Eligibility checks ---
         is_eligible = True
@@ -219,6 +234,7 @@ class UnifiedQualityPolicy:
             w_mhn=w_mhn,
             w_scene_ir=w_scene_ir,
             w_process_reward=w_process_reward,
+            w_map_first=w_map_first,
             w_combined=w_combined,
             is_eligible=is_eligible,
             eligibility_reason=eligibility_reason,
@@ -267,6 +283,18 @@ class UnifiedQualityPolicy:
         # Get num_frames from episode_metrics if available
         if datapack.episode_metrics:
             num_frames = datapack.episode_metrics.get("num_frames", 0)
+        map_first_quality = None
+        if datapack.episode_metrics:
+            map_first_quality = datapack.episode_metrics.get("map_first_quality_score")
+            if map_first_quality is None:
+                summary = datapack.episode_metrics.get("map_first_summary", {})
+                if isinstance(summary, dict):
+                    map_first_quality = summary.get("map_first_quality_score")
+        if map_first_quality is not None:
+            try:
+                map_first_quality = float(map_first_quality)
+            except Exception:
+                map_first_quality = None
 
         return self.compute(
             mhn_plausibility=mhn_plausibility,
@@ -277,6 +305,7 @@ class UnifiedQualityPolicy:
             process_reward_delta=pr_delta,
             process_reward_disagreement=pr_disagreement,
             process_reward_quality=pr_quality,
+            map_first_quality=map_first_quality if map_first_quality is not None else None,
             num_frames=num_frames,
         )
 
