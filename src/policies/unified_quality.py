@@ -262,7 +262,7 @@ class UnifiedQualityPolicy:
             pr_conf_p10 = prp.conf_p10
             pr_delta = prp.phi_star_delta
             pr_disagreement = prp.disagreement_mean
-            pr_quality = prp.quality_score()
+            pr_quality = max(0.0, prp.quality_score())
 
         # Get num_frames from episode_metrics if available
         if datapack.episode_metrics:

@@ -325,33 +325,36 @@ class ProcessRewardProfile:
             orchestrator_override=None,  # Set separately if needed
         )
 
-    def quality_score(self, include_disagreement: bool = True) -> float:
+    def quality_score(self, include_disagreement: bool = True, delta_cap: float = 1.0) -> float:
         """Compute quality score for sampling.
 
-        Formula: conf * (1 + max(0, delta)) * (1 - disagreement_penalty)
+        Formula: conf * (1 + delta_pos) * disagree_factor
 
         Properties:
-        - Bounded in [0, ~2] (conf in [0,1], delta clamped, disagreement penalty capped)
+        - Bounded in [0, ~2] (conf in [0,1], delta clamped, disagreement factor capped)
         - Monotonic increasing in conf_mean
-        - Monotonic increasing in positive phi_star_delta
+        - Monotonic increasing in positive phi_star_delta (clamped)
         - Monotonic decreasing in disagreement_mean
         - Negative delta doesn't penalize (avoids double-penalizing stuck episodes)
 
         Args:
             include_disagreement: If True, penalize high disagreement.
+            delta_cap: Max positive delta contribution (clamped).
 
         Returns:
             Quality score in [0, ~2].
         """
-        progress_factor = max(0.0, self.phi_star_delta)
-        base = self.conf_mean * (1.0 + progress_factor)
+        delta_pos = max(0.0, self.phi_star_delta)
+        delta_pos = min(delta_pos, max(0.0, delta_cap))
+        base = self.conf_mean * (1.0 + delta_pos)
 
         if include_disagreement:
-            # Disagreement penalty: 0 at disagreement=0, 0.3 at disagreement=1
-            disagreement_penalty = 0.3 * min(1.0, self.disagreement_mean)
-            base *= (1.0 - disagreement_penalty)
+            # Disagreement factor: 1 at disagreement=0, 0 at disagreement>=~3.33
+            disagree_factor = 1.0 - 0.3 * self.disagreement_mean
+            disagree_factor = max(0.0, min(1.0, disagree_factor))
+            base *= disagree_factor
 
-        return base
+        return max(0.0, base)
 
     def is_reliable(self, conf_threshold: float = 0.3) -> bool:
         """Check if episode is reliable based on confidence."""

@@ -104,7 +104,7 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
             else:
                 weight = sampler_utils._balanced_weight(ep)
             trust_scale = self._trust_scale(ep)
-            weights[key] = float(weight * trust_scale)
+            weights[key] = float(max(0.0, weight * trust_scale))
         return weights
 
     def _trust_scale(self, descriptor: Dict[str, Any]) -> float:
