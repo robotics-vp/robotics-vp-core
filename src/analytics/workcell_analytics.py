@@ -21,6 +21,44 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class FailureTaxonomy:
+    """Breakdown of failure types for an episode."""
+    collision_count: int = 0
+    timeout_count: int = 0
+    precision_count: int = 0
+    other_count: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.collision_count + self.timeout_count + self.precision_count + self.other_count
+
+    def to_dict(self) -> Dict[str, int]:
+        return {
+            "collision": self.collision_count,
+            "timeout": self.timeout_count,
+            "precision": self.precision_count,
+            "other": self.other_count,
+        }
+
+
+@dataclass
+class ManufacturingKPIs:
+    """Manufacturing-specific key performance indicators."""
+    cycle_time_s: float = 0.0  # Avg time per completed item
+    contact_force_proxy: float = 0.0  # Proxy for gripper force usage
+    scrap_proxy: float = 0.0  # Fraction of items that became scrap
+    failure_taxonomy: FailureTaxonomy = field(default_factory=FailureTaxonomy)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "cycle_time_s": self.cycle_time_s,
+            "contact_force_proxy": self.contact_force_proxy,
+            "scrap_proxy": self.scrap_proxy,
+            "failure_taxonomy": self.failure_taxonomy.to_dict(),
+        }
+
+
+@dataclass
 class WorkcellEpisodeMetrics:
     """Metrics for a single workcell episode."""
     episode_id: str
@@ -41,8 +79,30 @@ class WorkcellEpisodeMetrics:
     implied_wage: float = 0.0
     quality_score: float = 0.0
 
+    # Manufacturing KPIs
+    manufacturing_kpis: Optional[ManufacturingKPIs] = None
+
     # Difficulty features
     difficulty: Optional[WorkcellDifficultyFeatures] = None
+
+
+@dataclass
+class AggregateManufacturingKPIs:
+    """Aggregate manufacturing KPIs across episodes."""
+    mean_cycle_time_s: float = 0.0
+    mean_contact_force_proxy: float = 0.0
+    mean_scrap_proxy: float = 0.0
+    total_failures_by_type: Dict[str, int] = field(default_factory=dict)
+    failure_rate_by_type: Dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "mean_cycle_time_s": self.mean_cycle_time_s,
+            "mean_contact_force_proxy": self.mean_contact_force_proxy,
+            "mean_scrap_proxy": self.mean_scrap_proxy,
+            "total_failures_by_type": self.total_failures_by_type,
+            "failure_rate_by_type": self.failure_rate_by_type,
+        }
 
 
 @dataclass
@@ -64,6 +124,9 @@ class WorkcellSuiteReport:
     mean_throughput_per_hour: float
     mean_implied_wage: float
     mean_quality_score: float
+
+    # Manufacturing KPI aggregates
+    manufacturing_kpis: AggregateManufacturingKPIs = field(default_factory=AggregateManufacturingKPIs)
 
     # Difficulty correlation
     difficulty_success_correlation: float = 0.0
@@ -117,6 +180,17 @@ def compute_episode_metrics(
     error_rate = errors / max(items_total, 1)
     quality_score = completion_rate * (1 - error_rate)
 
+    # Compute manufacturing KPIs
+    manufacturing_kpis = _compute_manufacturing_kpis(
+        episode_data=episode_data,
+        items_completed=items_completed,
+        items_total=items_total,
+        time_s=time_s,
+        errors=errors,
+        tolerance_violations=tolerance_violations,
+        success=success,
+    )
+
     # Get difficulty features if available
     difficulty = episode_data.get("difficulty_features")
     if difficulty is None and "config" in episode_data:
@@ -139,7 +213,106 @@ def compute_episode_metrics(
         throughput_per_hour=throughput_per_hour,
         implied_wage=implied_wage,
         quality_score=quality_score,
+        manufacturing_kpis=manufacturing_kpis,
         difficulty=difficulty,
+    )
+
+
+def _compute_manufacturing_kpis(
+    episode_data: Dict[str, Any],
+    items_completed: int,
+    items_total: int,
+    time_s: float,
+    errors: int,
+    tolerance_violations: int,
+    success: bool,
+) -> ManufacturingKPIs:
+    """
+    Compute manufacturing KPIs for an episode.
+
+    Args:
+        episode_data: Raw episode data dict
+        items_completed: Number of items completed
+        items_total: Total items attempted
+        time_s: Total episode time in seconds
+        errors: Number of errors
+        tolerance_violations: Number of tolerance violations
+        success: Whether episode was successful
+
+    Returns:
+        ManufacturingKPIs
+    """
+    # Cycle time: average time per completed item
+    cycle_time_s = time_s / max(items_completed, 1)
+
+    # Contact force proxy: estimate from gripper actions
+    # Use gripper_close_count if available, otherwise estimate from steps
+    gripper_actions = episode_data.get("gripper_close_count", 0)
+    if gripper_actions == 0:
+        # Estimate: assume ~2 gripper actions per completed item
+        gripper_actions = max(items_completed * 2, episode_data.get("steps", 0) // 10)
+    # Normalize to [0, 1] range: more gripper actions = higher force proxy
+    contact_force_proxy = min(1.0, gripper_actions / max(items_total * 3, 1))
+
+    # Scrap proxy: fraction of items that became scrap (errors + incomplete)
+    items_failed = items_total - items_completed
+    items_scrapped = errors + items_failed
+    scrap_proxy = items_scrapped / max(items_total, 1)
+
+    # Failure taxonomy: classify failures by type
+    failure_taxonomy = _classify_failures(
+        episode_data=episode_data,
+        errors=errors,
+        tolerance_violations=tolerance_violations,
+        success=success,
+        time_s=time_s,
+    )
+
+    return ManufacturingKPIs(
+        cycle_time_s=cycle_time_s,
+        contact_force_proxy=contact_force_proxy,
+        scrap_proxy=scrap_proxy,
+        failure_taxonomy=failure_taxonomy,
+    )
+
+
+def _classify_failures(
+    episode_data: Dict[str, Any],
+    errors: int,
+    tolerance_violations: int,
+    success: bool,
+    time_s: float,
+) -> FailureTaxonomy:
+    """
+    Classify failures into taxonomy categories.
+
+    Categories:
+        - collision: Physical collision detected
+        - timeout: Episode exceeded time limit
+        - precision: Tolerance/placement errors
+        - other: Unclassified failures
+    """
+    # Extract failure info from episode_data if available
+    collision_count = episode_data.get("collision_count", 0)
+    timeout_count = 0
+    precision_count = tolerance_violations
+    other_count = 0
+
+    # Check for timeout
+    max_time = episode_data.get("max_time_s", episode_data.get("max_steps", 100) * 1.0)
+    if not success and time_s >= max_time * 0.95:
+        timeout_count = 1
+
+    # Remaining errors go to other
+    accounted_failures = collision_count + timeout_count + precision_count
+    if errors > accounted_failures:
+        other_count = errors - accounted_failures
+
+    return FailureTaxonomy(
+        collision_count=collision_count,
+        timeout_count=timeout_count,
+        precision_count=precision_count,
+        other_count=other_count,
     )
 
 
@@ -208,6 +381,9 @@ def compute_suite_report(
             difficulty_success_corr = float(np.corrcoef(difficulties, successes)[0, 1])
             difficulty_reward_corr = float(np.corrcoef(difficulties, rewards)[0, 1])
 
+    # Manufacturing KPI aggregates
+    manufacturing_kpis = _aggregate_manufacturing_kpis(episode_metrics)
+
     # Per-task-type breakdown
     by_task_type: Dict[str, Dict[str, float]] = {}
     task_types = set(m.task_type for m in episode_metrics)
@@ -235,9 +411,56 @@ def compute_suite_report(
         mean_throughput_per_hour=mean_throughput,
         mean_implied_wage=mean_wage,
         mean_quality_score=mean_quality,
+        manufacturing_kpis=manufacturing_kpis,
         difficulty_success_correlation=difficulty_success_corr,
         difficulty_reward_correlation=difficulty_reward_corr,
         by_task_type=by_task_type,
+    )
+
+
+def _aggregate_manufacturing_kpis(
+    episode_metrics: List[WorkcellEpisodeMetrics],
+) -> AggregateManufacturingKPIs:
+    """
+    Aggregate manufacturing KPIs across episodes.
+
+    Args:
+        episode_metrics: List of episode metrics with manufacturing_kpis
+
+    Returns:
+        AggregateManufacturingKPIs
+    """
+    metrics_with_kpis = [m for m in episode_metrics if m.manufacturing_kpis is not None]
+
+    if not metrics_with_kpis:
+        return AggregateManufacturingKPIs()
+
+    n = len(metrics_with_kpis)
+
+    # Mean KPIs
+    mean_cycle_time = sum(m.manufacturing_kpis.cycle_time_s for m in metrics_with_kpis) / n
+    mean_contact_force = sum(m.manufacturing_kpis.contact_force_proxy for m in metrics_with_kpis) / n
+    mean_scrap = sum(m.manufacturing_kpis.scrap_proxy for m in metrics_with_kpis) / n
+
+    # Aggregate failure taxonomy
+    total_failures = {
+        "collision": sum(m.manufacturing_kpis.failure_taxonomy.collision_count for m in metrics_with_kpis),
+        "timeout": sum(m.manufacturing_kpis.failure_taxonomy.timeout_count for m in metrics_with_kpis),
+        "precision": sum(m.manufacturing_kpis.failure_taxonomy.precision_count for m in metrics_with_kpis),
+        "other": sum(m.manufacturing_kpis.failure_taxonomy.other_count for m in metrics_with_kpis),
+    }
+
+    total_all_failures = sum(total_failures.values())
+    failure_rates = {
+        k: v / max(total_all_failures, 1) for k, v in total_failures.items()
+    }
+
+    return AggregateManufacturingKPIs(
+        mean_cycle_time_s=mean_cycle_time,
+        mean_contact_force_proxy=mean_contact_force,
+        mean_scrap_proxy=mean_scrap,
+        total_failures_by_type=total_failures,
+        failure_rate_by_type=failure_rates,
     )
 
 
@@ -262,6 +485,12 @@ def format_suite_report(report: WorkcellSuiteReport) -> str:
         f"Mean Throughput: {report.mean_throughput_per_hour:.1f}/hr",
         f"Mean Implied Wage: ${report.mean_implied_wage:.2f}/hr",
         f"Mean Quality Score: {report.mean_quality_score:.2f}",
+        "",
+        "--- Manufacturing KPIs ---",
+        f"Mean Cycle Time: {report.manufacturing_kpis.mean_cycle_time_s:.1f}s",
+        f"Contact Force Proxy: {report.manufacturing_kpis.mean_contact_force_proxy:.3f}",
+        f"Scrap Proxy: {report.manufacturing_kpis.mean_scrap_proxy:.1%}",
+        f"Failures by Type: {report.manufacturing_kpis.total_failures_by_type}",
         "",
         "--- Difficulty Correlations ---",
         f"Difficulty ↔ Success: {report.difficulty_success_correlation:.3f}",
