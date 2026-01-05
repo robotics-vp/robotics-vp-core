@@ -1,0 +1,22 @@
+# Smoke test configuration for workcell environment
+# Assembly bench layout with minimal parts
+
+workcell_env:
+  topology_type: ASSEMBLY_BENCH
+  num_stations: 1
+  num_fixtures: 1
+  num_bins: 2
+  conveyor_enabled: false
+
+  num_parts: 6
+  part_types:
+    - bolt
+    - plate
+
+  max_steps: 60
+  time_step_s: 1.0
+  physics_mode: SIMPLE
+
+  tolerance_mm: 2.0
+  occlusion_level: 0.1
+  tool_changes_required: 0
