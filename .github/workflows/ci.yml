@@ -27,3 +27,6 @@ jobs:
 
       - name: Run fast tests
         run: python3 -m pytest tests/ -m "not slow" --durations=20 -q
+
+      - name: Workcell env smoke tests
+        run: python3 scripts/smoke_workcell_env.py
