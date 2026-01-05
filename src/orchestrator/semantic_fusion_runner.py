@@ -129,6 +129,7 @@ def _safe_episode_id(episode_id: str) -> str:
 def run_semantic_fusion_for_rollouts(
     rollout_bundle: RolloutBundle,
     summary_path: Optional[Path] = None,
+    emit_semantic_fusion: bool = True,
 ) -> list[Dict[str, Any]]:
     """Run semantic fusion for each episode in a rollout bundle."""
     summaries: list[Dict[str, Any]] = []
@@ -203,11 +204,6 @@ def run_semantic_fusion_for_rollouts(
             num_classes=num_classes,
         )
 
-        episode_id = getattr(episode.metadata, "episode_id", "") or ""
-        fusion_basename = f"{_safe_episode_id(episode_id)}_semantic_fusion_v1.npz"
-        fusion_path = trajectory_path.with_name(fusion_basename)
-        np.savez_compressed(fusion_path, **fusion_result.to_npz())
-
         confidence_mean = float(np.mean(fusion_result.fused_confidence))
         disagreement_mean = float(fusion_result.diagnostics.get("disagreement_mean", 0.0)) if fusion_result.diagnostics else 0.0
         summary = {
@@ -215,18 +211,29 @@ def run_semantic_fusion_for_rollouts(
             "semantic_fusion_confidence_mean": confidence_mean,
             "semantic_disagreement_vla_vs_map": disagreement_mean,
             "semantic_fusion_quality_score": confidence_mean,
-            "semantic_fusion_path": str(fusion_path),
-            "semantic_fusion_keys": list(fusion_result.to_npz().keys()),
-            "semantic_fusion_prefix": SEMANTIC_FUSION_PREFIX,
         }
-        summaries.append(summary)
 
         metrics = {
             "semantic_fusion_confidence_mean": confidence_mean,
             "semantic_disagreement_vla_vs_map": disagreement_mean,
             "semantic_fusion_quality_score": confidence_mean,
         }
-        _update_episode_metadata(trajectory_path.parent, metrics, fusion_path)
+        if emit_semantic_fusion:
+            episode_id = getattr(episode.metadata, "episode_id", "") or ""
+            fusion_basename = f"{_safe_episode_id(episode_id)}_semantic_fusion_v1.npz"
+            fusion_path = trajectory_path.with_name(fusion_basename)
+            fusion_payload = fusion_result.to_npz()
+            np.savez_compressed(fusion_path, **fusion_payload)
+            summary.update(
+                {
+                    "semantic_fusion_path": str(fusion_path),
+                    "semantic_fusion_keys": list(fusion_payload.keys()),
+                    "semantic_fusion_prefix": SEMANTIC_FUSION_PREFIX,
+                }
+            )
+            _update_episode_metadata(trajectory_path.parent, metrics, fusion_path)
+
+        summaries.append(summary)
         episode.metrics = dict(episode.metrics, **metrics)
 
     if summary_path is not None:

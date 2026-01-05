@@ -35,6 +35,22 @@ def make_motor_backend(
                 lsd_config = load_lsd_vector_scene_config(backend_config)
 
         return LSDVectorSceneBackend(econ_meter=econ_meter, default_config=lsd_config)
+    if name == "workcell_env":
+        from src.motor_backend.workcell_env_backend import WorkcellEnvBackend
+        from src.config.workcell_env_config import WorkcellEnvConfig, load_workcell_env_config
+
+        workcell_config = None
+        if backend_config is not None:
+            if isinstance(backend_config, WorkcellEnvConfig):
+                workcell_config = backend_config
+            elif isinstance(backend_config, dict):
+                workcell_config = load_workcell_env_config(backend_config)
+
+        return WorkcellEnvBackend(
+            econ_meter=econ_meter,
+            datapack_provider=DatapackProvider(store),
+            default_config=workcell_config,
+        )
     if name == "dummy":
         return None
     raise ValueError(f"Unknown motor backend: {name}")

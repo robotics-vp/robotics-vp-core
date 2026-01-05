@@ -83,6 +83,74 @@ python3 scripts/eval_drawer_vase_scripted.py --episodes 5 --emit-datapacks data/
 python3 scripts/smoke_test_phase_c_hrl_vla.py --episodes 3 --out-datapacks data/phase_c_datapacks/smoke.json
 ```
 
+## 7.1) Workcell Manufacturing Suite (Blue-Collar Environments)
+
+The workcell environment suite provides modular manufacturing task environments for kitting, assembly, inspection, and conveyor operations.
+
+### Quick Start
+
+```bash
+# Run smoke tests
+python3 scripts/smoke_workcell_env.py
+
+# Run via motor backend factory
+python3 -c "
+from src.motor_backend import make_motor_backend
+backend = make_motor_backend('workcell_env')
+result = backend.train_policy(episodes=5, config={'task_type': 'kitting'})
+print(f'Training result: {result.metrics}')
+"
+
+# Promptable task generation (orchestrator path)
+python3 -c "
+from src.orchestrator.workcell_adapter import WorkcellOrchestrationAdapter
+adapter = WorkcellOrchestrationAdapter()
+result = adapter.request_task('Pack 6 bolts into a tray with 2mm tolerance')
+print(f'Generated task: {result.inferred_task_type}, nodes: {len(result.task_graph.nodes)}')
+"
+
+# Export datapack from workcell episodes
+python3 -c "
+from src.motor_backend.workcell_env_backend import WorkcellEnvBackend
+backend = WorkcellEnvBackend()
+backend.train_policy(episodes=10)
+datapack = backend.export_datapack()
+print(f'Datapack episodes: {len(datapack[\"episodes\"])}')
+"
+
+# Reconstruct workcell from SceneTracks (video-to-env replay)
+python3 -c "
+from src.envs.workcell_env.reconstruction.scene_tracks_adapter import SceneTracksAdapter
+import numpy as np
+
+# Load your SceneTracks_v1 npz
+# tracks = np.load('path/to/scene_tracks.npz')
+# adapter = SceneTracksAdapter()
+# result = adapter.reconstruct_from_tracks(dict(tracks))
+# print(f'Reconstructed: {len(result.scene_spec.parts)} parts')
+"
+```
+
+### Available Tasks
+
+| Task Type | Description | Config Key |
+|-----------|-------------|------------|
+| `kitting` | Pack items into trays/boxes | `PRESETS["assembly_bench_simple"]` |
+| `peg_in_hole` | Precision insertion | tolerance_mm parameter |
+| `bin_picking` | Pick from cluttered bins | occlusion_level parameter |
+| `conveyor_sorting` | Sort items on moving belt | `PRESETS["conveyor_sorting"]` |
+| `assembly` | Multi-step assembly with fasteners | tool_changes_required |
+| `inspection` | Visual defect detection | `PRESETS["inspection_simple"]` |
+
+### Key Files
+
+- `src/envs/workcell_env/` — Core environment module
+- `src/motor_backend/workcell_env_backend.py` — Motor backend integration
+- `src/orchestrator/workcell_adapter.py` — Promptable task compiler
+- `src/analytics/workcell_analytics.py` — Episode metrics and reports
+- `docs/workcell_ontology.md` — Entity schema (Station, Fixture, Part, Tool, Container)
+- `THIRD_PARTY_NOTICES.md` — License attribution for referenced patterns
+
 ## 8) Design Principles
 - **Economics-first:** MPL, wage parity, EP, error, safety, and data value drive rewards and gating.
 - **Multi-gating:** trust × w_econ for quality; λ for budget. Never stack λ as another gate.

@@ -1,0 +1,22 @@
+# Smoke test configuration for workcell environment
+# Conveyor sorting layout with simple part mix
+
+workcell_env:
+  topology_type: CONVEYOR_LINE
+  num_stations: 2
+  num_fixtures: 1
+  num_bins: 4
+  conveyor_enabled: true
+
+  num_parts: 12
+  part_types:
+    - widget_a
+    - widget_b
+
+  max_steps: 80
+  time_step_s: 0.5
+  physics_mode: SIMPLE
+
+  tolerance_mm: 3.0
+  occlusion_level: 0.2
+  tool_changes_required: 0
