@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"019b916c-a9d4-72f3-a529-76badcf5450b"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"**Preparing initial greeting**"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Hello!"}}
+{"type":"turn.completed","usage":{"input_tokens":7417,"cached_input_tokens":6272,"output_tokens":8}}
