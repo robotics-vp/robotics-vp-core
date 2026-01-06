@@ -26,3 +26,7 @@ tmp_*.json
 
 # local env
 .venv/
+
+# === AGENT ARTIFACTS ===
+.agent/runs/
+.agent/queue/

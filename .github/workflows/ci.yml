@@ -12,6 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify agent ergonomics
+        run: ./scripts/agent/verify.sh
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
