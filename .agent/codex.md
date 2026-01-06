@@ -43,6 +43,18 @@ CODEX_MODE=mcp ./scripts/codex/run.sh "task description"
 CODEX_MODE=cloud ./scripts/codex/run.sh --env ENV_ID "task description"
 ```
 
+## Cloud Lane
+
+Use the cloud lane for parallelism or long-running tasks.
+
+```bash
+# Force cloud via router
+CODEX_MODE=cloud ./scripts/codex/run.sh --env "$CODEX_CLOUD_ENV_ID" "task description"
+
+# Direct cloud runner
+./scripts/codex/run_cloud.sh --env "$CODEX_CLOUD_ENV_ID" --apply --wait "task description"
+```
+
 ## Task Contract
 
 Every Codex job MUST:

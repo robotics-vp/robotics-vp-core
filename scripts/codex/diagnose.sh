@@ -111,14 +111,23 @@ echo ""
 echo "=== MCP Check ==="
 
 MCP_CONFIG=""
-if [ -f ~/.mcp.json ]; then
-    MCP_CONFIG=~/.mcp.json
-elif [ -f ~/.config/claude/mcp.json ]; then
-    MCP_CONFIG=~/.config/claude/mcp.json
+MCP_SCOPE=""
+if [ -f "$REPO_ROOT/.mcp.json" ]; then
+    MCP_CONFIG="$REPO_ROOT/.mcp.json"
+    MCP_SCOPE="project (.mcp.json)"
+elif [ -f "$HOME/.claude.json" ]; then
+    MCP_CONFIG="$HOME/.claude.json"
+    MCP_SCOPE="user (~/.claude.json)"
+elif [ -f "$HOME/.mcp.json" ]; then
+    MCP_CONFIG="$HOME/.mcp.json"
+    MCP_SCOPE="user (~/.mcp.json)"
+elif [ -f "$HOME/.config/claude/mcp.json" ]; then
+    MCP_CONFIG="$HOME/.config/claude/mcp.json"
+    MCP_SCOPE="user (~/.config/claude/mcp.json)"
 fi
 
 if [ -n "$MCP_CONFIG" ]; then
-    echo -e "${GREEN}MCP config found:${NC} $MCP_CONFIG"
+    echo -e "${GREEN}MCP config found${NC} (${MCP_SCOPE}): $MCP_CONFIG"
 
     # Check for codex in config
     if grep -q "codex" "$MCP_CONFIG" 2>/dev/null; then
@@ -129,7 +138,7 @@ if [ -n "$MCP_CONFIG" ]; then
     fi
 else
     echo -e "${YELLOW}No MCP configuration found${NC}"
-    echo "Expected at: ~/.mcp.json or ~/.config/claude/mcp.json"
+    echo "Expected at: $REPO_ROOT/.mcp.json, ~/.claude.json, ~/.mcp.json, or ~/.config/claude/mcp.json"
 fi
 
 echo ""
