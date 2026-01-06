@@ -77,8 +77,12 @@ if ! command -v codex &> /dev/null; then
 fi
 
 # Check auth
-if [ -z "${OPENAI_API_KEY:-}" ]; then
-    echo -e "${YELLOW}Warning: OPENAI_API_KEY not set${NC}"
+if [ -n "${CODEX_API_KEY:-}" ]; then
+    : # Preferred for automation
+elif [ -n "${OPENAI_API_KEY:-}" ]; then
+    echo -e "${YELLOW}Warning: CODEX_API_KEY not set (using OPENAI_API_KEY)${NC}"
+else
+    echo -e "${YELLOW}Warning: No API key found (CODEX_API_KEY or OPENAI_API_KEY)${NC}"
     echo "Codex may not be able to authenticate."
 fi
 

@@ -28,9 +28,37 @@ echo ""
 
 ISSUES=()
 HAS_AUTH=false
+OAUTH_FOUND=false
 
 # Test 1: Environment / Auth
 echo "=== Authentication ==="
+
+# Check OAuth tokens in ~/.codex/auth.json
+if [ -f ~/.codex/auth.json ]; then
+    if grep -q '"access_token"' ~/.codex/auth.json 2>/dev/null; then
+        echo -e "${GREEN}OAuth tokens:${NC} Found in ~/.codex/auth.json"
+        OAUTH_FOUND=true
+        HAS_AUTH=true
+    else
+        echo -e "${YELLOW}OAuth tokens:${NC} auth.json exists but no access_token"
+    fi
+else
+    echo -e "${YELLOW}OAuth tokens:${NC} No ~/.codex/auth.json"
+fi
+
+# Check CODEX_API_KEY
+if [ -n "${CODEX_API_KEY:-}" ]; then
+    KEY_LEN=${#CODEX_API_KEY}
+    if [ $KEY_LEN -gt 8 ]; then
+        echo -e "${GREEN}CODEX_API_KEY:${NC} ${CODEX_API_KEY:0:4}...${CODEX_API_KEY: -4} (${KEY_LEN} chars)"
+        HAS_AUTH=true
+    else
+        echo -e "${YELLOW}CODEX_API_KEY:${NC} Set but very short"
+        ISSUES+=("CODEX_API_KEY appears too short")
+    fi
+else
+    echo -e "${YELLOW}CODEX_API_KEY:${NC} Not set"
+fi
 
 # Check OPENAI_API_KEY
 if [ -n "${OPENAI_API_KEY:-}" ]; then
@@ -40,26 +68,14 @@ if [ -n "${OPENAI_API_KEY:-}" ]; then
         HAS_AUTH=true
     else
         echo -e "${YELLOW}OPENAI_API_KEY:${NC} Set but very short"
-        ISSUES+=("API key appears too short")
+        ISSUES+=("OPENAI_API_KEY appears too short")
     fi
 else
-    echo -e "${YELLOW}OPENAI_API_KEY:${NC} Not set (checking OAuth...)"
-fi
-
-# Check OAuth tokens in ~/.codex/auth.json
-if [ -f ~/.codex/auth.json ]; then
-    if grep -q '"access_token"' ~/.codex/auth.json 2>/dev/null; then
-        echo -e "${GREEN}OAuth tokens:${NC} Found in ~/.codex/auth.json"
-        HAS_AUTH=true
-    else
-        echo -e "${YELLOW}OAuth tokens:${NC} auth.json exists but no access_token"
-    fi
-else
-    echo -e "${YELLOW}OAuth tokens:${NC} No ~/.codex/auth.json"
+    echo -e "${YELLOW}OPENAI_API_KEY:${NC} Not set"
 fi
 
 if [ "$HAS_AUTH" = false ]; then
-    ISSUES+=("No authentication found (need OPENAI_API_KEY or OAuth login)")
+    ISSUES+=("No authentication found (need OAuth login, CODEX_API_KEY, or OPENAI_API_KEY)")
 fi
 
 echo ""
@@ -95,14 +111,23 @@ echo ""
 echo "=== MCP Check ==="
 
 MCP_CONFIG=""
-if [ -f ~/.mcp.json ]; then
-    MCP_CONFIG=~/.mcp.json
-elif [ -f ~/.config/claude/mcp.json ]; then
-    MCP_CONFIG=~/.config/claude/mcp.json
+MCP_SCOPE=""
+if [ -f "$REPO_ROOT/.mcp.json" ]; then
+    MCP_CONFIG="$REPO_ROOT/.mcp.json"
+    MCP_SCOPE="project (.mcp.json)"
+elif [ -f "$HOME/.claude.json" ]; then
+    MCP_CONFIG="$HOME/.claude.json"
+    MCP_SCOPE="user (~/.claude.json)"
+elif [ -f "$HOME/.mcp.json" ]; then
+    MCP_CONFIG="$HOME/.mcp.json"
+    MCP_SCOPE="user (~/.mcp.json)"
+elif [ -f "$HOME/.config/claude/mcp.json" ]; then
+    MCP_CONFIG="$HOME/.config/claude/mcp.json"
+    MCP_SCOPE="user (~/.config/claude/mcp.json)"
 fi
 
 if [ -n "$MCP_CONFIG" ]; then
-    echo -e "${GREEN}MCP config found:${NC} $MCP_CONFIG"
+    echo -e "${GREEN}MCP config found${NC} (${MCP_SCOPE}): $MCP_CONFIG"
 
     # Check for codex in config
     if grep -q "codex" "$MCP_CONFIG" 2>/dev/null; then
@@ -113,7 +138,7 @@ if [ -n "$MCP_CONFIG" ]; then
     fi
 else
     echo -e "${YELLOW}No MCP configuration found${NC}"
-    echo "Expected at: ~/.mcp.json or ~/.config/claude/mcp.json"
+    echo "Expected at: $REPO_ROOT/.mcp.json, ~/.claude.json, ~/.mcp.json, or ~/.config/claude/mcp.json"
 fi
 
 echo ""
@@ -250,7 +275,8 @@ else
         case "$issue" in
             *"API key"*|*"authentication"*)
                 echo "  - Run 'codex' interactively to login via browser"
-                echo "  - Or set OPENAI_API_KEY: export OPENAI_API_KEY='your-key'"
+                echo "  - Or set CODEX_API_KEY: export CODEX_API_KEY='your-key'"
+                echo "  - Or set OPENAI_API_KEY: export OPENAI_API_KEY='your-key' (legacy)"
                 ;;
             *"not installed"*)
                 echo "  - Install Codex: npm install -g @openai/codex"
