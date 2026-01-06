@@ -27,23 +27,39 @@ echo "Timeout: ${TIMEOUT_SECS}s per test"
 echo ""
 
 ISSUES=()
+HAS_AUTH=false
 
-# Test 1: Environment
-echo "=== Environment ==="
+# Test 1: Environment / Auth
+echo "=== Authentication ==="
 
 # Check OPENAI_API_KEY
 if [ -n "${OPENAI_API_KEY:-}" ]; then
-    # Show first/last few chars
     KEY_LEN=${#OPENAI_API_KEY}
     if [ $KEY_LEN -gt 8 ]; then
         echo -e "${GREEN}OPENAI_API_KEY:${NC} ${OPENAI_API_KEY:0:4}...${OPENAI_API_KEY: -4} (${KEY_LEN} chars)"
+        HAS_AUTH=true
     else
         echo -e "${YELLOW}OPENAI_API_KEY:${NC} Set but very short"
         ISSUES+=("API key appears too short")
     fi
 else
-    echo -e "${RED}OPENAI_API_KEY:${NC} NOT SET"
-    ISSUES+=("OPENAI_API_KEY not set")
+    echo -e "${YELLOW}OPENAI_API_KEY:${NC} Not set (checking OAuth...)"
+fi
+
+# Check OAuth tokens in ~/.codex/auth.json
+if [ -f ~/.codex/auth.json ]; then
+    if grep -q '"access_token"' ~/.codex/auth.json 2>/dev/null; then
+        echo -e "${GREEN}OAuth tokens:${NC} Found in ~/.codex/auth.json"
+        HAS_AUTH=true
+    else
+        echo -e "${YELLOW}OAuth tokens:${NC} auth.json exists but no access_token"
+    fi
+else
+    echo -e "${YELLOW}OAuth tokens:${NC} No ~/.codex/auth.json"
+fi
+
+if [ "$HAS_AUTH" = false ]; then
+    ISSUES+=("No authentication found (need OPENAI_API_KEY or OAuth login)")
 fi
 
 echo ""
@@ -59,24 +75,9 @@ if command -v codex &> /dev/null; then
     CODEX_VERSION=$(codex --version 2>/dev/null || echo "unknown")
     echo "Version: $CODEX_VERSION"
 
-    # Test authentication
-    echo ""
-    echo "Testing authentication..."
-    set +e
-    AUTH_RESULT=$(timeout 30 codex whoami 2>&1)
-    AUTH_EXIT=$?
-    set -e
-
-    if [ $AUTH_EXIT -eq 0 ]; then
-        echo -e "${GREEN}Authentication: OK${NC}"
-        echo "$AUTH_RESULT"
-    elif [ $AUTH_EXIT -eq 124 ]; then
-        echo -e "${RED}Authentication: TIMEOUT${NC}"
-        ISSUES+=("CLI auth timed out")
-    else
-        echo -e "${RED}Authentication: FAILED${NC}"
-        echo "$AUTH_RESULT"
-        ISSUES+=("CLI auth failed")
+    # Check config
+    if [ -f ~/.codex/config.toml ]; then
+        echo -e "${GREEN}Config:${NC} ~/.codex/config.toml exists"
     fi
 else
     echo -e "${RED}Codex CLI not found${NC}"
@@ -108,7 +109,7 @@ if [ -n "$MCP_CONFIG" ]; then
         echo -e "${GREEN}Codex server configured${NC}"
     else
         echo -e "${YELLOW}Codex server not found in MCP config${NC}"
-        ISSUES+=("Codex not in MCP config")
+        # Not a blocking issue if CLI works
     fi
 else
     echo -e "${YELLOW}No MCP configuration found${NC}"
@@ -120,8 +121,8 @@ echo ""
 # Test 4: Quick CLI test
 echo "=== CLI Execution Test ==="
 
-if command -v codex &> /dev/null && [ -n "${OPENAI_API_KEY:-}" ]; then
-    echo "Running quick test (timeout: ${TIMEOUT_SECS}s)..."
+if command -v codex &> /dev/null && [ "$HAS_AUTH" = true ]; then
+    echo "Running quick test..."
 
     TEST_DIR="$REPO_ROOT/.agent/runs/diagnostic-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$TEST_DIR"
@@ -129,31 +130,32 @@ if command -v codex &> /dev/null && [ -n "${OPENAI_API_KEY:-}" ]; then
     START_TIME=$(date +%s)
     set +e
 
-    # Run minimal test with JSON output
-    timeout "$TIMEOUT_SECS" codex exec --json -o "$TEST_DIR/output.txt" \
-        "Say 'Hello from Codex diagnostic test' and list the current directory's top-level files" \
-        > "$TEST_DIR/events.jsonl" 2>&1 &
+    # Run minimal test with JSON output (background with manual timeout)
+    echo "say hello" | codex exec --json - > "$TEST_DIR/events.jsonl" 2>&1 &
     TEST_PID=$!
 
-    # Monitor for first event
+    # Monitor for completion or timeout
+    ELAPSED=0
     FIRST_EVENT=false
-    for i in $(seq 1 60); do
-        if [ -s "$TEST_DIR/events.jsonl" ]; then
+    while kill -0 $TEST_PID 2>/dev/null && [ $ELAPSED -lt $TIMEOUT_SECS ]; do
+        if [ -s "$TEST_DIR/events.jsonl" ] && [ "$FIRST_EVENT" = false ]; then
             FIRST_EVENT=true
-            echo -e "${GREEN}First event received after ${i}s${NC}"
-            break
+            echo -e "${GREEN}First event received after ${ELAPSED}s${NC}"
         fi
         sleep 1
+        ((ELAPSED++))
     done
 
-    if [ "$FIRST_EVENT" = false ]; then
-        echo -e "${RED}No events received within 60s${NC}"
-        ISSUES+=("No CLI events within 60s")
+    # Check if still running (timeout)
+    if kill -0 $TEST_PID 2>/dev/null; then
+        echo -e "${YELLOW}Timeout after ${TIMEOUT_SECS}s, killing...${NC}"
         kill $TEST_PID 2>/dev/null || true
+        sleep 1
+        kill -9 $TEST_PID 2>/dev/null || true
+        ISSUES+=("CLI test timed out")
     fi
 
-    # Wait for completion
-    wait $TEST_PID
+    wait $TEST_PID 2>/dev/null
     EXIT_CODE=$?
     set -e
 
@@ -161,36 +163,35 @@ if command -v codex &> /dev/null && [ -n "${OPENAI_API_KEY:-}" ]; then
     DURATION=$((END_TIME - START_TIME))
 
     echo "Duration: ${DURATION}s"
-    echo "Exit code: $EXIT_CODE"
 
-    if [ $EXIT_CODE -eq 0 ]; then
-        echo -e "${GREEN}CLI test: PASSED${NC}"
+    # Check for successful completion
+    if [ -s "$TEST_DIR/events.jsonl" ]; then
+        if grep -q '"turn.completed"' "$TEST_DIR/events.jsonl" 2>/dev/null; then
+            echo -e "${GREEN}CLI test: PASSED${NC}"
 
-        # Check output
-        if [ -f "$TEST_DIR/output.txt" ]; then
+            # Show events summary
             echo ""
-            echo "=== Output ==="
-            cat "$TEST_DIR/output.txt"
+            echo "Events received:"
+            grep -o '"type":"[^"]*"' "$TEST_DIR/events.jsonl" | sort | uniq -c | head -10
+        else
+            echo -e "${YELLOW}CLI test: Partial (no turn.completed)${NC}"
+            echo ""
+            echo "Last events:"
+            tail -5 "$TEST_DIR/events.jsonl"
         fi
-    elif [ $EXIT_CODE -eq 124 ]; then
-        echo -e "${RED}CLI test: TIMEOUT${NC}"
-        ISSUES+=("CLI test timed out")
     else
-        echo -e "${RED}CLI test: FAILED${NC}"
-        ISSUES+=("CLI test failed (exit code: $EXIT_CODE)")
-
-        # Show last events
-        if [ -f "$TEST_DIR/events.jsonl" ]; then
-            echo ""
-            echo "=== Last events ==="
-            tail -10 "$TEST_DIR/events.jsonl"
-        fi
+        echo -e "${RED}CLI test: No output${NC}"
+        ISSUES+=("CLI produced no output")
     fi
 
     echo ""
     echo "Test logs: $TEST_DIR/"
 else
-    echo -e "${YELLOW}Skipping (CLI not available or no API key)${NC}"
+    if [ "$HAS_AUTH" = false ]; then
+        echo -e "${YELLOW}Skipping (no authentication)${NC}"
+    else
+        echo -e "${YELLOW}Skipping (CLI not available)${NC}"
+    fi
 fi
 
 echo ""
@@ -247,22 +248,20 @@ else
 
     for issue in "${ISSUES[@]}"; do
         case "$issue" in
-            *"API key"*)
-                echo "  - Set OPENAI_API_KEY: export OPENAI_API_KEY='your-key'"
+            *"API key"*|*"authentication"*)
+                echo "  - Run 'codex' interactively to login via browser"
+                echo "  - Or set OPENAI_API_KEY: export OPENAI_API_KEY='your-key'"
                 ;;
             *"not installed"*)
                 echo "  - Install Codex: npm install -g @openai/codex"
                 ;;
-            *"MCP"*)
-                echo "  - Configure MCP: see .agent/mcp/servers/codex.md"
-                ;;
             *"timeout"*|*"timed out"*)
                 echo "  - Check network connectivity to OpenAI API"
-                echo "  - Verify API key has Codex access"
+                echo "  - Try a simpler prompt"
                 ;;
-            *"No CLI events"*)
-                echo "  - Possible output buffering issue"
-                echo "  - Try running directly: codex exec --json 'hello'"
+            *"No output"*|*"no output"*)
+                echo "  - Check ~/.codex/config.toml for errors"
+                echo "  - Try: echo 'hello' | codex exec --json -"
                 ;;
         esac
     done
