@@ -31,6 +31,8 @@ Codex can be invoked via three paths:
 ./scripts/codex/run_cloud.sh --env ENV_ID --apply "task description"
 ```
 
+Note: `codex cloud exec` does not support `--json`; JSON streaming is only for local `codex exec`.
+
 ### Router (Automatic Selection)
 
 ```bash

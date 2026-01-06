@@ -35,7 +35,9 @@ WAIT_FOR_COMPLETION=false
 APPLY_PATCH=false
 POLL_INTERVAL=30
 TIMEOUT=3600  # 1 hour
+ATTEMPTS=""
 TASK=""
+TASK_URL=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -57,6 +59,10 @@ while [[ $# -gt 0 ]]; do
             POLL_INTERVAL="$2"
             shift 2
             ;;
+        --attempts)
+            ATTEMPTS="$2"
+            shift 2
+            ;;
         --timeout)
             TIMEOUT="$2"
             shift 2
@@ -71,6 +77,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --wait            Wait for task completion (non-interactive requires --apply)"
             echo "  --apply           Wait and apply patch (implies --wait)"
             echo "  --poll SECS       Poll interval when waiting (default: 30)"
+            echo "  --attempts N      Number of assistant attempts (best-of-N)"
             echo "  --timeout SECS    Max wait time (default: 3600)"
             echo "  --help            Show this help"
             echo ""
@@ -112,6 +119,17 @@ if [ -z "$TASK" ]; then
     exit 1
 fi
 
+if [ -n "$ATTEMPTS" ]; then
+    if ! [[ "$ATTEMPTS" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}Error: --attempts must be an integer${NC}"
+        exit 1
+    fi
+    if [ "$ATTEMPTS" -lt 1 ] || [ "$ATTEMPTS" -gt 4 ]; then
+        echo -e "${RED}Error: --attempts must be between 1 and 4${NC}"
+        exit 1
+    fi
+fi
+
 # Check for codex CLI
 if ! command -v codex &> /dev/null; then
     echo -e "${RED}Error: Codex CLI not found${NC}"
@@ -148,7 +166,11 @@ set +e
 
 # Use codex cloud exec
 # Note: This captures the task ID for tracking
-SUBMIT_OUTPUT=$(codex cloud exec --env "$ENV_ID" "$TASK" 2>&1)
+EXEC_ARGS=(codex cloud exec --env "$ENV_ID")
+if [ -n "$ATTEMPTS" ]; then
+    EXEC_ARGS+=(--attempts "$ATTEMPTS")
+fi
+SUBMIT_OUTPUT=$("${EXEC_ARGS[@]}" "$TASK" 2>&1)
 SUBMIT_EXIT=$?
 
 echo "$SUBMIT_OUTPUT" > "$RUN_DIR/submit_output.json"
@@ -176,6 +198,8 @@ fi
 
 echo -e "${GREEN}Task submitted${NC}"
 
+TASK_URL=$(echo "$SUBMIT_OUTPUT" | grep -oE 'https?://[^ ]*task_[A-Za-z0-9_-]+' | head -1)
+
 # Try to extract task ID from output
 TASK_ID=$(echo "$SUBMIT_OUTPUT" | sed -nE 's/.*"task_id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -1)
 if [ -z "$TASK_ID" ]; then
@@ -190,6 +214,9 @@ fi
 
 if [ -n "$TASK_ID" ]; then
     echo "Task ID: $TASK_ID"
+    if [ -n "$TASK_URL" ]; then
+        echo "Task URL: $TASK_URL"
+    fi
 
     # Update metadata with task ID
     cat > "$RUN_DIR/meta.json" << EOF
@@ -199,6 +226,7 @@ if [ -n "$TASK_ID" ]; then
   "env_id": "$ENV_ID",
   "task": "$TASK",
   "task_id": "$TASK_ID",
+  "task_url": "$TASK_URL",
   "submitted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "status": "running"
 }
@@ -225,6 +253,9 @@ fi
 
 if [ -z "$TASK_ID" ]; then
     echo -e "${YELLOW}Warning: Task ID not found in submission output${NC}"
+    if [ -n "$TASK_URL" ]; then
+        echo "Task URL: $TASK_URL"
+    fi
     echo "Cannot wait/apply without a task ID."
     exit 1
 fi
@@ -241,6 +272,8 @@ echo "Waiting for completion (poll: ${POLL_INTERVAL}s, timeout: ${TIMEOUT}s)..."
 
 ELAPSED=0
 PATCH_APPLIED=false
+SLEEP_SECS=$POLL_INTERVAL
+MAX_SLEEP=120
 while [ $ELAPSED -lt $TIMEOUT ]; do
     set +e
     APPLY_OUTPUT=$(codex apply "$TASK_ID" 2>&1)
@@ -258,6 +291,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
   "env_id": "$ENV_ID",
   "task": "$TASK",
   "task_id": "$TASK_ID",
+  "task_url": "$TASK_URL",
   "submitted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "completed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "status": "completed",
@@ -268,14 +302,32 @@ EOF
     fi
 
     if echo "$APPLY_OUTPUT" | grep -qiE "still running|not ready|pending|in progress|no diff turn found"; then
-        echo "  Elapsed: ${ELAPSED}s (not ready)..."
-        sleep "$POLL_INTERVAL"
-        ((ELAPSED += POLL_INTERVAL))
+        if [ $((ELAPSED + SLEEP_SECS)) -gt $TIMEOUT ]; then
+            SLEEP_SECS=$((TIMEOUT - ELAPSED))
+        fi
+        if [ $SLEEP_SECS -le 0 ]; then
+            break
+        fi
+        echo "  Elapsed: ${ELAPSED}s (not ready; next check in ${SLEEP_SECS}s)..."
+        sleep "$SLEEP_SECS"
+        ((ELAPSED += SLEEP_SECS))
+        if [ $SLEEP_SECS -lt $MAX_SLEEP ]; then
+            SLEEP_SECS=$((SLEEP_SECS * 2))
+            if [ $SLEEP_SECS -gt $MAX_SLEEP ]; then
+                SLEEP_SECS=$MAX_SLEEP
+            fi
+        fi
         continue
     fi
 
     echo -e "${RED}Patch apply failed${NC}"
     echo "$APPLY_OUTPUT"
+    if [ -n "$TASK_URL" ]; then
+        echo "Task URL: $TASK_URL"
+    fi
+    echo "Next steps:"
+    echo "  - Re-run: codex apply $TASK_ID"
+    echo "  - Review the task diff in the cloud UI"
     cat > "$RUN_DIR/meta.json" << EOF
 {
   "job_id": "$JOB_ID",
@@ -283,6 +335,7 @@ EOF
   "env_id": "$ENV_ID",
   "task": "$TASK",
   "task_id": "$TASK_ID",
+  "task_url": "$TASK_URL",
   "submitted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "status": "failed",
   "patch_applied": $PATCH_APPLIED
@@ -293,4 +346,8 @@ done
 
 echo -e "${YELLOW}Timeout waiting for completion${NC}"
 echo "Task may still be running in cloud"
+if [ -n "$TASK_URL" ]; then
+    echo "Task URL: $TASK_URL"
+fi
+echo "Try: codex apply $TASK_ID"
 exit 1
