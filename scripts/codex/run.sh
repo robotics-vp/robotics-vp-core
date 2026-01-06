@@ -17,6 +17,7 @@
 #   --env ENV_ID           Cloud environment ID (for cloud mode)
 #   --wait                 Wait for cloud completion (cloud mode only)
 #   --apply                Wait and apply cloud diff (cloud mode only)
+#   --attempts N           Cloud best-of attempts (1-4)
 #   --schema FILE          Output schema file (for structured output)
 #   --timeout SECONDS      Timeout in seconds (default: 600)
 #
@@ -59,6 +60,10 @@ while [[ $# -gt 0 ]]; do
             CLOUD_ARGS+=("--apply")
             shift
             ;;
+        --attempts)
+            CLOUD_ARGS+=("--attempts" "$2")
+            shift 2
+            ;;
         --schema)
             SCHEMA="$2"
             shift 2
@@ -77,6 +82,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --env ENV_ID      Cloud environment ID (required for cloud mode)"
             echo "  --wait            Wait for cloud completion (cloud mode only)"
             echo "  --apply           Wait and apply cloud diff (cloud mode only)"
+            echo "  --attempts N      Cloud best-of attempts (1-4)"
             echo "  --schema FILE     Output schema file for structured output"
             echo "  --timeout SECS    Timeout in seconds (default: 600)"
             echo "  --help            Show this help message"
@@ -162,11 +168,15 @@ EXTRA_ARGS+=("--timeout" "$TIMEOUT")
 # Execute via chosen mode
 case $MODE in
     mcp)
+        if [ ${#CLOUD_ARGS[@]} -gt 0 ]; then
+            echo -e "${RED}Error: Cloud-only flags used in non-cloud mode${NC}"
+            exit 1
+        fi
         exec "$SCRIPT_DIR/run_mcp.sh" "${EXTRA_ARGS[@]}" "$TASK"
         ;;
     cli)
         if [ ${#CLOUD_ARGS[@]} -gt 0 ]; then
-            echo -e "${RED}Error: --wait/--apply only supported for cloud mode${NC}"
+            echo -e "${RED}Error: Cloud-only flags used in non-cloud mode${NC}"
             exit 1
         fi
         exec "$SCRIPT_DIR/run_cli.sh" "${EXTRA_ARGS[@]}" "$TASK"
