@@ -28,9 +28,37 @@ echo ""
 
 ISSUES=()
 HAS_AUTH=false
+OAUTH_FOUND=false
 
 # Test 1: Environment / Auth
 echo "=== Authentication ==="
+
+# Check OAuth tokens in ~/.codex/auth.json
+if [ -f ~/.codex/auth.json ]; then
+    if grep -q '"access_token"' ~/.codex/auth.json 2>/dev/null; then
+        echo -e "${GREEN}OAuth tokens:${NC} Found in ~/.codex/auth.json"
+        OAUTH_FOUND=true
+        HAS_AUTH=true
+    else
+        echo -e "${YELLOW}OAuth tokens:${NC} auth.json exists but no access_token"
+    fi
+else
+    echo -e "${YELLOW}OAuth tokens:${NC} No ~/.codex/auth.json"
+fi
+
+# Check CODEX_API_KEY
+if [ -n "${CODEX_API_KEY:-}" ]; then
+    KEY_LEN=${#CODEX_API_KEY}
+    if [ $KEY_LEN -gt 8 ]; then
+        echo -e "${GREEN}CODEX_API_KEY:${NC} ${CODEX_API_KEY:0:4}...${CODEX_API_KEY: -4} (${KEY_LEN} chars)"
+        HAS_AUTH=true
+    else
+        echo -e "${YELLOW}CODEX_API_KEY:${NC} Set but very short"
+        ISSUES+=("CODEX_API_KEY appears too short")
+    fi
+else
+    echo -e "${YELLOW}CODEX_API_KEY:${NC} Not set"
+fi
 
 # Check OPENAI_API_KEY
 if [ -n "${OPENAI_API_KEY:-}" ]; then
@@ -40,26 +68,14 @@ if [ -n "${OPENAI_API_KEY:-}" ]; then
         HAS_AUTH=true
     else
         echo -e "${YELLOW}OPENAI_API_KEY:${NC} Set but very short"
-        ISSUES+=("API key appears too short")
+        ISSUES+=("OPENAI_API_KEY appears too short")
     fi
 else
-    echo -e "${YELLOW}OPENAI_API_KEY:${NC} Not set (checking OAuth...)"
-fi
-
-# Check OAuth tokens in ~/.codex/auth.json
-if [ -f ~/.codex/auth.json ]; then
-    if grep -q '"access_token"' ~/.codex/auth.json 2>/dev/null; then
-        echo -e "${GREEN}OAuth tokens:${NC} Found in ~/.codex/auth.json"
-        HAS_AUTH=true
-    else
-        echo -e "${YELLOW}OAuth tokens:${NC} auth.json exists but no access_token"
-    fi
-else
-    echo -e "${YELLOW}OAuth tokens:${NC} No ~/.codex/auth.json"
+    echo -e "${YELLOW}OPENAI_API_KEY:${NC} Not set"
 fi
 
 if [ "$HAS_AUTH" = false ]; then
-    ISSUES+=("No authentication found (need OPENAI_API_KEY or OAuth login)")
+    ISSUES+=("No authentication found (need OAuth login, CODEX_API_KEY, or OPENAI_API_KEY)")
 fi
 
 echo ""
@@ -250,7 +266,8 @@ else
         case "$issue" in
             *"API key"*|*"authentication"*)
                 echo "  - Run 'codex' interactively to login via browser"
-                echo "  - Or set OPENAI_API_KEY: export OPENAI_API_KEY='your-key'"
+                echo "  - Or set CODEX_API_KEY: export CODEX_API_KEY='your-key'"
+                echo "  - Or set OPENAI_API_KEY: export OPENAI_API_KEY='your-key' (legacy)"
                 ;;
             *"not installed"*)
                 echo "  - Install Codex: npm install -g @openai/codex"

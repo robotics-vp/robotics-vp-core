@@ -4,33 +4,43 @@
 
 Codex can be used as a sub-agent to handle background tasks. This document defines the contract for Codex integration, ensuring reliable operation with proper observability and failure handling.
 
-## Dual-Path Execution
+## Execution Paths
 
-Codex can be invoked via two paths:
+Codex can be invoked via three paths:
 
-### Path 1: MCP (Model Context Protocol)
-
-```bash
-# Uses MCP server if configured
-./scripts/codex/run_mcp.sh "task description"
-```
-
-### Path 2: CLI (Command Line)
+### Path 1: CLI (Command Line)
 
 ```bash
 # Uses codex exec directly
 ./scripts/codex/run_cli.sh "task description"
 ```
 
+### Path 2: MCP (Model Context Protocol)
+
+```bash
+# Uses MCP server if configured
+./scripts/codex/run_mcp.sh "task description"
+```
+
+### Path 3: Cloud
+
+```bash
+# Uses Codex cloud execution
+./scripts/codex/run_cloud.sh --env ENV_ID "task description"
+./scripts/codex/run_cloud.sh --env ENV_ID --wait "task description"
+./scripts/codex/run_cloud.sh --env ENV_ID --apply "task description"
+```
+
 ### Router (Automatic Selection)
 
 ```bash
-# Prefers MCP if available, falls back to CLI
+# Prefers CLI if available, falls back to MCP
 ./scripts/codex/run.sh "task description"
 
 # Force a specific mode
 CODEX_MODE=cli ./scripts/codex/run.sh "task description"
 CODEX_MODE=mcp ./scripts/codex/run.sh "task description"
+CODEX_MODE=cloud ./scripts/codex/run.sh --env ENV_ID "task description"
 ```
 
 ## Task Contract
@@ -168,9 +178,9 @@ Queue stored in `.agent/queue/codex.jsonl`.
 ```
 
 This will:
-1. Test CLI path (120s timeout)
-2. Test MCP path (if configured)
-3. Report findings
+1. Check auth and CLI availability
+2. Check MCP configuration
+3. Run a quick CLI test (120s timeout)
 
 ### Check job status
 
@@ -192,7 +202,7 @@ This will:
 |---------|--------------|-----|
 | No output for hours | Missing --json flag | Use --json for event streaming |
 | Silent failure | Output limit hit | Increase limits in config |
-| Auth errors | Missing OPENAI_API_KEY | Set environment variable |
+| Auth errors | Missing OAuth or API key | Login with `codex` or set `CODEX_API_KEY`/`OPENAI_API_KEY` |
 | Timeout | Task too large | Split into smaller tasks |
 
 See `docs/codex_postmortem.md` for detailed diagnostics.

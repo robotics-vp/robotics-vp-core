@@ -32,6 +32,22 @@ Add to your MCP configuration (typically `~/.config/claude/mcp.json` or equivale
 {
   "mcpServers": {
     "codex": {
+      "command": "codex",
+      "args": ["mcp-server"],
+      "env": {
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+If `codex` is not on your PATH, you can use `npx` instead:
+
+```json
+{
+  "mcpServers": {
+    "codex": {
       "command": "npx",
       "args": ["-y", "codex", "mcp-server"],
       "env": {

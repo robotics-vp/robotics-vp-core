@@ -85,8 +85,9 @@ AWS_SECRET_ACCESS_KEY = "..."
 ### For Codex sub-agent
 
 ```bash
-# Codex uses OPENAI_API_KEY
-export OPENAI_API_KEY="your-key"
+# Codex auth (OAuth preferred, or API keys for automation)
+export CODEX_API_KEY="your-key"      # preferred
+export OPENAI_API_KEY="your-key"     # legacy
 ```
 
 ### For Claude
