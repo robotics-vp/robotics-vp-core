@@ -24,6 +24,18 @@ pip install -r requirements-holosoma.txt
 
 The backend maps task IDs to Holosoma presets in `src/motor_backend/holosoma_backend.py`.
 
+## Isaac Lab Backend (Optional)
+
+Isaac Lab is optional. To validate the backend locally (1 tiny episode, datapack export, KPIs),
+run:
+
+```
+python scripts/local_isaac_smoke.py --tasks peg_in_hole bin_picking
+```
+
+If Isaac Lab isn't installed, the script exits with a clean message.
+It exits with code 2 to indicate a skipped optional backend.
+
 ## OpenVLA / VLA Labeling
 
 Rollout labeling can optionally call OpenVLA when enabled. It is safe to run with OpenVLA disabled; the labeler falls back to stub tags and never raises.
