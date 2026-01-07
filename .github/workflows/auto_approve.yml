@@ -12,9 +12,18 @@ jobs:
     # Only run when label is present.
     # Don't run on forks (secrets unavailable) or drafts.
     # Only allow owner/member/collaborator authored PRs.
-    if: ${{ ((github.event.action == 'labeled' && github.event.label.name == 'auto-approve') || contains(toJson(github.event.pull_request.labels), 'auto-approve')) && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.author_association == 'OWNER' || github.event.pull_request.author_association == 'MEMBER' || github.event.pull_request.author_association == 'COLLABORATOR') }}
     runs-on: ubuntu-latest
     steps:
+      - name: Debug context
+        run: |
+          echo "action=${{ github.event.action }}"
+          echo "label=${{ github.event.label.name }}"
+          echo "draft=${{ github.event.pull_request.draft }}"
+          echo "head_repo=${{ github.event.pull_request.head.repo.full_name }}"
+          echo "repo=${{ github.repository }}"
+          echo "author_assoc=${{ github.event.pull_request.author_association }}"
+          echo "labels=${{ toJson(github.event.pull_request.labels) }}"
       - uses: hmarr/auto-approve-action@v4
+        if: ${{ ((github.event.action == 'labeled' && github.event.label.name == 'auto-approve') || contains(toJson(github.event.pull_request.labels), 'auto-approve')) && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.author_association == 'OWNER' || github.event.pull_request.author_association == 'MEMBER' || github.event.pull_request.author_association == 'COLLABORATOR') }}
         with:
           github-token: ${{ secrets.BOT_TOKEN }}
