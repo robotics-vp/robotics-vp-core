@@ -5,6 +5,9 @@ Includes process_reward-based sampling strategies:
 - "process_reward_conf": Weight by process reward confidence
 - "process_reward_progress": Weight by phi_star progress (delta)
 - "process_reward_quality": Weight by combined confidence and progress
+- "embodiment_quality": Weight by embodiment confidence (w_embodiment)
+- "embodiment_drift_penalty": Penalize high embodiment drift
+- "embodiment_quality_drift": Combine embodiment weight and drift penalty
 """
 from typing import Any, Dict, List, Sequence
 
@@ -74,6 +77,34 @@ def _process_reward_quality_weight(ep: Dict[str, Any]) -> float:
     return max(quality, 0.1)
 
 
+def _embodiment_metric(ep: Dict[str, Any], key: str, default: float) -> float:
+    if key in ep:
+        return float(ep.get(key, default))
+    desc = ep.get("descriptor", {}) if isinstance(ep.get("descriptor"), dict) else {}
+    if key in desc:
+        return float(desc.get(key, default))
+    emb = desc.get("embodiment_profile") or ep.get("embodiment_profile")
+    if isinstance(emb, dict) and key in emb:
+        return float(emb.get(key, default))
+    return float(default)
+
+
+def _embodiment_quality_weight(ep: Dict[str, Any]) -> float:
+    w_emb = _embodiment_metric(ep, "w_embodiment", 1.0)
+    return max(w_emb, 0.1)
+
+
+def _embodiment_drift_penalty_weight(ep: Dict[str, Any]) -> float:
+    drift = _embodiment_metric(ep, "embodiment_drift_score", 0.0)
+    return max(1.0 - drift, 0.1)
+
+
+def _embodiment_quality_drift_weight(ep: Dict[str, Any]) -> float:
+    w_emb = _embodiment_quality_weight(ep)
+    drift = _embodiment_metric(ep, "embodiment_drift_score", 0.0)
+    return max(w_emb * (1.0 - drift), 0.1)
+
+
 class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
     def __init__(self, trust_matrix: Dict[str, Any] = None):
         self.trust_matrix = trust_matrix or {}
@@ -92,6 +123,9 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
             - "process_reward_conf": Weight by process reward confidence
             - "process_reward_progress": Weight by phi_star progress (delta)
             - "process_reward_quality": Combined confidence + progress weighting
+            - "embodiment_quality": Weight by embodiment confidence
+            - "embodiment_drift_penalty": Penalize high embodiment drift
+            - "embodiment_quality_drift": Combine embodiment and drift
 
         Args:
             features: List of episode descriptors/features.
@@ -117,6 +151,12 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
                 weight = _process_reward_progress_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
             elif strategy == "process_reward_quality":
                 weight = _process_reward_quality_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
+            elif strategy == "embodiment_quality":
+                weight = _embodiment_quality_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
+            elif strategy == "embodiment_drift_penalty":
+                weight = _embodiment_drift_penalty_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
+            elif strategy == "embodiment_quality_drift":
+                weight = _embodiment_quality_drift_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
             else:
                 weight = sampler_utils._balanced_weight(ep)
             trust_scale = self._trust_scale(ep)

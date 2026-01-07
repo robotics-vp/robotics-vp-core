@@ -47,6 +47,7 @@ Rules: trust gate for plausibility, econ weighting for impact, λ for global bud
 - **Synthetic weighting:** `src/controllers/synthetic_weight_controller.py` (trust/econ quality + λ budget), `src/controllers/synth_lambda_controller.py`, `src/valuation/w_econ_lattice.py`
 - **World model trust:** `src/world_model/...`, `checkpoints/stable_world_model.pt` (frozen, do not alter math)
 - **Phase C env/HRL/VLA:** `src/envs/drawer_vase_physics_env.py`, `src/hrl/*`, `src/vision/*`, `src/vla/*`, `src/sima/*`
+- **Embodiment:** `src/embodiment/*` (contacts/affordances + econ attribution), `docs/embodiment_module.md`
 - **Datapacks:** `src/valuation/datapacks.py` → build datapacks from `EpisodeInfoSummary`
 - **Utilities/Smoke tests:** `scripts/smoke_test_dishwashing_sac.py`, `scripts/test_episode_features.py`, `scripts/eval_drawer_vase_scripted.py`, `scripts/smoke_test_phase_c_hrl_vla.py`, `docs/synthetic_weight_controller_design.md`
 

@@ -403,6 +403,45 @@ class ProcessRewardProfile:
 
 
 @dataclass
+class EmbodimentProfileSummary:
+    """
+    Embodiment metrics and artifact references for the datapack.
+
+    Captures contact/affordance diagnostics, drift signals, and pointers
+    to embodiment artifacts produced downstream of SceneTracks/MHN/SemFusion.
+    """
+    w_embodiment: float = 1.0
+    embodiment_quality_score: float = 1.0
+    trust_override_candidate: bool = False
+    physically_impossible_contacts: int = 0
+    contact_coverage_pct: float = 0.0
+    semantic_confidence_mean: float = 0.0
+    drift_score: float = 0.0
+
+    # Artifact pointers
+    embodiment_profile_npz: Optional[str] = None
+    affordance_graph_npz: Optional[str] = None
+    skill_segments_npz: Optional[str] = None
+    cost_breakdown_json: Optional[str] = None
+    value_attribution_json: Optional[str] = None
+    drift_report_json: Optional[str] = None
+    calibration_targets_json: Optional[str] = None
+    summary_jsonl: Optional[str] = None
+
+    # Compact summaries for quick filters
+    cost_summary: Optional[Dict[str, Any]] = None
+    value_summary: Optional[Dict[str, Any]] = None
+    diagnostics: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "EmbodimentProfileSummary":
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
 class ObjectiveProfile:
     """
     Objective and economic profile for the datapack.
@@ -540,6 +579,9 @@ class DataPackMeta:
     # Process reward profile (optional) - PBRS metrics and confidence
     process_reward_profile: Optional[ProcessRewardProfile] = None
 
+    # Embodiment profile (optional) - contacts/affordances + economics hooks
+    embodiment_profile: Optional[EmbodimentProfileSummary] = None
+
     # Optional orchestration guidance
     guidance_profile: Optional["GuidanceProfile"] = None
 
@@ -591,6 +633,7 @@ class DataPackMeta:
             'vla_plan': to_json_safe(self.vla_plan),
             'objective_profile': self.objective_profile.to_dict() if self.objective_profile else None,
             'process_reward_profile': self.process_reward_profile.to_dict() if self.process_reward_profile else None,
+            'embodiment_profile': self.embodiment_profile.to_dict() if self.embodiment_profile else None,
             'counterfactual_plan': to_json_safe(self.counterfactual_plan),
             'counterfactual_source': self.counterfactual_source,
             'created_at': self.created_at,
@@ -626,6 +669,10 @@ class DataPackMeta:
         if d.get('process_reward_profile'):
             process_reward_profile = ProcessRewardProfile.from_dict(d['process_reward_profile'])
 
+        embodiment_profile = None
+        if d.get('embodiment_profile'):
+            embodiment_profile = EmbodimentProfileSummary.from_dict(d['embodiment_profile'])
+
         return cls(
             schema_version=d.get('schema_version', DATAPACK_SCHEMA_VERSION),
             pack_id=d.get('pack_id', str(uuid.uuid4())),
@@ -647,6 +694,7 @@ class DataPackMeta:
             vla_plan=d.get('vla_plan'),
             objective_profile=objective_profile,
             process_reward_profile=process_reward_profile,
+            embodiment_profile=embodiment_profile,
             counterfactual_plan=d.get('counterfactual_plan'),
             counterfactual_source=d.get('counterfactual_source'),
             created_at=d.get('created_at', datetime.now().isoformat()),

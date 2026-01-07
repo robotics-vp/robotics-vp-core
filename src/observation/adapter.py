@@ -88,6 +88,9 @@ class ObservationAdapter:
         "process_reward_conf",
         "process_reward_progress",
         "process_reward_quality",
+        "embodiment_quality",
+        "embodiment_drift_penalty",
+        "embodiment_quality_drift",
     ]
     DEFAULT_OBJECTIVE_PRESET_ORDER = ["throughput", "energy_saver", "balanced", "safety_first", "custom"]
 

@@ -1,7 +1,13 @@
 from typing import List, Dict, Any
 import math
 
-from src.valuation.datapack_schema import ObjectiveProfile, AttributionProfile, GuidanceProfile, DataPackMeta
+from src.valuation.datapack_schema import (
+    ObjectiveProfile,
+    AttributionProfile,
+    GuidanceProfile,
+    EmbodimentProfileSummary,
+    DataPackMeta,
+)
 from src.orchestrator.semantic_metrics import SemanticMetrics
 
 
@@ -59,11 +65,43 @@ def validate_semantic_metrics(sm: SemanticMetrics) -> List[str]:
     return warnings
 
 
+def validate_embodiment_profile(ep: EmbodimentProfileSummary) -> List[str]:
+    warnings = []
+    if ep.w_embodiment < 0 or ep.w_embodiment > 1:
+        warnings.append("EmbodimentProfileSummary.w_embodiment out of [0,1]")
+    if ep.embodiment_quality_score < 0 or ep.embodiment_quality_score > 1:
+        warnings.append("EmbodimentProfileSummary.embodiment_quality_score out of [0,1]")
+    if ep.contact_coverage_pct < 0 or ep.contact_coverage_pct > 1:
+        warnings.append("EmbodimentProfileSummary.contact_coverage_pct out of [0,1]")
+    if ep.semantic_confidence_mean < 0 or ep.semantic_confidence_mean > 1:
+        warnings.append("EmbodimentProfileSummary.semantic_confidence_mean out of [0,1]")
+    if ep.drift_score < 0 or ep.drift_score > 1:
+        warnings.append("EmbodimentProfileSummary.drift_score out of [0,1]")
+    if ep.physically_impossible_contacts < 0:
+        warnings.append("EmbodimentProfileSummary.physically_impossible_contacts negative")
+    for field in (
+        "embodiment_profile_npz",
+        "affordance_graph_npz",
+        "skill_segments_npz",
+        "cost_breakdown_json",
+        "value_attribution_json",
+        "drift_report_json",
+        "calibration_targets_json",
+        "summary_jsonl",
+    ):
+        value = getattr(ep, field)
+        if value is not None and not isinstance(value, str):
+            warnings.append(f"EmbodimentProfileSummary.{field} must be a string path")
+    return warnings
+
+
 def validate_datapack_meta(dp: DataPackMeta) -> List[str]:
     warnings = []
     if dp.objective_profile:
         warnings.extend(validate_objective_profile(dp.objective_profile))
     if dp.guidance_profile:
         warnings.extend(validate_guidance_profile(dp.guidance_profile))
+    if dp.embodiment_profile:
+        warnings.extend(validate_embodiment_profile(dp.embodiment_profile))
     warnings.extend(validate_attribution_profile(dp.attribution))
     return warnings

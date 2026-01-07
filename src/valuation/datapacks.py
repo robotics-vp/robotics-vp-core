@@ -13,6 +13,7 @@ from src.valuation.datapack_schema import (
     AttributionProfile,
     SimaAnnotation,
     ObjectiveProfile,
+    EmbodimentProfileSummary,
 )
 
 
@@ -103,6 +104,7 @@ def build_datapack_meta_from_episode(
     baseline_error: Optional[float] = None,
     baseline_ep: Optional[float] = None,
     objective_profile: Optional[ObjectiveProfile] = None,
+    embodiment_profile: Optional[EmbodimentProfileSummary] = None,
     econ_semantic_tags: Optional[List[str]] = None,
     semantic_quality: Optional[float] = None,
 ) -> DataPackMeta:
@@ -128,6 +130,7 @@ def build_datapack_meta_from_episode(
         baseline_error: Baseline error rate for ΔJ computation
         baseline_ep: Baseline energy productivity for ΔJ computation
         objective_profile: Optional ObjectiveProfile for DL econ hyperparameters
+        embodiment_profile: Optional EmbodimentProfileSummary for contacts/affordances
         econ_semantic_tags: Optional econ/semantic advisory tags
         semantic_quality: Optional advisory quality score in [0, 1]
 
@@ -217,6 +220,7 @@ def build_datapack_meta_from_episode(
         sima_annotation=sima_annotation,
         vla_plan=vla_plan,
         objective_profile=objective_profile,
+        embodiment_profile=embodiment_profile,
         counterfactual_plan=None,
         counterfactual_source=None,
     )

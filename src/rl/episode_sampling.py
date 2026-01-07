@@ -54,6 +54,21 @@ def _episode_key(episode: Dict[str, Any]) -> str:
     return str(desc.get("pack_id") or desc.get("episode_id") or desc.get("id") or "")
 
 
+def _embodiment_metric(episode: Dict[str, Any], key: str, default: float) -> float:
+    if key in episode:
+        try:
+            return float(episode.get(key, default))
+        except Exception:
+            return float(default)
+    desc = episode.get("descriptor", {}) if isinstance(episode.get("descriptor"), dict) else {}
+    if key in desc:
+        try:
+            return float(desc.get(key, default))
+        except Exception:
+            return float(default)
+    return float(default)
+
+
 def _summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase: str) -> Dict[str, Any]:
     """Compact, JSON-safe summary of condition inputs for logging."""
     tag_items = [f"{str(k)}:{float(v):.4f}" for k, v in sorted(tags.items(), key=lambda kv: str(kv[0]))]
@@ -117,11 +132,26 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
     tier = 1
     trust_score = 0.5
     delta_J = 0.0
+    w_embodiment = None
+    embodiment_drift_score = None
+    embodiment_impossible_contacts = None
+    embodiment_trust_override = None
 
     if datapack.attribution:
         tier = datapack.attribution.tier
         trust_score = datapack.attribution.trust_score
         delta_J = datapack.attribution.delta_J
+    if datapack.embodiment_profile is not None:
+        emb = datapack.embodiment_profile
+        w_embodiment = emb.w_embodiment
+        embodiment_drift_score = emb.drift_score
+        embodiment_impossible_contacts = emb.physically_impossible_contacts
+        embodiment_trust_override = emb.trust_override_candidate
+    elif datapack.episode_metrics:
+        w_embodiment = datapack.episode_metrics.get("w_embodiment")
+        embodiment_drift_score = datapack.episode_metrics.get("embodiment_drift_score")
+        embodiment_impossible_contacts = datapack.episode_metrics.get("embodiment_physically_impossible_contacts")
+        embodiment_trust_override = datapack.episode_metrics.get("embodiment_trust_override_candidate")
 
     # Compute sampling weight (higher for higher-tier, higher-trust datapacks)
     sampling_weight = trust_score * (1.0 + 0.5 * tier)  # Tier 2 gets 1.5x boost
@@ -154,6 +184,12 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         "trust_score": trust_score,
         "delta_J": delta_J,
         "sampling_weight": sampling_weight,
+        "w_embodiment": w_embodiment if w_embodiment is not None else 1.0,
+        "embodiment_drift_score": embodiment_drift_score if embodiment_drift_score is not None else 0.0,
+        "embodiment_physically_impossible_contacts": embodiment_impossible_contacts or 0,
+        "embodiment_trust_override_candidate": bool(embodiment_trust_override)
+        if embodiment_trust_override is not None
+        else False,
 
         # Episode parameters
         "episode_length": episode_length,
@@ -234,9 +270,13 @@ class DataPackRLSampler:
     - process_reward_conf: weight by process reward confidence (if present)
     - process_reward_progress: weight by process reward progress (delta)
     - process_reward_quality: weight by combined process reward signals
+    - embodiment_quality: weight by embodiment confidence (if present)
+    - embodiment_drift_penalty: penalize high embodiment drift (if present)
+    - embodiment_quality_drift: combine embodiment weight with drift penalty
 
     Deterministic for a given seed and configuration; returns JSON-safe
-    descriptors without mutating objectives or reward math.
+    descriptors without mutating objectives or reward math. Embodiment-based
+    strategies only affect sampling weights.
     """
 
     def __init__(
@@ -320,6 +360,9 @@ class DataPackRLSampler:
             "process_reward_conf",
             "process_reward_progress",
             "process_reward_quality",
+            "embodiment_quality",
+            "embodiment_drift_penalty",
+            "embodiment_quality_drift",
         }:
             weight_strategy = "balanced" if strategy_name == "balanced" else strategy_name
             selected = self._sample_balanced(batch_size, rng, weight_strategy=weight_strategy)
@@ -439,6 +482,27 @@ class DataPackRLSampler:
             weights = [max(ep["frontier_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
         elif strategy == "econ_urgency":
             weights = [max(ep["econ_urgency_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
+        elif strategy == "embodiment_quality":
+            weights = [
+                max(_embodiment_metric(ep, "w_embodiment", 1.0), 0.1) * ep.get("recap_weight_multiplier", 1.0)
+                for ep in episodes
+            ]
+        elif strategy == "embodiment_drift_penalty":
+            weights = [
+                max(1.0 - _embodiment_metric(ep, "embodiment_drift_score", 0.0), 0.1)
+                * ep.get("recap_weight_multiplier", 1.0)
+                for ep in episodes
+            ]
+        elif strategy == "embodiment_quality_drift":
+            weights = [
+                max(
+                    _embodiment_metric(ep, "w_embodiment", 1.0)
+                    * (1.0 - _embodiment_metric(ep, "embodiment_drift_score", 0.0)),
+                    0.1,
+                )
+                * ep.get("recap_weight_multiplier", 1.0)
+                for ep in episodes
+            ]
         else:
             weights = [_balanced_weight(ep) for ep in episodes]
         if not self.use_unified_quality:
