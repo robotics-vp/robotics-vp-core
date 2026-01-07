@@ -1,0 +1,26 @@
+name: Auto-approve (opt-in)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  approve:
+    # Only run when label is present
+    if: >
+      contains(github.event.pull_request.labels.*.name, 'auto-approve')
+      && github.event.pull_request.draft == false
+      # Don’t even try on forks (secrets won't be available anyway, but be explicit)
+      && github.event.pull_request.head.repo.full_name == github.repository
+      # Only if the PR author is at least a collaborator-level identity
+      && (github.event.pull_request.author_association == 'OWNER'
+          || github.event.pull_request.author_association == 'MEMBER'
+          || github.event.pull_request.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hmarr/auto-approve-action@v4
+        with:
+          github-token: ${{ secrets.BOT_TOKEN }}
