@@ -46,6 +46,8 @@ class ManufacturingKPIs:
     """Manufacturing-specific key performance indicators."""
     cycle_time_s: float = 0.0  # Avg time per completed item
     contact_force_proxy: float = 0.0  # Proxy for gripper force usage
+    contact_force_N: float = 0.0  # Real contact force (MuJoCo if available)
+    constraint_error: float = 0.0  # Constraint violation proxy
     scrap_proxy: float = 0.0  # Fraction of items that became scrap
     failure_taxonomy: FailureTaxonomy = field(default_factory=FailureTaxonomy)
 
@@ -53,6 +55,8 @@ class ManufacturingKPIs:
         return {
             "cycle_time_s": self.cycle_time_s,
             "contact_force_proxy": self.contact_force_proxy,
+            "contact_force_N": self.contact_force_N,
+            "constraint_error": self.constraint_error,
             "scrap_proxy": self.scrap_proxy,
             "failure_taxonomy": self.failure_taxonomy.to_dict(),
         }
@@ -91,6 +95,8 @@ class AggregateManufacturingKPIs:
     """Aggregate manufacturing KPIs across episodes."""
     mean_cycle_time_s: float = 0.0
     mean_contact_force_proxy: float = 0.0
+    mean_contact_force_N: float = 0.0
+    mean_constraint_error: float = 0.0
     mean_scrap_proxy: float = 0.0
     total_failures_by_type: Dict[str, int] = field(default_factory=dict)
     failure_rate_by_type: Dict[str, float] = field(default_factory=dict)
@@ -99,6 +105,8 @@ class AggregateManufacturingKPIs:
         return {
             "mean_cycle_time_s": self.mean_cycle_time_s,
             "mean_contact_force_proxy": self.mean_contact_force_proxy,
+            "mean_contact_force_N": self.mean_contact_force_N,
+            "mean_constraint_error": self.mean_constraint_error,
             "mean_scrap_proxy": self.mean_scrap_proxy,
             "total_failures_by_type": self.total_failures_by_type,
             "failure_rate_by_type": self.failure_rate_by_type,
@@ -254,6 +262,15 @@ def _compute_manufacturing_kpis(
     # Normalize to [0, 1] range: more gripper actions = higher force proxy
     contact_force_proxy = min(1.0, gripper_actions / max(items_total * 3, 1))
 
+    # Real contact force (from MuJoCo or physics backend)
+    contact_force_N = 0.0
+    if "contact_force_N" in episode_data:
+        contact_force_N = float(episode_data.get("contact_force_N", 0.0))
+    elif "contact_force" in episode_data:
+        contact_force_N = float(episode_data.get("contact_force", 0.0))
+
+    constraint_error = float(episode_data.get("constraint_error", 0.0))
+
     # Scrap proxy: fraction of items that became scrap (errors + incomplete)
     items_failed = items_total - items_completed
     items_scrapped = errors + items_failed
@@ -271,6 +288,8 @@ def _compute_manufacturing_kpis(
     return ManufacturingKPIs(
         cycle_time_s=cycle_time_s,
         contact_force_proxy=contact_force_proxy,
+        contact_force_N=contact_force_N,
+        constraint_error=constraint_error,
         scrap_proxy=scrap_proxy,
         failure_taxonomy=failure_taxonomy,
     )
@@ -440,6 +459,8 @@ def _aggregate_manufacturing_kpis(
     # Mean KPIs
     mean_cycle_time = sum(m.manufacturing_kpis.cycle_time_s for m in metrics_with_kpis) / n
     mean_contact_force = sum(m.manufacturing_kpis.contact_force_proxy for m in metrics_with_kpis) / n
+    mean_contact_force_N = sum(m.manufacturing_kpis.contact_force_N for m in metrics_with_kpis) / n
+    mean_constraint_error = sum(m.manufacturing_kpis.constraint_error for m in metrics_with_kpis) / n
     mean_scrap = sum(m.manufacturing_kpis.scrap_proxy for m in metrics_with_kpis) / n
 
     # Aggregate failure taxonomy
@@ -458,6 +479,8 @@ def _aggregate_manufacturing_kpis(
     return AggregateManufacturingKPIs(
         mean_cycle_time_s=mean_cycle_time,
         mean_contact_force_proxy=mean_contact_force,
+        mean_contact_force_N=mean_contact_force_N,
+        mean_constraint_error=mean_constraint_error,
         mean_scrap_proxy=mean_scrap,
         total_failures_by_type=total_failures,
         failure_rate_by_type=failure_rates,
@@ -489,6 +512,8 @@ def format_suite_report(report: WorkcellSuiteReport) -> str:
         "--- Manufacturing KPIs ---",
         f"Mean Cycle Time: {report.manufacturing_kpis.mean_cycle_time_s:.1f}s",
         f"Contact Force Proxy: {report.manufacturing_kpis.mean_contact_force_proxy:.3f}",
+        f"Contact Force (N): {report.manufacturing_kpis.mean_contact_force_N:.2f}",
+        f"Constraint Error: {report.manufacturing_kpis.mean_constraint_error:.4f}",
         f"Scrap Proxy: {report.manufacturing_kpis.mean_scrap_proxy:.1%}",
         f"Failures by Type: {report.manufacturing_kpis.total_failures_by_type}",
         "",

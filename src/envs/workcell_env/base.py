@@ -15,6 +15,10 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 from src.envs.workcell_env.config import WorkcellEnvConfig
 from src.envs.workcell_env.scene.scene_spec import WorkcellSceneSpec
 from src.motor_backend.rollout_capture import EpisodeMetadata
+from src.envs.workcell_env.utils.determinism import (
+    deterministic_episode_id,
+    set_deterministic_seed,
+)
 
 
 @dataclass(frozen=True)
@@ -118,11 +122,14 @@ class WorkcellEnvBase:
         if seed is not None:
             self.seed = seed
             self._rng = random.Random(seed)
+            set_deterministic_seed(seed)
         if task_id is not None:
             self.task_id = task_id
         if robot_family is not None:
             self.robot_family = robot_family
 
+        if episode_id is None and seed is not None:
+            episode_id = deterministic_episode_id("workcell", seed, {"task_id": self.task_id})
         self._episode_id = episode_id or f"workcell_{uuid.uuid4().hex[:12]}"
         self._step_count = 0
         self._trajectory = []

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import logging
 import time
 import uuid
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from src.motor_backend.workcell_reward_terms import (
 )
 from src.objectives.economic_objective import EconomicObjectiveSpec
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class WorkcellEpisodeResult:
@@ -46,6 +49,8 @@ class WorkcellEpisodeResult:
     scene_spec: Mapping[str, Any]
     trajectory_data: Mapping[str, Any]
     metrics: Mapping[str, float]
+    rgb_frames: list[Any] | None = None
+    depth_frames: list[Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -232,11 +237,15 @@ class WorkcellEnvBackend:
         rewards: list[float] = []
         task_progress: list[float] = []
         info_history: list[Mapping[str, Any]] = []
+        rgb_frames: list[Any] = []
 
         step_count = 0
         total_reward = 0.0
         total_errors = 0
         energy_wh = 0.0
+        contact_force_sum = 0.0
+        constraint_error_sum = 0.0
+        collision_count = 0
 
         target_steps = _target_steps(config, objective)
         last_progress = 0.0
@@ -246,6 +255,9 @@ class WorkcellEnvBackend:
             action = self._select_action(obs, objective, rng)
             obs, info, _ = env.step(action)
             state = env.physics_adapter.get_state()
+            contact_force_sum += float(state.get("contact_force_N", 0.0))
+            constraint_error_sum += float(state.get("constraint_error", 0.0))
+            collision_count += int(state.get("collision_count", 0))
 
             progress = min(1.0, (step_count + 1) / max(target_steps, 1))
             progress_delta = max(progress - last_progress, 0.0)
@@ -276,6 +288,12 @@ class WorkcellEnvBackend:
             if isinstance(info, Mapping):
                 info_history.append(info)
 
+            if config.capture_rgb_frames and len(rgb_frames) < config.render_max_frames:
+                if _should_capture_frame(step_count, config):
+                    frame = _render_frame(env.physics_adapter, config)
+                    if frame is not None:
+                        rgb_frames.append(frame)
+
             step_count += 1
             if progress >= 1.0:
                 success = True
@@ -286,6 +304,8 @@ class WorkcellEnvBackend:
         mean_reward = total_reward / max(step_count, 1)
         error_rate = float(total_errors) / max(step_count, 1)
         mpl_units_per_hour = _estimate_mpl_units_per_hour(success, duration_s)
+        mean_contact_force = contact_force_sum / max(step_count, 1)
+        mean_constraint_error = constraint_error_sum / max(step_count, 1)
 
         trajectory_data = {
             "scene_spec": env.scene_spec.to_dict(),
@@ -302,6 +322,9 @@ class WorkcellEnvBackend:
             "mean_reward": float(mean_reward),
             "error_rate": float(error_rate),
             "energy_wh": float(energy_wh),
+            "contact_force_N": float(mean_contact_force),
+            "constraint_error": float(mean_constraint_error),
+            "collision_count": float(collision_count),
             "mpl_units_per_hour": float(mpl_units_per_hour),
             "success_rate": 1.0 if success else 0.0,
             "steps": float(step_count),
@@ -327,6 +350,8 @@ class WorkcellEnvBackend:
             scene_spec=env.scene_spec.to_dict(),
             trajectory_data=trajectory_data,
             metrics=metrics,
+            rgb_frames=rgb_frames or None,
+            depth_frames=None,
         )
 
     def _select_action(
@@ -424,16 +449,41 @@ class WorkcellEnvBackend:
                 seed=seed,
                 env_params=env_params,
             )
+            sensor_bundle = None
+            if config.capture_sensor_bundle:
+                sensor_bundle = _build_sensor_bundle(
+                    scene_spec=result.scene_spec,
+                    states=list(result.trajectory_data.get("states", [])),
+                    config=config,
+                    seed=seed,
+                )
             record_episode_rollout(
                 scenario_id=scenario_id,
                 episode_idx=idx,
                 metadata=episode_meta,
                 trajectory_data=result.trajectory_data,
-                rgb_frames=None,
-                depth_frames=None,
+                rgb_frames=result.rgb_frames,
+                depth_frames=result.depth_frames,
                 metrics=result.metrics,
                 base_dir=base_dir,
+                sensor_bundle=sensor_bundle,
             )
+            if config.enable_scene_tracks:
+                try:
+                    from src.vision.scene_ir_tracker.io.scene_tracks_runner import run_scene_tracks
+
+                    episode_dir = base_dir / scenario_id / f"episode_{idx:03d}"
+                    mode = "rgb" if result.rgb_frames else "vector_proxy"
+                    run_scene_tracks(
+                        datapack_path=episode_dir,
+                        output_path=episode_dir,
+                        seed=seed,
+                        max_frames=config.render_max_frames,
+                        camera="front",
+                        mode=mode,
+                    )
+                except Exception as exc:
+                    logger.warning("SceneTracks generation failed for episode %s: %s", result.episode_id, exc)
         return finalize_rollout_bundle(scenario_id, base_dir)
 
 
@@ -466,6 +516,119 @@ def _estimate_mpl_units_per_hour(success: bool, duration_s: float) -> float:
     if not success or duration_s <= 0.0:
         return 0.0
     return 3600.0 / duration_s
+
+
+def _should_capture_frame(step_idx: int, config: WorkcellEnvConfig) -> bool:
+    if config.render_fps <= 0:
+        return False
+    dt = max(config.time_step_s, 1e-6)
+    stride = max(1, int(round(1.0 / (dt * config.render_fps))))
+    return (step_idx % stride) == 0
+
+
+def _render_frame(adapter: Any, config: WorkcellEnvConfig) -> Any | None:
+    render_fn = getattr(adapter, "render", None)
+    if not callable(render_fn):
+        return None
+    try:
+        return render_fn(camera_name="front", width=config.render_width, height=config.render_height)
+    except TypeError:
+        try:
+            return render_fn()
+        except Exception:
+            return None
+
+
+def _build_sensor_bundle(
+    *,
+    scene_spec: Mapping[str, Any],
+    states: Sequence[Mapping[str, Any]],
+    config: WorkcellEnvConfig,
+    seed: int | None,
+) -> Any | None:
+    if not states:
+        return None
+    indices = _select_frame_indices(len(states), config)
+    if not indices:
+        return None
+    selected_states = [states[i] for i in indices]
+    timestamps = []
+    for idx, state in zip(indices, selected_states):
+        ts = state.get("time_s") if isinstance(state, Mapping) else None
+        if ts is None:
+            ts = float(idx) * float(config.time_step_s)
+        timestamps.append(float(ts))
+
+    cameras = list(config.sensor_cameras or ("front",))
+    noise_seed = config.sensor_noise_seed if config.sensor_noise_seed is not None else seed
+    noise_config = dict(config.sensor_noise or {})
+
+    rgb: dict[str, Any] = {}
+    depth: dict[str, Any] = {}
+    seg: dict[str, Any] = {}
+    intrinsics: dict[str, Any] = {}
+    extrinsics: dict[str, Any] = {}
+
+    try:
+        from src.envs.workcell_env.observations.mujoco_render import render_workcell_frames
+        from src.envs.workcell_env.scene.scene_spec import WorkcellSceneSpec
+        from src.motor_backend.sensor_bundle import SensorBundleData
+
+        if isinstance(scene_spec, WorkcellSceneSpec):
+            spec = scene_spec
+        else:
+            spec = WorkcellSceneSpec.from_dict(scene_spec)
+
+        for camera in cameras:
+            frames, depth_frames, seg_frames, camera_params = render_workcell_frames(
+                scene_spec=spec,
+                states=selected_states,
+                camera_name=camera,
+                width=config.render_width,
+                height=config.render_height,
+                max_frames=len(selected_states),
+                seed=noise_seed,
+                sensor_noise=noise_config or None,
+            )
+            if frames:
+                rgb[camera] = np.asarray(frames, dtype=np.uint8)
+            if depth_frames:
+                depth[camera] = np.asarray(depth_frames, dtype=np.float32)
+            if seg_frames:
+                seg[camera] = np.asarray(seg_frames, dtype=np.int32)
+            intrinsics[camera] = {
+                "fx": float(camera_params.fx),
+                "fy": float(camera_params.fy),
+                "cx": float(camera_params.cx),
+                "cy": float(camera_params.cy),
+                "width": int(camera_params.width),
+                "height": int(camera_params.height),
+            }
+            extrinsics[camera] = np.asarray(camera_params.world_from_cam, dtype=np.float32)
+
+        return SensorBundleData(
+            cameras=cameras,
+            rgb=rgb,
+            depth=depth,
+            seg=seg,
+            intrinsics=intrinsics,
+            extrinsics=extrinsics,
+            timestamps_s=timestamps,
+            depth_unit=config.sensor_depth_unit,
+            noise_config=noise_config,
+            noise_seed=noise_seed,
+        )
+    except Exception:
+        return None
+
+
+def _select_frame_indices(num_steps: int, config: WorkcellEnvConfig) -> list[int]:
+    if num_steps <= 0:
+        return []
+    indices = [idx for idx in range(num_steps) if _should_capture_frame(idx, config)]
+    if config.render_max_frames > 0:
+        indices = indices[: config.render_max_frames]
+    return indices
 
 
 def _target_steps(config: WorkcellEnvConfig, objective: EconomicObjectiveSpec) -> int:

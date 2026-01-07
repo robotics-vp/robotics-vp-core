@@ -6,7 +6,7 @@ Provides a frozen dataclass with serialization helpers and presets.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Literal, Optional
 
 
@@ -44,6 +44,23 @@ class WorkcellEnvConfig:
     # Physics mode
     physics_mode: Literal["SIMPLE", "MUJOCO", "ISAAC"] = "SIMPLE"
 
+    # Optional SceneTracks wiring
+    enable_scene_tracks: bool = False
+
+    # Rendering for datapack frames
+    capture_rgb_frames: bool = False
+    render_width: int = 128
+    render_height: int = 128
+    render_fps: int = 10
+    render_max_frames: int = 50
+
+    # Sensor bundle export
+    capture_sensor_bundle: bool = False
+    sensor_cameras: tuple[str, ...] = ("front",)
+    sensor_depth_unit: Literal["meters"] = "meters"
+    sensor_noise: Dict[str, Any] = field(default_factory=dict)
+    sensor_noise_seed: Optional[int] = None
+
     # Difficulty parameters
     tolerance_mm: float = 2.0
     occlusion_level: float = 0.1
@@ -62,6 +79,17 @@ class WorkcellEnvConfig:
             "max_steps": self.max_steps,
             "time_step_s": self.time_step_s,
             "physics_mode": self.physics_mode,
+            "enable_scene_tracks": self.enable_scene_tracks,
+            "capture_rgb_frames": self.capture_rgb_frames,
+            "render_width": self.render_width,
+            "render_height": self.render_height,
+            "render_fps": self.render_fps,
+            "render_max_frames": self.render_max_frames,
+            "capture_sensor_bundle": self.capture_sensor_bundle,
+            "sensor_cameras": list(self.sensor_cameras),
+            "sensor_depth_unit": self.sensor_depth_unit,
+            "sensor_noise": dict(self.sensor_noise),
+            "sensor_noise_seed": self.sensor_noise_seed,
             "tolerance_mm": self.tolerance_mm,
             "occlusion_level": self.occlusion_level,
             "tool_changes_required": self.tool_changes_required,
@@ -89,6 +117,17 @@ class WorkcellEnvConfig:
             max_steps=data.get("max_steps", 200),
             time_step_s=data.get("time_step_s", 1.0),
             physics_mode=data.get("physics_mode", "SIMPLE"),
+            enable_scene_tracks=data.get("enable_scene_tracks", False),
+            capture_rgb_frames=data.get("capture_rgb_frames", False),
+            render_width=data.get("render_width", 128),
+            render_height=data.get("render_height", 128),
+            render_fps=data.get("render_fps", 10),
+            render_max_frames=data.get("render_max_frames", 50),
+            capture_sensor_bundle=data.get("capture_sensor_bundle", False),
+            sensor_cameras=tuple(data.get("sensor_cameras", ("front",))),
+            sensor_depth_unit=data.get("sensor_depth_unit", "meters"),
+            sensor_noise=data.get("sensor_noise", {}) or {},
+            sensor_noise_seed=data.get("sensor_noise_seed"),
             tolerance_mm=data.get("tolerance_mm", 2.0),
             occlusion_level=data.get("occlusion_level", 0.1),
             tool_changes_required=data.get("tool_changes_required", 0),

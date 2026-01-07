@@ -99,6 +99,23 @@ curriculum:
   max_difficulty: 1.0
 ```
 
+## SensorBundle v1
+
+Rollout datapacks may include a canonical sensor bundle layout (SensorBundle v1):
+
+```
+episode_000/
+├── rgb/<camera>.npz         # uint8 (T, H, W, 3)
+├── depth/<camera>.npz       # float32 meters (T, H, W)
+├── seg/<camera>.npz         # int32 instance IDs (T, H, W)
+├── intrinsics/<camera>.json # fx, fy, cx, cy, width, height
+├── extrinsics/<camera>.npy  # world_from_cam (T, 4, 4)
+└── timestamps_s.npy         # float64 timestamps per frame
+```
+
+`metadata.json` includes a `sensor_bundle` entry with the version, camera list,
+depth unit, and any applied noise config.
+
 ## CLI Example
 
 Run a pricing report with Holosoma training:

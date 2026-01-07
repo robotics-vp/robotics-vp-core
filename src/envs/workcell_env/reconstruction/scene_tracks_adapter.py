@@ -199,7 +199,12 @@ class SceneTracksAdapter:
         # Try different key conventions
         track_ids = scene_tracks.get("track_ids", scene_tracks.get("scene_tracks_v1/track_ids"))
         positions = scene_tracks.get("positions", scene_tracks.get("scene_tracks_v1/positions"))
+        if positions is None:
+            positions = scene_tracks.get("poses_t", scene_tracks.get("scene_tracks_v1/poses_t"))
+
         orientations = scene_tracks.get("orientations", scene_tracks.get("scene_tracks_v1/orientations"))
+        if orientations is None:
+            orientations = scene_tracks.get("poses_R", scene_tracks.get("scene_tracks_v1/poses_R"))
         labels = scene_tracks.get("semantic_labels", scene_tracks.get("scene_tracks_v1/semantic_labels"))
 
         if track_ids is None or positions is None:
@@ -210,9 +215,24 @@ class SceneTracksAdapter:
 
         if orientations is not None:
             orientations = np.asarray(orientations)
+            if orientations.ndim == 4 and orientations.shape[-2:] == (3, 3):
+                orientations = _rotation_matrices_to_quat(orientations)
         else:
-            # Default identity quaternions
-            orientations = np.tile([0.0, 0.0, 0.0, 1.0], (len(positions), 1))
+            orientations = None
+
+        if positions.ndim == 3:
+            num_tracks = len(track_ids)
+            if positions.shape[0] != num_tracks and positions.shape[1] == num_tracks:
+                positions = np.swapaxes(positions, 0, 1)
+                if orientations is not None and orientations.ndim >= 3:
+                    orientations = np.swapaxes(orientations, 0, 1)
+            if orientations is None:
+                orientations = np.tile(
+                    [0.0, 0.0, 0.0, 1.0],
+                    (positions.shape[0], positions.shape[1], 1),
+                )
+        elif positions.ndim == 2 and orientations is None:
+            orientations = np.tile([0.0, 0.0, 0.0, 1.0], (positions.shape[0], 1))
 
         # Handle different array shapes
         if positions.ndim == 3:  # (num_tracks, T, 3)
@@ -221,7 +241,7 @@ class SceneTracksAdapter:
                     track_id=str(tid),
                     object_type="unknown",
                     positions=positions[i],
-                    orientations=orientations[i] if orientations.ndim == 3 else orientations,
+                    orientations=orientations[i] if orientations is not None and orientations.ndim >= 3 else orientations,
                     semantic_labels=labels[i] if labels is not None and labels.ndim >= 2 else None,
                 ))
         elif positions.ndim == 2:  # (T, 3) single track or (num_tracks, 3) single frame
@@ -309,6 +329,43 @@ class SceneTracksAdapter:
         label_conf = labeled_count / max(len(tracks), 1)
 
         return 0.6 * base_conf + 0.4 * label_conf
+
+
+def _rotation_matrices_to_quat(rotations: np.ndarray) -> np.ndarray:
+    """Convert rotation matrices to quaternions (w, x, y, z)."""
+    if rotations.ndim != 4:
+        return rotations
+    quats = np.zeros(rotations.shape[:-2] + (4,), dtype=np.float32)
+    for idx in np.ndindex(rotations.shape[:-2]):
+        R = rotations[idx]
+        trace = np.trace(R)
+        if trace > 0:
+            s = 0.5 / np.sqrt(trace + 1.0)
+            qw = 0.25 / s
+            qx = (R[2, 1] - R[1, 2]) * s
+            qy = (R[0, 2] - R[2, 0]) * s
+            qz = (R[1, 0] - R[0, 1]) * s
+        else:
+            if R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+                s = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
+                qw = (R[2, 1] - R[1, 2]) / s
+                qx = 0.25 * s
+                qy = (R[0, 1] + R[1, 0]) / s
+                qz = (R[0, 2] + R[2, 0]) / s
+            elif R[1, 1] > R[2, 2]:
+                s = 2.0 * np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2])
+                qw = (R[0, 2] - R[2, 0]) / s
+                qx = (R[0, 1] + R[1, 0]) / s
+                qy = 0.25 * s
+                qz = (R[1, 2] + R[2, 1]) / s
+            else:
+                s = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
+                qw = (R[1, 0] - R[0, 1]) / s
+                qx = (R[0, 2] + R[2, 0]) / s
+                qy = (R[1, 2] + R[2, 1]) / s
+                qz = 0.25 * s
+        quats[idx] = np.array([qw, qx, qy, qz], dtype=np.float32)
+    return quats
 
 
 def reconstruct_workcell_from_video(

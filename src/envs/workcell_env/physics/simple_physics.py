@@ -37,12 +37,14 @@ class SimplePhysicsAdapter:
         self.kinematic_only = bool(kinematic_only)
         self._rng = random.Random()
         self._state: Dict[str, Any] = {"objects": {}, "time_s": 0.0}
+        self._scene_spec: WorkcellSceneSpec | None = None
 
     def reset(self, scene_spec: WorkcellSceneSpec, seed: Optional[int] = None) -> None:
         """Reset state from a scene specification."""
         if seed is not None:
             self._rng = random.Random(seed)
         self.spatial_bounds = scene_spec.spatial_bounds
+        self._scene_spec = scene_spec
         self._state = {"objects": {}, "time_s": 0.0}
 
         for station in scene_spec.stations:
@@ -100,7 +102,30 @@ class SimplePhysicsAdapter:
 
     def get_state(self) -> Dict[str, Any]:
         """Return a copy of the physics state."""
-        return copy.deepcopy(self._state)
+        state = copy.deepcopy(self._state)
+        state.setdefault("collision_count", 0)
+        state.setdefault("contact_force_N", 0.0)
+        state.setdefault("constraint_error", 0.0)
+        return state
+
+    def render(self, *, width: int = 128, height: int = 128, camera_name: str = "front") -> Any:
+        """Render a simple proxy frame if scene spec is available."""
+        if self._scene_spec is None:
+            return None
+        try:
+            from src.envs.workcell_env.observations.mujoco_render import render_workcell_frames
+
+            frames, _, _, _ = render_workcell_frames(
+                scene_spec=self._scene_spec,
+                states=[self.get_state()],
+                camera_name=camera_name,
+                width=width,
+                height=height,
+                max_frames=1,
+            )
+            return frames[0] if frames else None
+        except Exception:
+            return None
 
     def check_collision(self, object_id_a: str, object_id_b: str) -> bool:
         """Check collision using bounding spheres."""

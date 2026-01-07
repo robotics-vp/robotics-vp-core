@@ -10,10 +10,12 @@ from src.ontology.store import OntologyStore
 
 def make_motor_backend(
     name: str,
-    econ_meter: EconomicMeter,
-    store: OntologyStore,
+    econ_meter: Optional[EconomicMeter] = None,
+    store: Optional[OntologyStore] = None,
     backend_config: Optional[Any] = None,
 ) -> MotorBackend | None:
+    if name not in ("workcell_isaaclab", "dummy") and (econ_meter is None or store is None):
+        raise ValueError(f"make_motor_backend requires econ_meter and store for backend '{name}'.")
     if name == "holosoma":
         from src.motor_backend.holosoma_backend import HolosomaBackend
 
@@ -50,6 +52,29 @@ def make_motor_backend(
             econ_meter=econ_meter,
             datapack_provider=DatapackProvider(store),
             default_config=workcell_config,
+        )
+    if name == "workcell_isaaclab":
+        import importlib
+
+        try:
+            module = importlib.import_module("src.motor_backend.workcell_isaaclab_backend")
+        except Exception:
+            raise RuntimeError(
+                "Isaac Lab backend is optional and not installed. "
+                "Install Isaac Lab and provide "
+                "`src/motor_backend/workcell_isaaclab_backend.py` with "
+                "`WorkcellIsaacLabBackend`."
+            ) from None
+        backend_cls = getattr(module, "WorkcellIsaacLabBackend", None)
+        if backend_cls is None:
+            raise RuntimeError(
+                "Isaac Lab backend module is missing `WorkcellIsaacLabBackend`. "
+                "Add it to `src/motor_backend/workcell_isaaclab_backend.py`."
+            ) from None
+        return backend_cls(
+            econ_meter=econ_meter,
+            datapack_provider=DatapackProvider(store),
+            backend_config=backend_config,
         )
     if name == "dummy":
         return None

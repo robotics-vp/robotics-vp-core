@@ -29,7 +29,34 @@ jobs:
         run: python3 -m compileall src scripts tests -q
 
       - name: Run fast tests
-        run: python3 -m pytest tests/ -m "not slow" --durations=20 -q
+        run: python3 -m pytest tests/ -m "not slow and not no_mujoco" --durations=20 -q
+
+      - name: MuJoCo missing-dep UX
+        run: python3 -m pytest -q tests/plugins/test_mujoco_missing_dep.py
 
       - name: Workcell env smoke tests
         run: python3 scripts/smoke_workcell_env.py
+
+  mujoco_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies (incl. MuJoCo)
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-extra.txt
+
+      - name: Syntax check
+        run: python3 -m compileall src scripts tests -q
+
+      - name: MuJoCo physics + SceneTracks gates
+        run: |
+          python3 -m pytest -q tests/integration/test_workcell_mujoco_physics_smoke.py
+          python3 -m pytest -q tests/integration/test_workcell_real_physics_scene_tracks_loop.py
