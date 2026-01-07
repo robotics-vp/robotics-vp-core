@@ -47,6 +47,7 @@ def record_episode_rollout(
     depth_frames: Any | None,
     metrics: Mapping[str, float],
     base_dir: Path,
+    sensor_bundle: Any | None = None,
 ) -> EpisodeRollout:
     episode_dir = Path(base_dir) / scenario_id / f"episode_{episode_idx:03d}"
     episode_dir.mkdir(parents=True, exist_ok=True)
@@ -57,6 +58,15 @@ def record_episode_rollout(
     rgb_path = _write_video_stub(episode_dir / "rgb.mp4", rgb_frames)
     depth_path = _write_video_stub(episode_dir / "depth.mp4", depth_frames)
 
+    sensor_bundle_meta = None
+    if sensor_bundle is not None:
+        try:
+            from src.motor_backend.sensor_bundle import write_sensor_bundle
+
+            sensor_bundle_meta = write_sensor_bundle(episode_dir, sensor_bundle)
+        except Exception:
+            sensor_bundle_meta = None
+
     rollout = EpisodeRollout(
         metadata=metadata,
         trajectory_path=trajectory_path,
@@ -64,7 +74,7 @@ def record_episode_rollout(
         depth_video_path=depth_path,
         metrics=dict(metrics),
     )
-    _write_metadata(episode_dir / "metadata.json", rollout)
+    _write_metadata(episode_dir / "metadata.json", rollout, sensor_bundle_meta)
     return rollout
 
 
@@ -121,7 +131,7 @@ def _write_video_stub(path: Path, frames: Any | None) -> Path | None:
             return None
 
 
-def _write_metadata(path: Path, rollout: EpisodeRollout) -> None:
+def _write_metadata(path: Path, rollout: EpisodeRollout, sensor_bundle_meta: Any | None = None) -> None:
     payload = {
         "metadata": asdict(rollout.metadata),
         "trajectory_path": str(rollout.trajectory_path),
@@ -129,6 +139,8 @@ def _write_metadata(path: Path, rollout: EpisodeRollout) -> None:
         "depth_video_path": str(rollout.depth_video_path) if rollout.depth_video_path else None,
         "metrics": dict(rollout.metrics),
     }
+    if sensor_bundle_meta:
+        payload["sensor_bundle"] = sensor_bundle_meta
     path.write_text(json.dumps(payload, indent=2))
 
 

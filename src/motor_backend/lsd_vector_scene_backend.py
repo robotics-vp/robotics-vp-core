@@ -386,7 +386,7 @@ class LSDVectorSceneBackend:
 
         # Scene IR Tracker integration
         scene_tracks_data = None
-        if getattr(config, "enable_scene_ir_tracker", False):
+        if getattr(config, "enable_scene_ir_tracker", False) or getattr(config, "enable_scene_tracks", False):
             try:
                 from src.vision.scene_ir_tracker import SceneIRTracker, SceneIRTrackerConfig
                 from src.vision.nag.types import CameraParams

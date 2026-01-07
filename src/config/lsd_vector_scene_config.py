@@ -77,6 +77,7 @@ class LSDVectorSceneConfig:
     # Scene IR Tracker settings
     enable_scene_ir_tracker: bool = False
     scene_ir_tracker_config: SceneIRTrackerConfig = field(default_factory=SceneIRTrackerConfig)
+    enable_scene_tracks: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
@@ -110,6 +111,7 @@ class LSDVectorSceneConfig:
             "motion_hierarchy_config": self.motion_hierarchy_config.to_dict(),
             "enable_scene_ir_tracker": self.enable_scene_ir_tracker,
             "scene_ir_tracker_config": self.scene_ir_tracker_config.to_dict(),
+            "enable_scene_tracks": self.enable_scene_tracks,
         }
 
     def to_json(self) -> str:
@@ -175,6 +177,7 @@ class LSDVectorSceneConfig:
             motion_hierarchy_config=mh_config,
             enable_scene_ir_tracker=data.get("enable_scene_ir_tracker", False),
             scene_ir_tracker_config=sirt_config,
+            enable_scene_tracks=data.get("enable_scene_tracks", False),
         )
 
     @classmethod
