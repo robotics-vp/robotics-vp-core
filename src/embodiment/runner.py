@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -40,7 +41,33 @@ def _load_trajectory_payload(path: Path) -> Optional[Dict[str, Any]]:
     return payload if isinstance(payload, dict) else None
 
 
-def _find_semantic_fusion_path(trajectory_path: Path) -> Optional[Path]:
+def _safe_episode_id(episode_id: str) -> str:
+    safe = episode_id.replace(os.sep, "_")
+    if os.altsep:
+        safe = safe.replace(os.altsep, "_")
+    return safe or "episode"
+
+
+def _find_semantic_fusion_path(trajectory_path: Path, episode_id: Optional[str]) -> Optional[Path]:
+    episode_dir = trajectory_path.parent
+    meta_path = episode_dir / "metadata.json"
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text())
+        except Exception:
+            meta = {}
+        meta_value = meta.get("semantic_fusion_path")
+        if isinstance(meta_value, str) and meta_value:
+            candidate = Path(meta_value)
+            if not candidate.is_absolute():
+                candidate = episode_dir / candidate
+            if candidate.exists():
+                return candidate
+    if episode_id:
+        safe_id = _safe_episode_id(episode_id)
+        candidate = trajectory_path.with_name(f"{safe_id}_semantic_fusion_v1.npz")
+        if candidate.exists():
+            return candidate
     candidate = trajectory_path.with_name(f"{trajectory_path.stem}_semantic_fusion_v1.npz")
     if candidate.exists():
         return candidate
@@ -248,7 +275,10 @@ def run_embodiment_for_rollouts(
             logger.warning("Embodiment skipped: scene_tracks missing for %s", episode.metadata.episode_id)
             continue
 
-        semantic_fusion_path = _find_semantic_fusion_path(episode.trajectory_path)
+        semantic_fusion_path = _find_semantic_fusion_path(
+            episode.trajectory_path,
+            getattr(episode.metadata, "episode_id", None),
+        )
         semantic_fusion = _load_npz(semantic_fusion_path) if semantic_fusion_path else None
 
         inputs = EmbodimentInputs(
