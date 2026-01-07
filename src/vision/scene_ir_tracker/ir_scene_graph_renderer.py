@@ -5,6 +5,7 @@ Provides occlusion-aware differentiable rendering for multiple entities.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -24,6 +25,11 @@ from src.vision.nag.types import CameraParams
 from src.vision.scene_ir_tracker.types import SceneEntity3D
 
 logger = logging.getLogger(__name__)
+
+
+def _stable_color_bytes(value: str) -> Tuple[float, float, float]:
+    digest = hashlib.sha256(value.encode("utf-8")).digest()
+    return digest[0] / 255.0, digest[1] / 255.0, digest[2] / 255.0
 
 
 def _check_torch() -> None:
@@ -243,10 +249,7 @@ class IRSceneGraphRenderer:
     ) -> "torch.Tensor":
         """Get RGB color for entity."""
         # Hash track_id for deterministic color
-        color_hash = hash(entity.track_id) % (256**3)
-        r = ((color_hash >> 16) & 0xFF) / 255.0
-        g = ((color_hash >> 8) & 0xFF) / 255.0
-        b = (color_hash & 0xFF) / 255.0
+        r, g, b = _stable_color_bytes(str(entity.track_id))
 
         # Ensure minimum brightness
         min_val = min(r, g, b)

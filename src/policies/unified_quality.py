@@ -62,6 +62,7 @@ class UnifiedQualityConfig:
     min_combined_weight: float = 0.1  # Below this = not eligible
     min_mhn_plausibility: float = 0.2  # Below this = immediate reject
     min_process_reward_conf: float = 0.2  # Below this = immediate reject
+    min_scene_tracks_quality: float = 0.2  # Below this = immediate reject
 
     # Weight computation parameters
     mhn_plausibility_weight: float = 0.7  # Weight of plausibility in MHN score
@@ -106,6 +107,7 @@ class UnifiedQualityPolicy:
         scene_ir_convergence: float = 1.0,
         scene_ir_visibility: float = 1.0,
         scene_ir_quality: Optional[float] = None,  # If pre-computed
+        scene_tracks_quality: Optional[Any] = None,
         # ProcessReward signals
         process_reward_conf: float = 0.5,
         process_reward_conf_p10: float = 0.5,
@@ -161,12 +163,17 @@ class UnifiedQualityPolicy:
                 cfg.scene_ir_convergence_weight * scene_ir_convergence +
                 cfg.scene_ir_visibility_weight * scene_ir_visibility
             )
+        scene_tracks_quality_val = _extract_scene_tracks_quality(scene_tracks_quality)
+        if scene_tracks_quality_val is not None:
+            w_scene_ir = min(w_scene_ir, scene_tracks_quality_val)
         w_scene_ir = max(0.0, min(1.0, w_scene_ir))
         components["scene_ir"] = {
             "convergence": scene_ir_convergence,
             "visibility": scene_ir_visibility,
             "quality": w_scene_ir,
         }
+        if scene_tracks_quality_val is not None:
+            components["scene_tracks"] = {"quality": scene_tracks_quality_val}
 
         # --- ProcessReward weight ---
         if process_reward_quality is not None:
@@ -216,6 +223,11 @@ class UnifiedQualityPolicy:
         if mhn_plausibility < cfg.min_mhn_plausibility:
             is_eligible = False
             eligibility_reason = f"mhn_plausibility={mhn_plausibility:.2f} < {cfg.min_mhn_plausibility}"
+        elif scene_tracks_quality_val is not None and scene_tracks_quality_val < cfg.min_scene_tracks_quality:
+            is_eligible = False
+            eligibility_reason = (
+                f"scene_tracks_quality={scene_tracks_quality_val:.2f} < {cfg.min_scene_tracks_quality}"
+            )
         elif process_reward_conf_p10 < cfg.min_process_reward_conf:
             is_eligible = False
             eligibility_reason = f"conf_p10={process_reward_conf_p10:.2f} < {cfg.min_process_reward_conf}"
@@ -254,6 +266,7 @@ class UnifiedQualityPolicy:
         datapack: "DataPackMeta",
         mhn_summary: Optional[Any] = None,
         scene_ir_quality: Optional[float] = None,
+        scene_tracks_quality: Optional[Any] = None,
     ) -> UnifiedQualityWeights:
         """Compute weights from a DataPackMeta object.
 
@@ -324,6 +337,7 @@ class UnifiedQualityPolicy:
             mhn_plausibility=mhn_plausibility,
             mhn_difficulty=mhn_difficulty,
             scene_ir_quality=scene_ir_quality,
+            scene_tracks_quality=scene_tracks_quality,
             process_reward_conf=pr_conf,
             process_reward_conf_p10=pr_conf_p10,
             process_reward_delta=pr_delta,
@@ -340,6 +354,7 @@ class UnifiedQualityPolicy:
         datapacks: list,
         mhn_summaries: Optional[Dict[str, Any]] = None,
         scene_ir_qualities: Optional[Dict[str, float]] = None,
+        scene_tracks_qualities: Optional[Dict[str, Any]] = None,
     ) -> tuple:
         """Filter datapacks by eligibility.
 
@@ -357,6 +372,7 @@ class UnifiedQualityPolicy:
 
         mhn_summaries = mhn_summaries or {}
         scene_ir_qualities = scene_ir_qualities or {}
+        scene_tracks_qualities = scene_tracks_qualities or {}
 
         for dp in datapacks:
             pack_id = dp.pack_id
@@ -364,6 +380,7 @@ class UnifiedQualityPolicy:
                 dp,
                 mhn_summary=mhn_summaries.get(pack_id),
                 scene_ir_quality=scene_ir_qualities.get(pack_id),
+                scene_tracks_quality=scene_tracks_qualities.get(pack_id),
             )
 
             if not weights.is_eligible:
@@ -375,3 +392,25 @@ class UnifiedQualityPolicy:
                 eligible.append((dp, weights))
 
         return eligible, ineligible, stagnant
+
+
+def _extract_scene_tracks_quality(value: Optional[Any]) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+    if isinstance(value, dict):
+        score = value.get("quality_score") or value.get("scene_tracks_quality")
+        try:
+            return float(score)
+        except (TypeError, ValueError):
+            return None
+    if hasattr(value, "quality_score"):
+        try:
+            return float(getattr(value, "quality_score"))
+        except (TypeError, ValueError):
+            return None
+    return None
