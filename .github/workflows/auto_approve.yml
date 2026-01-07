@@ -12,7 +12,7 @@ jobs:
     # Only run when label is present.
     # Don't run on forks (secrets unavailable) or drafts.
     # Only allow owner/member/collaborator authored PRs.
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'auto-approve') && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.author_association == 'OWNER' || github.event.pull_request.author_association == 'MEMBER' || github.event.pull_request.author_association == 'COLLABORATOR') }}
+    if: ${{ contains(toJson(github.event.pull_request.labels), 'auto-approve') && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.author_association == 'OWNER' || github.event.pull_request.author_association == 'MEMBER' || github.event.pull_request.author_association == 'COLLABORATOR') }}
     runs-on: ubuntu-latest
     steps:
       - uses: hmarr/auto-approve-action@v4
