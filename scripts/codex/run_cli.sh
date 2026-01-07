@@ -155,8 +155,9 @@ echo ""
 START_TIME=$(date +%s)
 set +e
 
-# Run with timeout, stream JSON events to file
-timeout "$TIMEOUT" codex "${CODEX_ARGS[@]}" 2>&1 | tee "$RUN_DIR/events.jsonl" &
+# Run codex in background, stream JSON events to file
+# (macOS doesn't have `timeout`, so we use background + manual kill)
+codex "${CODEX_ARGS[@]}" 2>&1 | tee "$RUN_DIR/events.jsonl" &
 CODEX_PID=$!
 
 # Update metadata with PID
@@ -173,9 +174,30 @@ cat > "$RUN_DIR/meta.json" << EOF
 }
 EOF
 
-# Wait for completion
-wait $CODEX_PID
+# Wait for completion with timeout
+ELAPSED=0
+TIMED_OUT=false
+while kill -0 $CODEX_PID 2>/dev/null && [ $ELAPSED -lt $TIMEOUT ]; do
+    sleep 1
+    ((ELAPSED++))
+done
+
+# Check if still running (timeout occurred)
+if kill -0 $CODEX_PID 2>/dev/null; then
+    echo -e "${YELLOW}Timeout after ${TIMEOUT}s, killing process...${NC}"
+    kill $CODEX_PID 2>/dev/null || true
+    sleep 1
+    kill -9 $CODEX_PID 2>/dev/null || true
+    TIMED_OUT=true
+fi
+
+wait $CODEX_PID 2>/dev/null
 EXIT_CODE=$?
+
+# Override exit code if timed out
+if [ "$TIMED_OUT" = true ]; then
+    EXIT_CODE=124
+fi
 set -e
 
 END_TIME=$(date +%s)

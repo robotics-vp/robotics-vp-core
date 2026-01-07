@@ -68,7 +68,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --env ENV_ID      Cloud environment ID (required, or set CODEX_CLOUD_ENV_ID)"
-            echo "  --wait            Wait for task completion"
+            echo "  --wait            Wait for task completion (non-interactive requires --apply)"
             echo "  --apply           Wait and apply patch (implies --wait)"
             echo "  --poll SECS       Poll interval when waiting (default: 30)"
             echo "  --timeout SECS    Max wait time (default: 3600)"
@@ -148,7 +148,7 @@ set +e
 
 # Use codex cloud exec
 # Note: This captures the task ID for tracking
-SUBMIT_OUTPUT=$(codex cloud exec --env "$ENV_ID" --json "$TASK" 2>&1)
+SUBMIT_OUTPUT=$(codex cloud exec --env "$ENV_ID" "$TASK" 2>&1)
 SUBMIT_EXIT=$?
 
 echo "$SUBMIT_OUTPUT" > "$RUN_DIR/submit_output.json"
@@ -177,7 +177,13 @@ fi
 echo -e "${GREEN}Task submitted${NC}"
 
 # Try to extract task ID from output
-TASK_ID=$(echo "$SUBMIT_OUTPUT" | grep -o '"task_id":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+TASK_ID=$(echo "$SUBMIT_OUTPUT" | sed -nE 's/.*"task_id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -1)
+if [ -z "$TASK_ID" ]; then
+    TASK_ID=$(echo "$SUBMIT_OUTPUT" | sed -nE 's/.*task_id[[:space:]]*[:=][[:space:]]*([A-Za-z0-9_-]+).*/\1/p' | head -1)
+fi
+if [ -z "$TASK_ID" ]; then
+    TASK_ID=$(echo "$SUBMIT_OUTPUT" | sed -nE 's/.*Task ID[[:space:]]*[:=][[:space:]]*([A-Za-z0-9_-]+).*/\1/p' | head -1)
+fi
 
 if [ -n "$TASK_ID" ]; then
     echo "Task ID: $TASK_ID"
@@ -214,38 +220,34 @@ if [ "$WAIT_FOR_COMPLETION" = false ]; then
     exit 0
 fi
 
-# Wait for completion
+if [ -z "$TASK_ID" ]; then
+    echo -e "${YELLOW}Warning: Task ID not found in submission output${NC}"
+    echo "Cannot wait/apply without a task ID."
+    exit 1
+fi
+
+if [ "$APPLY_PATCH" = false ]; then
+    echo -e "${YELLOW}Waiting without --apply is not supported in non-interactive mode${NC}"
+    echo "Re-run with --apply to apply the cloud diff when ready."
+    exit 1
+fi
+
+# Wait for completion and apply patch
 echo ""
 echo "Waiting for completion (poll: ${POLL_INTERVAL}s, timeout: ${TIMEOUT}s)..."
 
 ELAPSED=0
+PATCH_APPLIED=false
 while [ $ELAPSED -lt $TIMEOUT ]; do
-    # Poll for status
-    # Note: Actual implementation depends on Codex cloud API
-    # This is a placeholder that checks for patch files
+    set +e
+    APPLY_OUTPUT=$(codex apply "$TASK_ID" 2>&1)
+    APPLY_EXIT=$?
+    set -e
+    echo "$APPLY_OUTPUT" > "$RUN_DIR/apply_output.txt"
 
-    if [ -f "$RUN_DIR/patch.diff" ]; then
-        echo -e "${GREEN}Task completed!${NC}"
-
-        PATCH_APPLIED=false
-        if [ "$APPLY_PATCH" = true ]; then
-            # Apply patch only when explicitly requested
-            echo ""
-            echo "Applying patch..."
-            cd "$REPO_ROOT"
-            if git apply "$RUN_DIR/patch.diff"; then
-                PATCH_APPLIED=true
-                echo -e "${GREEN}Patch applied${NC}"
-            else
-                echo -e "${YELLOW}Patch apply failed (may need manual review)${NC}"
-            fi
-        else
-            echo ""
-            echo "Patch available at: $RUN_DIR/patch.diff"
-            echo "Re-run with --apply to apply it automatically."
-        fi
-
-        # Update metadata
+    if [ $APPLY_EXIT -eq 0 ]; then
+        PATCH_APPLIED=true
+        echo -e "${GREEN}Patch applied${NC}"
         cat > "$RUN_DIR/meta.json" << EOF
 {
   "job_id": "$JOB_ID",
@@ -262,9 +264,28 @@ EOF
         exit 0
     fi
 
-    echo "  Elapsed: ${ELAPSED}s..."
-    sleep "$POLL_INTERVAL"
-    ((ELAPSED += POLL_INTERVAL))
+    if echo "$APPLY_OUTPUT" | grep -qiE "still running|not ready|pending|in progress"; then
+        echo "  Elapsed: ${ELAPSED}s (not ready)..."
+        sleep "$POLL_INTERVAL"
+        ((ELAPSED += POLL_INTERVAL))
+        continue
+    fi
+
+    echo -e "${RED}Patch apply failed${NC}"
+    echo "$APPLY_OUTPUT"
+    cat > "$RUN_DIR/meta.json" << EOF
+{
+  "job_id": "$JOB_ID",
+  "mode": "cloud",
+  "env_id": "$ENV_ID",
+  "task": "$TASK",
+  "task_id": "$TASK_ID",
+  "submitted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "status": "failed",
+  "patch_applied": $PATCH_APPLIED
+}
+EOF
+    exit 1
 done
 
 echo -e "${YELLOW}Timeout waiting for completion${NC}"

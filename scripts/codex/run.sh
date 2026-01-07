@@ -15,6 +15,8 @@
 # Options:
 #   --mode cli|mcp|cloud   Force specific mode
 #   --env ENV_ID           Cloud environment ID (for cloud mode)
+#   --wait                 Wait for cloud completion (cloud mode only)
+#   --apply                Wait and apply cloud diff (cloud mode only)
 #   --schema FILE          Output schema file (for structured output)
 #   --timeout SECONDS      Timeout in seconds (default: 600)
 #
@@ -36,6 +38,7 @@ SCHEMA=""
 TIMEOUT=600
 ENV_ID="${CODEX_CLOUD_ENV_ID:-${CODEX_CLOUD_ENV:-}}"
 TASK=""
+CLOUD_ARGS=()
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -47,6 +50,14 @@ while [[ $# -gt 0 ]]; do
         --env)
             ENV_ID="$2"
             shift 2
+            ;;
+        --wait)
+            CLOUD_ARGS+=("--wait")
+            shift
+            ;;
+        --apply)
+            CLOUD_ARGS+=("--apply")
+            shift
             ;;
         --schema)
             SCHEMA="$2"
@@ -64,6 +75,8 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --mode MODE       Execution mode: cli, mcp, cloud, auto (default: auto)"
             echo "  --env ENV_ID      Cloud environment ID (required for cloud mode)"
+            echo "  --wait            Wait for cloud completion (cloud mode only)"
+            echo "  --apply           Wait and apply cloud diff (cloud mode only)"
             echo "  --schema FILE     Output schema file for structured output"
             echo "  --timeout SECS    Timeout in seconds (default: 600)"
             echo "  --help            Show this help message"
@@ -95,6 +108,10 @@ if [ -z "$TASK" ]; then
     echo -e "${RED}Error: Task description required${NC}"
     echo "Usage: $0 \"task description\""
     exit 1
+fi
+
+if [ "$MODE" = "auto" ] && [ ${#CLOUD_ARGS[@]} -gt 0 ]; then
+    MODE="cloud"
 fi
 
 # Function to check if MCP is available
@@ -148,6 +165,10 @@ case $MODE in
         exec "$SCRIPT_DIR/run_mcp.sh" "${EXTRA_ARGS[@]}" "$TASK"
         ;;
     cli)
+        if [ ${#CLOUD_ARGS[@]} -gt 0 ]; then
+            echo -e "${RED}Error: --wait/--apply only supported for cloud mode${NC}"
+            exit 1
+        fi
         exec "$SCRIPT_DIR/run_cli.sh" "${EXTRA_ARGS[@]}" "$TASK"
         ;;
     cloud)
@@ -162,7 +183,7 @@ case $MODE in
             echo "Or set CODEX_CLOUD_ENV_ID (or CODEX_CLOUD_ENV) environment variable"
             exit 1
         fi
-        exec "$SCRIPT_DIR/run_cloud.sh" --env "$ENV_ID" "${EXTRA_ARGS[@]}" "$TASK"
+        exec "$SCRIPT_DIR/run_cloud.sh" --env "$ENV_ID" "${CLOUD_ARGS[@]}" "${EXTRA_ARGS[@]}" "$TASK"
         ;;
     *)
         echo -e "${RED}Error: Invalid mode: $MODE${NC}"
