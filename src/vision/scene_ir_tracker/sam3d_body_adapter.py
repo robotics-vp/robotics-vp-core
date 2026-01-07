@@ -6,6 +6,7 @@ Uses stub implementation when actual model is not available.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -13,6 +14,12 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def _stable_seed(key: str, seed: Optional[int]) -> int:
+    payload = f"{seed}:{key}" if seed is not None else key
+    digest = hashlib.sha256(payload.encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "little", signed=False)
 
 # Standard body joint names (SMPL-like skeleton)
 BODY_JOINT_NAMES = [
@@ -98,6 +105,7 @@ class SAM3DBodyConfig:
         shape_latent_dim: Dimension of shape latent.
         pose_latent_dim: Dimension of pose latent.
         output_mesh: Whether to output mesh vertices.
+        stub_seed: Optional seed for deterministic stub outputs.
         device: Device for model inference.
     """
 
@@ -106,6 +114,7 @@ class SAM3DBodyConfig:
     shape_latent_dim: int = 10
     pose_latent_dim: int = 72
     output_mesh: bool = True
+    stub_seed: Optional[int] = None
     device: str = "cuda"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -115,6 +124,7 @@ class SAM3DBodyConfig:
             "shape_latent_dim": self.shape_latent_dim,
             "pose_latent_dim": self.pose_latent_dim,
             "output_mesh": self.output_mesh,
+            "stub_seed": self.stub_seed,
             "device": self.device,
         }
 
@@ -126,6 +136,7 @@ class SAM3DBodyConfig:
             shape_latent_dim=data.get("shape_latent_dim", 10),
             pose_latent_dim=data.get("pose_latent_dim", 72),
             output_mesh=data.get("output_mesh", True),
+            stub_seed=data.get("stub_seed"),
             device=data.get("device", "cuda"),
         )
 
@@ -263,7 +274,7 @@ class SAM3DBodyAdapter:
         pelvis_z = depth
 
         # Generate T-pose skeleton
-        rng = np.random.RandomState(hash(body_id) % (2**31))
+        rng = np.random.RandomState(_stable_seed(body_id, self.config.stub_seed))
         joints_3d = self._generate_tpose_skeleton(
             pelvis_position=np.array([pelvis_x, pelvis_y, pelvis_z]),
             height=1.7,  # Average human height

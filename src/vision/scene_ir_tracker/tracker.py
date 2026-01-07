@@ -205,7 +205,8 @@ class SceneIRTracker:
         """Reconstruct entities for a single frame."""
         entities = []
 
-        for instance_id, mask in masks.items():
+        for instance_id in sorted(masks.keys(), key=lambda key: str(key)):
+            mask = masks[instance_id]
             class_name = class_labels.get(instance_id, "unknown")
             kpts = keypoints.get(instance_id)
 

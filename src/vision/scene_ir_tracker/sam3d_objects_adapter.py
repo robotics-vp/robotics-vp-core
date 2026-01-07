@@ -6,6 +6,7 @@ Uses stub implementation when actual model is not available.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -13,6 +14,12 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def _stable_seed(key: str, seed: Optional[int]) -> int:
+    payload = f"{seed}:{key}" if seed is not None else key
+    digest = hashlib.sha256(payload.encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "little", signed=False)
 
 
 @dataclass
@@ -50,6 +57,7 @@ class SAM3DObjectsConfig:
         use_point_map: Whether to use point map as input.
         latent_dim: Dimension of shape/appearance latents.
         output_gaussians: Whether to output gaussian splat representation.
+        stub_seed: Optional seed for deterministic stub outputs.
         device: Device for model inference.
     """
 
@@ -57,6 +65,7 @@ class SAM3DObjectsConfig:
     use_point_map: bool = False
     latent_dim: int = 256
     output_gaussians: bool = True
+    stub_seed: Optional[int] = None
     device: str = "cuda"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -65,6 +74,7 @@ class SAM3DObjectsConfig:
             "use_point_map": self.use_point_map,
             "latent_dim": self.latent_dim,
             "output_gaussians": self.output_gaussians,
+            "stub_seed": self.stub_seed,
             "device": self.device,
         }
 
@@ -75,6 +85,7 @@ class SAM3DObjectsConfig:
             use_point_map=data.get("use_point_map", False),
             latent_dim=data.get("latent_dim", 256),
             output_gaussians=data.get("output_gaussians", True),
+            stub_seed=data.get("stub_seed"),
             device=data.get("device", "cuda"),
         )
 
@@ -211,7 +222,8 @@ class SAM3DObjectsAdapter:
                 depth = 3.0  # Default depth in meters
 
             # Generate synthetic latents (deterministic based on mask)
-            rng = np.random.RandomState(hash(f"obj_{i}_{center_x:.3f}_{center_y:.3f}") % (2**31))
+            key = f"obj_{i}_{center_x:.3f}_{center_y:.3f}"
+            rng = np.random.RandomState(_stable_seed(key, self.config.stub_seed))
             shape_latent = rng.randn(self.config.latent_dim).astype(np.float32) * 0.1
             appearance_latent = rng.randn(self.config.latent_dim).astype(np.float32) * 0.1
 
