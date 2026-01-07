@@ -1,1 +1,1 @@
-mujoco
+mujoco==3.2.5
