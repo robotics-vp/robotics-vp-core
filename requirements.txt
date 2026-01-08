@@ -1,6 +1,2 @@
-numpy
-pyyaml
-matplotlib
-torch
-scikit-learn
-pytest
+# Runtime dependencies live in pyproject.toml.
+-e .
