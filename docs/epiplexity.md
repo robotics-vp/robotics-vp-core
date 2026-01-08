@@ -35,6 +35,21 @@ For deterministic probe runs:
 VPE_DETERMINISTIC=1 VPE_DETERMINISTIC_SEED=0 python -m scripts.run_epiplexity_eval --synthetic
 ```
 
+## Curated Slices
+To evaluate geometry on targeted slices (occluded / dynamic / static), use the curated-slice runner:
+
+```bash
+python -m scripts.run_epiplexity_curated_slices --datapack-dir /path/to/datapacks --task drawer_vase
+```
+
+This compares `vision_rgb`, `geometry_scene_graph`, `geometry_bev`, and `canonical_tokens` under a fixed compute budget.
+
+For a synthetic smoke run:
+
+```bash
+python -m scripts.run_epiplexity_curated_slices --synthetic
+```
+
 ## Orchestrator Hook
 When enabled (`config/pipeline.yaml`):
 - `orchestrator.use_epiplexity_term = true`

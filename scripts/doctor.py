@@ -85,7 +85,7 @@ def _smoke_channel_set() -> None:
             SceneGraphTokenProvider(hidden_dim=32, num_layers=2, num_heads=4),
         ],
         encoder=encoder,
-        config=ChannelSetPipelineConfig(use_channel_set_encoder=True, use_loo_cl_pretrain=True, target_len=T),
+        config=ChannelSetPipelineConfig(use_channel_set_encoder=True, target_len=T),
     )
 
     output = pipeline.encode(episode, mode="eval")

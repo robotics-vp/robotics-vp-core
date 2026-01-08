@@ -16,6 +16,8 @@ from src.embodiment.artifacts import (
 )
 from src.scene.vector_scene.encoding import ordered_scene_tensors, SceneGraphEncoder
 from src.envs.lsd3d_env.gaussian_scene import GaussianScene
+from src.vision.scene_ir_tracker.serialization import deserialize_scene_tracks_v1, SceneTracksLite
+from src.process_reward.schemas import MHNSummary
 
 
 @dataclass
@@ -157,6 +159,106 @@ class SceneGraphTokenProvider(BaseTokenProvider):
             tokens=tokens,
             mask=mask,
             metadata={},
+        )
+
+
+@dataclass
+class GeometryBEVConfig:
+    resolution_m: float = 0.2
+    extent_m: float = 5.0
+    max_tracks: int = 64
+    patch_size: int = 4
+    embed_dim: int = 128
+    seed: int = 0
+    return_grid: bool = False
+    debug_rotation_check: bool = False
+    rotation_check_degrees: int = 90
+    rotation_check_tolerance: float = 1e-4
+    rotation_check_max_episodes: int = 1
+
+
+class GeometryBEVProvider(BaseTokenProvider):
+    """Map-first BEV tokens from SceneIR tracks."""
+
+    def __init__(
+        self,
+        channel_name: str = "geometry_bev",
+        config: Optional[GeometryBEVConfig] = None,
+        allow_synthetic: bool = False,
+    ) -> None:
+        self.channel_name = channel_name
+        self.config = config or GeometryBEVConfig()
+        self.allow_synthetic = allow_synthetic
+        self._proj: Optional[torch.Tensor] = None
+
+    def provide(
+        self,
+        episodes: Sequence[Any] | Any,
+        target_len: Optional[int] = None,
+        device: Optional[torch.device] = None,
+    ) -> TokenProviderOutput:
+        episode_list = _normalize_episode_list(episodes)
+        tokens_list: List[torch.Tensor] = []
+        masks: List[torch.Tensor] = []
+        grids: List[np.ndarray] = []
+        stats_list: List[Dict[str, float]] = []
+
+        feature_names = _bev_feature_names()
+        frame_spec = {
+            "origin": "ego",
+            "axes": "x_forward_y_left_z_up",
+            "resolution_m": float(self.config.resolution_m),
+            "extent_m": float(self.config.extent_m),
+        }
+        frame_sources: List[str] = []
+
+        rotation_checked = 0
+        for ep in episode_list:
+            scene_tracks = _extract_scene_tracks(ep)
+            if scene_tracks is None:
+                if not self.allow_synthetic:
+                    raise ValueError("geometry_bev channel requires scene_tracks")
+                scene_tracks = _synthetic_scene_tracks()
+
+            mhn_features = _extract_mhn_features(ep, scene_tracks.num_frames, scene_tracks.num_tracks)
+            bev_grid, stats, frame_source = _build_bev_grid(scene_tracks, ep, mhn_features, self.config)
+            if self.config.debug_rotation_check and rotation_checked < self.config.rotation_check_max_episodes:
+                _check_bev_rotation_consistency(scene_tracks, ep, mhn_features, bev_grid, self.config)
+                rotation_checked += 1
+            frame_sources.append(frame_source)
+            if target_len is not None and bev_grid.shape[0] != target_len:
+                bev_grid = _resample_bev_grid(bev_grid, target_len)
+            token, self._proj = _bev_grid_to_token(bev_grid, self.config, self._proj)
+            if target_len is not None and token.shape[0] != target_len:
+                token = _resample_tokens(token, target_len)
+            tokens_list.append(token)
+            masks.append(torch.ones(token.shape[0], dtype=torch.float32))
+            stats_list.append(stats)
+            if self.config.return_grid:
+                grids.append(bev_grid)
+
+        tokens = _stack_tokens(tokens_list)
+        mask = _stack_masks(masks, tokens.shape[1])
+        metadata: Dict[str, Any] = {
+            "feature_names": feature_names,
+            "frame_spec": frame_spec,
+            "bev_stats": stats_list,
+            "frame_sources": frame_sources,
+        }
+        if self.config.return_grid:
+            metadata["bev_grid"] = _stack_bev_grids(grids, tokens.shape[1])
+
+        if device is not None:
+            tokens = tokens.to(device)
+            mask = mask.to(device)
+            if "bev_grid" in metadata:
+                metadata["bev_grid"] = metadata["bev_grid"].to(device)
+
+        return TokenProviderOutput(
+            channel_name=self.channel_name,
+            tokens=tokens,
+            mask=mask,
+            metadata=metadata,
         )
 
 
@@ -326,6 +428,441 @@ def _deterministic_projection(input_dim: int, output_dim: int, seed: int) -> tor
     weight = rng.standard_normal((input_dim, output_dim)).astype(np.float32)
     weight = weight / max(1.0, math.sqrt(input_dim))
     return torch.tensor(weight, dtype=torch.float32)
+
+
+def _extract_scene_tracks(ep: Any) -> Optional[SceneTracksLite]:
+    payload = None
+    if hasattr(ep, "scene_tracks"):
+        payload = getattr(ep, "scene_tracks")
+    if isinstance(ep, dict):
+        payload = ep.get("scene_tracks") or ep.get("scene_tracks_v1") or payload
+        if payload is None:
+            path = ep.get("scene_tracks_path") or ep.get("scene_tracks_npz")
+            if path:
+                payload = _load_npz(str(path))
+    if payload is None:
+        return None
+    if isinstance(payload, SceneTracksLite):
+        return payload
+    if isinstance(payload, dict):
+        return deserialize_scene_tracks_v1(payload)
+    raise ValueError("Unsupported scene_tracks payload type")
+
+
+def _synthetic_scene_tracks(T: int = 5, K: int = 3) -> SceneTracksLite:
+    track_ids = np.array([f"track_{k}" for k in range(K)], dtype="U16")
+    entity_types = np.zeros((K,), dtype=np.int32)
+    class_ids = np.full((K,), -1, dtype=np.int32)
+    poses_R = np.repeat(np.eye(3, dtype=np.float32)[None, None, ...], T, axis=0)
+    poses_R = np.repeat(poses_R, K, axis=1)
+    poses_t = np.zeros((T, K, 3), dtype=np.float32)
+    for k in range(K):
+        poses_t[:, k, 0] = np.linspace(0.1 * k, 0.3 * k, T)
+        poses_t[:, k, 1] = 0.2 * k
+    scales = np.ones((T, K), dtype=np.float32)
+    visibility = np.ones((T, K), dtype=np.float32)
+    occlusion = np.zeros((T, K), dtype=np.float32)
+    ir_loss = np.zeros((T, K), dtype=np.float32)
+    converged = np.ones((T, K), dtype=bool)
+    return SceneTracksLite(
+        track_ids=track_ids,
+        entity_types=entity_types,
+        class_ids=class_ids,
+        poses_R=poses_R,
+        poses_t=poses_t,
+        scales=scales,
+        visibility=visibility,
+        occlusion=occlusion,
+        ir_loss=ir_loss,
+        converged=converged,
+    )
+
+
+def _extract_mhn_features(ep: Any, T: int, K: int) -> Dict[str, Optional[np.ndarray]]:
+    track_features = None
+    summary = None
+    if isinstance(ep, dict):
+        track_features = ep.get("mhn_track_features")
+        summary = ep.get("mhn_summary", None)
+        if summary is None:
+            summary = ep.get("mhn_features", None)
+    else:
+        track_features = getattr(ep, "mhn_track_features", None)
+        summary = getattr(ep, "mhn_summary", None)
+        if summary is None:
+            summary = getattr(ep, "mhn_features", None)
+
+    local_features = None
+    if track_features is not None:
+        arr = np.asarray(track_features, dtype=np.float32)
+        if arr.ndim == 3:
+            local = arr
+        elif arr.ndim == 2 and arr.shape[0] == K:
+            local = np.broadcast_to(arr[None, ...], (T, K, arr.shape[1]))
+        elif arr.ndim == 2 and arr.shape[0] == T:
+            local = None
+            summary = arr
+        elif arr.ndim == 1:
+            local = None
+            summary = arr
+        else:
+            local = None
+
+        if local is not None:
+            if local.shape[0] != T:
+                local = np.broadcast_to(local[:1], (T, K, local.shape[2]))
+            if local.shape[1] != K:
+                local = local[:, :K]
+            if local.shape[2] >= 3:
+                local_features = local[:, :, :3]
+            else:
+                pad = np.zeros((local.shape[0], local.shape[1], 3 - local.shape[2]), dtype=np.float32)
+                local_features = np.concatenate([local, pad], axis=2)
+
+    global_features = None
+    if summary is not None:
+        if isinstance(summary, dict):
+            summary_obj = MHNSummary.from_dict(summary)
+            vec = np.array(
+                [
+                    float(getattr(summary_obj, "mean_tree_depth", 0.0)),
+                    float(getattr(summary_obj, "mean_branch_factor", 0.0)),
+                    float(getattr(summary_obj, "plausibility_score", 1.0)),
+                ],
+                dtype=np.float32,
+            )
+            global_features = np.broadcast_to(vec, (T, 3)).copy()
+        else:
+            arr = np.asarray(summary, dtype=np.float32)
+            if arr.ndim == 1:
+                arr = np.broadcast_to(arr, (T, arr.shape[0]))
+            if arr.shape[0] != T:
+                arr = np.broadcast_to(arr[:1], (T, arr.shape[-1]))
+            if arr.shape[1] >= 3:
+                global_features = arr[:, :3]
+            else:
+                global_features = np.pad(arr, ((0, 0), (0, 3 - arr.shape[1])))
+
+    if global_features is None:
+        global_features = np.zeros((T, 3), dtype=np.float32)
+
+    return {"global": global_features, "local": local_features}
+
+
+def _bev_feature_names() -> List[str]:
+    return [
+        "occupancy",
+        "height_mean",
+        "velocity_x",
+        "velocity_y",
+        "track_confidence",
+        "occlusion_mean",
+        "mhn_local_depth",
+        "mhn_local_branch",
+        "mhn_local_plausibility",
+        "mhn_global_depth",
+        "mhn_global_branch",
+        "mhn_global_plausibility",
+    ]
+
+
+def _build_bev_grid(
+    scene_tracks: SceneTracksLite,
+    episode: Any,
+    mhn_features: Dict[str, Optional[np.ndarray]],
+    config: GeometryBEVConfig,
+) -> Tuple[np.ndarray, Dict[str, float], str]:
+    poses_t = np.asarray(scene_tracks.poses_t, dtype=np.float32)
+    T, K = poses_t.shape[:2]
+    visibility = np.asarray(getattr(scene_tracks, "visibility", np.ones((T, K))), dtype=np.float32)
+    occlusion = np.asarray(getattr(scene_tracks, "occlusion", np.zeros((T, K))), dtype=np.float32)
+    ir_loss = np.asarray(getattr(scene_tracks, "ir_loss", np.zeros((T, K))), dtype=np.float32)
+    converged = np.asarray(getattr(scene_tracks, "converged", np.ones((T, K), dtype=bool)))
+
+    ego_pos, ego_yaw, frame_source = _compute_ego_pose(scene_tracks, episode)
+    extent = float(config.extent_m)
+    resolution = float(config.resolution_m)
+    grid_size = max(1, int(np.ceil(2.0 * extent / resolution)))
+    num_features = len(_bev_feature_names())
+
+    grid = np.zeros((T, grid_size, grid_size, num_features), dtype=np.float32)
+    occupancy = np.zeros((T, grid_size, grid_size), dtype=np.float32)
+    height_sum = np.zeros_like(occupancy)
+    vel_x_sum = np.zeros_like(occupancy)
+    vel_y_sum = np.zeros_like(occupancy)
+    conf_sum = np.zeros_like(occupancy)
+    occ_sum = np.zeros_like(occupancy)
+    local_mhn_sum = np.zeros((T, grid_size, grid_size, 3), dtype=np.float32)
+    local_mhn = mhn_features.get("local")
+    global_mhn = mhn_features.get("global")
+    if global_mhn is None:
+        global_mhn = np.zeros((T, 3), dtype=np.float32)
+
+    prev_pos = None
+    track_counts = []
+    for t in range(T):
+        pos = poses_t[t]
+        rel = pos - ego_pos[t][None, :]
+        rel = _rotate_xy(rel, -ego_yaw[t])
+        if prev_pos is None:
+            vel = np.zeros_like(rel)
+        else:
+            vel = rel - prev_pos
+        prev_pos = rel
+
+        conf = visibility[t] * (1.0 - occlusion[t]) * (1.0 / (1.0 + ir_loss[t]))
+        conf = conf * converged[t].astype(np.float32)
+        track_idx = np.arange(K)
+        if K > config.max_tracks:
+            order = np.argsort(-conf, kind="mergesort")
+            track_idx = order[: config.max_tracks]
+
+        track_counts.append(float(len(track_idx)))
+        for k in track_idx:
+            x, y, z = rel[k]
+            ix = int(np.floor((x + extent) / resolution))
+            iy = int(np.floor((y + extent) / resolution))
+            if ix < 0 or iy < 0 or ix >= grid_size or iy >= grid_size:
+                continue
+            occupancy[t, iy, ix] += 1.0
+            height_sum[t, iy, ix] += z
+            vel_x_sum[t, iy, ix] += vel[k, 0]
+            vel_y_sum[t, iy, ix] += vel[k, 1]
+            conf_sum[t, iy, ix] += conf[k]
+            occ_sum[t, iy, ix] += occlusion[t, k]
+            if local_mhn is not None:
+                local_mhn_sum[t, iy, ix] += local_mhn[t, k]
+
+        occ_mask = occupancy[t] > 0
+        if np.any(occ_mask):
+            height_sum[t, occ_mask] /= occupancy[t, occ_mask]
+            vel_x_sum[t, occ_mask] /= occupancy[t, occ_mask]
+            vel_y_sum[t, occ_mask] /= occupancy[t, occ_mask]
+            conf_sum[t, occ_mask] /= occupancy[t, occ_mask]
+            occ_sum[t, occ_mask] /= occupancy[t, occ_mask]
+            if local_mhn is not None:
+                local_mhn_sum[t, occ_mask] /= occupancy[t, occ_mask][..., None]
+            grid[t, :, :, 9][occ_mask] = global_mhn[t, 0]
+            grid[t, :, :, 10][occ_mask] = global_mhn[t, 1]
+            grid[t, :, :, 11][occ_mask] = global_mhn[t, 2]
+
+        grid[t, :, :, 0] = occupancy[t] / max(1.0, float(config.max_tracks))
+        grid[t, :, :, 1] = height_sum[t]
+        grid[t, :, :, 2] = vel_x_sum[t]
+        grid[t, :, :, 3] = vel_y_sum[t]
+        grid[t, :, :, 4] = conf_sum[t]
+        grid[t, :, :, 5] = occ_sum[t]
+        if local_mhn is not None:
+            grid[t, :, :, 6:9] = local_mhn_sum[t]
+
+    occupied_ratio = float(np.mean(occupancy > 0))
+    stats = {
+        "occupied_ratio": occupied_ratio,
+        "track_count_mean": float(np.mean(track_counts)) if track_counts else 0.0,
+        "track_count_max": float(np.max(track_counts)) if track_counts else 0.0,
+        "grid_size": float(grid_size),
+    }
+    return grid, stats, frame_source
+
+
+def _compute_ego_pose(scene_tracks: SceneTracksLite, episode: Any) -> Tuple[np.ndarray, np.ndarray, str]:
+    poses = None
+    if isinstance(episode, dict):
+        poses = episode.get("ego_poses") or episode.get("ego_pose")
+        if poses is None and isinstance(episode.get("robot_state"), dict):
+            poses = episode["robot_state"].get("ee_pose")
+    else:
+        poses = getattr(episode, "ego_poses", None) or getattr(episode, "ego_pose", None)
+
+    if poses is not None:
+        arr = np.asarray(poses, dtype=np.float32)
+        if arr.ndim == 2 and arr.shape == (4, 4):
+            pos = arr[:3, 3][None, :]
+            yaw = np.array([_yaw_from_rot(arr[:3, :3])], dtype=np.float32)
+            return pos, yaw, "ego_pose"
+        if arr.ndim == 3 and arr.shape[1:] == (4, 4):
+            pos = arr[:, :3, 3]
+            yaw = np.array([_yaw_from_rot(r[:3, :3]) for r in arr], dtype=np.float32)
+            return pos, yaw, "ego_poses"
+        if arr.ndim == 2 and arr.shape[1] >= 3:
+            pos = arr[:, :3]
+            yaw = np.zeros((arr.shape[0],), dtype=np.float32)
+            return pos, yaw, "ego_positions"
+        if arr.ndim == 1 and arr.shape[0] >= 3:
+            pos = arr[:3][None, :]
+            yaw = np.zeros((1,), dtype=np.float32)
+            return pos, yaw, "ego_position"
+
+    entity_types = np.asarray(getattr(scene_tracks, "entity_types", np.array([], dtype=np.int32)))
+    body_indices = np.where(entity_types == 1)[0]
+    if body_indices.size > 0:
+        visibility = np.asarray(getattr(scene_tracks, "visibility", np.ones((scene_tracks.num_frames, scene_tracks.num_tracks))))
+        scores = visibility[:, body_indices].mean(axis=0)
+        best = body_indices[int(np.argmax(scores))]
+        pos = scene_tracks.poses_t[:, best, :]
+        yaw = np.array([_yaw_from_rot(scene_tracks.poses_R[t, best]) for t in range(scene_tracks.num_frames)], dtype=np.float32)
+        return pos, yaw, "body_track"
+
+    zeros = np.zeros((scene_tracks.num_frames, 3), dtype=np.float32)
+    yaw = np.zeros((scene_tracks.num_frames,), dtype=np.float32)
+    return zeros, yaw, "world"
+
+
+def _yaw_from_rot(R: np.ndarray) -> float:
+    return float(np.arctan2(R[1, 0], R[0, 0]))
+
+
+def _rotate_xy(points: np.ndarray, yaw: float) -> np.ndarray:
+    cos_y = float(np.cos(yaw))
+    sin_y = float(np.sin(yaw))
+    rot = np.array([[cos_y, -sin_y], [sin_y, cos_y]], dtype=np.float32)
+    xy = points[:, :2] @ rot.T
+    out = points.copy()
+    out[:, :2] = xy
+    return out
+
+
+def _rotate_scene_tracks(scene_tracks: SceneTracksLite, yaw_deg: float) -> SceneTracksLite:
+    yaw = float(np.deg2rad(yaw_deg))
+    cos_y = float(np.cos(yaw))
+    sin_y = float(np.sin(yaw))
+    rot = np.array([[cos_y, -sin_y, 0.0], [sin_y, cos_y, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+    poses_t = np.asarray(scene_tracks.poses_t, dtype=np.float32) @ rot.T
+    poses_R = np.asarray(scene_tracks.poses_R, dtype=np.float32)
+    poses_R_rot = np.einsum("ij,tkjl->tkil", rot, poses_R)
+    return SceneTracksLite(
+        track_ids=scene_tracks.track_ids,
+        entity_types=scene_tracks.entity_types,
+        class_ids=scene_tracks.class_ids,
+        poses_R=poses_R_rot.astype(np.float32),
+        poses_t=poses_t.astype(np.float32),
+        scales=scene_tracks.scales,
+        visibility=scene_tracks.visibility,
+        occlusion=scene_tracks.occlusion,
+        ir_loss=scene_tracks.ir_loss,
+        converged=scene_tracks.converged,
+    )
+
+
+def _rotate_episode_ego(episode: Any, yaw_deg: float) -> Any:
+    if not isinstance(episode, dict):
+        return episode
+    yaw = float(np.deg2rad(yaw_deg))
+    cos_y = float(np.cos(yaw))
+    sin_y = float(np.sin(yaw))
+    rot = np.array([[cos_y, -sin_y, 0.0], [sin_y, cos_y, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+    updated = dict(episode)
+    ego_poses = updated.get("ego_poses")
+    if ego_poses is not None:
+        arr = np.asarray(ego_poses, dtype=np.float32)
+        if arr.ndim == 3 and arr.shape[1:] == (4, 4):
+            new = arr.copy()
+            new[:, :3, :3] = np.einsum("ij,tjk->tik", rot, arr[:, :3, :3])
+            new[:, :3, 3] = (rot @ arr[:, :3, 3].T).T
+            updated["ego_poses"] = new
+            return updated
+    ego_pose = updated.get("ego_pose")
+    if ego_pose is not None:
+        arr = np.asarray(ego_pose, dtype=np.float32)
+        if arr.shape == (4, 4):
+            new = arr.copy()
+            new[:3, :3] = rot @ arr[:3, :3]
+            new[:3, 3] = rot @ arr[:3, 3]
+            updated["ego_pose"] = new
+            return updated
+    ego_positions = updated.get("ego_positions")
+    if ego_positions is not None:
+        arr = np.asarray(ego_positions, dtype=np.float32)
+        if arr.ndim == 2 and arr.shape[1] >= 3:
+            arr[:, :3] = (rot @ arr[:, :3].T).T
+            updated["ego_positions"] = arr
+            return updated
+    robot_state = updated.get("robot_state")
+    if isinstance(robot_state, dict) and "ee_pose" in robot_state:
+        ee_pose = np.asarray(robot_state["ee_pose"], dtype=np.float32)
+        if ee_pose.ndim == 1 and ee_pose.shape[0] >= 3:
+            ee_pose = ee_pose.copy()
+            ee_pose[:3] = rot @ ee_pose[:3]
+            robot_state = dict(robot_state)
+            robot_state["ee_pose"] = ee_pose
+            updated["robot_state"] = robot_state
+    return updated
+
+
+def _check_bev_rotation_consistency(
+    scene_tracks: SceneTracksLite,
+    episode: Any,
+    mhn_features: Dict[str, Optional[np.ndarray]],
+    reference_grid: np.ndarray,
+    config: GeometryBEVConfig,
+) -> None:
+    degrees = int(config.rotation_check_degrees)
+    if degrees % 90 != 0:
+        return
+    rot_tracks = _rotate_scene_tracks(scene_tracks, degrees)
+    rot_episode = _rotate_episode_ego(episode, degrees)
+    rot_grid, _, _ = _build_bev_grid(rot_tracks, rot_episode, mhn_features, config)
+    k = (degrees // 90) % 4
+    rot_back = np.rot90(rot_grid, k=-k, axes=(1, 2))
+    diff = float(np.max(np.abs(reference_grid - rot_back)))
+    if diff > float(config.rotation_check_tolerance):
+        raise ValueError(f"BEV rotation consistency check failed (max diff {diff:.6f})")
+
+
+def _resample_bev_grid(grid: np.ndarray, target_len: int) -> np.ndarray:
+    if grid.shape[0] == target_len:
+        return grid
+    grid_t = torch.from_numpy(grid).permute(1, 2, 3, 0).unsqueeze(0)
+    resized = F.interpolate(grid_t, size=target_len, mode="nearest")
+    resized = resized.squeeze(0).permute(3, 0, 1, 2).contiguous()
+    return resized.cpu().numpy()
+
+
+def _bev_grid_to_token(
+    grid: np.ndarray,
+    config: GeometryBEVConfig,
+    proj: Optional[torch.Tensor],
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    T, H, W, C = grid.shape
+    patch = max(1, int(config.patch_size))
+    pooled = _pool_bev_grid(grid, patch)
+    flat = pooled.reshape(T, -1).astype(np.float32)
+    if proj is None or proj.shape[0] != flat.shape[1] or proj.shape[1] != config.embed_dim:
+        proj = _deterministic_projection(flat.shape[1], int(config.embed_dim), int(config.seed))
+    tokens = torch.tensor(flat, dtype=torch.float32) @ proj
+    return tokens, proj
+
+
+def _pool_bev_grid(grid: np.ndarray, patch: int) -> np.ndarray:
+    if patch <= 1:
+        return grid
+    T, H, W, C = grid.shape
+    patch = min(patch, H, W)
+    pooled_h = max(1, H // patch)
+    pooled_w = max(1, W // patch)
+    trimmed = grid[:, : pooled_h * patch, : pooled_w * patch, :]
+    reshaped = trimmed.reshape(T, pooled_h, patch, pooled_w, patch, C)
+    return reshaped.mean(axis=(2, 4))
+
+
+def _stack_bev_grids(grids: List[np.ndarray], target_len: int) -> torch.Tensor:
+    if not grids:
+        return torch.zeros((0, target_len, 0, 0, 0), dtype=torch.float32)
+    max_h = max(g.shape[1] for g in grids)
+    max_w = max(g.shape[2] for g in grids)
+    max_c = max(g.shape[3] for g in grids)
+    padded = []
+    for g in grids:
+        if g.shape[0] != target_len:
+            g = _resample_bev_grid(g, target_len)
+        pad_h = max_h - g.shape[1]
+        pad_w = max_w - g.shape[2]
+        pad_c = max_c - g.shape[3]
+        if pad_h or pad_w or pad_c:
+            g = np.pad(g, ((0, 0), (0, pad_h), (0, pad_w), (0, pad_c)), mode="constant")
+        padded.append(g)
+    stacked = np.stack(padded, axis=0)
+    return torch.tensor(stacked, dtype=torch.float32)
 
 
 def _extract_embodiment_payload(ep: Any) -> Optional[Dict[str, Any]]:

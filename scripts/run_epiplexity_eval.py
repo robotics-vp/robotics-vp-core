@@ -38,6 +38,7 @@ def _synthetic_episodes(count: int = 4, T: int = 6, D: int = 8) -> List[Dict[str
         homeomorphic_tokens = (raw_tokens + 0.05 * rng.standard_normal((T, D))).astype(np.float32)
         rgb_frames = rng.integers(0, 255, size=(T, 64, 64, 3), dtype=np.uint8)
         graphs = [SceneGraph(nodes=nodes, edges=edges, objects=objects, metadata={"t": t}) for t in range(T)]
+        scene_tracks = _synthetic_scene_tracks(T=T, K=3)
         episodes.append(
             {
                 "episode_id": f"synthetic_{idx}",
@@ -45,9 +46,40 @@ def _synthetic_episodes(count: int = 4, T: int = 6, D: int = 8) -> List[Dict[str
                 "homeomorphic_tokens": homeomorphic_tokens,
                 "rgb_frames": rgb_frames,
                 "scene_graphs": graphs,
+                "scene_tracks": scene_tracks,
             }
         )
     return episodes
+
+
+def _synthetic_scene_tracks(T: int = 6, K: int = 3) -> Dict[str, np.ndarray]:
+    track_ids = np.array([f"track_{k}" for k in range(K)], dtype="U16")
+    entity_types = np.zeros((K,), dtype=np.int32)
+    class_ids = np.full((K,), -1, dtype=np.int32)
+    poses_R = np.repeat(np.eye(3, dtype=np.float32)[None, None, ...], T, axis=0)
+    poses_R = np.repeat(poses_R, K, axis=1)
+    poses_t = np.zeros((T, K, 3), dtype=np.float32)
+    for k in range(K):
+        poses_t[:, k, 0] = np.linspace(0.1 * k, 0.4 * k, T)
+        poses_t[:, k, 1] = 0.2 * k
+    scales = np.ones((T, K), dtype=np.float32)
+    visibility = np.ones((T, K), dtype=np.float32)
+    occlusion = np.zeros((T, K), dtype=np.float32)
+    ir_loss = np.zeros((T, K), dtype=np.float32)
+    converged = np.ones((T, K), dtype=bool)
+    return {
+        "scene_tracks_v1/version": np.array(["v1"], dtype="U8"),
+        "scene_tracks_v1/track_ids": track_ids,
+        "scene_tracks_v1/entity_types": entity_types,
+        "scene_tracks_v1/class_ids": class_ids,
+        "scene_tracks_v1/poses_R": poses_R,
+        "scene_tracks_v1/poses_t": poses_t,
+        "scene_tracks_v1/scales": scales,
+        "scene_tracks_v1/visibility": visibility,
+        "scene_tracks_v1/occlusion": occlusion,
+        "scene_tracks_v1/ir_loss": ir_loss,
+        "scene_tracks_v1/converged": converged,
+    }
 
 
 def main() -> None:
@@ -84,6 +116,7 @@ def main() -> None:
         "raw",
         "vision_rgb",
         "geometry_scene_graph",
+        "geometry_bev",
         "embodiment",
         "canonical_tokens",
         "homeomorphic",
@@ -92,7 +125,7 @@ def main() -> None:
     budgets = [ComputeBudget(max_steps=int(x.strip()), batch_size=args.batch_size) for x in args.budget_steps.split(",")]
     seeds = [int(x.strip()) for x in args.seeds.split(",")]
 
-    representation_fns = build_default_representation_fns(args.channel_groups_path)
+    representation_fns = build_default_representation_fns(args.channel_groups_path, include_geometry_bev=True)
     harness = TokenizerAblationHarness(representation_fns=representation_fns)
 
     leaderboard = harness.evaluate(

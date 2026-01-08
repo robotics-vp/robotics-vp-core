@@ -13,6 +13,7 @@ from src.representation.token_providers import (
     SceneGraphTokenProvider,
     RGBVisionTokenProvider,
     GaussianSceneTokenProvider,
+    GeometryBEVProvider,
 )
 
 RepresentationFn = Callable[[Union[Sequence[Any], Any]], torch.Tensor]
@@ -21,18 +22,26 @@ RepresentationFn = Callable[[Union[Sequence[Any], Any]], torch.Tensor]
 def build_default_representation_fns(
     channel_groups_path: str,
     encoder_config: ChannelSetEncoderConfig | None = None,
+    include_geometry_bev: bool = False,
+    geometry_bev_config: Any | None = None,
 ) -> Dict[str, RepresentationFn]:
     spec = load_channel_groups(channel_groups_path)
     encoder = ChannelSetEncoder(list(spec.channels.keys()), encoder_config or ChannelSetEncoderConfig())
+    encoder.eval()
 
     rgb_provider = RGBVisionTokenProvider(allow_synthetic=True)
     emb_provider = EmbodimentTokenProvider(allow_synthetic=True)
     scene_provider = SceneGraphTokenProvider()
     gaussian_provider = GaussianSceneTokenProvider()
+    bev_provider = GeometryBEVProvider(config=geometry_bev_config, allow_synthetic=True)
+
+    providers = [rgb_provider, emb_provider, scene_provider]
+    if include_geometry_bev:
+        providers.append(bev_provider)
 
     pipeline = ChannelSetPipeline(
         channel_spec=spec,
-        providers=[rgb_provider, emb_provider, scene_provider],
+        providers=providers,
         encoder=encoder,
         config=ChannelSetPipelineConfig(use_channel_set_encoder=True),
     )
@@ -41,6 +50,7 @@ def build_default_representation_fns(
         "raw": lambda episodes: _tokens_from_key(episodes, "raw_tokens"),
         "vision_rgb": lambda episodes: rgb_provider.provide(episodes).tokens,
         "geometry_scene_graph": lambda episodes: scene_provider.provide(episodes).tokens,
+        "geometry_bev": lambda episodes: bev_provider.provide(episodes).tokens,
         "embodiment": lambda episodes: emb_provider.provide(episodes).tokens,
         "canonical_tokens": lambda episodes: pipeline.encode(episodes).canonical_tokens,
         "homeomorphic": lambda episodes: _tokens_from_key(episodes, "homeomorphic_tokens"),

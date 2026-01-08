@@ -67,9 +67,20 @@ safety:
 # Representation settings (optional channel-set encoder)
 representations:
   use_channel_set_encoder: false
-  use_loo_cl_pretrain: false
   aux_loss_loo_cl_weight: 0.1
+  aux_loss_geom_ssl_weight: 0.0
   channel_groups_path: "configs/channel_groups_robotics.json"
+  geometry_bev:
+    resolution_m: 0.2
+    extent_m: 5.0
+    max_tracks: 64
+    patch_size: 4
+    embed_dim: 128
+    return_grid: false
+    debug_rotation_check: false
+    rotation_check_degrees: 90
+    rotation_check_tolerance: 1.0e-4
+    rotation_check_max_episodes: 1
 
 orchestrator:
   use_epiplexity_term: false

@@ -137,7 +137,7 @@ def main() -> None:
         channel_names=list(spec.channels.keys()),
         config=ChannelSetEncoderConfig(d_model=d_model, num_heads=4, dropout=0.0, pma_k=1),
     )
-    encoder.eval()
+    encoder.train()
 
     pipeline = ChannelSetPipeline(
         channel_spec=spec,
@@ -145,7 +145,6 @@ def main() -> None:
         encoder=encoder,
         config=ChannelSetPipelineConfig(
             use_channel_set_encoder=True,
-            use_loo_cl_pretrain=True,
             target_len=rgb_frames.shape[0],
         ),
     )
@@ -192,14 +191,13 @@ def main() -> None:
         channel_names=list(spec.channels.keys()),
         config=ChannelSetEncoderConfig(d_model=d_model, num_heads=4, dropout=0.0, pma_k=1),
     )
-    encoder_b.eval()
+    encoder_b.train()
     pipeline_b = ChannelSetPipeline(
         channel_spec=spec,
         providers=[rgb_provider_b, emb_provider_b, sg_provider_b],
         encoder=encoder_b,
         config=ChannelSetPipelineConfig(
             use_channel_set_encoder=True,
-            use_loo_cl_pretrain=True,
             target_len=rgb_frames.shape[0],
         ),
     )

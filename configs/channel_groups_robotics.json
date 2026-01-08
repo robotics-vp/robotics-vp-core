@@ -26,6 +26,14 @@
       "notes": "SceneGraphEncoder tokens; required geometry substrate."
     },
     {
+      "name": "geometry_bev",
+      "required": false,
+      "dim_hint": 128,
+      "rate_hint": "timestep",
+      "token_kind": "bev",
+      "notes": "Optional BEV geometry tokens (map-first)."
+    },
+    {
       "name": "geometry_gaussian_scene",
       "required": false,
       "dim_hint": 32,
