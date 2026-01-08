@@ -44,6 +44,13 @@ python -m scripts.run_epiplexity_curated_slices --datapack-dir /path/to/datapack
 
 This compares `vision_rgb`, `geometry_scene_graph`, `geometry_bev`, and `canonical_tokens` under a fixed compute budget.
 
+If raw streams are not available, curated slices can run on portable datapacks that embed
+`scene_tracks_v1`, `rgb_features_v1`, and `slice_labels_v1`. Use the exporter to generate them:
+
+```bash
+python -m scripts.export_portable_datapacks --datapack-dir /path/to/datapacks --task drawer_vase
+```
+
 For a synthetic smoke run:
 
 ```bash

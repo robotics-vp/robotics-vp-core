@@ -14,6 +14,7 @@ from src.representation.channel_set_encoder import ChannelSetEncoderConfig
 from src.representation.token_providers import GeometryBEVConfig
 from src.scene.vector_scene.graph import SceneGraph, SceneNode, SceneObject, NodeType, ObjectClass
 from src.valuation.datapack_repo import DataPackRepo
+from src.valuation.portable_datapacks import coerce_scene_tracks_payload
 from src.vision.scene_ir_tracker.serialization import deserialize_scene_tracks_v1
 from src.utils.determinism import maybe_enable_determinism_from_env
 
@@ -33,7 +34,7 @@ def _load_rgb_frames(path: Path) -> np.ndarray:
 
 
 def _scene_graphs_from_scene_tracks(scene_tracks_payload: Dict[str, np.ndarray]) -> List[SceneGraph]:
-    scene_tracks = deserialize_scene_tracks_v1(scene_tracks_payload)
+    scene_tracks = deserialize_scene_tracks_v1(coerce_scene_tracks_payload(scene_tracks_payload))
     poses_t = scene_tracks.poses_t
     T, K = poses_t.shape[:2]
     graphs = []
@@ -107,10 +108,19 @@ def _load_episodes_from_repo(repo: DataPackRepo, task_name: str) -> tuple[List[D
         "missing_raw": 0,
         "missing_inputs": 0,
         "usable": 0,
+        "portable": 0,
+        "missing_portable": 0,
     }
     for dp in datapacks:
         if not dp.raw_data_path:
             stats["missing_raw"] += 1
+            episode = _load_portable_episode(dp)
+            if episode is None:
+                stats["missing_portable"] += 1
+                continue
+            episodes.append(episode)
+            stats["portable"] += 1
+            stats["usable"] += 1
             continue
         stats["with_raw"] += 1
         raw_path = Path(dp.raw_data_path)
@@ -124,6 +134,40 @@ def _load_episodes_from_repo(repo: DataPackRepo, task_name: str) -> tuple[List[D
         episodes.append(episode)
         stats["usable"] += 1
     return episodes, stats
+
+
+def _load_portable_episode(dp: Any) -> Optional[Dict[str, Any]]:
+    scene_tracks = getattr(dp, "scene_tracks_v1", None)
+    rgb_features = getattr(dp, "rgb_features_v1", None)
+    slice_labels = getattr(dp, "slice_labels_v1", None)
+    if scene_tracks is None or rgb_features is None or slice_labels is None:
+        return None
+    scene_graphs = _scene_graphs_from_scene_tracks(coerce_scene_tracks_payload(scene_tracks))
+    episode = {
+        "episode_id": dp.episode_id or dp.pack_id,
+        "scene_tracks": scene_tracks,
+        "scene_graphs": scene_graphs,
+        "rgb_features_v1": rgb_features,
+        "slice_labels_v1": slice_labels,
+    }
+    if dp.embodiment_profile is not None:
+        episode["embodiment_profile"] = dp.embodiment_profile
+    return episode
+
+
+def _select_curated_slices_from_labels(episodes: Sequence[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    slices = {"occluded": [], "dynamic": [], "static": []}
+    for ep in episodes:
+        labels = ep.get("slice_labels_v1")
+        if not isinstance(labels, dict):
+            continue
+        if labels.get("is_occluded"):
+            slices["occluded"].append(ep)
+        if labels.get("is_dynamic"):
+            slices["dynamic"].append(ep)
+        if labels.get("is_static"):
+            slices["static"].append(ep)
+    return slices
 
 
 def _synthetic_scene_tracks(
@@ -220,6 +264,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=str, default="artifacts/epiplexity_leaderboards", help="Output dir")
     args = parser.parse_args()
 
+    stats = {"with_raw": 0, "portable": 0}
     if args.synthetic:
         episodes = _synthetic_curated_episodes(args.synthetic_count)
     else:
@@ -236,7 +281,7 @@ def main() -> None:
                     f"(total={stats['total']}; raw_data_path_nonnull={stats['with_raw']}; "
                     f"missing_raw={stats['missing_raw']}; usable={stats['usable']}); "
                     "required inputs missing (frames for vision_rgb; scene_tracks for geometry_bev). "
-                    "Provide a datapack root with raw streams or precomputed frames proxy / scene_tracks."
+                    "Provide raw streams or embedded scene_tracks_v1 + rgb_features_v1 + slice_labels_v1."
                 )
             raise RuntimeError(
                 "Cannot run curated slices: raw_data_path present but required inputs missing "
@@ -251,7 +296,12 @@ def main() -> None:
         static_motion_threshold=args.static_threshold,
         max_per_slice=args.max_per_slice,
     )
-    curated = select_curated_slices(episodes, selector_cfg)
+    if stats.get("with_raw", 0) == 0 and stats.get("portable", 0) > 0:
+        curated = _select_curated_slices_from_labels(episodes)
+        if not any(curated.values()):
+            raise RuntimeError("Portable datapacks missing slice_labels_v1; cannot compute curated slices.")
+    else:
+        curated = select_curated_slices(episodes, selector_cfg)
 
     budgets = [ComputeBudget(max_steps=int(x.strip()), batch_size=args.batch_size) for x in args.budget_steps.split(",")]
     seeds = [int(x.strip()) for x in args.seeds.split(",")]

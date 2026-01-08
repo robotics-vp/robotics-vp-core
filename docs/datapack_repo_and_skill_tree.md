@@ -14,7 +14,7 @@ The DataPack system provides a **unified 2.0-energy schema** for robotics data v
 - SIMA-2 co-agent (narrations)
 - Energy breakdown (per-limb, per-skill, per-joint, per-effector)
 
-**Schema Version**: `2.0-energy` (unified across all datapacks)
+**Schema Version**: `2.0-energy` (legacy) and `2.1-portable` (self-contained artifacts)
 
 ## Two-Bucket Taxonomy
 
@@ -37,7 +37,7 @@ The DataPack system provides a **unified 2.0-energy schema** for robotics data v
 @dataclass
 class DataPackMeta:
     # Schema version (always "2.0-energy")
-    schema_version: str = "2.0-energy"
+    schema_version: str = "2.0-energy"  # use "2.1-portable" when embedding portable artifacts
 
     # Identification
     pack_id: str                    # Unique identifier
@@ -166,6 +166,40 @@ repo.append(datapack)
 # Append batch
 repo.append_batch(datapacks)
 
+# Portable Datapacks (2.1-portable)
+Portable datapacks embed the minimal artifacts needed to run curated slices without raw rehydration.
+They include `scene_tracks_v1`, `rgb_features_v1`, and `slice_labels_v1` alongside standard metadata.
+
+Example JSONL entry (fields truncated):
+
+```json
+{
+  "schema_version": "2.1-portable",
+  "pack_id": "drawer_vase_scripted_0001",
+  "task_name": "drawer_vase",
+  "raw_data_path": null,
+  "scene_tracks_v1": {
+    "scene_tracks_v1/version": ["v1"],
+    "scene_tracks_v1/poses_t": "...",
+    "scene_tracks_v1/occlusion": "..."
+  },
+  "rgb_features_v1": {
+    "encoder": "vision_rgb::deterministic_pool_v1",
+    "dim": 64,
+    "pooling": "mean",
+    "stride_seconds": 1.0,
+    "features": "..."
+  },
+  "slice_labels_v1": {
+    "occlusion_level": 0.6,
+    "is_occluded": true,
+    "motion_score": 0.2,
+    "is_dynamic": true,
+    "is_static": false
+  }
+}
+```
+
 # Query with filters
 results = repo.query(
     task_name="drawer_vase",
@@ -279,6 +313,11 @@ python scripts/build_datapacks_from_episodes.py \
     --task drawer_vase \
     --engine pybullet \
     --verbose
+
+# Export portable datapacks (embed tracks/features/labels)
+python -m scripts.export_portable_datapacks \
+    --datapack-dir data/datapacks/phase_c \
+    --task drawer_vase
 ```
 
 ### ΔJ Computation

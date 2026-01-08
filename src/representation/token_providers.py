@@ -292,15 +292,20 @@ class RGBVisionTokenProvider(BaseTokenProvider):
         metadata: Dict[str, Any] = {"pool_size": self.pool_size}
 
         for ep in episode_list:
-            frames = _extract_rgb_frames(ep)
-            if frames is None:
-                frames = _proxy_render_from_geometry(ep)
-            if frames is None:
-                if not self.allow_synthetic:
-                    raise ValueError("vision_rgb channel requires frames or proxy render")
-                frames = _synthetic_rgb_frames(ep)
+            features_payload = _extract_rgb_features(ep)
+            if features_payload is not None:
+                token = _rgb_features_to_tokens(features_payload)
+                metadata["rgb_features_v1"] = features_payload
+            else:
+                frames = _extract_rgb_frames(ep)
+                if frames is None:
+                    frames = _proxy_render_from_geometry(ep)
+                if frames is None:
+                    if not self.allow_synthetic:
+                        raise ValueError("vision_rgb channel requires frames or proxy render")
+                    frames = _synthetic_rgb_frames(ep)
 
-            token = _rgb_frames_to_tokens(frames, self.pool_size, self._proj)
+                token = _rgb_frames_to_tokens(frames, self.pool_size, self._proj)
             if target_len is not None:
                 token = _resample_tokens(token, target_len)
             tokens_list.append(token)
@@ -445,8 +450,18 @@ def _extract_scene_tracks(ep: Any) -> Optional[SceneTracksLite]:
     if isinstance(payload, SceneTracksLite):
         return payload
     if isinstance(payload, dict):
-        return deserialize_scene_tracks_v1(payload)
+        return deserialize_scene_tracks_v1(_coerce_scene_tracks_payload(payload))
     raise ValueError("Unsupported scene_tracks payload type")
+
+
+def _coerce_scene_tracks_payload(payload: Dict[str, Any]) -> Dict[str, np.ndarray]:
+    coerced: Dict[str, np.ndarray] = {}
+    for key, value in payload.items():
+        if isinstance(value, np.ndarray):
+            coerced[key] = value
+        else:
+            coerced[key] = np.asarray(value)
+    return coerced
 
 
 def _synthetic_scene_tracks(T: int = 5, K: int = 3) -> SceneTracksLite:
@@ -1171,6 +1186,20 @@ def _extract_rgb_frames(ep: Any) -> Optional[np.ndarray]:
     return None
 
 
+def _extract_rgb_features(ep: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(ep, dict):
+        for key in ("rgb_features_v1", "vision_rgb_features", "rgb_features"):
+            if key in ep and ep[key] is not None:
+                payload = ep[key]
+                if isinstance(payload, dict):
+                    return payload
+    if hasattr(ep, "rgb_features_v1"):
+        payload = getattr(ep, "rgb_features_v1")
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
 def _proxy_render_from_geometry(ep: Any, height: int = 64, width: int = 64) -> Optional[np.ndarray]:
     graph_payload = None
     if isinstance(ep, dict):
@@ -1210,6 +1239,22 @@ def _rgb_frames_to_tokens(frames: np.ndarray, pool_size: Tuple[int, int], proj: 
     feat = torch.cat([pooled.flatten(1), mean, std], dim=1)
     tokens = feat @ proj
     return tokens.reshape(B, T, -1).squeeze(0)
+
+
+def _rgb_features_to_tokens(payload: Dict[str, Any]) -> torch.Tensor:
+    features_temporal = payload.get("features_temporal")
+    if features_temporal is not None:
+        arr = np.asarray(features_temporal, dtype=np.float32)
+        if arr.ndim == 1:
+            arr = arr[None, ...]
+        return torch.tensor(arr, dtype=torch.float32)
+    features = payload.get("features")
+    if features is None:
+        raise ValueError("rgb_features_v1 missing features")
+    arr = np.asarray(features, dtype=np.float32)
+    if arr.ndim == 1:
+        arr = arr[None, ...]
+    return torch.tensor(arr, dtype=torch.float32)
 
 
 def _extract_gaussian_scenes(ep: Any) -> List[GaussianScene]:

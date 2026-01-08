@@ -7,6 +7,7 @@ from src.config.econ_params import EconParams
 from src.valuation.energy_tags import infer_energy_driver_tags
 from src.valuation.datapack_schema import (
     DATAPACK_SCHEMA_VERSION,
+    DATAPACK_SCHEMA_VERSION_PORTABLE,
     DataPackMeta,
     EnergyProfile,
     ConditionProfile,
@@ -107,6 +108,11 @@ def build_datapack_meta_from_episode(
     embodiment_profile: Optional[EmbodimentProfileSummary] = None,
     econ_semantic_tags: Optional[List[str]] = None,
     semantic_quality: Optional[float] = None,
+    raw_data_path: Optional[str] = None,
+    scene_tracks_v1: Optional[Dict[str, Any]] = None,
+    rgb_features_v1: Optional[Dict[str, Any]] = None,
+    slice_labels_v1: Optional[Dict[str, Any]] = None,
+    schema_version: Optional[str] = None,
 ) -> DataPackMeta:
     """
     Build a DataPackMeta object from episode info (unified schema).
@@ -200,8 +206,11 @@ def build_datapack_meta_from_episode(
     # Generate pack_id
     pack_id = brick_id or str(uuid.uuid4())
 
+    portable = any(item is not None for item in (scene_tracks_v1, rgb_features_v1, slice_labels_v1))
+    resolved_schema = schema_version or (DATAPACK_SCHEMA_VERSION_PORTABLE if portable else DATAPACK_SCHEMA_VERSION)
+
     return DataPackMeta(
-        schema_version=DATAPACK_SCHEMA_VERSION,
+        schema_version=resolved_schema,
         pack_id=pack_id,
         task_name=env_type,
         env_type=env_type,
@@ -223,6 +232,10 @@ def build_datapack_meta_from_episode(
         embodiment_profile=embodiment_profile,
         counterfactual_plan=None,
         counterfactual_source=None,
+        raw_data_path=raw_data_path,
+        scene_tracks_v1=scene_tracks_v1,
+        rgb_features_v1=rgb_features_v1,
+        slice_labels_v1=slice_labels_v1,
     )
 
 

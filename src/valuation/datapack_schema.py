@@ -21,6 +21,7 @@ from src.valuation.guidance_profile import GuidanceProfile
 
 # Unified schema version - aligns with existing 2.0-energy format
 DATAPACK_SCHEMA_VERSION = "2.0-energy"
+DATAPACK_SCHEMA_VERSION_PORTABLE = "2.1-portable"
 
 
 @dataclass
@@ -606,6 +607,11 @@ class DataPackMeta:
     # Raw data references (for reconstruction)
     raw_data_path: Optional[str] = None  # Path to underlying npz/episode data
 
+    # Portable artifacts (optional) - enable curated eval without raw rehydration
+    scene_tracks_v1: Optional[Dict[str, Any]] = None
+    rgb_features_v1: Optional[Dict[str, Any]] = None
+    slice_labels_v1: Optional[Dict[str, Any]] = None
+
     # Vision backbone embedding (optional) - for novelty/regime analysis
     episode_embedding: Optional[List[float]] = None
     # e.g., [0.1, -0.2, 0.3, ...] - pooled embedding from VisionBackbone.encode_sequence()
@@ -644,6 +650,9 @@ class DataPackMeta:
             'episode_id': self.episode_id,
             'episode_index': self.episode_index,
             'raw_data_path': self.raw_data_path,
+            'scene_tracks_v1': to_json_safe(self.scene_tracks_v1),
+            'rgb_features_v1': to_json_safe(self.rgb_features_v1),
+            'slice_labels_v1': to_json_safe(self.slice_labels_v1),
             'guidance_profile': self.guidance_profile.to_dict() if self.guidance_profile else None,
             'vla_action_summary': to_json_safe(self.vla_action_summary),
             'episode_embedding': to_json_safe(self.episode_embedding),
@@ -707,6 +716,9 @@ class DataPackMeta:
             episode_id=d.get('episode_id'),
             episode_index=d.get('episode_index'),
             raw_data_path=d.get('raw_data_path'),
+            scene_tracks_v1=d.get('scene_tracks_v1'),
+            rgb_features_v1=d.get('rgb_features_v1'),
+            slice_labels_v1=d.get('slice_labels_v1'),
             guidance_profile=GuidanceProfile.from_dict(d['guidance_profile']) if d.get('guidance_profile') else None,
             vla_action_summary=d.get('vla_action_summary'),
             episode_embedding=d.get('episode_embedding'),
