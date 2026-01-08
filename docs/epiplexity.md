@@ -44,8 +44,9 @@ python -m scripts.run_epiplexity_curated_slices --datapack-dir /path/to/datapack
 
 This compares `vision_rgb`, `geometry_scene_graph`, `geometry_bev`, and `canonical_tokens` under a fixed compute budget.
 
-If raw streams are not available, curated slices can run on portable datapacks that embed
-`scene_tracks_v1`, `rgb_features_v1`, and `slice_labels_v1`. Use the exporter to generate them:
+**Raw vs portable datapacks:** Curated epiplexity slices run in one of two modes. If `raw_data_path` is present and accessible, the runner rehydrates raw streams (RGB, scene tracks) and computes slices directly. If raw data is absent but portable artifacts are embedded (`scene_tracks_v1`, `rgb_features_v1`, `slice_labels_v1`), the runner operates in portable mode, consuming stored artifacts without raw rehydration. If neither raw data nor portable artifacts are available, the runner fails fast with an explicit diagnostic.
+
+If raw streams are not available, curated slices can run on portable datapacks that embed `scene_tracks_v1`, `rgb_features_v1`, and `slice_labels_v1`. Use the exporter to generate them:
 
 ```bash
 python -m scripts.export_portable_datapacks --datapack-dir /path/to/datapacks --task drawer_vase

@@ -169,6 +169,7 @@ repo.append_batch(datapacks)
 # Portable Datapacks (2.1-portable)
 Portable datapacks embed the minimal artifacts needed to run curated slices without raw rehydration.
 They include `scene_tracks_v1`, `rgb_features_v1`, and `slice_labels_v1` alongside standard metadata.
+Curated epiplexity slices run in one of two modes. If `raw_data_path` is present and accessible, the runner rehydrates raw streams (RGB, scene tracks) and computes slices directly. If raw data is absent but portable artifacts are embedded, the runner operates in portable mode. If neither raw data nor portable artifacts are available, the runner fails fast with an explicit diagnostic.
 
 Example JSONL entry (fields truncated):
 

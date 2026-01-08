@@ -99,6 +99,20 @@ python -m scripts.doctor
 .venv/bin/python -m pytest -m slow -v
 ```
 
+## Curated Epiplexity Slices (Portable)
+```bash
+# 1) Export a portable datapack from raw datapacks
+python scripts/export_portable_datapacks.py \
+  --datapack-dir data/datapacks/phase_c_raw \
+  --output-dir data/datapacks/phase_c_portable
+
+# 2) Run curated epiplexity slices from the portable datapack
+python -m scripts.run_epiplexity_curated_slices \
+  --datapack-dir data/datapacks/phase_c_portable \
+  --task drawer_vase
+```
+This works on machines without raw streams once portable artifacts are embedded.
+
 ## 7.1) Workcell Manufacturing Suite (Blue-Collar Environments)
 
 The workcell environment suite provides modular manufacturing task environments for kitting, assembly, inspection, and conveyor operations.
