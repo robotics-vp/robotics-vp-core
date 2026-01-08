@@ -22,6 +22,10 @@ from src.rl.episode_descriptor_validator import (
 from src.utils.json_safe import to_json_safe
 from src.rl.skill_mode_resolver import SkillModeResolver
 from src.orchestrator.semantic_orchestrator_v2 import OrchestratorAdvisory
+from src.epiplexity.metadata import (
+    extract_epiplexity_summary_metric,
+    extract_epiplexity_summary_confidence,
+)
 
 if TYPE_CHECKING:
     from src.policies.registry import PolicyBundle
@@ -156,6 +160,12 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
     # Compute sampling weight (higher for higher-tier, higher-trust datapacks)
     sampling_weight = trust_score * (1.0 + 0.5 * tier)  # Tier 2 gets 1.5x boost
 
+    # Epiplexity signals (advisory only)
+    delta_epi = extract_epiplexity_summary_metric(datapack, metric="delta_epi_vs_baseline") or 0.0
+    epi_per_flop = extract_epiplexity_summary_metric(datapack, metric="epi_per_flop") or 0.0
+    epi_conf = extract_epiplexity_summary_confidence(datapack) or 0.0
+    w_epi = max(0.0, float(delta_epi)) * float(epi_conf)
+
     # Episode length heuristic (can be overridden by env defaults)
     episode_length = 1000  # Default
 
@@ -185,6 +195,10 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         "delta_J": delta_J,
         "sampling_weight": sampling_weight,
         "w_embodiment": w_embodiment if w_embodiment is not None else 1.0,
+        "w_epi": w_epi,
+        "delta_epi_per_flop": float(delta_epi),
+        "epi_per_flop": float(epi_per_flop),
+        "epi_confidence": float(epi_conf),
         "embodiment_drift_score": embodiment_drift_score if embodiment_drift_score is not None else 0.0,
         "embodiment_physically_impossible_contacts": embodiment_impossible_contacts or 0,
         "embodiment_trust_override_candidate": bool(embodiment_trust_override)
@@ -363,6 +377,7 @@ class DataPackRLSampler:
             "embodiment_quality",
             "embodiment_drift_penalty",
             "embodiment_quality_drift",
+            "epiplexity_roi",
         }:
             weight_strategy = "balanced" if strategy_name == "balanced" else strategy_name
             selected = self._sample_balanced(batch_size, rng, weight_strategy=weight_strategy)
@@ -500,6 +515,12 @@ class DataPackRLSampler:
                     * (1.0 - _embodiment_metric(ep, "embodiment_drift_score", 0.0)),
                     0.1,
                 )
+                * ep.get("recap_weight_multiplier", 1.0)
+                for ep in episodes
+            ]
+        elif strategy == "epiplexity_roi":
+            weights = [
+                max(float(ep.get("w_epi", ep["descriptor"].get("w_epi", 0.0))), 0.1)
                 * ep.get("recap_weight_multiplier", 1.0)
                 for ep in episodes
             ]

@@ -102,6 +102,7 @@ class SemanticOrchestrator:
         datapack_engine: DatapackEngine,
         task_graph: TaskGraph,
         ontology: EnvironmentOntology,
+        config: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize SemanticOrchestrator with upstream dependencies.
@@ -116,6 +117,7 @@ class SemanticOrchestrator:
         self.datapacks = datapack_engine
         self.task_graph = task_graph
         self.ontology = ontology
+        self.config = config or {}
 
         # Track semantic state
         self._update_history: List[SemanticUpdatePlan] = []
@@ -250,6 +252,18 @@ class SemanticOrchestrator:
             cross_module["sima_efficiency_bias"] = "high"
         else:
             cross_module["sima_efficiency_bias"] = "balanced"
+
+        # Epiplexity-driven scheduling (advisory)
+        if self.config.get("use_epiplexity_term", False):
+            epi_alpha = float(self.config.get("epi_alpha", 0.1))
+            epi_term = float(getattr(datapack_signals, "mean_delta_epi_per_flop", 0.0))
+            cross_module["epiplexity_term"] = {
+                "enabled": True,
+                "epi_alpha": epi_alpha,
+                "expected_delta_epi_per_flop": epi_term,
+            }
+            if epi_term > 0.0:
+                rationale_parts.append("Epiplexity term enabled for scheduling")
 
         plan.cross_module_constraints = cross_module
 

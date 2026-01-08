@@ -103,5 +103,29 @@ def validate_datapack_meta(dp: DataPackMeta) -> List[str]:
         warnings.extend(validate_guidance_profile(dp.guidance_profile))
     if dp.embodiment_profile:
         warnings.extend(validate_embodiment_profile(dp.embodiment_profile))
+    if dp.epiplexity_summary:
+        warnings.extend(validate_epiplexity_summary(dp.epiplexity_summary))
     warnings.extend(validate_attribution_profile(dp.attribution))
+    return warnings
+
+
+def validate_epiplexity_summary(summary: Dict[str, Any]) -> List[str]:
+    warnings = []
+    if not isinstance(summary, dict):
+        return ["epiplexity_summary must be a dict"]
+    for repr_id, budgets in summary.items():
+        if repr_id == "_default":
+            continue
+        if not isinstance(budgets, dict):
+            continue
+        for budget_id, stats in budgets.items():
+            if not isinstance(stats, dict):
+                continue
+            mean = stats.get("mean", {})
+            for key in ("S_T_proxy", "H_T_proxy", "epi_per_flop", "delta_epi_vs_baseline"):
+                val = mean.get(key)
+                if val is None:
+                    continue
+                if _is_nan(val):
+                    warnings.append(f"epiplexity_summary.{repr_id}.{budget_id}.{key} is NaN")
     return warnings

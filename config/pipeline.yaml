@@ -63,3 +63,16 @@ safety:
   max_gradient_norm: 1.0
   check_for_nans: true
   fail_on_inf: true
+
+# Representation settings (optional channel-set encoder)
+representations:
+  use_channel_set_encoder: false
+  use_loo_cl_pretrain: false
+  aux_loss_loo_cl_weight: 0.1
+  channel_groups_path: "configs/channel_groups_robotics.json"
+
+orchestrator:
+  use_epiplexity_term: false
+  epi_alpha: 0.1
+  epi_budget_id: "steps_50_bs_16"
+  epi_baseline_repr: "raw"

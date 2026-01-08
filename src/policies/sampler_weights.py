@@ -8,6 +8,7 @@ Includes process_reward-based sampling strategies:
 - "embodiment_quality": Weight by embodiment confidence (w_embodiment)
 - "embodiment_drift_penalty": Penalize high embodiment drift
 - "embodiment_quality_drift": Combine embodiment weight and drift penalty
+- "epiplexity_roi": Weight by epiplexity delta per flop (w_epi)
 """
 from typing import Any, Dict, List, Sequence
 
@@ -105,6 +106,20 @@ def _embodiment_quality_drift_weight(ep: Dict[str, Any]) -> float:
     return max(w_emb * (1.0 - drift), 0.1)
 
 
+def _epiplexity_metric(ep: Dict[str, Any], key: str, default: float) -> float:
+    if key in ep:
+        return float(ep.get(key, default))
+    desc = ep.get("descriptor", {}) if isinstance(ep.get("descriptor"), dict) else {}
+    if key in desc:
+        return float(desc.get(key, default))
+    return float(default)
+
+
+def _epiplexity_roi_weight(ep: Dict[str, Any]) -> float:
+    w_epi = _epiplexity_metric(ep, "w_epi", 0.0)
+    return max(w_epi, 0.1)
+
+
 class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
     def __init__(self, trust_matrix: Dict[str, Any] = None):
         self.trust_matrix = trust_matrix or {}
@@ -126,6 +141,7 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
             - "embodiment_quality": Weight by embodiment confidence
             - "embodiment_drift_penalty": Penalize high embodiment drift
             - "embodiment_quality_drift": Combine embodiment and drift
+            - "epiplexity_roi": Weight by epiplexity delta per flop (w_epi)
 
         Args:
             features: List of episode descriptors/features.
@@ -157,6 +173,8 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
                 weight = _embodiment_drift_penalty_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
             elif strategy == "embodiment_quality_drift":
                 weight = _embodiment_quality_drift_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
+            elif strategy == "epiplexity_roi":
+                weight = _epiplexity_roi_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
             else:
                 weight = sampler_utils._balanced_weight(ep)
             trust_scale = self._trust_scale(ep)
