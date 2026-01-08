@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import torch
 
 from src.envs.lsd_vector_scene_env import (
@@ -13,6 +14,7 @@ from src.vision.motion_hierarchy.config import MotionHierarchyConfig
 from src.vision.motion_hierarchy.motion_hierarchy_node import MotionHierarchyNode
 
 
+@pytest.mark.slow
 def test_lsd_motion_hierarchy_integration():
     config = LSDVectorSceneEnvConfig(
         scene_graph_config=SceneGraphConfig(topology_type="WAREHOUSE_AISLES", num_nodes=5, seed=123),

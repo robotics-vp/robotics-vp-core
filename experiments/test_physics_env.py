@@ -9,17 +9,22 @@ Tests:
 5. Info dict structure
 6. Saves sample frames to artifacts/physics_frames/
 """
+import pytest
 import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
+pybullet = pytest.importorskip(
+    "pybullet",
+    reason="pybullet not installed; install with `pip install pybullet`",
+)
+
 # Add parent dir to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.envs.physics import DishwashingPhysicsEnv
-import pytest
 
 @pytest.fixture(scope="module")
 def env():

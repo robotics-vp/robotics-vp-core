@@ -84,6 +84,21 @@ python3 scripts/eval_drawer_vase_scripted.py --episodes 5 --emit-datapacks data/
 python3 scripts/smoke_test_phase_c_hrl_vla.py --episodes 3 --out-datapacks data/phase_c_datapacks/smoke.json
 ```
 
+## Dev Workflow
+```bash
+# Create venv
+python3 -m venv .venv && .venv/bin/python -m pip install -U pip && .venv/bin/python -m pip install -e .
+
+# Sanity check
+python -m scripts.doctor
+
+# Fast tests
+.venv/bin/python -m pytest -q -m "not slow"
+
+# Slow tests
+.venv/bin/python -m pytest -m slow -v
+```
+
 ## 7.1) Workcell Manufacturing Suite (Blue-Collar Environments)
 
 The workcell environment suite provides modular manufacturing task environments for kitting, assembly, inspection, and conveyor operations.

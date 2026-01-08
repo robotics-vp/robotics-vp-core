@@ -96,6 +96,7 @@ class TestLSDVectorSceneBackend:
         )
         assert backend is not None
 
+    @pytest.mark.slow
     def test_train_policy(self, mock_econ_meter):
         from src.motor_backend.lsd_vector_scene_backend import LSDVectorSceneBackend
         from src.config.lsd_vector_scene_config import LSDVectorSceneConfig
@@ -122,6 +123,7 @@ class TestLSDVectorSceneBackend:
         assert "mpl_units_per_hour" in result.econ_metrics
         assert result.econ_metrics["mpl_units_per_hour"] >= 0
 
+    @pytest.mark.slow
     def test_evaluate_policy(self, mock_econ_meter):
         from src.motor_backend.lsd_vector_scene_backend import LSDVectorSceneBackend
         from src.config.lsd_vector_scene_config import LSDVectorSceneConfig
@@ -206,6 +208,7 @@ class TestMotorBackendFactory:
 class TestDifficultyFeatures:
     """Tests for difficulty feature computation."""
 
+    @pytest.mark.slow
     def test_get_difficulty_features(self):
         from src.envs.lsd_vector_scene_env import (
             LSDVectorSceneEnv,
@@ -410,6 +413,7 @@ class TestGGDSTraining:
         grad = ldm.compute_sds_gradient(images, "test prompt")
         assert grad.shape == images.shape
 
+    @pytest.mark.slow
     def test_ggds_smoke(self):
         """Smoke test for GGDS training."""
         from scripts.train_ggds_on_lsd_vector_scenes import (

@@ -12,6 +12,8 @@ data/
 logs/
 *.log
 *.txt
+!requirements.txt
+!requirements-dev.txt
 
 # === RESULTS / REPORTS ===
 results/*
@@ -26,6 +28,15 @@ tmp_*.json
 
 # local env
 .venv/
+
+# packaging/build artifacts
+*.egg-info/
+__pycache__/
+
+# epiplexity caches
+artifacts/epiplexity_cache*/
+artifacts/epiplexity_cache*
+artifacts/epiplexity_leaderboards/
 
 # === AGENT ARTIFACTS ===
 .agent/runs/

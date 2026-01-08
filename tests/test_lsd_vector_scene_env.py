@@ -176,6 +176,7 @@ class TestKitchenLayout:
 
 
 class TestDifficultyFeatures:
+    @pytest.mark.slow
     def test_difficulty_features_computed(self):
         config = LSDVectorSceneEnvConfig(
             scene_graph_config=SceneGraphConfig(
@@ -203,6 +204,7 @@ class TestDifficultyFeatures:
 
 
 class TestSeededReproducibility:
+    @pytest.mark.slow
     def test_same_seed_same_scene(self):
         config1 = LSDVectorSceneEnvConfig(
             scene_graph_config=SceneGraphConfig(seed=42),
