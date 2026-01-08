@@ -11,9 +11,11 @@ Signals:
 2. SceneIR quality (convergence, visibility)
 3. ProcessReward quality (confidence, progress, disagreement)
 4. Map-First quality (static map coverage, dynamics stability)
+5. Embodiment quality (contacts/affordances, drift diagnostics; optional)
 
 Formula:
     w = w_mhn * w_scene_ir * w_process_reward * w_map_first
+    (optionally include w_embodiment when enabled in config)
 
 Each component is in [0, 1], so combined weight is also in [0, 1].
 """
@@ -31,6 +33,7 @@ class UnifiedQualityWeights:
     w_scene_ir: float = 1.0
     w_process_reward: float = 1.0
     w_map_first: float = 1.0
+    w_embodiment: float = 1.0
 
     # Combined weight
     w_combined: float = 1.0
@@ -48,6 +51,7 @@ class UnifiedQualityWeights:
             "w_scene_ir": self.w_scene_ir,
             "w_process_reward": self.w_process_reward,
             "w_map_first": self.w_map_first,
+            "w_embodiment": self.w_embodiment,
             "w_combined": self.w_combined,
             "is_eligible": self.is_eligible,
             "eligibility_reason": self.eligibility_reason,
@@ -63,6 +67,7 @@ class UnifiedQualityConfig:
     min_mhn_plausibility: float = 0.2  # Below this = immediate reject
     min_process_reward_conf: float = 0.2  # Below this = immediate reject
     min_scene_tracks_quality: float = 0.2  # Below this = immediate reject
+    min_embodiment_weight: float = 0.0  # Only used if include_embodiment_weight is True
 
     # Weight computation parameters
     mhn_plausibility_weight: float = 0.7  # Weight of plausibility in MHN score
@@ -75,6 +80,9 @@ class UnifiedQualityConfig:
     detect_stagnation: bool = True
     stagnation_conf_min: float = 0.4
     stagnation_delta_max: float = 0.05
+
+    # Embodiment integration
+    include_embodiment_weight: bool = False  # Off by default to avoid reward coupling
 
 
 class UnifiedQualityPolicy:
@@ -116,6 +124,10 @@ class UnifiedQualityPolicy:
         process_reward_quality: Optional[float] = None,  # If pre-computed
         # Map-First signals
         map_first_quality: Optional[float] = None,
+        # Embodiment signals
+        embodiment_weight: Optional[float] = None,
+        embodiment_drift_score: Optional[float] = None,
+        embodiment_impossible_contacts: Optional[int] = None,
         # Semantic fusion diagnostics (observability only)
         semantic_fusion_confidence_mean: Optional[float] = None,
         semantic_disagreement_vla_vs_map: Optional[float] = None,
@@ -136,6 +148,9 @@ class UnifiedQualityPolicy:
             process_reward_disagreement: Mean perspective disagreement.
             process_reward_quality: Pre-computed PR quality (overrides above).
             map_first_quality: Optional Map-First quality score in [0, 1].
+            embodiment_weight: Optional embodiment weight in [0, 1].
+            embodiment_drift_score: Optional drift score in [0, 1].
+            embodiment_impossible_contacts: Optional count of impossible contacts.
             num_frames: Number of frames (for stagnation detection).
 
         Returns:
@@ -212,8 +227,20 @@ class UnifiedQualityPolicy:
                 "disagreement_vla_vs_map": semantic_disagreement_vla_vs_map,
             }
 
+        # --- Embodiment weight ---
+        w_embodiment = 1.0
+        if embodiment_weight is not None:
+            w_embodiment = max(0.0, min(1.0, float(embodiment_weight)))
+        components["embodiment"] = {
+            "w_embodiment": w_embodiment,
+            "drift_score": embodiment_drift_score,
+            "physically_impossible_contacts": embodiment_impossible_contacts,
+        }
+
         # --- Combined weight ---
         w_combined = w_mhn * w_scene_ir * w_process_reward * w_map_first
+        if cfg.include_embodiment_weight:
+            w_combined *= w_embodiment
 
         # --- Eligibility checks ---
         is_eligible = True
@@ -231,6 +258,9 @@ class UnifiedQualityPolicy:
         elif process_reward_conf_p10 < cfg.min_process_reward_conf:
             is_eligible = False
             eligibility_reason = f"conf_p10={process_reward_conf_p10:.2f} < {cfg.min_process_reward_conf}"
+        elif cfg.include_embodiment_weight and w_embodiment < cfg.min_embodiment_weight:
+            is_eligible = False
+            eligibility_reason = f"w_embodiment={w_embodiment:.2f} < {cfg.min_embodiment_weight}"
         elif w_combined < cfg.min_combined_weight:
             is_eligible = False
             eligibility_reason = f"w_combined={w_combined:.3f} < {cfg.min_combined_weight}"
@@ -255,6 +285,7 @@ class UnifiedQualityPolicy:
             w_scene_ir=w_scene_ir,
             w_process_reward=w_process_reward,
             w_map_first=w_map_first,
+            w_embodiment=w_embodiment,
             w_combined=w_combined,
             is_eligible=is_eligible,
             eligibility_reason=eligibility_reason,
@@ -292,6 +323,9 @@ class UnifiedQualityPolicy:
         pr_disagreement = 0.0
         pr_quality = None
         num_frames = 0
+        w_embodiment = None
+        embodiment_drift = None
+        embodiment_impossible = None
 
         if datapack.process_reward_profile is not None:
             prp = datapack.process_reward_profile
@@ -322,6 +356,12 @@ class UnifiedQualityPolicy:
         if datapack.episode_metrics:
             sem_conf = datapack.episode_metrics.get("semantic_fusion_confidence_mean")
             sem_disagreement = datapack.episode_metrics.get("semantic_disagreement_vla_vs_map")
+            if w_embodiment is None:
+                w_embodiment = datapack.episode_metrics.get("w_embodiment")
+            if embodiment_drift is None:
+                embodiment_drift = datapack.episode_metrics.get("embodiment_drift_score")
+            if embodiment_impossible is None:
+                embodiment_impossible = datapack.episode_metrics.get("embodiment_physically_impossible_contacts")
         if sem_conf is not None:
             try:
                 sem_conf = float(sem_conf)
@@ -332,6 +372,12 @@ class UnifiedQualityPolicy:
                 sem_disagreement = float(sem_disagreement)
             except Exception:
                 sem_disagreement = None
+
+        if datapack.embodiment_profile is not None:
+            emb = datapack.embodiment_profile
+            w_embodiment = emb.w_embodiment
+            embodiment_drift = emb.drift_score
+            embodiment_impossible = emb.physically_impossible_contacts
 
         return self.compute(
             mhn_plausibility=mhn_plausibility,
@@ -344,6 +390,9 @@ class UnifiedQualityPolicy:
             process_reward_disagreement=pr_disagreement,
             process_reward_quality=pr_quality,
             map_first_quality=map_first_quality if map_first_quality is not None else None,
+            embodiment_weight=w_embodiment,
+            embodiment_drift_score=embodiment_drift,
+            embodiment_impossible_contacts=embodiment_impossible,
             semantic_fusion_confidence_mean=sem_conf,
             semantic_disagreement_vla_vs_map=sem_disagreement,
             num_frames=num_frames,
