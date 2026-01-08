@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python3 -m pip install -r requirements-dev.txt
 
       - name: Syntax check
         run: python3 -m compileall src scripts tests -q
@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies (incl. MuJoCo)
         run: |
           python3 -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-extra.txt
+          python3 -m pip install -r requirements-dev.txt -r requirements-extra.txt
 
       - name: Syntax check
         run: python3 -m compileall src scripts tests -q
