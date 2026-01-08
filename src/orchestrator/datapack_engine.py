@@ -8,6 +8,7 @@ import json
 from src.valuation.datapack_repo import DataPackRepo
 from src.valuation.datapack_schema import DataPackMeta, ObjectiveProfile
 from src.orchestrator.semantic_metrics import SemanticMetrics
+from src.epiplexity.metadata import extract_epiplexity_summary_metric
 from src.orchestrator.economic_controller import EconSignals
 
 
@@ -50,6 +51,11 @@ class DatapackSignals:
     mean_spread_capture: float = 0.0
     mean_data_premium: float = 0.0
 
+    # Epiplexity signals (advisory)
+    epiplexity_coverage: float = 0.0
+    mean_epi_per_flop: float = 0.0
+    mean_delta_epi_per_flop: float = 0.0
+
     # Recommendations
     data_gaps: List[str] = field(default_factory=list)
     # e.g., ["edge_cases", "occlusion", "low_light"]
@@ -75,6 +81,9 @@ class DatapackSignals:
             "mean_rebate_pct": self.mean_rebate_pct,
             "mean_spread_capture": self.mean_spread_capture,
             "mean_data_premium": self.mean_data_premium,
+            "epiplexity_coverage": self.epiplexity_coverage,
+            "mean_epi_per_flop": self.mean_epi_per_flop,
+            "mean_delta_epi_per_flop": self.mean_delta_epi_per_flop,
             "data_gaps": self.data_gaps,
             "recommended_collection_focus": self.recommended_collection_focus,
         }
@@ -96,6 +105,7 @@ class DatapackSignals:
             "tier2_fraction",
             "vla_annotation_fraction",
             "guidance_annotation_fraction",
+            "epiplexity_coverage",
         ]
         for key in frac_fields:
             if filtered.get(key) is None:
@@ -130,8 +140,12 @@ class DatapackEngine:
 
     This module DOES NOT import SemanticOrchestrator or MetaTransformer.
     """
-    def __init__(self, repo: DataPackRepo):
+    def __init__(self, repo: DataPackRepo, config: Optional[Dict[str, Any]] = None):
         self.repo = repo
+        self.config = config or {}
+        self.use_epiplexity_term = bool(self.config.get("use_epiplexity_term", False))
+        self.epi_budget_id = self.config.get("epi_budget_id")
+        self.epi_baseline_repr = self.config.get("epi_baseline_repr")
 
     def compute_datapack_stats(self) -> Dict[str, Any]:
         stats = {}
@@ -200,6 +214,15 @@ class DatapackEngine:
                 w -= float(dp.attribution.delta_error)
                 w -= float(dp.energy.total_Wh)
                 w += float(getattr(dp.attribution, "rebate_pct", 0.0))
+                if self.use_epiplexity_term:
+                    epi_delta = extract_epiplexity_summary_metric(
+                        dp,
+                        repr_id=self.epi_baseline_repr,
+                        budget_id=self.epi_budget_id,
+                        metric="delta_epi_vs_baseline",
+                    )
+                    if epi_delta is not None:
+                        w += float(epi_delta)
                 weights[dp.pack_id] = max(0.0, w)
         return weights
 
@@ -325,6 +348,32 @@ class DatapackEngine:
         signals.mean_rebate_pct = float(np.mean(rebates)) if rebates else 0.0
         signals.mean_spread_capture = float(np.mean(spreads)) if spreads else 0.0
         signals.mean_data_premium = float(np.mean(premiums)) if premiums else 0.0
+
+        # Epiplexity signals (advisory only)
+        epi_vals = []
+        epi_delta_vals = []
+        for dp in datapacks:
+            epi_val = extract_epiplexity_summary_metric(
+                dp,
+                repr_id=self.epi_baseline_repr,
+                budget_id=self.epi_budget_id,
+                metric="epi_per_flop",
+            )
+            epi_delta = extract_epiplexity_summary_metric(
+                dp,
+                repr_id=self.epi_baseline_repr,
+                budget_id=self.epi_budget_id,
+                metric="delta_epi_vs_baseline",
+            )
+            if epi_val is not None:
+                epi_vals.append(epi_val)
+            if epi_delta is not None:
+                epi_delta_vals.append(epi_delta)
+        if epi_vals:
+            signals.epiplexity_coverage = len(epi_vals) / len(datapacks)
+            signals.mean_epi_per_flop = float(np.mean(epi_vals))
+        if epi_delta_vals:
+            signals.mean_delta_epi_per_flop = float(np.mean(epi_delta_vals))
 
         # Data coverage score (heuristic)
         signals.data_coverage_score = min(1.0, signals.tier2_fraction * 2.0 + signals.tier1_fraction)

@@ -610,6 +610,10 @@ class DataPackMeta:
     episode_embedding: Optional[List[float]] = None
     # e.g., [0.1, -0.2, 0.3, ...] - pooled embedding from VisionBackbone.encode_sequence()
 
+    # Epiplexity / prequential-MDL metrics (optional, advisory)
+    epiplexity: Optional[Dict[str, Any]] = None
+    epiplexity_summary: Optional[Dict[str, Any]] = None
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         d = {
@@ -643,6 +647,8 @@ class DataPackMeta:
             'guidance_profile': self.guidance_profile.to_dict() if self.guidance_profile else None,
             'vla_action_summary': to_json_safe(self.vla_action_summary),
             'episode_embedding': to_json_safe(self.episode_embedding),
+            'epiplexity': to_json_safe(self.epiplexity),
+            'epiplexity_summary': to_json_safe(self.epiplexity_summary),
         }
         return to_json_safe(d)
 
@@ -704,6 +710,8 @@ class DataPackMeta:
             guidance_profile=GuidanceProfile.from_dict(d['guidance_profile']) if d.get('guidance_profile') else None,
             vla_action_summary=d.get('vla_action_summary'),
             episode_embedding=d.get('episode_embedding'),
+            epiplexity=d.get('epiplexity'),
+            epiplexity_summary=d.get('epiplexity_summary'),
         )
 
     @classmethod

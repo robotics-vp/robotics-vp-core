@@ -1,0 +1,45 @@
+# Epiplexity / Prequential-MDL
+
+## Purpose
+Epiplexity is a compute-bounded proxy for learnable structure. Under a fixed compute budget, the system separates:
+- `S_T_proxy`: learnable structure (prequential improvement)
+- `H_T_proxy`: residual entropy (final NLL proxy)
+
+These diagnostics are advisory: they inform data valuation, representation selection, and orchestrator scheduling without changing reward math.
+
+## Key Components
+- `EpiplexityTracker`: runs probe learners, caches results, and returns `S_T_proxy`, `H_T_proxy`, and `epi_per_flop`.
+- `PrequentialAUCLossEstimator`: MVP estimator using area-under-loss-curve proxy.
+- `TokenizerAblationHarness`: compares representations on the same dataset slice and writes leaderboards.
+
+## Datapack Metadata
+Epiplexity results are stored in datapack metadata:
+- `epiplexity[repr][budget][seed]`: per-run metrics and version hashes
+- `epiplexity_summary[repr][budget]`: mean/std/confidence summary
+- `epiplexity_summary._default`: default repr/budget selector for downstream use
+
+By default, only summaries are attached to datapacks; full per-run details live in the cache (`artifacts/epiplexity_cache/`). To store full runs in datapack metadata, pass `--store-full-runs` to the CLI (debug only).
+
+## CLI
+Run a synthetic evaluation:
+
+```bash
+python -m scripts.run_epiplexity_eval --synthetic --dataset-slice-id demo_slice
+```
+
+Custom inputs can be provided via `--episode-jsonl` (each line is a JSON dict with token keys).
+
+For deterministic probe runs:
+
+```bash
+VPE_DETERMINISTIC=1 VPE_DETERMINISTIC_SEED=0 python -m scripts.run_epiplexity_eval --synthetic
+```
+
+## Orchestrator Hook
+When enabled (`config/pipeline.yaml`):
+- `orchestrator.use_epiplexity_term = true`
+- `orchestrator.epi_alpha` scales the advisory term
+- `orchestrator.epi_budget_id` selects which compute budget to read
+- `orchestrator.epi_baseline_repr` selects the baseline representation
+
+The semantic orchestrator surfaces this as an advisory scheduling term.

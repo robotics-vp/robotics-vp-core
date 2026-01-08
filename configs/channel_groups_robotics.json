@@ -1,0 +1,77 @@
+{
+  "version": "v1",
+  "channels": [
+    {
+      "name": "vision_rgb",
+      "required": true,
+      "dim_hint": 64,
+      "rate_hint": "video",
+      "token_kind": "image",
+      "notes": "Required RGB channel; proxy render allowed when camera absent."
+    },
+    {
+      "name": "embodiment",
+      "required": true,
+      "dim_hint": 16,
+      "rate_hint": "timestep",
+      "token_kind": "contact",
+      "notes": "Embodiment artifacts (contacts/segments) required once pipeline runs."
+    },
+    {
+      "name": "geometry_scene_graph",
+      "required": true,
+      "dim_hint": 128,
+      "rate_hint": "timestep",
+      "token_kind": "scene_graph",
+      "notes": "SceneGraphEncoder tokens; required geometry substrate."
+    },
+    {
+      "name": "geometry_gaussian_scene",
+      "required": false,
+      "dim_hint": 32,
+      "rate_hint": "timestep",
+      "token_kind": "gaussian_scene",
+      "notes": "Optional GaussianScene summary tokens."
+    },
+    {
+      "name": "action_stream",
+      "required": false,
+      "dim_hint": null,
+      "rate_hint": "timestep",
+      "token_kind": "actions",
+      "notes": "Optional action/joint stream tokens."
+    },
+    {
+      "name": "joint_saturation",
+      "required": false,
+      "dim_hint": null,
+      "rate_hint": "timestep",
+      "token_kind": "joint_state",
+      "notes": "Optional joint saturation diagnostics."
+    },
+    {
+      "name": "task_constraints",
+      "required": false,
+      "dim_hint": null,
+      "rate_hint": "event",
+      "token_kind": "constraints",
+      "notes": "Optional task constraint tokens."
+    },
+    {
+      "name": "backend_tags",
+      "required": false,
+      "dim_hint": null,
+      "rate_hint": "event",
+      "token_kind": "backend",
+      "notes": "Optional backend tag tokens."
+    },
+    {
+      "name": "failure_taxonomy",
+      "required": false,
+      "dim_hint": null,
+      "rate_hint": "event",
+      "token_kind": "failure",
+      "notes": "Optional failure taxonomy tokens."
+    }
+  ]
+}
