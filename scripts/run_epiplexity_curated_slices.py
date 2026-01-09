@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -155,6 +155,104 @@ def _load_portable_episode(dp: Any) -> Optional[Dict[str, Any]]:
     return episode
 
 
+def _load_token_only_episode(dp: Any) -> Optional[Dict[str, Any]]:
+    """Load episode in token-only mode using stored repr_tokens."""
+    repr_tokens = getattr(dp, "repr_tokens", None)
+    slice_labels = getattr(dp, "slice_labels_v1", None)
+    if repr_tokens is None or slice_labels is None:
+        return None
+    episode = {
+        "episode_id": dp.episode_id or dp.pack_id,
+        "repr_tokens": repr_tokens,
+        "slice_labels_v1": slice_labels,
+        "token_only": True,
+    }
+    if dp.embodiment_profile is not None:
+        episode["embodiment_profile"] = dp.embodiment_profile
+    return episode
+
+
+def _load_episodes_token_only(repo: DataPackRepo, task_name: str) -> tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """Load episodes in token-only mode (using stored repr_tokens)."""
+    datapacks = repo.load_all(task_name)
+    episodes: List[Dict[str, Any]] = []
+    stats = {
+        "total": len(datapacks),
+        "with_repr_tokens": 0,
+        "missing_repr_tokens": 0,
+        "usable": 0,
+    }
+    for dp in datapacks:
+        if dp.repr_tokens is None:
+            stats["missing_repr_tokens"] += 1
+            continue
+        stats["with_repr_tokens"] += 1
+        episode = _load_token_only_episode(dp)
+        if episode is None:
+            continue
+        episodes.append(episode)
+        stats["usable"] += 1
+    return episodes, stats
+
+
+def _build_token_only_leaderboard(
+    episodes: List[Dict[str, Any]],
+    repr_ids: List[str],
+    seeds: List[int],
+) -> Dict[str, Any]:
+    """Build leaderboard summaries from stored repr_tokens.
+
+    In token-only mode, we don't run the full prequential probe training.
+    Instead, we compute simple statistics from stored features to produce
+    comparable metrics that can be used for longitudinal tracking.
+    """
+    import numpy as np
+
+    summaries: Dict[str, Any] = {}
+
+    # Collect features per repr
+    repr_features: Dict[str, List[np.ndarray]] = {r: [] for r in repr_ids}
+
+    for ep in episodes:
+        repr_tokens = ep.get("repr_tokens", {})
+        for repr_id in repr_ids:
+            token_data = repr_tokens.get(repr_id)
+            if token_data is None or "error" in token_data:
+                continue
+            features = token_data.get("features")
+            if features is not None:
+                repr_features[repr_id].append(np.array(features))
+
+    # Compute simple metrics per repr
+    for repr_id in repr_ids:
+        features_list = repr_features[repr_id]
+        if not features_list:
+            summaries[repr_id] = {
+                "status": "no_data",
+                "num_episodes": 0,
+            }
+            continue
+
+        features_array = np.stack(features_list)
+        # Compute variance as proxy for structure (higher variance = more structure)
+        variance = float(np.var(features_array))
+        mean_norm = float(np.mean(np.linalg.norm(features_array, axis=-1)))
+
+        summaries[repr_id] = {
+            "status": "ok",
+            "num_episodes": len(features_list),
+            "dim": int(features_array.shape[-1]) if features_array.ndim > 1 else 1,
+            "variance": variance,
+            "mean_norm": mean_norm,
+            # Token-only mode doesn't run probes, so these are placeholders
+            "S_T_proxy": variance,  # Structure proxy
+            "H_T_proxy": 1.0 - variance,  # Residual entropy proxy (inverted)
+            "mode": "token_only",
+        }
+
+    return summaries
+
+
 def _select_curated_slices_from_labels(episodes: Sequence[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     slices = {"occluded": [], "dynamic": [], "static": []}
     for ep in episodes:
@@ -262,11 +360,36 @@ def main() -> None:
         help="Channel group spec path",
     )
     parser.add_argument("--output-dir", type=str, default="artifacts/epiplexity_leaderboards", help="Output dir")
+    parser.add_argument(
+        "--token-only",
+        action="store_true",
+        help="Use stored repr_tokens instead of running encoders (requires datapacks with repr_tokens)",
+    )
     args = parser.parse_args()
 
-    stats = {"with_raw": 0, "portable": 0}
+    stats = {"with_raw": 0, "portable": 0, "token_only": 0}
+    is_token_only = args.token_only
+
     if args.synthetic:
+        if is_token_only:
+            raise RuntimeError("--token-only cannot be used with --synthetic")
         episodes = _synthetic_curated_episodes(args.synthetic_count)
+    elif is_token_only:
+        # Token-only mode: load using stored repr_tokens
+        repo = DataPackRepo(base_dir=args.datapack_dir)
+        tasks = repo.list_tasks()
+        if not tasks:
+            raise RuntimeError(f"No datapacks found in {args.datapack_dir}")
+        task_name = args.task or tasks[0]
+        episodes, stats = _load_episodes_token_only(repo, task_name)
+        stats["token_only"] = stats.get("with_repr_tokens", 0)
+        if not episodes:
+            raise RuntimeError(
+                "Cannot run token-only curated slices: no datapacks with repr_tokens found "
+                f"(total={stats['total']}; with_repr_tokens={stats['with_repr_tokens']}; "
+                f"missing_repr_tokens={stats['missing_repr_tokens']}). "
+                "Run export_portable_datapacks with --include-repr-tokens first."
+            )
     else:
         repo = DataPackRepo(base_dir=args.datapack_dir)
         tasks = repo.list_tasks()
@@ -296,40 +419,58 @@ def main() -> None:
         static_motion_threshold=args.static_threshold,
         max_per_slice=args.max_per_slice,
     )
-    if stats.get("with_raw", 0) == 0 and stats.get("portable", 0) > 0:
+
+    # Select curated slices based on mode
+    if is_token_only or (stats.get("with_raw", 0) == 0 and stats.get("portable", 0) > 0) or stats.get("token_only", 0) > 0:
         curated = _select_curated_slices_from_labels(episodes)
         if not any(curated.values()):
-            raise RuntimeError("Portable datapacks missing slice_labels_v1; cannot compute curated slices.")
+            raise RuntimeError("Datapacks missing slice_labels_v1; cannot compute curated slices.")
     else:
         curated = select_curated_slices(episodes, selector_cfg)
 
     budgets = [ComputeBudget(max_steps=int(x.strip()), batch_size=args.batch_size) for x in args.budget_steps.split(",")]
     seeds = [int(x.strip()) for x in args.seeds.split(",")]
 
-    geometry_bev_cfg = GeometryBEVConfig()
-    representation_fns = build_default_representation_fns(
-        args.channel_groups_path,
-        encoder_config=ChannelSetEncoderConfig(),
-        include_geometry_bev=True,
-        geometry_bev_config=geometry_bev_cfg,
-    )
-    harness = TokenizerAblationHarness(representation_fns=representation_fns, output_dir=args.output_dir)
-
     repr_ids = ["vision_rgb", "geometry_scene_graph", "geometry_bev", "canonical_tokens"]
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    for slice_id, slice_episodes in curated.items():
-        if not slice_episodes:
-            continue
-        dataset_slice_id = f"curated_{slice_id}"
-        leaderboard = harness.evaluate(
-            episodes=slice_episodes,
-            repr_ids=repr_ids,
-            budgets=budgets,
-            seeds=seeds,
-            baseline_repr="vision_rgb",
-            dataset_slice_id=dataset_slice_id,
+    if is_token_only:
+        # Token-only mode: use stored repr_tokens directly
+        for slice_id, slice_episodes in curated.items():
+            if not slice_episodes:
+                continue
+            dataset_slice_id = f"curated_{slice_id}"
+
+            # Build leaderboard from stored repr_tokens
+            slice_summaries = _build_token_only_leaderboard(slice_episodes, repr_ids, seeds)
+            leaderboard_file = output_dir / f"{dataset_slice_id}.json"
+            leaderboard_file.write_text(json.dumps({"summaries": slice_summaries}, indent=2))
+            print(json.dumps({"slice": slice_id, "summaries": slice_summaries, "mode": "token_only"}, indent=2))
+    else:
+        # Normal mode: run harness with full encoding
+        geometry_bev_cfg = GeometryBEVConfig()
+        representation_fns = build_default_representation_fns(
+            args.channel_groups_path,
+            encoder_config=ChannelSetEncoderConfig(),
+            include_geometry_bev=True,
+            geometry_bev_config=geometry_bev_cfg,
         )
-        print(json.dumps({"slice": slice_id, "summaries": leaderboard.summaries}, indent=2))
+        harness = TokenizerAblationHarness(representation_fns=representation_fns, output_dir=args.output_dir)
+
+        for slice_id, slice_episodes in curated.items():
+            if not slice_episodes:
+                continue
+            dataset_slice_id = f"curated_{slice_id}"
+            leaderboard = harness.evaluate(
+                episodes=slice_episodes,
+                repr_ids=repr_ids,
+                budgets=budgets,
+                seeds=seeds,
+                baseline_repr="vision_rgb",
+                dataset_slice_id=dataset_slice_id,
+            )
+            print(json.dumps({"slice": slice_id, "summaries": leaderboard.summaries}, indent=2))
 
 
 if __name__ == "__main__":

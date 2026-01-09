@@ -1,0 +1,22 @@
+{
+  "schema_version": "v1",
+  "run_id": "e37b27c8",
+  "created_at": "2026-01-08T15:42:28.686624",
+  "source_commit": "7a60620e2670",
+  "plan_path": null,
+  "plan_sha": "54178e6d5ce53ba4442bf0c099f951b237b41333727d4c2cc69331844ae14d8c",
+  "audit_suite_id": "smoke_audit",
+  "audit_seed": 42,
+  "audit_config_sha": "7740847a602e34640ed8184698496f2db42a0a1fd5f25e713e709484d3d9407e",
+  "datapack_manifest_sha": "bd5f1f4066cf6ed345a96cb369a758f7ea5eb6e550a250b754839ee41f7bf001",
+  "seeds": {
+    "audit": 42,
+    "sampling": 42
+  },
+  "determinism_config": null,
+  "schema_versions": {
+    "plan": "v1",
+    "episode": "v1",
+    "ledger": "v1"
+  }
+}

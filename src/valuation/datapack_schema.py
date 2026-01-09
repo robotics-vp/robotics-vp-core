@@ -22,6 +22,7 @@ from src.valuation.guidance_profile import GuidanceProfile
 # Unified schema version - aligns with existing 2.0-energy format
 DATAPACK_SCHEMA_VERSION = "2.0-energy"
 DATAPACK_SCHEMA_VERSION_PORTABLE = "2.1-portable"
+DATAPACK_SCHEMA_VERSION_REPR = "2.2-repr"
 
 
 @dataclass
@@ -612,6 +613,11 @@ class DataPackMeta:
     rgb_features_v1: Optional[Dict[str, Any]] = None
     slice_labels_v1: Optional[Dict[str, Any]] = None
 
+    # Representation token outputs (optional) - enable token-only eval
+    repr_tokens: Optional[Dict[str, Dict[str, Any]]] = None
+    # Keys: repr name (e.g., "vision_rgb", "geometry_bev")
+    # Value: {"version": str, "dim": int, "features": List[float], "metadata": Dict}
+
     # Vision backbone embedding (optional) - for novelty/regime analysis
     episode_embedding: Optional[List[float]] = None
     # e.g., [0.1, -0.2, 0.3, ...] - pooled embedding from VisionBackbone.encode_sequence()
@@ -619,6 +625,10 @@ class DataPackMeta:
     # Epiplexity / prequential-MDL metrics (optional, advisory)
     epiplexity: Optional[Dict[str, Any]] = None
     epiplexity_summary: Optional[Dict[str, Any]] = None
+
+    # Homeostatic control signals (optional) - for closed-loop controller
+    signal_bundle: Optional[Dict[str, Any]] = None
+    # Contains serialized SignalBundle with epiplexity, stability, alignment metrics
 
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
@@ -653,11 +663,13 @@ class DataPackMeta:
             'scene_tracks_v1': to_json_safe(self.scene_tracks_v1),
             'rgb_features_v1': to_json_safe(self.rgb_features_v1),
             'slice_labels_v1': to_json_safe(self.slice_labels_v1),
+            'repr_tokens': to_json_safe(self.repr_tokens),
             'guidance_profile': self.guidance_profile.to_dict() if self.guidance_profile else None,
             'vla_action_summary': to_json_safe(self.vla_action_summary),
             'episode_embedding': to_json_safe(self.episode_embedding),
             'epiplexity': to_json_safe(self.epiplexity),
             'epiplexity_summary': to_json_safe(self.epiplexity_summary),
+            'signal_bundle': to_json_safe(self.signal_bundle),
         }
         return to_json_safe(d)
 
@@ -719,11 +731,13 @@ class DataPackMeta:
             scene_tracks_v1=d.get('scene_tracks_v1'),
             rgb_features_v1=d.get('rgb_features_v1'),
             slice_labels_v1=d.get('slice_labels_v1'),
+            repr_tokens=d.get('repr_tokens'),
             guidance_profile=GuidanceProfile.from_dict(d['guidance_profile']) if d.get('guidance_profile') else None,
             vla_action_summary=d.get('vla_action_summary'),
             episode_embedding=d.get('episode_embedding'),
             epiplexity=d.get('epiplexity'),
             epiplexity_summary=d.get('epiplexity_summary'),
+            signal_bundle=d.get('signal_bundle'),
         )
 
     @classmethod

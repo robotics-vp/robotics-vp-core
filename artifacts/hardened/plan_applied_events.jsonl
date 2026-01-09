@@ -1,0 +1,2 @@
+{"ts": "2026-01-08T15:58:20.270183", "step": 0, "plan_id": "baseline_v1", "plan_sha": "b5f667aa7312604859904dac81c079e390c0e575e2f020f8c698c10fb0a8eb4a", "prev_plan_sha": null, "applied": true}
+{"ts": "2026-01-08T15:58:20.274858", "step": 100, "plan_id": "homeostatic_v1", "plan_sha": "96472763b0d6cbeed7f1adfbf47127f9e6a093c081605a4b917fd4f4f9e7cb9b", "prev_plan_sha": "b5f667aa7312604859904dac81c079e390c0e575e2f020f8c698c10fb0a8eb4a", "applied": true}

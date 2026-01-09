@@ -1,0 +1,54 @@
+{
+  "schema_version": "v1",
+  "run_id": "46ba630c",
+  "created_at": "2026-01-08T19:07:19.640501",
+  "source_commit": "7a60620e2670",
+  "plan_path": null,
+  "plan_sha": "99bb1df2b23db10cd56a77897519f93a72d0eb59fb04898601f50eb5ae215129",
+  "audit_suite_id": "smoke_audit_v1",
+  "audit_seed": 42,
+  "audit_config_sha": "a908e00160766ddaf737a5ef84574c06081ddfc878f2ab4b541c4dd5348faf27",
+  "datapack_manifest_sha": "68b70e5ed0de07fc34278bf5d81067ed94f694816a25f79ff76359b97d3ada50",
+  "seeds": {
+    "python": 42,
+    "numpy": 42,
+    "torch": 42
+  },
+  "determinism_config": {
+    "seeds": {
+      "python": 42,
+      "numpy": 42,
+      "torch": 42,
+      "env": null
+    },
+    "versions": {
+      "python": "3.9.6",
+      "numpy": "2.0.2",
+      "torch": "2.8.0"
+    },
+    "device": {
+      "device": "cpu",
+      "cuda_available": false,
+      "cuda_version": null,
+      "cudnn_version": null
+    },
+    "flags": {
+      "deterministic_algorithms": false,
+      "cudnn_deterministic": false,
+      "cudnn_benchmark": false
+    },
+    "created_at": "2026-01-08T19:07:19.590557"
+  },
+  "probe_config_sha": null,
+  "probe_report_sha": null,
+  "plan_policy_config_sha": null,
+  "baseline_weights_sha": "6da8f2b9cb60310ae33871a91561fd9c2439d89ee002316368db214a2e03354b",
+  "final_weights_sha": "d7253c1ded84bc6415c02d4b3d9b58290ee6a8b5164c5ba9aaddb3fee336390c",
+  "plan_applied_events_sha": "003fb30e18b0daf6e686942ef597ee6f28a452288f00bb1d17ae06954aa41b20",
+  "schema_versions": {
+    "plan": "v1",
+    "episode": "v1",
+    "ledger": "v1",
+    "probe": "v1"
+  }
+}

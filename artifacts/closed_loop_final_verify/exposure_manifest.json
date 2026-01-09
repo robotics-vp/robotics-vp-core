@@ -1,0 +1,23 @@
+{
+  "schema_version": "v1",
+  "manifest_id": "46ba630c",
+  "step_start": 0,
+  "step_end": 1000,
+  "ts_start": "2026-01-08T19:07:19.590590",
+  "ts_end": "2026-01-08T19:07:19.596750",
+  "task_family_counts": {
+    "navigation": 74,
+    "manipulation": 126
+  },
+  "total_samples": 200,
+  "datapack_ids": [
+    "dp_46ba"
+  ],
+  "slice_ids": [
+    "baseline",
+    "updated"
+  ],
+  "slice_label_distribution": null,
+  "plan_id": "updated_v1",
+  "plan_sha": "99bb1df2b23db10cd56a77897519f93a72d0eb59fb04898601f50eb5ae215129"
+}

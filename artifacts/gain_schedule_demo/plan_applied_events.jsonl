@@ -1,0 +1,5 @@
+{"ts": "2026-01-08T18:34:43.633428", "step": 0, "plan_id": "baseline_v1", "plan_sha": "ad19bd2d453c8079b05004e58d929a6f474d45ccdffc39b745532ea5ad41e819", "prev_plan_sha": null, "applied": true}
+{"ts": "2026-01-08T18:35:22.208943", "step": 0, "plan_id": "baseline_v1", "plan_sha": "0a045a1892ddbf6a6708ed29af238a5d8674476050ec96b4cfcd91102c216e84", "prev_plan_sha": null, "applied": true}
+{"ts": "2026-01-08T18:36:21.263087", "step": 0, "plan_id": "baseline_v1", "plan_sha": "e10ffce028db9279538f03cfed9e9296f501227056b229c26ff07db85300b467", "prev_plan_sha": null, "applied": true}
+{"ts": "2026-01-08T18:37:05.672198", "step": 0, "plan_id": "baseline_v1", "plan_sha": "ecb79969c19338c7a8b428a4b6b375380fb4386e8264bebd03a7967462936e30", "prev_plan_sha": null, "applied": true}
+{"ts": "2026-01-08T18:37:05.677312", "step": 100, "plan_id": "homeostatic_v1", "plan_sha": "2547f8cfb068f1c275b7d6c13dba3578266192afb124bc7fbb4a05f516756d6c", "prev_plan_sha": "ecb79969c19338c7a8b428a4b6b375380fb4386e8264bebd03a7967462936e30", "applied": true}

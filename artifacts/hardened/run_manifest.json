@@ -1,0 +1,47 @@
+{
+  "schema_version": "v1",
+  "run_id": "169a736f",
+  "created_at": "2026-01-08T15:58:20.295458",
+  "source_commit": "7a60620e2670",
+  "plan_path": null,
+  "plan_sha": "96472763b0d6cbeed7f1adfbf47127f9e6a093c081605a4b917fd4f4f9e7cb9b",
+  "audit_suite_id": "smoke_audit_v1",
+  "audit_seed": 42,
+  "audit_config_sha": "a908e00160766ddaf737a5ef84574c06081ddfc878f2ab4b541c4dd5348faf27",
+  "datapack_manifest_sha": "b887ee3cfbd6a25e0c2e7613034bd2d1e872fc2bdcca4ad8d98c6dd72e6c4e10",
+  "seeds": {
+    "python": 42,
+    "numpy": 42,
+    "torch": 42
+  },
+  "determinism_config": {
+    "seeds": {
+      "python": 42,
+      "numpy": 42,
+      "torch": 42,
+      "env": null
+    },
+    "versions": {
+      "python": "3.9.6",
+      "numpy": "2.0.2",
+      "torch": "2.8.0"
+    },
+    "device": {
+      "device": "cpu",
+      "cuda_available": false,
+      "cuda_version": null,
+      "cudnn_version": null
+    },
+    "flags": {
+      "deterministic_algorithms": false,
+      "cudnn_deterministic": false,
+      "cudnn_benchmark": false
+    },
+    "created_at": "2026-01-08T15:58:20.268520"
+  },
+  "schema_versions": {
+    "plan": "v1",
+    "episode": "v1",
+    "ledger": "v1"
+  }
+}

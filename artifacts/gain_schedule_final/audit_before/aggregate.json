@@ -1,0 +1,20 @@
+{
+  "schema_version": "v1",
+  "audit_suite_id": "smoke_audit_v1",
+  "seed": 42,
+  "num_episodes": 2,
+  "success_rate": 0.5,
+  "mean_error": 0.19980235014036615,
+  "mean_return": 38.60056155336008,
+  "mean_energy_Wh": 30.981202604059636,
+  "mean_mpl_proxy": 0.2380755184822801,
+  "per_task": {
+    "manipulation": {
+      "count": 2.0,
+      "success": 1.0,
+      "success_rate": 0.5
+    }
+  },
+  "episodes_sha": "c208b0e2af14525431df80e05495c6ed3acbb9d08e7aab323101650c3050705f",
+  "config_sha": "a908e00160766ddaf737a5ef84574c06081ddfc878f2ab4b541c4dd5348faf27"
+}

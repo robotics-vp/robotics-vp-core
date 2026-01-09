@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import json
 
 import numpy as np
-from src.representation.token_providers import RGBVisionTokenProvider
+from src.representation.token_providers import (
+    RGBVisionTokenProvider,
+    BaseTokenProvider,
+    GeometryBEVProvider,
+    SceneGraphTokenProvider,
+)
 from src.vision.scene_ir_tracker.serialization import deserialize_scene_tracks_v1
-from src.valuation.datapack_schema import ConditionProfile, DATAPACK_SCHEMA_VERSION_PORTABLE
+from src.valuation.datapack_schema import ConditionProfile, DATAPACK_SCHEMA_VERSION_PORTABLE, DATAPACK_SCHEMA_VERSION_REPR
 
 
 def load_raw_episode_artifacts(raw_path: Path) -> Tuple[Optional[np.ndarray], Optional[Dict[str, np.ndarray]], Dict[str, Any]]:
@@ -115,6 +120,73 @@ def compute_slice_labels_v1(
     }
 
 
+def compute_repr_tokens_v1(
+    episode_artifacts: Dict[str, Any],
+    repr_names: List[str],
+    providers: Optional[Dict[str, BaseTokenProvider]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Compute portable repr tokens for specified representations.
+
+    Args:
+        episode_artifacts: Dict with keys like 'rgb_frames', 'scene_tracks', 'scene_graphs'
+        repr_names: List of representation names to compute (e.g., ['vision_rgb', 'geometry_bev'])
+        providers: Optional dict mapping repr names to token providers. If None, defaults are used.
+
+    Returns:
+        Dict mapping repr name to versioned payload with 'version', 'dim', 'features', 'metadata'.
+    """
+    import torch
+
+    if providers is None:
+        providers = _default_providers()
+
+    result: Dict[str, Dict[str, Any]] = {}
+
+
+    for repr_name in repr_names:
+        provider = providers.get(repr_name)
+        if provider is None:
+            continue
+
+        try:
+            output = provider.provide(episode_artifacts)
+            tokens = output.tokens
+
+            # Handle batch dimension
+            if tokens.dim() == 3:
+                tokens = tokens.squeeze(0)
+
+            # Pool to single vector
+            pooled = tokens.mean(dim=0)
+
+            payload: Dict[str, Any] = {
+                "version": f"{repr_name}::v1",
+                "dim": int(pooled.shape[-1]),
+                "num_tokens": int(tokens.shape[0]),
+                "pooling": "mean",
+                "features": pooled.detach().cpu().tolist(),
+                "metadata": output.metadata,
+            }
+            result[repr_name] = payload
+        except Exception as e:
+            # Skip representations that fail (e.g., missing inputs)
+            result[repr_name] = {
+                "version": f"{repr_name}::v1",
+                "error": str(e),
+            }
+
+    return result
+
+
+def _default_providers() -> Dict[str, BaseTokenProvider]:
+    """Create default token providers for common representations."""
+    return {
+        "vision_rgb": RGBVisionTokenProvider(seed=0, allow_synthetic=False),
+        "geometry_bev": GeometryBEVProvider(allow_synthetic=False),
+        "geometry_scene_graph": SceneGraphTokenProvider(),
+    }
+
+
 def coerce_scene_tracks_payload(payload: Dict[str, Any]) -> Dict[str, np.ndarray]:
     """Convert JSON-loaded scene tracks payload to numpy arrays."""
     coerced: Dict[str, np.ndarray] = {}
@@ -175,6 +247,8 @@ __all__ = [
     "load_raw_episode_artifacts",
     "compute_rgb_features_v1",
     "compute_slice_labels_v1",
+    "compute_repr_tokens_v1",
     "coerce_scene_tracks_payload",
     "DATAPACK_SCHEMA_VERSION_PORTABLE",
+    "DATAPACK_SCHEMA_VERSION_REPR",
 ]

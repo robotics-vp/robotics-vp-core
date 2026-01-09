@@ -1,0 +1,23 @@
+{
+  "schema_version": "v1",
+  "manifest_id": "f1702e15",
+  "step_start": 0,
+  "step_end": 1000,
+  "ts_start": "2026-01-08T18:37:04.859995",
+  "ts_end": "2026-01-08T18:37:05.677549",
+  "task_family_counts": {
+    "navigation": 107,
+    "manipulation": 93
+  },
+  "total_samples": 200,
+  "datapack_ids": [
+    "dp_f170"
+  ],
+  "slice_ids": [
+    "baseline",
+    "updated"
+  ],
+  "slice_label_distribution": null,
+  "plan_id": "homeostatic_v1",
+  "plan_sha": "2547f8cfb068f1c275b7d6c13dba3578266192afb124bc7fbb4a05f516756d6c"
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": "v1",
+  "report_id": "63d0ec03",
+  "created_at": "2026-01-08T17:27:11.581043",
+  "probe_config": {
+    "probe_variant": "linear",
+    "probe_steps": 100,
+    "batch_size": 16,
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "input_dim": 32,
+    "hidden_dim": null
+  },
+  "baseline_score": -0.8665658839543661,
+  "after_score": -0.7488534347216288,
+  "delta": 0.11771244923273727,
+  "flops_estimate": 614400.0,
+  "delta_epi_per_flop": 1.9158927283974165e-07,
+  "per_seed_deltas": [
+    0.05958159446716316,
+    0.18673454046249394,
+    0.10682121276855472
+  ],
+  "sign_consistency": 1.0,
+  "stability_pass": true,
+  "ood_baseline_score": null,
+  "ood_after_score": null,
+  "ood_delta": -30.296644973754884,
+  "transfer_pass": false,
+  "num_samples_id": 200,
+  "num_samples_ood": 100,
+  "probe_config_sha": "fb9b18bcbb40a47b6bb5b187bc5e2590231e35616b349212652db69a686cf846",
+  "report_sha": "f4b11811ce5097d7073be064e41ec703eabe6b313a2f0a3e3ad833e3b91c2d88"
+}
