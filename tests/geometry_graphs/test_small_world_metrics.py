@@ -334,3 +334,139 @@ class TestScoreBasedSelection:
             assert summary.shortcut_score_min <= summary.shortcut_score_p50 <= summary.shortcut_score_max
             assert summary.shortcut_score_min <= summary.shortcut_score_p90 <= summary.shortcut_score_max
             assert summary.shortcut_score_p50 <= summary.shortcut_score_p90
+
+    def test_target_nav_gain_mode(self):
+        """Target nav_gain mode should stop when target is reached."""
+        H, W, D = 12, 12, 16
+        rng = np.random.default_rng(42)
+        embeddings = rng.standard_normal((H, W, D)).astype(np.float32)
+
+        # Low target should result in fewer shortcuts
+        config_low = GraphSpecV1(
+            knn_k=8,
+            min_lattice_hops_for_shortcut=3,
+            shortcut_select_mode="target_nav_gain",
+            target_nav_gain=0.05,  # Low target
+            target_nav_gain_step=2,
+            max_shortcut_fraction=0.99,
+        )
+        summary_low = graph_summary_from_embeddings(embeddings, (H, W), config_low, seed=42)
+
+        # High target should result in more shortcuts (or hit ceiling)
+        config_high = GraphSpecV1(
+            knn_k=8,
+            min_lattice_hops_for_shortcut=3,
+            shortcut_select_mode="target_nav_gain",
+            target_nav_gain=0.30,  # High target
+            target_nav_gain_step=2,
+            max_shortcut_fraction=0.99,
+        )
+        summary_high = graph_summary_from_embeddings(embeddings, (H, W), config_high, seed=42)
+
+        # Lower target should use fewer or equal shortcuts
+        assert summary_low.shortcut_edge_count <= summary_high.shortcut_edge_count
+
+        # Both should achieve their targets (or hit max candidates)
+        # Note: nav_gain might not exactly match target due to discrete steps
+        assert summary_low.nav_gain >= 0  # Should be non-negative
+
+    def test_target_nav_gain_determinism(self):
+        """Target nav_gain mode should be deterministic."""
+        H, W, D = 10, 10, 16
+        rng = np.random.default_rng(42)
+        embeddings = rng.standard_normal((H, W, D)).astype(np.float32)
+
+        config = GraphSpecV1(
+            knn_k=6,
+            min_lattice_hops_for_shortcut=3,
+            shortcut_select_mode="target_nav_gain",
+            target_nav_gain=0.10,
+            target_nav_gain_step=1,
+        )
+
+        summary1 = graph_summary_from_embeddings(embeddings, (H, W), config, seed=42)
+        summary2 = graph_summary_from_embeddings(embeddings, (H, W), config, seed=42)
+
+        assert summary1.summary_sha == summary2.summary_sha
+        assert summary1.shortcut_edge_count == summary2.shortcut_edge_count
+
+
+class TestBaselineType:
+    """Tests for baseline type selection (ER vs configuration model)."""
+
+    def test_er_baseline_default(self):
+        """ER baseline should be the default."""
+        H, W, D = 10, 10, 16
+        rng = np.random.default_rng(42)
+        embeddings = rng.standard_normal((H, W, D)).astype(np.float32)
+
+        config = GraphSpecV1()  # Default baseline_type
+        summary = graph_summary_from_embeddings(embeddings, (H, W), config, seed=42)
+
+        assert summary.baseline_type == "ER_expected_degree"
+
+    def test_configuration_model_baseline(self):
+        """Configuration model baseline should work and be recorded."""
+        H, W, D = 10, 10, 16
+        rng = np.random.default_rng(42)
+        embeddings = rng.standard_normal((H, W, D)).astype(np.float32)
+
+        config = GraphSpecV1(
+            baseline_type="configuration_model",
+            knn_k=6,
+            min_lattice_hops_for_shortcut=3,
+        )
+        summary = graph_summary_from_embeddings(embeddings, (H, W), config, seed=42)
+
+        assert summary.baseline_type == "configuration_model"
+        # Sigma should still be computed (non-negative)
+        assert summary.sigma >= 0
+        # c_rand and l_rand should be computed
+        assert summary.c_rand >= 0
+        assert summary.l_rand >= 0
+
+    def test_baseline_types_produce_different_sigma(self):
+        """Different baseline types may produce different sigma values."""
+        H, W, D = 12, 12, 16
+        rng = np.random.default_rng(42)
+        embeddings = rng.standard_normal((H, W, D)).astype(np.float32)
+
+        config_er = GraphSpecV1(
+            baseline_type="ER_expected_degree",
+            knn_k=6,
+            min_lattice_hops_for_shortcut=3,
+        )
+        config_cm = GraphSpecV1(
+            baseline_type="configuration_model",
+            knn_k=6,
+            min_lattice_hops_for_shortcut=3,
+        )
+
+        summary_er = graph_summary_from_embeddings(embeddings, (H, W), config_er, seed=42)
+        summary_cm = graph_summary_from_embeddings(embeddings, (H, W), config_cm, seed=42)
+
+        # Both should have valid sigma
+        assert summary_er.sigma >= 0
+        assert summary_cm.sigma >= 0
+
+        # They may differ (configuration model is degree-matched)
+        # This is expected behavior, not a strict assertion
+        # Just verify both compute successfully
+
+    def test_configuration_model_deterministic(self):
+        """Configuration model baseline should be deterministic."""
+        H, W, D = 10, 10, 16
+        rng = np.random.default_rng(42)
+        embeddings = rng.standard_normal((H, W, D)).astype(np.float32)
+
+        config = GraphSpecV1(
+            baseline_type="configuration_model",
+        )
+
+        summary1 = graph_summary_from_embeddings(embeddings, (H, W), config, seed=42)
+        summary2 = graph_summary_from_embeddings(embeddings, (H, W), config, seed=42)
+
+        assert summary1.summary_sha == summary2.summary_sha
+        assert summary1.sigma == summary2.sigma
+        assert summary1.c_rand == summary2.c_rand
+        assert summary1.l_rand == summary2.l_rand

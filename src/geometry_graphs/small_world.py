@@ -207,6 +207,45 @@ def build_small_world_graph(
         for i, j, lattice_dist, score in candidate_edges:
             if score >= threshold:
                 selected_edges.append((i, j, lattice_dist, score))
+
+    elif config.shortcut_select_mode == "target_nav_gain":
+        # Target nav_gain mode: add shortcuts until nav_gain >= target (Goldilocks sparse)
+        # This iteratively adds shortcuts and checks navigability
+        target = config.target_nav_gain if config.target_nav_gain is not None else 0.1
+        step = config.target_nav_gain_step
+
+        # Compute lattice-only nav success first
+        flat_emb = embeddings.reshape(N, -1) if embeddings.ndim > 2 else embeddings
+        nav_rng = np.random.default_rng(seed)
+        lattice_nav_success, _, _, _ = _compute_navigability(
+            lattice_adjacency, flat_emb, config.n_queries, config.max_hops, nav_rng
+        )
+
+        # Iteratively add shortcuts in score order until nav_gain >= target
+        test_adjacency = {i: set(neighbors) for i, neighbors in lattice_adjacency.items()}
+        current_nav_gain = 0.0
+        idx = 0
+
+        while idx < len(candidate_edges) and current_nav_gain < target:
+            # Add a batch of shortcuts
+            batch_added = 0
+            while batch_added < step and idx < len(candidate_edges):
+                i, j, lattice_dist, score = candidate_edges[idx]
+                idx += 1
+                if j not in test_adjacency[i]:
+                    test_adjacency[i].add(j)
+                    test_adjacency[j].add(i)
+                    selected_edges.append((i, j, lattice_dist, score))
+                    batch_added += 1
+
+            # Check nav_gain with current shortcuts
+            test_adj_sorted = {k: sorted(list(v)) for k, v in test_adjacency.items()}
+            nav_rng = np.random.default_rng(seed)  # Reset RNG for consistent comparison
+            current_nav_success, _, _, _ = _compute_navigability(
+                test_adj_sorted, flat_emb, config.n_queries, config.max_hops, nav_rng
+            )
+            current_nav_gain = current_nav_success - lattice_nav_success
+
     else:
         # top_m_per_node mode: for each node, keep top M scoring candidates
         # Process in score order (highest first), respecting per-node budget
@@ -366,7 +405,60 @@ def _compute_random_baseline(
     
     c_rand = _compute_clustering_coefficient(adjacency)
     l_rand = _estimate_avg_path_length(adjacency, n_sources, rng)
-    
+
+    return c_rand, l_rand
+
+
+def _compute_configuration_model_baseline(
+    degree_sequence: List[int],
+    n_sources: int,
+    rng: np.random.Generator,
+) -> Tuple[float, float]:
+    """Compute clustering and path length for configuration model (degree-matched).
+
+    Uses stub-matching to generate a random graph with the same degree sequence.
+    More accurate sigma than ER when degree distribution is non-uniform.
+
+    Args:
+        degree_sequence: Degree of each node in the original graph
+        n_sources: Number of sources for path length estimation
+        rng: Random number generator
+
+    Returns:
+        (C_rand, L_rand) clustering coefficient and path length
+    """
+    N = len(degree_sequence)
+    if N <= 1:
+        return 0.0, 0.0
+
+    # Create stub list: each node i appears degree_sequence[i] times
+    stubs = []
+    for i, deg in enumerate(degree_sequence):
+        stubs.extend([i] * deg)
+
+    if len(stubs) == 0:
+        return 0.0, 0.0
+
+    # Shuffle stubs and pair them
+    rng.shuffle(stubs)
+
+    # Build adjacency from paired stubs
+    adjacency: Dict[int, List[int]] = {i: [] for i in range(N)}
+
+    # Pair consecutive stubs (may create self-loops and multi-edges, we'll filter)
+    for idx in range(0, len(stubs) - 1, 2):
+        i, j = stubs[idx], stubs[idx + 1]
+        if i != j:  # Skip self-loops
+            adjacency[i].append(j)
+            adjacency[j].append(i)
+
+    # Remove multi-edges by converting to sets then back to sorted lists
+    for i in adjacency:
+        adjacency[i] = sorted(set(adjacency[i]))
+
+    c_rand = _compute_clustering_coefficient(adjacency)
+    l_rand = _estimate_avg_path_length(adjacency, n_sources, rng)
+
     return c_rand, l_rand
 
 
@@ -517,13 +609,19 @@ def compute_graph_metrics(
     
     # Clustering coefficient
     clustering = _compute_clustering_coefficient(adjacency)
-    
+
     # Average path length
     avg_path = _estimate_avg_path_length(adjacency, config.n_sources, rng)
-    
-    # Random baseline
-    c_rand, l_rand = _compute_random_baseline(N, mean_degree, config.n_sources, rng)
-    
+
+    # Random baseline - choose method based on config
+    if config.baseline_type == "configuration_model":
+        # Degree-matched baseline (more accurate sigma)
+        degree_sequence = [len(neighbors) for neighbors in adjacency.values()]
+        c_rand, l_rand = _compute_configuration_model_baseline(degree_sequence, config.n_sources, rng)
+    else:
+        # ER baseline (fast, approximate)
+        c_rand, l_rand = _compute_random_baseline(N, mean_degree, config.n_sources, rng)
+
     # Small-world sigma
     if c_rand > 0 and l_rand > 0:
         sigma = (clustering / c_rand) / (avg_path / l_rand) if avg_path > 0 else 0.0
@@ -679,9 +777,10 @@ def graph_summary_from_embeddings(
         "nav_visited_nodes_mean": round(metrics.nav_visited_nodes_mean, 6),
         "nav_success_lattice": round(metrics.nav_success_lattice, 6),
         "nav_gain": round(metrics.nav_gain, 6),
+        "baseline_type": config.baseline_type,
     }
     summary_sha = sha256_json(summary_data)
-    
+
     return GraphSummaryV1(
         graph_spec_id=config.spec_id,
         graph_spec_sha=config.sha256(),
@@ -696,7 +795,7 @@ def graph_summary_from_embeddings(
         c_rand=metrics.c_rand,
         l_rand=metrics.l_rand,
         sigma=metrics.sigma,
-        baseline_type="ER_expected_degree",
+        baseline_type=config.baseline_type,
         shortcut_score_mode=config.shortcut_score_mode,
         shortcut_select_mode=config.shortcut_select_mode,
         shortcut_score_threshold_used=config.shortcut_score_threshold if config.shortcut_select_mode == "threshold" else None,

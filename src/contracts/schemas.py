@@ -322,14 +322,21 @@ class GraphSpecV1(BaseModel):
     # Score formula: score(i,j) = cos_sim(ei,ej) * log(1 + lattice_dist(i,j))
     shortcut_score_mode: Literal["cos_sim_logdist"] = "cos_sim_logdist"
 
-    # Selection mode: "threshold" keeps edges >= threshold, "top_m_per_node" keeps top M per node
-    shortcut_select_mode: Literal["threshold", "top_m_per_node"] = "top_m_per_node"
+    # Selection mode:
+    #   "threshold": keep edges with score >= shortcut_score_threshold
+    #   "top_m_per_node": keep top M scoring candidates per node
+    #   "target_nav_gain": add shortcuts until nav_gain >= target (Goldilocks sparse)
+    shortcut_select_mode: Literal["threshold", "top_m_per_node", "target_nav_gain"] = "top_m_per_node"
 
     # For threshold mode: minimum score to keep a shortcut
     shortcut_score_threshold: Optional[float] = None
 
     # For top_m_per_node mode: max shortcuts per node (replaces shortcut_budget_per_node as primary)
     shortcut_top_m_per_node: int = 2
+
+    # For target_nav_gain mode: stop adding shortcuts when nav_gain >= target
+    target_nav_gain: Optional[float] = None  # e.g., 0.15 means stop at 15% nav improvement
+    target_nav_gain_step: int = 1  # Shortcuts to add per iteration when searching for target
 
     # Quality filters
     mutual_knn_only: bool = True  # Keep shortcut only if mutual (i in knn(j) AND j in knn(i))
@@ -338,6 +345,11 @@ class GraphSpecV1(BaseModel):
     # Safety ceiling only - NOT the primary limiter, just a global cap
     # max_shortcut_fraction * total_edges is the absolute maximum shortcuts allowed
     max_shortcut_fraction: float = 0.25
+
+    # Baseline type for sigma calculation
+    # "ER_expected_degree": Erdos-Renyi with same expected degree (fast, approximate)
+    # "configuration_model": Degree-matched stub-matching shuffle (more accurate sigma)
+    baseline_type: Literal["ER_expected_degree", "configuration_model"] = "ER_expected_degree"
 
     def sha256(self) -> str:
         from src.utils.config_digest import sha256_json
