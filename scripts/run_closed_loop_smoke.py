@@ -44,6 +44,8 @@ from src.contracts.schemas import (
     ProbeEpiReportV1,
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
+    GraphSpecV1,
+    LedgerGraphV1,
 )
 from src.orchestrator.plan_applier import PlanApplier
 from src.orchestrator.homeostatic_plan_writer import (
@@ -68,6 +70,7 @@ from src.valuation.exposure_manifest import (
 from src.valuation.run_manifest import create_run_manifest, write_manifest
 from src.determinism.determinism_context import set_determinism, get_context_summary
 from src.utils.config_digest import sha256_json, sha256_file
+from src.geometry_graphs.small_world import graph_summary_from_embeddings
 
 
 def create_baseline_plan() -> SemanticUpdatePlanV1:
@@ -280,6 +283,10 @@ def main():
                         choices=["linear", "mlp"],
                         help="Probe model variant")
 
+    # Graph metrics flags
+    parser.add_argument("--include-graph-summary", action="store_true",
+                        help="Compute and log graph small-world metrics")
+
     args = parser.parse_args()
 
     # Determine mode
@@ -311,6 +318,48 @@ def main():
 
     # Run probe harness if enabled
     probe_report, _ = run_probe_harness(args, output_dir)
+
+    # Compute graph summary if enabled
+    graph_summary = None
+    graph_spec = None
+    if args.include_graph_summary:
+        print("\n[Graph] Computing small-world graph metrics...")
+        # Generate synthetic BEV-like embeddings for graph construction
+        rng = np.random.default_rng(args.seed)
+        H, W, D = 16, 16, 32  # Synthetic BEV grid: 16x16 cells, 32-dim embeddings
+        embeddings = rng.standard_normal((H, W, D)).astype(np.float32)
+        
+        graph_spec = GraphSpecV1(
+            spec_id="smoke_graph_spec_v1",
+            local_connectivity=4,
+            knn_k=6,
+            min_lattice_hops_for_shortcut=4,
+            n_sources=16,
+            n_queries=32,
+            max_hops=30,
+            seed=args.seed,
+        )
+        
+        graph_summary = graph_summary_from_embeddings(embeddings, (H, W), graph_spec, seed=args.seed)
+
+        print(f"  Node count: {graph_summary.node_count}")
+        print(f"  Local edges: {graph_summary.local_edge_count}")
+        print(f"  Shortcut edges: {graph_summary.shortcut_edge_count}")
+        print(f"  Shortcut fraction: {graph_summary.shortcut_fraction:.2%}")
+        print(f"  Select mode: {graph_summary.shortcut_select_mode}")
+        if graph_summary.shortcut_score_threshold_used is not None:
+            print(f"  Score threshold: {graph_summary.shortcut_score_threshold_used:.3f}")
+        print(f"  Score mode: {graph_summary.shortcut_score_mode}")
+        if graph_summary.shortcut_edge_count > 0:
+            print(f"  Score stats: min={graph_summary.shortcut_score_min:.3f} p50={graph_summary.shortcut_score_p50:.3f} p90={graph_summary.shortcut_score_p90:.3f} max={graph_summary.shortcut_score_max:.3f}")
+        print(f"  σ (small-worldness): {graph_summary.sigma:.3f}")
+        print(f"  Baseline type: {graph_summary.baseline_type}")
+        print(f"  Nav success (full): {graph_summary.nav_success_rate:.2%}")
+        print(f"  Nav success (lattice-only): {graph_summary.nav_success_lattice:.2%}")
+        print(f"  Nav gain (wormhole benefit): {graph_summary.nav_gain:.2%}")
+        print(f"  Visited nodes/query: {graph_summary.nav_visited_nodes_mean:.1f}")
+        print(f"  Compute time: {graph_summary.compute_time_ms:.1f}ms")
+
 
     # =========================================================================
     # Step 1: Create/generate baseline plan
@@ -619,6 +668,11 @@ def main():
         manifest.probe_config_sha = probe_report.probe_config_sha
         manifest.probe_report_sha = probe_report.report_sha
 
+    # Add graph SHAs to manifest if available
+    if graph_summary and graph_spec:
+        manifest.graph_spec_sha = graph_spec.sha256()
+        manifest.graph_summary_sha = graph_summary.summary_sha
+
     write_manifest(str(manifest_path), manifest)
     print(f"  run_manifest.json written")
     print(f"    Run ID: {manifest.run_id}")
@@ -626,6 +680,9 @@ def main():
     print(f"    Audit suite SHA: {audit_suite_sha[:16] if audit_suite_sha != 'inline' else 'inline'}")
     if manifest.probe_config_sha:
         print(f"    Probe config SHA: {manifest.probe_config_sha[:16]}")
+    if manifest.graph_spec_sha:
+        print(f"    Graph spec SHA: {manifest.graph_spec_sha[:16]}")
+        print(f"    Graph summary SHA: {manifest.graph_summary_sha[:16] if manifest.graph_summary_sha else 'N/A'}")
     print(f"    Source commit: {manifest.source_commit or 'N/A'}")
 
     # =========================================================================

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -292,10 +292,121 @@ class PlanPolicyConfigV1(BaseModel):
     # Cooldowns
     min_apply_interval_steps: int = 0
     max_changes_per_window: int = 100
+    
+    # Graph gates (optional)
+    graph_gates: Optional["GraphGatesV1"] = None
 
     def sha256(self) -> str:
         from src.utils.config_digest import sha256_json
         return sha256_json(self.model_dump(mode="json"))
+
+
+# =============================================================================
+# Graph Small-World Metrics
+# =============================================================================
+
+class GraphSpecV1(BaseModel):
+    """Configuration for small-world graph construction."""
+    model_config = ConfigDict(extra="forbid")
+
+    spec_id: str = "default_graph_spec_v1"
+    local_connectivity: Literal[4, 8] = 4  # 4-neighbor or 8-neighbor lattice
+    knn_k: int = 6  # k for kNN shortcut edges
+    min_lattice_hops_for_shortcut: int = 4  # Min grid distance for shortcut
+    n_sources: int = 32  # Sampled BFS sources for path length estimation
+    n_queries: int = 64  # Navigability queries
+    max_hops: int = 50  # Max hops for greedy navigation
+    seed: int = 42  # Random seed for sampling
+
+    # Score-based shortcut selection (principled and adaptive)
+    # Score formula: score(i,j) = cos_sim(ei,ej) * log(1 + lattice_dist(i,j))
+    shortcut_score_mode: Literal["cos_sim_logdist"] = "cos_sim_logdist"
+
+    # Selection mode: "threshold" keeps edges >= threshold, "top_m_per_node" keeps top M per node
+    shortcut_select_mode: Literal["threshold", "top_m_per_node"] = "top_m_per_node"
+
+    # For threshold mode: minimum score to keep a shortcut
+    shortcut_score_threshold: Optional[float] = None
+
+    # For top_m_per_node mode: max shortcuts per node (replaces shortcut_budget_per_node as primary)
+    shortcut_top_m_per_node: int = 2
+
+    # Quality filters
+    mutual_knn_only: bool = True  # Keep shortcut only if mutual (i in knn(j) AND j in knn(i))
+    shortcut_budget_per_node: Optional[int] = 2  # Legacy alias for shortcut_top_m_per_node
+
+    # Safety ceiling only - NOT the primary limiter, just a global cap
+    # max_shortcut_fraction * total_edges is the absolute maximum shortcuts allowed
+    max_shortcut_fraction: float = 0.25
+
+    def sha256(self) -> str:
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+class GraphSummaryV1(BaseModel):
+    """Per-episode graph metrics summary."""
+    model_config = ConfigDict(extra="forbid")
+
+    graph_spec_id: str
+    graph_spec_sha: str
+    summary_sha: str
+    node_mode: Literal["grid", "tokens", "pooled"]
+
+    # Graph structure
+    node_count: int
+    mean_degree: float
+    local_edge_count: int
+    shortcut_edge_count: int
+
+    # Small-world metrics
+    clustering_coefficient: float  # C
+    avg_path_length: float  # L (sampled)
+    c_rand: float  # Random baseline clustering
+    l_rand: float  # Random baseline path length
+    sigma: float  # Small-world index: (C/C_rand)/(L/L_rand)
+    baseline_type: str = "ER_expected_degree"  # Baseline graph type for σ
+
+    # Shortcut selection mode tracking
+    shortcut_score_mode: str = "cos_sim_logdist"  # Score formula used
+    shortcut_select_mode: str = "top_m_per_node"  # Selection strategy used
+    shortcut_score_threshold_used: Optional[float] = None  # For threshold mode
+
+    # Shortcut stats
+    shortcut_fraction: float
+    shortcut_lattice_hop_mean: float
+    shortcut_lattice_hop_p50: float
+    shortcut_lattice_hop_p90: float
+
+    # Shortcut quality scores (cos_sim * log(1+lattice_dist))
+    shortcut_score_mean: float = 0.0
+    shortcut_score_min: float = 0.0
+    shortcut_score_max: float = 0.0
+    shortcut_score_p50: float = 0.0  # Median score
+    shortcut_score_p90: float = 0.0  # 90th percentile score
+
+    # Bounded navigability (full graph with shortcuts)
+    nav_success_rate: float
+    nav_mean_hops: float
+    nav_stretch: float  # greedy_hops / shortest_path
+    nav_visited_nodes_mean: float = 0.0  # Average nodes visited per query (bounded compute)
+
+    # Lattice-only navigability baseline
+    nav_success_lattice: float = 0.0  # Success rate on lattice-only
+    nav_gain: float = 0.0  # nav_success_rate - nav_success_lattice (wormhole benefit)
+
+    # Metadata
+    compute_time_ms: float
+
+
+class GraphGatesV1(BaseModel):
+    """Thresholds for graph-based safety gates."""
+    model_config = ConfigDict(extra="forbid")
+
+    sigma_min: float = 0.8  # Force action if sigma drops below
+    nav_success_min: float = 0.5  # Force action if nav success drops below
+    patience: int = 3  # Allow N consecutive violations before action
+    penalty_mode: Literal["clamp", "noop"] = "clamp"
 
 
 # =============================================================================
@@ -380,6 +491,17 @@ class LedgerPlanPolicyV1(BaseModel):
     transfer_failure_count: int = 0
 
 
+class LedgerGraphV1(BaseModel):
+    """Graph small-world metrics for ledger entry."""
+    model_config = ConfigDict(extra="forbid")
+
+    graph_spec_sha: str
+    graph_summary_sha: Optional[str] = None
+    sigma: float
+    nav_success_rate: float
+    shortcut_fraction: float
+
+
 class ValueLedgerRecordV1(BaseModel):
     """Single record in the realized value ledger.
 
@@ -416,6 +538,9 @@ class ValueLedgerRecordV1(BaseModel):
     
     # Plan Policy (optional)
     plan_policy: Optional[LedgerPlanPolicyV1] = None
+    
+    # Graph metrics (optional)
+    graph: Optional[LedgerGraphV1] = None
 
     notes: Optional[str] = None
 
@@ -462,6 +587,10 @@ class RunManifestV1(BaseModel):
     baseline_weights_sha: Optional[str] = None
     final_weights_sha: Optional[str] = None
     plan_applied_events_sha: Optional[str] = None
+    
+    # Graph provenance (optional)
+    graph_spec_sha: Optional[str] = None
+    graph_summary_sha: Optional[str] = None
 
     # Schema versions used
     schema_versions: Dict[str, str] = Field(default_factory=lambda: {
