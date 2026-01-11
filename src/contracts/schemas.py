@@ -296,6 +296,9 @@ class PlanPolicyConfigV1(BaseModel):
     # Graph gates (optional)
     graph_gates: Optional["GraphGatesV1"] = None
 
+    # Regal gates (optional, Stage-6 meta-regal nodes)
+    regal_gates: Optional["RegalGatesV1"] = None
+
     def sha256(self) -> str:
         from src.utils.config_digest import sha256_json
         return sha256_json(self.model_dump(mode="json"))
@@ -419,6 +422,85 @@ class GraphGatesV1(BaseModel):
     nav_success_min: float = 0.5  # Force action if nav success drops below
     patience: int = 3  # Allow N consecutive violations before action
     penalty_mode: Literal["clamp", "noop"] = "clamp"
+
+
+# =============================================================================
+# Meta-Regal Nodes (Stage-6 Deterministic Audit Gates)
+# =============================================================================
+
+class RegalGatesV1(BaseModel):
+    """Opt-in configuration for meta-regal gates (Stage-6 deterministic nodes).
+
+    Regal nodes are deterministic audit evaluators that run at each planning cycle.
+    They provide semantic checks beyond numeric thresholds (spec conformance,
+    world coherence, reward integrity).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    # Which regal nodes to enable (e.g., ["spec_guardian", "world_coherence", "reward_integrity"])
+    enabled_regal_ids: List[str] = Field(default_factory=list)
+
+    # Patience: consecutive failures before triggering penalty
+    patience: int = 3
+
+    # Penalty mode when gates fail after patience exhausted
+    penalty_mode: Literal["clamp", "noop", "warn"] = "warn"
+
+    # Seed for deterministic evaluation
+    determinism_seed: int = 42
+
+    def sha256(self) -> str:
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+class RegalReportV1(BaseModel):
+    """Deterministic report from a single regal node evaluation.
+
+    Each regal node produces a hashable report that can be audited
+    and reproduced given the same inputs and seed.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    regal_id: str  # e.g., "spec_guardian", "world_coherence", "reward_integrity"
+    regal_version: str = "v1"
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+    # Evaluation inputs (for reproducibility)
+    inputs_sha: str  # SHA of all inputs fed to this regal
+    determinism_seed: int
+
+    # Verdict
+    passed: bool
+    confidence: float = 1.0  # 0.0-1.0, how confident the regal is
+    rationale: str = ""  # Human-readable explanation
+
+    # Detailed findings (optional, regal-specific)
+    findings: Optional[Dict[str, Any]] = None
+
+    # Report hash (computed after creation)
+    report_sha: str = ""
+
+    def compute_sha(self) -> None:
+        """Compute and set the report_sha field."""
+        from src.utils.config_digest import sha256_json
+        data = self.model_dump(mode="json")
+        data["report_sha"] = ""
+        self.report_sha = sha256_json(data)
+
+
+class LedgerRegalV1(BaseModel):
+    """Regal evaluation results for ledger entry.
+
+    Aggregates all regal reports from a planning cycle for
+    inclusion in the value ledger.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    regal_config_sha: str  # SHA of RegalGatesV1 used
+    reports: List[RegalReportV1] = Field(default_factory=list)
+    all_passed: bool = True
+    combined_inputs_sha: str = ""  # SHA of all inputs across all regals
 
 
 # =============================================================================
@@ -554,6 +636,9 @@ class ValueLedgerRecordV1(BaseModel):
     # Graph metrics (optional)
     graph: Optional[LedgerGraphV1] = None
 
+    # Regal evaluation (optional, Stage-6 meta-regal)
+    regal: Optional[LedgerRegalV1] = None
+
     notes: Optional[str] = None
 
 
@@ -603,6 +688,11 @@ class RunManifestV1(BaseModel):
     # Graph provenance (optional)
     graph_spec_sha: Optional[str] = None
     graph_summary_sha: Optional[str] = None
+
+    # Regal provenance (optional, Stage-6 meta-regal)
+    regal_config_sha: Optional[str] = None
+    regal_report_sha: Optional[str] = None
+    regal_inputs_sha: Optional[str] = None
 
     # Schema versions used
     schema_versions: Dict[str, str] = Field(default_factory=lambda: {
@@ -655,6 +745,14 @@ __all__ = [
     # Policy
     "PlanGainScheduleV1",
     "PlanPolicyConfigV1",
+    # Graph
+    "GraphSpecV1",
+    "GraphSummaryV1",
+    "GraphGatesV1",
+    # Regal (Stage-6 meta-regal)
+    "RegalGatesV1",
+    "RegalReportV1",
+    "LedgerRegalV1",
     # Ledger
     "LedgerWindowV1",
     "LedgerExposureV1",
@@ -663,6 +761,7 @@ __all__ = [
     "LedgerDeltasV1",
     "LedgerProbeV1",
     "LedgerPlanPolicyV1",
+    "LedgerGraphV1",
     "ValueLedgerRecordV1",
     # Manifest
     "RunManifestV1",

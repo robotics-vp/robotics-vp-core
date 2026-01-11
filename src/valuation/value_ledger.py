@@ -18,6 +18,10 @@ from src.contracts.schemas import (
     LedgerPolicyV1,
     LedgerAuditV1,
     LedgerDeltasV1,
+    LedgerRegalV1,
+    LedgerGraphV1,
+    LedgerProbeV1,
+    LedgerPlanPolicyV1,
     AuditAggregateV1,
 )
 from src.utils.config_digest import sha256_json
@@ -75,6 +79,10 @@ class ValueLedger:
         exposure: LedgerExposureV1,
         policy: LedgerPolicyV1,
         notes: Optional[str] = None,
+        probe: Optional[LedgerProbeV1] = None,
+        plan_policy: Optional[LedgerPlanPolicyV1] = None,
+        graph: Optional[LedgerGraphV1] = None,
+        regal: Optional[LedgerRegalV1] = None,
     ) -> ValueLedgerRecordV1:
         """Create a ledger record from audit results.
 
@@ -88,6 +96,10 @@ class ValueLedger:
             exposure: Datapack exposure
             policy: Policy checkpoints
             notes: Optional notes
+            probe: Optional probe harness results
+            plan_policy: Optional plan policy details
+            graph: Optional graph metrics
+            regal: Optional regal evaluation results
 
         Returns:
             ValueLedgerRecordV1 record
@@ -135,6 +147,10 @@ class ValueLedger:
             policy=policy,
             audit=audit_ref,
             deltas=deltas,
+            probe=probe,
+            plan_policy=plan_policy,
+            graph=graph,
+            regal=regal,
             notes=notes,
         )
 

@@ -39,6 +39,7 @@ from src.orchestrator.policy_hooks import (
     DefaultEconPolicyProvider,
     DefaultRewardIntegrityGuard,
 )
+from src.contracts.schemas import LedgerRegalV1
 
 
 def _default_policy_config() -> PlanPolicyConfigV1:
@@ -76,6 +77,11 @@ class GateStatus:
     # Graph gate patience tracking
     graph_failure_count: int = 0
 
+    # Regal gate patience tracking (Stage-6 meta-regal)
+    regal_failure_count: int = 0
+    regal_result: Optional[LedgerRegalV1] = None
+    regal_forced_noop: bool = False
+
     # Exposure normalization
     delta_per_exposure: Optional[float] = None
     exposure_count: Optional[int] = None
@@ -97,6 +103,9 @@ class GateStatus:
             "transfer_failure_count": self.transfer_failure_count,
             "transfer_patience_exceeded": self.transfer_patience_exceeded,
             "graph_failure_count": self.graph_failure_count,
+            "regal_failure_count": self.regal_failure_count,
+            "regal_result": self.regal_result.model_dump() if self.regal_result else None,
+            "regal_forced_noop": self.regal_forced_noop,
             "delta_per_exposure": self.delta_per_exposure,
             "exposure_count": self.exposure_count,
             "ledger_policy": self.ledger_policy.model_dump() if self.ledger_policy else None,
@@ -219,8 +228,11 @@ def check_gates(
     exposure_count: Optional[int] = None,
     previous_transfer_fail_count: int = 0,
     previous_graph_fail_count: int = 0,
+    previous_regal_fail_count: int = 0,
+    plan: Optional[SemanticUpdatePlanV1] = None,
+    regal_context: Optional[Dict[str, Any]] = None,
 ) -> GateStatus:
-    """Check stability and transfer gates from probe signal.
+    """Check stability, transfer, graph, and regal gates from probe signal.
 
     Args:
         signal_bundle: Bundle containing probe signal
@@ -228,6 +240,9 @@ def check_gates(
         exposure_count: Optional exposure count for normalization
         previous_transfer_fail_count: Previous consecutive transfer fail count
         previous_graph_fail_count: Previous consecutive graph gate fail count
+        previous_regal_fail_count: Previous consecutive regal gate fail count
+        plan: Optional plan for regal evaluation
+        regal_context: Optional context for regal evaluation (e.g., weight history)
 
     Returns:
         GateStatus with pass/fail and reason
@@ -369,6 +384,54 @@ def check_gates(
             # Reset on success
             graph_failure_count = 0
 
+    # Regal gates (optional, Stage-6 meta-regal) - semantic checks with patience
+    regal_failure_count = previous_regal_fail_count
+    regal_result: Optional[LedgerRegalV1] = None
+    regal_forced_noop = False
+
+    if config.regal_gates and config.regal_gates.enabled_regal_ids:
+        from src.regal.regal_evaluator import evaluate_regals
+
+        regal_result = evaluate_regals(
+            config=config.regal_gates,
+            plan=plan,
+            signals=signal_bundle,
+            policy_config=config,
+            context=regal_context,
+        )
+
+        if not regal_result.all_passed:
+            regal_failure_count = previous_regal_fail_count + 1
+
+            # Only trigger action if patience exceeded
+            if regal_failure_count >= config.regal_gates.patience:
+                if config.regal_gates.penalty_mode == "noop":
+                    return GateStatus(
+                        stability_pass=True,
+                        transfer_pass=transfer_pass,
+                        delta_epi_per_flop=delta_epi,
+                        raw_delta=raw_delta,
+                        flops_estimate=flops_estimate,
+                        sign_consistency=sign_consistency,
+                        ood_delta=ood_delta,
+                        forced_noop=True,
+                        reason=f"Regal gate failed (patience {regal_failure_count}/{config.regal_gates.patience})",
+                        transfer_failure_count=transfer_failure_count,
+                        graph_failure_count=graph_failure_count,
+                        regal_failure_count=regal_failure_count,
+                        regal_result=regal_result,
+                        regal_forced_noop=True,
+                        delta_per_exposure=delta_per_exposure,
+                        exposure_count=exposure_count,
+                    )
+                elif config.regal_gates.penalty_mode == "warn":
+                    # Continue but flag the issue
+                    regal_forced_noop = False  # Just warn, don't block
+                # "clamp" mode: continue but may trigger downstream clamping
+        else:
+            # Reset on success
+            regal_failure_count = 0
+
     return GateStatus(
         stability_pass=True,
         transfer_pass=transfer_pass,
@@ -381,6 +444,9 @@ def check_gates(
         reason="Gates passed",
         transfer_failure_count=transfer_failure_count,
         graph_failure_count=graph_failure_count,
+        regal_failure_count=regal_failure_count,
+        regal_result=regal_result,
+        regal_forced_noop=regal_forced_noop,
         delta_per_exposure=delta_per_exposure,
         exposure_count=exposure_count,
     )

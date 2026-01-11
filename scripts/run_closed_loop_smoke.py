@@ -46,6 +46,8 @@ from src.contracts.schemas import (
     PlanGainScheduleV1,
     GraphSpecV1,
     LedgerGraphV1,
+    RegalGatesV1,
+    LedgerRegalV1,
 )
 from src.orchestrator.plan_applier import PlanApplier
 from src.orchestrator.homeostatic_plan_writer import (
@@ -287,6 +289,17 @@ def main():
     parser.add_argument("--include-graph-summary", action="store_true",
                         help="Compute and log graph small-world metrics")
 
+    # Regal flags (Stage-6 meta-regal)
+    parser.add_argument("--include-regal", action="store_true",
+                        help="Run meta-regal gate evaluation (Stage-6)")
+    parser.add_argument("--regal-ids", type=str, default="spec_guardian,world_coherence,reward_integrity",
+                        help="Comma-separated regal IDs to enable")
+    parser.add_argument("--regal-patience", type=int, default=3,
+                        help="Regal patience (consecutive failures before action)")
+    parser.add_argument("--regal-penalty-mode", type=str, default="warn",
+                        choices=["warn", "noop", "clamp"],
+                        help="Regal penalty mode")
+
     args = parser.parse_args()
 
     # Determine mode
@@ -299,6 +312,9 @@ def main():
 
     if args.include_probe_epi:
         mode += "+probe"
+
+    if args.include_regal:
+        mode += "+regal"
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -502,6 +518,57 @@ def main():
     print(f"  Plan ID: {updated_plan.plan_id}")
     print(f"  Plan SHA: {updated_plan.sha256()[:16]}")
 
+    # Run regal evaluation if enabled
+    regal_result: Optional[LedgerRegalV1] = None
+    regal_config: Optional[RegalGatesV1] = None
+    if args.include_regal:
+        print("\n[4b/8] Running meta-regal gate evaluation...")
+        from src.regal.regal_evaluator import evaluate_regals
+
+        regal_config = RegalGatesV1(
+            enabled_regal_ids=[r.strip() for r in args.regal_ids.split(",")],
+            patience=args.regal_patience,
+            penalty_mode=args.regal_penalty_mode,
+            determinism_seed=args.seed,
+        )
+
+        # Build signal bundle for regal evaluation
+        regal_signals = build_signal_bundle_for_plan(
+            audit_deltas={"delta_success": 0.0, "delta_mpl": 0.0},
+            coverage_stats=dict(Counter(baseline_samples)),
+            probe_report=probe_report,
+        )
+
+        # Build policy config for regal evaluation
+        regal_policy_config = PlanPolicyConfigV1(
+            gain_schedule=PlanGainScheduleV1(
+                conservative_multiplier=1.1,
+                full_multiplier=1.5,
+                max_abs_weight_change=0.5,
+                min_weight_clamp=0.1,
+                max_weight_clamp=2.0,
+            ),
+            default_weights={"manipulation": 0.5, "navigation": 0.5},
+            regal_gates=regal_config,
+        )
+
+        regal_result = evaluate_regals(
+            config=regal_config,
+            plan=updated_plan,
+            signals=regal_signals,
+            policy_config=regal_policy_config,
+            context=None,
+        )
+
+        print(f"  Regal config SHA: {regal_config.sha256()[:16]}")
+        print(f"  Enabled regals: {regal_config.enabled_regal_ids}")
+        print(f"  All passed: {regal_result.all_passed}")
+        for report in regal_result.reports:
+            status = "PASS" if report.passed else "FAIL"
+            print(f"    {report.regal_id}: {status} (confidence={report.confidence:.2f})")
+            if not report.passed:
+                print(f"      Rationale: {report.rationale}")
+
     # =========================================================================
     # Step 5: Hot reload updated plan
     # =========================================================================
@@ -616,12 +683,10 @@ def main():
             policy_before="checkpoint_A",
             policy_after="checkpoint_B",
         ),
+        probe=ledger_probe,
+        regal=regal_result,
         notes=f"Mode: {mode}",
     )
-
-    # Add probe to record if available
-    if ledger_probe:
-        record.probe = ledger_probe
 
     ledger.append(record)
     print(f"  ledger.jsonl written")
@@ -673,6 +738,14 @@ def main():
         manifest.graph_spec_sha = graph_spec.sha256()
         manifest.graph_summary_sha = graph_summary.summary_sha
 
+    # Add regal SHAs to manifest if available
+    if regal_result and regal_config:
+        manifest.regal_config_sha = regal_config.sha256()
+        # Compute aggregate report SHA from individual report SHAs
+        if regal_result.reports:
+            manifest.regal_report_sha = sha256_json([r.report_sha for r in regal_result.reports])
+        manifest.regal_inputs_sha = regal_result.combined_inputs_sha
+
     write_manifest(str(manifest_path), manifest)
     print(f"  run_manifest.json written")
     print(f"    Run ID: {manifest.run_id}")
@@ -683,6 +756,9 @@ def main():
     if manifest.graph_spec_sha:
         print(f"    Graph spec SHA: {manifest.graph_spec_sha[:16]}")
         print(f"    Graph summary SHA: {manifest.graph_summary_sha[:16] if manifest.graph_summary_sha else 'N/A'}")
+    if manifest.regal_config_sha:
+        print(f"    Regal config SHA: {manifest.regal_config_sha[:16]}")
+        print(f"    Regal report SHA: {manifest.regal_report_sha[:16] if manifest.regal_report_sha else 'N/A'}")
     print(f"    Source commit: {manifest.source_commit or 'N/A'}")
 
     # =========================================================================
@@ -706,6 +782,15 @@ def main():
         print(f"  Transfer: {'PASS' if probe_report.transfer_pass else 'FAIL'}")
         if gate_status and gate_status.forced_noop:
             print(f"  Action: FORCED_NOOP ({gate_status.reason})")
+
+    if regal_result:
+        print(f"\nMeta-Regal Gate Results (Stage-6):")
+        print(f"  All passed: {regal_result.all_passed}")
+        for report in regal_result.reports:
+            status = "PASS" if report.passed else "FAIL"
+            print(f"  {report.regal_id}: {status} (conf={report.confidence:.2f})")
+        if regal_config:
+            print(f"  Config SHA: {regal_config.sha256()[:16]}")
 
     print(f"\nArtifacts:")
     print(f"  {exposure_path}")

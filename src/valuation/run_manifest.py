@@ -54,6 +54,19 @@ def create_run_manifest(
     seeds: Optional[Dict[str, int]] = None,
     plan_path: Optional[str] = None,
     determinism_config: Optional[Dict[str, Any]] = None,
+    # Optional provenance fields
+    probe_config_sha: Optional[str] = None,
+    probe_report_sha: Optional[str] = None,
+    plan_policy_config_sha: Optional[str] = None,
+    baseline_weights_sha: Optional[str] = None,
+    final_weights_sha: Optional[str] = None,
+    plan_applied_events_sha: Optional[str] = None,
+    graph_spec_sha: Optional[str] = None,
+    graph_summary_sha: Optional[str] = None,
+    # Regal provenance (Stage-6 meta-regal)
+    regal_config_sha: Optional[str] = None,
+    regal_report_sha: Optional[str] = None,
+    regal_inputs_sha: Optional[str] = None,
 ) -> RunManifestV1:
     """Create a run manifest for provenance.
 
@@ -67,6 +80,17 @@ def create_run_manifest(
         seeds: Seed values used
         plan_path: Path to plan file
         determinism_config: Determinism configuration
+        probe_config_sha: Optional probe config SHA
+        probe_report_sha: Optional probe report SHA
+        plan_policy_config_sha: Optional plan policy config SHA
+        baseline_weights_sha: Optional baseline weights SHA
+        final_weights_sha: Optional final weights SHA
+        plan_applied_events_sha: Optional plan applied events SHA
+        graph_spec_sha: Optional graph spec SHA
+        graph_summary_sha: Optional graph summary SHA
+        regal_config_sha: Optional regal config SHA (Stage-6)
+        regal_report_sha: Optional regal report SHA (Stage-6)
+        regal_inputs_sha: Optional regal inputs SHA (Stage-6)
 
     Returns:
         RunManifestV1 with provenance information
@@ -90,6 +114,17 @@ def create_run_manifest(
         datapack_manifest_sha=datapack_manifest_sha,
         seeds=seeds,
         determinism_config=determinism_config,
+        probe_config_sha=probe_config_sha,
+        probe_report_sha=probe_report_sha,
+        plan_policy_config_sha=plan_policy_config_sha,
+        baseline_weights_sha=baseline_weights_sha,
+        final_weights_sha=final_weights_sha,
+        plan_applied_events_sha=plan_applied_events_sha,
+        graph_spec_sha=graph_spec_sha,
+        graph_summary_sha=graph_summary_sha,
+        regal_config_sha=regal_config_sha,
+        regal_report_sha=regal_report_sha,
+        regal_inputs_sha=regal_inputs_sha,
     )
 
 
