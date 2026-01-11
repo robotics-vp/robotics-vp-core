@@ -630,6 +630,10 @@ class DataPackMeta:
     signal_bundle: Optional[Dict[str, Any]] = None
     # Contains serialized SignalBundle with epiplexity, stability, alignment metrics
 
+    # Graph small-world metrics (optional) - computed from geometry_bev
+    graph_summary_v1: Optional[Dict[str, Any]] = None
+    # Contains serialized GraphSummaryV1 with sigma, nav_success_rate, etc.
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         d = {
@@ -670,6 +674,7 @@ class DataPackMeta:
             'epiplexity': to_json_safe(self.epiplexity),
             'epiplexity_summary': to_json_safe(self.epiplexity_summary),
             'signal_bundle': to_json_safe(self.signal_bundle),
+            'graph_summary_v1': to_json_safe(self.graph_summary_v1),
         }
         return to_json_safe(d)
 
@@ -738,6 +743,7 @@ class DataPackMeta:
             epiplexity=d.get('epiplexity'),
             epiplexity_summary=d.get('epiplexity_summary'),
             signal_bundle=d.get('signal_bundle'),
+            graph_summary_v1=d.get('graph_summary_v1'),
         )
 
     @classmethod

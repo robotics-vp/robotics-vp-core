@@ -73,6 +73,9 @@ class GateStatus:
     transfer_failure_count: int = 0
     transfer_patience_exceeded: bool = False
 
+    # Graph gate patience tracking
+    graph_failure_count: int = 0
+
     # Exposure normalization
     delta_per_exposure: Optional[float] = None
     exposure_count: Optional[int] = None
@@ -93,6 +96,7 @@ class GateStatus:
             "reason": self.reason,
             "transfer_failure_count": self.transfer_failure_count,
             "transfer_patience_exceeded": self.transfer_patience_exceeded,
+            "graph_failure_count": self.graph_failure_count,
             "delta_per_exposure": self.delta_per_exposure,
             "exposure_count": self.exposure_count,
             "ledger_policy": self.ledger_policy.model_dump() if self.ledger_policy else None,
@@ -214,6 +218,7 @@ def check_gates(
     config: PlanPolicyConfigV1,
     exposure_count: Optional[int] = None,
     previous_transfer_fail_count: int = 0,
+    previous_graph_fail_count: int = 0,
 ) -> GateStatus:
     """Check stability and transfer gates from probe signal.
 
@@ -222,6 +227,7 @@ def check_gates(
         config: Plan config with thresholds
         exposure_count: Optional exposure count for normalization
         previous_transfer_fail_count: Previous consecutive transfer fail count
+        previous_graph_fail_count: Previous consecutive graph gate fail count
 
     Returns:
         GateStatus with pass/fail and reason
@@ -321,6 +327,48 @@ def check_gates(
         # Reset transfer failure count on success
         transfer_failure_count = 0
 
+    # Graph gates (optional) - check small-world metrics with patience
+    graph_failure_count = previous_graph_fail_count
+    if config.graph_gates:
+        sigma_signal = signal_bundle.get_signal(SignalType.SMALL_WORLD_SIGMA)
+        nav_signal = signal_bundle.get_signal(SignalType.NAV_SUCCESS_RATE)
+        
+        # Check if any graph gate is violated
+        graph_gate_failed = False
+        graph_fail_reason = ""
+        
+        if sigma_signal and sigma_signal.value < config.graph_gates.sigma_min:
+            graph_gate_failed = True
+            graph_fail_reason = f"Graph sigma collapsed: {sigma_signal.value:.2f} < {config.graph_gates.sigma_min}"
+        elif nav_signal and nav_signal.value < config.graph_gates.nav_success_min:
+            graph_gate_failed = True
+            graph_fail_reason = f"Nav success too low: {nav_signal.value:.2f} < {config.graph_gates.nav_success_min}"
+        
+        if graph_gate_failed:
+            graph_failure_count = previous_graph_fail_count + 1
+            
+            # Only trigger action if patience exceeded
+            if graph_failure_count >= config.graph_gates.patience:
+                if config.graph_gates.penalty_mode == "noop":
+                    return GateStatus(
+                        stability_pass=True,
+                        transfer_pass=transfer_pass,
+                        delta_epi_per_flop=delta_epi,
+                        raw_delta=raw_delta,
+                        flops_estimate=flops_estimate,
+                        sign_consistency=sign_consistency,
+                        ood_delta=ood_delta,
+                        forced_noop=True,
+                        reason=f"{graph_fail_reason} (patience {graph_failure_count}/{config.graph_gates.patience})",
+                        transfer_failure_count=transfer_failure_count,
+                        graph_failure_count=graph_failure_count,
+                        delta_per_exposure=delta_per_exposure,
+                        exposure_count=exposure_count,
+                    )
+        else:
+            # Reset on success
+            graph_failure_count = 0
+
     return GateStatus(
         stability_pass=True,
         transfer_pass=transfer_pass,
@@ -332,6 +380,7 @@ def check_gates(
         forced_noop=False,
         reason="Gates passed",
         transfer_failure_count=transfer_failure_count,
+        graph_failure_count=graph_failure_count,
         delta_per_exposure=delta_per_exposure,
         exposure_count=exposure_count,
     )

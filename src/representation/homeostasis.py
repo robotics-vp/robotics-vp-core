@@ -22,6 +22,9 @@ class SignalType(str, Enum):
     DRIFT = "drift"  # Representation drift from baseline
     COVERAGE = "coverage"  # Data coverage metrics
     DELTA_EPI_PER_FLOP = "delta_epi_per_flop"  # Probe discriminator signal
+    SMALL_WORLD_SIGMA = "small_world_sigma"  # Graph small-worldness index
+    NAV_SUCCESS_RATE = "nav_success_rate"  # Graph navigability success rate
+    SHORTCUT_FRACTION = "shortcut_fraction"  # Graph shortcut edge fraction
 
 
 @dataclass
