@@ -48,6 +48,7 @@ from src.contracts.schemas import (
     LedgerGraphV1,
     RegalGatesV1,
     LedgerRegalV1,
+    TrajectoryAuditV1,
 )
 from src.orchestrator.plan_applier import PlanApplier
 from src.orchestrator.homeostatic_plan_writer import (
@@ -300,6 +301,14 @@ def main():
                         choices=["warn", "noop", "clamp"],
                         help="Regal penalty mode")
 
+    # D4 Knob calibration flags
+    parser.add_argument("--use-learned-knobs", action="store_true",
+                        help="Use D4 learned/heuristic knob calibration")
+
+    # Trajectory audit flags (Stage-6 spatiotemporal grounding)
+    parser.add_argument("--include-trajectory-audit", action="store_true",
+                        help="Include synthetic trajectory audit data")
+
     args = parser.parse_args()
 
     # Determine mode
@@ -315,6 +324,12 @@ def main():
 
     if args.include_regal:
         mode += "+regal"
+
+    if args.use_learned_knobs:
+        mode += "+knobs"
+
+    if args.include_trajectory_audit:
+        mode += "+trajectory"
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -478,11 +493,20 @@ def main():
             min_raw_delta=0.01,
         )
         exposure_count = probe_report.num_samples_id if probe_report else None
-        
+
+        # Setup knob model if enabled
+        knob_model = None
+        if args.use_learned_knobs:
+            from src.regal.knob_model import get_knob_model
+            # Use stub learned model for smoke test (simulates learned behavior)
+            knob_model = get_knob_model(use_learned=True)
+            print(f"  Using D4 knob calibration: {knob_model.model_sha}")
+
         updated_plan, gate_status = build_plan_from_signals(
             signals, config, plan_id="homeostatic_v1", source_commit="auto",
             probe_report=probe_report,
             exposure_count=exposure_count,
+            knob_model=knob_model,
         )
 
         print(f"  Auto-generated from signals")
@@ -505,7 +529,18 @@ def main():
                 if lp.clamped:
                     print(f"  Scale Update: CLAMPED")
                 print(f"  Policy Config SHA: {lp.policy_config_sha[:16]}")
-                
+
+            # Print knob policy info if used
+            if gate_status.knob_policy:
+                kp = gate_status.knob_policy
+                print(f"  Knob Policy: {kp.policy_source}")
+                if kp.gain_multiplier_override:
+                    print(f"    Gain override: {kp.gain_multiplier_override:.2f}")
+                if kp.patience_override:
+                    print(f"    Patience override: {kp.patience_override}")
+                if kp.clamped:
+                    print(f"    Clamped: {', '.join(kp.clamp_reasons)}")
+
             print(f"  Forced NOOP: {gate_status.forced_noop}")
             if gate_status.forced_noop:
                 print(f"  Reason: {gate_status.reason}")
@@ -568,6 +603,47 @@ def main():
             print(f"    {report.regal_id}: {status} (confidence={report.confidence:.2f})")
             if not report.passed:
                 print(f"      Rationale: {report.rationale}")
+
+    # Generate trajectory audit if enabled (synthetic for now)
+    trajectory_audit: Optional[TrajectoryAuditV1] = None
+    if args.include_trajectory_audit:
+        print("\n[4c/8] Generating synthetic trajectory audit...")
+        rng = np.random.default_rng(args.seed)
+
+        # Generate synthetic trajectory data
+        num_steps = 50
+        action_dim = 7  # e.g., 7-DoF robot
+        trajectory_audit = TrajectoryAuditV1(
+            episode_id=f"smoke_episode_{run_id}",
+            num_steps=num_steps,
+            action_mean=[float(x) for x in rng.standard_normal(action_dim) * 0.1],
+            action_std=[float(x) for x in np.abs(rng.standard_normal(action_dim)) * 0.05 + 0.01],
+            state_bounds={
+                "pos_x": [-1.0, 1.0],
+                "pos_y": [-1.0, 1.0],
+                "pos_z": [0.0, 0.5],
+            },
+            total_return=float(rng.uniform(0.5, 1.5)),
+            reward_components={
+                "manipulation_reward": float(rng.uniform(0.3, 0.8)),
+                "collision_penalty": float(rng.uniform(-0.1, 0.0)),
+                "time_penalty": float(rng.uniform(-0.2, -0.1)),
+            },
+            events=["grasp_attempt", "grasp_success", "place_attempt"],
+            event_counts={"grasp_attempt": 3, "grasp_success": 2, "place_attempt": 2},
+            penetration_max=float(rng.uniform(0.0, 0.005)),
+            velocity_spike_count=int(rng.integers(0, 3)),
+            contact_anomaly_count=int(rng.integers(0, 2)),
+        )
+
+        print(f"  Episode ID: {trajectory_audit.episode_id}")
+        print(f"  Steps: {trajectory_audit.num_steps}")
+        print(f"  Total return: {trajectory_audit.total_return:.3f}")
+        print(f"  Events: {trajectory_audit.events}")
+        print(f"  Penetration max: {trajectory_audit.penetration_max:.4f}")
+        print(f"  Velocity spikes: {trajectory_audit.velocity_spike_count}")
+        print(f"  Contact anomalies: {trajectory_audit.contact_anomaly_count}")
+        print(f"  Trajectory audit SHA: {trajectory_audit.sha256()[:16]}")
 
     # =========================================================================
     # Step 5: Hot reload updated plan
@@ -746,6 +822,16 @@ def main():
             manifest.regal_report_sha = sha256_json([r.report_sha for r in regal_result.reports])
         manifest.regal_inputs_sha = regal_result.combined_inputs_sha
 
+    # Add knob calibration SHAs to manifest if available
+    if gate_status and gate_status.knob_policy:
+        manifest.knob_model_sha = gate_status.knob_policy.model_sha
+        manifest.knob_policy_sha = gate_status.knob_policy.sha256()
+        manifest.knob_policy_used = gate_status.knob_policy_used
+
+    # Add trajectory audit SHA to manifest if available
+    if trajectory_audit:
+        manifest.trajectory_audit_sha = trajectory_audit.sha256()
+
     write_manifest(str(manifest_path), manifest)
     print(f"  run_manifest.json written")
     print(f"    Run ID: {manifest.run_id}")
@@ -759,6 +845,11 @@ def main():
     if manifest.regal_config_sha:
         print(f"    Regal config SHA: {manifest.regal_config_sha[:16]}")
         print(f"    Regal report SHA: {manifest.regal_report_sha[:16] if manifest.regal_report_sha else 'N/A'}")
+    if manifest.knob_policy_sha:
+        print(f"    Knob policy SHA: {manifest.knob_policy_sha[:16]}")
+        print(f"    Knob policy used: {manifest.knob_policy_used}")
+    if manifest.trajectory_audit_sha:
+        print(f"    Trajectory audit SHA: {manifest.trajectory_audit_sha[:16]}")
     print(f"    Source commit: {manifest.source_commit or 'N/A'}")
 
     # =========================================================================
@@ -791,6 +882,24 @@ def main():
             print(f"  {report.regal_id}: {status} (conf={report.confidence:.2f})")
         if regal_config:
             print(f"  Config SHA: {regal_config.sha256()[:16]}")
+
+    if gate_status and gate_status.knob_policy:
+        print(f"\nD4 Knob Calibration Results:")
+        kp = gate_status.knob_policy
+        print(f"  Policy source: {kp.policy_source}")
+        print(f"  Policy SHA: {kp.sha256()[:16]}")
+        if kp.gain_multiplier_override:
+            print(f"  Gain override: {kp.gain_multiplier_override:.2f}")
+        if kp.clamped:
+            print(f"  Clamped: {', '.join(kp.clamp_reasons)}")
+
+    if trajectory_audit:
+        print(f"\nTrajectory Audit (Stage-6 Spatiotemporal):")
+        print(f"  Episode: {trajectory_audit.episode_id}")
+        print(f"  Steps: {trajectory_audit.num_steps}")
+        print(f"  Return: {trajectory_audit.total_return:.3f}")
+        print(f"  Physics anomalies: pen={trajectory_audit.penetration_max:.4f}, vel_spikes={trajectory_audit.velocity_spike_count}")
+        print(f"  Audit SHA: {trajectory_audit.sha256()[:16]}")
 
     print(f"\nArtifacts:")
     print(f"  {exposure_path}")

@@ -38,8 +38,11 @@ from src.orchestrator.policy_hooks import (
     RewardIntegrityGuard,
     DefaultEconPolicyProvider,
     DefaultRewardIntegrityGuard,
+    KnobAwareEconPolicyProvider,
+    KnobAwareRewardIntegrityGuard,
+    build_regime_features,
 )
-from src.contracts.schemas import LedgerRegalV1
+from src.contracts.schemas import LedgerRegalV1, KnobPolicyV1
 
 
 def _default_policy_config() -> PlanPolicyConfigV1:
@@ -89,6 +92,10 @@ class GateStatus:
     # Policy Ledger (for audit/provenance)
     ledger_policy: Optional[LedgerPlanPolicyV1] = None
 
+    # D4 Knob calibration provenance
+    knob_policy: Optional[KnobPolicyV1] = None
+    knob_policy_used: Optional[str] = None  # "learned" or "heuristic_fallback"
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "stability_pass": self.stability_pass,
@@ -109,6 +116,8 @@ class GateStatus:
             "delta_per_exposure": self.delta_per_exposure,
             "exposure_count": self.exposure_count,
             "ledger_policy": self.ledger_policy.model_dump() if self.ledger_policy else None,
+            "knob_policy": self.knob_policy.model_dump() if self.knob_policy else None,
+            "knob_policy_used": self.knob_policy_used,
         }
 
 
@@ -591,6 +600,8 @@ def build_plan_from_signals(
     integrity_guard: Optional[RewardIntegrityGuard] = None,
     previous_transfer_fail_count: int = 0,
     steps_since_last_change: Optional[int] = None,
+    knob_model: Optional[Any] = None,  # KnobModel from src.regal.knob_model
+    regal_context: Optional[Dict[str, Any]] = None,
 ) -> Tuple[SemanticUpdatePlanV1, GateStatus]:
     """Build SemanticUpdatePlanV1 deterministically from signals.
 
@@ -607,6 +618,9 @@ def build_plan_from_signals(
         econ_policy_provider: Hook for economic policy
         integrity_guard: Hook for reward integrity
         previous_transfer_fail_count: Previous failure count (state)
+        steps_since_last_change: Steps since last plan change (for cooldown)
+        knob_model: Optional KnobModel for D4 learned/heuristic calibration
+        regal_context: Optional context for regal evaluation (e.g., weight history)
 
     Returns:
         Tuple of (SemanticUpdatePlanV1, GateStatus)
@@ -615,6 +629,10 @@ def build_plan_from_signals(
 
     config = config or _default_policy_config()
     plan_id = plan_id or f"auto_{str(uuid.uuid4())[:8]}"
+
+    # Track knob policy for provenance
+    knob_policy_used: Optional[str] = None
+    knob_policy_result: Optional[KnobPolicyV1] = None
 
     # Add probe signal if report provided
     if probe_report:
@@ -638,10 +656,31 @@ def build_plan_from_signals(
             )
         )
 
-    # 1. Apply Economic Policy Hook
+    # 1. Apply Economic Policy Hook (with knob model integration if provided)
     gain_schedule_override = None
+
+    # If knob model is provided, create a KnobAwareEconPolicyProvider
+    if knob_model and econ_policy_provider is None:
+        econ_policy_provider = KnobAwareEconPolicyProvider(
+            knob_model=knob_model,
+            base_config=config,
+        )
+
     if econ_policy_provider:
-        gain_schedule_override = econ_policy_provider.get_gain_schedule(signal_bundle)
+        # Handle KnobAwareEconPolicyProvider specially to pass regal context
+        if isinstance(econ_policy_provider, KnobAwareEconPolicyProvider):
+            gain_schedule_override = econ_policy_provider.get_gain_schedule(
+                signal_bundle,
+                regal_result=None,  # Will be populated after gate check
+                context=regal_context,
+            )
+            # Track knob policy for provenance
+            if econ_policy_provider.last_knob_policy:
+                knob_policy_result = econ_policy_provider.last_knob_policy
+                knob_policy_used = knob_policy_result.policy_source
+        else:
+            gain_schedule_override = econ_policy_provider.get_gain_schedule(signal_bundle)
+
         if gain_schedule_override:
             # Create a shallow copy with new gain schedule
             config = config.model_copy(update={"gain_schedule": gain_schedule_override})
@@ -713,10 +752,13 @@ def build_plan_from_signals(
          post_weights_sha=normalization_meta.get("post_weights_sha"),
          renormalized=normalization_meta.get("renormalized", False),
          clamp_reasons=normalization_meta.get("clamp_reasons", []),
+         knob_policy=knob_policy_result,
     )
-    
+
     # Attach to GateStatus
     gate_status.ledger_policy = ledger_policy
+    gate_status.knob_policy = knob_policy_result
+    gate_status.knob_policy_used = knob_policy_used
 
     # Build notes
     notes = f"Priority: {action_plan.priority}. Actions: {[a.value for a in action_plan.actions]}."

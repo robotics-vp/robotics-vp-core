@@ -425,6 +425,50 @@ class GraphGatesV1(BaseModel):
 
 
 # =============================================================================
+# TrajectoryAuditV1 - Per-episode action/state/reward decomposition
+# =============================================================================
+
+class TrajectoryAuditV1(BaseModel):
+    """Per-episode trajectory audit for meta-regal grounding.
+
+    Provides the geometric/spatiotemporal substrate for:
+    - Spec violations via event/state constraints
+    - Coherence via perturbation sensitivity
+    - Reward hacking detection via reward-work correlation
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    episode_id: str
+    num_steps: int
+
+    # Action/state summaries (full logs too heavy, use stats)
+    action_mean: Optional[List[float]] = None  # Mean action per dimension
+    action_std: Optional[List[float]] = None   # Std action per dimension
+    state_bounds: Optional[Dict[str, List[float]]] = None  # {state_name: [min, max]}
+
+    # Reward decomposition
+    total_return: float = 0.0
+    reward_components: Optional[Dict[str, float]] = None  # {component_name: total}
+
+    # Events (for spec violation detection)
+    events: List[str] = Field(default_factory=list)  # e.g., ["collision", "drop", "timeout"]
+    event_counts: Optional[Dict[str, int]] = None
+
+    # Physics anomalies (for coherence/exploit detection)
+    penetration_max: Optional[float] = None
+    velocity_spike_count: int = 0
+    contact_anomaly_count: int = 0
+
+    # References to geometry stack
+    scene_tracks_sha: Optional[str] = None
+    bev_summary_sha: Optional[str] = None
+
+    def sha256(self) -> str:
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+# =============================================================================
 # Meta-Regal Nodes (Stage-6 Deterministic Audit Gates)
 # =============================================================================
 
@@ -434,11 +478,18 @@ class RegalGatesV1(BaseModel):
     Regal nodes are deterministic audit evaluators that run at each planning cycle.
     They provide semantic checks beyond numeric thresholds (spec conformance,
     world coherence, reward integrity).
+
+    Ordering: Guardians (spec/coherence/integrity) → Econ/Datapacks (allocation)
     """
     model_config = ConfigDict(extra="forbid")
 
     # Which regal nodes to enable (e.g., ["spec_guardian", "world_coherence", "reward_integrity"])
     enabled_regal_ids: List[str] = Field(default_factory=list)
+
+    # Gate thresholds (min acceptable scores, 0.0-1.0)
+    spec_consistency_min: float = 0.5  # Min spec adherence score
+    coherence_min: float = 0.5         # Min world coherence score
+    hack_prob_max: float = 0.3         # Max acceptable reward hacking probability
 
     # Patience: consecutive failures before triggering penalty
     patience: int = 3
@@ -448,6 +499,9 @@ class RegalGatesV1(BaseModel):
 
     # Seed for deterministic evaluation
     determinism_seed: int = 42
+
+    # Per-task-family threshold overrides
+    per_task_family_overrides: Optional[Dict[str, Dict[str, float]]] = None
 
     def sha256(self) -> str:
         from src.utils.config_digest import sha256_json
@@ -475,6 +529,21 @@ class RegalReportV1(BaseModel):
     confidence: float = 1.0  # 0.0-1.0, how confident the regal is
     rationale: str = ""  # Human-readable explanation
 
+    # Structured output (spec_guardian)
+    spec_consistency_score: float = 1.0  # 0.0-1.0
+    spec_violations: List[str] = Field(default_factory=list)
+
+    # Structured output (world_coherence)
+    coherence_score: float = 1.0  # 0.0-1.0
+    coherence_tags: List[str] = Field(default_factory=list)  # e.g., ["sim_exploit", "physics_violation"]
+
+    # Structured output (reward_integrity)
+    hack_probability: float = 0.0  # 0.0-1.0, estimated probability of reward hacking
+    integrity_flags: List[str] = Field(default_factory=list)  # e.g., ["oscillation", "reward_spike"]
+
+    # Forced action (if this regal triggered a penalty)
+    forced_action: Optional[Literal["noop", "clamp"]] = None
+
     # Detailed findings (optional, regal-specific)
     findings: Optional[Dict[str, Any]] = None
 
@@ -501,6 +570,92 @@ class LedgerRegalV1(BaseModel):
     reports: List[RegalReportV1] = Field(default_factory=list)
     all_passed: bool = True
     combined_inputs_sha: str = ""  # SHA of all inputs across all regals
+
+    # Summary stats for quick reference
+    spec_consistency_min_observed: float = 1.0
+    coherence_min_observed: float = 1.0
+    hack_probability_max_observed: float = 0.0
+
+    # Whether regal forced NOOP or clamp
+    forced_noop: bool = False
+    forced_clamp: bool = False
+
+
+# =============================================================================
+# Knob Calibration (D4 - Learned hyperparameters with heuristic fallback)
+# =============================================================================
+
+class RegimeFeaturesV1(BaseModel):
+    """Input features for knob calibration model.
+
+    Captures the current "regime" state for knob adaptation.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    # Audit performance
+    audit_delta_success: Optional[float] = None
+    audit_delta_error: Optional[float] = None
+    audit_success_rate: Optional[float] = None
+
+    # Exposure
+    exposure_count: int = 0
+    datapack_count: int = 0
+
+    # Probe discriminator
+    probe_delta_epi_per_flop: Optional[float] = None
+    probe_stability_pass: Optional[bool] = None
+    probe_transfer_pass: Optional[bool] = None
+
+    # Graph metrics
+    graph_sigma: Optional[float] = None
+    graph_nav_success: Optional[float] = None
+    graph_shortcut_fraction: Optional[float] = None
+
+    # Regal summary (from previous cycle)
+    regal_spec_score: Optional[float] = None
+    regal_coherence_score: Optional[float] = None
+    regal_hack_prob: Optional[float] = None
+
+    # Objective profile / task context
+    objective_profile: Optional[str] = None  # e.g., "exploration", "exploitation", "validation"
+    task_family_weights: Optional[Dict[str, float]] = None
+
+    def sha256(self) -> str:
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+class KnobPolicyV1(BaseModel):
+    """Output from knob calibration - overrides to PlanPolicyConfig.
+
+    Learned or heuristic knob adjustments, always bounded by hard constraints.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    policy_source: Literal["learned", "heuristic_fallback"] = "heuristic_fallback"
+    model_sha: Optional[str] = None  # SHA of learned model (if used)
+    regime_features_sha: Optional[str] = None  # SHA of input features
+
+    # Gain schedule overrides (clamped by hard limits)
+    gain_multiplier_override: Optional[float] = None
+    conservative_multiplier_override: Optional[float] = None
+
+    # Threshold overrides
+    threshold_overrides: Optional[Dict[str, float]] = None  # e.g., {"spec_consistency_min": 0.6}
+
+    # Patience override
+    patience_override: Optional[int] = None
+
+    # Per-task-family weight biases
+    task_family_biases: Optional[Dict[str, float]] = None
+
+    # Hard constraint validation
+    clamped: bool = False  # True if any output was clamped by hard limits
+    clamp_reasons: List[str] = Field(default_factory=list)
+
+    def sha256(self) -> str:
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
 
 
 # =============================================================================
@@ -575,14 +730,17 @@ class LedgerPlanPolicyV1(BaseModel):
     gain_schedule_source: str = "default"
     applied_multiplier: Optional[float] = None
     clamped: bool = False
-    
+
     # Normalization & Audit
     pre_weights_sha: Optional[str] = None
     post_weights_sha: Optional[str] = None
     renormalized: bool = False
     clamp_reasons: List[str] = Field(default_factory=list)
-    
+
     transfer_failure_count: int = 0
+
+    # D4 Knob calibration provenance
+    knob_policy: Optional["KnobPolicyV1"] = None
 
 
 class LedgerGraphV1(BaseModel):
@@ -639,6 +797,9 @@ class ValueLedgerRecordV1(BaseModel):
     # Regal evaluation (optional, Stage-6 meta-regal)
     regal: Optional[LedgerRegalV1] = None
 
+    # Knob policy (optional, D4 learned/heuristic calibration)
+    knob_policy: Optional["KnobPolicyV1"] = None
+
     notes: Optional[str] = None
 
 
@@ -693,6 +854,14 @@ class RunManifestV1(BaseModel):
     regal_config_sha: Optional[str] = None
     regal_report_sha: Optional[str] = None
     regal_inputs_sha: Optional[str] = None
+
+    # Knob calibration provenance (D4)
+    knob_model_sha: Optional[str] = None  # SHA of learned model (if used)
+    knob_policy_sha: Optional[str] = None  # SHA of KnobPolicyV1 output
+    knob_policy_used: Optional[Literal["learned", "heuristic_fallback"]] = None
+
+    # Trajectory audit provenance (for meta-regal grounding)
+    trajectory_audit_sha: Optional[str] = None  # Aggregated SHA of trajectory audits
 
     # Schema versions used
     schema_versions: Dict[str, str] = Field(default_factory=lambda: {
@@ -749,10 +918,15 @@ __all__ = [
     "GraphSpecV1",
     "GraphSummaryV1",
     "GraphGatesV1",
+    # Trajectory Audit (meta-regal grounding)
+    "TrajectoryAuditV1",
     # Regal (Stage-6 meta-regal)
     "RegalGatesV1",
     "RegalReportV1",
     "LedgerRegalV1",
+    # Knob Calibration (D4)
+    "RegimeFeaturesV1",
+    "KnobPolicyV1",
     # Ledger
     "LedgerWindowV1",
     "LedgerExposureV1",

@@ -131,6 +131,8 @@ class SpecGuardianRegal(RegalNode):
                 passed=True,
                 confidence=1.0,
                 rationale="No plan to validate",
+                spec_consistency_score=1.0,
+                spec_violations=[],
                 findings=findings,
             )
             report.compute_sha()
@@ -165,6 +167,11 @@ class SpecGuardianRegal(RegalNode):
         findings["violations"] = violations
         findings["num_ops_checked"] = len(plan.task_graph_changes)
 
+        # Compute spec consistency score (1.0 = perfect, decreases with violations)
+        num_ops = len(plan.task_graph_changes)
+        spec_consistency_score = 1.0 - (len(violations) / max(num_ops, 1)) if num_ops > 0 else 1.0
+        spec_consistency_score = max(0.0, spec_consistency_score)
+
         passed = len(violations) == 0
         report = RegalReportV1(
             regal_id=self.regal_id,
@@ -173,8 +180,10 @@ class SpecGuardianRegal(RegalNode):
             determinism_seed=self.seed,
             passed=passed,
             confidence=1.0 if passed else 0.8,
-            rationale=f"Checked {len(plan.task_graph_changes)} ops, {len(violations)} violations"
+            rationale=f"Checked {num_ops} ops, {len(violations)} violations"
             if not passed else "All operations within spec",
+            spec_consistency_score=spec_consistency_score,
+            spec_violations=violations,
             findings=findings,
         )
         report.compute_sha()
@@ -204,6 +213,8 @@ class WorldCoherenceRegal(RegalNode):
         findings: Dict[str, Any] = {}
         violations: List[str] = []
 
+        coherence_tags: List[str] = []
+
         if signals is None:
             report = RegalReportV1(
                 regal_id=self.regal_id,
@@ -213,6 +224,8 @@ class WorldCoherenceRegal(RegalNode):
                 passed=True,
                 confidence=1.0,
                 rationale="No signals to validate",
+                coherence_score=1.0,
+                coherence_tags=[],
                 findings=findings,
             )
             report.compute_sha()
@@ -230,8 +243,10 @@ class WorldCoherenceRegal(RegalNode):
             if isinstance(val, float):
                 if math.isnan(val):
                     violations.append(f"NaN value in signal {signal.signal_type}")
+                    coherence_tags.append("nan_value")
                 elif math.isinf(val):
                     violations.append(f"Inf value in signal {signal.signal_type}")
+                    coherence_tags.append("inf_value")
 
             # Check rate signals are in [0, 1]
             signal_name = str(signal.signal_type).lower()
@@ -241,9 +256,14 @@ class WorldCoherenceRegal(RegalNode):
                         violations.append(
                             f"Rate/fraction signal {signal.signal_type} out of bounds: {val}"
                         )
+                        coherence_tags.append("bounds_violation")
 
         findings["signals_checked"] = signals_checked
         findings["violations"] = violations
+
+        # Compute coherence score (1.0 = perfect, decreases with violations)
+        coherence_score = 1.0 - (len(violations) / max(signals_checked, 1)) if signals_checked > 0 else 1.0
+        coherence_score = max(0.0, coherence_score)
 
         passed = len(violations) == 0
         report = RegalReportV1(
@@ -255,6 +275,8 @@ class WorldCoherenceRegal(RegalNode):
             confidence=1.0 if passed else 0.7,
             rationale=f"Checked {signals_checked} signals, {len(violations)} violations"
             if not passed else f"All {signals_checked} signals coherent",
+            coherence_score=coherence_score,
+            coherence_tags=list(set(coherence_tags)),  # Deduplicate
             findings=findings,
         )
         report.compute_sha()
@@ -283,12 +305,16 @@ class RewardIntegrityRegal(RegalNode):
         inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context)
         findings: Dict[str, Any] = {}
         violations: List[str] = []
+        integrity_flags: List[str] = []
+        hack_indicators = 0
+        total_checks = 2  # We do 2 main checks
 
         # Check context for historical patterns
         history = context.get("weight_history", []) if context else []
         findings["history_length"] = len(history)
 
         # Check 1: Weight oscillations (if we have history)
+        oscillation_rate = 0.0
         if len(history) >= 3:
             # Look for sign changes in weight deltas
             sign_changes = 0
@@ -305,6 +331,8 @@ class RewardIntegrityRegal(RegalNode):
                 violations.append(
                     f"High weight oscillation detected: {oscillation_rate:.2%} sign changes"
                 )
+                integrity_flags.append("oscillation")
+                hack_indicators += 1
 
         # Check 2: Anomalous gain requests in plan
         if plan and policy_config and policy_config.gain_schedule:
@@ -318,8 +346,14 @@ class RewardIntegrityRegal(RegalNode):
                             f"Anomalous weight increase for {op.task_family}: "
                             f"{ratio:.2f}x (max expected: {max_mult:.2f}x)"
                         )
+                        integrity_flags.append("anomalous_gain")
+                        hack_indicators += 1
 
         findings["violations"] = violations
+
+        # Compute hack probability (0.0-1.0)
+        # Base on oscillation rate and number of anomalous indicators
+        hack_probability = min(1.0, (oscillation_rate * 0.5) + (hack_indicators * 0.25))
 
         passed = len(violations) == 0
         report = RegalReportV1(
@@ -331,6 +365,8 @@ class RewardIntegrityRegal(RegalNode):
             confidence=0.9 if passed else 0.6,  # Lower confidence on violations (may be false positive)
             rationale="No reward hacking patterns detected"
             if passed else f"Detected {len(violations)} potential issues",
+            hack_probability=hack_probability,
+            integrity_flags=list(set(integrity_flags)),  # Deduplicate
             findings=findings,
         )
         report.compute_sha()
