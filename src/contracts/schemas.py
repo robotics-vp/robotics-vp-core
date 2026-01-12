@@ -469,6 +469,77 @@ class TrajectoryAuditV1(BaseModel):
 
 
 # =============================================================================
+# Regal Phases and Context (Stage-6 Temporal Formalism)
+# =============================================================================
+
+
+class RegalPhaseV1(str, Enum):
+    """Temporal phases for regal evaluation.
+
+    Formalizes when regals run in the cybernetic loop:
+    - PRE_PLAN: Before plan generation (rare, for pre-conditions)
+    - POST_PLAN_PRE_APPLY: After plan generated, before application (gating)
+    - POST_APPLY_PRE_TRAIN: After plan applied, before training window
+    - DURING_TRAIN: Streaming checks during training (future)
+    - POST_TRAIN_PRE_AUDIT: After training, before audit eval
+    - POST_AUDIT: After audit, for final ledger/manifest recording
+    """
+    PRE_PLAN = "pre_plan"
+    POST_PLAN_PRE_APPLY = "post_plan_pre_apply"
+    POST_APPLY_PRE_TRAIN = "post_apply_pre_train"
+    DURING_TRAIN = "during_train"
+    POST_TRAIN_PRE_AUDIT = "post_train_pre_audit"
+    POST_AUDIT = "post_audit"
+
+
+class RegalContextV1(BaseModel):
+    """Strict typed context for regal evaluation substrate.
+
+    Replaces ad-hoc Dict[str, Any] context with typed, hashed, stable schema.
+    Extra keys are rejected (extra='forbid') to enforce schema discipline.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    # Core identifiers
+    run_id: str
+    step: Optional[int] = None
+
+    # Policy provenance
+    policy_before: Optional[str] = None
+    policy_after: Optional[str] = None
+
+    # Plan provenance
+    plan_sha: Optional[str] = None
+
+    # Weight provenance
+    baseline_weights_sha: Optional[str] = None
+    final_weights_sha: Optional[str] = None
+
+    # Audit provenance
+    audit_suite_id: Optional[str] = None
+    audit_suite_sha: Optional[str] = None
+    audit_seed: Optional[int] = None
+
+    # Exposure/substrate provenance
+    exposure_manifest_sha: Optional[str] = None
+    probe_report_sha: Optional[str] = None
+    graph_summary_sha: Optional[str] = None
+    trajectory_audit_sha: Optional[str] = None
+
+    # Econ provenance
+    econ_basis_sha: Optional[str] = None
+    econ_tensor_sha: Optional[str] = None
+
+    # Escape hatch for future extensions (still typed)
+    notes: Optional[Dict[str, Any]] = None
+
+    def sha256(self) -> str:
+        """Compute deterministic SHA-256 of context."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+# =============================================================================
 # Meta-Regal Nodes (Stage-6 Deterministic Audit Gates)
 # =============================================================================
 
@@ -517,6 +588,7 @@ class RegalReportV1(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     regal_id: str  # e.g., "spec_guardian", "world_coherence", "reward_integrity"
+    phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY  # Temporal phase
     regal_version: str = "v1"
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
@@ -934,6 +1006,7 @@ class RunManifestV1(BaseModel):
     regal_config_sha: Optional[str] = None
     regal_report_sha: Optional[str] = None
     regal_inputs_sha: Optional[str] = None
+    regal_context_sha: Optional[str] = None  # SHA of RegalContextV1
 
     # Knob calibration provenance (D4)
     knob_model_sha: Optional[str] = None  # SHA of learned model (if used)
@@ -1005,6 +1078,8 @@ __all__ = [
     # Trajectory Audit (meta-regal grounding)
     "TrajectoryAuditV1",
     # Regal (Stage-6 meta-regal)
+    "RegalPhaseV1",
+    "RegalContextV1",
     "RegalGatesV1",
     "RegalReportV1",
     "LedgerRegalV1",

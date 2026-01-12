@@ -15,6 +15,8 @@ from src.contracts.schemas import (
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
     EconTensorV1,
+    RegalContextV1,
+    RegalPhaseV1,
 )
 from src.regal.regal_evaluator import (
     RewardIntegrityRegal,
@@ -51,12 +53,13 @@ class TestRewardIntegrityWithEconTensor:
         }
         tensor = econ_to_tensor(econ_data)
 
-        context = {
-            "econ_tensor_v1": tensor,
-            "econ_basis_sha": get_default_basis().sha256,
-        }
+        # Use RegalContextV1 for context, pass tensor directly
+        context = RegalContextV1(
+            run_id="test",
+            econ_basis_sha=get_default_basis().sha256,
+        )
 
-        report = regal.evaluate(None, None, config, context)
+        report = regal.evaluate(None, None, config, context, econ_tensor=tensor)
 
         assert report.findings.get("econ_tensor_available") is True
         assert report.findings.get("econ_basis_sha") is not None
@@ -84,12 +87,12 @@ class TestRewardIntegrityWithEconTensor:
         }
         tensor = econ_to_tensor(econ_data)
 
-        context = {
-            "econ_tensor_v1": tensor,
-            "econ_basis_sha": get_default_basis().sha256,
-        }
+        context = RegalContextV1(
+            run_id="test",
+            econ_basis_sha=get_default_basis().sha256,
+        )
 
-        report = regal.evaluate(None, None, config, context)
+        report = regal.evaluate(None, None, config, context, econ_tensor=tensor)
 
         # Should detect econ anomaly
         assert "econ_anomaly" in report.integrity_flags
@@ -108,12 +111,12 @@ class TestRewardIntegrityWithEconTensor:
         }
         tensor = econ_to_tensor(econ_data)
 
-        context = {
-            "econ_tensor_v1": tensor,
-            "econ_basis_sha": get_default_basis().sha256,
-        }
+        context = RegalContextV1(
+            run_id="test",
+            econ_basis_sha=get_default_basis().sha256,
+        )
 
-        report = regal.evaluate(None, None, config, context)
+        report = regal.evaluate(None, None, config, context, econ_tensor=tensor)
 
         assert "econ_anomaly" not in report.integrity_flags
         assert report.passed is True
@@ -129,12 +132,12 @@ class TestRewardIntegrityWithEconTensor:
         }
         tensor = econ_to_tensor(econ_data)
 
-        context = {
-            "econ_tensor_v1": tensor,
-            "econ_basis_sha": get_default_basis().sha256,
-        }
+        context = RegalContextV1(
+            run_id="test",
+            econ_basis_sha=get_default_basis().sha256,
+        )
 
-        report = regal.evaluate(None, None, config, context)
+        report = regal.evaluate(None, None, config, context, econ_tensor=tensor)
 
         assert "econ_values" in report.findings
         assert isinstance(report.findings["econ_values"], dict)
@@ -153,13 +156,13 @@ class TestRegalStableOutput:
 
         econ_data = {"mpl_units_per_hour": 10.0, "success_rate": 0.9}
         tensor = econ_to_tensor(econ_data)
-        context = {
-            "econ_tensor_v1": tensor,
-            "econ_basis_sha": get_default_basis().sha256,
-        }
+        context = RegalContextV1(
+            run_id="test",
+            econ_basis_sha=get_default_basis().sha256,
+        )
 
-        report1 = regal.evaluate(None, None, config, context)
-        report2 = regal.evaluate(None, None, config, context)
+        report1 = regal.evaluate(None, None, config, context, econ_tensor=tensor)
+        report2 = regal.evaluate(None, None, config, context, econ_tensor=tensor)
 
         assert report1.passed == report2.passed
         assert report1.hack_probability == report2.hack_probability
@@ -186,11 +189,11 @@ class TestRegalStableOutput:
             "damage_cost": 20.0,
         })
 
-        context1 = {"econ_tensor_v1": tensor1, "econ_basis_sha": "sha1"}
-        context2 = {"econ_tensor_v1": tensor2, "econ_basis_sha": "sha2"}
+        context1 = RegalContextV1(run_id="test1", econ_basis_sha="sha1")
+        context2 = RegalContextV1(run_id="test2", econ_basis_sha="sha2")
 
-        report1 = regal.evaluate(None, None, config, context1)
-        report2 = regal.evaluate(None, None, config, context2)
+        report1 = regal.evaluate(None, None, config, context1, econ_tensor=tensor1)
+        report2 = regal.evaluate(None, None, config, context2, econ_tensor=tensor2)
 
         # Reports should differ
         assert report1.passed != report2.passed or report1.integrity_flags != report2.integrity_flags
@@ -213,17 +216,18 @@ class TestEvaluateRegalsWithEconTensor:
         )
 
         tensor = econ_to_tensor({"mpl_units_per_hour": 10.0})
-        context = {
-            "econ_tensor_v1": tensor,
-            "econ_basis_sha": get_default_basis().sha256,
-        }
+        context = RegalContextV1(
+            run_id="test",
+            econ_basis_sha=get_default_basis().sha256,
+        )
 
         result = evaluate_regals(
-            config,
+            config=config,
             plan=None,
             signals=None,
             policy_config=policy_config,
             context=context,
+            econ_tensor=tensor,
         )
 
         assert len(result.reports) == 3
@@ -248,17 +252,18 @@ class TestEvaluateRegalsWithEconTensor:
             "reward_scalar_sum": 5.0,
             "damage_cost": 20.0,
         })
-        context = {
-            "econ_tensor_v1": tensor,
-            "econ_basis_sha": get_default_basis().sha256,
-        }
+        context = RegalContextV1(
+            run_id="test",
+            econ_basis_sha=get_default_basis().sha256,
+        )
 
         result = evaluate_regals(
-            config,
+            config=config,
             plan=None,
             signals=None,
             policy_config=policy_config,
             context=context,
+            econ_tensor=tensor,
         )
 
         # Should detect anomaly
@@ -278,8 +283,11 @@ class TestRegalEconTensorFallback:
             default_weights={"manipulation": 0.5},
         )
 
-        # No econ tensor in context, stable weight history (no oscillation)
-        context = {"weight_history": [1.0, 1.0, 1.0]}
+        # No econ tensor, stable weight history (no oscillation) via RegalContextV1.notes
+        context = RegalContextV1(
+            run_id="test",
+            notes={"weight_history": [1.0, 1.0, 1.0]},
+        )
 
         report = regal.evaluate(None, None, config, context)
 
@@ -307,10 +315,11 @@ class TestRegalEconTensorFallback:
             default_weights={"manipulation": 0.5},
         )
 
-        # No tensor, but weight history with oscillations
-        context = {
-            "weight_history": [1.0, 1.5, 1.0, 1.5, 1.0, 1.5, 1.0],  # High oscillation
-        }
+        # No tensor, but weight history with oscillations via RegalContextV1.notes
+        context = RegalContextV1(
+            run_id="test",
+            notes={"weight_history": [1.0, 1.5, 1.0, 1.5, 1.0, 1.5, 1.0]},  # High oscillation
+        )
 
         report = regal.evaluate(None, None, config, context)
 

@@ -14,6 +14,8 @@ from src.contracts.schemas import (
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
     EconTensorV1,
+    RegalContextV1,
+    RegalPhaseV1,
 )
 from src.regal.regal_evaluator import (
     REGAL_REGISTRY,
@@ -51,27 +53,23 @@ class TestEconDataRegalRegistry:
 class TestEconDataRegalDeterminism:
     """Tests for EconDataRegal determinism and report SHA stability."""
 
-    def _make_econ_context(self) -> Dict[str, Any]:
-        """Create a context with econ tensor."""
+    def _make_econ_tensor(self) -> EconTensorV1:
+        """Create a test econ tensor."""
         basis = get_default_basis()
         econ_data = {
             "mpl_units_per_hour": 10.0,
             "success_rate": 0.85,
             "energy_cost": 2.0,
         }
-        tensor = econ_to_tensor(econ_data, basis=basis.spec, source="synthetic")
-        return {
-            "econ_tensor_v1": tensor,
-            "econ_basis_sha": basis.sha256,
-        }
+        return econ_to_tensor(econ_data, basis=basis.spec, source="synthetic")
 
     def test_inputs_sha_deterministic(self):
         """Test that same inputs produce same inputs_sha (deterministic)."""
         regal = EconDataRegal(seed=42)
-        context = self._make_econ_context()
+        tensor = self._make_econ_tensor()
 
-        report1 = regal.evaluate(None, None, None, context)
-        report2 = regal.evaluate(None, None, None, context)
+        report1 = regal.evaluate(None, None, None, None, econ_tensor=tensor)
+        report2 = regal.evaluate(None, None, None, None, econ_tensor=tensor)
 
         # inputs_sha should be deterministic (excludes timestamp)
         assert report1.inputs_sha == report2.inputs_sha
@@ -89,24 +87,21 @@ class TestEconDataRegalDeterminism:
         tensor1 = econ_to_tensor({"mpl_units_per_hour": 10.0}, basis=basis.spec)
         tensor2 = econ_to_tensor({"mpl_units_per_hour": 20.0}, basis=basis.spec)
 
-        context1 = {"econ_tensor_v1": tensor1, "econ_basis_sha": basis.sha256}
-        context2 = {"econ_tensor_v1": tensor2, "econ_basis_sha": basis.sha256}
-
-        report1 = regal.evaluate(None, None, None, context1)
-        report2 = regal.evaluate(None, None, None, context2)
+        report1 = regal.evaluate(None, None, None, None, econ_tensor=tensor1)
+        report2 = regal.evaluate(None, None, None, None, econ_tensor=tensor2)
 
         # Different inputs should produce different inputs_sha
         assert report1.inputs_sha != report2.inputs_sha
 
     def test_report_sha_changes_with_seed(self):
         """Test that different seed produces different inputs_sha."""
-        context = self._make_econ_context()
+        tensor = self._make_econ_tensor()
 
         regal1 = EconDataRegal(seed=42)
         regal2 = EconDataRegal(seed=43)
 
-        report1 = regal1.evaluate(None, None, None, context)
-        report2 = regal2.evaluate(None, None, None, context)
+        report1 = regal1.evaluate(None, None, None, None, econ_tensor=tensor)
+        report2 = regal2.evaluate(None, None, None, None, econ_tensor=tensor)
 
         assert report1.inputs_sha != report2.inputs_sha
 
@@ -124,8 +119,8 @@ class TestEconDataRegalValidation:
             "success_rate": 0.85,
         }, basis=basis.spec, source="synthetic")
 
-        context = {"econ_tensor_v1": tensor, "econ_basis_sha": basis.sha256}
-        report = regal.evaluate(None, None, None, context)
+        context = RegalContextV1(run_id="test", econ_basis_sha=basis.sha256)
+        report = regal.evaluate(None, None, None, context, econ_tensor=tensor)
 
         assert report.passed is True
         assert report.regal_id == "econ_data"
@@ -154,8 +149,8 @@ class TestEconDataRegalValidation:
             source="synthetic",
         )
 
-        context = {"econ_tensor_v1": tensor, "econ_basis_sha": basis.sha256}
-        report = regal.evaluate(None, None, None, context)
+        context = RegalContextV1(run_id="test", econ_basis_sha=basis.sha256)
+        report = regal.evaluate(None, None, None, context, econ_tensor=tensor)
 
         assert report.passed is False
         assert "nan_values" in report.coherence_tags
@@ -174,8 +169,8 @@ class TestEconDataRegalValidation:
             source="synthetic",
         )
 
-        context = {"econ_tensor_v1": tensor, "econ_basis_sha": basis.sha256}
-        report = regal.evaluate(None, None, None, context)
+        context = RegalContextV1(run_id="test", econ_basis_sha=basis.sha256)
+        report = regal.evaluate(None, None, None, context, econ_tensor=tensor)
 
         assert report.passed is False
         assert "inf_values" in report.coherence_tags
@@ -194,8 +189,8 @@ class TestEconDataRegalValidation:
             source="synthetic",
         )
 
-        context = {"econ_tensor_v1": tensor, "econ_basis_sha": basis.sha256}
-        report = regal.evaluate(None, None, None, context)
+        context = RegalContextV1(run_id="test", econ_basis_sha=basis.sha256)
+        report = regal.evaluate(None, None, None, context, econ_tensor=tensor)
 
         assert report.passed is False
         assert "basis_sha_mismatch" in report.coherence_tags
@@ -219,7 +214,7 @@ class TestEconDataRegalInAggregation:
 
         basis = get_default_basis()
         tensor = econ_to_tensor({"mpl_units_per_hour": 10.0}, basis=basis.spec)
-        context = {"econ_tensor_v1": tensor, "econ_basis_sha": basis.sha256}
+        context = RegalContextV1(run_id="test", econ_basis_sha=basis.sha256)
 
         result = evaluate_regals(
             config=config,
@@ -227,6 +222,7 @@ class TestEconDataRegalInAggregation:
             signals=None,
             policy_config=policy_config,
             context=context,
+            econ_tensor=tensor,
         )
 
         assert len(result.reports) == 1
@@ -251,7 +247,7 @@ class TestEconDataRegalInAggregation:
             "mpl_units_per_hour": 10.0,
             "success_rate": 0.9,
         }, basis=basis.spec)
-        context = {"econ_tensor_v1": tensor, "econ_basis_sha": basis.sha256}
+        context = RegalContextV1(run_id="test", econ_basis_sha=basis.sha256)
 
         result = evaluate_regals(
             config=config,
@@ -259,6 +255,7 @@ class TestEconDataRegalInAggregation:
             signals=None,
             policy_config=policy_config,
             context=context,
+            econ_tensor=tensor,
         )
 
         # Should have 4 reports (all enabled regals)
@@ -294,7 +291,7 @@ class TestEconDataRegalInAggregation:
             x=[float("nan")] + [0.0] * 9,
             source="synthetic",
         )
-        context = {"econ_tensor_v1": tensor, "econ_basis_sha": basis.sha256}
+        context = RegalContextV1(run_id="test", econ_basis_sha=basis.sha256)
 
         result = evaluate_regals(
             config=config,
@@ -302,6 +299,7 @@ class TestEconDataRegalInAggregation:
             signals=None,
             policy_config=policy_config,
             context=context,
+            econ_tensor=tensor,
         )
 
         # econ_data should fail, affecting all_passed
@@ -320,7 +318,7 @@ class TestEconDataRegalInAggregation:
 
         basis = get_default_basis()
         tensor = econ_to_tensor({"mpl_units_per_hour": 10.0}, basis=basis.spec)
-        context = {"econ_tensor_v1": tensor, "econ_basis_sha": basis.sha256}
+        context = RegalContextV1(run_id="test", econ_basis_sha=basis.sha256)
 
         result = evaluate_regals(
             config=config,
@@ -328,6 +326,7 @@ class TestEconDataRegalInAggregation:
             signals=None,
             policy_config=None,
             context=context,
+            econ_tensor=tensor,
         )
 
         # combined_inputs_sha should be computed from all reports

@@ -11,6 +11,8 @@ from src.contracts.schemas import (
     PlanOpType,
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
+    RegalContextV1,
+    RegalPhaseV1,
 )
 from src.representation.homeostasis import SignalBundle, ControlSignal, SignalType
 from src.regal.regal_evaluator import (
@@ -122,7 +124,7 @@ class TestRegalRegistry:
         class TestCustomRegal(RegalNode):
             regal_id = "test_custom_regal"
 
-            def evaluate(self, plan, signals, policy_config, context=None):
+            def evaluate(self, plan, signals, policy_config, context=None, phase=None, trajectory_audit=None, econ_tensor=None):
                 return RegalReportV1(
                     regal_id=self.regal_id,
                     inputs_sha="test",
@@ -268,8 +270,11 @@ class TestRewardIntegrityRegal:
         regal = RewardIntegrityRegal(seed=42)
         config = self._make_policy_config()
 
-        # Steady increase, no oscillation
-        context = {"weight_history": [1.0, 1.1, 1.2, 1.3, 1.4]}
+        # Steady increase, no oscillation - use RegalContextV1 with notes
+        context = RegalContextV1(
+            run_id="test",
+            notes={"weight_history": [1.0, 1.1, 1.2, 1.3, 1.4]}
+        )
 
         report = regal.evaluate(None, None, config, context)
         assert report.passed is True
@@ -279,8 +284,11 @@ class TestRewardIntegrityRegal:
         regal = RewardIntegrityRegal(seed=42)
         config = self._make_policy_config()
 
-        # Alternating up/down = high oscillation
-        context = {"weight_history": [1.0, 1.5, 1.0, 1.5, 1.0, 1.5, 1.0]}
+        # Alternating up/down = high oscillation - use RegalContextV1 with notes
+        context = RegalContextV1(
+            run_id="test",
+            notes={"weight_history": [1.0, 1.5, 1.0, 1.5, 1.0, 1.5, 1.0]}
+        )
 
         report = regal.evaluate(None, None, config, context)
         assert report.passed is False
@@ -322,7 +330,7 @@ class TestEvaluateRegals:
             ],
         )
 
-        result = evaluate_regals(config, plan, None, policy_config, None)
+        result = evaluate_regals(config=config, plan=plan, policy_config=policy_config)
 
         assert isinstance(result, LedgerRegalV1)
         assert result.all_passed is True
@@ -347,7 +355,7 @@ class TestEvaluateRegals:
             ],
         )
 
-        result = evaluate_regals(config, plan, None, policy_config, None)
+        result = evaluate_regals(config=config, plan=plan, policy_config=policy_config)
 
         assert result.all_passed is False
         assert len(result.reports) == 1
@@ -357,7 +365,7 @@ class TestEvaluateRegals:
         """Test evaluate_regals with no enabled regals."""
         config = RegalGatesV1(enabled_regal_ids=[])
 
-        result = evaluate_regals(config, None, None, None, None)
+        result = evaluate_regals(config=config)
 
         assert result.all_passed is True
         assert len(result.reports) == 0
@@ -368,7 +376,7 @@ class TestEvaluateRegals:
             enabled_regal_ids=["spec_guardian", "nonexistent_regal"],
         )
 
-        result = evaluate_regals(config, None, None, None, None)
+        result = evaluate_regals(config=config)
 
         # Should only have 1 report (spec_guardian), nonexistent skipped
         assert len(result.reports) == 1
@@ -381,8 +389,8 @@ class TestEvaluateRegals:
             determinism_seed=42,
         )
 
-        result1 = evaluate_regals(config, None, None, None, None)
-        result2 = evaluate_regals(config, None, None, None, None)
+        result1 = evaluate_regals(config=config)
+        result2 = evaluate_regals(config=config)
 
         # Combined inputs SHA should be deterministic
         assert result1.combined_inputs_sha == result2.combined_inputs_sha
