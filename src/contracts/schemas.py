@@ -659,6 +659,83 @@ class KnobPolicyV1(BaseModel):
 
 
 # =============================================================================
+# EconTensor - Canonical coordinate chart for economic metrics
+# =============================================================================
+
+class EconBasisSpecV1(BaseModel):
+    """Basis specification for econ tensor coordinate system.
+
+    Defines the canonical axis ordering, units, and normalization for econ tensors.
+    Basis is immutable and registered - treat as an API.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = "v1"
+    basis_id: str  # e.g., "econ_basis_v1"
+
+    # Canonical axis ordering (immutable once registered)
+    axes: List[str]  # e.g., ["mpl_units_per_hour", "wage_parity", ...]
+
+    # Units per axis (for documentation/validation)
+    units: Dict[str, str] = Field(default_factory=dict)  # axis -> unit string
+
+    # Normalization scales (for learned models)
+    scales: Dict[str, float] = Field(default_factory=dict)  # axis -> scale (default 1.0)
+
+    # How to handle missing axes
+    missing_policy: Literal["zero_fill", "mask"] = "zero_fill"
+
+    def sha256(self) -> str:
+        """Compute stable SHA of basis spec."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+class EconTensorV1(BaseModel):
+    """Economic metrics in canonical tensor form.
+
+    The tensor is ordered by the basis axes and includes provenance.
+    This is the invariant interface for econ data across the system.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = "v1"
+
+    # Basis reference
+    basis_id: str
+    basis_sha: str  # SHA of EconBasisSpecV1
+
+    # Tensor values (ordered by basis.axes)
+    x: List[float]
+
+    # Optional mask for missing values (if missing_policy="mask")
+    mask: Optional[List[bool]] = None
+
+    # Source of the tensor values
+    source: Literal["episode_metrics", "econ_vector", "datapack", "synthetic"] = "episode_metrics"
+
+    # Linked regime features (if computed)
+    regime_features_sha: Optional[str] = None
+
+    # Optional debug stats
+    stats: Optional[Dict[str, float]] = None  # e.g., {"norm": 1.23, "min": 0.0, "max": 2.5}
+
+    def sha256(self) -> str:
+        """Compute stable SHA of tensor."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+class LedgerEconV1(BaseModel):
+    """Econ tensor provenance for ledger records."""
+    model_config = ConfigDict(extra="forbid")
+
+    basis_sha: str
+    econ_tensor_sha: str
+    econ_tensor_summary: Optional[Dict[str, float]] = None  # e.g., {"norm": 1.5, "mpl": 0.8}
+
+
+# =============================================================================
 # ValueLedgerRecordV1 - Single ledger entry for realized value
 # =============================================================================
 
@@ -800,6 +877,9 @@ class ValueLedgerRecordV1(BaseModel):
     # Knob policy (optional, D4 learned/heuristic calibration)
     knob_policy: Optional["KnobPolicyV1"] = None
 
+    # Econ tensor provenance (canonical coordinate chart)
+    econ: Optional[LedgerEconV1] = None
+
     notes: Optional[str] = None
 
 
@@ -862,6 +942,10 @@ class RunManifestV1(BaseModel):
 
     # Trajectory audit provenance (for meta-regal grounding)
     trajectory_audit_sha: Optional[str] = None  # Aggregated SHA of trajectory audits
+
+    # Econ tensor provenance (canonical coordinate chart)
+    econ_basis_sha: Optional[str] = None  # SHA of EconBasisSpecV1
+    econ_tensor_sha: Optional[str] = None  # SHA of EconTensorV1 (aggregated if multiple)
 
     # Schema versions used
     schema_versions: Dict[str, str] = Field(default_factory=lambda: {
@@ -927,6 +1011,10 @@ __all__ = [
     # Knob Calibration (D4)
     "RegimeFeaturesV1",
     "KnobPolicyV1",
+    # Econ Tensor (coordinate chart)
+    "EconBasisSpecV1",
+    "EconTensorV1",
+    "LedgerEconV1",
     # Ledger
     "LedgerWindowV1",
     "LedgerExposureV1",

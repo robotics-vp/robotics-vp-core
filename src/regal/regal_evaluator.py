@@ -291,6 +291,7 @@ class RewardIntegrityRegal(RegalNode):
     - Sudden spikes in success rate without corresponding skill improvement
     - Anomalous energy consumption patterns
     - Weight oscillations (sign of exploitation)
+    - Econ tensor anomalies (if available)
     """
 
     regal_id = "reward_integrity"
@@ -307,7 +308,6 @@ class RewardIntegrityRegal(RegalNode):
         violations: List[str] = []
         integrity_flags: List[str] = []
         hack_indicators = 0
-        total_checks = 2  # We do 2 main checks
 
         # Check context for historical patterns
         history = context.get("weight_history", []) if context else []
@@ -348,6 +348,40 @@ class RewardIntegrityRegal(RegalNode):
                         )
                         integrity_flags.append("anomalous_gain")
                         hack_indicators += 1
+
+        # Check 3: Econ tensor analysis (if available)
+        econ_tensor = context.get("econ_tensor_v1") if context else None
+        econ_basis_sha = context.get("econ_basis_sha") if context else None
+        if econ_tensor is not None:
+            findings["econ_tensor_available"] = True
+            findings["econ_basis_sha"] = econ_basis_sha
+
+            # Use econ tensor for more sophisticated checks
+            # Check for anomalous patterns: high reward with high damage/energy
+            try:
+                from src.economics.econ_tensor import tensor_to_econ_dict
+                econ_dict = tensor_to_econ_dict(econ_tensor)
+                findings["econ_values"] = {k: round(v, 4) for k, v in list(econ_dict.items())[:5]}
+
+                # Invariant check: reward up but throughput flat + error rising
+                reward = econ_dict.get("reward_scalar_sum", 0.0)
+                error = econ_dict.get("error_rate", 0.0)
+                damage = econ_dict.get("damage_cost", 0.0)
+                mpl = econ_dict.get("mpl_units_per_hour", 0.0)
+
+                # Flag if reward high but MPL low and damage high
+                if reward > 1.0 and mpl < 0.1 and damage > 5.0:
+                    violations.append(
+                        f"Econ anomaly: high reward ({reward:.2f}) with low MPL ({mpl:.2f}) "
+                        f"and high damage ({damage:.2f})"
+                    )
+                    integrity_flags.append("econ_anomaly")
+                    hack_indicators += 1
+
+            except Exception as e:
+                findings["econ_tensor_error"] = str(e)
+        else:
+            findings["econ_tensor_available"] = False
 
         findings["violations"] = violations
 

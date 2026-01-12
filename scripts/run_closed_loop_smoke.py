@@ -49,6 +49,8 @@ from src.contracts.schemas import (
     RegalGatesV1,
     LedgerRegalV1,
     TrajectoryAuditV1,
+    EconTensorV1,
+    LedgerEconV1,
 )
 from src.orchestrator.plan_applier import PlanApplier
 from src.orchestrator.homeostatic_plan_writer import (
@@ -309,6 +311,10 @@ def main():
     parser.add_argument("--include-trajectory-audit", action="store_true",
                         help="Include synthetic trajectory audit data")
 
+    # Econ tensor flags (canonical coordinate chart)
+    parser.add_argument("--include-econ-tensor", action="store_true",
+                        help="Compute and log econ tensor (canonical coordinate chart)")
+
     args = parser.parse_args()
 
     # Determine mode
@@ -330,6 +336,9 @@ def main():
 
     if args.include_trajectory_audit:
         mode += "+trajectory"
+
+    if args.include_econ_tensor:
+        mode += "+econ"
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -645,6 +654,47 @@ def main():
         print(f"  Contact anomalies: {trajectory_audit.contact_anomaly_count}")
         print(f"  Trajectory audit SHA: {trajectory_audit.sha256()[:16]}")
 
+    # Generate econ tensor if enabled
+    econ_tensor: Optional["EconTensorV1"] = None
+    econ_basis_sha: Optional[str] = None
+    if args.include_econ_tensor:
+        print("\n[4d/8] Computing econ tensor (canonical coordinate chart)...")
+        from src.economics.econ_basis_registry import get_default_basis
+        from src.economics.econ_tensor import econ_to_tensor, compute_tensor_summary
+
+        # Get default basis
+        basis_def = get_default_basis()
+        econ_basis_sha = basis_def.sha256
+
+        # Create synthetic econ data (in production, this comes from EconVector)
+        rng_econ = np.random.default_rng(args.seed + 100)
+        econ_data = {
+            "mpl_units_per_hour": float(rng_econ.uniform(5.0, 25.0)),
+            "wage_parity": float(rng_econ.uniform(0.8, 1.2)),
+            "energy_cost": float(rng_econ.uniform(0.5, 3.0)),
+            "damage_cost": float(rng_econ.uniform(0.0, 1.0)),
+            "novelty_delta": float(rng_econ.uniform(-0.1, 0.1)),
+            "reward_scalar_sum": float(rng_econ.uniform(0.5, 2.0)),
+            "mobility_penalty": float(rng_econ.uniform(0.0, 0.2)),
+            "throughput": float(rng_econ.uniform(10.0, 50.0)),
+            "error_rate": float(rng_econ.uniform(0.0, 0.2)),
+            "success_rate": float(rng_econ.uniform(0.7, 1.0)),
+        }
+
+        econ_tensor = econ_to_tensor(
+            econ_data,
+            basis=basis_def.spec,
+            source="synthetic",
+        )
+
+        tensor_summary = compute_tensor_summary(econ_tensor, basis_def.spec)
+
+        print(f"  Basis ID: {econ_tensor.basis_id}")
+        print(f"  Basis SHA: {econ_basis_sha[:16]}")
+        print(f"  Tensor SHA: {econ_tensor.sha256()[:16]}")
+        print(f"  Tensor norm: {tensor_summary.get('norm', 0):.4f}")
+        print(f"  Key values: mpl={econ_data['mpl_units_per_hour']:.2f}, success={econ_data['success_rate']:.2f}")
+
     # =========================================================================
     # Step 5: Hot reload updated plan
     # =========================================================================
@@ -738,6 +788,17 @@ def main():
             transfer_pass=probe_report.transfer_pass,
         )
 
+    # Create econ ledger entry if tensor available
+    ledger_econ: Optional[LedgerEconV1] = None
+    if econ_tensor and econ_basis_sha:
+        from src.economics.econ_tensor import compute_tensor_summary
+        tensor_summary = compute_tensor_summary(econ_tensor)
+        ledger_econ = LedgerEconV1(
+            basis_sha=econ_basis_sha,
+            econ_tensor_sha=econ_tensor.sha256(),
+            econ_tensor_summary=tensor_summary,
+        )
+
     record = ledger.create_record(
         run_id=run_id,
         plan_id=updated_plan.plan_id,
@@ -761,6 +822,7 @@ def main():
         ),
         probe=ledger_probe,
         regal=regal_result,
+        econ=ledger_econ,
         notes=f"Mode: {mode}",
     )
 
@@ -832,6 +894,11 @@ def main():
     if trajectory_audit:
         manifest.trajectory_audit_sha = trajectory_audit.sha256()
 
+    # Add econ tensor SHAs to manifest if available
+    if econ_tensor:
+        manifest.econ_basis_sha = econ_basis_sha
+        manifest.econ_tensor_sha = econ_tensor.sha256()
+
     write_manifest(str(manifest_path), manifest)
     print(f"  run_manifest.json written")
     print(f"    Run ID: {manifest.run_id}")
@@ -850,6 +917,9 @@ def main():
         print(f"    Knob policy used: {manifest.knob_policy_used}")
     if manifest.trajectory_audit_sha:
         print(f"    Trajectory audit SHA: {manifest.trajectory_audit_sha[:16]}")
+    if manifest.econ_basis_sha:
+        print(f"    Econ basis SHA: {manifest.econ_basis_sha[:16]}")
+        print(f"    Econ tensor SHA: {manifest.econ_tensor_sha[:16] if manifest.econ_tensor_sha else 'N/A'}")
     print(f"    Source commit: {manifest.source_commit or 'N/A'}")
 
     # =========================================================================

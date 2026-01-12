@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from src.representation.homeostasis import SignalBundle
     from src.valuation.exposure_manifest import ExposureManifestV1
     from src.regal.knob_model import KnobModel
+    from src.contracts.schemas import EconTensorV1
 
 
 class EconPlanPolicyProvider(ABC):
@@ -94,6 +95,7 @@ def build_regime_features(
     regal_result: Optional[LedgerRegalV1] = None,
     context: Optional[Dict[str, Any]] = None,
     task_family_weights: Optional[Dict[str, float]] = None,
+    econ_tensor: Optional["EconTensorV1"] = None,
 ) -> RegimeFeaturesV1:
     """Build RegimeFeaturesV1 from available context.
 
@@ -103,6 +105,7 @@ def build_regime_features(
         regal_result: Result from regal evaluation
         context: Additional context (weight_history, etc.)
         task_family_weights: Current task family weights
+        econ_tensor: Optional econ tensor for coordinate chart data
 
     Returns:
         RegimeFeaturesV1 populated from available data
@@ -137,10 +140,22 @@ def build_regime_features(
         features.task_family_weights = task_family_weights
 
     # Additional context
+    objective_profile: Dict[str, Any] = {}
     if context:
         weight_history = context.get("weight_history", [])
         if weight_history:
-            features.objective_profile = {"weight_history_len": len(weight_history)}
+            objective_profile["weight_history_len"] = len(weight_history)
+
+    # Extract econ tensor info (if available)
+    if econ_tensor is not None:
+        objective_profile["econ_tensor_sha"] = econ_tensor.sha256()
+        objective_profile["econ_basis_sha"] = econ_tensor.basis_sha
+        # Include key econ values for the model
+        if econ_tensor.stats:
+            objective_profile["econ_norm"] = econ_tensor.stats.get("norm", 0.0)
+
+    if objective_profile:
+        features.objective_profile = objective_profile
 
     return features
 

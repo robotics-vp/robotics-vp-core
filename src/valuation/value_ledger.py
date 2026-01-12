@@ -22,6 +22,7 @@ from src.contracts.schemas import (
     LedgerGraphV1,
     LedgerProbeV1,
     LedgerPlanPolicyV1,
+    LedgerEconV1,
     AuditAggregateV1,
 )
 from src.utils.config_digest import sha256_json
@@ -83,6 +84,7 @@ class ValueLedger:
         plan_policy: Optional[LedgerPlanPolicyV1] = None,
         graph: Optional[LedgerGraphV1] = None,
         regal: Optional[LedgerRegalV1] = None,
+        econ: Optional["LedgerEconV1"] = None,
     ) -> ValueLedgerRecordV1:
         """Create a ledger record from audit results.
 
@@ -100,6 +102,7 @@ class ValueLedger:
             plan_policy: Optional plan policy details
             graph: Optional graph metrics
             regal: Optional regal evaluation results
+            econ: Optional econ tensor provenance
 
         Returns:
             ValueLedgerRecordV1 record
@@ -151,6 +154,7 @@ class ValueLedger:
             plan_policy=plan_policy,
             graph=graph,
             regal=regal,
+            econ=econ,
             notes=notes,
         )
 

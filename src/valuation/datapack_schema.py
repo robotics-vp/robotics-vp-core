@@ -634,6 +634,10 @@ class DataPackMeta:
     graph_summary_v1: Optional[Dict[str, Any]] = None
     # Contains serialized GraphSummaryV1 with sigma, nav_success_rate, etc.
 
+    # Econ tensor (optional) - canonical coordinate chart for econ metrics
+    econ_tensor_v1: Optional[Dict[str, Any]] = None
+    # Contains serialized EconTensorV1 with basis_sha, x, and provenance
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         d = {
@@ -675,6 +679,7 @@ class DataPackMeta:
             'epiplexity_summary': to_json_safe(self.epiplexity_summary),
             'signal_bundle': to_json_safe(self.signal_bundle),
             'graph_summary_v1': to_json_safe(self.graph_summary_v1),
+            'econ_tensor_v1': to_json_safe(self.econ_tensor_v1),
         }
         return to_json_safe(d)
 
@@ -744,6 +749,7 @@ class DataPackMeta:
             epiplexity_summary=d.get('epiplexity_summary'),
             signal_bundle=d.get('signal_bundle'),
             graph_summary_v1=d.get('graph_summary_v1'),
+            econ_tensor_v1=d.get('econ_tensor_v1'),
         )
 
     @classmethod
