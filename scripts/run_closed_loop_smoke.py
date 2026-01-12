@@ -75,6 +75,10 @@ from src.valuation.exposure_manifest import (
     write_exposure_manifest,
 )
 from src.valuation.run_manifest import create_run_manifest, write_manifest
+from src.valuation.trajectory_audit import (
+    create_trajectory_audit,
+    aggregate_trajectory_audits,
+)
 from src.determinism.determinism_context import set_determinism, get_context_summary
 from src.utils.config_digest import sha256_json, sha256_file
 from src.geometry_graphs.small_world import graph_summary_from_embeddings
@@ -620,61 +624,78 @@ def main():
             if not report.passed:
                 print(f"      Rationale: {report.rationale}")
 
-    # Generate trajectory audit if enabled (synthetic for now)
+    # Generate trajectory audit if enabled (using real producer)
     trajectory_audit: Optional[TrajectoryAuditV1] = None
+    trajectory_audit_sha: Optional[str] = None
     if args.include_trajectory_audit or (args.include_regal and getattr(args, 'regal_smoke_anomaly', False)):
-        print("\n[4c/8] Generating synthetic trajectory audit...")
+        print("\n[4c/8] Generating trajectory audit via producer...")
         rng = np.random.default_rng(args.seed)
 
         # Check if we need to inject anomalies for testing
         inject_anomalies = getattr(args, 'regal_smoke_anomaly', False)
         
-        # Generate synthetic trajectory data
+        # Generate synthetic episode data (simulates training loop output)
         num_steps = 50
         action_dim = 7  # e.g., 7-DoF robot
         
-        # Set velocity spikes and anomalies based on flag
+        # Create synthetic actions/rewards (deterministic from seed)
+        actions = [
+            [float(x) for x in rng.standard_normal(action_dim) * 0.1]
+            for _ in range(num_steps)
+        ]
+        rewards = [float(rng.uniform(0.0, 0.05)) for _ in range(num_steps)]
+        reward_components = {
+            "manipulation_reward": [float(rng.uniform(0.02, 0.04)) for _ in range(num_steps)],
+            "collision_penalty": [float(rng.uniform(-0.01, 0.0)) for _ in range(num_steps)],
+            "time_penalty": [float(rng.uniform(-0.005, -0.001)) for _ in range(num_steps)],
+        }
+        events = ["grasp_attempt", "grasp_success", "place_attempt"]
+        
+        # Generate velocity data with optional spikes for anomaly testing
         if inject_anomalies:
-            velocity_spike_count = 10  # >= 5 triggers WorldCoherenceRegal failure
-            contact_anomaly_count = 5   # >= 3 triggers failure
-            penetration_max = 0.05     # > 0.01 triggers failure
+            # Inject velocity spikes that will trip WorldCoherenceRegal
+            velocities = [
+                [float(rng.uniform(15.0, 20.0)), 0.0, 0.0] if i % 5 == 0 else [1.0, 1.0, 1.0]
+                for i in range(num_steps)
+            ]
             print("  [ANOMALY MODE] Injecting physics anomalies to trip WorldCoherenceRegal")
         else:
-            velocity_spike_count = int(rng.integers(0, 3))
-            contact_anomaly_count = int(rng.integers(0, 2))
-            penetration_max = float(rng.uniform(0.0, 0.005))
-
-        trajectory_audit = TrajectoryAuditV1(
+            velocities = [
+                [float(x) for x in rng.uniform(0.5, 2.0, 3)]
+                for _ in range(num_steps)
+            ]
+        
+        # Use the REAL producer (canonical entrypoint)
+        trajectory_audit = create_trajectory_audit(
             episode_id=f"smoke_episode_{run_id}",
             num_steps=num_steps,
-            action_mean=[float(x) for x in rng.standard_normal(action_dim) * 0.1],
-            action_std=[float(x) for x in np.abs(rng.standard_normal(action_dim)) * 0.05 + 0.01],
-            state_bounds={
-                "pos_x": [-1.0, 1.0],
-                "pos_y": [-1.0, 1.0],
-                "pos_z": [0.0, 0.5],
-            },
-            total_return=float(rng.uniform(0.5, 1.5)),
-            reward_components={
-                "manipulation_reward": float(rng.uniform(0.3, 0.8)),
-                "collision_penalty": float(rng.uniform(-0.1, 0.0)),
-                "time_penalty": float(rng.uniform(-0.2, -0.1)),
-            },
-            events=["grasp_attempt", "grasp_success", "place_attempt"],
-            event_counts={"grasp_attempt": 3, "grasp_success": 2, "place_attempt": 2},
-            penetration_max=penetration_max,
-            velocity_spike_count=velocity_spike_count,
-            contact_anomaly_count=contact_anomaly_count,
+            actions=actions,
+            rewards=rewards,
+            reward_components=reward_components,
+            events=events,
+            velocities=velocities,
+            velocity_threshold=10.0,
         )
+        
+        # For anomaly testing, also inject contact_anomaly_count and penetration_max
+        if inject_anomalies:
+            trajectory_audit = TrajectoryAuditV1(
+                **{**trajectory_audit.model_dump(), 
+                   "contact_anomaly_count": 5,
+                   "penetration_max": 0.05}
+            )
+        
+        # Compute SHA for provenance
+        trajectory_audit_sha = trajectory_audit.sha256()
 
         print(f"  Episode ID: {trajectory_audit.episode_id}")
         print(f"  Steps: {trajectory_audit.num_steps}")
         print(f"  Total return: {trajectory_audit.total_return:.3f}")
-        print(f"  Events: {trajectory_audit.events}")
-        print(f"  Penetration max: {trajectory_audit.penetration_max:.4f}")
+        print(f"  Action mean: {trajectory_audit.action_mean[:3]}... (truncated)")
+        print(f"  Event counts: {trajectory_audit.event_counts}")
         print(f"  Velocity spikes: {trajectory_audit.velocity_spike_count}")
         print(f"  Contact anomalies: {trajectory_audit.contact_anomaly_count}")
-        print(f"  Trajectory audit SHA: {trajectory_audit.sha256()[:16]}")
+        print(f"  Trajectory audit SHA: {trajectory_audit_sha[:16]}")
 
     # Re-run regal evaluation at POST_AUDIT phase if trajectory audit present
     regal_result_post_audit: Optional[LedgerRegalV1] = None
