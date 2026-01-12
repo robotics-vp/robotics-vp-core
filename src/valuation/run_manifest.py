@@ -67,6 +67,12 @@ def create_run_manifest(
     regal_config_sha: Optional[str] = None,
     regal_report_sha: Optional[str] = None,
     regal_inputs_sha: Optional[str] = None,
+    regal_context_sha: Optional[str] = None,
+    # Trajectory audit provenance
+    trajectory_audit_sha: Optional[str] = None,
+    # Economics provenance
+    econ_basis_sha: Optional[str] = None,
+    econ_tensor_sha: Optional[str] = None,
 ) -> RunManifestV1:
     """Create a run manifest for provenance.
 
@@ -91,6 +97,10 @@ def create_run_manifest(
         regal_config_sha: Optional regal config SHA (Stage-6)
         regal_report_sha: Optional regal report SHA (Stage-6)
         regal_inputs_sha: Optional regal inputs SHA (Stage-6)
+        regal_context_sha: Optional regal context SHA (Stage-6)
+        trajectory_audit_sha: Optional trajectory audit SHA
+        econ_basis_sha: Optional econ basis SHA
+        econ_tensor_sha: Optional econ tensor SHA
 
     Returns:
         RunManifestV1 with provenance information
@@ -125,6 +135,10 @@ def create_run_manifest(
         regal_config_sha=regal_config_sha,
         regal_report_sha=regal_report_sha,
         regal_inputs_sha=regal_inputs_sha,
+        regal_context_sha=regal_context_sha,
+        trajectory_audit_sha=trajectory_audit_sha,
+        econ_basis_sha=econ_basis_sha,
+        econ_tensor_sha=econ_tensor_sha,
     )
 
 

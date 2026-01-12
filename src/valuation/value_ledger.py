@@ -85,6 +85,8 @@ class ValueLedger:
         graph: Optional[LedgerGraphV1] = None,
         regal: Optional[LedgerRegalV1] = None,
         econ: Optional["LedgerEconV1"] = None,
+        # P0: regal provenance status
+        plan_applied: bool = True,
     ) -> ValueLedgerRecordV1:
         """Create a ledger record from audit results.
 
@@ -103,6 +105,7 @@ class ValueLedger:
             graph: Optional graph metrics
             regal: Optional regal evaluation results
             econ: Optional econ tensor provenance
+            plan_applied: Whether plan was applied (False if halted)
 
         Returns:
             ValueLedgerRecordV1 record
@@ -140,6 +143,10 @@ class ValueLedger:
             delta_mpl_proxy=delta_mpl_proxy,
         )
 
+        # P0: Compute regal provenance status
+        regal_degraded = regal is None
+        allow_deploy = regal.all_passed if regal else True
+
         return ValueLedgerRecordV1(
             record_id=str(uuid.uuid4())[:8],
             run_id=run_id,
@@ -156,6 +163,10 @@ class ValueLedger:
             regal=regal,
             econ=econ,
             notes=notes,
+            # P0: regal provenance fields
+            regal_degraded=regal_degraded,
+            allow_deploy=allow_deploy,
+            plan_applied=plan_applied,
         )
 
     @property

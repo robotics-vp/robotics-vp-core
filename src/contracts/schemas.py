@@ -1038,6 +1038,16 @@ class ValueLedgerRecordV1(BaseModel):
 
     notes: Optional[str] = None
 
+    # Regal provenance status (P0: never-silent-failure)
+    # True if regal was missing or incomplete during this run
+    regal_degraded: bool = False
+    # True if regal gates passed (allow deployment)
+    allow_deploy: bool = True
+    # True if plan was actually applied (False if halted before apply)
+    plan_applied: bool = True
+    # Regal summary (per-regal pass/fail for quick lookup)
+    regal_summary: Optional[Dict[str, "LedgerRegalSummaryV1"]] = None
+
 
 # =============================================================================
 # Run Manifest - Provenance for deterministic runs
