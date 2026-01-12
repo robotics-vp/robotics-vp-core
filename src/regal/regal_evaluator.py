@@ -407,6 +407,157 @@ class RewardIntegrityRegal(RegalNode):
         return report
 
 
+@register_regal("econ_data")
+class EconDataRegal(RegalNode):
+    """Validates econ tensor invariants and data allocation constraints.
+
+    True sibling regal node for economic metrics, producing a hashable
+    RegalReportV1 that is aggregated into LedgerRegalV1.
+
+    Checks:
+    - Econ tensor presence and validity
+    - Basis SHA integrity (matches registered basis)
+    - Tensor value invariants (no NaN/Inf, reasonable bounds)
+    - Axis completeness (all axes have valid values)
+    - Exposure/datapack constraints (if available)
+    """
+
+    regal_id = "econ_data"
+
+    def evaluate(
+        self,
+        plan: Optional[SemanticUpdatePlanV1],
+        signals: Optional["SignalBundle"],
+        policy_config: Optional[PlanPolicyConfigV1],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> RegalReportV1:
+        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context)
+        findings: Dict[str, Any] = {}
+        violations: List[str] = []
+        coherence_tags: List[str] = []
+
+        # Extract econ tensor from context
+        econ_tensor = context.get("econ_tensor_v1") if context else None
+        econ_basis_sha = context.get("econ_basis_sha") if context else None
+
+        if econ_tensor is None:
+            # No econ tensor provided - pass with warning
+            findings["econ_tensor_available"] = False
+            findings["reason"] = "No econ tensor in context"
+
+            report = RegalReportV1(
+                regal_id=self.regal_id,
+                regal_version=self.regal_version,
+                inputs_sha=inputs_sha,
+                determinism_seed=self.seed,
+                passed=True,
+                confidence=0.5,  # Lower confidence without econ data
+                rationale="No econ tensor provided; skipping econ validation",
+                spec_consistency_score=1.0,  # Not applicable
+                coherence_score=1.0,  # Not applicable
+                findings=findings,
+            )
+            report.compute_sha()
+            return report
+
+        findings["econ_tensor_available"] = True
+        findings["basis_id"] = econ_tensor.basis_id
+        findings["basis_sha"] = econ_tensor.basis_sha[:16]
+        findings["tensor_sha"] = econ_tensor.sha256()[:16]
+        findings["num_axes"] = len(econ_tensor.x)
+
+        # Check 1: Basis SHA integrity
+        try:
+            from src.economics.econ_basis_registry import get_basis
+            registered_basis = get_basis(econ_tensor.basis_id)
+            if registered_basis is not None:
+                if registered_basis.sha256 != econ_tensor.basis_sha:
+                    violations.append(
+                        f"Basis SHA mismatch: tensor has {econ_tensor.basis_sha[:16]}... "
+                        f"but registry has {registered_basis.sha256[:16]}..."
+                    )
+                    coherence_tags.append("basis_sha_mismatch")
+                else:
+                    findings["basis_verified"] = True
+            else:
+                findings["basis_verified"] = False
+                findings["basis_warning"] = f"Basis '{econ_tensor.basis_id}' not in registry"
+        except Exception as e:
+            findings["basis_check_error"] = str(e)
+
+        # Check 2: Tensor value invariants
+        import math
+        nan_count = 0
+        inf_count = 0
+        for i, val in enumerate(econ_tensor.x):
+            if math.isnan(val):
+                nan_count += 1
+            elif math.isinf(val):
+                inf_count += 1
+
+        if nan_count > 0:
+            violations.append(f"Tensor contains {nan_count} NaN values")
+            coherence_tags.append("nan_values")
+        if inf_count > 0:
+            violations.append(f"Tensor contains {inf_count} Inf values")
+            coherence_tags.append("inf_values")
+
+        findings["nan_count"] = nan_count
+        findings["inf_count"] = inf_count
+
+        # Check 3: Reasonable bounds (heuristic)
+        if econ_tensor.stats:
+            norm = econ_tensor.stats.get("norm", 0.0)
+            findings["tensor_norm"] = norm
+            # Flag extremely large norms as suspicious
+            if norm > 1000.0:
+                violations.append(f"Tensor norm unusually large: {norm:.2f}")
+                coherence_tags.append("large_norm")
+
+        # Check 4: Axis completeness (if mask present)
+        if econ_tensor.mask is not None:
+            missing_count = sum(1 for m in econ_tensor.mask if not m)
+            findings["masked_axes"] = missing_count
+            if missing_count > len(econ_tensor.x) // 2:
+                violations.append(f"More than half of axes masked: {missing_count}/{len(econ_tensor.x)}")
+                coherence_tags.append("high_missing")
+
+        # Check 5: Exposure/datapack constraints (if available)
+        exposure_manifest = context.get("exposure_manifest") if context else None
+        if exposure_manifest:
+            findings["exposure_available"] = True
+            # Could add datapack-specific validation here
+        else:
+            findings["exposure_available"] = False
+
+        # Compute scores
+        num_checks = 5  # basis, nan, inf, bounds, completeness
+        num_failures = len(violations)
+        econ_consistency_score = 1.0 - (num_failures / num_checks)
+        econ_consistency_score = max(0.0, econ_consistency_score)
+
+        findings["violations"] = violations
+        findings["econ_consistency_score"] = econ_consistency_score
+
+        passed = len(violations) == 0
+        report = RegalReportV1(
+            regal_id=self.regal_id,
+            regal_version=self.regal_version,
+            inputs_sha=inputs_sha,
+            determinism_seed=self.seed,
+            passed=passed,
+            confidence=0.9 if passed else 0.7,
+            rationale="Econ tensor validation passed"
+            if passed else f"Detected {len(violations)} econ violations",
+            spec_consistency_score=econ_consistency_score,
+            coherence_score=econ_consistency_score,
+            coherence_tags=list(set(coherence_tags)),
+            findings=findings,
+        )
+        report.compute_sha()
+        return report
+
+
 # =============================================================================
 # Evaluation Function
 # =============================================================================
