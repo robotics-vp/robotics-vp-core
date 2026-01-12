@@ -11,9 +11,13 @@ from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from src.contracts.schemas import (
     RegalGatesV1,
     RegalReportV1,
+    RegalPhaseV1,
+    RegalContextV1,
     LedgerRegalV1,
     SemanticUpdatePlanV1,
     PlanPolicyConfigV1,
+    TrajectoryAuditV1,
+    EconTensorV1,
 )
 from src.utils.config_digest import sha256_json
 
@@ -59,7 +63,10 @@ class RegalNode(ABC):
         plan: Optional[SemanticUpdatePlanV1],
         signals: Optional["SignalBundle"],
         policy_config: Optional[PlanPolicyConfigV1],
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[RegalContextV1] = None,
+        phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
+        trajectory_audit: Optional[TrajectoryAuditV1] = None,
+        econ_tensor: Optional[EconTensorV1] = None,
     ) -> RegalReportV1:
         """Evaluate this regal's constraints.
 
@@ -67,7 +74,10 @@ class RegalNode(ABC):
             plan: The semantic update plan (may be None if no plan yet)
             signals: Current signal bundle
             policy_config: Plan policy configuration
-            context: Additional context (e.g., recent history)
+            context: Typed regal context (replaces Dict[str, Any])
+            phase: Temporal phase for this evaluation
+            trajectory_audit: Episode trajectory audit for substrate grounding
+            econ_tensor: Econ tensor for economic metric validation
 
         Returns:
             RegalReportV1 with verdict and rationale
@@ -79,17 +89,23 @@ class RegalNode(ABC):
         plan: Optional[SemanticUpdatePlanV1],
         signals: Optional["SignalBundle"],
         policy_config: Optional[PlanPolicyConfigV1],
-        context: Optional[Dict[str, Any]],
+        context: Optional[RegalContextV1],
+        phase: RegalPhaseV1,
+        trajectory_audit: Optional[TrajectoryAuditV1],
+        econ_tensor: Optional[EconTensorV1],
     ) -> str:
         """Compute SHA of all inputs for reproducibility."""
         inputs = {
             "regal_id": self.regal_id,
             "seed": self.seed,
+            "phase": phase.value,
             "plan_sha": plan.sha256() if plan else None,
             "policy_config_sha": policy_config.sha256() if policy_config else None,
             # Signals are not directly hashable; use a summary
             "signals_summary": _signals_to_summary(signals) if signals else None,
-            "context": context,
+            "context_sha": context.sha256() if context else None,
+            "trajectory_audit_sha": trajectory_audit.sha256() if trajectory_audit else None,
+            "econ_tensor_sha": econ_tensor.sha256() if econ_tensor else None,
         }
         return sha256_json(inputs)
 
@@ -115,24 +131,44 @@ class SpecGuardianRegal(RegalNode):
         plan: Optional[SemanticUpdatePlanV1],
         signals: Optional["SignalBundle"],
         policy_config: Optional[PlanPolicyConfigV1],
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[RegalContextV1] = None,
+        phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
+        trajectory_audit: Optional[TrajectoryAuditV1] = None,
+        econ_tensor: Optional[EconTensorV1] = None,
     ) -> RegalReportV1:
-        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context)
+        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor)
         findings: Dict[str, Any] = {}
         violations: List[str] = []
+
+        # Track trajectory audit inspection
+        if trajectory_audit is not None:
+            findings["trajectory_audit_present"] = True
+            # Check for constraint violation events
+            if trajectory_audit.event_counts:
+                for event, count in trajectory_audit.event_counts.items():
+                    if "violation" in event.lower() and count > 0:
+                        violations.append(f"Constraint violation event: {event}={count}")
+            # Check events list for constraint violations
+            if trajectory_audit.events:
+                for event in trajectory_audit.events:
+                    if "violation" in event.lower():
+                        violations.append(f"Constraint violation: {event}")
+        else:
+            findings["trajectory_audit_present"] = False
 
         if plan is None:
             # No plan to check
             report = RegalReportV1(
                 regal_id=self.regal_id,
+                phase=phase,
                 regal_version=self.regal_version,
                 inputs_sha=inputs_sha,
                 determinism_seed=self.seed,
-                passed=True,
+                passed=len(violations) == 0,
                 confidence=1.0,
-                rationale="No plan to validate",
-                spec_consistency_score=1.0,
-                spec_violations=[],
+                rationale="No plan to validate" if len(violations) == 0 else f"{len(violations)} trajectory violations",
+                spec_consistency_score=1.0 if len(violations) == 0 else 0.5,
+                spec_violations=violations,
                 findings=findings,
             )
             report.compute_sha()
@@ -175,6 +211,7 @@ class SpecGuardianRegal(RegalNode):
         passed = len(violations) == 0
         report = RegalReportV1(
             regal_id=self.regal_id,
+            phase=phase,
             regal_version=self.regal_version,
             inputs_sha=inputs_sha,
             determinism_seed=self.seed,
@@ -207,17 +244,44 @@ class WorldCoherenceRegal(RegalNode):
         plan: Optional[SemanticUpdatePlanV1],
         signals: Optional["SignalBundle"],
         policy_config: Optional[PlanPolicyConfigV1],
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[RegalContextV1] = None,
+        phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
+        trajectory_audit: Optional[TrajectoryAuditV1] = None,
+        econ_tensor: Optional[EconTensorV1] = None,
     ) -> RegalReportV1:
-        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context)
+        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor)
         findings: Dict[str, Any] = {}
         violations: List[str] = []
-
         coherence_tags: List[str] = []
 
-        if signals is None:
+        # Check trajectory audit for physics anomalies (CRITICAL: can fail solely on this)
+        if trajectory_audit is not None:
+            findings["trajectory_audit_present"] = True
+            # Physics anomaly: velocity spikes
+            if trajectory_audit.velocity_spike_count >= 5:
+                violations.append(f"High velocity spikes: {trajectory_audit.velocity_spike_count}")
+                coherence_tags.append("velocity_anomaly")
+            # Physics anomaly: object penetration
+            if trajectory_audit.penetration_max and trajectory_audit.penetration_max > 0.01:
+                violations.append(f"Object penetration exceeded threshold: {trajectory_audit.penetration_max:.4f}")
+                coherence_tags.append("physics_violation")
+            # Physics anomaly: contact anomalies
+            if trajectory_audit.contact_anomaly_count >= 3:
+                violations.append(f"Contact anomalies: {trajectory_audit.contact_anomaly_count}")
+                coherence_tags.append("contact_anomaly")
+            # State bounds violations
+            if trajectory_audit.state_bounds:
+                for state_name, bounds in trajectory_audit.state_bounds.items():
+                    if len(bounds) == 2 and bounds[1] - bounds[0] > 100.0:
+                        violations.append(f"State '{state_name}' has extreme range: [{bounds[0]:.1f}, {bounds[1]:.1f}]")
+                        coherence_tags.append("state_bounds_violation")
+        else:
+            findings["trajectory_audit_present"] = False
+
+        if signals is None and len(violations) == 0:
             report = RegalReportV1(
                 regal_id=self.regal_id,
+                phase=phase,
                 regal_version=self.regal_version,
                 inputs_sha=inputs_sha,
                 determinism_seed=self.seed,
@@ -235,39 +299,42 @@ class WorldCoherenceRegal(RegalNode):
         import math
         signals_checked = 0
 
-        for signal in signals.signals:
-            signals_checked += 1
-            val = signal.value
+        if signals is not None:
+            for signal in signals.signals:
+                signals_checked += 1
+                val = signal.value
 
-            # Check for NaN/Inf
-            if isinstance(val, float):
-                if math.isnan(val):
-                    violations.append(f"NaN value in signal {signal.signal_type}")
-                    coherence_tags.append("nan_value")
-                elif math.isinf(val):
-                    violations.append(f"Inf value in signal {signal.signal_type}")
-                    coherence_tags.append("inf_value")
+                # Check for NaN/Inf
+                if isinstance(val, float):
+                    if math.isnan(val):
+                        violations.append(f"NaN value in signal {signal.signal_type}")
+                        coherence_tags.append("nan_value")
+                    elif math.isinf(val):
+                        violations.append(f"Inf value in signal {signal.signal_type}")
+                        coherence_tags.append("inf_value")
 
-            # Check rate signals are in [0, 1]
-            signal_name = str(signal.signal_type).lower()
-            if "rate" in signal_name or "fraction" in signal_name:
-                if isinstance(val, (int, float)):
-                    if val < 0.0 or val > 1.0:
-                        violations.append(
-                            f"Rate/fraction signal {signal.signal_type} out of bounds: {val}"
-                        )
-                        coherence_tags.append("bounds_violation")
+                # Check rate signals are in [0, 1]
+                signal_name = str(signal.signal_type).lower()
+                if "rate" in signal_name or "fraction" in signal_name:
+                    if isinstance(val, (int, float)):
+                        if val < 0.0 or val > 1.0:
+                            violations.append(
+                                f"Rate/fraction signal {signal.signal_type} out of bounds: {val}"
+                            )
+                            coherence_tags.append("bounds_violation")
 
         findings["signals_checked"] = signals_checked
         findings["violations"] = violations
 
         # Compute coherence score (1.0 = perfect, decreases with violations)
-        coherence_score = 1.0 - (len(violations) / max(signals_checked, 1)) if signals_checked > 0 else 1.0
+        total_checks = max(signals_checked, 1) + (1 if trajectory_audit else 0)
+        coherence_score = 1.0 - (len(violations) / max(total_checks, 1))
         coherence_score = max(0.0, coherence_score)
 
         passed = len(violations) == 0
         report = RegalReportV1(
             regal_id=self.regal_id,
+            phase=phase,
             regal_version=self.regal_version,
             inputs_sha=inputs_sha,
             determinism_seed=self.seed,
@@ -301,16 +368,19 @@ class RewardIntegrityRegal(RegalNode):
         plan: Optional[SemanticUpdatePlanV1],
         signals: Optional["SignalBundle"],
         policy_config: Optional[PlanPolicyConfigV1],
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[RegalContextV1] = None,
+        phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
+        trajectory_audit: Optional[TrajectoryAuditV1] = None,
+        econ_tensor: Optional[EconTensorV1] = None,
     ) -> RegalReportV1:
-        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context)
+        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor)
         findings: Dict[str, Any] = {}
         violations: List[str] = []
         integrity_flags: List[str] = []
         hack_indicators = 0
 
-        # Check context for historical patterns
-        history = context.get("weight_history", []) if context else []
+        # Check context for historical patterns (from notes if available)
+        history = context.notes.get("weight_history", []) if context and context.notes else []
         findings["history_length"] = len(history)
 
         # Check 1: Weight oscillations (if we have history)
@@ -334,7 +404,25 @@ class RewardIntegrityRegal(RegalNode):
                 integrity_flags.append("oscillation")
                 hack_indicators += 1
 
-        # Check 2: Anomalous gain requests in plan
+        # Check 2: Trajectory audit reward component analysis
+        if trajectory_audit is not None:
+            findings["trajectory_audit_present"] = True
+            if trajectory_audit.reward_components:
+                for name, value in trajectory_audit.reward_components.items():
+                    # Flag extreme reward component values
+                    if abs(value) > 10.0:
+                        violations.append(f"Extreme reward component: {name}={value:.2f}")
+                        integrity_flags.append(f"extreme_reward_{name}")
+                        hack_indicators += 1
+            # Reward oscillation indicator (very large spread between min/max reward)
+            if trajectory_audit.total_return > 10.0:
+                violations.append(f"Unusually high total return: {trajectory_audit.total_return:.2f}")
+                integrity_flags.append("high_return")
+                hack_indicators += 1
+        else:
+            findings["trajectory_audit_present"] = False
+
+        # Check 3: Anomalous gain requests in plan
         if plan and policy_config and policy_config.gain_schedule:
             max_mult = policy_config.gain_schedule.full_multiplier
             for op in plan.task_graph_changes:
@@ -349,27 +437,26 @@ class RewardIntegrityRegal(RegalNode):
                         integrity_flags.append("anomalous_gain")
                         hack_indicators += 1
 
-        # Check 3: Econ tensor analysis (if available)
-        econ_tensor = context.get("econ_tensor_v1") if context else None
-        econ_basis_sha = context.get("econ_basis_sha") if context else None
-        if econ_tensor is not None:
+        # Check 4: Econ tensor analysis (if available, prefer passed econ_tensor param)
+        tensor = econ_tensor
+        econ_basis_sha = None
+        if context and context.econ_basis_sha:
+            econ_basis_sha = context.econ_basis_sha
+
+        if tensor is not None:
             findings["econ_tensor_available"] = True
             findings["econ_basis_sha"] = econ_basis_sha
 
             # Use econ tensor for more sophisticated checks
-            # Check for anomalous patterns: high reward with high damage/energy
             try:
                 from src.economics.econ_tensor import tensor_to_econ_dict
-                econ_dict = tensor_to_econ_dict(econ_tensor)
+                econ_dict = tensor_to_econ_dict(tensor)
                 findings["econ_values"] = {k: round(v, 4) for k, v in list(econ_dict.items())[:5]}
 
-                # Invariant check: reward up but throughput flat + error rising
                 reward = econ_dict.get("reward_scalar_sum", 0.0)
-                error = econ_dict.get("error_rate", 0.0)
                 damage = econ_dict.get("damage_cost", 0.0)
                 mpl = econ_dict.get("mpl_units_per_hour", 0.0)
 
-                # Flag if reward high but MPL low and damage high
                 if reward > 1.0 and mpl < 0.1 and damage > 5.0:
                     violations.append(
                         f"Econ anomaly: high reward ({reward:.2f}) with low MPL ({mpl:.2f}) "
@@ -386,21 +473,21 @@ class RewardIntegrityRegal(RegalNode):
         findings["violations"] = violations
 
         # Compute hack probability (0.0-1.0)
-        # Base on oscillation rate and number of anomalous indicators
         hack_probability = min(1.0, (oscillation_rate * 0.5) + (hack_indicators * 0.25))
 
         passed = len(violations) == 0
         report = RegalReportV1(
             regal_id=self.regal_id,
+            phase=phase,
             regal_version=self.regal_version,
             inputs_sha=inputs_sha,
             determinism_seed=self.seed,
             passed=passed,
-            confidence=0.9 if passed else 0.6,  # Lower confidence on violations (may be false positive)
+            confidence=0.9 if passed else 0.6,
             rationale="No reward hacking patterns detected"
             if passed else f"Detected {len(violations)} potential issues",
             hack_probability=hack_probability,
-            integrity_flags=list(set(integrity_flags)),  # Deduplicate
+            integrity_flags=list(set(integrity_flags)),
             findings=findings,
         )
         report.compute_sha()
@@ -429,24 +516,28 @@ class EconDataRegal(RegalNode):
         plan: Optional[SemanticUpdatePlanV1],
         signals: Optional["SignalBundle"],
         policy_config: Optional[PlanPolicyConfigV1],
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[RegalContextV1] = None,
+        phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
+        trajectory_audit: Optional[TrajectoryAuditV1] = None,
+        econ_tensor: Optional[EconTensorV1] = None,
     ) -> RegalReportV1:
-        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context)
+        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor)
         findings: Dict[str, Any] = {}
         violations: List[str] = []
         coherence_tags: List[str] = []
 
-        # Extract econ tensor from context
-        econ_tensor = context.get("econ_tensor_v1") if context else None
-        econ_basis_sha = context.get("econ_basis_sha") if context else None
+        # Prefer passed econ_tensor param over context lookup
+        tensor = econ_tensor
+        econ_basis_sha = context.econ_basis_sha if context else None
 
-        if econ_tensor is None:
+        if tensor is None:
             # No econ tensor provided - pass with warning
             findings["econ_tensor_available"] = False
             findings["reason"] = "No econ tensor in context"
 
             report = RegalReportV1(
                 regal_id=self.regal_id,
+                phase=phase,
                 regal_version=self.regal_version,
                 inputs_sha=inputs_sha,
                 determinism_seed=self.seed,
@@ -461,19 +552,19 @@ class EconDataRegal(RegalNode):
             return report
 
         findings["econ_tensor_available"] = True
-        findings["basis_id"] = econ_tensor.basis_id
-        findings["basis_sha"] = econ_tensor.basis_sha[:16]
-        findings["tensor_sha"] = econ_tensor.sha256()[:16]
-        findings["num_axes"] = len(econ_tensor.x)
+        findings["basis_id"] = tensor.basis_id
+        findings["basis_sha"] = tensor.basis_sha[:16]
+        findings["tensor_sha"] = tensor.sha256()[:16]
+        findings["num_axes"] = len(tensor.x)
 
         # Check 1: Basis SHA integrity
         try:
             from src.economics.econ_basis_registry import get_basis
-            registered_basis = get_basis(econ_tensor.basis_id)
+            registered_basis = get_basis(tensor.basis_id)
             if registered_basis is not None:
-                if registered_basis.sha256 != econ_tensor.basis_sha:
+                if registered_basis.sha256 != tensor.basis_sha:
                     violations.append(
-                        f"Basis SHA mismatch: tensor has {econ_tensor.basis_sha[:16]}... "
+                        f"Basis SHA mismatch: tensor has {tensor.basis_sha[:16]}... "
                         f"but registry has {registered_basis.sha256[:16]}..."
                     )
                     coherence_tags.append("basis_sha_mismatch")
@@ -481,7 +572,7 @@ class EconDataRegal(RegalNode):
                     findings["basis_verified"] = True
             else:
                 findings["basis_verified"] = False
-                findings["basis_warning"] = f"Basis '{econ_tensor.basis_id}' not in registry"
+                findings["basis_warning"] = f"Basis '{tensor.basis_id}' not in registry"
         except Exception as e:
             findings["basis_check_error"] = str(e)
 
@@ -489,7 +580,7 @@ class EconDataRegal(RegalNode):
         import math
         nan_count = 0
         inf_count = 0
-        for i, val in enumerate(econ_tensor.x):
+        for i, val in enumerate(tensor.x):
             if math.isnan(val):
                 nan_count += 1
             elif math.isinf(val):
@@ -506,32 +597,42 @@ class EconDataRegal(RegalNode):
         findings["inf_count"] = inf_count
 
         # Check 3: Reasonable bounds (heuristic)
-        if econ_tensor.stats:
-            norm = econ_tensor.stats.get("norm", 0.0)
+        if tensor.stats:
+            norm = tensor.stats.get("norm", 0.0)
             findings["tensor_norm"] = norm
-            # Flag extremely large norms as suspicious
             if norm > 1000.0:
                 violations.append(f"Tensor norm unusually large: {norm:.2f}")
                 coherence_tags.append("large_norm")
 
         # Check 4: Axis completeness (if mask present)
-        if econ_tensor.mask is not None:
-            missing_count = sum(1 for m in econ_tensor.mask if not m)
+        if tensor.mask is not None:
+            missing_count = sum(1 for m in tensor.mask if not m)
             findings["masked_axes"] = missing_count
-            if missing_count > len(econ_tensor.x) // 2:
-                violations.append(f"More than half of axes masked: {missing_count}/{len(econ_tensor.x)}")
+            if missing_count > len(tensor.x) // 2:
+                violations.append(f"More than half of axes masked: {missing_count}/{len(tensor.x)}")
                 coherence_tags.append("high_missing")
 
-        # Check 5: Exposure/datapack constraints (if available)
-        exposure_manifest = context.get("exposure_manifest") if context else None
-        if exposure_manifest:
-            findings["exposure_available"] = True
-            # Could add datapack-specific validation here
+        # Check 5: Trajectory audit correlation (econ tensor must match trajectory reality)
+        if trajectory_audit is not None:
+            findings["trajectory_audit_present"] = True
+            # Sanity: if tensor shows high success but trajectory shows many anomalies, flag
+            try:
+                from src.economics.econ_tensor import tensor_to_econ_dict
+                econ_dict = tensor_to_econ_dict(tensor)
+                success = econ_dict.get("success_rate", 0.0)
+                anomaly_count = trajectory_audit.velocity_spike_count + trajectory_audit.contact_anomaly_count
+                if success > 0.9 and anomaly_count >= 5:
+                    violations.append(
+                        f"Econ-trajectory mismatch: success={success:.2f} but {anomaly_count} anomalies"
+                    )
+                    coherence_tags.append("econ_trajectory_mismatch")
+            except Exception:
+                pass
         else:
-            findings["exposure_available"] = False
+            findings["trajectory_audit_present"] = False
 
         # Compute scores
-        num_checks = 5  # basis, nan, inf, bounds, completeness
+        num_checks = 6  # basis, nan, inf, bounds, completeness, trajectory
         num_failures = len(violations)
         econ_consistency_score = 1.0 - (num_failures / num_checks)
         econ_consistency_score = max(0.0, econ_consistency_score)
@@ -542,6 +643,7 @@ class EconDataRegal(RegalNode):
         passed = len(violations) == 0
         report = RegalReportV1(
             regal_id=self.regal_id,
+            phase=phase,
             regal_version=self.regal_version,
             inputs_sha=inputs_sha,
             determinism_seed=self.seed,
@@ -564,19 +666,25 @@ class EconDataRegal(RegalNode):
 
 def evaluate_regals(
     config: RegalGatesV1,
+    phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
     plan: Optional[SemanticUpdatePlanV1] = None,
     signals: Optional["SignalBundle"] = None,
     policy_config: Optional[PlanPolicyConfigV1] = None,
-    context: Optional[Dict[str, Any]] = None,
+    context: Optional[RegalContextV1] = None,
+    trajectory_audit: Optional[TrajectoryAuditV1] = None,
+    econ_tensor: Optional[EconTensorV1] = None,
 ) -> LedgerRegalV1:
     """Evaluate all enabled regal nodes and return aggregated result.
 
     Args:
         config: Regal gates configuration specifying which nodes to run
+        phase: Temporal phase for this evaluation
         plan: Current semantic update plan
         signals: Current signal bundle
         policy_config: Plan policy configuration
-        context: Additional context for evaluation
+        context: Typed regal context
+        trajectory_audit: Episode trajectory audit for substrate grounding
+        econ_tensor: Econ tensor for economic metric validation
 
     Returns:
         LedgerRegalV1 with all reports and aggregate pass/fail
@@ -591,7 +699,9 @@ def evaluate_regals(
 
         regal_cls = REGAL_REGISTRY[regal_id]
         regal = regal_cls(seed=config.determinism_seed)
-        report = regal.evaluate(plan, signals, policy_config, context)
+        report = regal.evaluate(
+            plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor
+        )
         reports.append(report)
         all_inputs.append(report.inputs_sha)
 

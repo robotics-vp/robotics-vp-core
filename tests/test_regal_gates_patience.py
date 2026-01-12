@@ -15,6 +15,7 @@ from src.contracts.schemas import (
     PlanOpType,
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
+    RegalContextV1,
 )
 from src.representation.homeostasis import SignalBundle, ControlSignal, SignalType
 from src.regal.regal_evaluator import (
@@ -316,7 +317,10 @@ class TestRegalReportStructuredOutput:
             gain_schedule=PlanGainScheduleV1(full_multiplier=1.5),
             default_weights={"manipulation": 0.5},
         )
-        context = {"weight_history": [1.0, 1.1, 1.2, 1.3]}
+        context = RegalContextV1(
+            run_id="test",
+            notes={"weight_history": [1.0, 1.1, 1.2, 1.3]},
+        )
 
         report = regal.evaluate(None, None, config, context)
 
