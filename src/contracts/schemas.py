@@ -662,6 +662,81 @@ class LedgerRegalV1(BaseModel):
     forced_clamp: bool = False
 
 
+class LedgerRegalSummaryV1(BaseModel):
+    """Compact regal summary for value ledger records.
+
+    Provides a typed, space-efficient summary of regal outcomes
+    without embedding full RegalReportV1 objects.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    passed: bool
+    phase: RegalPhaseV1
+    confidence: float = 1.0
+
+    # Key scalar metrics (regal-specific)
+    spec_consistency_score: Optional[float] = None
+    coherence_score: Optional[float] = None
+    hack_probability: Optional[float] = None
+
+    # Tags for quick filtering
+    tags: List[str] = Field(default_factory=list)
+
+    # Link to full report
+    report_sha: str
+
+
+class RegalAnnotationsV1(BaseModel):
+    """Typed regal annotations for datapack metadata.
+
+    Attached to datapacks/episodes to record regal outcomes
+    and inform downstream curriculum/training decisions.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    # Violation tags from all regals
+    violation_tags: List[str] = Field(default_factory=list)
+
+    # Training disposition
+    training_disposition: Literal["allow", "eval_only", "quarantine"] = "allow"
+
+    # Correction recipe (advisory, for similar patterns)
+    correction_recipe: Optional[Dict[str, Any]] = None
+
+    # Phase-keyed report SHAs
+    phase_report_shas: Dict[str, str] = Field(default_factory=dict)
+
+    # Key findings summary
+    physics_anomaly_detected: bool = False
+    hack_pattern_detected: bool = False
+    constraint_violations: List[str] = Field(default_factory=list)
+
+    # Provenance
+    regal_config_sha: str = ""
+
+
+class KnobDeltaV1(BaseModel):
+    """Advisory knob delta emitted by regals.
+
+    Regals cannot modify PlanGainScheduleV1 directly. Instead they emit
+    advisory deltas that the knob policy layer applies subject to constraints.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    source_regal: str  # e.g., "econ_data", "world_coherence"
+    phase: RegalPhaseV1
+
+    # Advisory preference (not a command)
+    prefer_conservative_multiplier: bool = False  # Use conservative instead of full
+    multiplier_reduction_factor: Optional[float] = None  # e.g., 0.8 for 20% reduction (advisory)
+
+    # Task-specific advisories
+    task_family_advisories: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+    # e.g., {"manipulation": {"weight_cap": 0.7, "cooldown_steps": 5}}
+
+    rationale: str = ""
+
+
 # =============================================================================
 # Knob Calibration (D4 - Learned hyperparameters with heuristic fallback)
 # =============================================================================
@@ -1092,6 +1167,9 @@ __all__ = [
     "RegalGatesV1",
     "RegalReportV1",
     "LedgerRegalV1",
+    "LedgerRegalSummaryV1",
+    "RegalAnnotationsV1",
+    "KnobDeltaV1",
     # Knob Calibration (D4)
     "RegimeFeaturesV1",
     "KnobPolicyV1",
