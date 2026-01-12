@@ -88,6 +88,7 @@ class AuditEvalSuite:
         checkpoint_ref: Optional[str] = None,
         policy_id: Optional[str] = None,
         output_dir: Optional[str] = None,
+        regal_context_sha: Optional[str] = None,
     ) -> AuditAggregateV1:
         """Run the audit evaluation suite.
 
@@ -95,6 +96,7 @@ class AuditEvalSuite:
             checkpoint_ref: Policy checkpoint reference
             policy_id: Policy identifier
             output_dir: Optional directory to write results
+            regal_context_sha: Optional regal context SHA for provenance
 
         Returns:
             AuditAggregateV1 with aggregated metrics
@@ -119,7 +121,7 @@ class AuditEvalSuite:
                 episode_index += 1
 
         # Compute aggregate
-        aggregate = self._compute_aggregate()
+        aggregate = self._compute_aggregate(regal_context_sha=regal_context_sha)
 
         # Write outputs if requested
         if output_dir:
@@ -170,7 +172,7 @@ class AuditEvalSuite:
             ts_end=datetime.now().isoformat(),
         )
 
-    def _compute_aggregate(self) -> AuditAggregateV1:
+    def _compute_aggregate(self, regal_context_sha: Optional[str] = None) -> AuditAggregateV1:
         """Compute aggregate metrics from episode results."""
         if not self._results:
             return AuditAggregateV1(
@@ -219,6 +221,7 @@ class AuditEvalSuite:
             per_task=per_task,
             episodes_sha=sha256_json(episodes_data),
             config_sha=sha256_json(self._config_dict()),
+            regal_context_sha=regal_context_sha,
         )
 
     def _config_dict(self) -> Dict[str, Any]:

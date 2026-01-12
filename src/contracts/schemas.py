@@ -163,6 +163,9 @@ class AuditAggregateV1(BaseModel):
     # Hashes
     episodes_sha: str
     config_sha: str
+    
+    # Regal context provenance (P2: what regal context was this audit run under)
+    regal_context_sha: Optional[str] = None
 
 
 # =============================================================================
