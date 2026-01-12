@@ -257,17 +257,32 @@ class WorldCoherenceRegal(RegalNode):
         # Check trajectory audit for physics anomalies (CRITICAL: can fail solely on this)
         if trajectory_audit is not None:
             findings["trajectory_audit_present"] = True
+            
+            # Get configurable thresholds from policy_config.regal_gates (or use safe defaults)
+            vel_threshold = 5
+            pen_threshold = 0.01
+            contact_threshold = 3
+            if policy_config and policy_config.regal_gates:
+                vel_threshold = policy_config.regal_gates.velocity_spike_threshold
+                pen_threshold = policy_config.regal_gates.penetration_max_threshold
+                contact_threshold = policy_config.regal_gates.contact_anomaly_threshold
+            findings["thresholds_used"] = {
+                "velocity_spike": vel_threshold,
+                "penetration_max": pen_threshold,
+                "contact_anomaly": contact_threshold,
+            }
+            
             # Physics anomaly: velocity spikes
-            if trajectory_audit.velocity_spike_count >= 5:
-                violations.append(f"High velocity spikes: {trajectory_audit.velocity_spike_count}")
+            if trajectory_audit.velocity_spike_count >= vel_threshold:
+                violations.append(f"High velocity spikes: {trajectory_audit.velocity_spike_count} >= {vel_threshold}")
                 coherence_tags.append("velocity_anomaly")
             # Physics anomaly: object penetration
-            if trajectory_audit.penetration_max and trajectory_audit.penetration_max > 0.01:
-                violations.append(f"Object penetration exceeded threshold: {trajectory_audit.penetration_max:.4f}")
+            if trajectory_audit.penetration_max and trajectory_audit.penetration_max > pen_threshold:
+                violations.append(f"Object penetration exceeded threshold: {trajectory_audit.penetration_max:.4f} > {pen_threshold}")
                 coherence_tags.append("physics_violation")
             # Physics anomaly: contact anomalies
-            if trajectory_audit.contact_anomaly_count >= 3:
-                violations.append(f"Contact anomalies: {trajectory_audit.contact_anomaly_count}")
+            if trajectory_audit.contact_anomaly_count >= contact_threshold:
+                violations.append(f"Contact anomalies: {trajectory_audit.contact_anomaly_count} >= {contact_threshold}")
                 coherence_tags.append("contact_anomaly")
             # State bounds violations
             if trajectory_audit.state_bounds:
@@ -407,16 +422,28 @@ class RewardIntegrityRegal(RegalNode):
         # Check 2: Trajectory audit reward component analysis
         if trajectory_audit is not None:
             findings["trajectory_audit_present"] = True
+            
+            # Get configurable thresholds from policy_config.regal_gates (or use safe defaults)
+            extreme_reward_threshold = 10.0
+            high_return_threshold = 10.0
+            if policy_config and policy_config.regal_gates:
+                extreme_reward_threshold = policy_config.regal_gates.extreme_reward_component_threshold
+                high_return_threshold = policy_config.regal_gates.high_total_return_threshold
+            findings["reward_thresholds_used"] = {
+                "extreme_reward_component": extreme_reward_threshold,
+                "high_total_return": high_return_threshold,
+            }
+            
             if trajectory_audit.reward_components:
                 for name, value in trajectory_audit.reward_components.items():
                     # Flag extreme reward component values
-                    if abs(value) > 10.0:
-                        violations.append(f"Extreme reward component: {name}={value:.2f}")
+                    if abs(value) > extreme_reward_threshold:
+                        violations.append(f"Extreme reward component: {name}={value:.2f} (|val| > {extreme_reward_threshold})")
                         integrity_flags.append(f"extreme_reward_{name}")
                         hack_indicators += 1
             # Reward oscillation indicator (very large spread between min/max reward)
-            if trajectory_audit.total_return > 10.0:
-                violations.append(f"Unusually high total return: {trajectory_audit.total_return:.2f}")
+            if trajectory_audit.total_return > high_return_threshold:
+                violations.append(f"Unusually high total return: {trajectory_audit.total_return:.2f} > {high_return_threshold}")
                 integrity_flags.append("high_return")
                 hack_indicators += 1
         else:

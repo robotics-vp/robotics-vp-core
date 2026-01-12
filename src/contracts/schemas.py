@@ -574,6 +574,15 @@ class RegalGatesV1(BaseModel):
     # Per-task-family threshold overrides
     per_task_family_overrides: Optional[Dict[str, Dict[str, float]]] = None
 
+    # Trajectory audit anomaly thresholds (configurable, included in SHA for provenance)
+    # These trigger WorldCoherenceRegal failure
+    velocity_spike_threshold: int = 5      # >= this count triggers failure
+    penetration_max_threshold: float = 0.01  # > this distance triggers failure
+    contact_anomaly_threshold: int = 3     # >= this count triggers failure
+    # These trigger RewardIntegrityRegal flags
+    extreme_reward_component_threshold: float = 10.0  # abs > this triggers flag
+    high_total_return_threshold: float = 10.0  # > this triggers flag
+
     def sha256(self) -> str:
         from src.utils.config_digest import sha256_json
         return sha256_json(self.model_dump(mode="json"))
