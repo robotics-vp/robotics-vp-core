@@ -19,6 +19,11 @@ from datetime import datetime
 from src.utils.json_safe import to_json_safe
 from src.valuation.guidance_profile import GuidanceProfile
 
+# TYPE_CHECKING import for typed schema (avoid circular import)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.contracts.schemas import RegalAnnotationsV1
+
 # Unified schema version - aligns with existing 2.0-energy format
 DATAPACK_SCHEMA_VERSION = "2.0-energy"
 DATAPACK_SCHEMA_VERSION_PORTABLE = "2.1-portable"
@@ -638,9 +643,11 @@ class DataPackMeta:
     econ_tensor_v1: Optional[Dict[str, Any]] = None
     # Contains serialized EconTensorV1 with basis_sha, x, and provenance
 
-    # Regal annotations (optional) - P1 typed regal metadata for training disposition
+    # Regal annotations (typed) - canonical RegalAnnotationsV1 serialized as dict
+    # MUST use RegalAnnotationsV1.model_dump() when setting
     regal_annotations: Optional[Dict[str, Any]] = None
-    # Contains serialized RegalAnnotationsV1 with violation_tags, training_disposition, etc.
+    # SHA of regal_annotations for provenance closure
+    regal_annotations_sha: Optional[str] = None
 
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
@@ -685,6 +692,7 @@ class DataPackMeta:
             'graph_summary_v1': to_json_safe(self.graph_summary_v1),
             'econ_tensor_v1': to_json_safe(self.econ_tensor_v1),
             'regal_annotations': to_json_safe(self.regal_annotations),
+            'regal_annotations_sha': self.regal_annotations_sha,
         }
         return to_json_safe(d)
 
@@ -756,6 +764,7 @@ class DataPackMeta:
             graph_summary_v1=d.get('graph_summary_v1'),
             econ_tensor_v1=d.get('econ_tensor_v1'),
             regal_annotations=d.get('regal_annotations'),
+            regal_annotations_sha=d.get('regal_annotations_sha'),
         )
 
     @classmethod

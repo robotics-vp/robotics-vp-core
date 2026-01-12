@@ -144,8 +144,9 @@ class ValueLedger:
         )
 
         # P0: Compute regal provenance status
+        # SAFETY INVARIANT: Missing regal → deploy blocked (never permissive)
         regal_degraded = regal is None
-        allow_deploy = regal.all_passed if regal else True
+        allow_deploy = regal.all_passed if regal else False  # Must be False when regal missing
 
         return ValueLedgerRecordV1(
             record_id=str(uuid.uuid4())[:8],

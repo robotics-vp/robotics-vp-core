@@ -1117,6 +1117,12 @@ class RunManifestV1(BaseModel):
     econ_basis_sha: Optional[str] = None  # SHA of EconBasisSpecV1
     econ_tensor_sha: Optional[str] = None  # SHA of EconTensorV1 (aggregated if multiple)
 
+    # Deploy gate provenance (replayable deploy decision)
+    deploy_gate_decision_sha: Optional[str] = None  # SHA of DeployGateDecision
+
+    # Quarantine provenance (datapack exclusion list)
+    quarantine_manifest_sha: Optional[str] = None  # SHA of quarantined datapack IDs
+
     # Schema versions used
     schema_versions: Dict[str, str] = Field(default_factory=lambda: {
         "plan": SCHEMA_VERSION_PLAN,
@@ -1145,6 +1151,30 @@ class DatapackSelectionOverrides(BaseModel):
     allowlist: Optional[List[str]] = None
     denylist: Optional[List[str]] = None
     quotas: Optional[Dict[str, int]] = None
+    
+    # Quarantine enforcement (from RegalAnnotationsV1.training_disposition="quarantine")
+    quarantine_datapack_ids: Optional[List[str]] = None  # Datapacks to exclude
+    quarantine_manifest_sha: Optional[str] = None  # SHA of quarantine list for provenance
+    
+    def is_quarantined(self, datapack_id: str) -> bool:
+        """Check if a datapack is quarantined (should be excluded from training).
+        
+        SAFETY: Returns True if datapack is in quarantine list.
+        This is the enforcement point for regal-annotated exclusions.
+        """
+        if self.quarantine_datapack_ids is None:
+            return False
+        return datapack_id in self.quarantine_datapack_ids
+    
+    def filter_datapacks(self, datapack_ids: List[str]) -> List[str]:
+        """Filter datapacks, removing quarantined ones.
+        
+        Returns:
+            List of datapack IDs with quarantined ones removed.
+        """
+        if self.quarantine_datapack_ids is None:
+            return datapack_ids
+        return [dp_id for dp_id in datapack_ids if dp_id not in self.quarantine_datapack_ids]
 
 
 __all__ = [
