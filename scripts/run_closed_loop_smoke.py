@@ -569,6 +569,7 @@ def main():
     # Run regal evaluation if enabled
     regal_result: Optional[LedgerRegalV1] = None
     regal_config: Optional[RegalGatesV1] = None
+    regal_context_sha: Optional[str] = None  # Populated if context built
     if args.include_regal:
         print("\n[4b/8] Running meta-regal gate evaluation...")
         from src.regal.regal_evaluator import evaluate_regals
@@ -709,6 +710,11 @@ def main():
                 print(f"      Rationale: {report.rationale}")
                 if report.findings and "trajectory_audit_present" in report.findings:
                     print(f"      Trajectory audit inspected: {report.findings['trajectory_audit_present']}")
+
+        # Capture regal_context for manifest (POST_AUDIT is the authoritative phase)
+        regal_context_sha = regal_context.sha256()
+        # Use POST_AUDIT result as the primary result since it includes trajectory audit
+        regal_result = regal_result_post_audit
 
     # Generate econ tensor if enabled
     econ_tensor: Optional["EconTensorV1"] = None
@@ -935,10 +941,14 @@ def main():
     # Add regal SHAs to manifest if available
     if regal_result and regal_config:
         manifest.regal_config_sha = regal_config.sha256()
-        # Compute aggregate report SHA from individual report SHAs
+        # Compute aggregate report SHA from individual report SHAs (deterministic: sorted by phase, regal_id)
         if regal_result.reports:
-            manifest.regal_report_sha = sha256_json([r.report_sha for r in regal_result.reports])
+            sorted_reports = sorted(regal_result.reports, key=lambda r: (r.phase.value, r.regal_id))
+            manifest.regal_report_sha = sha256_json([r.report_sha for r in sorted_reports])
         manifest.regal_inputs_sha = regal_result.combined_inputs_sha
+        # Add regal context SHA if context was built
+        if regal_context_sha:
+            manifest.regal_context_sha = regal_context_sha
 
     # Add knob calibration SHAs to manifest if available
     if gate_status and gate_status.knob_policy:
@@ -968,6 +978,8 @@ def main():
     if manifest.regal_config_sha:
         print(f"    Regal config SHA: {manifest.regal_config_sha[:16]}")
         print(f"    Regal report SHA: {manifest.regal_report_sha[:16] if manifest.regal_report_sha else 'N/A'}")
+        if manifest.regal_context_sha:
+            print(f"    Regal context SHA: {manifest.regal_context_sha[:16]}")
     if manifest.knob_policy_sha:
         print(f"    Knob policy SHA: {manifest.knob_policy_sha[:16]}")
         print(f"    Knob policy used: {manifest.knob_policy_used}")

@@ -109,6 +109,56 @@ class TestRegalContextV1:
         assert ctx.plan_sha is None
         assert ctx.econ_tensor_sha is None
 
+    def test_notes_field_affects_sha(self):
+        """Notes field changes -> SHA changes."""
+        ctx1 = RegalContextV1(run_id="test", notes={"key1": "value1"})
+        ctx2 = RegalContextV1(run_id="test", notes={"key1": "value2"})
+        ctx3 = RegalContextV1(run_id="test", notes={})
+        assert ctx1.sha256() != ctx2.sha256()
+        assert ctx1.sha256() != ctx3.sha256()
+
+    def test_sha_uses_canonical_json(self):
+        """SHA is deterministic across key ordering in notes."""
+        ctx1 = RegalContextV1(run_id="test", notes={"a": "1", "b": "2"})
+        ctx2 = RegalContextV1(run_id="test", notes={"b": "2", "a": "1"})
+        # Pydantic model_dump preserves insertion order, so this test verifies
+        # that the sha256 uses sorted keys via sha256_json
+        assert ctx1.sha256() == ctx2.sha256()
+
+
+class TestUnimplementedPhaseGuard:
+    """Tests that unimplemented phases raise clear errors."""
+
+    def test_pre_plan_raises_not_implemented(self):
+        """PRE_PLAN phase should raise NotImplementedError."""
+        config = RegalGatesV1(
+            enabled_regal_ids=["spec_guardian"],
+            determinism_seed=42,
+        )
+        with pytest.raises(NotImplementedError, match="pre_plan.*not yet wired"):
+            evaluate_regals(config=config, phase=RegalPhaseV1.PRE_PLAN)
+
+    def test_during_train_raises_not_implemented(self):
+        """DURING_TRAIN phase should raise NotImplementedError."""
+        config = RegalGatesV1(
+            enabled_regal_ids=["spec_guardian"],
+            determinism_seed=42,
+        )
+        with pytest.raises(NotImplementedError, match="during_train.*not yet wired"):
+            evaluate_regals(config=config, phase=RegalPhaseV1.DURING_TRAIN)
+
+    def test_shipped_phases_do_not_raise(self):
+        """POST_PLAN_PRE_APPLY and POST_AUDIT should work without error."""
+        config = RegalGatesV1(
+            enabled_regal_ids=["spec_guardian"],
+            determinism_seed=42,
+        )
+        # These should not raise
+        result1 = evaluate_regals(config=config, phase=RegalPhaseV1.POST_PLAN_PRE_APPLY)
+        result2 = evaluate_regals(config=config, phase=RegalPhaseV1.POST_AUDIT)
+        assert len(result1.reports) == 1
+        assert len(result2.reports) == 1
+
 
 class TestWorldCoherenceWithTrajectoryAudit:
     """Tests for WorldCoherenceRegal consuming TrajectoryAuditV1."""

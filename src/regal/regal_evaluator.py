@@ -715,7 +715,19 @@ def evaluate_regals(
 
     Returns:
         LedgerRegalV1 with all reports and aggregate pass/fail
+
+    Raises:
+        NotImplementedError: If phase is not yet wired into the runner
     """
+    # Phase validation: only shipped phases are allowed
+    SHIPPED_PHASES = {RegalPhaseV1.POST_PLAN_PRE_APPLY, RegalPhaseV1.POST_AUDIT}
+    if phase not in SHIPPED_PHASES:
+        raise NotImplementedError(
+            f"Phase {phase.value!r} is not yet wired into the runner. "
+            f"Shipped phases: {[p.value for p in SHIPPED_PHASES]}. "
+            "See REGAL_WIRING_SPEC.md for planned phases."
+        )
+
     reports: List[RegalReportV1] = []
     all_inputs: List[str] = []
 
