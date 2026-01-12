@@ -51,6 +51,8 @@ from src.contracts.schemas import (
     TrajectoryAuditV1,
     EconTensorV1,
     LedgerEconV1,
+    RegalPhaseV1,
+    RegalContextV1,
 )
 from src.orchestrator.plan_applier import PlanApplier
 from src.orchestrator.homeostatic_plan_writer import (
@@ -302,6 +304,8 @@ def main():
     parser.add_argument("--regal-penalty-mode", type=str, default="warn",
                         choices=["warn", "noop", "clamp"],
                         help="Regal penalty mode")
+    parser.add_argument("--regal-smoke-anomaly", action="store_true",
+                        help="Inject physics anomalies in trajectory audit to trip WorldCoherenceRegal")
 
     # D4 Knob calibration flags
     parser.add_argument("--use-learned-knobs", action="store_true",
@@ -598,30 +602,47 @@ def main():
 
         regal_result = evaluate_regals(
             config=regal_config,
+            phase=RegalPhaseV1.POST_PLAN_PRE_APPLY,
             plan=updated_plan,
             signals=regal_signals,
             policy_config=regal_policy_config,
             context=None,
         )
 
+        print(f"  Phase: POST_PLAN_PRE_APPLY")
         print(f"  Regal config SHA: {regal_config.sha256()[:16]}")
         print(f"  Enabled regals: {regal_config.enabled_regal_ids}")
         print(f"  All passed: {regal_result.all_passed}")
         for report in regal_result.reports:
             status = "PASS" if report.passed else "FAIL"
-            print(f"    {report.regal_id}: {status} (confidence={report.confidence:.2f})")
+            print(f"    {report.regal_id}: {status} (phase={report.phase.value}, confidence={report.confidence:.2f})")
             if not report.passed:
                 print(f"      Rationale: {report.rationale}")
 
     # Generate trajectory audit if enabled (synthetic for now)
     trajectory_audit: Optional[TrajectoryAuditV1] = None
-    if args.include_trajectory_audit:
+    if args.include_trajectory_audit or (args.include_regal and getattr(args, 'regal_smoke_anomaly', False)):
         print("\n[4c/8] Generating synthetic trajectory audit...")
         rng = np.random.default_rng(args.seed)
 
+        # Check if we need to inject anomalies for testing
+        inject_anomalies = getattr(args, 'regal_smoke_anomaly', False)
+        
         # Generate synthetic trajectory data
         num_steps = 50
         action_dim = 7  # e.g., 7-DoF robot
+        
+        # Set velocity spikes and anomalies based on flag
+        if inject_anomalies:
+            velocity_spike_count = 10  # >= 5 triggers WorldCoherenceRegal failure
+            contact_anomaly_count = 5   # >= 3 triggers failure
+            penetration_max = 0.05     # > 0.01 triggers failure
+            print("  [ANOMALY MODE] Injecting physics anomalies to trip WorldCoherenceRegal")
+        else:
+            velocity_spike_count = int(rng.integers(0, 3))
+            contact_anomaly_count = int(rng.integers(0, 2))
+            penetration_max = float(rng.uniform(0.0, 0.005))
+
         trajectory_audit = TrajectoryAuditV1(
             episode_id=f"smoke_episode_{run_id}",
             num_steps=num_steps,
@@ -640,9 +661,9 @@ def main():
             },
             events=["grasp_attempt", "grasp_success", "place_attempt"],
             event_counts={"grasp_attempt": 3, "grasp_success": 2, "place_attempt": 2},
-            penetration_max=float(rng.uniform(0.0, 0.005)),
-            velocity_spike_count=int(rng.integers(0, 3)),
-            contact_anomaly_count=int(rng.integers(0, 2)),
+            penetration_max=penetration_max,
+            velocity_spike_count=velocity_spike_count,
+            contact_anomaly_count=contact_anomaly_count,
         )
 
         print(f"  Episode ID: {trajectory_audit.episode_id}")
@@ -653,6 +674,41 @@ def main():
         print(f"  Velocity spikes: {trajectory_audit.velocity_spike_count}")
         print(f"  Contact anomalies: {trajectory_audit.contact_anomaly_count}")
         print(f"  Trajectory audit SHA: {trajectory_audit.sha256()[:16]}")
+
+    # Re-run regal evaluation at POST_AUDIT phase if trajectory audit present
+    regal_result_post_audit: Optional[LedgerRegalV1] = None
+    if args.include_regal and trajectory_audit is not None:
+        print("\n[4c-ii/8] Running meta-regal gate evaluation at POST_AUDIT phase...")
+        from src.regal.regal_evaluator import evaluate_regals
+
+        # Build RegalContextV1 for typed provenance
+        regal_context = RegalContextV1(
+            run_id=run_id,
+            step=1,
+            plan_sha=updated_plan.sha256() if updated_plan else None,
+            trajectory_audit_sha=trajectory_audit.sha256() if trajectory_audit else None,
+        )
+
+        regal_result_post_audit = evaluate_regals(
+            config=regal_config,
+            phase=RegalPhaseV1.POST_AUDIT,
+            plan=updated_plan,
+            signals=regal_signals,
+            policy_config=regal_policy_config,
+            context=regal_context,
+            trajectory_audit=trajectory_audit,
+        )
+
+        print(f"  Phase: POST_AUDIT")
+        print(f"  RegalContext SHA: {regal_context.sha256()[:16]}")
+        print(f"  All passed: {regal_result_post_audit.all_passed}")
+        for report in regal_result_post_audit.reports:
+            status = "PASS" if report.passed else "FAIL"
+            print(f"    {report.regal_id}: {status} (phase={report.phase.value}, confidence={report.confidence:.2f})")
+            if not report.passed:
+                print(f"      Rationale: {report.rationale}")
+                if report.findings and "trajectory_audit_present" in report.findings:
+                    print(f"      Trajectory audit inspected: {report.findings['trajectory_audit_present']}")
 
     # Generate econ tensor if enabled
     econ_tensor: Optional["EconTensorV1"] = None
