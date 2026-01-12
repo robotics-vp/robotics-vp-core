@@ -71,6 +71,10 @@ class ExposureTracker:
 
         self._plan_id: Optional[str] = None
         self._plan_sha: Optional[str] = None
+        
+        # Quarantine enforcement
+        self._quarantine_datapack_ids: set = set()
+        self._excluded_count: int = 0  # Count of samples excluded due to quarantine
 
     def record_sample(
         self,
@@ -78,8 +82,23 @@ class ExposureTracker:
         datapack_id: Optional[str] = None,
         slice_id: Optional[str] = None,
         slice_label: Optional[str] = None,
-    ) -> None:
-        """Record a single training sample."""
+    ) -> bool:
+        """Record a single training sample.
+        
+        Args:
+            task_family: Task family name
+            datapack_id: Optional datapack identifier
+            slice_id: Optional slice identifier
+            slice_label: Optional slice label for repr distribution
+            
+        Returns:
+            True if sample was recorded, False if excluded due to quarantine
+        """
+        # Check quarantine BEFORE recording
+        if datapack_id and datapack_id in self._quarantine_datapack_ids:
+            self._excluded_count += 1
+            return False
+        
         self._task_counts[task_family] += 1
         if datapack_id:
             self._datapack_ids.add(datapack_id)
@@ -87,6 +106,7 @@ class ExposureTracker:
             self._slice_ids.add(slice_id)
         if slice_label:
             self._slice_labels[slice_label] += 1
+        return True
 
     def update_step(self, step: int) -> None:
         """Update current step."""
@@ -97,6 +117,24 @@ class ExposureTracker:
         """Set plan reference."""
         self._plan_id = plan_id
         self._plan_sha = plan_sha
+    
+    def set_quarantine(self, datapack_ids: List[str]) -> None:
+        """Set list of quarantined datapack IDs to exclude.
+        
+        Args:
+            datapack_ids: List of datapack IDs to quarantine (exclude from training)
+        """
+        self._quarantine_datapack_ids = set(datapack_ids)
+    
+    @property
+    def excluded_count(self) -> int:
+        """Number of samples excluded due to quarantine."""
+        return self._excluded_count
+    
+    @property
+    def quarantine_datapack_ids(self) -> List[str]:
+        """List of quarantined datapack IDs."""
+        return sorted(self._quarantine_datapack_ids)
 
     def build_manifest(self) -> ExposureManifestV1:
         """Build the exposure manifest."""

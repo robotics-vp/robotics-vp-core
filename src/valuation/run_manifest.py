@@ -73,6 +73,10 @@ def create_run_manifest(
     # Economics provenance
     econ_basis_sha: Optional[str] = None,
     econ_tensor_sha: Optional[str] = None,
+    # Deploy gate provenance
+    deploy_gate_decision_sha: Optional[str] = None,
+    # Quarantine provenance
+    quarantine_manifest_sha: Optional[str] = None,
 ) -> RunManifestV1:
     """Create a run manifest for provenance.
 
@@ -101,6 +105,8 @@ def create_run_manifest(
         trajectory_audit_sha: Optional trajectory audit SHA
         econ_basis_sha: Optional econ basis SHA
         econ_tensor_sha: Optional econ tensor SHA
+        deploy_gate_decision_sha: Optional deploy gate decision SHA
+        quarantine_manifest_sha: Optional quarantine manifest SHA
 
     Returns:
         RunManifestV1 with provenance information
@@ -139,6 +145,8 @@ def create_run_manifest(
         trajectory_audit_sha=trajectory_audit_sha,
         econ_basis_sha=econ_basis_sha,
         econ_tensor_sha=econ_tensor_sha,
+        deploy_gate_decision_sha=deploy_gate_decision_sha,
+        quarantine_manifest_sha=quarantine_manifest_sha,
     )
 
 
