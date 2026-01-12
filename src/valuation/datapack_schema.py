@@ -638,6 +638,10 @@ class DataPackMeta:
     econ_tensor_v1: Optional[Dict[str, Any]] = None
     # Contains serialized EconTensorV1 with basis_sha, x, and provenance
 
+    # Regal annotations (optional) - P1 typed regal metadata for training disposition
+    regal_annotations: Optional[Dict[str, Any]] = None
+    # Contains serialized RegalAnnotationsV1 with violation_tags, training_disposition, etc.
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         d = {
@@ -680,6 +684,7 @@ class DataPackMeta:
             'signal_bundle': to_json_safe(self.signal_bundle),
             'graph_summary_v1': to_json_safe(self.graph_summary_v1),
             'econ_tensor_v1': to_json_safe(self.econ_tensor_v1),
+            'regal_annotations': to_json_safe(self.regal_annotations),
         }
         return to_json_safe(d)
 
@@ -750,6 +755,7 @@ class DataPackMeta:
             signal_bundle=d.get('signal_bundle'),
             graph_summary_v1=d.get('graph_summary_v1'),
             econ_tensor_v1=d.get('econ_tensor_v1'),
+            regal_annotations=d.get('regal_annotations'),
         )
 
     @classmethod
