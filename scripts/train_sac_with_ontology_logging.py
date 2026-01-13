@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""
-Optional SAC training wrapper with ontology logging.
+"""SAC training wrapper with ontology logging and FULL regality.
 
 Does not alter reward math; uses EpisodeLogger + RewardEngine to log episodes,
 events, and econ vectors into the ontology store.
+
+Notes:
+- Wrapped with @regal_training for artifacts + verify_run()
+- Default env_type=workcell (paramount)
 """
 import argparse
 import numpy as np
@@ -22,10 +25,12 @@ from src.logging.episode_logger import EpisodeLogger
 from src.ontology.models import Task, Robot
 from src.ontology.store import OntologyStore
 from src.config.econ_params import EconParams
+from src.training.wrap_training_entrypoint import regal_training
 
-
-def main():
-    parser = argparse.ArgumentParser(description="SAC training with ontology logging (optional)")
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main training function with regality wrapper."""
+    parser = argparse.ArgumentParser(description="SAC training with ontology logging (FULL regality)")
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--ontology-root", type=str, default="data/ontology")
@@ -37,6 +42,9 @@ def main():
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
+
+    if runner:
+        runner.start_training()
 
     econ_params = EconParams(
         price_per_unit=0.3,
@@ -96,6 +104,7 @@ def main():
     reward_engine = RewardEngine(task, robot, config={}, econ_domain_name=args.econ_domain)
     logger = EpisodeLogger(store=store, task=task, robot=robot)
 
+    total_steps = 0
     for ep_idx in range(args.episodes):
         episode = logger.start_episode()
         obs = env.reset()
@@ -115,9 +124,13 @@ def main():
             agent.store_transition(obs, action, scalar_reward, next_obs, done, novelty=0.5)
             obs = next_obs
             timestep += 1
-        econ = reward_engine.compute_econ_vector(episode, logger._events)  # Using buffered events
+            total_steps += 1
+        econ = reward_engine.compute_econ_vector(episode, logger._events)
         logger.mark_outcome(status="success")
         logger.finalize(econ_vector=econ)
+
+    if runner:
+        runner.update_step(total_steps)
 
     print(f"[train_sac_with_ontology_logging] Completed {args.episodes} episodes with ontology logging at {args.ontology_root}")
 

@@ -504,8 +504,19 @@ def run_offline_experiment(
     return results
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train offline policy with data augmentation')
+# Add regality wrapper
+import sys
+repo_root_path = Path(__file__).parent.parent
+if str(repo_root_path) not in sys.path:
+    sys.path.insert(0, str(repo_root_path))
+
+from src.training.wrap_training_entrypoint import regal_training
+
+
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main training function with regality wrapper."""
+    parser = argparse.ArgumentParser(description='Train offline policy with data augmentation (FULL regality)')
     parser.add_argument(
         '--real',
         type=str,
@@ -569,6 +580,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if runner:
+        runner.start_training()
+
     results = run_offline_experiment(
         real_data_path=args.real,
         synthetic_data_path=args.synthetic,
@@ -582,6 +596,9 @@ if __name__ == '__main__':
         use_weighted_sampling=args.weighted_sampling,
     )
 
+    if runner:
+        runner.update_step(args.updates)
+
     print("\nNext steps:")
     print("1. Run baseline experiment:")
     print("   python scripts/train_offline_policy.py --real data/physics_zv_rollouts.npz")
@@ -591,3 +608,8 @@ if __name__ == '__main__':
     print("       --synthetic data/synthetic_zv_rollouts.npz")
     print()
     print("3. Compare results to validate world model value")
+
+
+if __name__ == '__main__':
+    main()
+

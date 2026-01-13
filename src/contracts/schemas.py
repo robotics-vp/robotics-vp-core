@@ -599,6 +599,16 @@ class RegalGatesV1(BaseModel):
     extreme_reward_component_threshold: float = 10.0  # abs > this triggers flag
     high_total_return_threshold: float = 10.0  # > this triggers flag
 
+    # Selection pathology thresholds (WorldCoherenceRegal)
+    min_eligible_count: int = 3  # < this triggers eligible_shrunk tag
+    min_eligible_fraction: float = 0.1  # < this fraction of original triggers eligible_shrunk
+    rejection_spike_threshold: float = 0.5  # > this fraction rejected triggers rejection_spike
+
+    # Econ ↔ selection/exposure consistency thresholds (EconDataRegal)
+    econ_min_selected_for_high_mpl: int = 2  # if MPL > threshold with fewer selected → flag
+    econ_high_mpl_threshold: float = 0.8  # MPL axis value considered "high"
+    econ_exposure_skew_threshold: float = 0.5  # top1 datapack > this fraction → skew flag
+
     def sha256(self) -> str:
         from src.utils.config_digest import sha256_json
         return sha256_json(self.model_dump(mode="json"))
@@ -1367,6 +1377,9 @@ class RunManifestV1(BaseModel):
 
     # Selection manifest provenance (Phase 2: selection determinism)
     selection_manifest_sha: Optional[str] = None  # SHA of SelectionManifestV1
+
+    # Regal report bundle provenance (Phase 8: file-verified regal)
+    ledger_regal_sha: Optional[str] = None  # SHA of LedgerRegalV1 persisted to ledger_regal.json
 
     # Verification report provenance (Phase 7: meta-verification)
     verification_report_sha: Optional[str] = None  # SHA of VerificationReportV1

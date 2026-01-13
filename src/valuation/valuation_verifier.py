@@ -492,6 +492,155 @@ def verify_run(output_dir: str) -> VerificationReportV1:
         # Non-training runs: just warn if missing, don't fail
         warnings.append("trajectory_audit present but not a training run; skipping strict RewardBreakdown check")
 
+    # 16. Verify ledger_regal_sha if present (Phase 8: file-verified regal)
+    if getattr(manifest, 'ledger_regal_sha', None):
+        ledger_regal_path = output_path / "ledger_regal.json"
+        if ledger_regal_path.exists():
+            computed_sha = sha256_file(str(ledger_regal_path))
+            checks.append(VerificationCheckV1(
+                check_id="ledger_regal_sha_match",
+                passed=manifest.ledger_regal_sha == computed_sha,
+                message="Ledger regal SHA matches" if manifest.ledger_regal_sha == computed_sha
+                        else "Ledger regal SHA mismatch",
+                expected=manifest.ledger_regal_sha,
+                actual=computed_sha,
+            ))
+        else:
+            checks.append(VerificationCheckV1(
+                check_id="ledger_regal_sha_match",
+                passed=False,
+                message="ledger_regal.json file missing but SHA in manifest",
+            ))
+
+    # 17. Verify exposure_manifest if present
+    exposure_manifest_path = output_path / "exposure_manifest.json"
+    if exposure_manifest_path.exists():
+        try:
+            with open(exposure_manifest_path, "r") as f:
+                exp_data = json.load(f)
+            
+            exp_datapack_ids = set(exp_data.get("datapack_ids", []))
+            
+            # 17a: Cross-check with selection manifest if both exist
+            selection_manifest_path = output_path / "selection_manifest.json"
+            if selection_manifest_path.exists():
+                with open(selection_manifest_path, "r") as f:
+                    sel_data = json.load(f)
+                
+                selected_ids = set(sel_data.get("selected_datapack_ids", []))
+                quarantine_ids = set(sel_data.get("quarantine_datapack_ids", []))
+                
+                # Check: exposure ⊆ selected
+                exposure_not_in_selected = exp_datapack_ids - selected_ids
+                if exposure_not_in_selected and selected_ids:  # Only check if selection exists
+                    checks.append(VerificationCheckV1(
+                        check_id="exposure_only_selected_ids",
+                        passed=False,
+                        message=f"VIOLATION: exposure contains non-selected datapacks: {sorted(exposure_not_in_selected)[:5]}",
+                    ))
+                elif selected_ids:
+                    checks.append(VerificationCheckV1(
+                        check_id="exposure_only_selected_ids",
+                        passed=True,
+                        message=f"exposure ⊆ selected ({len(exp_datapack_ids)}/{len(selected_ids)})",
+                    ))
+                
+                # Check: no quarantine in exposure
+                quarantine_in_exposure = exp_datapack_ids & quarantine_ids
+                if quarantine_in_exposure:
+                    checks.append(VerificationCheckV1(
+                        check_id="exposure_quarantine_exclusion",
+                        passed=False,
+                        message=f"CRITICAL: quarantined datapacks in exposure: {sorted(quarantine_in_exposure)}",
+                    ))
+                else:
+                    checks.append(VerificationCheckV1(
+                        check_id="exposure_quarantine_exclusion",
+                        passed=True,
+                        message="exposure ∩ quarantine = ∅",
+                    ))
+        except Exception as e:
+            warnings.append(f"Could not verify exposure manifest: {e}")
+
+    # 18. Orchestrator state semantic checks
+    orchestrator_state_path = output_path / "orchestrator_state.json"
+    if orchestrator_state_path.exists():
+        try:
+            with open(orchestrator_state_path, "r") as f:
+                orch_data = json.load(f)
+            
+            # 18a: Check counters are non-negative
+            counters_valid = True
+            for field in ["failure_counts", "patience_counters", "cooldown_remaining"]:
+                field_data = orch_data.get(field, {})
+                if isinstance(field_data, dict):
+                    for key, val in field_data.items():
+                        if isinstance(val, (int, float)) and val < 0:
+                            counters_valid = False
+                            break
+            
+            checks.append(VerificationCheckV1(
+                check_id="orchestrator_state_nonnegative_counters",
+                passed=counters_valid,
+                message="Orchestrator counters valid (all non-negative)" if counters_valid
+                        else "VIOLATION: Negative orchestrator counter values detected",
+            ))
+            
+            # 18b: Applied knob deltas present when training
+            applied_deltas = orch_data.get("applied_knob_deltas", None)
+            if is_training_run:
+                has_deltas = applied_deltas is not None  # Empty list is valid
+                checks.append(VerificationCheckV1(
+                    check_id="orchestrator_applied_knob_deltas_present_when_training",
+                    passed=has_deltas,
+                    message=f"Training run has applied_knob_deltas ({len(applied_deltas or [])} deltas)" if has_deltas
+                            else "VIOLATION: Training run missing applied_knob_deltas field",
+                ))
+        except Exception as e:
+            warnings.append(f"Could not verify orchestrator state semantics: {e}")
+
+    # 19. Applied knob deltas cross-validation
+    applied_deltas_path = output_path / "applied_knob_deltas.json"
+    if applied_deltas_path.exists() and orchestrator_state_path.exists():
+        try:
+            with open(applied_deltas_path, "r") as f:
+                file_deltas = json.load(f)
+            with open(orchestrator_state_path, "r") as f:
+                orch_data = json.load(f)
+            
+            orch_deltas = orch_data.get("applied_knob_deltas", [])
+            
+            # Canonicalize and compare (sha256_json imported at module level)
+            file_sha = sha256_json(file_deltas if isinstance(file_deltas, list) else file_deltas.get("deltas", []))
+            orch_sha = sha256_json(orch_deltas)
+            
+            checks.append(VerificationCheckV1(
+                check_id="applied_knob_deltas_match_orchestrator_state",
+                passed=file_sha == orch_sha,
+                message="Applied knob deltas match orchestrator state" if file_sha == orch_sha
+                        else "VIOLATION: Knob deltas in file differ from orchestrator state",
+                expected=orch_sha[:16],
+                actual=file_sha[:16],
+            ))
+        except Exception as e:
+            warnings.append(f"Could not verify knob deltas consistency: {e}")
+
+    # 20. Econ tensor ↔ exposure consistency (lightweight)
+    econ_tensor_path = output_path / "econ_tensor.json"
+    if econ_tensor_path.exists() and is_training_run:
+        if not (exposure_manifest_path.exists() or selection_manifest_path.exists()):
+            checks.append(VerificationCheckV1(
+                check_id="econ_tensor_exposure_consistency",
+                passed=False,
+                message="VIOLATION: Econ tensor exists but no selection/exposure manifest for training run",
+            ))
+        else:
+            checks.append(VerificationCheckV1(
+                check_id="econ_tensor_exposure_consistency",
+                passed=True,
+                message="Econ tensor has corresponding selection/exposure manifest",
+            ))
+
     # Compute manifest SHA
     manifest_sha = sha256_json(manifest.model_dump(mode="json"))
 

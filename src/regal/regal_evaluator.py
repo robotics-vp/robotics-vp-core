@@ -865,3 +865,34 @@ def _signals_to_summary(signals: "SignalBundle") -> Dict[str, Any]:
         "signal_types": sorted([str(s.signal_type) for s in signals.signals]),
         "bundle_id": getattr(signals, "bundle_id", None),
     }
+
+
+def write_ledger_regal(ledger_regal: LedgerRegalV1, output_dir: Path) -> str:
+    """Write LedgerRegalV1 to file and return SHA.
+    
+    Args:
+        ledger_regal: The regal ledger to persist
+        output_dir: Directory to write ledger_regal.json
+        
+    Returns:
+        SHA-256 of the written file (for manifest inclusion)
+    """
+    from src.utils.config_digest import sha256_file
+    import json
+    
+    output_path = Path(output_dir) / "ledger_regal.json"
+    
+    # Serialize with deterministic ordering
+    data = ledger_regal.model_dump(mode="json")
+    
+    # Sort reports by (phase, regal_id) for deterministic ordering
+    if data.get("reports"):
+        data["reports"] = sorted(
+            data["reports"],
+            key=lambda r: (r.get("phase", ""), r.get("regal_id", ""))
+        )
+    
+    with open(output_path, "w") as f:
+        json.dump(data, f, indent=2, sort_keys=True)
+    
+    return sha256_file(str(output_path))

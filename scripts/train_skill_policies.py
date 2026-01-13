@@ -270,8 +270,13 @@ def evaluate_scripted_baseline(n_episodes=50):
     return skill_results
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Train HRL Skill Policies')
+from src.training.wrap_training_entrypoint import regal_training
+
+
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main training function with regality wrapper."""
+    parser = argparse.ArgumentParser(description='Train HRL Skill Policies (FULL regality)')
     parser.add_argument(
         '--skill',
         type=str,
@@ -311,6 +316,10 @@ def main():
 
     args = parser.parse_args()
 
+    if runner:
+        runner.start_training()
+
+    total_steps = 0
     if args.skill.lower() == 'baseline':
         evaluate_scripted_baseline()
     elif args.skill.lower() == 'all':
@@ -321,6 +330,7 @@ def main():
             device=args.device,
             save_dir=args.save_dir
         )
+        total_steps = args.steps * SkillID.NUM_SKILLS
     else:
         # Train specific skill
         skill_name = args.skill.upper()
@@ -339,7 +349,12 @@ def main():
             device=args.device,
             save_dir=args.save_dir
         )
+        total_steps = args.steps
+
+    if runner:
+        runner.update_step(total_steps)
 
 
 if __name__ == '__main__':
     main()
+
