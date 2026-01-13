@@ -506,6 +506,9 @@ class RegalContextV1(BaseModel):
 
     Replaces ad-hoc Dict[str, Any] context with typed, hashed, stable schema.
     Extra keys are rejected (extra='forbid') to enforce schema discipline.
+    
+    Key provenance SHAs are included so that causal replay is structural:
+    same context SHA → same regal outcome (given same inputs).
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -534,6 +537,10 @@ class RegalContextV1(BaseModel):
     probe_report_sha: Optional[str] = None
     graph_summary_sha: Optional[str] = None
     trajectory_audit_sha: Optional[str] = None
+
+    # Orchestrator/selection provenance (P1: structural causal replay)
+    orchestrator_state_sha: Optional[str] = None  # SHA of OrchestratorStateV1
+    selection_manifest_sha: Optional[str] = None  # SHA of SelectionManifestV1
 
     # Econ provenance
     econ_basis_sha: Optional[str] = None

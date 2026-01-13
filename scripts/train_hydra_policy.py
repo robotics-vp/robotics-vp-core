@@ -1,8 +1,11 @@
-"""
-Phase I Hydra policy training entrypoint.
+"""Phase I Hydra policy training entrypoint with FULL regality.
 
 Loads Stage 5 dataset slices, builds a minimal HydraActor skeleton, runs a
 deterministic regression loop against condition features, and emits a checkpoint.
+
+Notes:
+- Wrapped with @regal_training for artifacts + verify_run()
+- Default env_type=workcell (paramount)
 """
 import argparse
 import hashlib
@@ -26,6 +29,7 @@ from src.utils.json_safe import to_json_safe
 from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
 from src.utils.failure_sentinel import FailureSentinel
+from src.training.wrap_training_entrypoint import regal_training
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -187,7 +191,14 @@ def write_checkpoint(checkpoint_dir: Path, payload: Dict[str, Any], policy_state
     return path
 
 
-def main(argv: Optional[List[str]] = None) -> None:
+@regal_training(env_type="workcell")
+def main(argv: Optional[List[str]] = None, runner=None) -> None:
+    """Main training function with regality wrapper.
+    
+    Args:
+        argv: Command line arguments (optional)
+        runner: RegalTrainingRunner instance (injected by decorator)
+    """
     args = parse_args(argv)
     set_deterministic_seeds(args.seed)
 
@@ -215,6 +226,10 @@ def main(argv: Optional[List[str]] = None) -> None:
     run_name = f"hydra_policy_{args.seed}"
     log_file = f"results/training_logs/{run_name}.jsonl"
 
+    # Start training with runner tracking (if available)
+    if runner:
+        runner.start_training()
+
     metrics = run_with_oom_recovery(
         run_training,
         dataset, 
@@ -226,6 +241,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         log_file=log_file,
         config_digest=config_digest,
     )
+
+    # Record step progress with runner
+    if runner:
+        runner.update_step(metrics.get("processed", 0))
+
     digest_src = json.dumps({"metrics": metrics, "seed": args.seed, "count": len(dataset), "policy_checksum": metrics.get("policy_checksum")}, sort_keys=True)
     payload = {
         "dataset_samples": len(dataset),
@@ -234,6 +254,12 @@ def main(argv: Optional[List[str]] = None) -> None:
         "trained_steps": metrics.get("processed", 0),
     }
     ckpt_path = write_checkpoint(Path(args.checkpoint_dir), payload, policy.state_dict())
+
+    # Record weights with runner
+    if runner:
+        from src.utils.config_digest import sha256_file
+        weights_sha = sha256_file(str(ckpt_path)) if ckpt_path.stat().st_size < 100_000_000 else "too_large"
+        runner.set_weights(weights_sha, weights_sha)  # baseline=final for single-stage
 
     log = {"event": "phase1_hydra_policy_training_complete", "checkpoint": str(ckpt_path), "payload": payload}
     print(json.dumps(to_json_safe(log), sort_keys=True))
