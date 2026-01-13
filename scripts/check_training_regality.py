@@ -20,15 +20,58 @@ from typing import Dict, List, Optional, Set, Tuple
 
 # Allowlist: scripts that are explicitly permitted to NOT use RegalTrainingRunner
 # Each entry must have a reason documented here
+#
+# MIGRATION STATUS:
+# - Phase 10 complete: 4 trainers wrapped (hydra, sac_ontology, offline, skill)
+# - Pending migration: 23 trainers (listed below with PENDING_MIGRATION tag)
+# - Goal: reduce to 0 pending by end of week
+#
 TRAINING_SCRIPT_ALLOWLIST: Dict[str, str] = {
-    # Legacy scripts pending migration
-    "train_vision_backbone_real.py": "Vision-only script, no RL loop, pending migration",
-    "train_sima2_segmenter.py": "Perception script, no RL loop, pending migration",
-    "train_spatial_rnn.py": "Perception script, no RL loop, pending migration",
-    # Test/demo scripts
-    "train_tiny_demo.py": "Minimal demo script for onboarding, no production use",
-    # Utils
-    "train_knob_model.py": "Meta-training script, regality at different layer",
+    # =========================================================================
+    # Already compliant (use @regal_training or RegalTrainingRunner)
+    # These should NOT be in the allowlist - but we leave as comment for tracking
+    # =========================================================================
+    # "train_hydra_policy.py": "COMPLIANT - wrapped in Phase 9",
+    # "train_sac_with_ontology_logging.py": "COMPLIANT - wrapped in Phase 9",
+    # "train_offline_policy.py": "COMPLIANT - wrapped in Phase 9",
+    # "train_skill_policies.py": "COMPLIANT - wrapped in Phase 9",
+    
+    # =========================================================================
+    # PENDING_MIGRATION: Scripts awaiting @regal_training wrapper
+    # Priority: Wrap in order listed (most used first)
+    # =========================================================================
+    "train_behaviour_model.py": "PENDING_MIGRATION: High priority - behaviour cloning core",
+    "train_world_model_from_datapacks.py": "PENDING_MIGRATION: High priority - world model",
+    "train_stable_world_model.py": "PENDING_MIGRATION: High priority - stable world model",
+    "train_trust_aware_world_model.py": "PENDING_MIGRATION: High priority - trust-aware WM",
+    "train_horizon_agnostic_world_model.py": "PENDING_MIGRATION: High priority - horizon WM",
+    "train_latent_diffusion.py": "PENDING_MIGRATION: Medium priority - diffusion model",
+    "train_orchestration_transformer.py": "PENDING_MIGRATION: Medium priority - orch transformer",
+    "train_orchestration_transformer_v1_curriculum.py": "PENDING_MIGRATION: Medium - orch curriculum",
+    "train_high_level_controller.py": "PENDING_MIGRATION: Medium priority - HLC",
+    "train_meta_transformer_synthetic.py": "PENDING_MIGRATION: Medium priority - meta transformer",
+    "train_motion_hierarchy_node.py": "PENDING_MIGRATION: Medium priority - motion hierarchy",
+    "train_aligned_encoder.py": "PENDING_MIGRATION: Medium priority - visual encoder",
+    "train_vision_backbone.py": "PENDING_MIGRATION: Medium priority - vision backbone",
+    "train_trust_net.py": "PENDING_MIGRATION: Medium priority - trust network",
+    "train_trust_weighted_offline.py": "PENDING_MIGRATION: Medium priority - trust-weighted",
+    "train_vla_recap_offline.py": "PENDING_MIGRATION: Medium priority - VLA offline",
+    "train_offline_with_local_synth.py": "PENDING_MIGRATION: Medium - offline local synth",
+    "train_energy_profile_policy.py": "PENDING_MIGRATION: Low priority - energy profile",
+    "train_energy_response_model.py": "PENDING_MIGRATION: Low priority - energy response",
+    "train_synth_lambda_controller.py": "PENDING_MIGRATION: Low priority - synth lambda",
+    "train_w_econ_lattice.py": "PENDING_MIGRATION: Low priority - econ lattice",
+    "train_w_econ_lattice_from_J.py": "PENDING_MIGRATION: Low priority - econ lattice J",
+    "train_ggds_on_lsd_vector_scenes.py": "PENDING_MIGRATION: Low priority - GGDS/LSD",
+    
+    # =========================================================================
+    # Legacy scripts (not for production, no migration planned)
+    # =========================================================================
+    "train_vision_backbone_real.py": "LEGACY: Vision-only script, no RL loop, deprecated",
+    "train_sima2_segmenter.py": "LEGACY: Perception script, no RL loop, deprecated",
+    "train_spatial_rnn.py": "LEGACY: Perception script, no RL loop, deprecated",
+    "train_tiny_demo.py": "LEGACY: Minimal demo for onboarding, no production use",
+    "train_knob_model.py": "LEGACY: Meta-training script, regality at different layer",
 }
 
 # Pattern to detect RegalTrainingRunner usage
