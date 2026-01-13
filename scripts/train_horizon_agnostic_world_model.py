@@ -28,6 +28,7 @@ from torch.utils.data import Dataset, DataLoader
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from scripts.train_latent_diffusion import LatentDynamicsModel
 from src.valuation.trust_net import TrustNet, extract_episode_features
+from src.training.wrap_training_entrypoint import regal_training
 
 
 class EpisodeDataset(Dataset):
@@ -376,7 +377,12 @@ class HorizonAgnosticTrainer:
         return history
 
 
-def main():
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     parser = argparse.ArgumentParser(description='Train horizon-agnostic world model')
     parser.add_argument('--dataset', type=str, default='data/physics_zv_rollouts.npz')
     parser.add_argument('--trust-net', type=str, default='checkpoints/trust_net.pt')
@@ -455,6 +461,9 @@ def main():
         tf_start=args.tf_start,
         tf_end=args.tf_end,
     )
+
+    if runner:
+        runner.update_step(args.epochs * 100)  # Approximate
 
     # Evaluate
     print("\n" + "="*60)

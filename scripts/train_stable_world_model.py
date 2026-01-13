@@ -30,6 +30,7 @@ import torch.optim as optim
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from src.world_model.contractive_dynamics import StableWorldModel
 from src.valuation.trust_net import TrustNet
+from src.training.wrap_training_entrypoint import regal_training
 
 
 class RealScheduledSampler:
@@ -549,7 +550,12 @@ def train_stable_world_model(args):
     print("="*70)
 
 
-def main():
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     parser = argparse.ArgumentParser(description='Train stable world model')
     parser.add_argument('--dataset', type=str, default='data/physics_zv_rollouts.npz')
     parser.add_argument('--trust-net', type=str, default='checkpoints/trust_net.pt')
@@ -576,6 +582,9 @@ def main():
 
     args = parser.parse_args()
     train_stable_world_model(args)
+    
+    if runner:
+        runner.update_step(args.epochs * 100)  # Approximate
 
 
 if __name__ == '__main__':

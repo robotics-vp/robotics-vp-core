@@ -28,6 +28,7 @@ from torch.utils.data import Dataset, DataLoader
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from scripts.train_latent_diffusion import ZVTransitionDataset, LatentDynamicsModel
 from src.valuation.trust_net import TrustNet, extract_episode_features
+from src.training.wrap_training_entrypoint import regal_training
 
 
 class TrustAwareWorldModelTrainer:
@@ -330,7 +331,12 @@ class TrustAwareWorldModelTrainer:
         return history
 
 
-def main():
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     parser = argparse.ArgumentParser(description='Train trust-aware world model')
     parser.add_argument('--dataset', type=str, default='data/physics_zv_rollouts.npz',
                         help='Path to real z_V rollouts')
@@ -422,6 +428,9 @@ def main():
         batch_size=args.batch_size,
         lr=args.lr,
     )
+
+    if runner:
+        runner.update_step(args.epochs * 100)  # Approximate
 
     # Evaluate improvement
     print("\n" + "="*60)

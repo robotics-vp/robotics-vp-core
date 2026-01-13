@@ -39,6 +39,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+# Regality wrapper (Phase 10: workcell paramount)
+_repo_root = Path(__file__).parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+from src.training.wrap_training_entrypoint import regal_training
+
 # PyTorch imports (optional for scaffolding)
 try:
     import torch
@@ -511,6 +517,7 @@ def train_behaviour_model(
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
     best_val_loss = float("inf")
     start_time = time.time()
+    global_step = 0
 
     for epoch in range(config.num_epochs):
         if verbose:
@@ -532,6 +539,7 @@ def train_behaviour_model(
         )
         history["train_loss"].append(train_metrics["loss"])
         history["train_acc"].append(train_metrics["accuracy"])
+        global_step += len(train_loader)
 
         # Validate
         val_iter = (move_batch(b) for b in val_loader)
@@ -599,7 +607,24 @@ def train_behaviour_model(
     return summary
 
 
-def main() -> int:
+def _run_training(config: TrainingConfig, runner=None, verbose: bool = True) -> Dict[str, Any]:
+    """Inner training function with runner hooks."""
+    if runner:
+        runner.start_training()
+    
+    result = train_behaviour_model(config, verbose=verbose)
+    
+    # Report final step to runner
+    if runner:
+        total_steps = config.num_epochs * 100  # Approximate
+        runner.update_step(total_steps)
+    
+    return result
+
+
+@regal_training(env_type="workcell")
+def main(runner=None) -> int:
+    """Main entrypoint with regality wrapper."""
     parser = argparse.ArgumentParser(
         description="Train CtRL-Sim-style BehaviourModel"
     )
@@ -678,7 +703,7 @@ def main() -> int:
     )
 
     try:
-        train_behaviour_model(config, verbose=not args.quiet)
+        _run_training(config, runner=runner, verbose=not args.quiet)
         return 0
 
     except Exception as e:

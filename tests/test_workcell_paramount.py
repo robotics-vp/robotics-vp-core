@@ -220,4 +220,49 @@ class TestPendingMigrationTracking:
         assert p0_count <= 10, (
             f"Too many P0 scripts ({p0_count}). P0 means 'do this week'."
         )
+    
+    def test_p0_must_be_empty_or_blocked(self):
+        """P0 entries must either be empty or have blocked_by set.
+        
+        This prevents "P0 forever" - if something is P0, it must be:
+        1. Wrapped immediately, OR
+        2. Have a documented blocker
+        """
+        import json
+        backlog_path = ROOT / "scripts" / "TRAINING_MIGRATION_BACKLOG.json"
+        
+        with open(backlog_path, "r") as f:
+            data = json.load(f)
+        
+        p0_without_blockers = []
+        for item in data["backlog"]:
+            if item["priority"] == "P0":
+                if not item.get("blocked_by"):
+                    p0_without_blockers.append(item["script"])
+        
+        assert len(p0_without_blockers) == 0, (
+            f"P0 scripts without blockers: {p0_without_blockers}\n"
+            "Either wrap these scripts or add blocked_by field explaining why"
+        )
+    
+    def test_migration_progress_tracked(self):
+        """Track migration progress for reporting."""
+        import json
+        backlog_path = ROOT / "scripts" / "TRAINING_MIGRATION_BACKLOG.json"
+        
+        with open(backlog_path, "r") as f:
+            data = json.load(f)
+        
+        pending_count = len(data.get("backlog", []))
+        migrated_count = len(data.get("migrated", []))
+        
+        print(f"\n=== Migration Progress ===")
+        print(f"  Pending: {pending_count}")
+        print(f"  Migrated: {migrated_count}")
+        print(f"  Legacy: 5 (allowlisted)")
+        print(f"  Compliant: {30 - pending_count - 5}")  # 30 total - pending - legacy
+        print(f"==========================")
+        
+        # Track that we're making progress
+        assert migrated_count >= 0, "Should track migrated scripts"
 

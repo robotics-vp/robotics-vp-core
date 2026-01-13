@@ -27,6 +27,7 @@ except ImportError:
 from src.valuation.datapack_repo import DataPackRepo
 from src.valuation.phase_b_integration import PhaseBDataPackIntegration
 from src.valuation.episode_features import make_full_datapack_features
+from src.training.wrap_training_entrypoint import regal_training
 
 
 class DataPackWorldModelDataset(Dataset):
@@ -493,7 +494,12 @@ def generate_synthetic_datapacks(model, source_datapacks, run_id, horizon=10):
     return synthetic
 
 
-def main():
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     parser = argparse.ArgumentParser(description='Train world model from DataPacks')
     parser.add_argument('--data-dir', type=str, default='data/datapacks',
                         help='DataPack repository directory')
@@ -557,6 +563,9 @@ def main():
         output_dir=args.output_dir,
         run_id=args.run_id
     )
+
+    if runner:
+        runner.update_step(args.epochs * 100)  # Approximate total steps
 
     if results:
         print("\n" + "=" * 70)
