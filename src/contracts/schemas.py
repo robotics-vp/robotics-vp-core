@@ -230,6 +230,9 @@ class ProbeEpiReportV1(BaseModel):
     probe_config_sha: str = ""
     report_sha: str = ""
 
+    # Regal context provenance (P5: computed_under)
+    regal_context_sha: Optional[str] = None  # SHA of RegalContextV1 under which this was computed
+
     def compute_hashes(self) -> None:
         """Compute and set hash fields."""
         from src.utils.config_digest import sha256_json
@@ -370,6 +373,9 @@ class GraphSummaryV1(BaseModel):
     graph_spec_sha: str
     summary_sha: str
     node_mode: Literal["grid", "tokens", "pooled"]
+
+    # Regal context provenance (P5: computed_under)
+    regal_context_sha: Optional[str] = None  # SHA of RegalContextV1 under which this was computed
 
     # Graph structure
     node_count: int
@@ -1053,6 +1059,232 @@ class ValueLedgerRecordV1(BaseModel):
 
 
 # =============================================================================
+# OrchestratorStateV1 - Orchestrator provenance closure (Phase 1)
+# =============================================================================
+
+class OrchestratorStateV1(BaseModel):
+    """Orchestrator state for provenance closure.
+
+    Captures all decision factors for replay: failure counts, patience counters,
+    clamp/noop decisions, cooldowns, and applied knob deltas.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = "v1"
+
+    # Failure counts (regal + non-regal gates)
+    failure_counts: Dict[str, int] = Field(default_factory=dict)  # gate_id -> count
+    patience_counters: Dict[str, int] = Field(default_factory=dict)  # gate_id -> remaining patience
+
+    # Clamp/noop decisions and trigger conditions
+    clamp_decisions: List[Dict[str, Any]] = Field(default_factory=list)  # [{gate, trigger, clamped_value}]
+    noop_decisions: List[Dict[str, Any]] = Field(default_factory=list)  # [{gate, trigger, reason}]
+
+    # Cooldown/backoff state
+    cooldown_remaining: Dict[str, int] = Field(default_factory=dict)  # gate_id -> steps remaining
+    backoff_multipliers: Dict[str, float] = Field(default_factory=dict)  # gate_id -> current multiplier
+
+    # Applied KnobDeltaV1[] (not just computed advisories)
+    applied_knob_deltas: List["KnobDeltaV1"] = Field(default_factory=list)
+
+    # Current step for temporal ordering
+    step: int = 0
+
+    def sha256(self) -> str:
+        """Compute deterministic SHA-256 of orchestrator state."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+# =============================================================================
+# SelectionManifestV1 - Selection provenance for replay (Phase 2)
+# =============================================================================
+
+class SelectionManifestV1(BaseModel):
+    """Selection manifest for deterministic data sampling replay.
+
+    Records what would have been sampled and what was rejected, enabling
+    exact replay of selection decisions.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = "v1"
+    manifest_id: str
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+    # Eligible datapacks at sampling start
+    eligible_datapack_ids: List[str] = Field(default_factory=list)
+
+    # Quarantine list used
+    quarantine_datapack_ids: List[str] = Field(default_factory=list)
+
+    # Selected datapacks (ordered, deterministic)
+    selected_datapack_ids: List[str] = Field(default_factory=list)
+
+    # Rejected datapacks with reasons
+    rejected_datapacks: List[Dict[str, str]] = Field(default_factory=list)  # [{id, reason}]
+
+    # RNG seeds and sampler config
+    rng_seed: int = 42
+    sampler_config_sha: Optional[str] = None
+
+    def sha256(self) -> str:
+        """Compute deterministic SHA-256 of selection manifest."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+# =============================================================================
+# RewardBreakdownV1 - Canonical reward component schema (Phase 4)
+# =============================================================================
+
+class RewardBreakdownV1(BaseModel):
+    """Canonical reward component breakdown for standardization.
+
+    All envs must use this schema for reward decomposition, ensuring
+    consistent semantics across tasks for RewardIntegrity checks.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = "v1"
+
+    # Required components (all envs must provide)
+    task_reward: float = 0.0  # Primary task completion reward
+    time_penalty: float = 0.0  # Time cost
+    energy_cost: float = 0.0  # Energy consumption cost
+
+    # Optional standard components
+    collision_penalty: Optional[float] = None
+    success_bonus: Optional[float] = None
+    grasp_reward: Optional[float] = None
+    place_reward: Optional[float] = None
+    navigation_reward: Optional[float] = None
+
+    # Safety/constraint components
+    constraint_violation_penalty: Optional[float] = None
+    safety_penalty: Optional[float] = None
+
+    # Shaping/auxiliary components (not used for final eval)
+    shaping_reward: Optional[float] = None
+    curiosity_bonus: Optional[float] = None
+
+    # Custom components (escape hatch, keyed by name)
+    custom_components: Dict[str, float] = Field(default_factory=dict)
+
+    # Normalization metadata
+    normalization_scale: float = 1.0
+    raw_total: Optional[float] = None  # Pre-normalization total
+
+    def total(self) -> float:
+        """Compute total reward from all components."""
+        total = self.task_reward + self.time_penalty + self.energy_cost
+        for val in [
+            self.collision_penalty, self.success_bonus, self.grasp_reward,
+            self.place_reward, self.navigation_reward, self.constraint_violation_penalty,
+            self.safety_penalty, self.shaping_reward, self.curiosity_bonus,
+        ]:
+            if val is not None:
+                total += val
+        total += sum(self.custom_components.values())
+        return total * self.normalization_scale
+
+    def to_dict(self) -> Dict[str, float]:
+        """Convert to flat dict for TrajectoryAuditV1 consumption."""
+        result = {
+            "task_reward": self.task_reward,
+            "time_penalty": self.time_penalty,
+            "energy_cost": self.energy_cost,
+        }
+        for key in [
+            "collision_penalty", "success_bonus", "grasp_reward", "place_reward",
+            "navigation_reward", "constraint_violation_penalty", "safety_penalty",
+            "shaping_reward", "curiosity_bonus",
+        ]:
+            val = getattr(self, key)
+            if val is not None:
+                result[key] = val
+        result.update(self.custom_components)
+        return result
+
+    def sha256(self) -> str:
+        """Compute deterministic SHA-256."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+# =============================================================================
+# DeployGateInputsV1 - Deploy gate inputs for causal replay (Phase 6)
+# =============================================================================
+
+class DeployGateInputsV1(BaseModel):
+    """Typed inputs for deploy gate decision.
+
+    Makes deploy decisions fully deterministic and replayable given these inputs.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = "v1"
+
+    # Audit deltas
+    audit_delta_success: Optional[float] = None
+    audit_delta_error: Optional[float] = None
+    audit_delta_mpl: Optional[float] = None
+
+    # Regal summary
+    regal_all_passed: bool = True
+    regal_degraded: bool = False
+    regal_report_sha: Optional[str] = None
+
+    # Required SHAs for verification
+    run_manifest_sha: Optional[str] = None
+    ledger_record_sha: Optional[str] = None
+
+    # Thresholds used (for replay)
+    deploy_threshold_success: float = 0.0  # Minimum delta_success to allow
+    deploy_threshold_mpl: float = 0.0  # Minimum delta_mpl to allow
+
+    # Additional gate inputs
+    trajectory_audit_sha: Optional[str] = None
+    econ_tensor_sha: Optional[str] = None
+
+    def sha256(self) -> str:
+        """Compute deterministic SHA-256 of deploy gate inputs."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+class DeployGateDecisionV1(BaseModel):
+    """Deploy gate decision with full provenance.
+
+    Records the decision and its deterministic derivation from inputs.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = "v1"
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+    # Decision
+    allow_deploy: bool = False
+    reason: str = ""
+
+    # Input provenance
+    inputs_sha: str  # SHA of DeployGateInputsV1
+    inputs: DeployGateInputsV1
+
+    # Decision derivation (for audit)
+    checks_performed: List[Dict[str, Any]] = Field(default_factory=list)  # [{check, passed, detail}]
+
+    def sha256(self) -> str:
+        """Compute SHA from inputs_sha + decision."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json({
+            "inputs_sha": self.inputs_sha,
+            "allow_deploy": self.allow_deploy,
+            "reason": self.reason,
+        })
+
+
+# =============================================================================
 # Run Manifest - Provenance for deterministic runs
 # =============================================================================
 
@@ -1122,6 +1354,18 @@ class RunManifestV1(BaseModel):
 
     # Quarantine provenance (datapack exclusion list)
     quarantine_manifest_sha: Optional[str] = None  # SHA of quarantined datapack IDs
+
+    # Orchestrator state provenance (Phase 1: control plane causality)
+    orchestrator_state_sha: Optional[str] = None  # SHA of OrchestratorStateV1
+
+    # Selection manifest provenance (Phase 2: selection determinism)
+    selection_manifest_sha: Optional[str] = None  # SHA of SelectionManifestV1
+
+    # Verification report provenance (Phase 7: meta-verification)
+    verification_report_sha: Optional[str] = None  # SHA of VerificationReportV1
+
+    # Deploy gate inputs provenance (Phase 6: causal deploy)
+    deploy_gate_inputs_sha: Optional[str] = None  # SHA of DeployGateInputsV1
 
     # Schema versions used
     schema_versions: Dict[str, str] = Field(default_factory=lambda: {
@@ -1232,6 +1476,15 @@ __all__ = [
     "ValueLedgerRecordV1",
     # Manifest
     "RunManifestV1",
+    # Orchestrator State (Phase 1)
+    "OrchestratorStateV1",
+    # Selection Manifest (Phase 2)
+    "SelectionManifestV1",
+    # Reward Breakdown (Phase 4)
+    "RewardBreakdownV1",
+    # Deploy Gate (Phase 6)
+    "DeployGateInputsV1",
+    "DeployGateDecisionV1",
     # Overrides
     "TaskSamplerOverrides",
     "DatapackSelectionOverrides",

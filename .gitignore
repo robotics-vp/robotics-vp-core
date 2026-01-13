@@ -41,3 +41,11 @@ artifacts/epiplexity_leaderboards/
 # === AGENT ARTIFACTS ===
 .agent/runs/
 .agent/queue/
+
+# === OS FILES ===
+**/.DS_Store
+
+# === ARTIFACTS ===
+artifacts/
+artifacts/**
+artifacts/*

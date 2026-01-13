@@ -1,17 +1,23 @@
 """Deployment gating module for regal-aware deploy decisions.
 
-P2 stub: Provides typed deploy decision interface based on regal outputs.
+Provides typed deploy decision interface based on regal outputs.
 Actual deployment logic is external; this module provides the decision API.
+
+Phase 6: Deploy gate is fully causal - decision is deterministic given inputs.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.contracts.schemas import (
     LedgerRegalV1,
     RegalReportV1,
+    DeployGateInputsV1,
+    DeployGateDecisionV1,
 )
 from src.utils.config_digest import sha256_json
 
@@ -129,7 +135,189 @@ def check_deploy_gate(
     return decision
 
 
+# =============================================================================
+# Phase 6: Typed Deploy Gate (fully causal)
+# =============================================================================
+
+
+def create_deploy_gate_inputs(
+    regal_result: Optional[LedgerRegalV1] = None,
+    audit_delta_success: Optional[float] = None,
+    audit_delta_error: Optional[float] = None,
+    audit_delta_mpl: Optional[float] = None,
+    run_manifest_sha: Optional[str] = None,
+    ledger_record_sha: Optional[str] = None,
+    trajectory_audit_sha: Optional[str] = None,
+    econ_tensor_sha: Optional[str] = None,
+    deploy_threshold_success: float = 0.0,
+    deploy_threshold_mpl: float = 0.0,
+) -> DeployGateInputsV1:
+    """Create typed deploy gate inputs for causal replay.
+
+    Args:
+        regal_result: LedgerRegalV1 from regal evaluation
+        audit_delta_success: Delta success rate from audit
+        audit_delta_error: Delta error rate from audit
+        audit_delta_mpl: Delta MPL from audit
+        run_manifest_sha: SHA of run manifest
+        ledger_record_sha: SHA of ledger record
+        trajectory_audit_sha: SHA of trajectory audit
+        econ_tensor_sha: SHA of econ tensor
+        deploy_threshold_success: Minimum delta_success to allow
+        deploy_threshold_mpl: Minimum delta_mpl to allow
+
+    Returns:
+        DeployGateInputsV1 with all inputs for deterministic decision
+    """
+    regal_all_passed = True
+    regal_degraded = regal_result is None
+    regal_report_sha = None
+
+    if regal_result is not None:
+        regal_all_passed = regal_result.all_passed
+        regal_report_sha = sha256_json([r.report_sha for r in regal_result.reports])
+
+    return DeployGateInputsV1(
+        audit_delta_success=audit_delta_success,
+        audit_delta_error=audit_delta_error,
+        audit_delta_mpl=audit_delta_mpl,
+        regal_all_passed=regal_all_passed,
+        regal_degraded=regal_degraded,
+        regal_report_sha=regal_report_sha,
+        run_manifest_sha=run_manifest_sha,
+        ledger_record_sha=ledger_record_sha,
+        deploy_threshold_success=deploy_threshold_success,
+        deploy_threshold_mpl=deploy_threshold_mpl,
+        trajectory_audit_sha=trajectory_audit_sha,
+        econ_tensor_sha=econ_tensor_sha,
+    )
+
+
+def compute_deploy_decision(
+    inputs: DeployGateInputsV1,
+    require_regal: bool = True,
+) -> DeployGateDecisionV1:
+    """Compute deploy decision deterministically from inputs.
+
+    This is the canonical deploy gate: same inputs -> same decision.
+
+    Args:
+        inputs: Typed deploy gate inputs
+        require_regal: If True, missing regal blocks deploy
+
+    Returns:
+        DeployGateDecisionV1 with decision and full provenance
+    """
+    inputs_sha = inputs.sha256()
+    checks_performed: List[Dict[str, Any]] = []
+    allow_deploy = True
+    reason_parts: List[str] = []
+
+    # Check 1: Regal degraded (missing)
+    if inputs.regal_degraded:
+        checks_performed.append({
+            "check": "regal_not_degraded",
+            "passed": not require_regal,
+            "detail": "Regal evaluation missing",
+        })
+        if require_regal:
+            allow_deploy = False
+            reason_parts.append("regal_missing")
+
+    # Check 2: Regal all passed
+    if not inputs.regal_degraded and not inputs.regal_all_passed:
+        checks_performed.append({
+            "check": "regal_all_passed",
+            "passed": False,
+            "detail": "Regal gate failed",
+        })
+        allow_deploy = False
+        reason_parts.append("regal_failed")
+    elif not inputs.regal_degraded:
+        checks_performed.append({
+            "check": "regal_all_passed",
+            "passed": True,
+            "detail": "Regal gate passed",
+        })
+
+    # Check 3: Audit delta success threshold
+    if inputs.audit_delta_success is not None:
+        passed = inputs.audit_delta_success >= inputs.deploy_threshold_success
+        checks_performed.append({
+            "check": "audit_delta_success_threshold",
+            "passed": passed,
+            "detail": f"{inputs.audit_delta_success:.4f} >= {inputs.deploy_threshold_success}",
+        })
+        if not passed:
+            allow_deploy = False
+            reason_parts.append(f"audit_regression_{inputs.audit_delta_success:.2%}")
+
+    # Check 4: Audit delta MPL threshold
+    if inputs.audit_delta_mpl is not None:
+        passed = inputs.audit_delta_mpl >= inputs.deploy_threshold_mpl
+        checks_performed.append({
+            "check": "audit_delta_mpl_threshold",
+            "passed": passed,
+            "detail": f"{inputs.audit_delta_mpl:.4f} >= {inputs.deploy_threshold_mpl}",
+        })
+        if not passed:
+            allow_deploy = False
+            reason_parts.append(f"mpl_regression_{inputs.audit_delta_mpl:.4f}")
+
+    reason = ", ".join(reason_parts) if reason_parts else "all_checks_passed"
+
+    return DeployGateDecisionV1(
+        allow_deploy=allow_deploy,
+        reason=reason,
+        inputs_sha=inputs_sha,
+        inputs=inputs,
+        checks_performed=checks_performed,
+    )
+
+
+def write_deploy_gate_inputs(path: str, inputs: DeployGateInputsV1) -> str:
+    """Write deploy gate inputs to JSON file.
+
+    Args:
+        path: Output path
+        inputs: Deploy gate inputs to write
+
+    Returns:
+        SHA-256 of written file content
+    """
+    from src.utils.config_digest import sha256_file
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(inputs.model_dump(mode="json"), f, indent=2)
+    return sha256_file(str(output_path))
+
+
+def write_deploy_gate_decision(path: str, decision: DeployGateDecisionV1) -> str:
+    """Write deploy gate decision to JSON file.
+
+    Args:
+        path: Output path
+        decision: Deploy gate decision to write
+
+    Returns:
+        SHA-256 of written file content
+    """
+    from src.utils.config_digest import sha256_file
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(decision.model_dump(mode="json"), f, indent=2)
+    return sha256_file(str(output_path))
+
+
 __all__ = [
+    # Legacy
     "DeployGateDecision",
     "check_deploy_gate",
+    # Phase 6: Typed deploy gate
+    "create_deploy_gate_inputs",
+    "compute_deploy_decision",
+    "write_deploy_gate_inputs",
+    "write_deploy_gate_decision",
 ]

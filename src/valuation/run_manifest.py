@@ -77,6 +77,14 @@ def create_run_manifest(
     deploy_gate_decision_sha: Optional[str] = None,
     # Quarantine provenance
     quarantine_manifest_sha: Optional[str] = None,
+    # Phase 1: Orchestrator state provenance
+    orchestrator_state_sha: Optional[str] = None,
+    # Phase 2: Selection manifest provenance
+    selection_manifest_sha: Optional[str] = None,
+    # Phase 6: Deploy gate inputs provenance
+    deploy_gate_inputs_sha: Optional[str] = None,
+    # Phase 7: Verification report provenance
+    verification_report_sha: Optional[str] = None,
 ) -> RunManifestV1:
     """Create a run manifest for provenance.
 
@@ -107,6 +115,10 @@ def create_run_manifest(
         econ_tensor_sha: Optional econ tensor SHA
         deploy_gate_decision_sha: Optional deploy gate decision SHA
         quarantine_manifest_sha: Optional quarantine manifest SHA
+        orchestrator_state_sha: Optional orchestrator state SHA (Phase 1)
+        selection_manifest_sha: Optional selection manifest SHA (Phase 2)
+        deploy_gate_inputs_sha: Optional deploy gate inputs SHA (Phase 6)
+        verification_report_sha: Optional verification report SHA (Phase 7)
 
     Returns:
         RunManifestV1 with provenance information
@@ -147,6 +159,10 @@ def create_run_manifest(
         econ_tensor_sha=econ_tensor_sha,
         deploy_gate_decision_sha=deploy_gate_decision_sha,
         quarantine_manifest_sha=quarantine_manifest_sha,
+        orchestrator_state_sha=orchestrator_state_sha,
+        selection_manifest_sha=selection_manifest_sha,
+        deploy_gate_inputs_sha=deploy_gate_inputs_sha,
+        verification_report_sha=verification_report_sha,
     )
 
 

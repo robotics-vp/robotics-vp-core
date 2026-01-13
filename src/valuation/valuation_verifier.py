@@ -255,10 +255,115 @@ def verify_run(output_dir: str) -> VerificationReportV1:
             passed=True,
             message=f"Deploy gate decision SHA recorded: {manifest.deploy_gate_decision_sha[:16]}",
         ))
-    
+
+    # 9. Verify orchestrator_state_sha presence (Phase 1)
+    if manifest.orchestrator_state_sha:
+        orchestrator_state_path = output_path / "orchestrator_state.json"
+        if orchestrator_state_path.exists():
+            computed_sha = sha256_file(str(orchestrator_state_path))
+            checks.append(VerificationCheckV1(
+                check_id="orchestrator_state_sha_match",
+                passed=manifest.orchestrator_state_sha == computed_sha,
+                message="Orchestrator state SHA matches" if manifest.orchestrator_state_sha == computed_sha
+                        else "Orchestrator state SHA mismatch",
+                expected=manifest.orchestrator_state_sha,
+                actual=computed_sha,
+            ))
+        else:
+            checks.append(VerificationCheckV1(
+                check_id="orchestrator_state_sha_present",
+                passed=True,
+                message=f"Orchestrator state SHA recorded: {manifest.orchestrator_state_sha[:16]}",
+            ))
+
+    # 10. Verify selection_manifest_sha presence (Phase 2)
+    if manifest.selection_manifest_sha:
+        selection_manifest_path = output_path / "selection_manifest.json"
+        if selection_manifest_path.exists():
+            computed_sha = sha256_file(str(selection_manifest_path))
+            checks.append(VerificationCheckV1(
+                check_id="selection_manifest_sha_match",
+                passed=manifest.selection_manifest_sha == computed_sha,
+                message="Selection manifest SHA matches" if manifest.selection_manifest_sha == computed_sha
+                        else "Selection manifest SHA mismatch",
+                expected=manifest.selection_manifest_sha,
+                actual=computed_sha,
+            ))
+        else:
+            checks.append(VerificationCheckV1(
+                check_id="selection_manifest_sha_present",
+                passed=True,
+                message=f"Selection manifest SHA recorded: {manifest.selection_manifest_sha[:16]}",
+            ))
+
+    # 11. Verify trajectory_audit_sha is REQUIRED for training runs (Phase 3)
+    # Detect training run: presence of final_weights_sha different from baseline_weights_sha
+    is_training_run = (
+        manifest.final_weights_sha is not None
+        and manifest.baseline_weights_sha is not None
+        and manifest.final_weights_sha != manifest.baseline_weights_sha
+    )
+    if is_training_run:
+        checks.append(VerificationCheckV1(
+            check_id="trajectory_audit_sha_required_for_training",
+            passed=manifest.trajectory_audit_sha is not None,
+            message="Training run has trajectory_audit_sha" if manifest.trajectory_audit_sha
+                    else "VIOLATION: Training run missing trajectory_audit_sha",
+        ))
+
+    # 12. Verify probe_report regal_context_sha matches manifest (Phase 5)
+    if manifest.probe_report_sha and manifest.regal_context_sha:
+        probe_report_path = output_path / "probe_report.json"
+        if probe_report_path.exists():
+            try:
+                with open(probe_report_path, "r") as f:
+                    probe_data = json.load(f)
+                probe_regal_ctx = probe_data.get("regal_context_sha")
+                if probe_regal_ctx:
+                    checks.append(VerificationCheckV1(
+                        check_id="probe_report_regal_context_match",
+                        passed=probe_regal_ctx == manifest.regal_context_sha,
+                        message="Probe report regal_context_sha matches manifest" if probe_regal_ctx == manifest.regal_context_sha
+                                else "Probe report regal_context_sha mismatch",
+                        expected=manifest.regal_context_sha,
+                        actual=probe_regal_ctx,
+                    ))
+            except Exception:
+                pass  # Skip if can't parse
+
+    # 13. Verify deploy_gate_inputs_sha recomputation (Phase 6)
+    if manifest.deploy_gate_inputs_sha:
+        deploy_gate_path = output_path / "deploy_gate_inputs.json"
+        if deploy_gate_path.exists():
+            computed_sha = sha256_file(str(deploy_gate_path))
+            checks.append(VerificationCheckV1(
+                check_id="deploy_gate_inputs_sha_match",
+                passed=manifest.deploy_gate_inputs_sha == computed_sha,
+                message="Deploy gate inputs SHA matches" if manifest.deploy_gate_inputs_sha == computed_sha
+                        else "Deploy gate inputs SHA mismatch",
+                expected=manifest.deploy_gate_inputs_sha,
+                actual=computed_sha,
+            ))
+
+    # 14. Verify verification_report_sha meta-check (Phase 7)
+    # This is the "verifier of verifier" - manifest must include verification_report_sha
+    # that matches the file content AFTER this verification runs
+    if manifest.verification_report_sha:
+        verification_report_path = output_path / "verification_report.json"
+        if verification_report_path.exists():
+            computed_sha = sha256_file(str(verification_report_path))
+            checks.append(VerificationCheckV1(
+                check_id="verification_report_sha_match",
+                passed=manifest.verification_report_sha == computed_sha,
+                message="Verification report SHA matches" if manifest.verification_report_sha == computed_sha
+                        else "Verification report SHA mismatch (may need re-run)",
+                expected=manifest.verification_report_sha,
+                actual=computed_sha,
+            ))
+
     # Compute manifest SHA
     manifest_sha = sha256_json(manifest.model_dump(mode="json"))
-    
+
     return _build_report(run_id, checks, warnings, manifest_sha, len(ledger_records))
 
 

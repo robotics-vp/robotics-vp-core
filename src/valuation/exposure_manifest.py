@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from src.utils.config_digest import sha256_json
 
+from src.contracts.schemas import SelectionManifestV1
+
 
 class ExposureManifestV1(BaseModel):
     """Exposure manifest for a training window.
@@ -76,6 +78,12 @@ class ExposureTracker:
         self._quarantine_datapack_ids: set = set()
         self._excluded_count: int = 0  # Count of samples excluded due to quarantine
 
+        # Selection tracking (Phase 2)
+        self._eligible_datapack_ids: set = set()  # All datapacks that were eligible
+        self._rejected_datapacks: List[Dict[str, str]] = []  # Rejected with reasons
+        self._rng_seed: int = 42
+        self._sampler_config_sha: Optional[str] = None
+
     def record_sample(
         self,
         task_family: str,
@@ -97,6 +105,7 @@ class ExposureTracker:
         # Check quarantine BEFORE recording
         if datapack_id and datapack_id in self._quarantine_datapack_ids:
             self._excluded_count += 1
+            self._rejected_datapacks.append({"id": datapack_id, "reason": "quarantine"})
             return False
         
         self._task_counts[task_family] += 1
@@ -135,6 +144,49 @@ class ExposureTracker:
     def quarantine_datapack_ids(self) -> List[str]:
         """List of quarantined datapack IDs."""
         return sorted(self._quarantine_datapack_ids)
+
+    def set_eligible_datapacks(self, datapack_ids: List[str]) -> None:
+        """Set the list of eligible datapacks (before filtering).
+
+        Args:
+            datapack_ids: List of all eligible datapack IDs at sampling start
+        """
+        self._eligible_datapack_ids = set(datapack_ids)
+
+    def set_sampler_config(self, seed: int, config_sha: Optional[str] = None) -> None:
+        """Set sampler configuration for reproducibility.
+
+        Args:
+            seed: RNG seed used for sampling
+            config_sha: Optional SHA of sampler config
+        """
+        self._rng_seed = seed
+        self._sampler_config_sha = config_sha
+
+    def record_rejection(self, datapack_id: str, reason: str) -> None:
+        """Record a datapack rejection with reason.
+
+        Args:
+            datapack_id: ID of rejected datapack
+            reason: Reason for rejection (e.g., "missing_fields", "validation_failed")
+        """
+        self._rejected_datapacks.append({"id": datapack_id, "reason": reason})
+
+    def build_selection_manifest(self) -> SelectionManifestV1:
+        """Build selection manifest for deterministic replay.
+
+        Returns:
+            SelectionManifestV1 with complete selection provenance
+        """
+        return SelectionManifestV1(
+            manifest_id=f"{self.manifest_id}_selection",
+            eligible_datapack_ids=sorted(self._eligible_datapack_ids),
+            quarantine_datapack_ids=self.quarantine_datapack_ids,
+            selected_datapack_ids=sorted(self._datapack_ids),
+            rejected_datapacks=self._rejected_datapacks,
+            rng_seed=self._rng_seed,
+            sampler_config_sha=self._sampler_config_sha,
+        )
 
     def build_manifest(self) -> ExposureManifestV1:
         """Build the exposure manifest."""
@@ -178,9 +230,28 @@ def load_exposure_manifest(path: str) -> ExposureManifestV1:
     return ExposureManifestV1.model_validate(data)
 
 
+def write_selection_manifest(path: str, manifest: SelectionManifestV1) -> str:
+    """Write selection manifest to JSON file.
+
+    Args:
+        path: Output path
+        manifest: Selection manifest to write
+
+    Returns:
+        SHA-256 of written file content
+    """
+    from src.utils.config_digest import sha256_file
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(manifest.model_dump(mode="json"), f, indent=2)
+    return sha256_file(str(output_path))
+
+
 __all__ = [
     "ExposureManifestV1",
     "ExposureTracker",
     "write_exposure_manifest",
     "load_exposure_manifest",
+    "write_selection_manifest",
 ]

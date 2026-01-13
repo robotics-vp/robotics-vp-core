@@ -404,5 +404,249 @@ class TestVerifyRunTamperDetection:
             assert any("run_id mismatch" in c.message for c in report.checks if not c.passed)
 
 
+# =============================================================================
+# Test 6: OrchestratorStateV1 Tamper Detection
+# =============================================================================
+
+
+class TestOrchestratorStateTamperDetection:
+    """Tests for orchestrator state SHA tamper detection."""
+
+    def test_orchestrator_state_sha_deterministic(self):
+        """OrchestratorStateV1 produces deterministic SHA."""
+        from src.contracts.schemas import OrchestratorStateV1, KnobDeltaV1
+
+        state1 = OrchestratorStateV1(
+            failure_counts={"gate_a": 2},
+            patience_counters={"gate_a": 3},
+            step=100,
+        )
+        state2 = OrchestratorStateV1(
+            failure_counts={"gate_a": 2},
+            patience_counters={"gate_a": 3},
+            step=100,
+        )
+
+        assert state1.sha256() == state2.sha256()
+
+    def test_orchestrator_state_sha_changes_with_content(self):
+        """Different state produces different SHA."""
+        from src.contracts.schemas import OrchestratorStateV1
+
+        state1 = OrchestratorStateV1(step=100)
+        state2 = OrchestratorStateV1(step=101)
+
+        assert state1.sha256() != state2.sha256()
+
+
+# =============================================================================
+# Test 7: SelectionManifestV1 Tamper Detection
+# =============================================================================
+
+
+class TestSelectionManifestTamperDetection:
+    """Tests for selection manifest SHA tamper detection."""
+
+    def test_selection_manifest_sha_deterministic(self):
+        """SelectionManifestV1 produces deterministic SHA."""
+        from src.contracts.schemas import SelectionManifestV1
+
+        # Use fixed timestamp to ensure deterministic SHA
+        fixed_ts = "2024-01-01T00:00:00"
+        manifest1 = SelectionManifestV1(
+            manifest_id="test",
+            created_at=fixed_ts,
+            eligible_datapack_ids=["dp_001", "dp_002"],
+            quarantine_datapack_ids=["dp_003"],
+            selected_datapack_ids=["dp_001"],
+            rng_seed=42,
+        )
+        manifest2 = SelectionManifestV1(
+            manifest_id="test",
+            created_at=fixed_ts,
+            eligible_datapack_ids=["dp_001", "dp_002"],
+            quarantine_datapack_ids=["dp_003"],
+            selected_datapack_ids=["dp_001"],
+            rng_seed=42,
+        )
+
+        assert manifest1.sha256() == manifest2.sha256()
+
+    def test_selection_manifest_tracks_rejections(self):
+        """Selection manifest tracks rejected datapacks with reasons."""
+        tracker = ExposureTracker(manifest_id="test", step_start=0)
+        tracker.set_quarantine(["bad_dp_001"])
+        tracker.set_eligible_datapacks(["dp_001", "bad_dp_001"])
+        tracker.set_sampler_config(seed=42)
+
+        # Try to record quarantined datapack
+        tracker.record_sample("task_a", datapack_id="bad_dp_001")
+
+        selection = tracker.build_selection_manifest()
+        assert len(selection.rejected_datapacks) == 1
+        assert selection.rejected_datapacks[0]["id"] == "bad_dp_001"
+        assert selection.rejected_datapacks[0]["reason"] == "quarantine"
+
+
+# =============================================================================
+# Test 8: RewardBreakdownV1 Standardization
+# =============================================================================
+
+
+class TestRewardBreakdownStandardization:
+    """Tests for reward breakdown schema standardization."""
+
+    def test_reward_breakdown_required_components(self):
+        """RewardBreakdownV1 has required components."""
+        from src.contracts.schemas import RewardBreakdownV1
+
+        breakdown = RewardBreakdownV1(
+            task_reward=1.0,
+            time_penalty=-0.1,
+            energy_cost=-0.05,
+        )
+
+        assert breakdown.task_reward == 1.0
+        assert breakdown.time_penalty == -0.1
+        assert breakdown.energy_cost == -0.05
+
+    def test_reward_breakdown_total(self):
+        """RewardBreakdownV1.total() computes correctly."""
+        from src.contracts.schemas import RewardBreakdownV1
+
+        breakdown = RewardBreakdownV1(
+            task_reward=1.0,
+            time_penalty=-0.1,
+            energy_cost=-0.05,
+            success_bonus=0.5,
+            custom_components={"bonus": 0.2},
+        )
+
+        expected = 1.0 - 0.1 - 0.05 + 0.5 + 0.2
+        assert abs(breakdown.total() - expected) < 1e-6
+
+    def test_reward_breakdown_to_dict_for_trajectory_audit(self):
+        """RewardBreakdownV1.to_dict() produces dict for TrajectoryAuditV1."""
+        from src.contracts.schemas import RewardBreakdownV1
+
+        breakdown = RewardBreakdownV1(
+            task_reward=1.0,
+            time_penalty=-0.1,
+            energy_cost=-0.05,
+            success_bonus=0.5,
+        )
+
+        d = breakdown.to_dict()
+        assert "task_reward" in d
+        assert "time_penalty" in d
+        assert "energy_cost" in d
+        assert "success_bonus" in d
+        assert d["task_reward"] == 1.0
+
+
+# =============================================================================
+# Test 9: DeployGateInputsV1 Causal Replay
+# =============================================================================
+
+
+class TestDeployGateCausalReplay:
+    """Tests for deploy gate deterministic decision making."""
+
+    def test_deploy_gate_inputs_sha_deterministic(self):
+        """DeployGateInputsV1 produces deterministic SHA."""
+        from src.contracts.schemas import DeployGateInputsV1
+
+        inputs1 = DeployGateInputsV1(
+            audit_delta_success=0.05,
+            regal_all_passed=True,
+            regal_degraded=False,
+        )
+        inputs2 = DeployGateInputsV1(
+            audit_delta_success=0.05,
+            regal_all_passed=True,
+            regal_degraded=False,
+        )
+
+        assert inputs1.sha256() == inputs2.sha256()
+
+    def test_deploy_gate_decision_deterministic(self):
+        """Same inputs produce same decision."""
+        from src.contracts.schemas import DeployGateInputsV1
+        from src.deployment.deploy_gate import compute_deploy_decision
+
+        inputs = DeployGateInputsV1(
+            audit_delta_success=0.05,
+            regal_all_passed=True,
+            regal_degraded=False,
+        )
+
+        decision1 = compute_deploy_decision(inputs)
+        decision2 = compute_deploy_decision(inputs)
+
+        assert decision1.allow_deploy == decision2.allow_deploy
+        assert decision1.inputs_sha == decision2.inputs_sha
+        assert decision1.sha256() == decision2.sha256()
+
+    def test_deploy_gate_blocks_on_regal_failure(self):
+        """Deploy gate blocks when regal fails."""
+        from src.contracts.schemas import DeployGateInputsV1
+        from src.deployment.deploy_gate import compute_deploy_decision
+
+        inputs = DeployGateInputsV1(
+            regal_all_passed=False,
+            regal_degraded=False,
+        )
+
+        decision = compute_deploy_decision(inputs)
+        assert decision.allow_deploy is False
+        assert "regal_failed" in decision.reason
+
+
+# =============================================================================
+# Test 10: Training Run Trajectory Audit Requirement
+# =============================================================================
+
+
+class TestTrainingRunTrajectoryAuditRequirement:
+    """Tests for trajectory_audit_sha requirement on training runs."""
+
+    def test_verify_run_requires_trajectory_audit_for_training(self):
+        """verify_run fails if training run lacks trajectory_audit_sha."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_id = "training_run"
+
+            # Create manifest for training run (different baseline/final weights)
+            manifest = RunManifestV1(
+                run_id=run_id,
+                plan_sha="plan123",
+                audit_suite_id="test",
+                audit_seed=42,
+                audit_config_sha="cfg123",
+                datapack_manifest_sha="dp123",
+                seeds={"audit": 42},
+                baseline_weights_sha="baseline_abc",
+                final_weights_sha="final_xyz",
+                trajectory_audit_sha=None,  # Missing!
+            )
+            manifest_path = Path(tmpdir) / "run_manifest.json"
+            with open(manifest_path, "w") as f:
+                json.dump(manifest.model_dump(mode="json"), f)
+
+            # Create valid ledger
+            record = _create_minimal_ledger_record(run_id=run_id)
+            record = record.model_copy(update={"plan_sha": "plan123"})
+            ledger_path = Path(tmpdir) / "ledger.jsonl"
+            with open(ledger_path, "w") as f:
+                f.write(json.dumps(record.model_dump(mode="json")) + "\n")
+
+            report = verify_run(tmpdir)
+
+            # Should fail with trajectory_audit_sha required check
+            failed_checks = [c for c in report.checks if not c.passed]
+            trajectory_check = [c for c in failed_checks
+                                if "trajectory_audit" in c.check_id.lower()]
+            assert len(trajectory_check) > 0, "Should fail trajectory audit check"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
