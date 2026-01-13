@@ -141,6 +141,13 @@ def verify_run(output_dir: str) -> VerificationReportV1:
     
     run_id = manifest.run_id
     
+    # Detect training run early (needed for multiple checks including 10c, 11, 15)
+    is_training_run = (
+        manifest.final_weights_sha is not None
+        and manifest.baseline_weights_sha is not None
+        and manifest.final_weights_sha != manifest.baseline_weights_sha
+    )
+    
     # Load ledger
     ledger_records, ledger_err = _load_ledger(ledger_path)
     if ledger_err:
@@ -289,6 +296,62 @@ def verify_run(output_dir: str) -> VerificationReportV1:
                 expected=manifest.selection_manifest_sha,
                 actual=computed_sha,
             ))
+            
+            # 10a-c: Selection manifest semantic invariants (P1.5 enforcement)
+            try:
+                with open(selection_manifest_path, "r") as f:
+                    sel_data = json.load(f)
+                
+                eligible_ids = set(sel_data.get("eligible_datapack_ids", []))
+                selected_ids = set(sel_data.get("selected_datapack_ids", []))
+                quarantine_ids = set(sel_data.get("quarantine_datapack_ids", []))
+                
+                # Check 10a: selected_ids ⊆ eligible_ids
+                invalid_selected = selected_ids - eligible_ids
+                if invalid_selected:
+                    checks.append(VerificationCheckV1(
+                        check_id="selection_selected_subset_eligible",
+                        passed=False,
+                        message=f"VIOLATION: selected_ids not subset of eligible: {sorted(invalid_selected)[:5]}",
+                    ))
+                else:
+                    checks.append(VerificationCheckV1(
+                        check_id="selection_selected_subset_eligible",
+                        passed=True,
+                        message=f"selected_ids ⊆ eligible_ids ({len(selected_ids)}/{len(eligible_ids)})",
+                    ))
+                
+                # Check 10b: selected_ids ∩ quarantine_ids = ∅
+                quarantine_violation = selected_ids & quarantine_ids
+                if quarantine_violation:
+                    checks.append(VerificationCheckV1(
+                        check_id="selection_quarantine_disjoint",
+                        passed=False,
+                        message=f"CRITICAL: quarantined datapacks selected: {sorted(quarantine_violation)}",
+                    ))
+                else:
+                    checks.append(VerificationCheckV1(
+                        check_id="selection_quarantine_disjoint",
+                        passed=True,
+                        message="selected ∩ quarantine = ∅ (quarantine enforced)",
+                    ))
+                
+                # Check 10c: len(selected) > 0 for training runs (unless dry-run)
+                is_dry_run = sel_data.get("dry_run", False)
+                if is_training_run and not is_dry_run and len(selected_ids) == 0:
+                    checks.append(VerificationCheckV1(
+                        check_id="selection_nonempty_for_training",
+                        passed=False,
+                        message="VIOLATION: training run has no selected datapacks",
+                    ))
+                elif is_training_run and len(selected_ids) > 0:
+                    checks.append(VerificationCheckV1(
+                        check_id="selection_nonempty_for_training",
+                        passed=True,
+                        message=f"Training run has {len(selected_ids)} selected datapacks",
+                    ))
+            except Exception as e:
+                warnings.append(f"Could not verify selection manifest semantics: {e}")
         else:
             checks.append(VerificationCheckV1(
                 check_id="selection_manifest_sha_present",
@@ -297,12 +360,7 @@ def verify_run(output_dir: str) -> VerificationReportV1:
             ))
 
     # 11. Verify trajectory_audit_sha is REQUIRED for training runs (Phase 3)
-    # Detect training run: presence of final_weights_sha different from baseline_weights_sha
-    is_training_run = (
-        manifest.final_weights_sha is not None
-        and manifest.baseline_weights_sha is not None
-        and manifest.final_weights_sha != manifest.baseline_weights_sha
-    )
+    # is_training_run already computed above
     if is_training_run:
         checks.append(VerificationCheckV1(
             check_id="trajectory_audit_sha_required_for_training",
