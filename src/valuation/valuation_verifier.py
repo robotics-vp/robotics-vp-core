@@ -20,6 +20,36 @@ from src.contracts.schemas import (
 from src.utils.config_digest import sha256_json, sha256_file
 
 
+# =============================================================================
+# Blocking Check IDs (Phase 9: verifier checks that block deploy)
+# =============================================================================
+# These check_ids, when failed, will block allow_deploy for FULL regality runs.
+# Diagnostic-only checks (eligible_shrunk_pathology, selection_rejection_spike)
+# are NOT in this list and only warn.
+
+BLOCKING_CHECK_IDS = frozenset([
+    # Structural integrity (tamper detection)
+    "orchestrator_state_sha_match",
+    "selection_manifest_sha_match",
+    "ledger_regal_sha_match",
+    "deploy_gate_inputs_sha_match",
+    "verification_report_sha_match",
+    # Semantic invariants
+    "selection_selected_subset_eligible",
+    "selection_quarantine_disjoint",
+    "selection_nonempty_for_training",
+    "exposure_only_selected_ids",
+    "exposure_quarantine_exclusion",
+    "orchestrator_state_nonnegative_counters",
+    "applied_knob_deltas_match_orchestrator_state",
+    "orchestrator_decisions_match_plan_applied_events",
+    # Required artifacts for FULL
+    "ledger_regal_required_for_full",
+    "trajectory_audit_sha_required_for_training",
+    "econ_evidence_present_for_full",
+])
+
+
 class VerificationCheckV1(BaseModel):
     """Single verification check result."""
     model_config = ConfigDict(extra="forbid")
@@ -789,9 +819,28 @@ def write_verification_report(path: str, report: VerificationReportV1) -> str:
     return report.sha256()
 
 
+def get_blocking_failures(report: VerificationReportV1) -> Tuple[int, List[str]]:
+    """Extract blocking failures from a verification report.
+    
+    Args:
+        report: Verification report to analyze
+        
+    Returns:
+        Tuple of (blocking_failure_count, list of blocking check_ids that failed)
+    """
+    blocking_failures = []
+    for check in report.checks:
+        if not check.passed and check.check_id in BLOCKING_CHECK_IDS:
+            blocking_failures.append(check.check_id)
+    return len(blocking_failures), blocking_failures
+
+
 __all__ = [
     "VerificationCheckV1",
     "VerificationReportV1",
     "verify_run",
     "write_verification_report",
+    "get_blocking_failures",
+    "BLOCKING_CHECK_IDS",
 ]
+

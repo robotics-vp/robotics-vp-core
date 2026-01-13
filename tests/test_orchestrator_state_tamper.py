@@ -473,3 +473,95 @@ class TestSelectionPathology:
                 f"All checks: {[(c.check_id, c.passed) for c in result.checks]}"
             )
 
+
+class TestVerificationBlocksDeploy:
+    """Prove: verification failure → deploy blocked for FULL runs (causal chain)."""
+    
+    def test_verification_failures_block_deploy(self):
+        """FULL run with blocking verification failure → allow_deploy=False."""
+        from src.deployment.deploy_gate import compute_deploy_decision
+        from src.contracts.schemas import DeployGateInputsV1
+        from src.valuation.valuation_verifier import BLOCKING_CHECK_IDS, get_blocking_failures
+        
+        # Simulate a FULL run with a blocking verification failure
+        inputs = DeployGateInputsV1(
+            regal_all_passed=True,  # Regal is fine
+            regal_degraded=False,
+            is_full_regality_run=True,  # This is a FULL run
+            verification_all_passed=False,  # BUT verification failed!
+            verification_blocking_failures=1,
+            verification_blocking_check_ids=["selection_quarantine_disjoint"],  # Blocking check
+        )
+        
+        decision = compute_deploy_decision(inputs, require_regal=True)
+        
+        # MUST be blocked
+        assert not decision.allow_deploy, (
+            f"Expected allow_deploy=False when verification failed. "
+            f"Got: allow_deploy={decision.allow_deploy}, reason={decision.reason}"
+        )
+        
+        # Reason must include verification_failed
+        assert "verification_failed" in decision.reason, (
+            f"Reason should include 'verification_failed'. Got: {decision.reason}"
+        )
+        
+        # The blocking check should be performed
+        check_5 = next(
+            (c for c in decision.checks_performed if c["check"] == "verification_required_for_full"),
+            None
+        )
+        assert check_5 is not None, "verification_required_for_full check should be in checks_performed"
+        assert not check_5["passed"], "verification_required_for_full should have failed"
+    
+    def test_non_blocking_failures_do_not_block(self):
+        """FULL run with ONLY diagnostic failures → allow_deploy=True."""
+        from src.deployment.deploy_gate import compute_deploy_decision
+        from src.contracts.schemas import DeployGateInputsV1
+        
+        # Simulate a FULL run with only non-blocking (diagnostic) failures
+        # eligible_shrunk_pathology is NOT in BLOCKING_CHECK_IDS
+        inputs = DeployGateInputsV1(
+            regal_all_passed=True,
+            regal_degraded=False,
+            is_full_regality_run=True,
+            verification_all_passed=True,  # Passes (no BLOCKING failures)
+            verification_blocking_failures=0,
+            verification_blocking_check_ids=[],  # Empty - only diagnostic failures
+        )
+        
+        decision = compute_deploy_decision(inputs, require_regal=True)
+        
+        # Should be allowed (no blocking failures)
+        assert decision.allow_deploy, (
+            f"Expected allow_deploy=True when only diagnostic failures. "
+            f"Got: allow_deploy={decision.allow_deploy}, reason={decision.reason}"
+        )
+    
+    def test_inputs_sha_includes_verification_fields(self):
+        """DeployGateInputsV1 SHA must change when verification fields change."""
+        from src.contracts.schemas import DeployGateInputsV1
+        
+        inputs_passing = DeployGateInputsV1(
+            is_full_regality_run=True,
+            verification_all_passed=True,
+            verification_blocking_failures=0,
+            verification_blocking_check_ids=[],
+        )
+        
+        inputs_failing = DeployGateInputsV1(
+            is_full_regality_run=True,
+            verification_all_passed=False,  # Changed!
+            verification_blocking_failures=1,
+            verification_blocking_check_ids=["selection_quarantine_disjoint"],
+        )
+        
+        sha_passing = inputs_passing.sha256()
+        sha_failing = inputs_failing.sha256()
+        
+        # SHAs must be different
+        assert sha_passing != sha_failing, (
+            "DeployGateInputsV1 SHA must differ when verification fields change"
+        )
+
+

@@ -264,6 +264,28 @@ def compute_deploy_decision(
             allow_deploy = False
             reason_parts.append(f"mpl_regression_{inputs.audit_delta_mpl:.4f}")
 
+    # Check 5: Verification all passed (CRITICAL for FULL runs)
+    # This is the key causal link: verification failures → deploy blocked
+    if inputs.is_full_regality_run:
+        if not inputs.verification_all_passed:
+            checks_performed.append({
+                "check": "verification_required_for_full",
+                "passed": False,
+                "detail": f"Verification failed: {inputs.verification_blocking_failures} blocking checks failed",
+                "blocking_check_ids": inputs.verification_blocking_check_ids,
+            })
+            allow_deploy = False
+            blocking_ids = ",".join(inputs.verification_blocking_check_ids[:3])
+            if len(inputs.verification_blocking_check_ids) > 3:
+                blocking_ids += "..."
+            reason_parts.append(f"verification_failed:{blocking_ids}")
+        else:
+            checks_performed.append({
+                "check": "verification_required_for_full",
+                "passed": True,
+                "detail": "Verification passed",
+            })
+
     reason = ", ".join(reason_parts) if reason_parts else "all_checks_passed"
 
     return DeployGateDecisionV1(
