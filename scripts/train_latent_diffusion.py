@@ -21,6 +21,12 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 
+# Regality wrapper (Phase 10: workcell paramount)
+_repo_root = Path(__file__).parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+from src.training.wrap_training_entrypoint import regal_training
+
 
 class ZVTransitionDataset(Dataset):
     """
@@ -389,7 +395,12 @@ def train_latent_dynamics(
     return model, save_path
 
 
-if __name__ == '__main__':
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     parser = argparse.ArgumentParser(description='Train latent dynamics model on z_V')
     parser.add_argument(
         '--dataset',
@@ -457,6 +468,9 @@ if __name__ == '__main__':
         use_scene_tracks=args.use_scene_tracks,
     )
 
+    if runner:
+        runner.update_step(args.epochs * 100)  # Approximate
+
     print("\n" + "="*60)
     print("Next steps:")
     print("="*60)
@@ -469,3 +483,7 @@ if __name__ == '__main__':
     print(f"   python scripts/validate_dmpl_novelty.py \\")
     print(f"     --synthetic data/synthetic_zv_rollouts.npz")
     print("="*60)
+
+
+if __name__ == '__main__':
+    main()

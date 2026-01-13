@@ -16,10 +16,17 @@ import torch
 
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from src.valuation.trust_net import train_trust_net, score_episodes_with_trust
+from src.training.wrap_training_entrypoint import regal_training
 
 
-def main():
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     # Paths
+
     real_path = 'data/physics_zv_rollouts.npz'
     synthetic_path = 'data/synthetic_zv_rollouts.npz'
     checkpoint_path = 'checkpoints/trust_net.pt'
@@ -145,6 +152,9 @@ def main():
     with open('results/trust_net_analysis.json', 'w') as f:
         json.dump(report, f, indent=2)
     print(f"\nSaved analysis to results/trust_net_analysis.json")
+
+    if runner:
+        runner.update_step(100)  # Training steps approximate
 
     print("\n" + "=" * 60)
     print("NEXT STEPS")

@@ -20,6 +20,7 @@ from src.datasets import VisionPhase1Dataset
 from src.datasets.base import set_deterministic_seeds
 from src.utils.json_safe import to_json_safe
 from src.vision.backbone_stub import VisionBackboneStub
+from src.training.wrap_training_entrypoint import regal_training
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -107,7 +108,12 @@ def write_checkpoint(checkpoint_dir: Path, payload: Dict[str, Any], head_state: 
     return path
 
 
-def main(argv: Optional[List[str]] = None) -> None:
+@regal_training(env_type="workcell")
+def main(argv: Optional[List[str]] = None, runner=None) -> None:
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     args = parse_args(argv)
     set_deterministic_seeds(args.seed)
 
@@ -148,6 +154,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         "payload": payload,
     }
     print(json.dumps(to_json_safe(log), sort_keys=True))
+
+    if runner:
+        runner.update_step(metrics.get("processed", 0))
 
 
 if __name__ == "__main__":

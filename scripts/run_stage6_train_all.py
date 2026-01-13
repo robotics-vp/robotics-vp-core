@@ -142,7 +142,94 @@ class Stage6TrainingOrchestrator:
         
         return success, child_result
     
+    def run_child_trainer_inprocess(
+        self,
+        module_name: str,
+        component_name: str,
+        override_argv: Optional[List[str]] = None,
+    ) -> Tuple[bool, Dict[str, Any]]:
+        """Run a migrated trainer in-process with unified runner.
+        
+        This is the blessed path for migrated trainers. It:
+        - Imports the trainer module directly
+        - Passes the orchestrator's runner for unified artifact tracking
+        - Avoids subprocess overhead and artifact fragmentation
+        
+        Args:
+            module_name: Module path like "scripts.train_hydra_policy"
+            component_name: Human-readable component name for logging
+            override_argv: Optional argv to override for argument parsing
+            
+        Returns:
+            Tuple of (success, result_dict)
+        """
+        import importlib
+        
+        print(f"\n{'='*60}")
+        print(f"[Stage6] Training (in-process): {component_name}")
+        print(f"{'='*60}")
+        
+        try:
+            # Import the module
+            module = importlib.import_module(module_name)
+            
+            # Get the main function
+            if not hasattr(module, "main"):
+                raise AttributeError(f"{module_name} does not have main()")
+            
+            main_fn = module.main
+            
+            # Override sys.argv if needed
+            old_argv = sys.argv
+            if override_argv:
+                sys.argv = ["script"] + override_argv
+            
+            try:
+                # Call main with our runner (unified artifact tracking)
+                # The @regal_training decorator will pass the runner if provided
+                main_fn(runner=self.runner)
+                success = True
+            finally:
+                sys.argv = old_argv
+            
+        except Exception as e:
+            print(f"[Stage6] WARNING: {component_name} failed: {e}")
+            import traceback
+            traceback.print_exc()
+            success = False
+        
+        # Record child result
+        child_result = {
+            "component": component_name,
+            "module": module_name,
+            "mode": "inprocess",
+            "success": success,
+            "timestamp": datetime.now().isoformat(),
+        }
+        self._child_results.append(child_result)
+        
+        return success, child_result
+    
+    # Mapping of migrated trainers for in-process execution
+    MIGRATED_TRAINERS = {
+        "train_hydra_policy": "scripts.train_hydra_policy",
+        "train_sac_with_ontology_logging": "scripts.train_sac_with_ontology_logging", 
+        "train_offline_policy": "scripts.train_offline_policy",
+        "train_skill_policies": "scripts.train_skill_policies",
+        "train_behaviour_model": "scripts.train_behaviour_model",
+        "train_world_model_from_datapacks": "scripts.train_world_model_from_datapacks",
+        "train_stable_world_model": "scripts.train_stable_world_model",
+        "train_trust_aware_world_model": "scripts.train_trust_aware_world_model",
+        "train_horizon_agnostic_world_model": "scripts.train_horizon_agnostic_world_model",
+        "train_latent_diffusion": "scripts.train_latent_diffusion",
+        "train_trust_net": "scripts.train_trust_net",
+        "train_orchestration_transformer": "scripts.train_orchestration_transformer",
+        "train_vision_backbone": "scripts.train_vision_backbone",
+        "train_aligned_encoder": "scripts.train_aligned_encoder",
+    }
+
     def aggregate_trajectory_audits(self) -> List[TrajectoryAuditV1]:
+
         """Aggregate trajectory audits from child runs.
         
         Looks for trajectory_audit.json files in child output directories.

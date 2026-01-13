@@ -134,7 +134,14 @@ class TestWrappedTrainersImportable:
         "train_stable_world_model",
         "train_trust_aware_world_model",
         "train_horizon_agnostic_world_model",
+        # P1 trainers (batch 1)
+        "train_latent_diffusion",
+        "train_trust_net",
+        "train_orchestration_transformer",
+        "train_vision_backbone",
+        "train_aligned_encoder",
     ]
+
     
     @pytest.mark.parametrize("trainer_name", WRAPPED_TRAINERS)
     def test_trainer_importable(self, trainer_name):

@@ -11,7 +11,14 @@ No Phase B/RL integration - purely advisory orchestration.
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
+
+# Regality wrapper
+_repo_root = Path(__file__).parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+from src.training.wrap_training_entrypoint import regal_training
 
 import numpy as np
 import torch
@@ -140,7 +147,12 @@ def evaluate_subset(
     return evaluate(model, loader, criterion, vocab_size)
 
 
-def main():
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     parser = argparse.ArgumentParser(description="Train Orchestration Transformer")
     parser.add_argument("--num-samples", type=int, default=1000, help="Number of training samples")
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
@@ -352,6 +364,9 @@ def main():
         with open(save_dir / "subset_metrics.json", "w") as f:
             json.dump(subset_metrics, f, indent=2)
         print(f"\nSaved subset metrics to {save_dir / 'subset_metrics.json'}")
+
+    if runner:
+        runner.update_step(args.epochs * 100)  # Approximate
 
 
 if __name__ == "__main__":

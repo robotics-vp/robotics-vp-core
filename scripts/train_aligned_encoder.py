@@ -21,6 +21,12 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 
+# Regality wrapper
+_repo_root = Path(__file__).parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+from src.training.wrap_training_entrypoint import regal_training
+
 
 class VideoFrameDataset(Dataset):
     """
@@ -315,7 +321,12 @@ def train_aligned_encoder(
     return student, checkpoint_path
 
 
-if __name__ == '__main__':
+@regal_training(env_type="workcell")
+def main(runner=None):
+    """Main entrypoint with regality wrapper."""
+    if runner:
+        runner.start_training()
+    
     parser = argparse.ArgumentParser(description='Train aligned visual encoder')
     parser.add_argument(
         '--config',
@@ -383,6 +394,9 @@ if __name__ == '__main__':
         save_dir=args.save_dir,
     )
 
+    if runner:
+        runner.update_step(args.epochs * 100)  # Approximate
+
     print("\n" + "="*60)
     print("Next steps:")
     print("="*60)
@@ -395,3 +409,7 @@ if __name__ == '__main__':
     print("2. Use in SAC training:")
     print(f"   python train_sac_v2.py {args.config}")
     print("="*60)
+
+
+if __name__ == '__main__':
+    main()
