@@ -57,12 +57,19 @@ class Stage6TrainingOrchestrator:
         output_dir: str = "artifacts/stage6",
         env_type: str = "workcell",  # Default: workcell (paramount)
         seed: int = 42,
+        policy_mode: str = "prod",  # "prod" or "paranoid"
     ):
         self.run_id = run_id or f"stage6_{str(uuid.uuid4())[:8]}"
         self.output_dir = Path(output_dir) / self.run_id
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.env_type = env_type
         self.seed = seed
+        self.policy_mode = policy_mode
+        
+        # Policy mode determines block_on_severity
+        # - prod: only FAIL blocks (default, for stable envs)
+        # - paranoid: WARN also blocks (for new envs/rewards/samplers)
+        block_on_severity = "FAIL" if policy_mode == "prod" else "WARN"
         
         # Unified runner for the Stage6 composite run
         self.runner = RegalTrainingRunner(TrainingRunConfig(
@@ -82,9 +89,11 @@ class Stage6TrainingOrchestrator:
         self._child_results: List[Dict[str, Any]] = []
         self._checkpoint_refs: List[Dict[str, str]] = []
         self._total_training_steps = 0
+        self._block_on_severity = block_on_severity
         
         # Timestamps
         self._ts_start = datetime.now().isoformat()
+
     
     def run_child_trainer(
         self,
