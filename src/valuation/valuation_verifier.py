@@ -361,6 +361,79 @@ def verify_run(output_dir: str) -> VerificationReportV1:
                 actual=computed_sha,
             ))
 
+    # 15. RewardBreakdown required for FULL regality when trajectory_audit exists
+    # Per Gap E: If trajectory_audit_sha exists AND this is a training run (FULL proxy),
+    # reward_components must:
+    # - Be present in the trajectory audit
+    # - Contain required keys (task_reward, time_penalty, energy_cost)
+    # - Pass sum consistency: total == sum(components) within tolerance
+    # 
+    # Gate: Only enforce for training runs (is_training_run = weights changed)
+    # Legacy/PARTIAL runs without reward_components get a warning, not failure
+    trajectory_audit_path = output_path / "trajectory_audit.json"
+    if manifest.trajectory_audit_sha and trajectory_audit_path.exists() and is_training_run:
+        try:
+            with open(trajectory_audit_path, "r") as f:
+                audit_data = json.load(f)
+            
+            # Check episode audits for reward_components
+            episode_audits = audit_data.get("episode_audits", [])
+            required_keys = {"task_reward", "time_penalty", "energy_cost"}
+            
+            episodes_with_issues = 0
+            for idx, ep in enumerate(episode_audits):
+                reward_components = ep.get("reward_components") or {}
+                total_return = ep.get("total_return", 0.0)
+                
+                # Check 15a: reward_components presence (FULL runs must have this)
+                if not reward_components:
+                    checks.append(VerificationCheckV1(
+                        check_id=f"reward_breakdown_present_ep{idx}",
+                        passed=False,
+                        message=f"Episode {idx}: reward_components missing (FULL training requires RewardBreakdown)",
+                    ))
+                    episodes_with_issues += 1
+                else:
+                    # Check 15b: required keys present (warn only for missing optional keys)
+                    present_keys = set(reward_components.keys())
+                    missing_required = required_keys - present_keys
+                    if missing_required:
+                        # Missing required keys is a failure
+                        checks.append(VerificationCheckV1(
+                            check_id=f"reward_breakdown_keys_ep{idx}",
+                            passed=False,
+                            message=f"Episode {idx}: missing required reward keys: {sorted(missing_required)}",
+                        ))
+                        episodes_with_issues += 1
+                    
+                    # Check 15c: sum consistency with relaxed tolerance
+                    # Tolerance: absolute 1e-3 + relative 1% of total (handles shaping terms)
+                    component_sum = sum(float(v) for v in reward_components.values())
+                    tolerance = 1e-3 + 0.01 * abs(total_return)
+                    sum_matches = abs(total_return - component_sum) <= tolerance
+                    if not sum_matches:
+                        checks.append(VerificationCheckV1(
+                            check_id=f"reward_breakdown_sum_ep{idx}",
+                            passed=False,
+                            message=f"Episode {idx}: reward sum mismatch: total={total_return:.4f}, components sum={component_sum:.4f} (tolerance={tolerance:.4f})",
+                            expected=str(total_return),
+                            actual=str(component_sum),
+                        ))
+                        episodes_with_issues += 1
+            
+            # Summary check
+            if episode_audits and episodes_with_issues == 0:
+                checks.append(VerificationCheckV1(
+                    check_id="reward_breakdown_required_for_full",
+                    passed=True,
+                    message=f"RewardBreakdown valid in all {len(episode_audits)} episodes",
+                ))
+        except Exception as e:
+            warnings.append(f"Could not verify RewardBreakdown: {e}")
+    elif manifest.trajectory_audit_sha and trajectory_audit_path.exists() and not is_training_run:
+        # Non-training runs: just warn if missing, don't fail
+        warnings.append("trajectory_audit present but not a training run; skipping strict RewardBreakdown check")
+
     # Compute manifest SHA
     manifest_sha = sha256_json(manifest.model_dump(mode="json"))
 

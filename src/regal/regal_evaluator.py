@@ -18,6 +18,8 @@ from src.contracts.schemas import (
     PlanPolicyConfigV1,
     TrajectoryAuditV1,
     EconTensorV1,
+    SelectionManifestV1,
+    OrchestratorStateV1,
 )
 from src.utils.config_digest import sha256_json
 
@@ -67,6 +69,8 @@ class RegalNode(ABC):
         phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
         trajectory_audit: Optional[TrajectoryAuditV1] = None,
         econ_tensor: Optional[EconTensorV1] = None,
+        selection_manifest: Optional[SelectionManifestV1] = None,
+        orchestrator_state: Optional[OrchestratorStateV1] = None,
     ) -> RegalReportV1:
         """Evaluate this regal's constraints.
 
@@ -78,6 +82,8 @@ class RegalNode(ABC):
             phase: Temporal phase for this evaluation
             trajectory_audit: Episode trajectory audit for substrate grounding
             econ_tensor: Econ tensor for economic metric validation
+            selection_manifest: Selection manifest for datapack provenance
+            orchestrator_state: Orchestrator state for loop memory/actuation trace
 
         Returns:
             RegalReportV1 with verdict and rationale
@@ -93,6 +99,8 @@ class RegalNode(ABC):
         phase: RegalPhaseV1,
         trajectory_audit: Optional[TrajectoryAuditV1],
         econ_tensor: Optional[EconTensorV1],
+        selection_manifest: Optional[SelectionManifestV1] = None,
+        orchestrator_state: Optional[OrchestratorStateV1] = None,
     ) -> str:
         """Compute SHA of all inputs for reproducibility."""
         inputs = {
@@ -106,6 +114,8 @@ class RegalNode(ABC):
             "context_sha": context.sha256() if context else None,
             "trajectory_audit_sha": trajectory_audit.sha256() if trajectory_audit else None,
             "econ_tensor_sha": econ_tensor.sha256() if econ_tensor else None,
+            "selection_manifest_sha": selection_manifest.sha256() if selection_manifest else None,
+            "orchestrator_state_sha": orchestrator_state.sha256() if orchestrator_state else None,
         }
         return sha256_json(inputs)
 
@@ -122,6 +132,7 @@ class SpecGuardianRegal(RegalNode):
     - Task families in plan are in the allowed set
     - Weight changes don't exceed max_abs_weight_change
     - No unexpected operations
+    - Quarantined datapacks never selected (using selection_manifest)
     """
 
     regal_id = "spec_guardian"
@@ -135,10 +146,37 @@ class SpecGuardianRegal(RegalNode):
         phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
         trajectory_audit: Optional[TrajectoryAuditV1] = None,
         econ_tensor: Optional[EconTensorV1] = None,
+        selection_manifest: Optional[SelectionManifestV1] = None,
+        orchestrator_state: Optional[OrchestratorStateV1] = None,
     ) -> RegalReportV1:
-        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor)
+        inputs_sha = self._compute_inputs_sha(
+            plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor,
+            selection_manifest, orchestrator_state
+        )
         findings: Dict[str, Any] = {}
         violations: List[str] = []
+
+        # NEW: Check quarantine-not-selected invariant
+        if selection_manifest is not None:
+            findings["selection_manifest_present"] = True
+            findings["selected_datapack_count"] = len(selection_manifest.selected_datapack_ids)
+            findings["quarantined_count"] = len(selection_manifest.quarantined_datapack_ids)
+            
+            # CRITICAL: Quarantined IDs must never be selected
+            selected_set = set(selection_manifest.selected_datapack_ids)
+            quarantined_set = set(selection_manifest.quarantined_datapack_ids)
+            forbidden_selected = selected_set & quarantined_set
+            
+            if forbidden_selected:
+                violations.append(
+                    f"CRITICAL: Quarantined datapacks selected: {sorted(forbidden_selected)}"
+                )
+                findings["quarantine_violation"] = True
+                findings["forbidden_selected_ids"] = sorted(forbidden_selected)
+            else:
+                findings["quarantine_violation"] = False
+        else:
+            findings["selection_manifest_present"] = False
 
         # Track trajectory audit inspection
         if trajectory_audit is not None:
@@ -374,6 +412,7 @@ class RewardIntegrityRegal(RegalNode):
     - Anomalous energy consumption patterns
     - Weight oscillations (sign of exploitation)
     - Econ tensor anomalies (if available)
+    - Orchestrator state oscillation patterns (patience, clamps, knob deltas)
     """
 
     regal_id = "reward_integrity"
@@ -387,18 +426,70 @@ class RewardIntegrityRegal(RegalNode):
         phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
         trajectory_audit: Optional[TrajectoryAuditV1] = None,
         econ_tensor: Optional[EconTensorV1] = None,
+        selection_manifest: Optional[SelectionManifestV1] = None,
+        orchestrator_state: Optional[OrchestratorStateV1] = None,
     ) -> RegalReportV1:
-        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor)
+        inputs_sha = self._compute_inputs_sha(
+            plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor,
+            selection_manifest, orchestrator_state
+        )
         findings: Dict[str, Any] = {}
         violations: List[str] = []
         integrity_flags: List[str] = []
         hack_indicators = 0
 
+        # NEW: Orchestrator state oscillation detection
+        if orchestrator_state is not None:
+            findings["orchestrator_state_present"] = True
+            findings["orchestrator_step"] = orchestrator_state.step
+            findings["total_failures"] = orchestrator_state.total_failures
+            findings["total_clamps"] = orchestrator_state.total_clamps
+            
+            # Check 1a: Rapid failure accumulation (sign of repeated exploitation attempts)
+            if orchestrator_state.total_failures >= 5:
+                violations.append(
+                    f"High failure count in orchestrator: {orchestrator_state.total_failures} failures"
+                )
+                integrity_flags.append("high_failures")
+                hack_indicators += 1
+            
+            # Check 1b: High clamp rate (sign of system fighting unstable policy)
+            if orchestrator_state.total_clamps >= 3:
+                violations.append(
+                    f"High clamp count in orchestrator: {orchestrator_state.total_clamps} clamps"
+                )
+                integrity_flags.append("high_clamps")
+                hack_indicators += 1
+            
+            # Check 1c: Analyze knob delta history for oscillation patterns
+            if orchestrator_state.knob_deltas:
+                knob_values = [kd.new_value for kd in orchestrator_state.knob_deltas]
+                if len(knob_values) >= 3:
+                    # Detect sign oscillation in knob adjustments
+                    sign_changes = 0
+                    for i in range(2, len(knob_values)):
+                        prev_delta = knob_values[i - 1] - knob_values[i - 2]
+                        curr_delta = knob_values[i] - knob_values[i - 1]
+                        if prev_delta * curr_delta < 0:  # Sign change
+                            sign_changes += 1
+                    
+                    knob_oscillation_rate = sign_changes / (len(knob_values) - 2)
+                    findings["knob_oscillation_rate"] = knob_oscillation_rate
+                    
+                    if knob_oscillation_rate > 0.5:  # More than 50% sign changes
+                        violations.append(
+                            f"Knob oscillation detected: {knob_oscillation_rate:.0%} sign changes"
+                        )
+                        integrity_flags.append("knob_oscillation")
+                        hack_indicators += 1
+        else:
+            findings["orchestrator_state_present"] = False
+
         # Check context for historical patterns (from notes if available)
         history = context.notes.get("weight_history", []) if context and context.notes else []
         findings["history_length"] = len(history)
 
-        # Check 1: Weight oscillations (if we have history)
+        # Check 2: Weight oscillations (if we have history)
         oscillation_rate = 0.0
         if len(history) >= 3:
             # Look for sign changes in weight deltas
@@ -700,6 +791,8 @@ def evaluate_regals(
     context: Optional[RegalContextV1] = None,
     trajectory_audit: Optional[TrajectoryAuditV1] = None,
     econ_tensor: Optional[EconTensorV1] = None,
+    selection_manifest: Optional[SelectionManifestV1] = None,
+    orchestrator_state: Optional[OrchestratorStateV1] = None,
 ) -> LedgerRegalV1:
     """Evaluate all enabled regal nodes and return aggregated result.
 
@@ -712,6 +805,8 @@ def evaluate_regals(
         context: Typed regal context
         trajectory_audit: Episode trajectory audit for substrate grounding
         econ_tensor: Econ tensor for economic metric validation
+        selection_manifest: Selection manifest for datapack provenance
+        orchestrator_state: Orchestrator state for loop memory/actuation trace
 
     Returns:
         LedgerRegalV1 with all reports and aggregate pass/fail
@@ -739,7 +834,8 @@ def evaluate_regals(
         regal_cls = REGAL_REGISTRY[regal_id]
         regal = regal_cls(seed=config.determinism_seed)
         report = regal.evaluate(
-            plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor
+            plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor,
+            selection_manifest, orchestrator_state
         )
         reports.append(report)
         all_inputs.append(report.inputs_sha)
