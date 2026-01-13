@@ -6,6 +6,17 @@ Runs a few episodes with random actions to sanity-check:
 - Env termination reasons
 - MPL/EP/error logging
 - Energy/profit accounting
+
+REGALITY COMPLIANCE: BASIC (smoke test only)
+--------------------------------------------
+Produces: JSON/CSV summaries with MPL/EP/error metrics
+Does NOT produce: manifest, ledger, trajectory audit, selection manifest
+
+For FULL dishwashing regality compliance, use:
+    python scripts/run_dishwashing_regal.py --output-dir artifacts/dishwashing_regal
+
+For FULL workcell (manufacturing cell) regality compliance, use:
+    python scripts/run_workcell_regal.py --output-dir artifacts/workcell_regal
 """
 import argparse
 import json

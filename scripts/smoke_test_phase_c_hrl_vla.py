@@ -4,6 +4,15 @@ Lightweight smoke test for Phase C HRL/VLA stack plumbing.
 
 Runs a few Drawer+Vase episodes with the scripted low-level policy,
 summarizes with EpisodeInfoSummary, builds datapacks, and sanity-checks imports.
+
+REGALITY COMPLIANCE: PARTIAL
+----------------------------
+Produces: datapacks with metadata and ObjectiveProfile
+Does NOT produce: manifest, ledger, trajectory audit, verify_run() call
+Missing: OrchestratorStateV1, SelectionManifestV1, DeployGateDecisionV1
+
+For workcell (manufacturing cell) with FULL regality compliance, use:
+    python scripts/run_workcell_regal.py --output-dir artifacts/workcell_regal
 """
 import argparse
 import json

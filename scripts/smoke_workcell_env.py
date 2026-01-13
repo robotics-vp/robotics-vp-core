@@ -4,6 +4,14 @@ Smoke test script for workcell environment suite.
 
 Runs basic tests for kitting and peg-in-hole tasks with deterministic seeds.
 Exits nonzero on failure.
+
+REGALITY COMPLIANCE: BASIC
+--------------------------
+This is a basic smoke test for env functionality only.
+Does NOT produce: manifest, ledger, trajectory audit, selection manifest, etc.
+
+For FULL regality compliance, use:
+    python scripts/run_workcell_regal.py --output-dir artifacts/workcell_regal
 """
 from __future__ import annotations
 
