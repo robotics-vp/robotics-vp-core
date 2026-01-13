@@ -18,61 +18,35 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 
-# Allowlist: scripts that are explicitly permitted to NOT use RegalTrainingRunner
-# Each entry must have a reason documented here
+# =============================================================================
+# Allowlist: LEGACY/DEPRECATED scripts only
+# =============================================================================
+# These scripts are explicitly permitted to NOT use RegalTrainingRunner.
+# They are not for production use and will not be migrated.
 #
-# MIGRATION STATUS:
-# - Phase 10 complete: 4 trainers wrapped (hydra, sac_ontology, offline, skill)
-# - Pending migration: 23 trainers (listed below with PENDING_MIGRATION tag)
-# - Goal: reduce to 0 pending by end of week
+# For pending migration scripts, see: TRAINING_MIGRATION_BACKLOG.json
 #
 TRAINING_SCRIPT_ALLOWLIST: Dict[str, str] = {
-    # =========================================================================
-    # Already compliant (use @regal_training or RegalTrainingRunner)
-    # These should NOT be in the allowlist - but we leave as comment for tracking
-    # =========================================================================
-    # "train_hydra_policy.py": "COMPLIANT - wrapped in Phase 9",
-    # "train_sac_with_ontology_logging.py": "COMPLIANT - wrapped in Phase 9",
-    # "train_offline_policy.py": "COMPLIANT - wrapped in Phase 9",
-    # "train_skill_policies.py": "COMPLIANT - wrapped in Phase 9",
-    
-    # =========================================================================
-    # PENDING_MIGRATION: Scripts awaiting @regal_training wrapper
-    # Priority: Wrap in order listed (most used first)
-    # =========================================================================
-    "train_behaviour_model.py": "PENDING_MIGRATION: High priority - behaviour cloning core",
-    "train_world_model_from_datapacks.py": "PENDING_MIGRATION: High priority - world model",
-    "train_stable_world_model.py": "PENDING_MIGRATION: High priority - stable world model",
-    "train_trust_aware_world_model.py": "PENDING_MIGRATION: High priority - trust-aware WM",
-    "train_horizon_agnostic_world_model.py": "PENDING_MIGRATION: High priority - horizon WM",
-    "train_latent_diffusion.py": "PENDING_MIGRATION: Medium priority - diffusion model",
-    "train_orchestration_transformer.py": "PENDING_MIGRATION: Medium priority - orch transformer",
-    "train_orchestration_transformer_v1_curriculum.py": "PENDING_MIGRATION: Medium - orch curriculum",
-    "train_high_level_controller.py": "PENDING_MIGRATION: Medium priority - HLC",
-    "train_meta_transformer_synthetic.py": "PENDING_MIGRATION: Medium priority - meta transformer",
-    "train_motion_hierarchy_node.py": "PENDING_MIGRATION: Medium priority - motion hierarchy",
-    "train_aligned_encoder.py": "PENDING_MIGRATION: Medium priority - visual encoder",
-    "train_vision_backbone.py": "PENDING_MIGRATION: Medium priority - vision backbone",
-    "train_trust_net.py": "PENDING_MIGRATION: Medium priority - trust network",
-    "train_trust_weighted_offline.py": "PENDING_MIGRATION: Medium priority - trust-weighted",
-    "train_vla_recap_offline.py": "PENDING_MIGRATION: Medium priority - VLA offline",
-    "train_offline_with_local_synth.py": "PENDING_MIGRATION: Medium - offline local synth",
-    "train_energy_profile_policy.py": "PENDING_MIGRATION: Low priority - energy profile",
-    "train_energy_response_model.py": "PENDING_MIGRATION: Low priority - energy response",
-    "train_synth_lambda_controller.py": "PENDING_MIGRATION: Low priority - synth lambda",
-    "train_w_econ_lattice.py": "PENDING_MIGRATION: Low priority - econ lattice",
-    "train_w_econ_lattice_from_J.py": "PENDING_MIGRATION: Low priority - econ lattice J",
-    "train_ggds_on_lsd_vector_scenes.py": "PENDING_MIGRATION: Low priority - GGDS/LSD",
-    
-    # =========================================================================
-    # Legacy scripts (not for production, no migration planned)
-    # =========================================================================
     "train_vision_backbone_real.py": "LEGACY: Vision-only script, no RL loop, deprecated",
     "train_sima2_segmenter.py": "LEGACY: Perception script, no RL loop, deprecated",
     "train_spatial_rnn.py": "LEGACY: Perception script, no RL loop, deprecated",
     "train_tiny_demo.py": "LEGACY: Minimal demo for onboarding, no production use",
     "train_knob_model.py": "LEGACY: Meta-training script, regality at different layer",
 }
+
+
+def load_migration_backlog() -> Set[str]:
+    """Load pending migration scripts from backlog artifact."""
+    backlog_path = Path(__file__).parent / "TRAINING_MIGRATION_BACKLOG.json"
+    if not backlog_path.exists():
+        return set()
+    
+    import json
+    with open(backlog_path, "r") as f:
+        data = json.load(f)
+    
+    return {item["script"] for item in data.get("backlog", [])}
+
 
 # Pattern to detect RegalTrainingRunner usage
 REGAL_PATTERNS = [
@@ -84,20 +58,28 @@ REGAL_PATTERNS = [
 ]
 
 
-def check_script_compliance(script_path: Path) -> Tuple[bool, str]:
+def check_script_compliance(
+    script_path: Path,
+    migration_backlog: Optional[Set[str]] = None,
+) -> Tuple[bool, str]:
     """Check if a training script uses RegalTrainingRunner.
     
     Args:
         script_path: Path to the training script
+        migration_backlog: Set of scripts in migration backlog (pending)
         
     Returns:
         Tuple of (is_compliant, reason)
     """
     script_name = script_path.name
     
-    # Check allowlist first
+    # Check allowlist first (legacy/deprecated)
     if script_name in TRAINING_SCRIPT_ALLOWLIST:
-        return True, f"Allowlisted: {TRAINING_SCRIPT_ALLOWLIST[script_name]}"
+        return True, f"Allowlisted (legacy): {TRAINING_SCRIPT_ALLOWLIST[script_name]}"
+    
+    # Check migration backlog (pending)
+    if migration_backlog and script_name in migration_backlog:
+        return True, f"In migration backlog (pending wrapper)"
     
     # Read script content
     try:
@@ -135,17 +117,19 @@ def run_compliance_check(
         Tuple of (all_passed, list of (script, reason) for failures)
     """
     training_scripts = find_training_scripts(scripts_dir)
+    migration_backlog = load_migration_backlog()
     
     if verbose:
         print(f"Found {len(training_scripts)} training scripts")
-        print(f"Allowlist: {len(TRAINING_SCRIPT_ALLOWLIST)} scripts")
+        print(f"Allowlist (legacy): {len(TRAINING_SCRIPT_ALLOWLIST)} scripts")
+        print(f"Migration backlog: {len(migration_backlog)} scripts")
         print()
     
     failures: List[Tuple[Path, str]] = []
     successes: List[Tuple[Path, str]] = []
     
     for script in training_scripts:
-        is_compliant, reason = check_script_compliance(script)
+        is_compliant, reason = check_script_compliance(script, migration_backlog)
         
         if is_compliant:
             successes.append((script, reason))

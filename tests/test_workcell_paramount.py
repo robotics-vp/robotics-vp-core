@@ -127,50 +127,97 @@ class TestEnvTypeNotOmittable:
 
 
 class TestPendingMigrationTracking:
-    """Test that pending migration scripts are tracked."""
+    """Test that pending migration scripts are tracked via backlog artifact."""
     
-    def test_allowlist_has_no_unlisted_noncompliant(self):
-        """All non-compliant trainers must be in allowlist."""
+    def test_allowlist_contains_only_legacy(self):
+        """Allowlist must contain ONLY legacy/deprecated scripts."""
+        from scripts.check_training_regality import TRAINING_SCRIPT_ALLOWLIST
+        
+        for script_name, reason in TRAINING_SCRIPT_ALLOWLIST.items():
+            assert "LEGACY" in reason, (
+                f"Allowlist contains non-legacy script: {script_name} -> {reason}\n"
+                "Pending scripts should be in TRAINING_MIGRATION_BACKLOG.json, not allowlist"
+            )
+    
+    def test_backlog_exists_and_valid(self):
+        """Migration backlog artifact must exist and be valid JSON."""
+        import json
+        backlog_path = ROOT / "scripts" / "TRAINING_MIGRATION_BACKLOG.json"
+        
+        assert backlog_path.exists(), (
+            "TRAINING_MIGRATION_BACKLOG.json not found. "
+            "Pending migrations must be tracked in backlog artifact."
+        )
+        
+        with open(backlog_path, "r") as f:
+            data = json.load(f)
+        
+        assert "backlog" in data, "Backlog must have 'backlog' key"
+        assert len(data["backlog"]) > 0, "Backlog must not be empty"
+        
+        # Validate structure of first entry
+        first_entry = data["backlog"][0]
+        required_fields = {"script", "priority", "owner", "notes"}
+        assert required_fields.issubset(first_entry.keys()), (
+            f"Backlog entry missing required fields: {required_fields - first_entry.keys()}"
+        )
+    
+    def test_all_noncompliant_in_backlog_or_allowlist(self):
+        """All non-compliant trainers must be in backlog or allowlist."""
         from scripts.check_training_regality import (
             check_script_compliance,
             find_training_scripts,
+            load_migration_backlog,
             TRAINING_SCRIPT_ALLOWLIST,
         )
         
         scripts_dir = ROOT / "scripts"
         training_scripts = find_training_scripts(scripts_dir)
+        migration_backlog = load_migration_backlog()
         
         unlisted_noncompliant = []
         for script in training_scripts:
-            is_compliant, reason = check_script_compliance(script)
-            if not is_compliant and script.name not in TRAINING_SCRIPT_ALLOWLIST:
+            is_compliant, reason = check_script_compliance(script, migration_backlog)
+            if not is_compliant:
                 unlisted_noncompliant.append(script.name)
         
         assert len(unlisted_noncompliant) == 0, (
-            f"Non-compliant scripts not in allowlist: {unlisted_noncompliant}\n"
-            "Either add @regal_training or add to TRAINING_SCRIPT_ALLOWLIST"
+            f"Non-compliant scripts not tracked: {unlisted_noncompliant}\n"
+            "Add to TRAINING_MIGRATION_BACKLOG.json or wrap with @regal_training"
         )
     
-    def test_pending_migration_count_tracked(self):
-        """Track number of pending migrations for progress monitoring."""
-        from scripts.check_training_regality import TRAINING_SCRIPT_ALLOWLIST
+    def test_backlog_count_regression_guard(self):
+        """Backlog count must not exceed limit (regression guard)."""
+        from scripts.check_training_regality import load_migration_backlog
         
-        pending_count = sum(
-            1 for reason in TRAINING_SCRIPT_ALLOWLIST.values()
-            if "PENDING_MIGRATION" in reason
-        )
-        legacy_count = sum(
-            1 for reason in TRAINING_SCRIPT_ALLOWLIST.values()
-            if "LEGACY" in reason
-        )
+        backlog = load_migration_backlog()
+        backlog_count = len(backlog)
         
-        # This is informational, not a failure
-        print(f"\nMigration status:")
-        print(f"  Pending: {pending_count} scripts")
-        print(f"  Legacy:  {legacy_count} scripts")
+        print(f"\nBacklog status: {backlog_count} scripts pending migration")
         
-        # Fail if pending grows beyond 25 (regression guard)
-        assert pending_count <= 25, (
-            f"Pending migration count ({pending_count}) exceeds limit (25). "
-            "Wrap more scripts or add legitimate entries to allowlist."
+        # Fail if backlog grows beyond 25 (regression guard)
+        assert backlog_count <= 25, (
+            f"Backlog count ({backlog_count}) exceeds limit (25). "
+            "Wrap more scripts to reduce backlog."
         )
+    
+    def test_backlog_has_priority_distribution(self):
+        """Backlog should have reasonable priority distribution."""
+        import json
+        backlog_path = ROOT / "scripts" / "TRAINING_MIGRATION_BACKLOG.json"
+        
+        with open(backlog_path, "r") as f:
+            data = json.load(f)
+        
+        priorities = [item["priority"] for item in data["backlog"]]
+        p0_count = sum(1 for p in priorities if p == "P0")
+        p1_count = sum(1 for p in priorities if p == "P1")
+        p2_count = sum(1 for p in priorities if p == "P2")
+        
+        print(f"\nPriority distribution: P0={p0_count}, P1={p1_count}, P2={p2_count}")
+        
+        # P0 should be limited (urgent work)
+        assert p0_count <= 10, (
+            f"Too many P0 scripts ({p0_count}). P0 means 'do this week'."
+        )
+

@@ -1,0 +1,222 @@
+{
+  "schema_version": "v1",
+  "description": "Training script migration backlog for @regal_training wrapper",
+  "goal": "Reduce pending count to 0",
+  "created_at": "2026-01-13",
+  "updated_at": "2026-01-13",
+  "backlog": [
+    {
+      "script": "train_behaviour_model.py",
+      "priority": "P0",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "High priority - behaviour cloning core, complex training loop",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_world_model_from_datapacks.py",
+      "priority": "P0",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "High priority - world model from datapacks, key Stage6 component",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_stable_world_model.py",
+      "priority": "P0",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "High priority - stable world model variant",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_trust_aware_world_model.py",
+      "priority": "P0",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "High priority - trust-aware WM, uses trust scores",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_horizon_agnostic_world_model.py",
+      "priority": "P0",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "High priority - horizon-agnostic WM",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_latent_diffusion.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - diffusion model training",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_orchestration_transformer.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - orchestration transformer",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_orchestration_transformer_v1_curriculum.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": "train_orchestration_transformer.py",
+      "notes": "Medium priority - curriculum variant, wrap after base",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_high_level_controller.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - high-level controller",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_meta_transformer_synthetic.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - meta transformer",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_motion_hierarchy_node.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - motion hierarchy",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_aligned_encoder.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - visual encoder alignment",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_vision_backbone.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - vision backbone",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_trust_net.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - trust network training",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_trust_weighted_offline.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": "train_trust_net.py",
+      "notes": "Medium priority - depends on trust_net",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_vla_recap_offline.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - VLA offline training",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_offline_with_local_synth.py",
+      "priority": "P1",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Medium priority - offline with local synthesis",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_energy_profile_policy.py",
+      "priority": "P2",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Low priority - energy profile policy",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_energy_response_model.py",
+      "priority": "P2",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Low priority - energy response model",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_synth_lambda_controller.py",
+      "priority": "P2",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Low priority - synth lambda controller",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_w_econ_lattice.py",
+      "priority": "P2",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Low priority - econ lattice training",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_w_econ_lattice_from_J.py",
+      "priority": "P2",
+      "owner": "claude",
+      "blocked_by": "train_w_econ_lattice.py",
+      "notes": "Low priority - variant, wrap after base",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    },
+    {
+      "script": "train_ggds_on_lsd_vector_scenes.py",
+      "priority": "P2",
+      "owner": "claude",
+      "blocked_by": null,
+      "notes": "Low priority - GGDS/LSD training",
+      "created_at": "2026-01-13",
+      "updated_at": "2026-01-13"
+    }
+  ],
+  "summary": {
+    "total": 23,
+    "P0": 5,
+    "P1": 12,
+    "P2": 6
+  }
+}
