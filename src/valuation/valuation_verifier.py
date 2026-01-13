@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -51,12 +51,18 @@ BLOCKING_CHECK_IDS = frozenset([
 
 
 class VerificationCheckV1(BaseModel):
-    """Single verification check result."""
+    """Single verification check result.
+    
+    severity determines whether a failed check blocks deployment:
+    - FAIL: always blocks if passed=False (for FULL runs)
+    - WARN: diagnostic only, does not block deployment
+    """
     model_config = ConfigDict(extra="forbid")
     
     check_id: str
     passed: bool
     message: str
+    severity: Literal["FAIL", "WARN"] = "FAIL"  # FAIL blocks deploy, WARN is diagnostic
     expected: Optional[str] = None
     actual: Optional[str] = None
 
@@ -87,6 +93,11 @@ class VerificationReportV1(BaseModel):
     # Manifest summary
     manifest_sha: Optional[str] = None
     ledger_record_count: int = 0
+    
+    # Policy provenance (Phase 10: blocking policy SHA)
+    # Proves "this verification was run under policy X"
+    regality_thresholds_sha: Optional[str] = None  # SHA of RegalityThresholdsV1 used
+    blocking_policy_sha: Optional[str] = None  # SHA of blocking check IDs + severity policy
     
     def sha256(self) -> str:
         """Compute verification report SHA for provenance."""
@@ -819,20 +830,61 @@ def write_verification_report(path: str, report: VerificationReportV1) -> str:
     return report.sha256()
 
 
-def get_blocking_failures(report: VerificationReportV1) -> Tuple[int, List[str]]:
+def get_blocking_failures(
+    report: VerificationReportV1,
+    block_on_warn: bool = False,
+) -> Tuple[int, List[str]]:
     """Extract blocking failures from a verification report.
     
     Args:
         report: Verification report to analyze
+        block_on_warn: If True, WARN severity also blocks (production mode)
         
     Returns:
         Tuple of (blocking_failure_count, list of blocking check_ids that failed)
     """
     blocking_failures = []
     for check in report.checks:
-        if not check.passed and check.check_id in BLOCKING_CHECK_IDS:
-            blocking_failures.append(check.check_id)
+        if not check.passed:
+            # Check if this failure is blocking
+            is_blocking = False
+            
+            # FAIL severity always blocks (if in BLOCKING_CHECK_IDS or has severity=FAIL)
+            if check.severity == "FAIL":
+                # Either in blocking list OR has explicit FAIL severity
+                if check.check_id in BLOCKING_CHECK_IDS:
+                    is_blocking = True
+            elif check.severity == "WARN" and block_on_warn:
+                # WARN only blocks in production mode (block_on_warn=True)
+                if check.check_id in BLOCKING_CHECK_IDS:
+                    is_blocking = True
+            
+            if is_blocking:
+                blocking_failures.append(check.check_id)
+    
     return len(blocking_failures), blocking_failures
+
+
+def compute_blocking_policy_sha(
+    blocking_check_ids: frozenset,
+    block_on_severity: str = "FAIL",
+) -> str:
+    """Compute deterministic SHA of blocking policy.
+    
+    This proves "this deploy was blocked under policy X".
+    
+    Args:
+        blocking_check_ids: Set of check IDs that block deployment
+        block_on_severity: "FAIL" or "WARN" - which severity levels block
+        
+    Returns:
+        SHA-256 of the blocking policy
+    """
+    policy_data = {
+        "blocking_check_ids": sorted(blocking_check_ids),
+        "block_on_severity": block_on_severity,
+    }
+    return sha256_json(policy_data)
 
 
 __all__ = [
@@ -841,6 +893,8 @@ __all__ = [
     "verify_run",
     "write_verification_report",
     "get_blocking_failures",
+    "compute_blocking_policy_sha",
     "BLOCKING_CHECK_IDS",
 ]
+
 

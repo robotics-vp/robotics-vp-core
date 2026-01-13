@@ -565,3 +565,76 @@ class TestVerificationBlocksDeploy:
         )
 
 
+class TestThresholdAndSeveritySHA:
+    """Prove: changing thresholds/severity changes SHAs deterministically."""
+    
+    def test_threshold_change_changes_sha(self):
+        """Changing any threshold field must change RegalityThresholdsV1 SHA."""
+        from src.contracts.schemas import RegalityThresholdsV1
+        
+        thresholds_default = RegalityThresholdsV1()
+        thresholds_different = RegalityThresholdsV1(
+            eligible_min_count=5,  # Changed from 3
+        )
+        
+        sha_default = thresholds_default.sha256()
+        sha_different = thresholds_different.sha256()
+        
+        assert sha_default != sha_different, (
+            "RegalityThresholdsV1 SHA must change when eligible_min_count changes"
+        )
+    
+    def test_severity_change_changes_report_sha(self):
+        """Changing check severity must change verification_report_sha."""
+        from src.valuation.valuation_verifier import VerificationCheckV1, VerificationReportV1
+        
+        check_fail = VerificationCheckV1(
+            check_id="test_check",
+            passed=False,
+            message="Test",
+            severity="FAIL",
+        )
+        check_warn = VerificationCheckV1(
+            check_id="test_check",
+            passed=False,
+            message="Test",
+            severity="WARN",  # Changed!
+        )
+        
+        report_fail = VerificationReportV1(
+            run_id="test",
+            all_passed=False,
+            check_count=1,
+            passed_count=0,
+            failed_count=1,
+            checks=[check_fail],
+        )
+        report_warn = VerificationReportV1(
+            run_id="test",
+            all_passed=False,
+            check_count=1,
+            passed_count=0,
+            failed_count=1,
+            checks=[check_warn],
+        )
+        
+        sha_fail = report_fail.sha256()
+        sha_warn = report_warn.sha256()
+        
+        assert sha_fail != sha_warn, (
+            "VerificationReportV1 SHA must change when check severity changes"
+        )
+    
+    def test_blocking_policy_sha_deterministic(self):
+        """compute_blocking_policy_sha must be deterministic."""
+        from src.valuation.valuation_verifier import compute_blocking_policy_sha, BLOCKING_CHECK_IDS
+        
+        sha1 = compute_blocking_policy_sha(BLOCKING_CHECK_IDS, "FAIL")
+        sha2 = compute_blocking_policy_sha(BLOCKING_CHECK_IDS, "FAIL")
+        sha3 = compute_blocking_policy_sha(BLOCKING_CHECK_IDS, "WARN")  # Different policy
+        
+        assert sha1 == sha2, "Same inputs must produce same SHA"
+        assert sha1 != sha3, "Different block_on_severity must produce different SHA"
+
+
+

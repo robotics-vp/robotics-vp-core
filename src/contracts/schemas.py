@@ -614,6 +614,62 @@ class RegalGatesV1(BaseModel):
         return sha256_json(self.model_dump(mode="json"))
 
 
+class RegalityThresholdsV1(BaseModel):
+    """Unified policy thresholds for verification and deployment.
+    
+    All "numbers that matter" in one typed object with SHA.
+    Consumed by verifier, deploy gate, and regals.
+    
+    Changing ANY field changes the SHA, ensuring:
+    - Different thresholds → different verification_report_sha
+    - Different thresholds → different deploy_gate_inputs_sha
+    - Different thresholds → different deploy_gate_decision_sha
+    
+    "No ghost policy" guarantee: all knobs are committed to artifacts.
+    """
+    model_config = ConfigDict(extra="forbid")
+    
+    schema_version: str = "v1"
+    
+    # ==========================================================================
+    # Deploy gate thresholds
+    # ==========================================================================
+    deploy_threshold_success: float = 0.0  # Min audit delta_success to allow
+    deploy_threshold_mpl: float = 0.0  # Min audit delta_mpl to allow
+    require_regal: bool = True  # Block deploy if regal missing
+    require_verification_for_full: bool = True  # Block FULL deploy if verification fails
+    
+    # ==========================================================================
+    # Verification pathology thresholds
+    # ==========================================================================
+    eligible_min_count: int = 3  # < this → eligible_shrunk_pathology
+    rejection_spike_fraction: float = 0.5  # > this → selection_rejection_spike
+    
+    # ==========================================================================
+    # Reward breakdown epsilon (for sum consistency)
+    # ==========================================================================
+    reward_breakdown_epsilon_abs: float = 1e-3  # Absolute tolerance
+    reward_breakdown_epsilon_rel: float = 0.01  # Relative tolerance (1% of total)
+    
+    # ==========================================================================
+    # Verification severity policy
+    # ==========================================================================
+    # Controls whether WARN-severity failures block deployment
+    block_on_severity: Literal["FAIL", "WARN"] = "FAIL"  # FAIL=only FAIL blocks, WARN=both block
+    
+    # ==========================================================================
+    # Blocking check overrides (rare, but useful for exceptions)
+    # ==========================================================================
+    # check_id → force_block (True=always block, False=never block)
+    blocking_check_overrides: Dict[str, bool] = Field(default_factory=dict)
+    
+    def sha256(self) -> str:
+        """Compute deterministic SHA-256 of thresholds."""
+        from src.utils.config_digest import sha256_json
+        return sha256_json(self.model_dump(mode="json"))
+
+
+
 class RegalReportV1(BaseModel):
     """Deterministic report from a single regal node evaluation.
 
@@ -1393,6 +1449,9 @@ class RunManifestV1(BaseModel):
 
     # Deploy gate inputs provenance (Phase 6: causal deploy)
     deploy_gate_inputs_sha: Optional[str] = None  # SHA of DeployGateInputsV1
+
+    # Policy thresholds provenance (Phase 10: centralized policy)
+    regality_thresholds_sha: Optional[str] = None  # SHA of RegalityThresholdsV1
 
     # Schema versions used
     schema_versions: Dict[str, str] = Field(default_factory=lambda: {
