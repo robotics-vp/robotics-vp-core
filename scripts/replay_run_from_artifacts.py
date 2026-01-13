@@ -163,6 +163,30 @@ def replay_run(run_dir: str, verbose: bool = False) -> Dict[str, Any]:
         if verbose:
             print(f"  orchestrator_state_sha: {'✓ MATCH' if match else '✗ MISMATCH'}")
     
+    # 5b. Verify regality_thresholds_sha (Phase 10: policy as causal input)
+    # Replay REFUSES runs missing thresholds if manifest has SHA
+    thresholds_path = output_path / "regality_thresholds.json"
+    if getattr(manifest, 'regality_thresholds_sha', None):
+        if thresholds_path.exists():
+            computed_sha = sha256_file(str(thresholds_path))
+            match = computed_sha == manifest.regality_thresholds_sha
+            results["sha_comparisons"]["regality_thresholds_sha"] = {
+                "expected": manifest.regality_thresholds_sha,
+                "actual": computed_sha,
+                "match": match,
+            }
+            if not match:
+                results["all_match"] = False
+                results["errors"].append("regality_thresholds_sha mismatch - policy may have changed")
+            if verbose:
+                print(f"  regality_thresholds_sha: {'✓ MATCH' if match else '✗ MISMATCH'}")
+        else:
+            # HARD FAIL: manifest has SHA but file missing
+            results["all_match"] = False
+            results["errors"].append("regality_thresholds.json missing but SHA in manifest - replay refuses")
+            if verbose:
+                print(f"  regality_thresholds_sha: ✗ FILE MISSING (replay refuses)")
+    
     # 6. Run full verification
     if verbose:
         print("\n--- Running Full Verification ---")

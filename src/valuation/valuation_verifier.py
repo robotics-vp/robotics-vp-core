@@ -34,6 +34,7 @@ BLOCKING_CHECK_IDS = frozenset([
     "ledger_regal_sha_match",
     "deploy_gate_inputs_sha_match",
     "verification_report_sha_match",
+    "regality_thresholds_sha_match",  # Phase 10: policy as causal input
     # Semantic invariants
     "selection_selected_subset_eligible",
     "selection_quarantine_disjoint",
@@ -43,6 +44,7 @@ BLOCKING_CHECK_IDS = frozenset([
     "orchestrator_state_nonnegative_counters",
     "applied_knob_deltas_match_orchestrator_state",
     "orchestrator_decisions_match_plan_applied_events",
+    "unknown_blocking_override_check_id",  # Phase 10: policy integrity
     # Required artifacts for FULL
     "ledger_regal_required_for_full",
     "trajectory_audit_sha_required_for_training",
@@ -786,6 +788,56 @@ def verify_run(output_dir: str) -> VerificationReportV1:
             ))
         except Exception as e:
             warnings.append(f"Could not verify econ evidence: {e}")
+
+    # 26. Validate blocking_check_overrides reference known check IDs
+    # This catches fat-fingered override keys that would silently not apply
+    regality_thresholds_path = output_path / "regality_thresholds.json"
+    if regality_thresholds_path.exists():
+        try:
+            with open(regality_thresholds_path, "r") as f:
+                thresholds_data = json.load(f)
+            
+            overrides = thresholds_data.get("blocking_check_overrides", {})
+            known_check_ids = {c.check_id for c in checks}
+            unknown_overrides = [k for k in overrides.keys() if k not in known_check_ids]
+            
+            if unknown_overrides:
+                checks.append(VerificationCheckV1(
+                    check_id="unknown_blocking_override_check_id",
+                    passed=False,
+                    message=f"VIOLATION: blocking_check_overrides references unknown check_ids: {unknown_overrides}",
+                    severity="FAIL",
+                ))
+            else:
+                checks.append(VerificationCheckV1(
+                    check_id="unknown_blocking_override_check_id",
+                    passed=True,
+                    message="All blocking_check_overrides reference known check_ids",
+                    severity="FAIL",
+                ))
+        except Exception as e:
+            warnings.append(f"Could not verify blocking_check_overrides: {e}")
+
+    # 27. Verify regality_thresholds_sha if present
+    if getattr(manifest, 'regality_thresholds_sha', None):
+        if regality_thresholds_path.exists():
+            computed_sha = sha256_file(str(regality_thresholds_path))
+            checks.append(VerificationCheckV1(
+                check_id="regality_thresholds_sha_match",
+                passed=manifest.regality_thresholds_sha == computed_sha,
+                message="Regality thresholds SHA matches" if manifest.regality_thresholds_sha == computed_sha
+                        else "Regality thresholds SHA mismatch",
+                expected=manifest.regality_thresholds_sha,
+                actual=computed_sha,
+                severity="FAIL",
+            ))
+        else:
+            checks.append(VerificationCheckV1(
+                check_id="regality_thresholds_sha_match",
+                passed=False,
+                message="regality_thresholds.json file missing but SHA in manifest",
+                severity="FAIL",
+            ))
 
     # Compute manifest SHA
     manifest_sha = sha256_json(manifest.model_dump(mode="json"))

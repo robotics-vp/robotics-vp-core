@@ -635,6 +635,31 @@ class TestThresholdAndSeveritySHA:
         
         assert sha1 == sha2, "Same inputs must produce same SHA"
         assert sha1 != sha3, "Different block_on_severity must produce different SHA"
+    
+    def test_policy_sha_in_inputs_changes_decision_sha(self):
+        """DeployGateInputsV1 SHA must change when policy SHA changes."""
+        from src.contracts.schemas import DeployGateInputsV1
+        
+        inputs_policy_a = DeployGateInputsV1(
+            is_full_regality_run=True,
+            verification_all_passed=True,
+            regality_thresholds_sha="sha_policy_a",  # Policy A
+            blocking_policy_sha="sha_blocking_a",
+        )
+        
+        inputs_policy_b = DeployGateInputsV1(
+            is_full_regality_run=True,
+            verification_all_passed=True,
+            regality_thresholds_sha="sha_policy_b",  # Different policy!
+            blocking_policy_sha="sha_blocking_b",
+        )
+        
+        sha_a = inputs_policy_a.sha256()
+        sha_b = inputs_policy_b.sha256()
+        
+        assert sha_a != sha_b, (
+            "DeployGateInputsV1 SHA must change when policy SHA changes"
+        )
 
 
 

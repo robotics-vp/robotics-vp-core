@@ -1327,6 +1327,11 @@ class DeployGateInputsV1(BaseModel):
     verification_blocking_check_ids: List[str] = Field(default_factory=list)
     is_full_regality_run: bool = False  # True if is_training_run (weights changed)
 
+    # Policy provenance (Phase 10: policy SHA in deploy inputs)
+    # Ensures "same inputs, different policy" produces different decision hash
+    regality_thresholds_sha: Optional[str] = None  # SHA of RegalityThresholdsV1 used
+    blocking_policy_sha: Optional[str] = None  # SHA of blocking check IDs + severity policy
+
     def sha256(self) -> str:
         """Compute deterministic SHA-256 of deploy gate inputs."""
         from src.utils.config_digest import sha256_json
