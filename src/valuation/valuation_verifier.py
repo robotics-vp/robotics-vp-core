@@ -641,6 +641,111 @@ def verify_run(output_dir: str) -> VerificationReportV1:
                 message="Econ tensor has corresponding selection/exposure manifest",
             ))
 
+    # 21. Ledger regal REQUIRED for FULL (training) runs
+    ledger_regal_path = output_path / "ledger_regal.json"
+    if is_training_run:
+        has_ledger_regal = ledger_regal_path.exists() and getattr(manifest, 'ledger_regal_sha', None)
+        checks.append(VerificationCheckV1(
+            check_id="ledger_regal_required_for_full",
+            passed=has_ledger_regal,
+            message="FULL run has ledger_regal.json with SHA" if has_ledger_regal
+                    else "VIOLATION: FULL training run missing ledger_regal.json or ledger_regal_sha",
+        ))
+
+    # 22. Orchestrator decisions match plan_applied_events
+    plan_applied_events_path = output_path / "plan_applied_events.jsonl"
+    if orchestrator_state_path.exists() and plan_applied_events_path.exists():
+        try:
+            with open(orchestrator_state_path, "r") as f:
+                orch_data = json.load(f)
+            
+            noop_decisions = orch_data.get("noop_decisions", [])
+            clamp_decisions = orch_data.get("clamp_decisions", [])
+            
+            # Load plan applied events
+            plan_events = []
+            with open(plan_applied_events_path, "r") as f:
+                for line in f:
+                    if line.strip():
+                        plan_events.append(json.load(f) if not plan_events else json.loads(line.strip()))
+            
+            # Check that noop decisions correspond to plan_applied=False events
+            # Simplified check: if there are noop decisions, there should be non-applied events
+            consistency_ok = True
+            if noop_decisions:
+                # Check for corresponding plan_applied=False in events
+                non_applied_count = sum(1 for e in plan_events if not e.get("plan_applied", True))
+                if non_applied_count < len(noop_decisions):
+                    consistency_ok = False
+            
+            checks.append(VerificationCheckV1(
+                check_id="orchestrator_decisions_match_plan_applied_events",
+                passed=consistency_ok,
+                message="Orchestrator decisions consistent with plan_applied_events" if consistency_ok
+                        else f"VIOLATION: {len(noop_decisions)} noop decisions but fewer non-applied events",
+            ))
+        except Exception as e:
+            warnings.append(f"Could not verify orchestrator-plan consistency: {e}")
+
+    # 23. Selection pathology: eligible_shrunk
+    # Threshold from RegalGatesV1 (default min_eligible_count=3)
+    selection_manifest_path = output_path / "selection_manifest.json"
+    if selection_manifest_path.exists():
+        try:
+            with open(selection_manifest_path, "r") as f:
+                sel_data = json.load(f)
+            
+            eligible_ids = sel_data.get("eligible_datapack_ids", [])
+            rejected = sel_data.get("rejected_datapacks", [])
+            
+            # Check eligible count (threshold: min 3 for meaningful training)
+            MIN_ELIGIBLE = 3
+            eligible_ok = len(eligible_ids) >= MIN_ELIGIBLE
+            checks.append(VerificationCheckV1(
+                check_id="eligible_shrunk_pathology",
+                passed=eligible_ok,
+                message=f"Eligible count healthy: {len(eligible_ids)}" if eligible_ok
+                        else f"WARNING: Eligible shrunk to {len(eligible_ids)} (< {MIN_ELIGIBLE})",
+            ))
+            
+            # 24. Selection pathology: rejection_spike
+            # If more than 50% rejected, flag as spike
+            REJECTION_SPIKE_THRESHOLD = 0.5
+            total_considered = len(eligible_ids) + len(rejected)
+            if total_considered > 0:
+                rejection_ratio = len(rejected) / total_considered
+                rejection_ok = rejection_ratio <= REJECTION_SPIKE_THRESHOLD
+                checks.append(VerificationCheckV1(
+                    check_id="selection_rejection_spike",
+                    passed=rejection_ok,
+                    message=f"Rejection ratio normal: {rejection_ratio:.1%}" if rejection_ok
+                            else f"WARNING: Rejection spike detected: {rejection_ratio:.1%} (> {REJECTION_SPIKE_THRESHOLD:.0%})",
+                ))
+        except Exception as e:
+            warnings.append(f"Could not verify selection pathology: {e}")
+
+    # 25. Econ evidence present for FULL runs with econ tensor
+    if econ_tensor_path.exists() and is_training_run:
+        try:
+            with open(econ_tensor_path, "r") as f:
+                econ_data = json.load(f)
+            
+            # Check for required evidence fields
+            evidence = econ_data.get("evidence_summary", {})
+            required_evidence = ["num_selected", "num_sampled"]
+            evidence_present = all(
+                evidence.get(k) is not None for k in required_evidence
+            ) if evidence else False
+            
+            checks.append(VerificationCheckV1(
+                check_id="econ_evidence_present_for_full",
+                passed=evidence_present,
+                message="Econ tensor has evidence_summary" if evidence_present
+                        else "VIOLATION: FULL run econ tensor missing evidence_summary",
+            ))
+        except Exception as e:
+            warnings.append(f"Could not verify econ evidence: {e}")
+
     # Compute manifest SHA
     manifest_sha = sha256_json(manifest.model_dump(mode="json"))
 

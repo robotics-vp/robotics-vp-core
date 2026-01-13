@@ -302,3 +302,174 @@ class TestExposureManifestTamper:
                 f"Failed checks: {[c.check_id for c in result.checks if not c.passed]}"
             )
             assert "dp_bad" in quarantine_check.message
+
+
+class TestLedgerRegalRequired:
+    """Test that FULL runs require ledger_regal.json."""
+    
+    def test_full_run_missing_ledger_regal(self):
+        """Training run without ledger_regal.json → verify_run() MUST flag."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            
+            # Create a training run manifest (has baseline/final weights)
+            run_manifest = {
+                "schema_version": "v1",
+                "run_id": "full_no_regal",
+                "created_at": "2026-01-12T12:00:00",
+                "plan_sha": "plan_sha_123",
+                "audit_suite_id": "test",
+                "audit_seed": 42,
+                "audit_config_sha": "audit_sha",
+                "datapack_manifest_sha": "dp_sha",
+                "seeds": {"main": 42},
+                # Training run markers (triggers is_training_run)
+                "baseline_weights_sha": "weights_before",
+                "final_weights_sha": "weights_after",
+                # NO ledger_regal_sha!
+            }
+            
+            with open(output_dir / "run_manifest.json", "w") as f:
+                json.dump(run_manifest, f, indent=2)
+            
+            with open(output_dir / "ledger.jsonl", "w") as f:
+                f.write(json.dumps({"schema_version": "v1", "record_id": "r1", "run_id": "full_no_regal", "plan_sha": "plan_sha_123"}) + "\n")
+            
+            # Verify MUST fail on ledger_regal_required_for_full
+            result = verify_run(str(output_dir))
+            
+            required_check = next(
+                (c for c in result.checks if c.check_id == "ledger_regal_required_for_full" and not c.passed),
+                None
+            )
+            
+            assert required_check is not None, (
+                f"Expected 'ledger_regal_required_for_full' to fail. "
+                f"Failed checks: {[c.check_id for c in result.checks if not c.passed]}"
+            )
+
+
+class TestOrchestratorPlanAppliedMatch:
+    """Test orchestrator decisions match plan_applied_events cross-validation."""
+    
+    def test_noop_decisions_mismatch_plan_events(self):
+        """Noop decisions without corresponding plan_applied=False → verify_run() MUST fail."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            
+            # Create orchestrator state with noop decisions
+            orch_state = {
+                "schema_version": "v1",
+                "step": 100,
+                "failure_counts": {},
+                "patience_counters": {},
+                "clamp_decisions": [],
+                "noop_decisions": [
+                    {"step": 50, "reason": "gate_failed"},
+                    {"step": 75, "reason": "gate_failed"},
+                ],
+                "cooldown_remaining": {},
+                "backoff_multipliers": {},
+                "applied_knob_deltas": [],
+            }
+            
+            orch_path = output_dir / "orchestrator_state.json"
+            with open(orch_path, "w") as f:
+                json.dump(orch_state, f, indent=2, sort_keys=True)
+            orch_sha = sha256_file(str(orch_path))
+            
+            # Create plan_applied_events that does NOT reflect the noops
+            # (all events show plan_applied=True, but orch has noops)
+            events_path = output_dir / "plan_applied_events.jsonl"
+            with open(events_path, "w") as f:
+                f.write(json.dumps({"step": 50, "plan_applied": True}) + "\n")
+                f.write(json.dumps({"step": 75, "plan_applied": True}) + "\n")
+            
+            # Create run manifest
+            run_manifest = {
+                "schema_version": "v1",
+                "run_id": "orch_plan_mismatch",
+                "created_at": "2026-01-12T12:00:00",
+                "plan_sha": "plan_sha_123",
+                "audit_suite_id": "test",
+                "audit_seed": 42,
+                "audit_config_sha": "audit_sha",
+                "datapack_manifest_sha": "dp_sha",
+                "seeds": {"main": 42},
+                "orchestrator_state_sha": orch_sha,
+            }
+            
+            with open(output_dir / "run_manifest.json", "w") as f:
+                json.dump(run_manifest, f, indent=2)
+            
+            with open(output_dir / "ledger.jsonl", "w") as f:
+                f.write(json.dumps({"schema_version": "v1", "record_id": "r1", "run_id": "orch_plan_mismatch", "plan_sha": "plan_sha_123"}) + "\n")
+            
+            # Verify MUST fail on orchestrator_decisions_match_plan_applied_events
+            result = verify_run(str(output_dir))
+            
+            match_check = next(
+                (c for c in result.checks if c.check_id == "orchestrator_decisions_match_plan_applied_events" and not c.passed),
+                None
+            )
+            
+            assert match_check is not None, (
+                f"Expected 'orchestrator_decisions_match_plan_applied_events' to fail. "
+                f"All checks: {[(c.check_id, c.passed) for c in result.checks]}"
+            )
+
+
+class TestSelectionPathology:
+    """Test selection pathology checks (eligible shrunk, rejection spike)."""
+    
+    def test_eligible_shrunk_pathology(self):
+        """Eligible count below threshold → verify_run() flags warning."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            
+            # Create selection manifest with only 2 eligible (below threshold)
+            selection = {
+                "schema_version": "v1",
+                "manifest_id": "sel_shrunk",
+                "eligible_datapack_ids": ["dp_1", "dp_2"],  # Only 2, below MIN_ELIGIBLE=3
+                "quarantine_datapack_ids": [],
+                "selected_datapack_ids": ["dp_1", "dp_2"],
+                "rejected_datapacks": [],
+                "rng_seed": 42,
+            }
+            with open(output_dir / "selection_manifest.json", "w") as f:
+                json.dump(selection, f, indent=2, sort_keys=True)
+            sel_sha = sha256_file(str(output_dir / "selection_manifest.json"))
+            
+            # Create manifest
+            run_manifest = {
+                "schema_version": "v1",
+                "run_id": "shrunk_test",
+                "created_at": "2026-01-12T12:00:00",
+                "plan_sha": "plan_sha_123",
+                "audit_suite_id": "test",
+                "audit_seed": 42,
+                "audit_config_sha": "audit_sha",
+                "datapack_manifest_sha": "dp_sha",
+                "seeds": {"main": 42},
+                "selection_manifest_sha": sel_sha,
+            }
+            with open(output_dir / "run_manifest.json", "w") as f:
+                json.dump(run_manifest, f, indent=2)
+            
+            with open(output_dir / "ledger.jsonl", "w") as f:
+                f.write(json.dumps({"schema_version": "v1", "record_id": "r1", "run_id": "shrunk_test", "plan_sha": "plan_sha_123"}) + "\n")
+            
+            # Verify should flag eligible_shrunk_pathology
+            result = verify_run(str(output_dir))
+            
+            shrunk_check = next(
+                (c for c in result.checks if c.check_id == "eligible_shrunk_pathology" and not c.passed),
+                None
+            )
+            
+            assert shrunk_check is not None, (
+                f"Expected 'eligible_shrunk_pathology' to fail with only 2 eligible. "
+                f"All checks: {[(c.check_id, c.passed) for c in result.checks]}"
+            )
+
