@@ -400,15 +400,6 @@ video (T×H×W×3) → Video encoder → latent (128D) → SAC
 - R3D-18 (Tran et al., 2018): 3D ResNet for video
 - TimeSformer (Bertasius et al., 2021): Temporal transformer
 
-## License
-
-Proprietary - All rights reserved.
-
-## Contact
-
-For investment inquiries or technical questions, see documentation or create an issue.
-
----
 
 **Status:** Simulation validated, ready for video integration
 **Performance:** 1.65× wage parity, 2.7% error, $5.93/hr revenue
