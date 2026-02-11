@@ -13,6 +13,8 @@ from src.orchestrator.semantic_metrics import (
     write_semantic_econ_suggestions,
     semantic_metrics_to_dict,
 )
+from src.objectives.frontier import ParetoFrontierTracker
+from src.objectives.tensor import ObjectiveTensor, objective_tensor_from_axes
 import time
 import math
 
@@ -615,3 +617,59 @@ class EconomicController:
         Stores last seen meta outputs for logging; does not alter rewards.
         """
         self._last_meta_out = meta_out
+
+    def prioritize_compute_allocations(
+        self,
+        datapacks: List[DataPackMeta],
+        frontier_tracker: Optional[ParetoFrontierTracker] = None,
+        profile_id: str = "default",
+    ) -> List[Dict[str, Any]]:
+        """Rank datapacks by marginal frontier gain per unit compute (advisory)."""
+        frontier_tracker = frontier_tracker or ParetoFrontierTracker(
+            maximize={
+                "throughput": True,
+                "error": False,
+                "safety": True,
+                "energy": False,
+            }
+        )
+        rankings: List[Dict[str, Any]] = []
+        for dp in datapacks:
+            objective_tensor_payload = dp.objective_tensor_v1
+            if objective_tensor_payload:
+                try:
+                    objective_tensor = ObjectiveTensor.from_dict(objective_tensor_payload)
+                except Exception:
+                    objective_tensor = None
+            else:
+                objective_tensor = None
+            if objective_tensor is None:
+                objective_tensor = objective_tensor_from_axes(
+                    {
+                        "throughput": float(getattr(dp.attribution, "delta_mpl", 0.0)),
+                        "error": abs(float(getattr(dp.attribution, "delta_error", 0.0))),
+                        "safety": max(0.0, 1.0 - abs(float(getattr(dp.attribution, "delta_error", 0.0)))),
+                        "energy": float(getattr(dp.energy, "Wh_per_unit", 0.0)),
+                    },
+                    context={"pack_id": dp.pack_id, "source": "economic_controller_fallback"},
+                )
+
+            gain = frontier_tracker.marginal_gain(
+                objective_tensor,
+                task_id=dp.task_name,
+                env_id=dp.env_type,
+                profile_id=profile_id,
+                compute_cost=1.0,
+            )
+            reliability = float(dp.semantic_quality if dp.semantic_quality is not None else 1.0)
+            priority = float(gain * max(0.0, min(1.0, reliability)))
+            rankings.append(
+                {
+                    "pack_id": dp.pack_id,
+                    "frontier_gain": gain,
+                    "reliability": reliability,
+                    "priority": priority,
+                }
+            )
+        rankings.sort(key=lambda item: item["priority"], reverse=True)
+        return rankings

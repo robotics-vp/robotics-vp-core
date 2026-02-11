@@ -66,6 +66,8 @@ class OntologyStore:
             "datapacks": self.root / "datapacks.jsonl",
             "episodes": self.root / "episodes.jsonl",
             "econ_vectors": self.root / "econ_vectors.jsonl",
+            "econ_tensors": self.root / "econ_tensors.jsonl",
+            "objective_tensors": self.root / "objective_tensors.jsonl",
             "events": self.root / "events.jsonl",
             "scenarios": self.root / "scenarios.jsonl",
         }
@@ -156,6 +158,53 @@ class OntologyStore:
         records = _load_jsonl(self.paths["econ_vectors"])
         vectors = _deserialize_list(records, EconVector)
         return sorted(vectors, key=lambda v: v.episode_id)
+
+    def upsert_econ_tensor(self, episode_id: str, econ_tensor: Mapping[str, Any]) -> None:
+        records = self.list_econ_tensors()
+        by_episode = {str(r.get("episode_id", "")): r for r in records if r.get("episode_id")}
+        by_episode[str(episode_id)] = {
+            "episode_id": str(episode_id),
+            "econ_tensor": dict(econ_tensor or {}),
+        }
+        ordered = [by_episode[k] for k in sorted(by_episode.keys())]
+        _write_jsonl(self.paths["econ_tensors"], ordered)
+
+    def get_econ_tensor(self, episode_id: str) -> Optional[Dict[str, Any]]:
+        return next(
+            (
+                rec
+                for rec in self.list_econ_tensors()
+                if str(rec.get("episode_id")) == str(episode_id)
+            ),
+            None,
+        )
+
+    def list_econ_tensors(self) -> List[Dict[str, Any]]:
+        return _load_jsonl(self.paths["econ_tensors"])
+
+    # Objective tensors (stored as dict payloads keyed by episode_id)
+    def upsert_objective_tensor(self, episode_id: str, objective_tensor: Mapping[str, Any]) -> None:
+        records = self.list_objective_tensors()
+        by_episode = {str(r.get("episode_id", "")): r for r in records if r.get("episode_id")}
+        by_episode[str(episode_id)] = {
+            "episode_id": str(episode_id),
+            "objective_tensor": dict(objective_tensor or {}),
+        }
+        ordered = [by_episode[k] for k in sorted(by_episode.keys())]
+        _write_jsonl(self.paths["objective_tensors"], ordered)
+
+    def get_objective_tensor(self, episode_id: str) -> Optional[Dict[str, Any]]:
+        return next(
+            (
+                rec
+                for rec in self.list_objective_tensors()
+                if str(rec.get("episode_id")) == str(episode_id)
+            ),
+            None,
+        )
+
+    def list_objective_tensors(self) -> List[Dict[str, Any]]:
+        return _load_jsonl(self.paths["objective_tensors"])
 
     # Events
     def append_events(self, events: List[EpisodeEvent]) -> None:

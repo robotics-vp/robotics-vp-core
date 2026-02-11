@@ -26,6 +26,8 @@ from src.ontology.models import Task, Robot
 from src.ontology.store import OntologyStore
 from src.config.econ_params import EconParams
 from src.training.wrap_training_entrypoint import regal_training
+from src.objectives.profile import ObjectiveProfile
+from src.economics.functor import ObjectiveEconFunctor
 
 @regal_training(env_type="workcell")
 def main(runner=None):
@@ -38,6 +40,13 @@ def main(runner=None):
     parser.add_argument("--robot-id", type=str, default="robot_sac")
     parser.add_argument("--use-mobility-policy", action="store_true", help="Enable advisory mobility micro-policy (stub)")
     parser.add_argument("--econ-domain", type=str, default="default", help="Econ domain calibration profile to use")
+    parser.add_argument(
+        "--objective-scalarizer",
+        type=str,
+        default="legacy",
+        choices=["legacy", "weighted_sum", "constrained", "lexicographic", "chebyshev", "epsilon", "product"],
+        help="Optional objective scalarizer; legacy preserves raw reward behavior.",
+    )
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -101,7 +110,32 @@ def main(runner=None):
     store.upsert_task(task)
     store.upsert_robot(robot)
 
-    reward_engine = RewardEngine(task, robot, config={}, econ_domain_name=args.econ_domain)
+    objective_profile = None
+    if args.objective_scalarizer != "legacy":
+        objective_profile = ObjectiveProfile(
+            profile_id=f"train_sac_with_ontology_logging:{args.objective_scalarizer}",
+            scalarizer=args.objective_scalarizer,
+            weights={
+                "throughput": 1.0,
+                "error": 1.0,
+                "safety": 1.0,
+                "energy": 1.0,
+            },
+            maximize={
+                "throughput": True,
+                "error": False,
+                "safety": True,
+                "energy": False,
+            },
+        )
+    reward_engine = RewardEngine(
+        task,
+        robot,
+        config={},
+        econ_domain_name=args.econ_domain,
+        objective_profile=objective_profile,
+    )
+    objective_econ_functor = ObjectiveEconFunctor()
     logger = EpisodeLogger(store=store, task=task, robot=robot)
 
     total_steps = 0
@@ -126,8 +160,19 @@ def main(runner=None):
             timestep += 1
             total_steps += 1
         econ = reward_engine.compute_econ_vector(episode, logger._events)
+        objective_tensor = reward_engine.compute_objective_tensor_from_events(episode, logger._events)
+        econ_tensor = objective_econ_functor.map(
+            objective_tensor,
+            constraint_flags=[],
+            uncertainty=0.0,
+            context={"episode_id": episode.episode_id},
+        )
         logger.mark_outcome(status="success")
-        logger.finalize(econ_vector=econ)
+        logger.finalize(
+            econ_vector=econ,
+            econ_tensor=econ_tensor,
+            objective_tensor=objective_tensor,
+        )
 
     if runner:
         runner.update_step(total_steps)

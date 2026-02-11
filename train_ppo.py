@@ -9,6 +9,7 @@ Integrates:
 - Data valuation (ΔMPL regression → pricing)
 """
 import os, yaml, random, argparse
+from typing import Optional
 import numpy as np
 import torch
 from sklearn.linear_model import Ridge
@@ -30,6 +31,9 @@ from src.data_value.novelty_diffusion import (
 )
 from src.observation.condition_vector_builder import ConditionVectorBuilder
 from src.rl.trunk_net import TrunkNet
+from src.objectives.profile import ObjectiveProfile
+from src.objectives.compiler import ObjectiveCompiler
+from src.objectives.tensor import objective_tensor_from_axes
 
 USE_CONDITION_VECTOR = os.environ.get("USE_CONDITION_VECTOR", "0") == "1"
 USE_CONDITION_VECTOR_FOR_POLICY = os.environ.get("USE_CONDITION_VECTOR_FOR_POLICY", "0") == "1"
@@ -122,7 +126,11 @@ def _maybe_build_condition_vector(builder, episode_idx: int, sampler_strategy: s
     )
 
 
-def run(config_path=None, use_condition_vector_for_policy: bool = False):
+def run(
+    config_path=None,
+    use_condition_vector_for_policy: bool = False,
+    objective_profile: Optional[ObjectiveProfile] = None,
+):
     # Config
     cfg = load_config(config_path)
     random.seed(cfg["seed"])
@@ -187,6 +195,7 @@ def run(config_path=None, use_condition_vector_for_policy: bool = False):
     logger = CsvLogger("logs/ppo_training.csv")
     condition_builder = ConditionVectorBuilder() if USE_CONDITION_VECTOR else None
     policy_conditioner = None
+    objective_compiler = ObjectiveCompiler(objective_profile) if objective_profile else None
     if (use_condition_vector_for_policy or USE_CONDITION_VECTOR_FOR_POLICY) and condition_builder is not None:
         policy_conditioner = TrunkNet(
             vision_dim=1,
@@ -261,6 +270,23 @@ def run(config_path=None, use_condition_vector_for_policy: bool = False):
                 alpha_error=alpha_error,
                 alpha_ep=alpha_ep,
             )
+            if objective_compiler is not None:
+                objective_tensor = objective_tensor_from_axes(
+                    {
+                        "throughput": float(mpl_t),
+                        "error": abs(float(err_term)),
+                        "safety": max(0.0, 1.0 - min(1.0, abs(float(err_term)))),
+                        "energy": abs(float(ep_t)),
+                    },
+                    context={"episode_index": ep, "step_index": episode_steps, "source": "train_ppo"},
+                )
+                reward = float(objective_compiler.scalarize(objective_tensor))
+                reward_components = dict(reward_components)
+                reward_components["objective_scalarized_reward"] = reward
+                reward_components["objective_tensor_v1"] = objective_tensor.to_dict()
+                reward_components["objective_constraint_flags"] = objective_compiler.constraint_flags(
+                    objective_tensor
+                )
             last_reward_components = reward_components
 
             # Store transition
@@ -401,5 +427,34 @@ if __name__ == "__main__":
         action="store_true",
         help="Feed ConditionVector through the policy conditioning block (default off; zero-init keeps outputs unchanged).",
     )
+    parser.add_argument(
+        "--objective-scalarizer",
+        type=str,
+        default="legacy",
+        choices=["legacy", "weighted_sum", "constrained", "lexicographic", "chebyshev", "epsilon", "product"],
+        help="Optional ObjectiveCompiler scalarization mode at entrypoint; legacy keeps existing scalar reward.",
+    )
     args = parser.parse_args()
-    run(config_path=args.config, use_condition_vector_for_policy=args.use_condition_vector_for_policy)
+    objective_profile = None
+    if args.objective_scalarizer != "legacy":
+        objective_profile = ObjectiveProfile(
+            profile_id=f"train_ppo:{args.objective_scalarizer}",
+            scalarizer=args.objective_scalarizer,
+            weights={
+                "throughput": 1.0,
+                "error": 1.0,
+                "safety": 1.0,
+                "energy": 1.0,
+            },
+            maximize={
+                "throughput": True,
+                "error": False,
+                "safety": True,
+                "energy": False,
+            },
+        )
+    run(
+        config_path=args.config,
+        use_condition_vector_for_policy=args.use_condition_vector_for_policy,
+        objective_profile=objective_profile,
+    )

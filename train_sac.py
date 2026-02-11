@@ -10,6 +10,7 @@ End-to-end deep learning:
 import argparse
 import json
 from pathlib import Path
+from typing import Optional
 import numpy as np
 import torch
 
@@ -35,6 +36,9 @@ from src.rl.curriculum import DataPackCurriculum
 from src.valuation.datapack_schema import DataPackMeta
 from src.observation.condition_vector_builder import ConditionVectorBuilder
 from src.rl.trunk_net import TrunkNet
+from src.objectives.profile import ObjectiveProfile
+from src.objectives.compiler import ObjectiveCompiler
+from src.objectives.tensor import objective_tensor_from_axes
 
 
 def _load_datapacks(path: Path):
@@ -134,6 +138,7 @@ def train_sac(
     use_mobility_policy: bool = False,
     use_condition_vector: bool = False,
     use_condition_vector_for_policy: bool = False,
+    objective_profile: Optional[ObjectiveProfile] = None,
 ):
     """Train SAC agent with economic objectives."""
 
@@ -224,6 +229,7 @@ def train_sac(
     prev_mp_r = None
     objective_vector = profile.get("default_objective_vector", [1.0, 0.7, 0.5, 0.8])
     alpha_mpl, alpha_error, alpha_ep, alpha_safety = objective_vector
+    objective_compiler = ObjectiveCompiler(objective_profile) if objective_profile else None
 
     # Online data value estimator (novelty → ΔMPL)
     data_value_estimator = OnlineDataValueEstimator(
@@ -347,6 +353,23 @@ def train_sac(
                 alpha_ep=alpha_ep,
                 alpha_wage=0.0,
             )
+            if objective_compiler is not None:
+                objective_tensor = objective_tensor_from_axes(
+                    {
+                        "throughput": float(mpl_t),
+                        "error": abs(float(err_term)),
+                        "safety": max(0.0, 1.0 - min(1.0, abs(float(err_term)))),
+                        "energy": abs(float(ep_t)),
+                    },
+                    context={"episode_index": ep, "step_index": episode_steps, "source": "train_sac"},
+                )
+                reward = float(objective_compiler.scalarize(objective_tensor))
+                reward_components = dict(reward_components)
+                reward_components["objective_scalarized_reward"] = reward
+                reward_components["objective_tensor_v1"] = objective_tensor.to_dict()
+                reward_components["objective_constraint_flags"] = objective_compiler.constraint_flags(
+                    objective_tensor
+                )
 
             last_reward_components = reward_components
 
@@ -585,10 +608,35 @@ if __name__ == "__main__":
         action="store_true",
         help="Feed ConditionVector through the policy conditioning block (default off; zero-init keeps outputs unchanged).",
     )
+    parser.add_argument(
+        "--objective-scalarizer",
+        type=str,
+        default="legacy",
+        choices=["legacy", "weighted_sum", "constrained", "lexicographic", "chebyshev", "epsilon", "product"],
+        help="Optional ObjectiveCompiler scalarization mode at entrypoint; legacy keeps existing scalar reward.",
+    )
     args = parser.parse_args()
 
     if args.engine_type != "pybullet":
         raise NotImplementedError("Only pybullet engine supported in this script.")
+    objective_profile = None
+    if args.objective_scalarizer != "legacy":
+        objective_profile = ObjectiveProfile(
+            profile_id=f"train_sac:{args.objective_scalarizer}",
+            scalarizer=args.objective_scalarizer,
+            weights={
+                "throughput": 1.0,
+                "error": 1.0,
+                "safety": 1.0,
+                "energy": 1.0,
+            },
+            maximize={
+                "throughput": True,
+                "error": False,
+                "safety": True,
+                "energy": False,
+            },
+        )
     train_sac(
         episodes=args.episodes,
         seed=args.seed,
@@ -606,4 +654,5 @@ if __name__ == "__main__":
         use_mobility_policy=args.use_mobility_policy,
         use_condition_vector=args.use_condition_vector,
         use_condition_vector_for_policy=args.use_condition_vector_for_policy,
+        objective_profile=objective_profile,
     )

@@ -38,6 +38,8 @@ from src.orchestrator.diffusion_requests import (
     prompt_to_diffusion_stub_input,
 )
 from src.hrl.skills import SkillID
+from src.regal.gen_plausibility import RegalGenPlausibilityNode
+from src.regal.base import RegalDecision
 
 
 def simulate_real_video_reference() -> Dict[str, Any]:
@@ -283,6 +285,7 @@ def run_stage1_pipeline(
     # Initialize components
     diffusion_stub = VideoDiffusionStub()
     vla_planner = VLATransformerPlanner()
+    plausibility_node = RegalGenPlausibilityNode()
 
     all_datapacks = []
     all_proposals = []
@@ -312,6 +315,28 @@ def run_stage1_pipeline(
         for j, proposal in enumerate(proposals):
             print(f"    Proposal {j+1}: {proposal.augmentation_type}")
 
+            plausibility_context = {
+                "map_first_quality_score": max(0.0, min(1.0, proposal.estimated_novelty)),
+                "semantic_disagreement_vla_vs_map": max(0.0, min(1.0, 1.0 - proposal.confidence)),
+                "vla_evidence_coverage": max(0.0, min(1.0, len(semantic_tags) / 12.0)),
+            }
+            plausibility_report = plausibility_node.evaluate(plausibility_context)
+            if plausibility_report.decision == RegalDecision.BLOCK:
+                print(
+                    "      Skipped by plausibility gate:",
+                    ",".join(plausibility_report.reason_codes),
+                )
+                pipeline_log.append(
+                    {
+                        "video_id": video_ref["episode_id"],
+                        "proposal_id": proposal.proposal_id,
+                        "augmentation_type": proposal.augmentation_type,
+                        "plausibility_gate": plausibility_report.to_dict(),
+                        "blocked": True,
+                    }
+                )
+                continue
+
             # Generate VLA plan
             vla_plan = extract_vla_plan_from_proposal(proposal, vla_planner)
             print(f"      VLA skills: {vla_plan.skill_sequence[:3]}...")
@@ -320,6 +345,9 @@ def run_stage1_pipeline(
             datapack = create_datapack_from_pipeline(
                 video_ref, semantic_tags, proposal, vla_plan, objective_preset
             )
+            datapack.regal_annotations = {
+                "gen_plausibility": plausibility_report.to_dict(),
+            }
             print(f"      DataPack: {datapack.pack_id}")
             print(f"      Tier: {datapack.attribution.tier}, Trust: {datapack.attribution.trust_score:.3f}")
 

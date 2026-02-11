@@ -121,16 +121,50 @@ class EpisodeLogger:
         if metadata:
             self._current_episode.metadata.update(metadata)
 
-    def finalize(self, econ_vector: Optional[EconVector] = None):
+    def finalize(
+        self,
+        econ_vector: Optional[EconVector] = None,
+        econ_tensor: Optional[Any] = None,
+        objective_tensor: Optional[Any] = None,
+    ):
         if self._current_episode is None:
             raise RuntimeError("No active episode; call start_episode first.")
         self._current_episode.ended_at = datetime.utcnow()
+        objective_payload = None
+        if objective_tensor is not None:
+            if hasattr(objective_tensor, "to_dict"):
+                objective_payload = objective_tensor.to_dict()
+            elif isinstance(objective_tensor, dict):
+                objective_payload = objective_tensor
+            else:
+                objective_payload = {"values": objective_tensor}
+            self._current_episode.metadata["objective_tensor_present"] = True
+            self._current_episode.metadata["objective_tensor_version"] = objective_payload.get(
+                "version",
+                "objective_tensor_v1",
+            )
         # Persist episode and events
         self.store.upsert_episode(self._current_episode)
         if self._events:
             self.store.append_events(self._events)
         if econ_vector:
             self.store.upsert_econ_vector(econ_vector)
+        if econ_tensor is not None:
+            if hasattr(econ_tensor, "to_dict"):
+                econ_tensor_payload = econ_tensor.to_dict()
+            elif isinstance(econ_tensor, dict):
+                econ_tensor_payload = econ_tensor
+            else:
+                econ_tensor_payload = {"values": econ_tensor}
+            self.store.upsert_econ_tensor(
+                self._current_episode.episode_id,
+                econ_tensor_payload,
+            )
+        if objective_payload is not None:
+            self.store.upsert_objective_tensor(
+                self._current_episode.episode_id,
+                objective_payload,
+            )
         # Reset
         self._current_episode = None
         self._events = []

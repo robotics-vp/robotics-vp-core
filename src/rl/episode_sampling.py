@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Iterable, Tuple, TYPE_CHECKING
 import hashlib
 
+from src.objectives.compiler import ObjectiveCompiler
+from src.objectives.profile import ObjectiveProfile
+from src.objectives.tensor import ObjectiveTensor
 from src.valuation.datapack_schema import DataPackMeta
 from src.rl.episode_descriptor_validator import (
     normalize_episode_descriptor,
@@ -309,6 +312,7 @@ class DataPackRLSampler:
         trust_matrix: Optional[Dict[str, Any]] = None,
         use_condition_vector: bool = False,
         use_unified_quality: bool = True,
+        unified_quality_profile: Optional[ObjectiveProfile] = None,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
@@ -320,6 +324,12 @@ class DataPackRLSampler:
         self.trust_matrix = trust_matrix or {}
         self.use_condition_vector = bool(use_condition_vector)
         self.use_unified_quality = bool(use_unified_quality)
+        if isinstance(unified_quality_profile, dict):
+            unified_quality_profile = ObjectiveProfile.from_dict(unified_quality_profile)
+        self.unified_quality_profile = unified_quality_profile
+        self.unified_quality_compiler = (
+            ObjectiveCompiler(unified_quality_profile) if unified_quality_profile else None
+        )
         self.skill_resolver = SkillModeResolver(
             default_mode="efficiency_throughput",
             mode_order=[
@@ -442,6 +452,12 @@ class DataPackRLSampler:
         episode["unified_quality_weight"] = max(0.0, float(descriptor.get("unified_quality_weight", 1.0)))
         episode["unified_quality_eligible"] = bool(descriptor.get("unified_quality_eligible", True))
         episode["unified_quality_reason"] = descriptor.get("unified_quality_reason")
+        uq_payload = descriptor.get("unified_quality", {})
+        if not isinstance(uq_payload, dict):
+            uq_payload = {}
+        episode["unified_quality_signal_bundle"] = uq_payload.get("signal_bundle")
+        episode["unified_quality_objective_tensor"] = uq_payload.get("objective_tensor_slice")
+        episode["unified_quality_constraint_flags"] = uq_payload.get("constraint_flags", [])
         
         # Auditor Integration
         episode["auditor_result"] = None
@@ -452,7 +468,15 @@ class DataPackRLSampler:
                 auditor_features = self.policies.datapack_auditor.build_features(
                     datapack=descriptor, # passing dict as datapack proxy
                     semantic_tags=enrichment.get("novelty_tags", []) + enrichment.get("fragility_tags", []) + enrichment.get("risk_tags", []), # Flatten tags roughly
-                    econ_slice={"expected_mpl_gain": episode["expected_mpl_gain"], "novelty_score": episode["novelty_score"]},
+                    econ_slice={
+                        "expected_mpl_gain": episode["expected_mpl_gain"],
+                        "novelty_score": episode["novelty_score"],
+                        "frontier_gain": episode.get("frontier_score", 0.0),
+                        "plausibility_score": (
+                            episode.get("unified_quality_signal_bundle", {}) or {}
+                        ).get("map_first", 1.0),
+                        "reward_hack_risk": 0.0,
+                    },
                     recap_scores={"quality_score": episode.get("recap_goodness_score", 0.5)}
                 )
                 # Evaluate
@@ -530,7 +554,7 @@ class DataPackRLSampler:
             clamped = [max(0.0, float(w)) for w in weights]
         else:
             clamped = [
-                max(0.0, float(w * max(0.0, ep.get("unified_quality_weight", 1.0))))
+                max(0.0, float(w * self._resolve_unified_quality_weight(ep)))
                 for w, ep in zip(weights, episodes)
             ]
         if clamped and max(clamped) <= 0.0:
@@ -590,6 +614,19 @@ class DataPackRLSampler:
                 )
             )
         return selected[:batch_size]
+
+    def _resolve_unified_quality_weight(self, episode: Dict[str, Any]) -> float:
+        default_weight = max(0.0, float(episode.get("unified_quality_weight", 1.0)))
+        if self.unified_quality_compiler is None:
+            return default_weight
+        payload = episode.get("unified_quality_objective_tensor")
+        if not isinstance(payload, dict):
+            return default_weight
+        try:
+            objective_tensor = ObjectiveTensor.from_dict(payload)
+            return max(0.0, float(self.unified_quality_compiler.scalarize(objective_tensor)))
+        except Exception:
+            return default_weight
 
     def _sample_frontier_prioritized(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
         """Bias sampling toward high ΔMPL/ΔJ datapacks while keeping diversity."""
