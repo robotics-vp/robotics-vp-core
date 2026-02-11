@@ -5,12 +5,16 @@ Does NOT alter scalar rewards used by SAC/PPO; it only mirrors existing reward
 math into logged components and episode-level EconVector aggregation.
 """
 from dataclasses import asdict
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
+import numpy as np
 
 from src.ontology.models import Task, Robot, Episode, EpisodeEvent, EconVector
 from src.policies.registry import build_all_policies
-from src.economics.domain_adapter import EconDomainAdapter, EconDomainAdapterConfig
+from src.economics.domain_adapter import EconDomainAdapter
+from src.objectives.compiler import ObjectiveCompiler
+from src.objectives.profile import ObjectiveProfile
+from src.objectives.tensor import ObjectiveTensor, objective_tensor_from_axes
 
 
 class RewardEngine:
@@ -21,6 +25,7 @@ class RewardEngine:
         config: Dict[str, Any],
         policies=None,
         econ_domain_name: str = "default",
+        objective_profile: Optional[ObjectiveProfile] = None,
     ):
         self.task = task
         self.robot = robot
@@ -44,6 +49,14 @@ class RewardEngine:
             self.adapter.config.offsets = self.config.get("econ_offsets", {}) or {}
         if self.config.get("source_domain"):
             self.adapter.config.source_domain = self.config["source_domain"]
+        configured_profile = self.config.get("objective_profile")
+        if objective_profile is None and configured_profile:
+            if isinstance(configured_profile, ObjectiveProfile):
+                objective_profile = configured_profile
+            else:
+                objective_profile = ObjectiveProfile.from_dict(configured_profile)
+        self.objective_profile = objective_profile
+        self.objective_compiler = ObjectiveCompiler(objective_profile) if objective_profile else None
 
     def step_reward(
         self,
@@ -59,7 +72,21 @@ class RewardEngine:
             if key in info:
                 components[key] = float(info[key])
         components["scalar_reward"] = float(raw_env_reward)
-        return float(raw_env_reward), components
+        if self.objective_compiler is None:
+            return float(raw_env_reward), components
+
+        objective_tensor = self.compute_objective_tensor(
+            episode_metrics=info or {},
+            policy_metrics=None,
+            map_first_metrics=info or {},
+        )
+        scalar_reward = self.objective_compiler.scalarize(objective_tensor)
+        flags = self.objective_compiler.constraint_flags(objective_tensor)
+        components["scalar_reward_legacy"] = float(raw_env_reward)
+        components["scalar_reward_objective"] = float(scalar_reward)
+        components["objective_tensor_v1"] = objective_tensor.to_dict()
+        components["objective_constraint_flags"] = flags
+        return float(scalar_reward), components
 
     def compute_econ_vector(
         self,
@@ -147,3 +174,104 @@ class RewardEngine:
             return float(value)
         except Exception:
             return default
+
+    def compute_objective_tensor(
+        self,
+        episode_metrics: Dict[str, Any],
+        policy_metrics: Optional[Dict[str, Any]] = None,
+        map_first_metrics: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> ObjectiveTensor:
+        """Build ObjectiveTensor from episode/policy/map-first metric slices."""
+        policy_metrics = policy_metrics or {}
+        map_first_metrics = map_first_metrics or {}
+        throughput = self._safe_float(
+            episode_metrics.get("mpl_component", episode_metrics.get("mpl_t", episode_metrics.get("throughput", 0.0)))
+        )
+        error = self._safe_float(
+            episode_metrics.get("delta_errors", episode_metrics.get("error_penalty", episode_metrics.get("error_rate", 0.0)))
+        )
+        error = abs(error)
+        energy = self._safe_float(
+            episode_metrics.get("energy_penalty", episode_metrics.get("ep_t", episode_metrics.get("energy_Wh_per_unit", 0.0)))
+        )
+        energy = abs(energy)
+
+        map_quality = map_first_metrics.get("map_first_quality_score")
+        if map_quality is None and isinstance(map_first_metrics.get("map_first_summary"), dict):
+            map_quality = map_first_metrics.get("map_first_summary", {}).get("map_first_quality_score")
+        map_quality = self._safe_float(map_quality, 1.0)
+
+        safety_bonus = self._safe_float(episode_metrics.get("safety_bonus", 0.0))
+        safety = max(0.0, 1.0 - min(1.0, error)) + max(0.0, safety_bonus) + max(0.0, map_quality)
+
+        tensor = objective_tensor_from_axes(
+            {
+                "throughput": throughput,
+                "error": error,
+                "safety": safety,
+                "energy": energy,
+            },
+            context={
+                "task_id": self.task.task_id,
+                "robot_id": self.robot.robot_id,
+                **(context or {}),
+            },
+            provenance={
+                "source": "reward_engine",
+                "episode_metrics_keys": sorted(list((episode_metrics or {}).keys()))[:64],
+                "policy_metrics_keys": sorted(list((policy_metrics or {}).keys()))[:64],
+            },
+        )
+        return tensor
+
+    def compute_objective_tensor_from_events(
+        self,
+        episode: Episode,
+        events: List[EpisodeEvent],
+        policy_metrics: Optional[Dict[str, Any]] = None,
+    ) -> ObjectiveTensor:
+        """Aggregate event stream into a single ObjectiveTensor artifact."""
+        if not events:
+            return self.compute_objective_tensor(
+                episode_metrics={},
+                policy_metrics=policy_metrics,
+                context={"episode_id": episode.episode_id},
+            )
+        mpl_vals = []
+        error_vals = []
+        energy_vals = []
+        safety_vals = []
+        map_first_vals = []
+        for event in events:
+            comps = event.reward_components or {}
+            mpl_vals.append(self._safe_float(comps.get("mpl_component", comps.get("mpl_t", 0.0))))
+            error_vals.append(abs(self._safe_float(comps.get("error_penalty", comps.get("delta_errors", 0.0)))))
+            energy_vals.append(abs(self._safe_float(comps.get("energy_penalty", comps.get("ep_t", 0.0)))))
+            safety_vals.append(self._safe_float(comps.get("safety_bonus", 0.0)))
+            map_first_vals.append(
+                self._safe_float(
+                    (event.metadata or {}).get(
+                        "map_first_quality_score",
+                        ((event.metadata or {}).get("map_first_summary") or {}).get("map_first_quality_score", 1.0),
+                    ),
+                    1.0,
+                )
+            )
+        episode_metrics = {
+            "mpl_component": float(np.mean(mpl_vals)) if mpl_vals else 0.0,
+            "delta_errors": float(np.mean(error_vals)) if error_vals else 0.0,
+            "energy_penalty": float(np.mean(energy_vals)) if energy_vals else 0.0,
+            "safety_bonus": float(np.mean(safety_vals)) if safety_vals else 0.0,
+            "map_first_quality_score": float(np.mean(map_first_vals)) if map_first_vals else 1.0,
+        }
+        return self.compute_objective_tensor(
+            episode_metrics=episode_metrics,
+            policy_metrics=policy_metrics,
+            map_first_metrics=episode_metrics,
+            context={
+                "episode_id": episode.episode_id,
+                "task_id": episode.task_id,
+                "robot_id": episode.robot_id,
+            },
+        )

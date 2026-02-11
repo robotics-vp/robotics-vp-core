@@ -643,6 +643,10 @@ class DataPackMeta:
     econ_tensor_v1: Optional[Dict[str, Any]] = None
     # Contains serialized EconTensorV1 with basis_sha, x, and provenance
 
+    # Objective tensor (optional) - portable multi-objective contract artifact
+    objective_tensor_v1: Optional[Dict[str, Any]] = None
+    # Contains serialized ObjectiveTensor with schema, values, context, provenance
+
     # Regal annotations (typed) - canonical RegalAnnotationsV1 serialized as dict
     # MUST use RegalAnnotationsV1.model_dump() when setting
     regal_annotations: Optional[Dict[str, Any]] = None
@@ -691,6 +695,7 @@ class DataPackMeta:
             'signal_bundle': to_json_safe(self.signal_bundle),
             'graph_summary_v1': to_json_safe(self.graph_summary_v1),
             'econ_tensor_v1': to_json_safe(self.econ_tensor_v1),
+            'objective_tensor_v1': to_json_safe(self.objective_tensor_v1),
             'regal_annotations': to_json_safe(self.regal_annotations),
             'regal_annotations_sha': self.regal_annotations_sha,
         }
@@ -763,6 +768,7 @@ class DataPackMeta:
             signal_bundle=d.get('signal_bundle'),
             graph_summary_v1=d.get('graph_summary_v1'),
             econ_tensor_v1=d.get('econ_tensor_v1'),
+            objective_tensor_v1=d.get('objective_tensor_v1'),
             regal_annotations=d.get('regal_annotations'),
             regal_annotations_sha=d.get('regal_annotations_sha'),
         )
