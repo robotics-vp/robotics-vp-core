@@ -82,7 +82,8 @@ class PlanApplier:
         self._current_sha: Optional[str] = None
         self._last_poll_step: int = -1
         self._last_apply_step: int = -1
-        self._file_mtime: float = 0.0
+        # Use nanosecond-resolution mtime to avoid missing rapid rewrites on CI/filesystems.
+        self._file_mtime_ns: int = 0
         self._window_change_count: int = 0
 
         # Computed overrides
@@ -131,7 +132,7 @@ class PlanApplier:
             prev_sha = self._current_sha
             self._current_plan = plan
             self._current_sha = new_sha
-            self._file_mtime = os.path.getmtime(target_path)
+            self._file_mtime_ns = os.stat(target_path).st_mtime_ns
             self._last_apply_step = step
             self._window_change_count += 1
 
@@ -203,8 +204,8 @@ class PlanApplier:
 
         # Check file modification time
         try:
-            current_mtime = os.path.getmtime(self.plan_path)
-            if current_mtime <= self._file_mtime:
+            current_mtime_ns = os.stat(self.plan_path).st_mtime_ns
+            if current_mtime_ns <= self._file_mtime_ns:
                 return None
         except OSError:
             return None
@@ -303,4 +304,3 @@ __all__ = [
     "PlanApplier",
     "PlanApplyResult",
 ]
-
