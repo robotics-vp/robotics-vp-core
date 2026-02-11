@@ -6,7 +6,10 @@ All conversions are stable and hashable for provenance.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+import numpy as np
 
 from src.contracts.schemas import (
     EconBasisSpecV1,
@@ -17,6 +20,60 @@ from src.economics.econ_basis_registry import get_default_basis, get_basis
 
 if TYPE_CHECKING:
     from src.ontology.models import EconVector
+
+
+# =============================================================================
+# Runtime EconTensor (additive, backward-compatible with EconTensorV1 utilities)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class EconTensorSchema:
+    """Runtime econ tensor schema for objective-econ coupling."""
+
+    schema_id: str = "econ_tensor_runtime_v1"
+    axes: tuple[str, ...] = (
+        "value_earned",
+        "price_tick",
+        "marginal_frontier_gain",
+        "constraint_penalty",
+        "uncertainty_discount",
+    )
+    units: Dict[str, str] = field(
+        default_factory=lambda: {
+            "value_earned": "usd",
+            "price_tick": "usd_per_hour",
+            "marginal_frontier_gain": "frontier_gain_per_compute",
+            "constraint_penalty": "usd",
+            "uncertainty_discount": "fraction",
+        }
+    )
+
+
+@dataclass
+class EconTensor:
+    """Runtime econ tensor payload used before conversion to EconTensorV1."""
+
+    values: np.ndarray
+    schema: EconTensorSchema = field(default_factory=EconTensorSchema)
+    context: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.values = np.asarray(self.values, dtype=np.float32)
+        if self.values.ndim == 0:
+            self.values = self.values.reshape(1)
+        if self.values.shape[-1] != len(self.schema.axes):
+            raise ValueError(
+                f"EconTensor expects last dim {len(self.schema.axes)}, got {self.values.shape[-1]}"
+            )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "schema_id": self.schema.schema_id,
+            "axes": list(self.schema.axes),
+            "values": self.values.tolist(),
+            "context": dict(self.context),
+        }
 
 
 # =============================================================================
@@ -245,6 +302,8 @@ def compute_tensor_summary(tensor: EconTensorV1, basis: Optional[EconBasisSpecV1
 
 
 __all__ = [
+    "EconTensorSchema",
+    "EconTensor",
     "econ_to_tensor",
     "econ_vector_to_tensor",
     "tensor_to_econ_dict",

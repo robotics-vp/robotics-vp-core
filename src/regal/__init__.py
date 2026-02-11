@@ -21,6 +21,12 @@ from src.regal.knob_model import (
     StubLearnedKnobModel,
     get_knob_model,
 )
+from src.regal.base import RegalDecision, RegalReport, RegalNode as MetaRegalNode
+from src.regal.objective_integrity import RegalObjectiveIntegrityNode
+from src.regal.reward_safety import RegalRewardSafetyNode
+from src.regal.econ_consistency import RegalEconConsistencyNode
+from src.regal.gen_plausibility import RegalGenPlausibilityNode
+from src.regal.data_value import RegalDataValueNode
 
 __all__ = [
     # Regal evaluators
@@ -36,4 +42,13 @@ __all__ = [
     "HeuristicKnobProvider",
     "StubLearnedKnobModel",
     "get_knob_model",
+    # Lightweight additive regal nodes
+    "RegalDecision",
+    "RegalReport",
+    "MetaRegalNode",
+    "RegalObjectiveIntegrityNode",
+    "RegalRewardSafetyNode",
+    "RegalEconConsistencyNode",
+    "RegalGenPlausibilityNode",
+    "RegalDataValueNode",
 ]

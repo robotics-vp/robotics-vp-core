@@ -27,6 +27,7 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
         semantic_tags: Optional[Sequence[Any]] = None,
         econ_slice: Optional[Dict[str, Any]] = None,
         recap_scores: Optional[Dict[str, Any]] = None,
+        regal_reports: Optional[Sequence[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Build features from datapack and context.
@@ -64,6 +65,31 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
         is_ood = len(ood_tags) > 0
         
         datapack_id = _get(datapack, "datapack_id") or _get(datapack, "pack_id") or _get(datapack, "episode_id", "unknown")
+        plausibility_score = _get(datapack, "plausibility_score")
+        if plausibility_score is None and isinstance(_get(datapack, "regal_annotations", {}), dict):
+            gen_plaus = _get(datapack, "regal_annotations", {}).get("gen_plausibility", {})
+            if isinstance(gen_plaus, dict):
+                plausibility_score = (
+                    gen_plaus.get("details", {}).get("plausibility_score")
+                    if isinstance(gen_plaus.get("details"), dict)
+                    else None
+                )
+        if plausibility_score is None:
+            plausibility_score = econ.get("plausibility_score", 1.0)
+        reward_hack_risk = econ.get("reward_hack_risk", 0.0)
+        frontier_gain = econ.get("frontier_gain", 0.0)
+        if regal_reports:
+            for rep in regal_reports:
+                if not isinstance(rep, dict):
+                    continue
+                rid = str(rep.get("node_id", ""))
+                if rid.endswith("reward_safety"):
+                    decision = str(rep.get("decision", "ALLOW")).upper()
+                    if decision in {"BLOCK", "REROUTE"}:
+                        reward_hack_risk = max(float(reward_hack_risk), 0.8)
+                if rid.endswith("gen_plausibility"):
+                    details = rep.get("details", {}) if isinstance(rep.get("details"), dict) else {}
+                    plausibility_score = details.get("plausibility_score", plausibility_score)
 
         return {
             "datapack_id": datapack_id,
@@ -74,6 +100,9 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
             "expected_mpl_gain": econ.get("expected_mpl_gain", 0.0),
             "novelty_score": econ.get("novelty_score", 0.0),
             "recap_quality": recap.get("quality_score", 0.5),
+            "frontier_gain": frontier_gain,
+            "plausibility_score": float(plausibility_score),
+            "reward_hack_risk": float(reward_hack_risk),
         }
 
     def evaluate(self, features: Dict[str, Any]) -> Dict[str, Any]:
@@ -93,10 +122,17 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
         if features["is_ood"]:
             base_risk = min(1.0, base_risk * 1.2)
             
-        predicted_risk_score = base_risk
+        plausibility_score = max(0.0, min(1.0, float(features.get("plausibility_score", 1.0))))
+        reward_hack_risk = max(0.0, min(1.0, float(features.get("reward_hack_risk", 0.0))))
+        frontier_gain = max(0.0, float(features.get("frontier_gain", 0.0)))
+
+        predicted_risk_score = min(
+            1.0,
+            max(base_risk, reward_hack_risk, 1.0 - plausibility_score),
+        )
         
         # 2. Predict Value (MPL Gain)
-        base_value = features["expected_mpl_gain"]
+        base_value = features["expected_mpl_gain"] + frontier_gain
         
         # Novelty boosts value
         if features["novelty_score"] > 0.5:
@@ -116,14 +152,14 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
         # 4. Assign Rating
         rating = "BBB" # Default
         
-        # AAA: High Value, Low Risk, High Quality
-        if predicted_delta_mpl > 5.0 and predicted_risk_score < 0.3:
+        # AAA: High frontier/value, low risk, high plausibility
+        if predicted_delta_mpl > 5.0 and predicted_risk_score < 0.3 and plausibility_score > 0.7:
             rating = "AAA"
         # AA: Good Value, Safe
-        elif predicted_delta_mpl > 2.0 and predicted_risk_score < 0.4:
+        elif predicted_delta_mpl > 2.0 and predicted_risk_score < 0.4 and plausibility_score > 0.6:
             rating = "AA"
         # A: Standard
-        elif predicted_risk_score < 0.5:
+        elif predicted_risk_score < 0.5 and plausibility_score > 0.45:
             rating = "A"
         # JUNK: High Risk, Low Value
         elif predicted_risk_score > 0.8 and predicted_delta_mpl < 2.0:
@@ -150,6 +186,9 @@ class HeuristicDatapackAuditor(DatapackAuditorPolicy):
                 "raw_score_basis": {
                     "predicted_delta_mpl": predicted_delta_mpl,
                     "predicted_risk_score": predicted_risk_score,
+                    "plausibility_score": plausibility_score,
+                    "frontier_gain": frontier_gain,
+                    "reward_hack_risk": reward_hack_risk,
                 },
             }
         }

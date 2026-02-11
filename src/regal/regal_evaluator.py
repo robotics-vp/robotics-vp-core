@@ -286,8 +286,20 @@ class WorldCoherenceRegal(RegalNode):
         phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
         trajectory_audit: Optional[TrajectoryAuditV1] = None,
         econ_tensor: Optional[EconTensorV1] = None,
+        selection_manifest: Optional[SelectionManifestV1] = None,
+        orchestrator_state: Optional[OrchestratorStateV1] = None,
     ) -> RegalReportV1:
-        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor)
+        inputs_sha = self._compute_inputs_sha(
+            plan,
+            signals,
+            policy_config,
+            context,
+            phase,
+            trajectory_audit,
+            econ_tensor,
+            selection_manifest,
+            orchestrator_state,
+        )
         findings: Dict[str, Any] = {}
         violations: List[str] = []
         coherence_tags: List[str] = []
@@ -638,8 +650,20 @@ class EconDataRegal(RegalNode):
         phase: RegalPhaseV1 = RegalPhaseV1.POST_PLAN_PRE_APPLY,
         trajectory_audit: Optional[TrajectoryAuditV1] = None,
         econ_tensor: Optional[EconTensorV1] = None,
+        selection_manifest: Optional[SelectionManifestV1] = None,
+        orchestrator_state: Optional[OrchestratorStateV1] = None,
     ) -> RegalReportV1:
-        inputs_sha = self._compute_inputs_sha(plan, signals, policy_config, context, phase, trajectory_audit, econ_tensor)
+        inputs_sha = self._compute_inputs_sha(
+            plan,
+            signals,
+            policy_config,
+            context,
+            phase,
+            trajectory_audit,
+            econ_tensor,
+            selection_manifest,
+            orchestrator_state,
+        )
         findings: Dict[str, Any] = {}
         violations: List[str] = []
         coherence_tags: List[str] = []
