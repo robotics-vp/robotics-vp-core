@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 
+from src.constraints.constraint_set import ConstraintSet
 from src.valuation.datapack_schema import DataPackMeta
 from src.valuation.guidance_profile import GuidanceProfile
 
@@ -25,9 +26,36 @@ class DiffusionPromptSpec:
 
     source_datapack_ids: List[str]
     vla_hint: Optional[Dict[str, Any]] = None
+    constraint_set_ref: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+def _build_constraint_set_from_datapack(dp: DataPackMeta) -> ConstraintSet:
+    metrics = dp.episode_metrics or {}
+    sem = dp.vla_action_summary or {}
+    map_first_summary = {}
+    if isinstance(metrics.get("map_first_summary"), dict):
+        map_first_summary = metrics.get("map_first_summary", {})
+    if "map_first_quality_score" in metrics:
+        map_first_summary.setdefault("map_first_quality_score", metrics.get("map_first_quality_score"))
+    fusion_metrics = {
+        "semantic_fusion_confidence_mean": metrics.get("semantic_fusion_confidence_mean", 0.0),
+        "semantic_disagreement_vla_vs_map": metrics.get("semantic_disagreement_vla_vs_map", 0.0),
+    }
+    semantic_evidence = {
+        "semantic_tags": (dp.semantic_tags or []) + (sem.get("semantic_tags", []) if isinstance(sem, dict) else []),
+        "fragile": "fragile" in (dp.semantic_tags or []),
+        "safety_critical": "safety" in (dp.semantic_tags or []),
+        "vla_confidence": sem.get("confidence") if isinstance(sem, dict) else None,
+        "source": "datapack_episode_metrics",
+    }
+    return ConstraintSet.from_artifacts(
+        semantic_evidence=semantic_evidence,
+        map_first_summary=map_first_summary,
+        fusion_metrics=fusion_metrics,
+    )
 
 
 def build_diffusion_prompt_from_guidance(
@@ -40,10 +68,12 @@ def build_diffusion_prompt_from_guidance(
             skill_ids.append(s["skill_id"])
 
     # Merge semantic tags from datapack, guidance, and VLA annotations
+    constraint_set = _build_constraint_set_from_datapack(dp)
     semantic_tags = list(set(
         (dp.energy_driver_tags or []) +
         (guidance.semantic_tags or []) +
-        (dp.semantic_tags or [])
+        (dp.semantic_tags or []) +
+        constraint_set.to_prompt_tags()
     ))
 
     difficulty_hint = "typical"
@@ -118,6 +148,7 @@ def build_diffusion_prompt_from_guidance(
         target_economic_effect=target_effect,
         source_datapack_ids=[dp.pack_id],
         vla_hint=vla_hint,
+        constraint_set_ref=constraint_set.to_structured_fields(),
     )
 
 
@@ -181,6 +212,7 @@ def prompt_to_diffusion_stub_input(prompt: DiffusionPromptSpec) -> Dict[str, Any
         "objective_preset": objective_preset,
         "energy_profile": energy_profile,
         "econ_context": econ_context,
+        "constraint_set": prompt.constraint_set_ref or {},
     }
 
 
@@ -214,6 +246,7 @@ def generate_proposals_from_prompts(
             objective_preset=stub_input["objective_preset"],
             energy_profile=stub_input["energy_profile"],
             econ_context=stub_input["econ_context"],
+            constraint_set=stub_input.get("constraint_set"),
             num_proposals=2,
         )
 
@@ -226,6 +259,7 @@ def generate_proposals_from_prompts(
             proposal_dict["orchestrator_request_id"] = prompt.request_id
             proposal_dict["orchestrator_rationale"] = prompt.rationale
             proposal_dict["target_economic_effect"] = prompt.target_economic_effect
+            proposal_dict["constraint_set_ref"] = prompt.constraint_set_ref
 
             all_proposals.append(proposal_dict)
 

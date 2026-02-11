@@ -35,6 +35,7 @@ class DiffusionProposal:
     estimated_novelty: float  # Expected novelty score of generated clip
     rationale: str  # Why this clip was proposed
     timestamp: float
+    constraint_set: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -77,6 +78,7 @@ class VideoDiffusionStub:
         objective_preset: str = "balanced",
         energy_profile: str = "BASE",
         econ_context: Optional[Dict[str, float]] = None,
+        constraint_set: Optional[Dict[str, Any]] = None,
         num_proposals: int = 3,
     ) -> List[DiffusionProposal]:
         """
@@ -143,6 +145,10 @@ class VideoDiffusionStub:
                 rationale = f"General variation: {aug_type}"
                 confidence = 0.6
                 novelty = 0.4
+            if constraint_set:
+                constrained_axes = sorted(list((constraint_set.get("hard_bounds") or {}).keys()))
+                if constrained_axes:
+                    rationale += f"; constrained_by={','.join(constrained_axes[:4])}"
 
             # Add some randomness to confidence and novelty
             confidence = max(0.1, min(1.0, confidence + random.uniform(-0.1, 0.1)))
@@ -161,6 +167,7 @@ class VideoDiffusionStub:
                 estimated_novelty=novelty,
                 rationale=rationale,
                 timestamp=time.time(),
+                constraint_set=constraint_set or {},
             )
             proposals.append(proposal)
 
@@ -173,6 +180,7 @@ class VideoDiffusionStub:
         objective_preset: str = "balanced",
         energy_profile: str = "BASE",
         econ_context: Optional[Dict[str, float]] = None,
+        constraint_set: Optional[Dict[str, Any]] = None,
     ) -> SyntheticEpisodeProposal:
         """
         Propose a synthetic episode based on existing episode.
@@ -195,6 +203,7 @@ class VideoDiffusionStub:
             objective_preset=objective_preset,
             energy_profile=energy_profile,
             econ_context=econ_context,
+            constraint_set=constraint_set,
             num_proposals=2,
         )
 

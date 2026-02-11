@@ -20,8 +20,11 @@ Formula:
 Each component is in [0, 1], so combined weight is also in [0, 1].
 """
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
+from src.objectives.compiler import ObjectiveCompiler
+from src.objectives.profile import ObjectiveProfile
+from src.objectives.tensor import objective_tensor_from_axes
 from src.utils.json_safe import to_json_safe
 
 
@@ -44,6 +47,9 @@ class UnifiedQualityWeights:
 
     # Debug info
     components: Dict[str, Any] = field(default_factory=dict)
+    constraint_flags: List[str] = field(default_factory=list)
+    signal_bundle: Optional[Dict[str, float]] = None
+    objective_tensor_slice: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -56,6 +62,9 @@ class UnifiedQualityWeights:
             "is_eligible": self.is_eligible,
             "eligibility_reason": self.eligibility_reason,
             "components": to_json_safe(self.components),
+            "constraint_flags": list(self.constraint_flags),
+            "signal_bundle": to_json_safe(self.signal_bundle),
+            "objective_tensor_slice": to_json_safe(self.objective_tensor_slice),
         }
 
 
@@ -133,6 +142,8 @@ class UnifiedQualityPolicy:
         semantic_disagreement_vla_vs_map: Optional[float] = None,
         # Episode info
         num_frames: int = 0,
+        # Optional sampler boundary scalarization profile
+        objective_profile: Optional[ObjectiveProfile] = None,
     ) -> UnifiedQualityWeights:
         """Compute unified quality weights.
 
@@ -238,32 +249,60 @@ class UnifiedQualityPolicy:
         }
 
         # --- Combined weight ---
-        w_combined = w_mhn * w_scene_ir * w_process_reward * w_map_first
-        if cfg.include_embodiment_weight:
-            w_combined *= w_embodiment
+        signal_bundle = {
+            "mhn": float(w_mhn),
+            "scene_ir": float(w_scene_ir),
+            "process_reward": float(w_process_reward),
+            "map_first": float(w_map_first),
+            "embodiment": float(w_embodiment),
+        }
+        objective_tensor = objective_tensor_from_axes(
+            {
+                "throughput": w_mhn,
+                "error": 1.0 - w_process_reward,
+                "safety": min(w_scene_ir, w_map_first),
+                "energy": 1.0 - w_map_first,
+            },
+            context={"source": "unified_quality"},
+        )
+        objective_tensor_slice = objective_tensor.to_dict()
+        if objective_profile is not None:
+            compiler = ObjectiveCompiler(objective_profile)
+            w_combined = compiler.scalarize(objective_tensor)
+        else:
+            w_combined = w_mhn * w_scene_ir * w_process_reward * w_map_first
+            if cfg.include_embodiment_weight:
+                w_combined *= w_embodiment
+        w_combined = max(0.0, float(w_combined))
 
         # --- Eligibility checks ---
         is_eligible = True
         eligibility_reason = "passed"
+        constraint_flags: List[str] = []
 
         # Hard gates
         if mhn_plausibility < cfg.min_mhn_plausibility:
             is_eligible = False
             eligibility_reason = f"mhn_plausibility={mhn_plausibility:.2f} < {cfg.min_mhn_plausibility}"
+            constraint_flags.append("mhn_plausibility_below_min")
         elif scene_tracks_quality_val is not None and scene_tracks_quality_val < cfg.min_scene_tracks_quality:
             is_eligible = False
             eligibility_reason = (
                 f"scene_tracks_quality={scene_tracks_quality_val:.2f} < {cfg.min_scene_tracks_quality}"
             )
+            constraint_flags.append("scene_tracks_quality_below_min")
         elif process_reward_conf_p10 < cfg.min_process_reward_conf:
             is_eligible = False
             eligibility_reason = f"conf_p10={process_reward_conf_p10:.2f} < {cfg.min_process_reward_conf}"
+            constraint_flags.append("process_reward_conf_p10_below_min")
         elif cfg.include_embodiment_weight and w_embodiment < cfg.min_embodiment_weight:
             is_eligible = False
             eligibility_reason = f"w_embodiment={w_embodiment:.2f} < {cfg.min_embodiment_weight}"
+            constraint_flags.append("embodiment_weight_below_min")
         elif w_combined < cfg.min_combined_weight:
             is_eligible = False
             eligibility_reason = f"w_combined={w_combined:.3f} < {cfg.min_combined_weight}"
+            constraint_flags.append("combined_weight_below_min")
 
         # Stagnation detection
         is_stagnant = False
@@ -290,6 +329,9 @@ class UnifiedQualityPolicy:
             is_eligible=is_eligible,
             eligibility_reason=eligibility_reason,
             components=components,
+            constraint_flags=constraint_flags,
+            signal_bundle=signal_bundle,
+            objective_tensor_slice=objective_tensor_slice,
         )
 
     def compute_from_datapack(
@@ -298,6 +340,7 @@ class UnifiedQualityPolicy:
         mhn_summary: Optional[Any] = None,
         scene_ir_quality: Optional[float] = None,
         scene_tracks_quality: Optional[Any] = None,
+        objective_profile: Optional[ObjectiveProfile] = None,
     ) -> UnifiedQualityWeights:
         """Compute weights from a DataPackMeta object.
 
@@ -396,6 +439,7 @@ class UnifiedQualityPolicy:
             semantic_fusion_confidence_mean=sem_conf,
             semantic_disagreement_vla_vs_map=sem_disagreement,
             num_frames=num_frames,
+            objective_profile=objective_profile,
         )
 
     def filter_eligible(
