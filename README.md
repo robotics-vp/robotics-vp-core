@@ -54,6 +54,21 @@ That implies:
 - Inferential training at deployment must be economically gated.
 - Sim generation must be conditioned on expected economic value for the specific `task x env x trajectory`.
 
+## Concrete Economics Layer (Current vs Target)
+Current (implemented today, partial):
+- Episode-level economics: `MPL`, error, energy, wage-parity style metrics.
+- Advisory valuation and sampling infrastructure tied to datapacks.
+- Seeded deterministic loops for replay/sampling and orchestration overlays.
+
+Target (explicitly staged in this repo):
+- `ObjectiveTensor` stays intact across real/diffusion/sim/training until contract compile.
+- `ObjectiveCompiler` performs explicit scalarization at run/contract boundary.
+- `ConstraintSet` carries VLA + geometry manifold bounds into generation requests.
+- `ObjectiveEconFunctor` maps objective outcomes + violations + uncertainty into econ deltas.
+- `PricingSentinel` emits high-frequency task-hour pricing ticks; `ValueLedger` keeps sparse, auditable receipts.
+
+This is the shift from \"economics as logging\" to \"economics as control and accounting\".
+
 ## What "Economics-First" Means Here
 Economics-first means we optimize and price against deployment outcomes:
 - Throughput / MPL
@@ -66,19 +81,19 @@ Not all customers optimize the same objective.
 Objective programmability is required to map customer contracts into policy behavior.
 
 ## Concrete Program Roadmap
-The roadmap below is ordered as execution layers.
+The roadmap below is ordered as execution layers and capital-efficiency milestones.
 
 | Stage | Goal | Concrete Output | Economic Impact |
 |---|---|---|---|
 | 1 | Synthetic data engine loop | Real video -> diffusion -> sim -> policy updates/datapacks | Faster capability iteration |
-| 2 | Economic telemetry in-loop | Per-episode/per-task telemetry streams (`MPL`, error, energy, uncertainty) | Sim/training focus shifts to value-relevant regimes |
-| 3 | Real-time pricing | Task-hour dynamic pricing plus data-sharing credits | Makes deployment and data contribution economically rational |
-| 4 | Fleet coordination by economics | Assignment/routing/scheduling uses marginal economics | Improves blended fleet ROI |
-| 5 | Objective programmability | Customer objective profiles compiled to policy scalarization at contract/run time | Honest, programmable contracts across verticals |
-| 6 | Securitization and insurance primitives | Risk-adjusted productivity and reliability curves | Enables financing and risk transfer products |
-| 7 | Automated GTM for adjacent manufacturers | Transfer playbooks for similar `task x env` cohorts | Lower expansion cost, faster enterprise rollout |
-| 8 | Leasing + cross-customer fleet coordination | Shared-capacity and lease-aware optimization | Better asset utilization across customers |
-| 9 | Lifecycle economics | Productivity decay tracking as maintenance/repair proxy | Better uptime, replacement timing, and total-cost control |
+| 2 | Economic telemetry in-loop | Per-episode/per-task telemetry streams (`MPL`, error, safety, energy, uncertainty) | Sim/training focus shifts to value-relevant regimes |
+| 3 | Real-time pricing + data sharing credits | Task-hour dynamic pricing + rebate/credit primitives for shared data | Makes deployment and contribution economically rational |
+| 4 | Fleet coordination by economics | Assignment/routing/scheduling uses marginal value and risk | Improves blended fleet ROI |
+| 5 | Objective programmability | Customer objective contracts compiled into scalarization profiles | Honest, programmable contracts across verticals |
+| 6 | Inferential training economics | Deployment-time adaptation spend admitted only when expected gain > cost/risk | Prevents compute burn and pricing distortion |
+| 7 | Securitization + insurance pricing | Risk-adjusted productivity/reliability curves | Enables financing and risk transfer products |
+| 8 | Automated GTM + leasing + cross-customer coordination | Transfer playbooks + lease-aware shared-capacity optimization | Faster rollout, higher utilization |
+| 9 | Lifecycle fleet management | Productivity decay as repair/replacement trigger | Better uptime and lifecycle economics |
 
 ## Deployment-Time Inferential Training (Planned)
 As inference compute share increases, deployment-time adaptation must be economically bounded.
@@ -87,6 +102,15 @@ Target behavior:
 - Inferential updates are admitted only when expected value exceeds cost/risk threshold.
 - Objective profile and contract constraints define acceptable adaptation directions.
 - Economic telemetry decides whether to spend compute on adaptation, data collection, or no-op.
+
+## Pricing and Data-Sharing Contract (Concrete)
+Planned deployment contract primitives:
+- `task_hour_price_tick`: real-time estimate of value-backed task-hour price.
+- `constraint_adjustment`: discount when constraints or uncertainty degrade trust.
+- `data_share_credit`: explicit credit tied to measured marginal frontier gain.
+- `net_customer_rate`: tick minus credits plus any risk/insurance adjustment.
+
+This is designed to avoid dishonest pricing claims from metric gaming or constraint violations.
 
 ## Intended Architectural Contracts
 The stack is moving toward these first-class artifacts:
