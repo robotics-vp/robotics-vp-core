@@ -84,6 +84,7 @@ class PlanApplier:
         self._last_apply_step: int = -1
         # Use nanosecond-resolution mtime to avoid missing rapid rewrites on CI/filesystems.
         self._file_mtime_ns: int = 0
+        self._file_content_sha: Optional[str] = None
         self._window_change_count: int = 0
 
         # Computed overrides
@@ -132,7 +133,9 @@ class PlanApplier:
             prev_sha = self._current_sha
             self._current_plan = plan
             self._current_sha = new_sha
-            self._file_mtime_ns = os.stat(target_path).st_mtime_ns
+            stat = os.stat(target_path)
+            self._file_mtime_ns = stat.st_mtime_ns
+            self._file_content_sha = self._compute_file_sha(target_path)
             self._last_apply_step = step
             self._window_change_count += 1
 
@@ -205,13 +208,27 @@ class PlanApplier:
         # Check file modification time
         try:
             current_mtime_ns = os.stat(self.plan_path).st_mtime_ns
-            if current_mtime_ns <= self._file_mtime_ns:
+            if current_mtime_ns < self._file_mtime_ns:
                 return None
+            if current_mtime_ns == self._file_mtime_ns and self._file_content_sha is not None:
+                # Some filesystems can coalesce mtimes for rapid rewrites.
+                # Fall back to content hash so we do not miss real plan updates.
+                if self._compute_file_sha(self.plan_path) == self._file_content_sha:
+                    return None
         except OSError:
             return None
 
         # Load and apply
         return self.load(step=step)
+
+    @staticmethod
+    def _compute_file_sha(path: str) -> str:
+        """Compute SHA-256 of a file's bytes."""
+        hasher = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest()
 
     def _compute_overrides(self, plan: SemanticUpdatePlanV1) -> None:
         """Compute overrides from plan."""
