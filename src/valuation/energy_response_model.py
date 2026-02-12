@@ -72,7 +72,9 @@ def _one_hot(value: str, vocab: List[str]) -> List[float]:
     return [1.0 if value == v else 0.0 for v in vocab]
 
 
-def build_deltas(samples: List[EnergyInterventionSample]) -> Dict[Tuple[str, Any], Dict[str, EnergyInterventionSample]]:
+def build_deltas(
+    samples: List[EnergyInterventionSample],
+) -> Dict[Tuple[str, Any], Dict[str, EnergyInterventionSample]]:
     """Group samples by (env, episode) and map profile->sample."""
     grouped: Dict[Tuple[str, Any], Dict[str, EnergyInterventionSample]] = {}
     for s in samples:
@@ -81,7 +83,12 @@ def build_deltas(samples: List[EnergyInterventionSample]) -> Dict[Tuple[str, Any
     return grouped
 
 
-def encode_sample(sample: EnergyInterventionSample, base: EnergyInterventionSample, env_vocab: List[str], profile_vocab: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+def encode_sample(
+    sample: EnergyInterventionSample,
+    base: EnergyInterventionSample,
+    env_vocab: List[str],
+    profile_vocab: List[str],
+) -> Tuple[np.ndarray, np.ndarray]:
     """Return feature vector x and target y (deltas vs BASE)."""
     # Features: env one-hot + profile one-hot + energy knobs (sorted keys)
     env_one = _one_hot(sample.env_name, env_vocab)
@@ -109,11 +116,18 @@ class EnergyResponseModel:
     def __init__(self, in_dim: int, hidden_dim: int = 64):
         self.net = EnergyResponseNet(in_dim, hidden_dim)
 
-    def fit(self, X: torch.Tensor, Y: torch.Tensor, epochs: int = 50, lr: float = 1e-3, device: str = "cpu"):
+    def fit(
+        self,
+        X: torch.Tensor,
+        Y: torch.Tensor,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        device: str = "cpu",
+    ):
         self.net.to(device)
         opt = torch.optim.Adam(self.net.parameters(), lr=lr)
         loss_fn = nn.MSELoss()
-        losses = {"train": []}
+        losses: Dict[str, List[float]] = {"train": []}
         for _ in range(epochs):
             self.net.train()
             opt.zero_grad()

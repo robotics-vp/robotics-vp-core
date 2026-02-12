@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Literal
 from dataclasses import asdict
 import uuid
 
@@ -63,14 +63,18 @@ def build_datapack_from_episode(
         "agent_profile": agent_profile,
         "tags": tags,
         "econ_semantic_tags": econ_semantic_tags,
-        "semantic_quality": max(0.0, min(1.0, semantic_quality)) if semantic_quality is not None else None,
+        "semantic_quality": max(0.0, min(1.0, semantic_quality))
+        if semantic_quality is not None
+        else None,
         "attribution": {
             "delta_mpl": metrics.get("mpl_episode"),
             "delta_error": metrics.get("error_rate_episode"),
             "delta_ep": metrics.get("ep_episode"),
             "novelty": condition_profile.get("novelty", None) if condition_profile else None,
             "trust": metrics.get("wage_parity", None),  # placeholder if trust not logged
-            "econ_weight": condition_profile.get("econ_weight", None) if condition_profile else None,
+            "econ_weight": condition_profile.get("econ_weight", None)
+            if condition_profile
+            else None,
         },
         "energy": {
             "total_Wh": metrics.get("energy_Wh", 0.0),
@@ -84,7 +88,8 @@ def build_datapack_from_episode(
             "energy_per_effector": metrics.get("energy_per_effector", {}),
             "coordination_metrics": metrics.get("coordination_metrics", {}),
         },
-        "semantic_energy_drivers": semantic_energy_drivers or infer_energy_driver_tags(episode_info, econ_params),
+        "semantic_energy_drivers": semantic_energy_drivers
+        or infer_energy_driver_tags(episode_info, econ_params),
     }
     return datapack
 
@@ -170,7 +175,7 @@ def build_datapack_meta_from_episode(
     delta_j = delta_mpl - delta_error * 10 + delta_ep * 0.1
 
     # Determine bucket
-    bucket = "positive" if delta_j >= 0 else "negative"
+    bucket: Literal["positive", "negative"] = "positive" if delta_j >= 0 else "negative"
 
     # Build condition profile
     cond = ConditionProfile(
@@ -207,7 +212,9 @@ def build_datapack_meta_from_episode(
     pack_id = brick_id or str(uuid.uuid4())
 
     portable = any(item is not None for item in (scene_tracks_v1, rgb_features_v1, slice_labels_v1))
-    resolved_schema = schema_version or (DATAPACK_SCHEMA_VERSION_PORTABLE if portable else DATAPACK_SCHEMA_VERSION)
+    resolved_schema = schema_version or (
+        DATAPACK_SCHEMA_VERSION_PORTABLE if portable else DATAPACK_SCHEMA_VERSION
+    )
 
     return DataPackMeta(
         schema_version=resolved_schema,
@@ -218,7 +225,9 @@ def build_datapack_meta_from_episode(
         bucket=bucket,
         semantic_tags=tags,
         econ_semantic_tags=econ_semantic_tags,
-        semantic_quality=max(0.0, min(1.0, semantic_quality)) if semantic_quality is not None else None,
+        semantic_quality=max(0.0, min(1.0, semantic_quality))
+        if semantic_quality is not None
+        else None,
         energy_driver_tags=energy_tags,
         condition=cond,
         attribution=attr,

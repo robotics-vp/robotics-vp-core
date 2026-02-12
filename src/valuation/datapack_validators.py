@@ -19,7 +19,7 @@ def _is_nan(x):
 
 
 def validate_objective_profile(op: ObjectiveProfile) -> List[str]:
-    warnings = []
+    warnings: List[str] = []
     if not op.objective_vector or len(op.objective_vector) < 3:
         warnings.append("ObjectiveProfile.objective_vector missing or too short")
     if op.wage_human is None:
@@ -30,7 +30,7 @@ def validate_objective_profile(op: ObjectiveProfile) -> List[str]:
 
 
 def validate_attribution_profile(ap: AttributionProfile) -> List[str]:
-    warnings = []
+    warnings: List[str] = []
     fields = [
         ("delta_mpl_model", ap.delta_mpl_model),
         ("delta_mpl_data", ap.delta_mpl_data),
@@ -46,7 +46,7 @@ def validate_attribution_profile(ap: AttributionProfile) -> List[str]:
 
 
 def validate_guidance_profile(gp: GuidanceProfile) -> List[str]:
-    warnings = []
+    warnings: List[str] = []
     if gp.semantic_tags is None:
         warnings.append("GuidanceProfile.semantic_tags missing")
     if gp.quality_label is None:
@@ -55,7 +55,7 @@ def validate_guidance_profile(gp: GuidanceProfile) -> List[str]:
 
 
 def validate_semantic_metrics(sm: SemanticMetrics) -> List[str]:
-    warnings = []
+    warnings: List[str] = []
     if sm.task_cluster_purity < 0 or sm.task_cluster_purity > 1:
         warnings.append("SemanticMetrics.task_cluster_purity out of [0,1]")
     if sm.concept_drift_score < 0:
@@ -66,7 +66,7 @@ def validate_semantic_metrics(sm: SemanticMetrics) -> List[str]:
 
 
 def validate_embodiment_profile(ep: EmbodimentProfileSummary) -> List[str]:
-    warnings = []
+    warnings: List[str] = []
     if ep.w_embodiment < 0 or ep.w_embodiment > 1:
         warnings.append("EmbodimentProfileSummary.w_embodiment out of [0,1]")
     if ep.embodiment_quality_score < 0 or ep.embodiment_quality_score > 1:
@@ -96,7 +96,7 @@ def validate_embodiment_profile(ep: EmbodimentProfileSummary) -> List[str]:
 
 
 def validate_datapack_meta(dp: DataPackMeta) -> List[str]:
-    warnings = []
+    warnings: List[str] = []
     if dp.objective_profile:
         warnings.extend(validate_objective_profile(dp.objective_profile))
     if dp.guidance_profile:
@@ -110,7 +110,7 @@ def validate_datapack_meta(dp: DataPackMeta) -> List[str]:
 
 
 def validate_epiplexity_summary(summary: Dict[str, Any]) -> List[str]:
-    warnings = []
+    warnings: List[str] = []
     if not isinstance(summary, dict):
         return ["epiplexity_summary must be a dict"]
     for repr_id, budgets in summary.items():

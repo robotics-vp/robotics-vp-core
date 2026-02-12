@@ -4,9 +4,10 @@ Provides utility functions to create real TrajectoryAuditV1 records
 from episode rollout data. This is the P0 implementation for regal
 grounding on actual physics/reward data.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from src.contracts.schemas import TrajectoryAuditV1
 from src.utils.config_digest import sha256_json
@@ -26,9 +27,9 @@ def create_trajectory_audit(
     bev_summary_sha: Optional[str] = None,
 ) -> TrajectoryAuditV1:
     """Create a TrajectoryAuditV1 from episode rollout data.
-    
+
     This is the canonical producer for training loop integration.
-    
+
     Args:
         episode_id: Unique episode identifier
         num_steps: Number of timesteps in episode
@@ -41,26 +42,26 @@ def create_trajectory_audit(
         velocity_threshold: Threshold above which velocity is a "spike"
         scene_tracks_sha: SHA of associated scene tracks
         bev_summary_sha: SHA of associated BEV summary
-        
+
     Returns:
         TrajectoryAuditV1 ready for regal evaluation
     """
     import math
-    
+
     # Compute action statistics if provided
     action_mean: Optional[List[float]] = None
     action_std: Optional[List[float]] = None
-    
+
     if actions and len(actions) > 0:
         action_dim = len(actions[0])
         action_mean = [0.0] * action_dim
         action_std = [0.0] * action_dim
-        
+
         # Compute mean
         for action in actions:
             for i, val in enumerate(action):
                 action_mean[i] += val / len(actions)
-        
+
         # Compute std
         if len(actions) > 1:
             for action in actions:
@@ -69,35 +70,35 @@ def create_trajectory_audit(
             action_std = [math.sqrt(v / (len(actions) - 1)) for v in action_std]
         else:
             action_std = [0.0] * action_dim
-    
+
     # Compute total return and component totals
     total_return = sum(rewards) if rewards else 0.0
-    
+
     component_totals: Optional[Dict[str, float]] = None
     if reward_components:
         component_totals = {}
         for comp_name, values in reward_components.items():
             component_totals[comp_name] = sum(values)
-    
+
     # Count events
     event_counts: Optional[Dict[str, int]] = None
     if events:
         event_counts = {}
         for event in events:
             event_counts[event] = event_counts.get(event, 0) + 1
-    
+
     # Compute physics anomaly stats
     penetration_max: Optional[float] = None
     if penetrations:
         penetration_max = max(penetrations)
-    
+
     velocity_spike_count = 0
     if velocities:
         for vel in velocities:
-            speed = math.sqrt(sum(v ** 2 for v in vel))
+            speed = math.sqrt(sum(v**2 for v in vel))
             if speed > velocity_threshold:
                 velocity_spike_count += 1
-    
+
     return TrajectoryAuditV1(
         episode_id=episode_id,
         num_steps=num_steps,
@@ -116,18 +117,18 @@ def create_trajectory_audit(
 
 def aggregate_trajectory_audits(audits: List[TrajectoryAuditV1]) -> str:
     """Compute aggregate SHA for a list of trajectory audits.
-    
+
     Deterministic: sorted by episode_id before hashing.
-    
+
     Args:
         audits: List of TrajectoryAuditV1 to aggregate
-        
+
     Returns:
         SHA-256 of sorted audit SHAs
     """
     if not audits:
         return sha256_json([])
-    
+
     sorted_shas = sorted(audit.sha256() for audit in audits)
     return sha256_json(sorted_shas)
 

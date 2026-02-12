@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import Dict, List
 
 from src.config.econ_params import EconParams
 from src.envs.dishwashing_env import EpisodeInfoSummary
@@ -41,7 +41,11 @@ def build_reward_terms(summary: EpisodeInfoSummary, econ_params: EconParams) -> 
     r_mpl = mpl
     r_error = -err
     r_energy = -energy_cost if energy_cost != 0 else -energy_wh
-    r_safety = -1.0 if getattr(summary, "termination_reason", "") in ("catastrophic_error", "vase_broken") else 0.0
+    r_safety = (
+        -1.0
+        if getattr(summary, "termination_reason", "") in ("catastrophic_error", "vase_broken")
+        else 0.0
+    )
     r_novelty = 0.0
     return {
         "r_mpl": r_mpl,
@@ -64,4 +68,3 @@ def combine_reward(objective_vector: List[float], reward_terms: Dict[str, float]
         + w[3] * reward_terms.get("r_safety", 0.0)
         + w[4] * reward_terms.get("r_novelty", 0.0)
     )
-

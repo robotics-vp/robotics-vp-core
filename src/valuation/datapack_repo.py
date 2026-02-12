@@ -36,8 +36,8 @@ class DataPackRepo:
         os.makedirs(base_dir, exist_ok=True)
 
         # In-memory cache (optional, for faster queries)
-        self._cache = {}
-        self._cache_dirty = {}
+        self._cache: Dict[str, List[DataPackMeta]] = {}
+        self._cache_dirty: Dict[str, bool] = {}
 
     def _get_file_path(self, task_name):
         """Get JSONL file path for task."""
@@ -53,8 +53,8 @@ class DataPackRepo:
         file_path = self._get_file_path(datapack.task_name)
 
         # Append to JSONL
-        with open(file_path, 'a') as f:
-            f.write(datapack.to_json() + '\n')
+        with open(file_path, "a") as f:
+            f.write(datapack.to_json() + "\n")
 
         # Invalidate cache
         if datapack.task_name in self._cache:
@@ -68,7 +68,7 @@ class DataPackRepo:
             datapacks: List of DataPackMeta objects
         """
         # Group by task_name
-        by_task = {}
+        by_task: Dict[str, List[DataPackMeta]] = {}
         for dp in datapacks:
             if dp.task_name not in by_task:
                 by_task[dp.task_name] = []
@@ -78,9 +78,9 @@ class DataPackRepo:
         for task_name, task_datapacks in by_task.items():
             file_path = self._get_file_path(task_name)
 
-            with open(file_path, 'a') as f:
+            with open(file_path, "a") as f:
                 for dp in task_datapacks:
-                    f.write(dp.to_json() + '\n')
+                    f.write(dp.to_json() + "\n")
 
             # Invalidate cache
             if task_name in self._cache:
@@ -101,7 +101,7 @@ class DataPackRepo:
         if not os.path.exists(file_path):
             return
 
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -147,7 +147,7 @@ class DataPackRepo:
         include_counterfactual: bool = False,
         include_sima: bool = False,
         sort_by: Optional[str] = None,
-        sort_descending: bool = True
+        sort_descending: bool = True,
     ) -> List[DataPackMeta]:
         """
         Query datapacks with filters.
@@ -246,10 +246,7 @@ class DataPackRepo:
             elif sort_by == "trust_score":
                 results.sort(key=lambda x: x.attribution.trust_score, reverse=sort_descending)
             elif sort_by == "mvd_score":
-                results.sort(
-                    key=lambda x: x.attribution.mvd_score or 0,
-                    reverse=sort_descending
-                )
+                results.sort(key=lambda x: x.attribution.mvd_score or 0, reverse=sort_descending)
             elif sort_by == "created_at":
                 results.sort(key=lambda x: x.created_at, reverse=sort_descending)
 
@@ -268,10 +265,15 @@ class DataPackRepo:
             for dp in datapacks:
                 if not dp.guidance_profile:
                     continue
-                f.write(json.dumps({
-                    "pack_id": dp.pack_id,
-                    "guidance_profile": dp.guidance_profile.to_dict(),
-                }) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "pack_id": dp.pack_id,
+                            "guidance_profile": dp.guidance_profile.to_dict(),
+                        }
+                    )
+                    + "\n"
+                )
 
     def get_positive_for_skill(
         self,
@@ -279,7 +281,7 @@ class DataPackRepo:
         skill_id: int,
         objective_vector: Optional[np.ndarray] = None,
         condition_filters: Optional[Dict[str, Any]] = None,
-        top_k: int = 10
+        top_k: int = 10,
     ) -> List[DataPackMeta]:
         """
         Get top positive datapacks for a specific skill.
@@ -303,7 +305,7 @@ class DataPackRepo:
             min_trust=0.9,
             limit=top_k,
             sort_by="delta_j",
-            sort_descending=True
+            sort_descending=True,
         )
 
     def get_negative_for_skill(
@@ -313,7 +315,7 @@ class DataPackRepo:
         objective_vector: Optional[np.ndarray] = None,
         condition_filters: Optional[Dict[str, Any]] = None,
         top_k: int = 10,
-        require_counterfactual: bool = True
+        require_counterfactual: bool = True,
     ) -> List[DataPackMeta]:
         """
         Get top negative datapacks for a specific skill.
@@ -339,7 +341,7 @@ class DataPackRepo:
             limit=top_k,
             include_counterfactual=require_counterfactual,
             sort_by="delta_j",
-            sort_descending=False  # Most negative first
+            sort_descending=False,  # Most negative first
         )
 
     def get_statistics(self, task_name: str) -> Dict[str, Any]:
@@ -356,9 +358,9 @@ class DataPackRepo:
 
         if not datapacks:
             return {
-                'total': 0,
-                'positive': 0,
-                'negative': 0,
+                "total": 0,
+                "positive": 0,
+                "negative": 0,
             }
 
         positive = [dp for dp in datapacks if dp.bucket == "positive"]
@@ -374,33 +376,33 @@ class DataPackRepo:
             all_skills.update(dp.get_skill_ids())
 
         # Engine types
-        engine_types = {}
+        engine_types: Dict[str, int] = {}
         for dp in datapacks:
             et = dp.condition.engine_type
             engine_types[et] = engine_types.get(et, 0) + 1
 
         # Source types
-        source_types = {}
+        source_types: Dict[str, int] = {}
         for dp in datapacks:
             st = dp.attribution.source_type
             source_types[st] = source_types.get(st, 0) + 1
 
         return {
-            'total': len(datapacks),
-            'positive': len(positive),
-            'negative': len(negative),
-            'positive_ratio': len(positive) / len(datapacks),
-            'delta_j_mean': np.mean(delta_js),
-            'delta_j_std': np.std(delta_js),
-            'delta_j_min': np.min(delta_js),
-            'delta_j_max': np.max(delta_js),
-            'trust_mean': np.mean(trust_scores),
-            'trust_std': np.std(trust_scores),
-            'unique_skills': list(all_skills),
-            'engine_types': engine_types,
-            'source_types': source_types,
-            'with_sima': sum(1 for dp in datapacks if dp.sima_annotation is not None),
-            'with_counterfactual': sum(1 for dp in negative if dp.counterfactual_plan is not None),
+            "total": len(datapacks),
+            "positive": len(positive),
+            "negative": len(negative),
+            "positive_ratio": len(positive) / len(datapacks),
+            "delta_j_mean": np.mean(delta_js),
+            "delta_j_std": np.std(delta_js),
+            "delta_j_min": np.min(delta_js),
+            "delta_j_max": np.max(delta_js),
+            "trust_mean": np.mean(trust_scores),
+            "trust_std": np.std(trust_scores),
+            "unique_skills": list(all_skills),
+            "engine_types": engine_types,
+            "source_types": source_types,
+            "with_sima": sum(1 for dp in datapacks if dp.sima_annotation is not None),
+            "with_counterfactual": sum(1 for dp in negative if dp.counterfactual_plan is not None),
         }
 
     def clear(self, task_name: str):
@@ -431,7 +433,7 @@ class DataPackRepo:
         """
         datapacks = self.load_all(task_name)
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump([dp.to_dict() for dp in datapacks], f, indent=2)
 
     def import_from_json(self, input_path: str):
@@ -441,7 +443,7 @@ class DataPackRepo:
         Args:
             input_path: Input JSON file path
         """
-        with open(input_path, 'r') as f:
+        with open(input_path, "r") as f:
             data = json.load(f)
 
         datapacks = [DataPackMeta.from_dict(d) for d in data]
@@ -456,7 +458,7 @@ class DataPackRepo:
         """
         tasks = []
         for filename in os.listdir(self.base_dir):
-            if filename.endswith('_datapacks.jsonl'):
-                task_name = filename.replace('_datapacks.jsonl', '')
+            if filename.endswith("_datapacks.jsonl"):
+                task_name = filename.replace("_datapacks.jsonl", "")
                 tasks.append(task_name)
         return tasks

@@ -1,12 +1,12 @@
 import json
 import os
-from typing import Dict
+from typing import Any
 
 from src.valuation.datapack_schema import DataPackMeta
 from src.valuation.datapack_repo import DataPackRepo
 
 
-def attach_vla_action_to_datapack(datapack: DataPackMeta, vla_json: Dict[str, any]) -> DataPackMeta:
+def attach_vla_action_to_datapack(datapack: DataPackMeta, vla_json: dict[str, Any]) -> DataPackMeta:
     datapack.vla_action_summary = {
         "has_vla": bool(vla_json.get("action", {}).get("vla_available", False)),
         "instruction": vla_json.get("instruction"),
@@ -26,23 +26,26 @@ def attach_vla_action_to_datapack(datapack: DataPackMeta, vla_json: Dict[str, an
     return datapack
 
 
-def ingest_vla_actions_for_repo(repo: DataPackRepo, vla_results_path: str, output_overlay: str):
+def ingest_vla_actions_for_repo(
+    repo: DataPackRepo, vla_results_path: str, output_overlay: str
+) -> None:
     if not os.path.exists(vla_results_path):
         return
-    overlays = []
+    overlays: list[dict[str, Any]] = []
     with open(vla_results_path, "r") as f:
         data = [json.loads(line) for line in f if line.strip()]
     # Build map for quick lookup
-    id_to_dp = {}
+    id_to_dp: dict[str, DataPackMeta] = {}
     for task in os.listdir(repo.base_dir):
         if not task.endswith(".jsonl"):
             continue
         task_name = task.replace("_datapacks.jsonl", "")
         for dp in repo.iter_all(task_name) or []:
-            id_to_dp[dp.episode_id] = dp
+            if dp.episode_id is not None:
+                id_to_dp[dp.episode_id] = dp
     for rec in data:
         epi = rec.get("episode_id")
-        if epi in id_to_dp:
+        if isinstance(epi, str) and epi in id_to_dp:
             dp = attach_vla_action_to_datapack(id_to_dp[epi], rec)
             overlays.append({"pack_id": dp.pack_id, "vla_action_summary": dp.vla_action_summary})
     if overlays:

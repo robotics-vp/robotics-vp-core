@@ -21,8 +21,9 @@ from src.valuation.guidance_profile import GuidanceProfile
 
 # TYPE_CHECKING import for typed schema (avoid circular import)
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
-    from src.contracts.schemas import RegalAnnotationsV1
+    pass
 
 # Unified schema version - aligns with existing 2.0-energy format
 DATAPACK_SCHEMA_VERSION = "2.0-energy"
@@ -37,6 +38,7 @@ class EnergyProfile:
 
     Captures per-limb, per-skill, per-joint, and per-effector energy usage.
     """
+
     total_Wh: float = 0.0
     Wh_per_unit: float = 0.0
     Wh_per_hour: float = 0.0
@@ -94,6 +96,7 @@ class ConditionProfile:
 
     Engine-aware for multi-world support (PyBullet, Isaac Gym, UE5).
     """
+
     # Task and engine
     task_name: str = "drawer_vase"
     engine_type: Literal["pybullet", "isaac", "ue5"] = "pybullet"
@@ -123,15 +126,15 @@ class ConditionProfile:
         """Convert to dictionary for JSON serialization."""
         d = asdict(self)
         # Convert tuple to list for JSON
-        d['vase_offset'] = list(self.vase_offset)
+        d["vase_offset"] = list(self.vase_offset)
         return d
 
     @classmethod
     def from_dict(cls, d):
         """Create from dictionary."""
         # Convert list back to tuple
-        if 'vase_offset' in d and isinstance(d['vase_offset'], list):
-            d['vase_offset'] = tuple(d['vase_offset'])
+        if "vase_offset" in d and isinstance(d["vase_offset"], list):
+            d["vase_offset"] = tuple(d["vase_offset"])
         return cls(**d)
 
 
@@ -143,6 +146,7 @@ class AttributionProfile:
     Tracks how this data affected key metrics: MPL, error rate, EP, J.
     Includes gating signals (trust, w_econ, λ) and world model metadata.
     """
+
     # Core impact deltas (vs baseline)
     delta_mpl: float = 0.0  # Change in marginal product of labor
     delta_error: float = 0.0  # Change in error rate
@@ -225,6 +229,7 @@ class SimaAnnotation:
     Captures natural language instruction, step-level narrations,
     and derived skill plans for training VLA.
     """
+
     instruction: str = ""  # High-level natural language instruction
     step_narrations: List[str] = field(default_factory=list)  # Per-step narrations
     sima_agent_id: str = "sima_v1"  # Which SIMA model/config
@@ -253,9 +258,9 @@ class SimaAnnotation:
         """Compute narration statistics."""
         self.narration_count = len(self.step_narrations)
         if self.step_narrations:
-            self.average_narration_length = sum(
-                len(n) for n in self.step_narrations
-            ) / len(self.step_narrations)
+            self.average_narration_length = sum(len(n) for n in self.step_narrations) / len(
+                self.step_narrations
+            )
 
 
 @dataclass
@@ -269,6 +274,7 @@ class ProcessRewardProfile:
     - Sampling weight computation
     - Data quality analysis
     """
+
     # Core PBRS metrics
     phi_star_mean: float = 0.0  # Mean fused potential
     phi_star_final: float = 0.0  # Final potential value
@@ -417,6 +423,7 @@ class EmbodimentProfileSummary:
     Captures contact/affordance diagnostics, drift signals, and pointers
     to embodiment artifacts produced downstream of SceneTracks/MHN/SemFusion.
     """
+
     w_embodiment: float = 1.0
     embodiment_quality_score: float = 1.0
     trust_override_candidate: bool = False
@@ -461,6 +468,7 @@ class ObjectiveProfile:
 
     This is the bridge to programmable objectives and DL econ hyperparameters.
     """
+
     # Objective vector (what the system was optimizing for)
     objective_vector: List[float] = field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0, 0.0])
     # [w_mpl, w_error, w_energy, w_safety, w_novelty]
@@ -506,7 +514,9 @@ class ObjectiveProfile:
 
     def summary(self) -> str:
         """Get human-readable summary."""
-        deltas_str = "none" if not self.econ_profile_deltas else f"{len(self.econ_profile_deltas)} deltas"
+        deltas_str = (
+            "none" if not self.econ_profile_deltas else f"{len(self.econ_profile_deltas)} deltas"
+        )
         return (
             f"ObjectiveProfile[{self.task_family}/{self.env_name}/{self.engine_type}] "
             f"obj={self.objective_vector[:4]} | "
@@ -526,6 +536,7 @@ class DataPackMeta:
     - positive: Data that improved J/MPL/error/EP
     - negative: Data that worsened J/MPL/error/EP (with counterfactual plan)
     """
+
     # Schema version (unified with existing 2.0-energy format)
     schema_version: str = DATAPACK_SCHEMA_VERSION
 
@@ -656,121 +667,129 @@ class DataPackMeta:
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         d = {
-            'schema_version': self.schema_version,
-            'pack_id': self.pack_id,
-            'task_name': self.task_name,
-            'env_type': self.env_type,
-            'brick_id': self.brick_id,
-            'bucket': self.bucket,
-            'semantic_tags': self.semantic_tags,
-            'econ_semantic_tags': self.econ_semantic_tags,
-            'semantic_quality': self.semantic_quality,
-            'energy_driver_tags': self.energy_driver_tags,
-            'condition': self.condition.to_dict(),
-            'attribution': self.attribution.to_dict(),
-            'energy': self.energy.to_dict(),
-            'agent_profile': to_json_safe(self.agent_profile),
-            'skill_trace': to_json_safe(self.skill_trace),
-            'episode_metrics': to_json_safe(self.episode_metrics),
-            'sima_annotation': self.sima_annotation.to_dict() if self.sima_annotation else None,
-            'vla_plan': to_json_safe(self.vla_plan),
-            'objective_profile': self.objective_profile.to_dict() if self.objective_profile else None,
-            'process_reward_profile': self.process_reward_profile.to_dict() if self.process_reward_profile else None,
-            'embodiment_profile': self.embodiment_profile.to_dict() if self.embodiment_profile else None,
-            'counterfactual_plan': to_json_safe(self.counterfactual_plan),
-            'counterfactual_source': self.counterfactual_source,
-            'created_at': self.created_at,
-            'episode_id': self.episode_id,
-            'episode_index': self.episode_index,
-            'raw_data_path': self.raw_data_path,
-            'scene_tracks_v1': to_json_safe(self.scene_tracks_v1),
-            'rgb_features_v1': to_json_safe(self.rgb_features_v1),
-            'slice_labels_v1': to_json_safe(self.slice_labels_v1),
-            'repr_tokens': to_json_safe(self.repr_tokens),
-            'guidance_profile': self.guidance_profile.to_dict() if self.guidance_profile else None,
-            'vla_action_summary': to_json_safe(self.vla_action_summary),
-            'episode_embedding': to_json_safe(self.episode_embedding),
-            'epiplexity': to_json_safe(self.epiplexity),
-            'epiplexity_summary': to_json_safe(self.epiplexity_summary),
-            'signal_bundle': to_json_safe(self.signal_bundle),
-            'graph_summary_v1': to_json_safe(self.graph_summary_v1),
-            'econ_tensor_v1': to_json_safe(self.econ_tensor_v1),
-            'objective_tensor_v1': to_json_safe(self.objective_tensor_v1),
-            'regal_annotations': to_json_safe(self.regal_annotations),
-            'regal_annotations_sha': self.regal_annotations_sha,
+            "schema_version": self.schema_version,
+            "pack_id": self.pack_id,
+            "task_name": self.task_name,
+            "env_type": self.env_type,
+            "brick_id": self.brick_id,
+            "bucket": self.bucket,
+            "semantic_tags": self.semantic_tags,
+            "econ_semantic_tags": self.econ_semantic_tags,
+            "semantic_quality": self.semantic_quality,
+            "energy_driver_tags": self.energy_driver_tags,
+            "condition": self.condition.to_dict(),
+            "attribution": self.attribution.to_dict(),
+            "energy": self.energy.to_dict(),
+            "agent_profile": to_json_safe(self.agent_profile),
+            "skill_trace": to_json_safe(self.skill_trace),
+            "episode_metrics": to_json_safe(self.episode_metrics),
+            "sima_annotation": self.sima_annotation.to_dict() if self.sima_annotation else None,
+            "vla_plan": to_json_safe(self.vla_plan),
+            "objective_profile": self.objective_profile.to_dict()
+            if self.objective_profile
+            else None,
+            "process_reward_profile": self.process_reward_profile.to_dict()
+            if self.process_reward_profile
+            else None,
+            "embodiment_profile": self.embodiment_profile.to_dict()
+            if self.embodiment_profile
+            else None,
+            "counterfactual_plan": to_json_safe(self.counterfactual_plan),
+            "counterfactual_source": self.counterfactual_source,
+            "created_at": self.created_at,
+            "episode_id": self.episode_id,
+            "episode_index": self.episode_index,
+            "raw_data_path": self.raw_data_path,
+            "scene_tracks_v1": to_json_safe(self.scene_tracks_v1),
+            "rgb_features_v1": to_json_safe(self.rgb_features_v1),
+            "slice_labels_v1": to_json_safe(self.slice_labels_v1),
+            "repr_tokens": to_json_safe(self.repr_tokens),
+            "guidance_profile": self.guidance_profile.to_dict() if self.guidance_profile else None,
+            "vla_action_summary": to_json_safe(self.vla_action_summary),
+            "episode_embedding": to_json_safe(self.episode_embedding),
+            "epiplexity": to_json_safe(self.epiplexity),
+            "epiplexity_summary": to_json_safe(self.epiplexity_summary),
+            "signal_bundle": to_json_safe(self.signal_bundle),
+            "graph_summary_v1": to_json_safe(self.graph_summary_v1),
+            "econ_tensor_v1": to_json_safe(self.econ_tensor_v1),
+            "objective_tensor_v1": to_json_safe(self.objective_tensor_v1),
+            "regal_annotations": to_json_safe(self.regal_annotations),
+            "regal_annotations_sha": self.regal_annotations_sha,
         }
         return to_json_safe(d)
 
     @classmethod
     def from_dict(cls, d):
         """Create from dictionary."""
-        condition = ConditionProfile.from_dict(d.get('condition', {}))
-        attribution = AttributionProfile.from_dict(d.get('attribution', {}))
+        condition = ConditionProfile.from_dict(d.get("condition", {}))
+        attribution = AttributionProfile.from_dict(d.get("attribution", {}))
 
         # Handle energy profile (new in unified schema)
         energy = EnergyProfile()
-        if 'energy' in d:
-            energy = EnergyProfile.from_dict(d['energy'])
+        if "energy" in d:
+            energy = EnergyProfile.from_dict(d["energy"])
 
         sima_annotation = None
-        if d.get('sima_annotation'):
-            sima_annotation = SimaAnnotation.from_dict(d['sima_annotation'])
+        if d.get("sima_annotation"):
+            sima_annotation = SimaAnnotation.from_dict(d["sima_annotation"])
 
         objective_profile = None
-        if d.get('objective_profile'):
-            objective_profile = ObjectiveProfile.from_dict(d['objective_profile'])
+        if d.get("objective_profile"):
+            objective_profile = ObjectiveProfile.from_dict(d["objective_profile"])
 
         process_reward_profile = None
-        if d.get('process_reward_profile'):
-            process_reward_profile = ProcessRewardProfile.from_dict(d['process_reward_profile'])
+        if d.get("process_reward_profile"):
+            process_reward_profile = ProcessRewardProfile.from_dict(d["process_reward_profile"])
 
         embodiment_profile = None
-        if d.get('embodiment_profile'):
-            embodiment_profile = EmbodimentProfileSummary.from_dict(d['embodiment_profile'])
+        if d.get("embodiment_profile"):
+            embodiment_profile = EmbodimentProfileSummary.from_dict(d["embodiment_profile"])
 
         return cls(
-            schema_version=d.get('schema_version', DATAPACK_SCHEMA_VERSION),
-            pack_id=d.get('pack_id', str(uuid.uuid4())),
-            task_name=d.get('task_name', 'drawer_vase'),
-            env_type=d.get('env_type', d.get('task_name', 'drawer_vase')),
-            brick_id=d.get('brick_id'),
-            bucket=d.get('bucket', 'positive'),
-            semantic_tags=d.get('semantic_tags', []),
-            econ_semantic_tags=d.get('econ_semantic_tags'),
-            semantic_quality=d.get('semantic_quality'),
-            energy_driver_tags=d.get('energy_driver_tags', []),
+            schema_version=d.get("schema_version", DATAPACK_SCHEMA_VERSION),
+            pack_id=d.get("pack_id", str(uuid.uuid4())),
+            task_name=d.get("task_name", "drawer_vase"),
+            env_type=d.get("env_type", d.get("task_name", "drawer_vase")),
+            brick_id=d.get("brick_id"),
+            bucket=d.get("bucket", "positive"),
+            semantic_tags=d.get("semantic_tags", []),
+            econ_semantic_tags=d.get("econ_semantic_tags"),
+            semantic_quality=d.get("semantic_quality"),
+            energy_driver_tags=d.get("energy_driver_tags", []),
             condition=condition,
             attribution=attribution,
             energy=energy,
-            agent_profile=d.get('agent_profile', {}),
-            skill_trace=d.get('skill_trace', []),
-            episode_metrics=d.get('episode_metrics', {}),
+            agent_profile=d.get("agent_profile", {}),
+            skill_trace=d.get("skill_trace", []),
+            episode_metrics=d.get("episode_metrics", {}),
             sima_annotation=sima_annotation,
-            vla_plan=d.get('vla_plan'),
+            vla_plan=d.get("vla_plan"),
             objective_profile=objective_profile,
             process_reward_profile=process_reward_profile,
             embodiment_profile=embodiment_profile,
-            counterfactual_plan=d.get('counterfactual_plan'),
-            counterfactual_source=d.get('counterfactual_source'),
-            created_at=d.get('created_at', datetime.now().isoformat()),
-            episode_id=d.get('episode_id'),
-            episode_index=d.get('episode_index'),
-            raw_data_path=d.get('raw_data_path'),
-            scene_tracks_v1=d.get('scene_tracks_v1'),
-            rgb_features_v1=d.get('rgb_features_v1'),
-            slice_labels_v1=d.get('slice_labels_v1'),
-            repr_tokens=d.get('repr_tokens'),
-            guidance_profile=GuidanceProfile.from_dict(d['guidance_profile']) if d.get('guidance_profile') else None,
-            vla_action_summary=d.get('vla_action_summary'),
-            episode_embedding=d.get('episode_embedding'),
-            epiplexity=d.get('epiplexity'),
-            epiplexity_summary=d.get('epiplexity_summary'),
-            signal_bundle=d.get('signal_bundle'),
-            graph_summary_v1=d.get('graph_summary_v1'),
-            econ_tensor_v1=d.get('econ_tensor_v1'),
-            objective_tensor_v1=d.get('objective_tensor_v1'),
-            regal_annotations=d.get('regal_annotations'),
-            regal_annotations_sha=d.get('regal_annotations_sha'),
+            counterfactual_plan=d.get("counterfactual_plan"),
+            counterfactual_source=d.get("counterfactual_source"),
+            created_at=d.get("created_at", datetime.now().isoformat()),
+            episode_id=d.get("episode_id"),
+            episode_index=d.get("episode_index"),
+            raw_data_path=d.get("raw_data_path"),
+            scene_tracks_v1=d.get("scene_tracks_v1"),
+            rgb_features_v1=d.get("rgb_features_v1"),
+            slice_labels_v1=d.get("slice_labels_v1"),
+            repr_tokens=d.get("repr_tokens"),
+            guidance_profile=GuidanceProfile.from_dict(d["guidance_profile"])
+            if d.get("guidance_profile")
+            else None,
+            vla_action_summary=d.get("vla_action_summary"),
+            episode_embedding=d.get("episode_embedding"),
+            epiplexity=d.get("epiplexity"),
+            epiplexity_summary=d.get("epiplexity_summary"),
+            signal_bundle=d.get("signal_bundle"),
+            graph_summary_v1=d.get("graph_summary_v1"),
+            econ_tensor_v1=d.get("econ_tensor_v1"),
+            objective_tensor_v1=d.get("objective_tensor_v1"),
+            regal_annotations=d.get("regal_annotations"),
+            regal_annotations_sha=d.get("regal_annotations_sha"),
         )
 
     @classmethod
@@ -781,64 +800,64 @@ class DataPackMeta:
         This is the format produced by build_datapack_from_episode() in datapacks.py.
         """
         # Extract episode metrics
-        episode_metrics = legacy_dict.get('episode_metrics', {})
+        episode_metrics = legacy_dict.get("episode_metrics", {})
 
         # Extract condition profile from legacy format
-        legacy_condition = legacy_dict.get('condition_profile', {})
+        legacy_condition = legacy_dict.get("condition_profile", {})
         condition = ConditionProfile(
-            task_name=legacy_dict.get('env_type', 'drawer_vase'),
-            engine_type=legacy_condition.get('engine_type', 'pybullet'),
-            world_id=legacy_condition.get('world_id', 'pyb_drawer_v1'),
-            econ_preset=legacy_dict.get('econ_params', {}).get('preset', 'drawer_vase'),
-            price_per_unit=legacy_dict.get('econ_params', {}).get('price_per_unit', 5.0),
-            energy_price_kWh=legacy_dict.get('econ_params', {}).get('energy_price_kWh', 0.12),
+            task_name=legacy_dict.get("env_type", "drawer_vase"),
+            engine_type=legacy_condition.get("engine_type", "pybullet"),
+            world_id=legacy_condition.get("world_id", "pyb_drawer_v1"),
+            econ_preset=legacy_dict.get("econ_params", {}).get("preset", "drawer_vase"),
+            price_per_unit=legacy_dict.get("econ_params", {}).get("price_per_unit", 5.0),
+            energy_price_kWh=legacy_dict.get("econ_params", {}).get("energy_price_kWh", 0.12),
             tags=legacy_condition,
         )
 
         # Extract attribution from legacy format
-        legacy_attribution = legacy_dict.get('attribution', {})
+        legacy_attribution = legacy_dict.get("attribution", {})
         attribution = AttributionProfile(
-            delta_mpl=legacy_attribution.get('delta_mpl', 0.0),
-            delta_error=legacy_attribution.get('delta_error', 0.0),
-            delta_ep=legacy_attribution.get('delta_ep', 0.0),
-            trust_score=legacy_attribution.get('trust', 0.0),
-            w_econ=legacy_attribution.get('econ_weight', 0.0) or 0.0,
+            delta_mpl=legacy_attribution.get("delta_mpl", 0.0),
+            delta_error=legacy_attribution.get("delta_error", 0.0),
+            delta_ep=legacy_attribution.get("delta_ep", 0.0),
+            trust_score=legacy_attribution.get("trust", 0.0),
+            w_econ=legacy_attribution.get("econ_weight", 0.0) or 0.0,
         )
 
         # Extract energy profile from legacy format
-        legacy_energy = legacy_dict.get('energy', {})
+        legacy_energy = legacy_dict.get("energy", {})
         energy = EnergyProfile(
-            total_Wh=legacy_energy.get('total_Wh', 0.0),
-            Wh_per_unit=legacy_energy.get('Wh_per_unit', 0.0),
-            Wh_per_hour=legacy_energy.get('Wh_per_hour', 0.0),
-            energy_per_limb=legacy_energy.get('energy_per_limb', {}),
-            energy_per_skill=legacy_energy.get('energy_per_skill', {}),
-            energy_per_joint=legacy_energy.get('energy_per_joint', {}),
-            energy_per_effector=legacy_energy.get('energy_per_effector', {}),
-            coordination_metrics=legacy_energy.get('coordination_metrics', {}),
-            limb_energy_Wh=legacy_energy.get('limb_energy_Wh', {}),
-            skill_energy_Wh=legacy_energy.get('skill_energy_Wh', {}),
+            total_Wh=legacy_energy.get("total_Wh", 0.0),
+            Wh_per_unit=legacy_energy.get("Wh_per_unit", 0.0),
+            Wh_per_hour=legacy_energy.get("Wh_per_hour", 0.0),
+            energy_per_limb=legacy_energy.get("energy_per_limb", {}),
+            energy_per_skill=legacy_energy.get("energy_per_skill", {}),
+            energy_per_joint=legacy_energy.get("energy_per_joint", {}),
+            energy_per_effector=legacy_energy.get("energy_per_effector", {}),
+            coordination_metrics=legacy_energy.get("coordination_metrics", {}),
+            limb_energy_Wh=legacy_energy.get("limb_energy_Wh", {}),
+            skill_energy_Wh=legacy_energy.get("skill_energy_Wh", {}),
         )
 
         # Determine bucket based on delta_J or defaults
-        delta_j = legacy_attribution.get('delta_J', legacy_attribution.get('delta_mpl', 0.0))
-        bucket = "positive" if delta_j >= 0 else "negative"
+        delta_j = legacy_attribution.get("delta_J", legacy_attribution.get("delta_mpl", 0.0))
+        bucket: Literal["positive", "negative"] = "positive" if delta_j >= 0 else "negative"
 
         return cls(
-            schema_version=legacy_dict.get('schema_version', DATAPACK_SCHEMA_VERSION),
-            pack_id=legacy_dict.get('brick_id', str(uuid.uuid4())),
-            task_name=legacy_dict.get('env_type', 'drawer_vase'),
-            env_type=legacy_dict.get('env_type', 'drawer_vase'),
-            brick_id=legacy_dict.get('brick_id'),
+            schema_version=legacy_dict.get("schema_version", DATAPACK_SCHEMA_VERSION),
+            pack_id=legacy_dict.get("brick_id", str(uuid.uuid4())),
+            task_name=legacy_dict.get("env_type", "drawer_vase"),
+            env_type=legacy_dict.get("env_type", "drawer_vase"),
+            brick_id=legacy_dict.get("brick_id"),
             bucket=bucket,
-            semantic_tags=legacy_dict.get('tags', []),
-            econ_semantic_tags=legacy_dict.get('econ_semantic_tags'),
-            semantic_quality=legacy_dict.get('semantic_quality'),
-            energy_driver_tags=legacy_dict.get('semantic_energy_drivers', []),
+            semantic_tags=legacy_dict.get("tags", []),
+            econ_semantic_tags=legacy_dict.get("econ_semantic_tags"),
+            semantic_quality=legacy_dict.get("semantic_quality"),
+            energy_driver_tags=legacy_dict.get("semantic_energy_drivers", []),
             condition=condition,
             attribution=attribution,
             energy=energy,
-            agent_profile=legacy_dict.get('agent_profile', {}),
+            agent_profile=legacy_dict.get("agent_profile", {}),
             skill_trace=[],
             episode_metrics=episode_metrics,
             sima_annotation=None,
@@ -846,7 +865,7 @@ class DataPackMeta:
             counterfactual_plan=None,
             counterfactual_source=None,
             created_at=datetime.now().isoformat(),
-            episode_id=legacy_dict.get('brick_id'),
+            episode_id=legacy_dict.get("brick_id"),
             episode_index=None,
             raw_data_path=None,
         )
@@ -858,38 +877,40 @@ class DataPackMeta:
         For backwards compatibility with existing scripts.
         """
         return {
-            'schema_version': self.schema_version,
-            'env_type': self.env_type,
-            'brick_id': self.brick_id or self.pack_id,
-            'episode_metrics': self.episode_metrics,
-            'econ_params': {
-                'price_per_unit': self.condition.price_per_unit,
-                'damage_cost': self.condition.vase_break_cost,
-                'energy_Wh_per_attempt': self.condition.energy_price_kWh,
-                'time_step_s': 0.01,
-                'max_steps': 1000,
-                'preset': self.condition.econ_preset,
+            "schema_version": self.schema_version,
+            "env_type": self.env_type,
+            "brick_id": self.brick_id or self.pack_id,
+            "episode_metrics": self.episode_metrics,
+            "econ_params": {
+                "price_per_unit": self.condition.price_per_unit,
+                "damage_cost": self.condition.vase_break_cost,
+                "energy_Wh_per_attempt": self.condition.energy_price_kWh,
+                "time_step_s": 0.01,
+                "max_steps": 1000,
+                "preset": self.condition.econ_preset,
             },
-            'condition_profile': self.condition.tags,
-            'agent_profile': self.agent_profile,
-            'tags': self.semantic_tags,
-            'attribution': {
-                'delta_mpl': self.attribution.delta_mpl,
-                'delta_error': self.attribution.delta_error,
-                'delta_ep': self.attribution.delta_ep,
-                'novelty': None,
-                'trust': self.attribution.trust_score,
-                'econ_weight': self.attribution.w_econ,
+            "condition_profile": self.condition.tags,
+            "agent_profile": self.agent_profile,
+            "tags": self.semantic_tags,
+            "attribution": {
+                "delta_mpl": self.attribution.delta_mpl,
+                "delta_error": self.attribution.delta_error,
+                "delta_ep": self.attribution.delta_ep,
+                "novelty": None,
+                "trust": self.attribution.trust_score,
+                "econ_weight": self.attribution.w_econ,
             },
-            'energy': self.energy.to_dict(),
-            'semantic_energy_drivers': self.energy_driver_tags,
+            "energy": self.energy.to_dict(),
+            "semantic_energy_drivers": self.energy_driver_tags,
         }
 
     def to_json(self):
         """Convert to JSON string."""
+
         def _convert_numpy(obj):
             """Recursively convert numpy types to Python natives."""
             import numpy as np
+
             if isinstance(obj, np.generic):
                 return obj.item()
             if isinstance(obj, dict):
@@ -909,7 +930,7 @@ class DataPackMeta:
 
     def get_skill_ids(self):
         """Extract skill ID sequence from skill trace."""
-        return [entry['skill_id'] for entry in self.skill_trace]
+        return [entry["skill_id"] for entry in self.skill_trace]
 
     def has_skill(self, skill_id):
         """Check if a specific skill was used."""
@@ -917,7 +938,7 @@ class DataPackMeta:
 
     def get_total_duration(self):
         """Get total duration of skill trace."""
-        return sum(entry.get('duration', 0) for entry in self.skill_trace)
+        return sum(entry.get("duration", 0) for entry in self.skill_trace)
 
     def matches_condition_filters(self, filters):
         """
@@ -939,12 +960,12 @@ class DataPackMeta:
                 if key not in self.semantic_tags:
                     return False
             # Check numeric thresholds
-            elif key.endswith('_min'):
+            elif key.endswith("_min"):
                 attr_name = key[:-4]
                 if hasattr(self.condition, attr_name):
                     if getattr(self.condition, attr_name) < value:
                         return False
-            elif key.endswith('_max'):
+            elif key.endswith("_max"):
                 attr_name = key[:-4]
                 if hasattr(self.condition, attr_name):
                     if getattr(self.condition, attr_name) > value:
@@ -976,7 +997,7 @@ def create_positive_datapack(
     skill_trace,
     semantic_tags=None,
     sima_annotation=None,
-    episode_id=None
+    episode_id=None,
 ):
     """
     Factory function to create a positive datapack.
@@ -1001,7 +1022,7 @@ def create_positive_datapack(
         skill_trace=skill_trace,
         semantic_tags=semantic_tags or [],
         sima_annotation=sima_annotation,
-        episode_id=episode_id
+        episode_id=episode_id,
     )
 
 
@@ -1014,7 +1035,7 @@ def create_negative_datapack(
     counterfactual_source,
     semantic_tags=None,
     sima_annotation=None,
-    episode_id=None
+    episode_id=None,
 ):
     """
     Factory function to create a negative datapack with counterfactual.
@@ -1043,5 +1064,5 @@ def create_negative_datapack(
         counterfactual_source=counterfactual_source,
         semantic_tags=semantic_tags or [],
         sima_annotation=sima_annotation,
-        episode_id=episode_id
+        episode_id=episode_id,
     )

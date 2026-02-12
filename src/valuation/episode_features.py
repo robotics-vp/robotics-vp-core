@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Tuple
+from typing import Optional
 
 from src.envs.dishwashing_env import EpisodeInfoSummary
 from src.config.econ_params import EconParams
@@ -44,12 +44,12 @@ def make_episode_feature_vector(
     baseline_mpl = baseline.mpl_episode if baseline else None
     baseline_ep = baseline.ep_episode if baseline else None
     baseline_err = baseline.error_rate_episode if baseline else econ.max_error_rate_sla
-    baseline_energy_unit = (
-        baseline.energy_Wh_per_unit if baseline else econ.energy_Wh_per_attempt
-    )
+    baseline_energy_unit = baseline.energy_Wh_per_unit if baseline else econ.energy_Wh_per_attempt
 
     # Defaults to own value if no baseline provided
-    mpl_norm = summary.mpl_episode / max(1e-6, baseline_mpl if baseline_mpl else summary.mpl_episode or 1e-6)
+    mpl_norm = summary.mpl_episode / max(
+        1e-6, baseline_mpl if baseline_mpl else summary.mpl_episode or 1e-6
+    )
 
     # Energy productivity (units per Wh)
     default_ep_baseline = 1.0 / max(econ.energy_Wh_per_attempt, 1e-6)
@@ -84,15 +84,18 @@ def make_episode_feature_vector(
     ]
     driver_hot = [1.0 if d in drivers else 0.0 for d in driver_order]
 
-    features = np.array([
-        mpl_norm,
-        ep_norm,
-        err_norm,
-        energy_norm,
-        wage_parity,
-        *limb_fractions,
-        *driver_hot,
-    ], dtype=np.float32)
+    features = np.array(
+        [
+            mpl_norm,
+            ep_norm,
+            err_norm,
+            energy_norm,
+            wage_parity,
+            *limb_fractions,
+            *driver_hot,
+        ],
+        dtype=np.float32,
+    )
 
     return np.concatenate([features, term_one_hot])
 
@@ -158,21 +161,24 @@ def make_datapack_feature_vector(
     elif datapack.attribution.source_type == "hybrid":
         source_type_onehot[2] = 1.0
 
-    features = np.array([
-        delta_mpl_norm,
-        delta_error_norm,
-        delta_ep_norm,
-        delta_j_norm,
-        trust_score,
-        w_econ,
-        lambda_budget_norm,
-        bucket_is_positive,
-        has_counterfactual,
-        has_sima,
-        n_skills_norm,
-        total_duration_norm,
-        *source_type_onehot,
-    ], dtype=np.float32)
+    features = np.array(
+        [
+            delta_mpl_norm,
+            delta_error_norm,
+            delta_ep_norm,
+            delta_j_norm,
+            trust_score,
+            w_econ,
+            lambda_budget_norm,
+            bucket_is_positive,
+            has_counterfactual,
+            has_sima,
+            n_skills_norm,
+            total_duration_norm,
+            *source_type_onehot,
+        ],
+        dtype=np.float32,
+    )
 
     return features
 
@@ -226,13 +232,15 @@ def make_condition_feature_vector(condition) -> np.ndarray:
     elif condition.engine_type == "ue5":
         engine_onehot[2] = 1.0
 
-    features = np.concatenate([
-        vase_offset_norm,
-        [friction, occlusion],
-        lighting_onehot,
-        obj_vec,
-        engine_onehot,
-    ]).astype(np.float32)
+    features = np.concatenate(
+        [
+            vase_offset_norm,
+            [friction, occlusion],
+            lighting_onehot,
+            obj_vec,
+            engine_onehot,
+        ]
+    ).astype(np.float32)
 
     return features
 
@@ -279,12 +287,12 @@ def extract_skill_sequence_features(datapack, num_skills: int = 6) -> np.ndarray
     skill_durations = np.zeros(num_skills, dtype=np.float32)
 
     for i, entry in enumerate(datapack.skill_trace):
-        skill_id = entry.get('skill_id', 0)
+        skill_id = entry.get("skill_id", 0)
         if 0 <= skill_id < num_skills:
             skill_usage[skill_id] += 1
             if skill_order[skill_id] == 0:
                 skill_order[skill_id] = i + 1  # First occurrence position
-            skill_durations[skill_id] += entry.get('duration', 0)
+            skill_durations[skill_id] += entry.get("duration", 0)
 
     # Normalize
     skill_usage = skill_usage / max(len(datapack.skill_trace), 1)

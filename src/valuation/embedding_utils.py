@@ -9,14 +9,14 @@ These are additive helpers - no changes to Phase B math or RL training loops.
 """
 
 import numpy as np
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Tuple, Dict
 
 
 def compute_embedding_novelty(
     embedding: np.ndarray,
     reference_embeddings: List[np.ndarray],
     k: int = 5,
-    method: str = "mean_k_nearest"
+    method: str = "mean_k_nearest",
 ) -> float:
     """
     Compute novelty score for an embedding relative to reference set.
@@ -41,23 +41,23 @@ def compute_embedding_novelty(
         return 1.0
 
     # Compute distances to all reference embeddings
-    distances = []
+    distances: List[float] = []
     for ref_emb in reference_embeddings:
-        dist = np.linalg.norm(embedding - ref_emb)
+        dist = float(np.linalg.norm(embedding - ref_emb))
         distances.append(dist)
 
-    distances = np.array(distances)
+    distances_arr = np.asarray(distances, dtype=float)
 
     if method == "mean_k_nearest":
-        k_actual = min(k, len(distances))
-        k_nearest = np.sort(distances)[:k_actual]
+        k_actual = min(k, len(distances_arr))
+        k_nearest = np.sort(distances_arr)[:k_actual]
         novelty = float(np.mean(k_nearest))
 
     elif method == "min_distance":
-        novelty = float(np.min(distances))
+        novelty = float(np.min(distances_arr))
 
     elif method == "percentile_10":
-        novelty = float(np.percentile(distances, 10))
+        novelty = float(np.percentile(distances_arr, 10))
 
     else:
         raise ValueError(f"Unknown novelty method: {method}")
@@ -66,9 +66,7 @@ def compute_embedding_novelty(
 
 
 def compute_embedding_similarity(
-    embedding1: np.ndarray,
-    embedding2: np.ndarray,
-    method: str = "cosine"
+    embedding1: np.ndarray, embedding2: np.ndarray, method: str = "cosine"
 ) -> float:
     """
     Compute similarity between two embeddings.
@@ -103,8 +101,7 @@ def compute_embedding_similarity(
 
 
 def compute_regime_cluster(
-    embedding: np.ndarray,
-    regime_centroids: Dict[str, np.ndarray]
+    embedding: np.ndarray, regime_centroids: Dict[str, np.ndarray]
 ) -> Tuple[str, float]:
     """
     Assign embedding to nearest regime cluster.
@@ -125,13 +122,13 @@ def compute_regime_cluster(
         return "unknown", 0.0
 
     # Compute distances to each regime centroid
-    distances = {}
+    distances: Dict[str, float] = {}
     for regime_name, centroid in regime_centroids.items():
-        dist = np.linalg.norm(embedding - centroid)
+        dist = float(np.linalg.norm(embedding - centroid))
         distances[regime_name] = dist
 
     # Find closest regime
-    closest_regime = min(distances, key=distances.get)
+    closest_regime = min(distances, key=distances.__getitem__)
     min_dist = distances[closest_regime]
 
     # Compute confidence as inverse of distance (normalized)
@@ -148,8 +145,7 @@ def compute_regime_cluster(
 
 
 def build_regime_centroids_from_embeddings(
-    embeddings: List[np.ndarray],
-    labels: List[str]
+    embeddings: List[np.ndarray], labels: List[str]
 ) -> Dict[str, np.ndarray]:
     """
     Build regime centroids from labeled embeddings.
@@ -165,7 +161,7 @@ def build_regime_centroids_from_embeddings(
         raise ValueError("Embeddings and labels must have same length")
 
     # Group embeddings by label
-    regime_groups = {}
+    regime_groups: Dict[str, List[np.ndarray]] = {}
     for emb, label in zip(embeddings, labels):
         if label not in regime_groups:
             regime_groups[label] = []
@@ -180,10 +176,7 @@ def build_regime_centroids_from_embeddings(
 
 
 def cluster_embeddings_kmeans(
-    embeddings: List[np.ndarray],
-    n_clusters: int = 3,
-    max_iters: int = 100,
-    seed: int = 42
+    embeddings: List[np.ndarray], n_clusters: int = 3, max_iters: int = 100, seed: int = 42
 ) -> Tuple[List[int], Dict[int, np.ndarray]]:
     """
     Simple K-means clustering for regime discovery.
@@ -216,29 +209,29 @@ def cluster_embeddings_kmeans(
     indices = np.random.choice(len(embeddings), n_clusters, replace=False)
     centroids_array = embeddings_array[indices].copy()
 
-    assignments = np.zeros(len(embeddings), dtype=int)
+    assignments_arr = np.zeros(len(embeddings), dtype=int)
 
     for iteration in range(max_iters):
         # Assignment step: assign each embedding to nearest centroid
-        old_assignments = assignments.copy()
+        old_assignments = assignments_arr.copy()
         for i, emb in enumerate(embeddings_array):
             distances = np.linalg.norm(centroids_array - emb, axis=1)
-            assignments[i] = np.argmin(distances)
+            assignments_arr[i] = int(np.argmin(distances))
 
         # Check for convergence
-        if np.all(assignments == old_assignments):
+        if np.all(assignments_arr == old_assignments):
             break
 
         # Update step: recompute centroids
         for k in range(n_clusters):
-            cluster_members = embeddings_array[assignments == k]
+            cluster_members = embeddings_array[assignments_arr == k]
             if len(cluster_members) > 0:
                 centroids_array[k] = np.mean(cluster_members, axis=0)
 
     # Convert to dict format
     centroids_dict = {k: centroids_array[k] for k in range(n_clusters)}
 
-    return assignments.tolist(), centroids_dict
+    return assignments_arr.tolist(), centroids_dict
 
 
 def compute_embedding_statistics(embeddings: List[np.ndarray]) -> Dict[str, float]:

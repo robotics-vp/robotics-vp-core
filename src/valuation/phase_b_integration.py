@@ -4,13 +4,13 @@ Phase B Integration with DataPack Repository.
 Hooks Phase B scripts (trust_net, w_econ_lattice, λ-controller) into DataPackRepo.
 """
 
-import os
 import json
+import os
 import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, cast
 
 from .datapack_repo import DataPackRepo
-from .datapack_schema import DataPackMeta, AttributionProfile
+from .datapack_schema import DataPackMeta
 
 
 class PhaseBDataPackIntegration:
@@ -25,11 +25,7 @@ class PhaseBDataPackIntegration:
     """
 
     def __init__(
-        self,
-        repo: DataPackRepo,
-        trust_net=None,
-        w_econ_lattice=None,
-        lambda_controller=None
+        self, repo: DataPackRepo, trust_net=None, w_econ_lattice=None, lambda_controller=None
     ):
         """
         Args:
@@ -44,10 +40,7 @@ class PhaseBDataPackIntegration:
         self.lambda_controller = lambda_controller
 
     def enrich_with_phase_b_scores(
-        self,
-        task_name: str,
-        episode_features: Optional[np.ndarray] = None,
-        batch_size: int = 100
+        self, task_name: str, episode_features: Optional[np.ndarray] = None, batch_size: int = 100
     ) -> int:
         """
         Enrich existing datapacks with Phase B scores (trust, w_econ).
@@ -71,7 +64,7 @@ class PhaseBDataPackIntegration:
         updated_count = 0
 
         for i in range(0, len(datapacks), batch_size):
-            batch = datapacks[i:i + batch_size]
+            batch = datapacks[i : i + batch_size]
 
             # Compute trust scores
             if self.trust_net is not None:
@@ -98,9 +91,7 @@ class PhaseBDataPackIntegration:
         return updated_count
 
     def _compute_trust_scores(
-        self,
-        datapacks: List[DataPackMeta],
-        episode_features: Optional[np.ndarray] = None
+        self, datapacks: List[DataPackMeta], episode_features: Optional[np.ndarray] = None
     ) -> List[float]:
         """Compute trust scores for batch of datapacks."""
         if self.trust_net is None:
@@ -117,10 +108,11 @@ class PhaseBDataPackIntegration:
 
             # Compute trust score
             try:
-                if hasattr(self.trust_net, 'score_episode'):
+                if hasattr(self.trust_net, "score_episode"):
                     score = self.trust_net.score_episode(features)
-                elif hasattr(self.trust_net, 'forward'):
+                elif hasattr(self.trust_net, "forward"):
                     import torch
+
                     feat_t = torch.FloatTensor(features).unsqueeze(0)
                     with torch.no_grad():
                         score = self.trust_net(feat_t).item()
@@ -134,9 +126,7 @@ class PhaseBDataPackIntegration:
         return scores
 
     def _compute_w_econ_scores(
-        self,
-        datapacks: List[DataPackMeta],
-        episode_features: Optional[np.ndarray] = None
+        self, datapacks: List[DataPackMeta], episode_features: Optional[np.ndarray] = None
     ) -> List[float]:
         """Compute w_econ scores for batch of datapacks."""
         if self.w_econ_lattice is None:
@@ -152,10 +142,11 @@ class PhaseBDataPackIntegration:
 
             # Compute w_econ score
             try:
-                if hasattr(self.w_econ_lattice, 'score_episode'):
+                if hasattr(self.w_econ_lattice, "score_episode"):
                     score = self.w_econ_lattice.score_episode(features)
-                elif hasattr(self.w_econ_lattice, 'forward'):
+                elif hasattr(self.w_econ_lattice, "forward"):
                     import torch
+
                     feat_t = torch.FloatTensor(features).unsqueeze(0)
                     with torch.no_grad():
                         score = self.w_econ_lattice(feat_t).item()
@@ -171,24 +162,24 @@ class PhaseBDataPackIntegration:
     def _extract_features_from_datapack(self, dp: DataPackMeta) -> np.ndarray:
         """Extract episode features from datapack for scoring."""
         # Build feature vector from attribution
-        features = np.array([
-            dp.attribution.delta_mpl,
-            dp.attribution.delta_error,
-            dp.attribution.delta_ep,
-            dp.attribution.delta_wage_parity,
-            dp.attribution.delta_J,
-            dp.attribution.lambda_budget,
-            len(dp.skill_trace),  # Number of skills
-            dp.get_total_duration(),  # Total duration
-        ], dtype=np.float32)
+        features = np.array(
+            [
+                dp.attribution.delta_mpl,
+                dp.attribution.delta_error,
+                dp.attribution.delta_ep,
+                dp.attribution.delta_wage_parity,
+                dp.attribution.delta_J,
+                dp.attribution.lambda_budget,
+                len(dp.skill_trace),  # Number of skills
+                dp.get_total_duration(),  # Total duration
+            ],
+            dtype=np.float32,
+        )
 
         return features
 
     def select_training_data_by_trust(
-        self,
-        task_name: str,
-        min_trust: float = 0.9,
-        max_samples: int = 1000
+        self, task_name: str, min_trust: float = 0.9, max_samples: int = 1000
     ) -> List[DataPackMeta]:
         """
         Select high-trust datapacks for training.
@@ -206,14 +197,11 @@ class PhaseBDataPackIntegration:
             min_trust=min_trust,
             limit=max_samples,
             sort_by="trust_score",
-            sort_descending=True
+            sort_descending=True,
         )
 
     def select_by_econ_weight(
-        self,
-        task_name: str,
-        min_econ_weight: float = 0.5,
-        max_samples: int = 1000
+        self, task_name: str, min_econ_weight: float = 0.5, max_samples: int = 1000
     ) -> List[DataPackMeta]:
         """
         Select datapacks by economic weight (trust * w_econ).
@@ -230,24 +218,19 @@ class PhaseBDataPackIntegration:
 
         # Filter by combined weight
         filtered = [
-            dp for dp in all_packs
+            dp
+            for dp in all_packs
             if (dp.attribution.trust_score * dp.attribution.w_econ) >= min_econ_weight
         ]
 
         # Sort by combined weight
-        filtered.sort(
-            key=lambda x: x.attribution.trust_score * x.attribution.w_econ,
-            reverse=True
-        )
+        filtered.sort(key=lambda x: x.attribution.trust_score * x.attribution.w_econ, reverse=True)
 
         return filtered[:max_samples]
 
     def allocate_lambda_budget(
-        self,
-        task_name: str,
-        total_budget: float = 1000.0,
-        strategy: str = "proportional"
-    ) -> Dict[str, List[Tuple[str, float]]]:
+        self, task_name: str, total_budget: float = 1000.0, strategy: str = "proportional"
+    ) -> Dict[str, object]:
         """
         Allocate λ synthetic budget across datapacks.
 
@@ -261,19 +244,18 @@ class PhaseBDataPackIntegration:
         """
         if self.lambda_controller is None:
             print("No λ-controller provided")
-            return {'allocations': []}
+            return {"allocations": []}
 
         datapacks = self.repo.load_all(task_name)
         if not datapacks:
-            return {'allocations': []}
+            return {"allocations": []}
 
-        allocations = []
+        allocations: List[Tuple[str, float]] = []
 
         if strategy == "proportional":
             # Allocate proportional to economic weight
             total_weight = sum(
-                dp.attribution.trust_score * dp.attribution.w_econ
-                for dp in datapacks
+                dp.attribution.trust_score * dp.attribution.w_econ for dp in datapacks
             )
 
             for dp in datapacks:
@@ -288,7 +270,7 @@ class PhaseBDataPackIntegration:
             sorted_packs = sorted(
                 datapacks,
                 key=lambda x: x.attribution.trust_score * x.attribution.w_econ,
-                reverse=True
+                reverse=True,
             )
 
             budget_per_pack = total_budget / k
@@ -304,17 +286,14 @@ class PhaseBDataPackIntegration:
                 allocations.append((dp.pack_id, budget_per_pack))
 
         return {
-            'strategy': strategy,
-            'total_budget': total_budget,
-            'n_allocated': len(allocations),
-            'allocations': allocations
+            "strategy": strategy,
+            "total_budget": total_budget,
+            "n_allocated": len(allocations),
+            "allocations": allocations,
         }
 
     def mark_training_run(
-        self,
-        datapacks: List[DataPackMeta],
-        run_id: str,
-        role: str = "policy_train"
+        self, datapacks: List[DataPackMeta], run_id: str, role: str = "policy_train"
     ):
         """
         Mark datapacks as used in a training run.
@@ -328,13 +307,13 @@ class PhaseBDataPackIntegration:
             if run_id not in dp.attribution.used_in_training_runs:
                 dp.attribution.used_in_training_runs.append(run_id)
 
-            if role.startswith("wm_"):
-                dp.attribution.wm_role = role
+            if role in {"wm_train", "wm_eval", "wm_synth_source", "wm_synth_target"}:
+                dp.attribution.wm_role = cast(
+                    Literal["wm_train", "wm_eval", "wm_synth_source", "wm_synth_target"], role
+                )
 
     def get_unused_datapacks(
-        self,
-        task_name: str,
-        exclude_runs: Optional[List[str]] = None
+        self, task_name: str, exclude_runs: Optional[List[str]] = None
     ) -> List[DataPackMeta]:
         """
         Get datapacks not yet used in training.
@@ -350,17 +329,15 @@ class PhaseBDataPackIntegration:
         all_packs = self.repo.load_all(task_name)
 
         unused = [
-            dp for dp in all_packs
+            dp
+            for dp in all_packs
             if not any(run in dp.attribution.used_in_training_runs for run in exclude_runs)
         ]
 
         return unused
 
     def compute_mvd_scores(
-        self,
-        task_name: str,
-        baseline_delta_j: float = 0.0,
-        horizon: int = 1000
+        self, task_name: str, baseline_delta_j: float = 0.0, horizon: int = 1000
     ) -> int:
         """
         Compute Marginal Value-of-Data scores for datapacks.
@@ -381,9 +358,9 @@ class PhaseBDataPackIntegration:
         for dp in datapacks:
             # Simple MVD: trust * w_econ * delta_j
             mvd = (
-                dp.attribution.trust_score *
-                dp.attribution.w_econ *
-                max(dp.attribution.delta_J - baseline_delta_j, 0)
+                dp.attribution.trust_score
+                * dp.attribution.w_econ
+                * max(dp.attribution.delta_J - baseline_delta_j, 0)
             )
             dp.attribution.mvd_score = mvd
             updated += 1
@@ -401,7 +378,7 @@ class PhaseBDataPackIntegration:
         datapacks = self.repo.load_all(task_name)
 
         if not datapacks:
-            summary = {'task_name': task_name, 'n_datapacks': 0}
+            summary = {"task_name": task_name, "n_datapacks": 0}
         else:
             trust_scores = [dp.attribution.trust_score for dp in datapacks]
             w_econ_scores = [dp.attribution.w_econ for dp in datapacks]
@@ -414,41 +391,41 @@ class PhaseBDataPackIntegration:
                 all_runs.update(dp.attribution.used_in_training_runs)
 
             # Source type distribution
-            source_types = {}
+            source_types: Dict[str, int] = {}
             for dp in datapacks:
                 st = dp.attribution.source_type
                 source_types[st] = source_types.get(st, 0) + 1
 
             summary = {
-                'task_name': task_name,
-                'n_datapacks': len(datapacks),
-                'trust_scores': {
-                    'mean': float(np.mean(trust_scores)),
-                    'std': float(np.std(trust_scores)),
-                    'min': float(np.min(trust_scores)),
-                    'max': float(np.max(trust_scores)),
+                "task_name": task_name,
+                "n_datapacks": len(datapacks),
+                "trust_scores": {
+                    "mean": float(np.mean(trust_scores)),
+                    "std": float(np.std(trust_scores)),
+                    "min": float(np.min(trust_scores)),
+                    "max": float(np.max(trust_scores)),
                 },
-                'w_econ_scores': {
-                    'mean': float(np.mean(w_econ_scores)),
-                    'std': float(np.std(w_econ_scores)),
-                    'min': float(np.min(w_econ_scores)),
-                    'max': float(np.max(w_econ_scores)),
+                "w_econ_scores": {
+                    "mean": float(np.mean(w_econ_scores)),
+                    "std": float(np.std(w_econ_scores)),
+                    "min": float(np.min(w_econ_scores)),
+                    "max": float(np.max(w_econ_scores)),
                 },
-                'lambda_budgets': {
-                    'total': float(np.sum(lambda_budgets)),
-                    'mean': float(np.mean(lambda_budgets)),
-                    'max': float(np.max(lambda_budgets)),
+                "lambda_budgets": {
+                    "total": float(np.sum(lambda_budgets)),
+                    "mean": float(np.mean(lambda_budgets)),
+                    "max": float(np.max(lambda_budgets)),
                 },
-                'mvd_scores': {
-                    'mean': float(np.mean(mvd_scores)),
-                    'std': float(np.std(mvd_scores)),
-                    'max': float(np.max(mvd_scores)),
+                "mvd_scores": {
+                    "mean": float(np.mean(mvd_scores)),
+                    "std": float(np.std(mvd_scores)),
+                    "max": float(np.max(mvd_scores)),
                 },
-                'training_runs': list(all_runs),
-                'source_types': source_types,
+                "training_runs": list(all_runs),
+                "source_types": source_types,
             }
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(summary, f, indent=2)
 
 
@@ -458,7 +435,7 @@ def integrate_phase_b_with_datapacks(
     trust_net=None,
     w_econ_lattice=None,
     lambda_controller=None,
-    output_dir: str = "results/phase_b_integration"
+    output_dir: str = "results/phase_b_integration",
 ):
     """
     Convenience function to run full Phase B integration.
@@ -480,7 +457,7 @@ def integrate_phase_b_with_datapacks(
         repo=repo,
         trust_net=trust_net,
         w_econ_lattice=w_econ_lattice,
-        lambda_controller=lambda_controller
+        lambda_controller=lambda_controller,
     )
 
     print("=" * 70)
@@ -500,11 +477,11 @@ def integrate_phase_b_with_datapacks(
     # Allocate λ budget
     print("\n3. Allocating λ synthetic budget...")
     allocation = integration.allocate_lambda_budget(
-        task_name,
-        total_budget=1000.0,
-        strategy="proportional"
+        task_name, total_budget=1000.0, strategy="proportional"
     )
-    print(f"   Allocated {allocation['total_budget']:.2f} budget to {allocation['n_allocated']} datapacks")
+    print(
+        f"   Allocated {allocation['total_budget']:.2f} budget to {allocation['n_allocated']} datapacks"
+    )
 
     # Export summary
     summary_path = os.path.join(output_dir, f"{task_name}_phase_b_summary.json")
@@ -520,10 +497,10 @@ def integrate_phase_b_with_datapacks(
     print(f"   Econ-weighted datapacks (≥0.5): {len(econ_weighted)}")
 
     return {
-        'n_updated': n_updated,
-        'n_mvd': n_mvd,
-        'allocation': allocation,
-        'n_high_trust': len(high_trust),
-        'n_econ_weighted': len(econ_weighted),
-        'summary_path': summary_path,
+        "n_updated": n_updated,
+        "n_mvd": n_mvd,
+        "allocation": allocation,
+        "n_high_trust": len(high_trust),
+        "n_econ_weighted": len(econ_weighted),
+        "summary_path": summary_path,
     }

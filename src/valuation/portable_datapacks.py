@@ -1,4 +1,5 @@
 """Portable datapack artifacts for curated slice evaluation."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,10 +14,16 @@ from src.representation.token_providers import (
     SceneGraphTokenProvider,
 )
 from src.vision.scene_ir_tracker.serialization import deserialize_scene_tracks_v1
-from src.valuation.datapack_schema import ConditionProfile, DATAPACK_SCHEMA_VERSION_PORTABLE, DATAPACK_SCHEMA_VERSION_REPR
+from src.valuation.datapack_schema import (
+    ConditionProfile,
+    DATAPACK_SCHEMA_VERSION_PORTABLE,
+    DATAPACK_SCHEMA_VERSION_REPR,
+)
 
 
-def load_raw_episode_artifacts(raw_path: Path) -> Tuple[Optional[np.ndarray], Optional[Dict[str, np.ndarray]], Dict[str, Any]]:
+def load_raw_episode_artifacts(
+    raw_path: Path,
+) -> Tuple[Optional[np.ndarray], Optional[Dict[str, np.ndarray]], Dict[str, Any]]:
     """Load RGB frames and scene_tracks payload from a raw datapack path."""
     meta: Dict[str, Any] = {}
     if raw_path.is_dir():
@@ -50,7 +57,9 @@ def compute_rgb_features_v1(
     store_temporal: bool = False,
 ) -> Dict[str, Any]:
     """Compute portable RGB features using the vision_rgb encoder."""
-    provider = RGBVisionTokenProvider(token_dim=token_dim, pool_size=pool_size, seed=0, allow_synthetic=False)
+    provider = RGBVisionTokenProvider(
+        token_dim=token_dim, pool_size=pool_size, seed=0, allow_synthetic=False
+    )
     tokens = provider.provide({"rgb_frames": rgb_frames}).tokens
     if tokens.dim() == 3:
         tokens = tokens.squeeze(0)
@@ -104,7 +113,11 @@ def compute_slice_labels_v1(
 
     is_dynamic = motion_score is not None and motion_score >= dynamic_threshold
     is_static = motion_score is not None and motion_score <= static_threshold
-    motion_bucket = _bucketize(motion_score, low=static_threshold, high=dynamic_threshold) if motion_score is not None else None
+    motion_bucket = (
+        _bucketize(motion_score, low=static_threshold, high=dynamic_threshold)
+        if motion_score is not None
+        else None
+    )
 
     return {
         "schema_version": DATAPACK_SCHEMA_VERSION_PORTABLE,
@@ -135,13 +148,11 @@ def compute_repr_tokens_v1(
     Returns:
         Dict mapping repr name to versioned payload with 'version', 'dim', 'features', 'metadata'.
     """
-    import torch
 
     if providers is None:
         providers = _default_providers()
 
     result: Dict[str, Dict[str, Any]] = {}
-
 
     for repr_name in repr_names:
         provider = providers.get(repr_name)
