@@ -97,10 +97,10 @@ def extract_episode_features(z_sequence):
         features: [n_features] numpy array
     """
     features = [
-        z_sequence.mean(),           # Global mean
-        z_sequence.std(),            # Global std
-        z_sequence.min(),            # Min value
-        z_sequence.max(),            # Max value
+        z_sequence.mean(),  # Global mean
+        z_sequence.std(),  # Global std
+        z_sequence.min(),  # Min value
+        z_sequence.max(),  # Max value
         z_sequence.mean(axis=0).std(),  # Variance across dimensions
         np.abs(np.diff(z_sequence, axis=0)).mean(),  # Temporal smoothness
     ]
@@ -124,20 +124,20 @@ def build_trust_dataset(real_path, synthetic_path):
 
     # Load real data
     real_data = np.load(real_path, allow_pickle=True)
-    n_real = int(real_data['n_episodes'])
+    n_real = int(real_data["n_episodes"])
 
     for ep in range(n_real):
-        z_seq = real_data[f'ep_{ep}_z_sequence']
+        z_seq = real_data[f"ep_{ep}_z_sequence"]
         feat = extract_episode_features(z_seq)
         features.append(feat)
         labels.append(1.0)  # Real
 
     # Load synthetic data
     syn_data = np.load(synthetic_path, allow_pickle=True)
-    n_syn = int(syn_data['n_episodes'])
+    n_syn = int(syn_data["n_episodes"])
 
     for ep in range(n_syn):
-        z_seq = syn_data[f'ep_{ep}_z_sequence']
+        z_seq = syn_data[f"ep_{ep}_z_sequence"]
         feat = extract_episode_features(z_seq)
         features.append(feat)
         labels.append(0.0)  # Synthetic
@@ -154,7 +154,7 @@ def train_trust_net(
     n_epochs=100,
     batch_size=32,
     lr=1e-3,
-    device='cpu',
+    device="cpu",
 ):
     """
     Train trust_net to distinguish real from synthetic episodes.
@@ -182,8 +182,8 @@ def train_trust_net(
     X_std = X.std(axis=0) + 1e-6
     X_norm = (X - X_mean) / X_std
 
-    print(f"\nFeature statistics:")
-    feature_names = ['mean', 'std', 'min', 'max', 'dim_var', 'smoothness']
+    print("\nFeature statistics:")
+    feature_names = ["mean", "std", "min", "max", "dim_var", "smoothness"]
     for i, name in enumerate(feature_names):
         print(f"  {name}: mean={X[:, i].mean():.6f}, std={X[:, i].std():.6f}")
 
@@ -222,7 +222,7 @@ def train_trust_net(
         n_batches = 0
 
         for i in range(0, len(X_train), batch_size):
-            batch_idx = perm[i:i+batch_size]
+            batch_idx = perm[i : i + batch_size]
             X_batch = X_train[batch_idx]
             y_batch = y_train[batch_idx]
 
@@ -250,11 +250,13 @@ def train_trust_net(
             best_state = model.state_dict().copy()
 
         if (epoch + 1) % 20 == 0:
-            print(f"  Epoch {epoch+1}/{n_epochs}: "
-                  f"train_loss={epoch_loss/n_batches:.4f}, "
-                  f"train_acc={train_acc:.3f}, "
-                  f"val_loss={val_loss:.4f}, "
-                  f"val_acc={val_acc:.3f}")
+            print(
+                f"  Epoch {epoch + 1}/{n_epochs}: "
+                f"train_loss={epoch_loss / n_batches:.4f}, "
+                f"train_acc={train_acc:.3f}, "
+                f"val_loss={val_loss:.4f}, "
+                f"val_acc={val_acc:.3f}"
+            )
 
     # Load best model
     model.load_state_dict(best_state)
@@ -267,7 +269,7 @@ def train_trust_net(
     real_trust = all_pred[y == 1].mean()
     syn_trust = all_pred[y == 0].mean()
 
-    print(f"\nFinal Results:")
+    print("\nFinal Results:")
     print(f"  Best validation accuracy: {best_val_acc:.3f}")
     print(f"  Mean trust score (real episodes): {real_trust:.4f}")
     print(f"  Mean trust score (synthetic episodes): {syn_trust:.4f}")
@@ -275,7 +277,8 @@ def train_trust_net(
 
     # ROC-AUC
     try:
-        from sklearn.metrics import roc_auc_score
+        from sklearn.metrics import roc_auc_score  # type: ignore[import-untyped]
+
         auc = roc_auc_score(y, all_pred)
         print(f"  ROC-AUC: {auc:.4f}")
     except ImportError:
@@ -283,13 +286,13 @@ def train_trust_net(
         print("  (sklearn not available for ROC-AUC)")
 
     metrics = {
-        'best_val_acc': best_val_acc,
-        'real_trust_mean': real_trust,
-        'syn_trust_mean': syn_trust,
-        'trust_gap': real_trust - syn_trust,
-        'roc_auc': auc,
-        'X_mean': X_mean,
-        'X_std': X_std,
+        "best_val_acc": best_val_acc,
+        "real_trust_mean": real_trust,
+        "syn_trust_mean": syn_trust,
+        "trust_gap": real_trust - syn_trust,
+        "roc_auc": auc,
+        "X_mean": X_mean,
+        "X_std": X_std,
     }
 
     return model, metrics
@@ -300,7 +303,7 @@ def score_episodes_with_trust(
     npz_path,
     X_mean,
     X_std,
-    device='cpu',
+    device="cpu",
 ):
     """
     Score all episodes in a dataset with trust values.
@@ -314,14 +317,14 @@ def score_episodes_with_trust(
         trust_scores: [n_episodes] array of p_real values
     """
     data = np.load(npz_path, allow_pickle=True)
-    n_episodes = int(data['n_episodes'])
+    n_episodes = int(data["n_episodes"])
 
     trust_scores = []
 
     model.eval()
     with torch.no_grad():
         for ep in range(n_episodes):
-            z_seq = data[f'ep_{ep}_z_sequence']
+            z_seq = data[f"ep_{ep}_z_sequence"]
             feat = extract_episode_features(z_seq)
             feat_norm = (feat - X_mean) / X_std
 

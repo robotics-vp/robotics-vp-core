@@ -3,14 +3,14 @@
 Tracks what datapacks/slices were used during a training window.
 Mandatory for ledger writes.
 """
+
 from __future__ import annotations
 
 import json
 from collections import Counter
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -73,7 +73,7 @@ class ExposureTracker:
 
         self._plan_id: Optional[str] = None
         self._plan_sha: Optional[str] = None
-        
+
         # Quarantine enforcement
         self._quarantine_datapack_ids: set = set()
         self._excluded_count: int = 0  # Count of samples excluded due to quarantine
@@ -92,13 +92,13 @@ class ExposureTracker:
         slice_label: Optional[str] = None,
     ) -> bool:
         """Record a single training sample.
-        
+
         Args:
             task_family: Task family name
             datapack_id: Optional datapack identifier
             slice_id: Optional slice identifier
             slice_label: Optional slice label for repr distribution
-            
+
         Returns:
             True if sample was recorded, False if excluded due to quarantine
         """
@@ -107,7 +107,7 @@ class ExposureTracker:
             self._excluded_count += 1
             self._rejected_datapacks.append({"id": datapack_id, "reason": "quarantine"})
             return False
-        
+
         self._task_counts[task_family] += 1
         if datapack_id:
             self._datapack_ids.add(datapack_id)
@@ -126,20 +126,20 @@ class ExposureTracker:
         """Set plan reference."""
         self._plan_id = plan_id
         self._plan_sha = plan_sha
-    
+
     def set_quarantine(self, datapack_ids: List[str]) -> None:
         """Set list of quarantined datapack IDs to exclude.
-        
+
         Args:
             datapack_ids: List of datapack IDs to quarantine (exclude from training)
         """
         self._quarantine_datapack_ids = set(datapack_ids)
-    
+
     @property
     def excluded_count(self) -> int:
         """Number of samples excluded due to quarantine."""
         return self._excluded_count
-    
+
     @property
     def quarantine_datapack_ids(self) -> List[str]:
         """List of quarantined datapack IDs."""
@@ -241,6 +241,7 @@ def write_selection_manifest(path: str, manifest: SelectionManifestV1) -> str:
         SHA-256 of written file content
     """
     from src.utils.config_digest import sha256_file
+
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:

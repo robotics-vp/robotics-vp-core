@@ -3,12 +3,12 @@
 Captures all provenance information for a closed-loop run including
 code commit, plan hash, datapack manifest, seeds, and schema versions.
 """
+
 from __future__ import annotations
 
 import json
 import subprocess
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

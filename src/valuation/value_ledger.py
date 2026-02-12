@@ -3,13 +3,13 @@
 Links plan exposure, training windows, and audit deltas in an
 immutable, append-only ledger for provenance and attribution.
 """
+
 from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from src.contracts.schemas import (
     ValueLedgerRecordV1,
@@ -25,7 +25,6 @@ from src.contracts.schemas import (
     LedgerEconV1,
     AuditAggregateV1,
 )
-from src.utils.config_digest import sha256_json
 
 
 class ValueLedger:
