@@ -4,15 +4,17 @@ Dynamic wage indexer for tracking human wage benchmarks.
 Smooths toward market wages and optionally adjusts for sector inflation.
 This is an accounting layer only - does NOT affect RL rewards or training.
 """
+
 from dataclasses import dataclass
 
 
 @dataclass
 class WageIndexConfig:
     """Configuration for wage indexer."""
-    alpha: float = 0.1              # Smoothing factor (0 = no update, 1 = instant)
-    inflation_adj: bool = True      # Whether to adjust for sector inflation
-    min_update_interval: int = 1    # Episodes between updates (stub for now)
+
+    alpha: float = 0.1  # Smoothing factor (0 = no update, 1 = instant)
+    inflation_adj: bool = True  # Whether to adjust for sector inflation
+    min_update_interval: int = 1  # Episodes between updates (stub for now)
 
 
 class WageIndexer:

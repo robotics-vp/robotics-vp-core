@@ -3,11 +3,12 @@
 Provides deterministic conversion between econ dicts/vectors and EconTensorV1.
 All conversions are stable and hashable for provenance.
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 import numpy as np
 
@@ -20,6 +21,8 @@ from src.economics.econ_basis_registry import get_default_basis, get_basis
 
 if TYPE_CHECKING:
     from src.ontology.models import EconVector
+
+EconTensorSource = Literal["episode_metrics", "econ_vector", "datapack", "synthetic"]
 
 
 # =============================================================================
@@ -80,11 +83,12 @@ class EconTensor:
 # Core Conversion Functions
 # =============================================================================
 
+
 def econ_to_tensor(
     econ_data: Dict[str, float],
     basis: Optional[EconBasisSpecV1] = None,
     regime_features: Optional[RegimeFeaturesV1] = None,
-    source: str = "episode_metrics",
+    source: EconTensorSource = "episode_metrics",
 ) -> EconTensorV1:
     """Convert an econ dict/vector to EconTensorV1.
 
@@ -224,6 +228,7 @@ def hash_econ_tensor(tensor: EconTensorV1) -> str:
 # Synthetic Tensor Generation (for testing/smoke)
 # =============================================================================
 
+
 def create_synthetic_econ_tensor(
     basis: Optional[EconBasisSpecV1] = None,
     seed: int = 42,
@@ -238,6 +243,7 @@ def create_synthetic_econ_tensor(
         Synthetic EconTensorV1
     """
     import random
+
     rng = random.Random(seed)
 
     if basis is None:
@@ -270,7 +276,10 @@ def create_synthetic_econ_tensor(
 # Integration Helpers
 # =============================================================================
 
-def extract_key_econ_values(tensor: EconTensorV1, basis: Optional[EconBasisSpecV1] = None) -> Dict[str, float]:
+
+def extract_key_econ_values(
+    tensor: EconTensorV1, basis: Optional[EconBasisSpecV1] = None
+) -> Dict[str, float]:
     """Extract key econ values for summary/debugging.
 
     Returns a small dict with the most important values.
@@ -282,7 +291,9 @@ def extract_key_econ_values(tensor: EconTensorV1, basis: Optional[EconBasisSpecV
     return {k: v for k, v in econ_dict.items() if k in key_axes}
 
 
-def compute_tensor_summary(tensor: EconTensorV1, basis: Optional[EconBasisSpecV1] = None) -> Dict[str, float]:
+def compute_tensor_summary(
+    tensor: EconTensorV1, basis: Optional[EconBasisSpecV1] = None
+) -> Dict[str, float]:
     """Compute a summary dict for ledger provenance.
 
     Returns norm and a couple key values.

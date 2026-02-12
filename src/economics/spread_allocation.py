@@ -8,9 +8,9 @@ they receive that same share of the wage spread vs human.
 """
 
 
-def compute_contribution_shares(delta_mpl_cust: float,
-                                delta_mpl_total: float,
-                                eps: float = 1e-6) -> tuple[float, float]:
+def compute_contribution_shares(
+    delta_mpl_cust: float, delta_mpl_total: float, eps: float = 1e-6
+) -> tuple[float, float]:
     """
     Compute customer vs platform contribution shares based on ΔMPL.
 
@@ -31,12 +31,14 @@ def compute_contribution_shares(delta_mpl_cust: float,
     return s_cust, s_plat
 
 
-def compute_spread_allocation(w_robot: float,
-                              w_human: float,
-                              hours: float,
-                              delta_mpl_cust: float,
-                              delta_mpl_total: float,
-                              eps_parity: float = 0.05) -> dict:
+def compute_spread_allocation(
+    w_robot: float,
+    w_human: float,
+    hours: float,
+    delta_mpl_cust: float,
+    delta_mpl_total: float,
+    eps_parity: float = 0.05,
+) -> dict:
     """
     Mechanistic allocation of spread vs human between customer and platform.
 

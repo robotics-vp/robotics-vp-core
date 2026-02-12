@@ -4,8 +4,9 @@ Online data value estimator.
 Predicts E[ΔMPL_i] from novelty features using incremental learning.
 This replaces the novelty proxy with honest "data → ΔMPL → price" path.
 """
+
 import numpy as np
-from sklearn.linear_model import SGDRegressor
+from sklearn.linear_model import SGDRegressor  # type: ignore[import-untyped]
 from collections import deque
 
 
@@ -28,12 +29,12 @@ class OnlineDataValueEstimator:
 
         # SGD regressor with adaptive learning rate
         self.model = SGDRegressor(
-            learning_rate='adaptive',
+            learning_rate="adaptive",
             eta0=0.01,
             max_iter=1000,  # Sufficient for initial fit convergence
             tol=1e-3,
             warm_start=True,  # Incremental learning
-            random_state=42
+            random_state=42,
         )
 
         # History: [(features, ΔMPL_actual), ...]
@@ -105,9 +106,9 @@ class OnlineDataValueEstimator:
         """
         if not self.is_fitted:
             return {
-                'fitted': False,
-                'n_samples': len(self.history),
-                'min_samples_needed': self.min_samples
+                "fitted": False,
+                "n_samples": len(self.history),
+                "min_samples_needed": self.min_samples,
             }
 
         # Compute prediction error on history
@@ -118,21 +119,23 @@ class OnlineDataValueEstimator:
             predictions = self.model.predict(X_hist)
             errors = predictions - y_hist
             mae = np.abs(errors).mean()
-            rmse = np.sqrt((errors ** 2).mean())
+            rmse = np.sqrt((errors**2).mean())
 
             return {
-                'fitted': True,
-                'n_samples': len(self.history),
-                'mae': float(mae),
-                'rmse': float(rmse),
-                'mean_actual_delta_mpl': float(y_hist.mean()),
-                'std_actual_delta_mpl': float(y_hist.std()),
-                'model_coef': float(self.model.coef_[0]) if hasattr(self.model, 'coef_') else None,
-                'model_intercept': float(self.model.intercept_) if hasattr(self.model, 'intercept_') else None,
+                "fitted": True,
+                "n_samples": len(self.history),
+                "mae": float(mae),
+                "rmse": float(rmse),
+                "mean_actual_delta_mpl": float(y_hist.mean()),
+                "std_actual_delta_mpl": float(y_hist.std()),
+                "model_coef": float(self.model.coef_[0]) if hasattr(self.model, "coef_") else None,
+                "model_intercept": float(self.model.intercept_)
+                if hasattr(self.model, "intercept_")
+                else None,
             }
         else:
             return {
-                'fitted': True,
-                'n_samples': len(self.history),
-                'min_samples_needed': self.min_samples
+                "fitted": True,
+                "n_samples": len(self.history),
+                "min_samples_needed": self.min_samples,
             }

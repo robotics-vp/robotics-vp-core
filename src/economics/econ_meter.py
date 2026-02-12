@@ -39,12 +39,15 @@ class EconomicMeter:
         if mpl_units_per_hour == 0.0:
             mpl_units_per_hour = self._estimate_mpl_from_duration(raw_metrics, config)
         error_rate = self._extract_metric(raw_metrics, ("error_rate", "errors", "error_fraction"))
-        if error_rate == 0.0 and raw_metrics.get("success_rate") is not None:
+        success_rate = raw_metrics.get("success_rate")
+        if error_rate == 0.0 and success_rate is not None:
             try:
-                error_rate = 1.0 - float(raw_metrics.get("success_rate"))
+                error_rate = 1.0 - float(success_rate)
             except (TypeError, ValueError):
                 pass
-        novelty_delta = self._extract_metric(raw_metrics, ("novelty_delta", "novelty_score", "novelty"))
+        novelty_delta = self._extract_metric(
+            raw_metrics, ("novelty_delta", "novelty_score", "novelty")
+        )
         reward_scalar_sum = self._extract_metric(
             raw_metrics,
             ("reward_scalar_sum", "episode_reward", "reward_sum", "total_reward", "mean_reward"),
@@ -103,7 +106,9 @@ class EconomicMeter:
         except Exception:
             return 0.0
 
-    def _compute_wage_parity(self, mpl_units_per_hour: float, error_rate: float, damage_cost_per_error: float) -> float:
+    def _compute_wage_parity(
+        self, mpl_units_per_hour: float, error_rate: float, damage_cost_per_error: float
+    ) -> float:
         task = self.task
         if mpl_units_per_hour <= 0.0:
             return 0.0
@@ -111,8 +116,14 @@ class EconomicMeter:
             return mpl_units_per_hour / task.human_mpl_units_per_hour
         price_per_unit = self._price_per_unit(task)
         if price_per_unit <= 0:
-            return mpl_units_per_hour / task.human_mpl_units_per_hour if task.human_mpl_units_per_hour > 0 else 0.0
-        implied = implied_robot_wage(price_per_unit, mpl_units_per_hour, error_rate, damage_cost_per_error)
+            return (
+                mpl_units_per_hour / task.human_mpl_units_per_hour
+                if task.human_mpl_units_per_hour > 0
+                else 0.0
+            )
+        implied = implied_robot_wage(
+            price_per_unit, mpl_units_per_hour, error_rate, damage_cost_per_error
+        )
         if task.human_wage_per_hour <= 0:
             return 0.0
         return implied / task.human_wage_per_hour
@@ -122,8 +133,12 @@ class EconomicMeter:
             return 0.0
         return task.human_wage_per_hour / task.human_mpl_units_per_hour
 
-    def _estimate_mpl_from_duration(self, raw_metrics: Mapping[str, Any], config: Mapping[str, Any]) -> float:
-        duration_s = self._extract_metric(raw_metrics, ("mean_episode_length_s", "episode_length_s"))
+    def _estimate_mpl_from_duration(
+        self, raw_metrics: Mapping[str, Any], config: Mapping[str, Any]
+    ) -> float:
+        duration_s = self._extract_metric(
+            raw_metrics, ("mean_episode_length_s", "episode_length_s")
+        )
         if duration_s <= 0.0:
             return 0.0
         units_per_episode = float(config.get("units_per_episode", 1.0))

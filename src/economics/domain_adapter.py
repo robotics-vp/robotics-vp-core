@@ -4,12 +4,13 @@ Economic Domain Adapter (Phase G).
 Handles calibration of economic vectors between simulation (PyBullet, Isaac)
 and real-world labor economics. Acts as the "Exchange Rate" mechanism.
 """
+
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Iterable, Mapping, Optional
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from src.ontology.models import EconVector
 
@@ -18,8 +19,8 @@ from src.ontology.models import EconVector
 class EconDomainAdapterConfig:
     source_domain: str  # e.g. "pybullet"
     target_domain: str = "platform_econ"
-    scaling: Dict[str, float] = field(default_factory=dict)
-    offsets: Dict[str, float] = field(default_factory=dict)
+    scaling: dict[str, float] = field(default_factory=dict)
+    offsets: dict[str, float] = field(default_factory=dict)
     version: str = "v0.1_identity"
 
 
@@ -41,10 +42,18 @@ class EconDomainAdapter:
         self.config_path = config_path
         self.config = config or self._load_config_from_yaml(domain_name, config_path)
 
-    def _load_config_from_yaml(self, domain_name: str, config_path: Optional[str]) -> EconDomainAdapterConfig:
-        cfg_path = Path(config_path) if config_path else Path(__file__).resolve().parents[2] / "config" / "econ_domains.yaml"
+    def _load_config_from_yaml(
+        self, domain_name: str, config_path: Optional[str]
+    ) -> EconDomainAdapterConfig:
+        cfg_path = (
+            Path(config_path)
+            if config_path
+            else Path(__file__).resolve().parents[2] / "config" / "econ_domains.yaml"
+        )
         if not cfg_path.exists():
-            logger.warning("EconDomainAdapter config not found at %s; using identity calibration", cfg_path)
+            logger.warning(
+                "EconDomainAdapter config not found at %s; using identity calibration", cfg_path
+            )
             return EconDomainAdapterConfig(source_domain=domain_name or "pybullet")
 
         try:
@@ -56,7 +65,11 @@ class EconDomainAdapter:
 
         profile = payload.get(domain_name)
         if profile is None:
-            logger.warning("EconDomainAdapter: domain '%s' not found in %s; falling back to identity/default profile", domain_name, cfg_path)
+            logger.warning(
+                "EconDomainAdapter: domain '%s' not found in %s; falling back to identity/default profile",
+                domain_name,
+                cfg_path,
+            )
             profile = payload.get("default", {}) or {}
 
         if not isinstance(profile, dict):
@@ -71,17 +84,19 @@ class EconDomainAdapter:
             version=str(profile.get("version") or f"profile:{domain_name or 'default'}"),
         )
 
-    def _extract_calibration(self, profile: Dict[str, float]) -> Tuple[Dict[str, float], Dict[str, float]]:
+    def _extract_calibration(
+        self, profile: Mapping[str, Any]
+    ) -> tuple[dict[str, float], dict[str, float]]:
         """
         Normalize YAML profile into scale/offset maps.
 
         Supports new keys (scale_mpl, bias_energy_wh, etc.) and legacy names
         (mpl_scale, energy_scale, damage_scale) for backward compatibility.
         """
-        scaling: Dict[str, float] = {}
-        offsets: Dict[str, float] = {}
+        scaling: dict[str, float] = {}
+        offsets: dict[str, float] = {}
 
-        def _first(keys, default=None):
+        def _first(keys: Iterable[str], default: Any = None) -> Any:
             for key in keys:
                 if key in profile:
                     return profile[key]
@@ -94,8 +109,14 @@ class EconDomainAdapter:
                 return default
 
         component_key_map = {
-            "mpl_units_per_hour": (["scale_mpl", "mpl_scale", "scale_mpl_units_per_hour"], ["bias_mpl", "mpl_bias"]),
-            "energy_cost": (["scale_energy_wh", "energy_scale", "scale_energy_cost"], ["bias_energy_wh", "energy_bias"]),
+            "mpl_units_per_hour": (
+                ["scale_mpl", "mpl_scale", "scale_mpl_units_per_hour"],
+                ["bias_mpl", "mpl_bias"],
+            ),
+            "energy_cost": (
+                ["scale_energy_wh", "energy_scale", "scale_energy_cost"],
+                ["bias_energy_wh", "energy_bias"],
+            ),
             "damage_cost": (["scale_damage", "damage_scale"], ["bias_damage", "damage_bias"]),
             "wage_parity": (["scale_wage_parity"], ["bias_wage_parity"]),
             "novelty_delta": (["scale_novelty_delta"], ["bias_novelty_delta"]),
@@ -123,9 +144,10 @@ class EconDomainAdapter:
                 offsets.setdefault(comp, _safe_float(val, 0.0))
 
         # Legacy offset dict (offset.energy_cost style)
-        if isinstance(profile.get("offset"), dict):
-            for comp, val in profile["offset"].items():
-                offsets.setdefault(comp, _safe_float(val, 0.0))
+        offset_values = profile.get("offset")
+        if isinstance(offset_values, dict):
+            for comp, val in offset_values.items():
+                offsets.setdefault(str(comp), _safe_float(val, 0.0))
 
         return scaling, offsets
 
@@ -154,7 +176,7 @@ class EconDomainAdapter:
             source_domain=self.config.source_domain,
             calibration_version=self.config.version,
         )
-        
+
         # Mark as calibrated in metadata
         calibrated.metadata["is_calibrated"] = True
         calibrated.metadata["raw_source_domain"] = econ.source_domain
@@ -189,9 +211,12 @@ class EconDomainAdapter:
             "offsets": dict(self.config.offsets),
             "version": self.config.version,
             "domain": self.domain_name,
-            "config_path": str(self.config_path or Path(__file__).resolve().parents[2] / "config" / "econ_domains.yaml"),
+            "config_path": str(
+                self.config_path
+                or Path(__file__).resolve().parents[2] / "config" / "econ_domains.yaml"
+            ),
         }
-        
+
         return calibrated
 
     def _calibrate(self, value: float, component: str) -> float:
@@ -201,13 +226,13 @@ class EconDomainAdapter:
         except Exception:
             return 0.0
 
-    def _calibrate_components(self, components: Dict[str, float]) -> Dict[str, float]:
+    def _calibrate_components(self, components: dict[str, float]) -> dict[str, float]:
         calibrated = {}
         for k, v in components.items():
             calibrated[k] = self._calibrate(v, k)
         return calibrated
 
-    def _resolve_calibration(self, component: str) -> Tuple[float, float]:
+    def _resolve_calibration(self, component: str) -> tuple[float, float]:
         """
         Resolve scale/offset with sensible aliases to keep domains simple.
         """
@@ -230,4 +255,6 @@ class EconDomainAdapter:
             elif "mpl" in component:
                 offset = self.config.offsets.get("mpl_units_per_hour")
 
-        return float(scale if scale is not None else 1.0), float(offset if offset is not None else 0.0)
+        return float(scale if scale is not None else 1.0), float(
+            offset if offset is not None else 0.0
+        )
