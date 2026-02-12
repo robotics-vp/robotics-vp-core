@@ -4,6 +4,7 @@ The basis registry stores frozen basis definitions that define the canonical
 axis ordering for econ tensors. Treat basis as an API - once registered,
 the axis ordering is immutable.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,9 +17,11 @@ from src.contracts.schemas import EconBasisSpecV1
 # Registry
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class EconBasisDefinition:
     """Frozen wrapper for EconBasisSpecV1."""
+
     basis_id: str
     spec: EconBasisSpecV1
 
@@ -73,16 +76,16 @@ def list_bases() -> Dict[str, str]:
 
 # Canonical axis ordering matching EconVector fields
 ECON_BASIS_V1_AXES = [
-    "mpl_units_per_hour",   # Marginal product of labor (units/hour)
-    "wage_parity",          # Wage parity ratio (dimensionless)
-    "energy_cost",          # Energy cost (currency units)
-    "damage_cost",          # Damage/collision cost (currency units)
-    "novelty_delta",        # Novelty improvement delta (dimensionless)
-    "reward_scalar_sum",    # Sum of scalar rewards (dimensionless)
-    "mobility_penalty",     # Mobility penalty (dimensionless)
-    "throughput",           # Units processed per hour
-    "error_rate",           # Error rate (0-1)
-    "success_rate",         # Success rate (0-1)
+    "mpl_units_per_hour",  # Marginal product of labor (units/hour)
+    "wage_parity",  # Wage parity ratio (dimensionless)
+    "energy_cost",  # Energy cost (currency units)
+    "damage_cost",  # Damage/collision cost (currency units)
+    "novelty_delta",  # Novelty improvement delta (dimensionless)
+    "reward_scalar_sum",  # Sum of scalar rewards (dimensionless)
+    "mobility_penalty",  # Mobility penalty (dimensionless)
+    "throughput",  # Units processed per hour
+    "error_rate",  # Error rate (0-1)
+    "success_rate",  # Success rate (0-1)
 ]
 
 ECON_BASIS_V1_UNITS = {

@@ -1,8 +1,9 @@
 """Objective->Econ mapping layer (ObjectiveEconFunctor)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 import numpy as np
 

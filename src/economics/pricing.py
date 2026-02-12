@@ -65,8 +65,9 @@ def compute_consumer_surplus(w_human: float, customer_cost: float) -> float:
     return max(0.0, w_human - customer_cost)
 
 
-def validate_consumer_surplus_guarantee(customer_cost: float, w_human: float,
-                                        tolerance: float = 1e-6) -> bool:
+def validate_consumer_surplus_guarantee(
+    customer_cost: float, w_human: float, tolerance: float = 1e-6
+) -> bool:
     """
     Validate that consumer surplus guarantee holds.
 
