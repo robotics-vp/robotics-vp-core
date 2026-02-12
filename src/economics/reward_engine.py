@@ -4,6 +4,7 @@ RewardEngine: advisory wrapper to decompose rewards and compute EconVectors.
 Does NOT alter scalar rewards used by SAC/PPO; it only mirrors existing reward
 math into logged components and episode-level EconVector aggregation.
 """
+
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
@@ -56,19 +57,28 @@ class RewardEngine:
             else:
                 objective_profile = ObjectiveProfile.from_dict(configured_profile)
         self.objective_profile = objective_profile
-        self.objective_compiler = ObjectiveCompiler(objective_profile) if objective_profile else None
+        self.objective_compiler = (
+            ObjectiveCompiler(objective_profile) if objective_profile else None
+        )
 
     def step_reward(
         self,
         raw_env_reward: float,
         info: Dict[str, Any],
-    ) -> Tuple[float, Dict[str, float]]:
+    ) -> Tuple[float, Dict[str, Any]]:
         """
         Decompose raw_env_reward into components without changing the scalar.
         """
-        components: Dict[str, float] = {}
+        components: Dict[str, Any] = {}
         # Pull known components if present
-        for key in ("mpl_component", "ep_component", "error_penalty", "energy_penalty", "safety_bonus", "novelty_bonus"):
+        for key in (
+            "mpl_component",
+            "ep_component",
+            "error_penalty",
+            "energy_penalty",
+            "safety_bonus",
+            "novelty_bonus",
+        ):
             if key in info:
                 components[key] = float(info[key])
         components["scalar_reward"] = float(raw_env_reward)
@@ -98,7 +108,9 @@ class RewardEngine:
         not change training rewards.
         """
         reward_scalar_sum = sum(e.reward_scalar for e in events)
-        mpl_units_per_hour = max(e.reward_components.get("mpl_component", 0.0) for e in events) if events else 0.0
+        mpl_units_per_hour = (
+            max(e.reward_components.get("mpl_component", 0.0) for e in events) if events else 0.0
+        )
         wage_parity = self._safe_float(self.config.get("wage_parity_stub"), 1.0)
         energy_cost = sum(e.reward_components.get("energy_penalty", 0.0) for e in events)
         damage_cost = sum(e.reward_components.get("collision_penalty", 0.0) for e in events)
@@ -106,14 +118,20 @@ class RewardEngine:
             if self.policies:
                 energy_feats = self.policies.energy_cost.build_features(events)
                 energy_eval = self.policies.energy_cost.evaluate(energy_feats)
-                energy_cost = self._safe_float(energy_eval.get("energy_cost", energy_cost), energy_cost)
+                energy_cost = self._safe_float(
+                    energy_eval.get("energy_cost", energy_cost), energy_cost
+                )
                 safety_feats = self.policies.safety_risk.build_features(events)
                 safety_eval = self.policies.safety_risk.evaluate(safety_feats)
-                damage_cost = self._safe_float(safety_eval.get("damage_estimate", damage_cost), damage_cost)
+                damage_cost = self._safe_float(
+                    safety_eval.get("damage_estimate", damage_cost), damage_cost
+                )
         except Exception:
             # Preserve existing behavior on any policy failure
             pass
-        novelty_delta = max(e.reward_components.get("novelty_bonus", 0.0) for e in events) if events else 0.0
+        novelty_delta = (
+            max(e.reward_components.get("novelty_bonus", 0.0) for e in events) if events else 0.0
+        )
         components_agg: Dict[str, float] = {}
         mobility_penalty = 0.0
         precision_bonus = 0.0
@@ -125,9 +143,17 @@ class RewardEngine:
                 components_agg[k] = components_agg.get(k, 0.0) + self._safe_float(v)
             md = getattr(e, "metadata", {}) or {}
             mobility = md.get("mobility_adjustment", {}) if isinstance(md, dict) else {}
-            recovery_required = mobility.get("recovery_required") if isinstance(mobility, dict) else None
-            stability_margin = mobility.get("metadata", {}).get("stability_margin") if isinstance(mobility, dict) else None
-            precision_gate = mobility.get("precision_gate_passed") if isinstance(mobility, dict) else None
+            recovery_required = (
+                mobility.get("recovery_required") if isinstance(mobility, dict) else None
+            )
+            stability_margin = (
+                mobility.get("metadata", {}).get("stability_margin")
+                if isinstance(mobility, dict)
+                else None
+            )
+            precision_gate = (
+                mobility.get("precision_gate_passed") if isinstance(mobility, dict) else None
+            )
             if recovery_required:
                 mobility_penalty += 1.0
                 recovery_events += 1
@@ -136,7 +162,9 @@ class RewardEngine:
             if precision_gate is False:
                 mobility_penalty += 0.5
             if precision_gate is True and mobility.get("metadata", {}).get("drift_mm") is not None:
-                precision_bonus += max(0.0, 1.0 - self._safe_float(mobility.get("metadata", {}).get("drift_mm") / 10.0))
+                precision_bonus += max(
+                    0.0, 1.0 - self._safe_float(mobility.get("metadata", {}).get("drift_mm") / 10.0)
+                )
         if stability_vals:
             stability_risk_score = 1.0 - min(1.0, sum(stability_vals) / len(stability_vals))
 
@@ -160,7 +188,7 @@ class RewardEngine:
             },
             source_domain=self.adapter.config.source_domain,
         )
-        
+
         # Apply calibration
         calibrated_econ = self.adapter.map_vector(raw_econ)
         try:
@@ -186,20 +214,31 @@ class RewardEngine:
         policy_metrics = policy_metrics or {}
         map_first_metrics = map_first_metrics or {}
         throughput = self._safe_float(
-            episode_metrics.get("mpl_component", episode_metrics.get("mpl_t", episode_metrics.get("throughput", 0.0)))
+            episode_metrics.get(
+                "mpl_component",
+                episode_metrics.get("mpl_t", episode_metrics.get("throughput", 0.0)),
+            )
         )
         error = self._safe_float(
-            episode_metrics.get("delta_errors", episode_metrics.get("error_penalty", episode_metrics.get("error_rate", 0.0)))
+            episode_metrics.get(
+                "delta_errors",
+                episode_metrics.get("error_penalty", episode_metrics.get("error_rate", 0.0)),
+            )
         )
         error = abs(error)
         energy = self._safe_float(
-            episode_metrics.get("energy_penalty", episode_metrics.get("ep_t", episode_metrics.get("energy_Wh_per_unit", 0.0)))
+            episode_metrics.get(
+                "energy_penalty",
+                episode_metrics.get("ep_t", episode_metrics.get("energy_Wh_per_unit", 0.0)),
+            )
         )
         energy = abs(energy)
 
         map_quality = map_first_metrics.get("map_first_quality_score")
         if map_quality is None and isinstance(map_first_metrics.get("map_first_summary"), dict):
-            map_quality = map_first_metrics.get("map_first_summary", {}).get("map_first_quality_score")
+            map_quality = map_first_metrics.get("map_first_summary", {}).get(
+                "map_first_quality_score"
+            )
         map_quality = self._safe_float(map_quality, 1.0)
 
         safety_bonus = self._safe_float(episode_metrics.get("safety_bonus", 0.0))
@@ -246,14 +285,20 @@ class RewardEngine:
         for event in events:
             comps = event.reward_components or {}
             mpl_vals.append(self._safe_float(comps.get("mpl_component", comps.get("mpl_t", 0.0))))
-            error_vals.append(abs(self._safe_float(comps.get("error_penalty", comps.get("delta_errors", 0.0)))))
-            energy_vals.append(abs(self._safe_float(comps.get("energy_penalty", comps.get("ep_t", 0.0)))))
+            error_vals.append(
+                abs(self._safe_float(comps.get("error_penalty", comps.get("delta_errors", 0.0))))
+            )
+            energy_vals.append(
+                abs(self._safe_float(comps.get("energy_penalty", comps.get("ep_t", 0.0))))
+            )
             safety_vals.append(self._safe_float(comps.get("safety_bonus", 0.0)))
             map_first_vals.append(
                 self._safe_float(
                     (event.metadata or {}).get(
                         "map_first_quality_score",
-                        ((event.metadata or {}).get("map_first_summary") or {}).get("map_first_quality_score", 1.0),
+                        ((event.metadata or {}).get("map_first_summary") or {}).get(
+                            "map_first_quality_score", 1.0
+                        ),
                     ),
                     1.0,
                 )
