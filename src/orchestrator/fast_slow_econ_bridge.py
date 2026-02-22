@@ -10,14 +10,8 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from typing import (
-    Deque,
-    Dict,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-)
+from math import isfinite
+from typing import Deque, Dict, List, Mapping, MutableMapping, Optional
 
 
 @dataclass(frozen=True)
@@ -27,17 +21,20 @@ class ConstraintBound:
     min_value: float
     max_value: float
 
+    def __post_init__(self) -> None:
+        if self.min_value > self.max_value:
+            raise ValueError("min_value must be <= max_value")
+
     def clamp(self, value: float) -> float:
-        return max(self.min_value, min(self.max_value, value))
+        safe_value = float(value)
+        if not isfinite(safe_value):
+            safe_value = self.min_value
+        return max(self.min_value, min(self.max_value, safe_value))
 
 
 @dataclass(frozen=True)
 class ConstraintShadow:
-    """Locally cached action manifold approximation.
-
-    For now this is represented as axis-aligned bounds (fast path); a future
-    upgrade can replace this with a QP projection without changing call sites.
-    """
+    """Locally cached action manifold approximation."""
 
     version: int
     bounds: Mapping[str, ConstraintBound]
@@ -61,9 +58,9 @@ class EconTensorSample:
     time_delta_ms: float
 
 
-@dataclass
+@dataclass(frozen=True)
 class SettlementRecord:
-    """Aggregated record settled to L2/global ledger."""
+    """Aggregated record prepared for L2/global settlement."""
 
     start_tick: int
     end_tick: int
@@ -72,43 +69,56 @@ class SettlementRecord:
 
 
 class TransientLedger:
-    """L1 circular ledger for high-frequency econ tensors."""
+    """L1 circular ledger for high-frequency econ tensors.
+
+    Settlement is two-phase:
+    - `prepare_settlement`: build a batch without mutating ack state.
+    - `ack_settlement`: mark the batch as durably persisted in L2.
+    """
 
     def __init__(self, capacity: int = 2048) -> None:
         self.capacity = max(1, int(capacity))
         self._buffer: Deque[EconTensorSample] = deque(maxlen=self.capacity)
-        self._last_settled_tick: Optional[int] = None
+        self._last_acked_tick: Optional[int] = None
 
     def append(self, sample: EconTensorSample) -> None:
         self._buffer.append(sample)
 
     def pending(self) -> List[EconTensorSample]:
-        if self._last_settled_tick is None:
+        if self._last_acked_tick is None:
             return list(self._buffer)
-        return [s for s in self._buffer if s.tick_id > self._last_settled_tick]
+        return [s for s in self._buffer if s.tick_id > self._last_acked_tick]
 
-    def settle(self, max_batch: int = 256) -> Optional[SettlementRecord]:
+    def prepare_settlement(self, max_batch: int = 256) -> Optional[SettlementRecord]:
         pending = self.pending()[: max(1, int(max_batch))]
         if not pending:
             return None
-
         totals = {
             "energy_delta": sum(s.energy_delta for s in pending),
             "error_delta": sum(s.error_delta for s in pending),
             "time_delta_ms": sum(s.time_delta_ms for s in pending),
         }
-        record = SettlementRecord(
+        return SettlementRecord(
             start_tick=pending[0].tick_id,
             end_tick=pending[-1].tick_id,
             sample_count=len(pending),
             totals=totals,
         )
-        self._last_settled_tick = record.end_tick
+
+    def ack_settlement(self, end_tick: int) -> None:
+        if self._last_acked_tick is None or end_tick > self._last_acked_tick:
+            self._last_acked_tick = int(end_tick)
+
+    def settle(self, max_batch: int = 256) -> Optional[SettlementRecord]:
+        """Compatibility helper for immediate local settlement + ack."""
+        record = self.prepare_settlement(max_batch=max_batch)
+        if record:
+            self.ack_settlement(record.end_tick)
         return record
 
     def is_reconciled(self, l2_latest_tick: int, max_tick_drift: int = 512) -> bool:
         max_seen_tick = max((s.tick_id for s in self._buffer), default=l2_latest_tick)
-        return (max_seen_tick - l2_latest_tick) <= max_tick_drift
+        return (max_seen_tick - int(l2_latest_tick)) <= int(max_tick_drift)
 
 
 @dataclass
@@ -124,7 +134,7 @@ class OntologyMask:
         return self.by_zone.get(str(zone_id))
 
 
-@dataclass
+@dataclass(frozen=True)
 class FastSlowSyncDecision:
     """Deploy gate decision exposed to orchestrator/runtime."""
 
@@ -177,8 +187,13 @@ class FastSlowEconBridge:
             )
         )
 
-    def settle_to_l2(self, max_batch: int = 256) -> Optional[SettlementRecord]:
-        return self.ledger.settle(max_batch=max_batch)
+    def settle_to_l2(
+        self, max_batch: int = 256, acknowledge: bool = False
+    ) -> Optional[SettlementRecord]:
+        record = self.ledger.prepare_settlement(max_batch=max_batch)
+        if acknowledge and record is not None:
+            self.ledger.ack_settlement(record.end_tick)
+        return record
 
     def deploy_gate(
         self,

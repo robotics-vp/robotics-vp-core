@@ -22,8 +22,9 @@ Implemented in `src/orchestrator/fast_slow_econ_bridge.py`.
 
 2. **Hierarchical Ledgering (L1/L2)**
    - Fast loop appends `EconTensorSample` to `TransientLedger` (L1 circular buffer).
-   - Orchestrator periodically calls `settle()` to produce batched `SettlementRecord`s
-     for async L2/global persistence.
+   - Orchestrator periodically calls `settle_to_l2(...)`/`prepare_settlement(...)` to produce
+     batched `SettlementRecord`s for async L2/global persistence.
+   - Settlement is two-phase: prepare batch first, then `ack_settlement(...)` once L2 write is durable.
    - `deploy_gate()` can block execution when L1/L2 drift exceeds a threshold.
 
 3. **Predictive Ontology Masking**
