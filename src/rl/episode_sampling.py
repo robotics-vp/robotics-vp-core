@@ -18,6 +18,7 @@ from src.objectives.profile import ObjectiveProfile
 from src.objectives.tensor import ObjectiveTensor
 from src.orchestrator.queue_selection import (
     QueueDispatchConfig,
+    QueueDispatchMode,
     apply_live_queue_selection,
 )
 from src.valuation.datapack_schema import DataPackMeta
@@ -470,8 +471,30 @@ class DataPackRLSampler:
         else:
             raise ValueError(f"Unknown sampling strategy: {strategy_name}")
 
-        rng.shuffle(selected)  # Deterministic shuffle for batch decorrelation
-        return [self._format_output(ep, strategy_name) for ep in selected]
+        dispatch = self._apply_queue_dispatch_to_selection(
+            selected,
+            strategy_name=strategy_name,
+        )
+        if dispatch is not None and dispatch.get("mode") not in {"log_only", "compare_only"}:
+            selected = [
+                next(episode for episode in selected if _episode_key(episode) == episode_id)
+                for episode_id in dispatch["ordered_episode_ids"]
+                if any(_episode_key(episode) == episode_id for episode in selected)
+            ]
+        else:
+            rng.shuffle(selected)  # Deterministic shuffle for batch decorrelation
+        return [
+            self._format_output(
+                ep,
+                strategy_name,
+                queue_dispatch=(
+                    {"mode": dispatch["mode"], "decision": dispatch["decision_map"].get(_episode_key(ep), {})}
+                    if dispatch is not None
+                    else None
+                ),
+            )
+            for ep in selected
+        ]
 
     def pool_summary(self) -> Dict[str, Any]:
         """Lightweight summary of the sampler pool for debugging/preview."""
@@ -674,6 +697,13 @@ class DataPackRLSampler:
         return mapping
 
     def _compute_weights(self, episodes: List[Dict[str, Any]], strategy: str) -> List[float]:
+        weights = self._compute_base_weights(episodes, strategy)
+        adjusted = self._apply_queue_dispatch_weight_adjustments(episodes, weights)
+        if adjusted and max(adjusted) <= 0.0:
+            return [1.0] * len(adjusted)
+        return adjusted
+
+    def _compute_base_weights(self, episodes: List[Dict[str, Any]], strategy: str) -> List[float]:
         if not episodes:
             return []
         policy = getattr(self, "policies", None)
@@ -721,8 +751,6 @@ class DataPackRLSampler:
                 max(0.0, float(w * self._resolve_unified_quality_weight(ep)))
                 for w, ep in zip(weights, episodes)
             ]
-        if clamped and max(clamped) <= 0.0:
-            return [1.0] * len(clamped)
         return clamped
 
     def _eligible_pool(self) -> List[Dict[str, Any]]:
@@ -932,6 +960,67 @@ class DataPackRLSampler:
             meta["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")
             descriptor["metadata"] = meta
         return to_json_safe(descriptor)
+
+    def _apply_queue_dispatch_weight_adjustments(
+        self,
+        episodes: List[Dict[str, Any]],
+        weights: List[float],
+    ) -> List[float]:
+        if not episodes or not self.live_queue_selection:
+            return weights
+        mode = str(getattr(self.queue_dispatch_config.mode, "value", self.queue_dispatch_config.mode) or "disabled").lower()
+        if mode in {QueueDispatchMode.DISABLED.value, "disabled", QueueDispatchMode.LOG_ONLY.value, "log_only", "compare_only"}:
+            return weights
+        dispatch = apply_live_queue_selection(
+            episodes,
+            live_queue_selection=self.live_queue_selection,
+            base_weights={
+                _episode_key(episode): float(weight)
+                for episode, weight in zip(episodes, weights)
+            },
+            config=self.queue_dispatch_config,
+        )
+        decision_map = {
+            str(row.get("episode_id", "")): dict(row)
+            for row in dispatch.get("entries", [])
+        }
+        adjusted: List[float] = []
+        for episode, weight in zip(episodes, weights):
+            decision = decision_map.get(_episode_key(episode), {})
+            if decision.get("dropped"):
+                adjusted.append(0.0)
+                continue
+            adjusted_weight = float(decision.get("adjusted_weight", weight) or weight)
+            adjusted.append(max(0.0, adjusted_weight))
+        return adjusted
+
+    def _apply_queue_dispatch_to_selection(
+        self,
+        selected: List[Dict[str, Any]],
+        *,
+        strategy_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        if not selected or not self.live_queue_selection:
+            return None
+        mode = str(getattr(self.queue_dispatch_config.mode, "value", self.queue_dispatch_config.mode) or "disabled").lower()
+        if mode in {QueueDispatchMode.DISABLED.value, "disabled"}:
+            return None
+        weight_strategy = self._weight_strategy_for_strategy(strategy_name)
+        dispatch = apply_live_queue_selection(
+            selected,
+            live_queue_selection=self.live_queue_selection,
+            base_weights={
+                _episode_key(episode): float(weight)
+                for episode, weight in zip(selected, self._compute_base_weights(selected, strategy=weight_strategy))
+            },
+            config=self.queue_dispatch_config,
+        )
+        dispatch["decision_map"] = {
+            str(row.get("episode_id", "")): dict(row)
+            for row in dispatch.get("entries", [])
+        }
+        self.last_queue_dispatch_artifact = dispatch
+        return dispatch
 
 
 def _normalize_enrichment(enrichment: Optional[Dict[str, Any]]) -> Dict[str, Any]:

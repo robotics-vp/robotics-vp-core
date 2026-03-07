@@ -9,10 +9,12 @@ adapter:
   head_hidden_dim: 64
   device: cpu
   lr: 0.001
+  mode: live_loss
   log_interval: 10
   artifact_dir: artifacts/sac_contract_aware_smoke
   consistency_loss_weight: 0.1
   objective_loss_weight: 0.35
   econ_loss_weight: 0.35
+  critic_alignment_weight: 0.15
   metadata:
     purpose: additive_smoke

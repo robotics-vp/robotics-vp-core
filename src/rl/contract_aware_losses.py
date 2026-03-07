@@ -29,6 +29,7 @@ def contract_aware_losses(
     scalar_targets: torch.Tensor,
     objective_targets: Optional[torch.Tensor] = None,
     econ_targets: Optional[torch.Tensor] = None,
+    reference_scalar_predictions: Optional[torch.Tensor] = None,
     weights: ContractAwareLossWeights | None = None,
 ) -> Dict[str, torch.Tensor]:
     use_weights = weights or ContractAwareLossWeights()
@@ -58,7 +59,14 @@ def contract_aware_losses(
         losses["econ_confidence_loss"] = econ_conf_loss
         total = total + use_weights.econ * econ_loss + use_weights.confidence * econ_conf_loss
 
-    consistency_loss = F.mse_loss(outputs.compiled_scalar, outputs.compiled_scalar_baseline.detach())
+    compile_consistency_loss = F.mse_loss(outputs.compiled_scalar, outputs.compiled_scalar_baseline.detach())
+    consistency_loss = compile_consistency_loss
+    losses["compile_consistency_loss"] = compile_consistency_loss
+    if reference_scalar_predictions is not None:
+        reference_tensor = reference_scalar_predictions.reshape_as(outputs.compiled_scalar)
+        reference_consistency_loss = F.mse_loss(outputs.compiled_scalar, reference_tensor.detach())
+        losses["reference_consistency_loss"] = reference_consistency_loss
+        consistency_loss = consistency_loss + reference_consistency_loss
     scalar_conf_target = _confidence_target((outputs.compiled_scalar.detach() - scalar_targets.detach()).abs(), scale=1.0)
     scalar_conf_loss = F.mse_loss(outputs.scalar_confidence, scalar_conf_target)
     losses["consistency_loss"] = consistency_loss

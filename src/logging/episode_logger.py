@@ -70,8 +70,15 @@ class EpisodeLogger:
         condition_vector: Optional[Any] = None,
         skill_mode: Optional[str] = None,
     ) -> Episode:
-        episode_id = _deterministic_episode_id(self.task.task_id, self.robot.robot_id, datapack.datapack_id if datapack else None)
         meta = dict(metadata or {})
+        episode_id = str(
+            meta.pop("episode_id", "")
+            or _deterministic_episode_id(
+                self.task.task_id,
+                self.robot.robot_id,
+                datapack.datapack_id if datapack else None,
+            )
+        )
         resolved_skill_mode = skill_mode or getattr(condition_vector, "skill_mode", None)
         if resolved_skill_mode:
             meta.setdefault("skill_mode", str(resolved_skill_mode))

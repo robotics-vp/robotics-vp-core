@@ -27,11 +27,13 @@ class SACContractAwareAdapterConfig:
     head_hidden_dim: int = 64
     device: str = "cpu"
     lr: float = 1e-3
+    mode: str = "sidecar"
     log_interval: int = 50
     artifact_dir: Optional[str] = None
     consistency_loss_weight: float = 0.1
     objective_loss_weight: float = 0.35
     econ_loss_weight: float = 0.35
+    critic_alignment_weight: float = 0.15
     model_version: str = "sac_contract_aware_adapter_v1"
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -50,11 +52,13 @@ class SACContractAwareAdapterConfig:
             "head_hidden_dim": int(self.head_hidden_dim),
             "device": self.device,
             "lr": float(self.lr),
+            "mode": self.mode,
             "log_interval": int(self.log_interval),
             "artifact_dir": self.artifact_dir,
             "consistency_loss_weight": float(self.consistency_loss_weight),
             "objective_loss_weight": float(self.objective_loss_weight),
             "econ_loss_weight": float(self.econ_loss_weight),
+            "critic_alignment_weight": float(self.critic_alignment_weight),
             "model_version": self.model_version,
             "metadata": dict(self.metadata),
         }
@@ -71,11 +75,13 @@ class SACContractAwareAdapterConfig:
             head_hidden_dim=int(payload.get("head_hidden_dim", 64)),
             device=str(payload.get("device", "cpu")),
             lr=float(payload.get("lr", 1e-3)),
+            mode=str(payload.get("mode", "sidecar")),
             log_interval=int(payload.get("log_interval", 50)),
             artifact_dir=payload.get("artifact_dir"),
             consistency_loss_weight=float(payload.get("consistency_loss_weight", 0.1)),
             objective_loss_weight=float(payload.get("objective_loss_weight", 0.35)),
             econ_loss_weight=float(payload.get("econ_loss_weight", 0.35)),
+            critic_alignment_weight=float(payload.get("critic_alignment_weight", 0.15)),
             model_version=str(payload.get("model_version", "sac_contract_aware_adapter_v1")),
             metadata=dict(payload.get("metadata", {}) or {}),
         )
@@ -95,6 +101,7 @@ class SACContractAwareAdapter:
         self.training_steps = 0
         self.last_metrics: Dict[str, Any] = {}
         self._artifact_path: Optional[Path] = None
+        self._prediction_path: Optional[Path] = None
 
         if not self.enabled:
             self.bundle = None
@@ -116,6 +123,93 @@ class SACContractAwareAdapter:
             artifact_root = Path(self.config.artifact_dir)
             artifact_root.mkdir(parents=True, exist_ok=True)
             self._artifact_path = artifact_root / "sac_contract_aware_metrics.jsonl"
+            self._prediction_path = artifact_root / "sac_contract_aware_predictions.jsonl"
+
+    @property
+    def live_mode_enabled(self) -> bool:
+        return str(self.config.mode).lower() == "live_loss"
+
+    def compute_loss_bundle(
+        self,
+        *,
+        latent_batch: np.ndarray | torch.Tensor,
+        action_batch: np.ndarray | torch.Tensor,
+        reward_batch: np.ndarray | torch.Tensor,
+        done_batch: Optional[np.ndarray | torch.Tensor] = None,
+        condition_batch: Optional[np.ndarray | torch.Tensor] = None,
+        skill_modes: Optional[Sequence[str]] = None,
+        reference_scalar_predictions: Optional[np.ndarray | torch.Tensor] = None,
+    ) -> Dict[str, Any]:
+        if not self.enabled or self.bundle is None or self.optimizer is None:
+            return {"enabled": False}
+
+        latents = _as_tensor(latent_batch, device=self.device)
+        actions = _as_tensor(action_batch, device=self.device)
+        rewards = _as_tensor(reward_batch, device=self.device).reshape(-1)
+        condition = _condition_tensor(
+            condition_batch,
+            batch_size=latents.shape[0],
+            condition_dim=self.bundle.config.condition_dim,
+            device=self.device,
+        )
+        outputs = self.bundle(latents, actions, condition)
+        scalar_targets = rewards
+        objective_targets = _objective_targets(rewards, outputs.objective_axes, device=self.device)
+        econ_targets = _econ_targets(rewards, outputs.econ_axes, done_batch, device=self.device)
+        reference_scalars = (
+            _as_tensor(reference_scalar_predictions, device=self.device).reshape(-1)
+            if reference_scalar_predictions is not None
+            else None
+        )
+
+        weights = ContractAwareLossWeights(
+            scalar=1.0,
+            objective=self.config.objective_loss_weight,
+            econ=self.config.econ_loss_weight,
+            consistency=self.config.consistency_loss_weight,
+            confidence=0.05,
+        )
+        losses = contract_aware_losses(
+            outputs=outputs,
+            scalar_targets=scalar_targets,
+            objective_targets=objective_targets,
+            econ_targets=econ_targets,
+            reference_scalar_predictions=reference_scalars,
+            weights=weights,
+        )
+        metrics = self._metrics_from_outputs(
+            outputs=outputs,
+            losses=losses,
+            scalar_targets=scalar_targets,
+            objective_targets=objective_targets,
+            econ_targets=econ_targets,
+            reference_scalar_predictions=reference_scalars,
+            skill_modes=skill_modes,
+        )
+        return {
+            "enabled": True,
+            "outputs": outputs,
+            "losses": losses,
+            "metrics": metrics,
+        }
+
+    def optimize_loss_bundle(self, loss_bundle: Mapping[str, Any]) -> Dict[str, Any]:
+        if not self.enabled or self.bundle is None or self.optimizer is None:
+            return {"enabled": False}
+        outputs = loss_bundle.get("outputs")
+        losses = dict(loss_bundle.get("losses", {}) or {})
+        metrics = dict(loss_bundle.get("metrics", {}) or {})
+        if outputs is None or "total_loss" not in losses:
+            return {"enabled": False}
+        self.optimizer.zero_grad(set_to_none=True)
+        losses["total_loss"].backward()
+        self.optimizer.step()
+        self.training_steps += 1
+        metrics["training_step"] = int(self.training_steps)
+        self.last_metrics = metrics
+        self._append_metrics(metrics)
+        self._append_predictions(outputs.detach(), metrics)
+        return metrics
 
     def update_from_batch(
         self,
@@ -127,64 +221,17 @@ class SACContractAwareAdapter:
         condition_batch: Optional[np.ndarray | torch.Tensor] = None,
         skill_modes: Optional[Sequence[str]] = None,
     ) -> Dict[str, Any]:
-        if not self.enabled or self.bundle is None or self.optimizer is None:
+        loss_bundle = self.compute_loss_bundle(
+            latent_batch=latent_batch,
+            action_batch=action_batch,
+            reward_batch=reward_batch,
+            done_batch=done_batch,
+            condition_batch=condition_batch,
+            skill_modes=skill_modes,
+        )
+        if not loss_bundle.get("enabled", False):
             return {"enabled": False}
-
-        self.training_steps += 1
-        latents = _as_tensor(latent_batch, device=self.device)
-        actions = _as_tensor(action_batch, device=self.device)
-        rewards = _as_tensor(reward_batch, device=self.device).reshape(-1)
-        condition = _condition_tensor(
-            condition_batch,
-            batch_size=latents.shape[0],
-            condition_dim=self.bundle.config.condition_dim,
-            device=self.device,
-        )
-        outputs = self.bundle(
-            latents,
-            actions,
-            condition,
-        )
-        scalar_targets = rewards
-        objective_targets = _objective_targets(rewards, outputs.objective_axes, device=self.device)
-        econ_targets = _econ_targets(rewards, outputs.econ_axes, done_batch, device=self.device)
-
-        weights = ContractAwareLossWeights(
-            scalar=1.0,
-            objective=self.config.objective_loss_weight,
-            econ=self.config.econ_loss_weight,
-            consistency=self.config.consistency_loss_weight,
-            confidence=0.05,
-        )
-        self.optimizer.zero_grad(set_to_none=True)
-        losses = contract_aware_losses(
-            outputs=outputs,
-            scalar_targets=scalar_targets,
-            objective_targets=objective_targets,
-            econ_targets=econ_targets,
-            weights=weights,
-        )
-        losses["total_loss"].backward()
-        self.optimizer.step()
-
-        metrics = {
-            "enabled": True,
-            "training_step": int(self.training_steps),
-            "total_loss": float(losses["total_loss"].item()),
-            "scalar_loss": float(losses["scalar_loss"].item()),
-            "objective_loss": float(losses.get("objective_loss", torch.tensor(0.0)).item()),
-            "econ_loss": float(losses.get("econ_loss", torch.tensor(0.0)).item()),
-            "consistency_loss": float(losses["consistency_loss"].item()),
-            "compiled_scalar_mean": float(outputs.compiled_scalar.detach().mean().item()),
-            "objective_prediction_mean": float(outputs.objective_vector.detach().mean().item()),
-            "econ_prediction_mean": float(outputs.econ_vector.detach().mean().item()),
-            "config_digest": self.config.config_digest,
-            "model_version": self.config.model_version,
-            "skill_mode": (skill_modes[0] if skill_modes else self.config.skill_modes[0]),
-        }
-        self.last_metrics = metrics
-        self._append_metrics(metrics)
-        return metrics
+        return self.optimize_loss_bundle(loss_bundle)
 
     def state_dict(self) -> Dict[str, Any]:
         if not self.enabled or self.bundle is None:
@@ -215,6 +262,67 @@ class SACContractAwareAdapter:
             return
         with self._artifact_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(dict(metrics), sort_keys=True) + "\n")
+
+    def _append_predictions(self, outputs, metrics: Mapping[str, Any]) -> None:
+        if self._prediction_path is None:
+            return
+        if self.training_steps % max(1, self.config.log_interval) != 0:
+            return
+        payload = {
+            "training_step": int(self.training_steps),
+            "config_digest": self.config.config_digest,
+            "model_version": self.config.model_version,
+            "objective_axes": list(outputs.objective_axes),
+            "econ_axes": list(outputs.econ_axes),
+            "objective_prediction_sample": outputs.objective_vector[:2].detach().cpu().tolist(),
+            "econ_prediction_sample": outputs.econ_vector[:2].detach().cpu().tolist(),
+            "compiled_scalar_sample": outputs.compiled_scalar[:8].detach().cpu().tolist(),
+            "compiled_scalar_baseline_sample": outputs.compiled_scalar_baseline[:8].detach().cpu().tolist(),
+            "consistency_error_mae": metrics.get("compiled_vs_baseline_mae", 0.0),
+            "scalar_calibration_mae": metrics.get("scalar_calibration_mae", 0.0),
+            "objective_calibration_mae": metrics.get("objective_calibration_mae", 0.0),
+            "econ_calibration_mae": metrics.get("econ_calibration_mae", 0.0),
+            "reference_scalar_mae": metrics.get("reference_scalar_mae"),
+        }
+        with self._prediction_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+    def _metrics_from_outputs(
+        self,
+        *,
+        outputs,
+        losses: Mapping[str, torch.Tensor],
+        scalar_targets: torch.Tensor,
+        objective_targets: torch.Tensor,
+        econ_targets: torch.Tensor,
+        reference_scalar_predictions: Optional[torch.Tensor],
+        skill_modes: Optional[Sequence[str]],
+    ) -> Dict[str, Any]:
+        metrics = {
+            "enabled": True,
+            "mode": str(self.config.mode),
+            "live_mode_enabled": bool(self.live_mode_enabled),
+            "total_loss": float(losses["total_loss"].detach().item()),
+            "scalar_loss": float(losses["scalar_loss"].detach().item()),
+            "objective_loss": float(losses.get("objective_loss", torch.tensor(0.0)).detach().item()),
+            "econ_loss": float(losses.get("econ_loss", torch.tensor(0.0)).detach().item()),
+            "consistency_loss": float(losses["consistency_loss"].detach().item()),
+            "compiled_scalar_mean": float(outputs.compiled_scalar.detach().mean().item()),
+            "objective_prediction_mean": float(outputs.objective_vector.detach().mean().item()),
+            "econ_prediction_mean": float(outputs.econ_vector.detach().mean().item()),
+            "scalar_calibration_mae": float(torch.mean(torch.abs(outputs.compiled_scalar.detach() - scalar_targets.detach())).item()),
+            "objective_calibration_mae": float(torch.mean(torch.abs(outputs.objective_vector.detach() - objective_targets.detach())).item()),
+            "econ_calibration_mae": float(torch.mean(torch.abs(outputs.econ_vector.detach() - econ_targets.detach())).item()),
+            "compiled_vs_baseline_mae": float(torch.mean(torch.abs(outputs.compiled_scalar.detach() - outputs.compiled_scalar_baseline.detach())).item()),
+            "config_digest": self.config.config_digest,
+            "model_version": self.config.model_version,
+            "skill_mode": (skill_modes[0] if skill_modes else self.config.skill_modes[0]),
+        }
+        if reference_scalar_predictions is not None:
+            metrics["reference_scalar_mae"] = float(
+                torch.mean(torch.abs(outputs.compiled_scalar.detach() - reference_scalar_predictions.detach())).item()
+            )
+        return metrics
 
 
 def _as_tensor(value: np.ndarray | torch.Tensor, *, device: torch.device) -> torch.Tensor:

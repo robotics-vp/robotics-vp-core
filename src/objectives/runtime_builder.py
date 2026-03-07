@@ -18,7 +18,11 @@ class SourceDomain(str, Enum):
     PYBULLET = "pybullet"
     ISAAC = "isaac"
     SYNTHETIC = "synthetic"
+    SYNTHETIC_SHADOW = "synthetic_shadow"
+    SIM_ROLLOUT = "sim_rollout"
+    TRAINING_RUN = "training_run"
     REPLAY = "replay"
+    FUTURE_REAL_DEPLOYMENT = "future_real_deployment"
     REAL_LAB = "real_lab"
 
 

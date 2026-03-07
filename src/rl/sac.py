@@ -8,7 +8,9 @@ Features:
 - Replay buffer with novelty-based prioritization
 - Integrated encoder training
 """
-from typing import Optional
+import json
+from pathlib import Path
+from typing import Any, Dict, Mapping, Optional
 
 import torch
 import torch.nn as nn
@@ -144,17 +146,64 @@ class NoveltyReplayBuffer:
     Samples are prioritized by: weight = novelty × |TD_error|
     """
 
-    def __init__(self, capacity=int(1e6)):
+    def __init__(
+        self,
+        capacity=int(1e6),
+        *,
+        artifact_dir: Optional[str] = None,
+        sampling_log_interval: int = 50,
+    ):
         self.capacity = capacity
         self.buffer = deque(maxlen=capacity)
         self.priorities = deque(maxlen=capacity)
+        self.transition_metadata = deque(maxlen=capacity)
+        self.dispatch_by_episode: Dict[str, Dict[str, Any]] = {}
+        self.receipt_feedback_by_episode: Dict[str, Dict[str, Any]] = {}
+        self.last_sampling_artifact: Optional[Dict[str, Any]] = None
+        self.sample_calls = 0
+        self.sampling_log_interval = int(sampling_log_interval)
+        self._artifact_path: Optional[Path] = None
+        if artifact_dir:
+            artifact_root = Path(artifact_dir)
+            artifact_root.mkdir(parents=True, exist_ok=True)
+            self._artifact_path = artifact_root / "online_sac_sampling.jsonl"
 
-    def push(self, obs, action, reward, next_obs, done, novelty=1.0):
+    def push(
+        self,
+        obs,
+        action,
+        reward,
+        next_obs,
+        done,
+        novelty=1.0,
+        *,
+        episode_id: Optional[str] = None,
+        queue_dispatch: Optional[Mapping[str, Any]] = None,
+        source_domain: Optional[str] = None,
+        receipt_feedback: Optional[Mapping[str, Any]] = None,
+        condition_vector: Optional[Any] = None,
+        skill_mode: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ):
         """Add transition to buffer."""
         self.buffer.append((obs, action, reward, next_obs, done, novelty))
         self.priorities.append(1.0)  # Initial priority (will update)
+        transition_meta = {
+            "episode_id": str(episode_id or ""),
+            "queue_dispatch": dict(queue_dispatch or {}),
+            "source_domain": source_domain,
+            "receipt_feedback": dict(receipt_feedback or {}),
+            "condition_vector": condition_vector,
+            "skill_mode": skill_mode,
+            "metadata": dict(metadata or {}),
+        }
+        self.transition_metadata.append(transition_meta)
+        if transition_meta["episode_id"] and transition_meta["queue_dispatch"]:
+            self.dispatch_by_episode[transition_meta["episode_id"]] = dict(transition_meta["queue_dispatch"])
+        if transition_meta["episode_id"] and transition_meta["receipt_feedback"]:
+            self.receipt_feedback_by_episode[transition_meta["episode_id"]] = dict(transition_meta["receipt_feedback"])
 
-    def sample(self, batch_size, use_prioritization=True):
+    def sample(self, batch_size, use_prioritization=True, return_metadata=False):
         """
         Sample batch with novelty-based prioritization.
 
@@ -165,16 +214,25 @@ class NoveltyReplayBuffer:
             batch_size = len(self.buffer)
 
         if use_prioritization and len(self.priorities) > 0:
-            # Prioritized sampling
-            priorities = np.array(self.priorities)
-            priorities = np.abs(priorities) + 1e-6  # Avoid zero
-            probs = priorities / priorities.sum()
-            indices = np.random.choice(len(self.buffer), batch_size, p=probs, replace=False)
+            priorities = np.array(self.priorities, dtype=np.float64)
+            priorities = np.abs(priorities) + 1e-6
         else:
-            # Uniform sampling
-            indices = np.random.choice(len(self.buffer), batch_size, replace=False)
+            priorities = np.ones(len(self.buffer), dtype=np.float64)
+
+        queue_multipliers = np.array(
+            [self._sampling_multiplier(index) for index in range(len(self.buffer))],
+            dtype=np.float64,
+        )
+        effective_priorities = priorities * queue_multipliers
+        total_priority = float(effective_priorities.sum())
+        if total_priority <= 0.0:
+            effective_priorities = np.ones(len(self.buffer), dtype=np.float64)
+            total_priority = float(effective_priorities.sum())
+        probs = effective_priorities / total_priority
+        indices = np.random.choice(len(self.buffer), batch_size, p=probs, replace=False)
 
         batch = [self.buffer[i] for i in indices]
+        sampled_metadata = [self._transition_metadata(int(i)) for i in indices]
 
         obs = np.array([t[0] for t in batch])
         actions = np.array([t[1] for t in batch])
@@ -183,6 +241,17 @@ class NoveltyReplayBuffer:
         dones = np.array([t[4] for t in batch])
         novelties = np.array([t[5] for t in batch])
 
+        self.sample_calls += 1
+        self.last_sampling_artifact = self._build_sampling_artifact(
+            indices=indices,
+            sample_probs=probs,
+            queue_multipliers=queue_multipliers,
+            sampled_metadata=sampled_metadata,
+        )
+        self._append_sampling_artifact(self.last_sampling_artifact)
+
+        if return_metadata:
+            return obs, actions, rewards, next_obs, dones, novelties, indices, sampled_metadata
         return obs, actions, rewards, next_obs, dones, novelties, indices
 
     def update_priorities(self, indices, priorities):
@@ -190,8 +259,116 @@ class NoveltyReplayBuffer:
         for idx, priority in zip(indices, priorities):
             self.priorities[idx] = priority
 
+    def apply_queue_dispatch(self, dispatch_artifact: Mapping[str, Any]) -> None:
+        entries = list(dispatch_artifact.get("entries", []) or [])
+        self.dispatch_by_episode = {
+            str(entry.get("episode_id", "")): dict(entry)
+            for entry in entries
+            if entry.get("episode_id")
+        }
+
+    def attach_receipt_feedback(self, feedback_by_episode: Mapping[str, Mapping[str, Any]]) -> None:
+        for episode_id, payload in dict(feedback_by_episode or {}).items():
+            if episode_id:
+                self.receipt_feedback_by_episode[str(episode_id)] = dict(payload or {})
+
     def __len__(self):
         return len(self.buffer)
+
+    def _sampling_multiplier(self, index: int) -> float:
+        metadata = self._transition_metadata(index)
+        episode_id = str(metadata.get("episode_id", "") or "")
+        queue_dispatch = dict(metadata.get("queue_dispatch", {}) or {})
+        if episode_id and episode_id in self.dispatch_by_episode:
+            queue_dispatch = dict(self.dispatch_by_episode[episode_id])
+        base_weight = float(queue_dispatch.get("base_weight", 1.0) or 1.0)
+        adjusted_weight = float(queue_dispatch.get("adjusted_weight", base_weight) or base_weight)
+        if bool(queue_dispatch.get("dropped", False)):
+            return 1e-6
+        if abs(base_weight) <= 1e-9:
+            return max(1.0, adjusted_weight)
+        return max(1e-6, adjusted_weight / base_weight)
+
+    def _transition_metadata(self, index: int) -> Dict[str, Any]:
+        if index >= len(self.transition_metadata):
+            return {}
+        metadata = dict(self.transition_metadata[index] or {})
+        episode_id = str(metadata.get("episode_id", "") or "")
+        if episode_id and episode_id in self.dispatch_by_episode and not metadata.get("queue_dispatch"):
+            metadata["queue_dispatch"] = dict(self.dispatch_by_episode[episode_id])
+        if episode_id and episode_id in self.receipt_feedback_by_episode and not metadata.get("receipt_feedback"):
+            metadata["receipt_feedback"] = dict(self.receipt_feedback_by_episode[episode_id])
+        return metadata
+
+    def _build_sampling_artifact(
+        self,
+        *,
+        indices,
+        sample_probs: np.ndarray,
+        queue_multipliers: np.ndarray,
+        sampled_metadata,
+    ) -> Dict[str, Any]:
+        entries: Dict[str, Dict[str, Any]] = {}
+        first_seen: Dict[str, int] = {}
+        for index in range(len(self.buffer)):
+            metadata = self._transition_metadata(index)
+            episode_id = str(metadata.get("episode_id", "") or f"transition_{index:06d}")
+            dispatch = dict(metadata.get("queue_dispatch", {}) or self.dispatch_by_episode.get(episode_id, {}) or {})
+            first_seen.setdefault(episode_id, index)
+            if episode_id not in entries:
+                receipt_feedback = dict(metadata.get("receipt_feedback", {}) or self.receipt_feedback_by_episode.get(episode_id, {}) or {})
+                entries[episode_id] = {
+                    "episode_id": episode_id,
+                    "original_rank": int(dispatch.get("original_rank", first_seen[episode_id])),
+                    "adjusted_rank": int(dispatch.get("adjusted_rank", first_seen[episode_id])),
+                    "reweight_factor": float(queue_multipliers[index]),
+                    "reasons": list(dispatch.get("reasons", []) or []),
+                    "evidence": dict(dispatch.get("evidence", {}) or {}),
+                    "promotion_stage": str(dispatch.get("promotion_stage", "compare_only") or "compare_only"),
+                    "influence_source": str(dispatch.get("influence_source", "heuristic") or "heuristic"),
+                    "source_domain": metadata.get("source_domain"),
+                    "receipt_feedback": receipt_feedback,
+                }
+        sampled_episode_ids = [
+            str(metadata.get("episode_id", "") or f"transition_{int(index):06d}")
+            for index, metadata in zip(indices.tolist(), sampled_metadata)
+        ]
+        original_queue_order = [
+            row["episode_id"]
+            for row in sorted(entries.values(), key=lambda row: (row["original_rank"], row["episode_id"]))
+        ]
+        adjusted_queue_order = [
+            row["episode_id"]
+            for row in sorted(
+                entries.values(),
+                key=lambda row: (row["adjusted_rank"], -row["reweight_factor"], row["episode_id"]),
+            )
+        ]
+        return {
+            "sample_call": int(self.sample_calls),
+            "buffer_size": len(self.buffer),
+            "selected_transition_count": int(len(indices)),
+            "selected_episode_ids": sampled_episode_ids,
+            "original_queue_order": original_queue_order,
+            "adjusted_queue_order": adjusted_queue_order,
+            "reweight_factors": {
+                row["episode_id"]: float(row["reweight_factor"])
+                for row in entries.values()
+            },
+            "mean_sample_probability": float(np.mean(sample_probs[indices])) if len(indices) else 0.0,
+            "entries": [
+                dict(row)
+                for row in sorted(entries.values(), key=lambda row: (row["adjusted_rank"], row["episode_id"]))
+            ],
+        }
+
+    def _append_sampling_artifact(self, artifact: Mapping[str, Any]) -> None:
+        if self._artifact_path is None:
+            return
+        if self.sample_calls % max(1, self.sampling_log_interval) != 0:
+            return
+        with self._artifact_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(dict(artifact), sort_keys=True) + "\n")
 
 
 class SACAgent:
@@ -208,7 +385,9 @@ class SACAgent:
                  lr=3e-4, gamma=0.995, tau=5e-3,
                  buffer_capacity=int(1e6), batch_size=1024,
                  target_entropy=None, device='cpu',
-                 contract_aware_adapter: Optional[object] = None):
+                 contract_aware_adapter: Optional[object] = None,
+                 sampling_artifact_dir: Optional[str] = None,
+                 sampling_log_interval: int = 50):
         """
         Args:
             encoder: EncoderWithAuxiliaries instance
@@ -251,7 +430,11 @@ class SACAgent:
         self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr)
 
         # Replay buffer
-        self.replay_buffer = NoveltyReplayBuffer(capacity=buffer_capacity)
+        self.replay_buffer = NoveltyReplayBuffer(
+            capacity=buffer_capacity,
+            artifact_dir=sampling_artifact_dir,
+            sampling_log_interval=sampling_log_interval,
+        )
 
         # Training metrics
         self.training_steps = 0
@@ -280,7 +463,23 @@ class SACAgent:
 
         return action.cpu().numpy()[0], novelty
 
-    def store_transition(self, obs, action, reward, next_obs, done, novelty=1.0):
+    def store_transition(
+        self,
+        obs,
+        action,
+        reward,
+        next_obs,
+        done,
+        novelty=1.0,
+        *,
+        episode_id: Optional[str] = None,
+        queue_dispatch: Optional[Mapping[str, Any]] = None,
+        source_domain: Optional[str] = None,
+        receipt_feedback: Optional[Mapping[str, Any]] = None,
+        condition_vector: Optional[Any] = None,
+        skill_mode: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ):
         """Store transition in replay buffer."""
         # Convert obs dict to array
         if isinstance(obs, dict):
@@ -289,7 +488,30 @@ class SACAgent:
             next_obs = np.array([next_obs['t'], next_obs['completed'],
                                 next_obs['attempts'], next_obs['errors']])
 
-        self.replay_buffer.push(obs, action, reward, next_obs, done, novelty)
+        self.replay_buffer.push(
+            obs,
+            action,
+            reward,
+            next_obs,
+            done,
+            novelty,
+            episode_id=episode_id,
+            queue_dispatch=queue_dispatch,
+            source_domain=source_domain,
+            receipt_feedback=receipt_feedback,
+            condition_vector=condition_vector,
+            skill_mode=skill_mode,
+            metadata=metadata,
+        )
+
+    def apply_queue_dispatch(self, dispatch_artifact: Mapping[str, Any]) -> None:
+        self.replay_buffer.apply_queue_dispatch(dispatch_artifact)
+
+    def attach_receipt_feedback(self, feedback_by_episode: Mapping[str, Mapping[str, Any]]) -> None:
+        self.replay_buffer.attach_receipt_feedback(feedback_by_episode)
+
+    def get_last_sampling_artifact(self) -> Optional[Dict[str, Any]]:
+        return self.replay_buffer.last_sampling_artifact
 
     def update(self, aux_loss_weight={'consistency': 0.1, 'contrastive': 0.1}):
         """
@@ -302,8 +524,8 @@ class SACAgent:
             return {}
 
         # Sample batch
-        obs, actions, rewards, next_obs, dones, novelties, indices = \
-            self.replay_buffer.sample(self.batch_size)
+        obs, actions, rewards, next_obs, dones, novelties, indices, sample_metadata = \
+            self.replay_buffer.sample(self.batch_size, return_metadata=True)
 
         # Convert to tensors
         obs_t = torch.FloatTensor(obs).to(self.device)
@@ -312,6 +534,8 @@ class SACAgent:
         next_obs_t = torch.FloatTensor(next_obs).to(self.device)
         dones_t = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
         novelties_t = torch.FloatTensor(novelties).to(self.device)
+        condition_batch = _condition_batch_from_metadata(sample_metadata)
+        skill_modes = _skill_modes_from_metadata(sample_metadata)
 
         # Encode observations
         latent = self.encoder.encode(obs_t)
@@ -338,6 +562,28 @@ class SACAgent:
 
         critic_loss = (F.mse_loss(q1, target_value, reduction='none') * weights.unsqueeze(1)).mean()
         critic_loss += (F.mse_loss(q2, target_value, reduction='none') * weights.unsqueeze(1)).mean()
+        contract_alignment_loss = torch.tensor(0.0, device=self.device)
+        contract_aware_bundle = None
+        contract_aware_metrics = {}
+        if self.contract_aware_adapter is not None and getattr(self.contract_aware_adapter, "live_mode_enabled", False):
+            contract_aware_bundle = self.contract_aware_adapter.compute_loss_bundle(
+                latent_batch=latent.detach(),
+                action_batch=actions_t.detach(),
+                reward_batch=rewards_t.detach().squeeze(-1),
+                done_batch=dones_t.detach().squeeze(-1),
+                condition_batch=condition_batch,
+                skill_modes=skill_modes,
+                reference_scalar_predictions=torch.min(q1.detach(), q2.detach()).squeeze(-1),
+            )
+            if contract_aware_bundle.get("enabled", False):
+                alignment_target = contract_aware_bundle["outputs"].compiled_scalar.detach().unsqueeze(-1)
+                contract_alignment_loss = (
+                    F.mse_loss(q1, alignment_target) + F.mse_loss(q2, alignment_target)
+                )
+                critic_alignment_weight = float(
+                    getattr(getattr(self.contract_aware_adapter, "config", None), "critic_alignment_weight", 0.0) or 0.0
+                )
+                critic_loss = critic_loss + critic_alignment_weight * contract_alignment_loss
 
         # Update critics
         self.critic_optimizer.zero_grad()
@@ -348,13 +594,18 @@ class SACAgent:
         td_errors = (target_value - q1).abs().detach().cpu().numpy().flatten()
         self.replay_buffer.update_priorities(indices, td_errors * novelties)
 
-        contract_aware_metrics = {}
-        if self.contract_aware_adapter is not None:
+        if self.contract_aware_adapter is not None and getattr(self.contract_aware_adapter, "live_mode_enabled", False):
+            if contract_aware_bundle is not None and contract_aware_bundle.get("enabled", False):
+                contract_aware_metrics = self.contract_aware_adapter.optimize_loss_bundle(contract_aware_bundle)
+                contract_aware_metrics["critic_alignment_loss"] = float(contract_alignment_loss.detach().item())
+        elif self.contract_aware_adapter is not None:
             contract_aware_metrics = self.contract_aware_adapter.update_from_batch(
                 latent_batch=latent.detach(),
                 action_batch=actions_t.detach(),
                 reward_batch=rewards_t.detach().squeeze(-1),
                 done_batch=dones_t.detach().squeeze(-1),
+                condition_batch=condition_batch,
+                skill_modes=skill_modes,
             )
 
         # --- Actor Update ---
@@ -426,6 +677,11 @@ class SACAgent:
             'mean_weight': weights.mean().item(),
             'q_mean': q_new.mean().item()
         }
+        sampling_artifact = self.replay_buffer.last_sampling_artifact or {}
+        if sampling_artifact:
+            metrics['sampling_selected_episode_count'] = len(sampling_artifact.get('selected_episode_ids', []))
+            metrics['sampling_queue_entry_count'] = len(sampling_artifact.get('entries', []))
+            metrics['sampling_mean_probability'] = float(sampling_artifact.get('mean_sample_probability', 0.0))
         for key, value in contract_aware_metrics.items():
             metrics[f'contract_aware_{key}'] = value
         return metrics
@@ -468,3 +724,44 @@ class SACAgent:
             and hasattr(self.contract_aware_adapter, 'load_state_dict')
         ):
             self.contract_aware_adapter.load_state_dict(checkpoint['contract_aware_adapter'])
+
+
+def _condition_batch_from_metadata(sample_metadata) -> Optional[np.ndarray]:
+    rows = []
+    max_dim = 0
+    for metadata in sample_metadata:
+        condition = metadata.get("condition_vector")
+        if condition is None:
+            rows.append(None)
+            continue
+        if hasattr(condition, "to_vector"):
+            values = np.asarray(condition.to_vector(), dtype=np.float32).reshape(-1)
+        elif isinstance(condition, dict):
+            try:
+                values = np.asarray(list(condition.values()), dtype=np.float32).reshape(-1)
+            except Exception:
+                values = np.zeros(0, dtype=np.float32)
+        else:
+            values = np.asarray(condition, dtype=np.float32).reshape(-1)
+        rows.append(values)
+        max_dim = max(max_dim, int(values.shape[0]))
+    if max_dim <= 0:
+        return None
+    padded = []
+    for values in rows:
+        if values is None:
+            padded.append(np.zeros(max_dim, dtype=np.float32))
+            continue
+        if values.shape[0] < max_dim:
+            values = np.pad(values, (0, max_dim - values.shape[0]))
+        elif values.shape[0] > max_dim:
+            values = values[:max_dim]
+        padded.append(values.astype(np.float32))
+    return np.stack(padded, axis=0)
+
+
+def _skill_modes_from_metadata(sample_metadata) -> list[str]:
+    return [
+        str(metadata.get("skill_mode") or "efficiency_throughput")
+        for metadata in sample_metadata
+    ]

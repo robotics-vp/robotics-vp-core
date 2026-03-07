@@ -52,6 +52,10 @@ def build_shadow_advisory_output(
         str(row.metadata.get("episode_id", "")): row
         for row in receipt_bundle.adaptation_outcomes
     }
+    datapack_by_episode = {
+        str(row.metadata.get("episode_id", "")): row
+        for row in receipt_bundle.datapack_contributions
+    }
     steps_by_episode = defaultdict(list)
     for step in dataset.steps:
         steps_by_episode[step.episode_id].append(step)
@@ -80,6 +84,12 @@ def build_shadow_advisory_output(
         deployment_label = deployment_by_episode.get(episode.episode_id)
         deployment_receipt = receipt_by_episode.get(episode.episode_id)
         adaptation_label = adaptation_by_episode.get(episode.episode_id)
+        datapack_label = datapack_by_episode.get(episode.episode_id)
+        use_realized_receipts = receipt_bundle.label_mode in {
+            "sim_rollout",
+            "training_run",
+            "future_real_deployment",
+        }
 
         sampling = recommend_sampling(
             objective_profile_coverage_gap=coverage_gap,
@@ -104,12 +114,20 @@ def build_shadow_advisory_output(
             episode_id=episode.episode_id,
             objective_profile_id=str(episode.metadata.get("objective_profile_id", "balanced_contract")),
             source_domain=episode.source_domain,
-            expected_value_gain=float(episode.econ_tensor_summary.get("axes", {}).get("value_earned", 0.0)),
+            expected_value_gain=(
+                float(deployment_label.realized_value)
+                if deployment_label is not None and use_realized_receipts
+                else float(episode.econ_tensor_summary.get("axes", {}).get("value_earned", 0.0))
+            ),
             compute_cost=max(0.05, 0.08 * max(1, episode.total_steps) / 10.0),
             risk_cost=float(episode.econ_tensor_summary.get("axes", {}).get("constraint_penalty", 0.0)),
             uncertainty=float(policy_uncertainty or 0.0),
             ood_score=float(episode.condition_vector.get("ood_risk_level", 0.0) or 0.0),
-            data_quality=data_quality,
+            data_quality=(
+                max(0.0, data_quality - 0.15)
+                if datapack_label is not None and datapack_label.downweight_recommended
+                else data_quality
+            ),
             provenance_quality=provenance_quality,
             pricing_summary=dict(pricing_result.applied_output),
             regal_statuses={
@@ -123,7 +141,11 @@ def build_shadow_advisory_output(
             },
             replay_policy_uncertainty=float(policy_uncertainty or 0.0),
             learned_data_value=learned_data_value,
-            expected_adaptation_benefit=max(0.0, learned_data_value - float(policy_mae or 0.0)),
+            expected_adaptation_benefit=(
+                float(adaptation_label.realized_gain)
+                if adaptation_label is not None and use_realized_receipts
+                else max(0.0, learned_data_value - float(policy_mae or 0.0))
+            ),
             metadata={
                 "pricing_delta": learned_pricing_delta,
                 "realized_gain": (
@@ -134,6 +156,11 @@ def build_shadow_advisory_output(
                 "realized_value": (
                     float(deployment_label.realized_value)
                     if deployment_label is not None
+                    else None
+                ),
+                "realized_reward": (
+                    float(deployment_label.realized_reward)
+                    if deployment_label is not None and deployment_label.realized_reward is not None
                     else None
                 ),
             },
@@ -166,6 +193,37 @@ def build_shadow_advisory_output(
                     "adaptation_outcome": (
                         adaptation_label.to_dict() if adaptation_label is not None else None
                     ),
+                    "datapack_contribution": (
+                        datapack_label.to_dict() if datapack_label is not None else None
+                    ),
+                },
+                "advisor_evaluation": {
+                    "pricing_alignment": (
+                        {
+                            "predicted_rate": float(pricing_result.applied_output.get("net_customer_rate", 0.0) or 0.0),
+                            "pricing_accepted": bool(deployment_label.pricing_accepted),
+                        }
+                        if deployment_label is not None
+                        else None
+                    ),
+                    "data_value_alignment": (
+                        {
+                            "predicted_data_value": float(learned_data_value),
+                            "realized_frontier_gain": float(datapack_label.marginal_frontier_gain_realized),
+                            "downweight_recommended": bool(datapack_label.downweight_recommended),
+                        }
+                        if datapack_label is not None
+                        else None
+                    ),
+                    "policy_alignment": (
+                        {
+                            "policy_error": float(policy_mae or 0.0),
+                            "task_success": deployment_label.task_success,
+                            "objective_satisfied": deployment_label.objective_satisfied,
+                        }
+                        if deployment_label is not None
+                        else None
+                    ),
                 },
             }
         )
@@ -197,6 +255,13 @@ def build_shadow_advisory_output(
         ),
         "manifest_compatibility": manifest_compatibility.to_dict(),
         "receipt_label_coverage": receipt_bundle.coverage_summary(),
+        "advisor_realized_feedback_count": sum(
+            1
+            for output in episode_outputs
+            if output["advisor_evaluation"]["pricing_alignment"] is not None
+            or output["advisor_evaluation"]["data_value_alignment"] is not None
+            or output["advisor_evaluation"]["policy_alignment"] is not None
+        ),
     }
     payload = {
         "summary": summary,

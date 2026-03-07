@@ -40,7 +40,10 @@ def test_apply_live_queue_selection_bounded_reweight_and_drop():
                 "priority_score": 0.9,
                 "replay_action": "downweight",
                 "tags": ["low_provenance_review", "downweight_candidate"],
-                "metadata": {"deploy_recommendation": "deny_shadow"},
+                "metadata": {
+                    "deploy_recommendation": "deny_shadow",
+                    "promotion_stage": "budget_gate",
+                },
             },
         ],
     }

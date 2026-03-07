@@ -32,10 +32,14 @@ class PromotionEvidenceRecord:
     node_id: str
     policy_node_id: str
     current_stage: str
+    coverage: Dict[str, Any]
     metrics: Dict[str, Any]
     promotion_decision: Dict[str, Any]
+    disagreement_slices: Dict[str, Any] = field(default_factory=dict)
     disagreement_episode_ids: list[str] = field(default_factory=list)
+    false_positive_summary: Dict[str, Any] = field(default_factory=dict)
     false_positive_episode_ids: list[str] = field(default_factory=list)
+    false_negative_summary: Dict[str, Any] = field(default_factory=dict)
     false_negative_episode_ids: list[str] = field(default_factory=list)
     downstream_usefulness: Dict[str, Any] = field(default_factory=dict)
     evidence_pointers: Dict[str, Any] = field(default_factory=dict)
@@ -45,10 +49,14 @@ class PromotionEvidenceRecord:
             "node_id": self.node_id,
             "policy_node_id": self.policy_node_id,
             "current_stage": self.current_stage,
+            "coverage": dict(self.coverage),
             "metrics": dict(self.metrics),
             "promotion_decision": dict(self.promotion_decision),
+            "disagreement_slices": dict(self.disagreement_slices),
             "disagreement_episode_ids": list(self.disagreement_episode_ids),
+            "false_positive_summary": dict(self.false_positive_summary),
             "false_positive_episode_ids": list(self.false_positive_episode_ids),
+            "false_negative_summary": dict(self.false_negative_summary),
             "false_negative_episode_ids": list(self.false_negative_episode_ids),
             "downstream_usefulness": dict(self.downstream_usefulness),
             "evidence_pointers": dict(self.evidence_pointers),
@@ -122,6 +130,10 @@ def build_promotion_evidence_report(
         disagreement_episode_ids: list[str] = []
         false_positive_episode_ids: list[str] = []
         false_negative_episode_ids: list[str] = []
+        disagreement_source_counts: Dict[str, int] = {}
+        disagreement_skill_counts: Dict[str, int] = {}
+        false_positive_source_counts: Dict[str, int] = {}
+        false_negative_source_counts: Dict[str, int] = {}
 
         for episode in dataset.episodes:
             deployment_label = deployment_by_episode.get(episode.episode_id)
@@ -146,10 +158,14 @@ def build_promotion_evidence_report(
             current_vectors.append(list(episode.condition_vector_values))
             if abs(prediction - baseline) > 0.25:
                 disagreement_episode_ids.append(episode.episode_id)
+                disagreement_source_counts[episode.source_domain] = disagreement_source_counts.get(episode.source_domain, 0) + 1
+                disagreement_skill_counts[episode.skill_mode] = disagreement_skill_counts.get(episode.skill_mode, 0) + 1
             if prediction >= 0.5 and outcome < 0.5:
                 false_positive_episode_ids.append(episode.episode_id)
+                false_positive_source_counts[episode.source_domain] = false_positive_source_counts.get(episode.source_domain, 0) + 1
             if prediction < 0.5 and outcome >= 0.5:
                 false_negative_episode_ids.append(episode.episode_id)
+                false_negative_source_counts[episode.source_domain] = false_negative_source_counts.get(episode.source_domain, 0) + 1
 
         calibration = summarize_calibration(
             confidences=confidences,
@@ -195,10 +211,31 @@ def build_promotion_evidence_report(
                 node_id=node_id,
                 policy_node_id=policy_node_id,
                 current_stage=promotion_policy.node_stage(policy_node_id).value,
+                coverage={
+                    "episode_count": len(predictions),
+                    "receipt_coverage_count": (
+                        receipt_bundle.coverage_summary().get("covered_episode_count", 0)
+                        if receipt_bundle
+                        else 0
+                    ),
+                    "source_domains": sorted({episode.source_domain for episode in dataset.episodes}),
+                },
                 metrics=metrics.to_dict(),
                 promotion_decision=decision.to_dict(),
+                disagreement_slices={
+                    "by_source_domain": dict(sorted(disagreement_source_counts.items())),
+                    "by_skill_mode": dict(sorted(disagreement_skill_counts.items())),
+                },
                 disagreement_episode_ids=sorted(disagreement_episode_ids),
+                false_positive_summary={
+                    "count": len(false_positive_episode_ids),
+                    "by_source_domain": dict(sorted(false_positive_source_counts.items())),
+                },
                 false_positive_episode_ids=sorted(false_positive_episode_ids),
+                false_negative_summary={
+                    "count": len(false_negative_episode_ids),
+                    "by_source_domain": dict(sorted(false_negative_source_counts.items())),
+                },
                 false_negative_episode_ids=sorted(false_negative_episode_ids),
                 downstream_usefulness={
                     "precision_if_acted": round(
@@ -386,9 +423,12 @@ def _promotion_markdown(report: PromotionEvidenceReport) -> str:
                 f"### {row.node_id}",
                 f"- Current stage: {row.current_stage}",
                 f"- Recommendation: {row.promotion_decision.get('outcome')} -> {row.promotion_decision.get('recommended_stage')}",
+                f"- Coverage: {row.coverage.get('episode_count', 0)} episodes / {row.coverage.get('receipt_coverage_count', 0)} receipts",
                 f"- Calibration error: {row.metrics.get('calibration_error')}",
                 f"- Baseline agreement: {row.metrics.get('baseline_agreement')}",
                 f"- Disagreements: {len(row.disagreement_episode_ids)}",
+                f"- False positives: {row.false_positive_summary.get('count', 0)}",
+                f"- False negatives: {row.false_negative_summary.get('count', 0)}",
                 "",
             ]
         )

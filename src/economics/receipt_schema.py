@@ -64,6 +64,12 @@ class DeploymentReceiptRecord:
     quoted_rate: float
     billed_rate: float
     pricing_acceptance: PricingAcceptanceLabel
+    realized_reward: Optional[float] = None
+    task_success: Optional[bool] = None
+    objective_satisfied: Optional[bool] = None
+    incident_events: list[str] = field(default_factory=list)
+    human_review_label: Optional[str] = None
+    override_label: Optional[str] = None
     adaptation_outcome_ref: Optional[str] = None
     datapack_label_ref: Optional[str] = None
     provenance: Dict[str, Any] = field(default_factory=dict)
@@ -95,6 +101,12 @@ class DeploymentReceiptRecord:
             "quoted_rate": float(self.quoted_rate),
             "billed_rate": float(self.billed_rate),
             "pricing_acceptance": self.pricing_acceptance.to_dict(),
+            "realized_reward": self.realized_reward,
+            "task_success": self.task_success,
+            "objective_satisfied": self.objective_satisfied,
+            "incident_events": list(self.incident_events),
+            "human_review_label": self.human_review_label,
+            "override_label": self.override_label,
             "adaptation_outcome_ref": self.adaptation_outcome_ref,
             "datapack_label_ref": self.datapack_label_ref,
             "provenance": dict(self.provenance),
@@ -115,6 +127,16 @@ class DeploymentReceiptRecord:
             quoted_rate=float(payload.get("quoted_rate", 0.0)),
             billed_rate=float(payload.get("billed_rate", 0.0)),
             pricing_acceptance=PricingAcceptanceLabel.from_dict(payload.get("pricing_acceptance", {}) or {}),
+            realized_reward=(
+                float(payload.get("realized_reward"))
+                if payload.get("realized_reward") is not None
+                else None
+            ),
+            task_success=payload.get("task_success"),
+            objective_satisfied=payload.get("objective_satisfied"),
+            incident_events=[str(value) for value in payload.get("incident_events", []) or []],
+            human_review_label=payload.get("human_review_label"),
+            override_label=payload.get("override_label"),
             adaptation_outcome_ref=payload.get("adaptation_outcome_ref"),
             datapack_label_ref=payload.get("datapack_label_ref"),
             provenance=dict(payload.get("provenance", {}) or {}),
