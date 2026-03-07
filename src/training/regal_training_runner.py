@@ -17,11 +17,12 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src.contracts.schemas import (
     RunManifestV1,
     TrajectoryAuditV1,
+    AuditAggregateV1,
     EconTensorV1,
     RegalContextV1,
     LedgerWindowV1,
@@ -53,6 +54,16 @@ from src.deployment.deploy_gate import (
 )
 from src.determinism.determinism_context import set_determinism, get_context_summary
 from src.utils.config_digest import sha256_json, sha256_file
+from src.training.checkpoint_registry import (
+    CheckpointRecord,
+    create_checkpoint_registry,
+    write_checkpoint_registry,
+)
+from src.training.training_manifest import (
+    TrainingRuntimeManifest,
+    build_training_runtime_summary_markdown,
+    write_training_runtime_manifest,
+)
 
 
 @dataclass
@@ -111,6 +122,35 @@ class TrainingRunResult:
     allow_deploy: bool = False
     deploy_reason: str = ""
 
+    # Runtime unification
+    training_runtime_manifest_sha: Optional[str] = None
+    checkpoint_registry_sha: Optional[str] = None
+    runtime_status: str = "unknown"
+    failure_reason: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "success": bool(self.success),
+            "output_dir": str(self.output_dir),
+            "manifest_sha": self.manifest_sha,
+            "ledger_sha": self.ledger_sha,
+            "exposure_sha": self.exposure_sha,
+            "selection_manifest_sha": self.selection_manifest_sha,
+            "orchestrator_state_sha": self.orchestrator_state_sha,
+            "trajectory_audit_sha": self.trajectory_audit_sha,
+            "verification_report_sha": self.verification_report_sha,
+            "deploy_gate_inputs_sha": self.deploy_gate_inputs_sha,
+            "verify_all_passed": bool(self.verify_all_passed),
+            "verify_failed_checks": list(self.verify_failed_checks),
+            "allow_deploy": bool(self.allow_deploy),
+            "deploy_reason": self.deploy_reason,
+            "training_runtime_manifest_sha": self.training_runtime_manifest_sha,
+            "checkpoint_registry_sha": self.checkpoint_registry_sha,
+            "runtime_status": self.runtime_status,
+            "failure_reason": self.failure_reason,
+        }
+
 
 class RegalTrainingRunner:
     """Canonical training runner with full regality compliance.
@@ -158,9 +198,22 @@ class RegalTrainingRunner:
         self._econ_tensor: Optional[EconTensorV1] = None
         self._econ_basis_sha: Optional[str] = None
 
+        # Unified training runtime state
+        self._training_kind: Optional[str] = None
+        self._training_runtime_context: Dict[str, Any] = {}
+        self._runtime_artifacts: Dict[str, str] = {}
+        self._runtime_artifact_metadata: Dict[str, Dict[str, Any]] = {}
+        self._checkpoint_records: List[CheckpointRecord] = []
+        self._runtime_status: str = "initialized"
+        self._failure_reason: Optional[str] = None
+        self._runtime_started_at: Optional[str] = None
+        self._runtime_ended_at: Optional[str] = None
+
     def start_training(self) -> None:
         """Called at start of training."""
         self._ts_start = datetime.now().isoformat()
+        self._runtime_started_at = self._ts_start
+        self._runtime_status = "running"
         set_determinism(seed=self.config.seed)
 
     def record_sample(
@@ -231,6 +284,136 @@ class RegalTrainingRunner:
         self._econ_tensor = tensor
         self._econ_basis_sha = basis_sha
 
+    def configure_training_runtime(
+        self,
+        *,
+        training_kind: str,
+        config_path: Optional[str] = None,
+        config_digest: str = "",
+        replay_dataset_dir: Optional[str] = None,
+        replay_manifest_digest: Optional[str] = None,
+        replay_dataset_summary: Optional[Mapping[str, Any]] = None,
+        objective_profile_snapshot: Optional[Mapping[str, Any]] = None,
+        promotion_policy_snapshot: Optional[Mapping[str, Any]] = None,
+        source_domain_coverage: Optional[Mapping[str, Any]] = None,
+        receipt_label_coverage: Optional[Mapping[str, Any]] = None,
+        artifact_schema_compatibility: Optional[List[Mapping[str, Any]]] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> None:
+        """Store unified runtime metadata for training-manifest emission."""
+        self._training_kind = str(training_kind)
+        self._training_runtime_context = {
+            "config_path": config_path,
+            "config_digest": config_digest,
+            "replay_dataset_dir": replay_dataset_dir,
+            "replay_manifest_digest": replay_manifest_digest,
+            "replay_dataset_summary": dict(replay_dataset_summary or {}),
+            "objective_profile_snapshot": dict(objective_profile_snapshot or {}),
+            "promotion_policy_snapshot": dict(promotion_policy_snapshot or {}),
+            "source_domain_coverage": dict(source_domain_coverage or {}),
+            "receipt_label_coverage": dict(receipt_label_coverage or {}),
+            "artifact_schema_compatibility": [
+                dict(row) for row in (artifact_schema_compatibility or [])
+            ],
+            "metadata": dict(metadata or {}),
+        }
+
+    def register_artifact(
+        self,
+        artifact_id: str,
+        path: str | Path,
+        *,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> None:
+        """Register a training-runtime artifact for the unified manifest."""
+        self._runtime_artifacts[str(artifact_id)] = str(path)
+        self._runtime_artifact_metadata[str(artifact_id)] = dict(metadata or {})
+
+    def register_checkpoint(self, checkpoint: CheckpointRecord) -> None:
+        """Register a checkpoint for the unified checkpoint registry."""
+        self._checkpoint_records.append(checkpoint)
+
+    def set_runtime_status(self, status: str, *, failure_reason: Optional[str] = None) -> None:
+        """Update runtime status/failure information for summary artifacts."""
+        self._runtime_status = str(status)
+        self._runtime_ended_at = datetime.now().isoformat()
+        self._failure_reason = failure_reason
+
+    def _write_training_runtime_artifacts(
+        self,
+        *,
+        plan_sha: str,
+        plan_id: str,
+        status: Optional[str] = None,
+    ) -> tuple[Optional[str], Optional[str]]:
+        if not (self._training_kind or self._runtime_artifacts or self._checkpoint_records or self._training_runtime_context):
+            return None, None
+
+        effective_status = status or self._runtime_status
+        checkpoint_registry_sha: Optional[str] = None
+        checkpoint_registry_path: Optional[str] = None
+        if self._checkpoint_records:
+            checkpoint_registry = create_checkpoint_registry(
+                run_id=self.run_id,
+                training_kind=self._training_kind or "training_job",
+                checkpoints=self._checkpoint_records,
+                metadata={"runtime_status": effective_status},
+            )
+            checkpoint_registry_path = str(self.output_dir / "checkpoint_registry.json")
+            checkpoint_registry_sha = write_checkpoint_registry(
+                checkpoint_registry_path,
+                checkpoint_registry,
+            )
+        runtime_manifest = TrainingRuntimeManifest(
+            schema_version="training_runtime_manifest_v1",
+            run_id=self.run_id,
+            training_kind=self._training_kind or "training_job",
+            status=effective_status,
+            seed=self.config.seed,
+            plan_id=plan_id,
+            plan_sha=plan_sha,
+            started_at=self._runtime_started_at or self._ts_start or "",
+            ended_at=self._runtime_ended_at or self._ts_end or "",
+            config_path=self._training_runtime_context.get("config_path"),
+            config_digest=str(self._training_runtime_context.get("config_digest", "")),
+            replay_dataset_dir=self._training_runtime_context.get("replay_dataset_dir"),
+            replay_manifest_digest=self._training_runtime_context.get("replay_manifest_digest"),
+            replay_dataset_summary=dict(self._training_runtime_context.get("replay_dataset_summary", {}) or {}),
+            objective_profile_snapshot=dict(self._training_runtime_context.get("objective_profile_snapshot", {}) or {}),
+            promotion_policy_snapshot=dict(self._training_runtime_context.get("promotion_policy_snapshot", {}) or {}),
+            source_domain_coverage=dict(self._training_runtime_context.get("source_domain_coverage", {}) or {}),
+            receipt_label_coverage=dict(self._training_runtime_context.get("receipt_label_coverage", {}) or {}),
+            artifact_paths=dict(sorted(self._runtime_artifacts.items())),
+            checkpoint_registry_path=checkpoint_registry_path,
+            checkpoint_registry_digest=checkpoint_registry_sha,
+            promotion_evidence_path=self._runtime_artifacts.get("regal_promotion_eval"),
+            promotion_evidence_digest=(
+                sha256_file(self._runtime_artifacts["regal_promotion_eval"])
+                if self._runtime_artifacts.get("regal_promotion_eval")
+                and Path(self._runtime_artifacts["regal_promotion_eval"]).exists()
+                else None
+            ),
+            artifact_schema_compatibility=[
+                dict(row)
+                for row in list(self._training_runtime_context.get("artifact_schema_compatibility", []) or [])
+            ],
+            failure_reason=self._failure_reason,
+            metadata=dict(self._training_runtime_context.get("metadata", {}) or {}),
+        )
+        manifest_path = self.output_dir / "training_runtime_manifest.json"
+        manifest_sha = write_training_runtime_manifest(manifest_path, runtime_manifest)
+        summary_md = build_training_runtime_summary_markdown(
+            runtime_manifest,
+            checkpoint_rows=[record.to_dict() for record in self._checkpoint_records],
+        )
+        (self.output_dir / "training_runtime_summary.md").write_text(summary_md, encoding="utf-8")
+        self._runtime_artifacts.setdefault("training_runtime_manifest", str(manifest_path))
+        self._runtime_artifacts.setdefault(
+            "training_runtime_summary",
+            str(self.output_dir / "training_runtime_summary.md"),
+        )
+        return manifest_sha, checkpoint_registry_sha
+
     def finalize(
         self,
         plan_sha: str,
@@ -246,6 +429,9 @@ class RegalTrainingRunner:
             TrainingRunResult with all artifact SHAs and verification result
         """
         self._ts_end = datetime.now().isoformat()
+        self._runtime_ended_at = self._ts_end
+        if self._runtime_status not in {"failed", "verification_failed"}:
+            self._runtime_status = "finalizing"
 
         # Aggregate trajectory audits (REQUIRED for training)
         trajectory_audit_sha: Optional[str] = None
@@ -282,12 +468,20 @@ class RegalTrainingRunner:
         orchestrator_path = self.output_dir / "orchestrator_state.json"
         orchestrator_sha = write_orchestrator_state(str(orchestrator_path), orchestrator_state)
 
+        audit_before = self._audit_before or self._placeholder_audit_aggregate()
+        audit_after = self._audit_after or audit_before
+
         # Build deploy gate inputs
         deploy_inputs = create_deploy_gate_inputs(
-            regal_result=self._regal_result,
+            regal_result=(
+                self._regal_result
+                if getattr(self._regal_result, "all_passed", None) is not None
+                else None
+            ),
             audit_delta_success=(
-                self._audit_after.success_rate - self._audit_before.success_rate
-                if self._audit_before and self._audit_after else None
+                audit_after.success_rate - audit_before.success_rate
+                if audit_before.success_rate is not None and audit_after.success_rate is not None
+                else None
             ),
             trajectory_audit_sha=trajectory_audit_sha,
             econ_tensor_sha=self._econ_tensor.sha256() if self._econ_tensor else None,
@@ -307,8 +501,8 @@ class RegalTrainingRunner:
             run_id=self.run_id,
             plan_id=plan_id,
             plan_sha=plan_sha,
-            audit_before=self._audit_before,
-            audit_after=self._audit_after,
+            audit_before=audit_before,
+            audit_after=audit_after,
             window=LedgerWindowV1(
                 step_start=0,
                 step_end=self.config.training_steps,
@@ -324,7 +518,11 @@ class RegalTrainingRunner:
                 policy_before="baseline",
                 policy_after="trained",
             ),
-            regal=self._regal_result,
+            regal=(
+                self._regal_result
+                if getattr(self._regal_result, "all_passed", None) is not None
+                else None
+            ),
             notes=f"Regal training run: {self.run_id}",
         )
         ledger.append(record)
@@ -336,7 +534,7 @@ class RegalTrainingRunner:
             plan_sha=plan_sha,
             audit_suite_id=self.config.audit_suite_id,
             audit_seed=self.config.audit_seed,
-            audit_config_sha=self._audit_before.config_sha if self._audit_before else "",
+            audit_config_sha=audit_before.config_sha,
             datapack_ids=exposure_manifest.datapack_ids,
             seeds={"audit": self.config.seed},
             determinism_config=get_context_summary(),
@@ -371,6 +569,11 @@ class RegalTrainingRunner:
         manifest_sha = sha256_file(str(manifest_path))
 
         # Build result
+        runtime_manifest_sha, checkpoint_registry_sha = self._write_training_runtime_artifacts(
+            plan_sha=plan_sha,
+            plan_id=plan_id,
+            status="completed" if verification_report.all_passed else "verification_failed",
+        )
         failed_checks = [c.check_id for c in verification_report.checks if not c.passed]
 
         result = TrainingRunResult(
@@ -389,6 +592,10 @@ class RegalTrainingRunner:
             verify_failed_checks=failed_checks,
             allow_deploy=deploy_decision.allow_deploy,
             deploy_reason=deploy_decision.reason,
+            training_runtime_manifest_sha=runtime_manifest_sha,
+            checkpoint_registry_sha=checkpoint_registry_sha,
+            runtime_status="completed" if verification_report.all_passed else "verification_failed",
+            failure_reason=None if verification_report.all_passed else "verification_failed",
         )
 
         # Print summary
@@ -418,6 +625,55 @@ class RegalTrainingRunner:
 
         return result
 
+    def _placeholder_audit_aggregate(self) -> AuditAggregateV1:
+        """Build a deterministic placeholder audit aggregate when no legacy audit exists."""
+        returns = [float(audit.total_return or 0.0) for audit in self._trajectory_audits]
+        success_like = [
+            1.0
+            if (audit.contact_anomaly_count or 0) == 0 and (audit.velocity_spike_count or 0) == 0
+            else 0.0
+            for audit in self._trajectory_audits
+        ]
+        energy_like = [
+            float(sum(abs(value) for value in (audit.action_mean or [])))
+            for audit in self._trajectory_audits
+        ]
+        return AuditAggregateV1(
+            audit_suite_id=self.config.audit_suite_id,
+            seed=self.config.audit_seed,
+            num_episodes=len(self._trajectory_audits),
+            success_rate=(
+                sum(success_like) / float(len(success_like))
+                if success_like
+                else 0.0
+            ),
+            mean_return=(
+                sum(returns) / float(len(returns))
+                if returns
+                else 0.0
+            ),
+            mean_energy_Wh=(
+                sum(energy_like) / float(len(energy_like))
+                if energy_like
+                else 0.0
+            ),
+            mean_mpl_proxy=(
+                sum(max(0.0, value) for value in returns) / float(len(returns))
+                if returns
+                else 0.0
+            ),
+            per_task={},
+            episodes_sha=sha256_json([audit.sha256() for audit in self._trajectory_audits]),
+            config_sha=sha256_json(
+                {
+                    "audit_suite_id": self.config.audit_suite_id,
+                    "audit_seed": self.config.audit_seed,
+                    "trajectory_audit_count": len(self._trajectory_audits),
+                }
+            ),
+            regal_context_sha=self._regal_context_sha,
+        )
+
 
 def run_training_with_regality(
     training_fn: Callable[[RegalTrainingRunner], None],
@@ -440,7 +696,16 @@ def run_training_with_regality(
     runner.start_training()
 
     # Run the training
-    training_fn(runner)
+    try:
+        training_fn(runner)
+    except Exception as exc:
+        runner.set_runtime_status("failed", failure_reason=f"{exc.__class__.__name__}: {exc}")
+        runner._write_training_runtime_artifacts(  # noqa: SLF001 - shared internal helper
+            plan_sha=plan_sha,
+            plan_id=plan_id,
+            status="failed",
+        )
+        raise
 
     # Finalize and verify
     return runner.finalize(plan_sha=plan_sha, plan_id=plan_id)

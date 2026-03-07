@@ -105,11 +105,18 @@ def train_offline_rl(
     dataset_dir: str | Path,
     config_path: str | Path,
     output_dir: str | Path,
+    episode_ids: Optional[Sequence[str]] = None,
 ) -> OfflineRLTrainResult:
     dataset = load_replay_dataset(dataset_dir)
     config = load_offline_rl_config(config_path)
     output_root = Path(output_dir)
     output_root.mkdir(parents=True, exist_ok=True)
+    selected_episode_ids = {str(value) for value in (episode_ids or []) if str(value)}
+    filtered_steps = (
+        [row for row in dataset.steps if row.episode_id in selected_episode_ids]
+        if selected_episode_ids
+        else list(dataset.steps)
+    )
 
     training_cfg = dict(config.get("training", {}) or {})
     algorithm = str(config.get("algorithm", "td3_bc_shadow"))
@@ -158,7 +165,7 @@ def train_offline_rl(
     actor_optimizer = torch.optim.AdamW(actor.parameters(), lr=float(training_cfg.get("actor_lr", 1e-3)))
     critic_optimizer = torch.optim.AdamW(critic.parameters(), lr=float(training_cfg.get("critic_lr", 1e-3)))
 
-    train_records, _ = split_step_records(dataset.steps, val_fraction=float(training_cfg.get("val_fraction", 0.25)))
+    train_records, _ = split_step_records(filtered_steps, val_fraction=float(training_cfg.get("val_fraction", 0.25)))
     transition_dataset = OfflineReplayTransitionDataset(
         train_records,
         obs_dim=actor_config.obs_dim,
@@ -256,6 +263,7 @@ def train_offline_rl(
         "train_steps": train_steps,
         "actor_checkpoint": str(actor_checkpoint),
         "critic_checkpoint": str(critic_checkpoint),
+        "selected_episode_count": len(selected_episode_ids) if selected_episode_ids else len({row.episode_id for row in filtered_steps}),
         "device": str(device),
         "determinism": get_context_summary(),
         "sac_backbone_preserved": True,

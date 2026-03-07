@@ -8,6 +8,7 @@ from src.economics.inferential_training_gate import InferentialTrainingCandidate
 from src.phase_h.advisory_integration import MAX_MULTIPLIER, MIN_MULTIPLIER
 from src.orchestrator.adaptation_budgeting import evaluate_adaptation_budget
 from src.orchestrator.queue_selection import build_live_queue_selection
+from src.replay.receipt_ingest import resolve_receipt_label_bundle
 from src.replay.dataset import load_replay_dataset
 from src.replay.compatibility import check_replay_manifest_compatibility
 from src.regality.promotion_policy import load_regal_promotion_policy
@@ -29,10 +30,28 @@ def build_shadow_advisory_output(
     data_value_advisor: Optional[DataValueAdvisor] = None,
     regal_support_advisor: Optional[RegalSupportAdvisor] = None,
     promotion_policy_path: str = "configs/regality/promotion_default.yaml",
+    receipt_label_dir: Optional[str] = None,
+    receipt_label_mode: str = "synthetic_shadow",
 ) -> Dict[str, Any]:
     dataset = load_replay_dataset(replay_dataset_dir)
     promotion_policy = load_regal_promotion_policy(promotion_policy_path)
     manifest_compatibility = check_replay_manifest_compatibility(dataset.manifest, expected_schema_version=dataset.manifest.schema_version)
+    receipt_bundle = resolve_receipt_label_bundle(
+        dataset=dataset,
+        receipt_label_dir=receipt_label_dir,
+        allow_synthetic=True,
+        label_mode=receipt_label_mode,
+    )
+    deployment_by_episode = {
+        row.episode_id: row for row in receipt_bundle.deployment_outcomes
+    }
+    receipt_by_episode = {
+        row.episode_id: row for row in receipt_bundle.deployment_receipts
+    }
+    adaptation_by_episode = {
+        str(row.metadata.get("episode_id", "")): row
+        for row in receipt_bundle.adaptation_outcomes
+    }
     steps_by_episode = defaultdict(list)
     for step in dataset.steps:
         steps_by_episode[step.episode_id].append(step)
@@ -58,6 +77,9 @@ def build_shadow_advisory_output(
         provenance_quality = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
         data_quality = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
         hard_flags = sum(1 for flag in episode.constraint_flags if str(flag.get("severity", "")) == "hard")
+        deployment_label = deployment_by_episode.get(episode.episode_id)
+        deployment_receipt = receipt_by_episode.get(episode.episode_id)
+        adaptation_label = adaptation_by_episode.get(episode.episode_id)
 
         sampling = recommend_sampling(
             objective_profile_coverage_gap=coverage_gap,
@@ -102,7 +124,19 @@ def build_shadow_advisory_output(
             replay_policy_uncertainty=float(policy_uncertainty or 0.0),
             learned_data_value=learned_data_value,
             expected_adaptation_benefit=max(0.0, learned_data_value - float(policy_mae or 0.0)),
-            metadata={"pricing_delta": learned_pricing_delta},
+            metadata={
+                "pricing_delta": learned_pricing_delta,
+                "realized_gain": (
+                    float(adaptation_label.realized_gain)
+                    if adaptation_label is not None
+                    else None
+                ),
+                "realized_value": (
+                    float(deployment_label.realized_value)
+                    if deployment_label is not None
+                    else None
+                ),
+            },
         )
         budget_candidates.append(candidate)
 
@@ -122,6 +156,17 @@ def build_shadow_advisory_output(
                 "pricing_advisor": pricing_result.to_dict(),
                 "data_value_advisor": data_value_result.to_dict(),
                 "regal_support_advisor": regal_support_result.to_dict(),
+                "receipt_feedback": {
+                    "deployment_outcome": (
+                        deployment_label.to_dict() if deployment_label is not None else None
+                    ),
+                    "deployment_receipt": (
+                        deployment_receipt.to_dict() if deployment_receipt is not None else None
+                    ),
+                    "adaptation_outcome": (
+                        adaptation_label.to_dict() if adaptation_label is not None else None
+                    ),
+                },
             }
         )
 
@@ -136,6 +181,11 @@ def build_shadow_advisory_output(
         episode_output["inferential_budget_decision"] = budget_decision
         episode_output["collect_more_data"] = budget_decision["decision"] == "collect_more_data"
         episode_output["retrain"] = budget_decision["decision"] == "adapt_now"
+        if episode_output["receipt_feedback"]["deployment_outcome"] is not None:
+            episode_output["inferential_budget_decision"]["artifact_summary"]["receipt_feedback"] = {
+                "realized_value": episode_output["receipt_feedback"]["deployment_outcome"]["realized_value"],
+                "pricing_accepted": episode_output["receipt_feedback"]["deployment_outcome"]["pricing_accepted"],
+            }
 
     summary = {
         "episodes": len(episode_outputs),
@@ -146,6 +196,7 @@ def build_shadow_advisory_output(
             sum(float(output["slice_weight_multiplier"]) for output in episode_outputs) / max(len(episode_outputs), 1)
         ),
         "manifest_compatibility": manifest_compatibility.to_dict(),
+        "receipt_label_coverage": receipt_bundle.coverage_summary(),
     }
     payload = {
         "summary": summary,
@@ -156,6 +207,7 @@ def build_shadow_advisory_output(
             "config_digest": promotion_policy.config_digest,
         },
         "adaptation_budget": budget_artifact.to_dict(),
+        "receipt_label_coverage": receipt_bundle.coverage_summary(),
     }
     payload["live_queue_selection"] = build_live_queue_selection(payload)
     return payload

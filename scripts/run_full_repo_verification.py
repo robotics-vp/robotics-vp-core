@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,12 @@ def _run(command: list[str]) -> dict:
     }
 
 
+def _resolve_tool(executable: str, module: str, *module_args: str) -> list[str]:
+    if shutil.which(executable):
+        return [executable, *module_args]
+    return ["python3", "-m", module, *module_args]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run additive full-repo verification")
     parser.add_argument("--skip-mypy", action="store_true")
@@ -29,13 +36,13 @@ def main() -> None:
 
     checks = [
         _run(["python3", "-m", "compileall", "src", "scripts", "tests", "-q"]),
-        _run(["ruff", "check", "."]),
-        _run(["ruff", "format", "--check", "."]),
+        _run(_resolve_tool("ruff", "ruff", "check", ".")),
+        _run(_resolve_tool("ruff", "ruff", "format", "--check", ".")),
     ]
     if not args.skip_mypy:
-        checks.append(_run(["mypy", "src/"]))
+        checks.append(_run(_resolve_tool("mypy", "mypy", "src/")))
     if not args.skip_pytest:
-        checks.append(_run(["pytest", "tests/", "-q"]))
+        checks.append(_run(_resolve_tool("pytest", "pytest", "tests/", "-q")))
 
     payload = {
         "root": str(ROOT),

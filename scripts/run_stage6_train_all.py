@@ -222,7 +222,7 @@ class Stage6TrainingOrchestrator:
     # Mapping of migrated trainers for in-process execution
     MIGRATED_TRAINERS = {
         "train_hydra_policy": "scripts.train_hydra_policy",
-        "train_sac_with_ontology_logging": "scripts.train_sac_with_ontology_logging", 
+        "train_sac_with_ontology_logging": "scripts.train_sac_with_ontology_logging",
         "train_offline_policy": "scripts.train_offline_policy",
         "train_skill_policies": "scripts.train_skill_policies",
         "train_behaviour_model": "scripts.train_behaviour_model",
@@ -235,6 +235,9 @@ class Stage6TrainingOrchestrator:
         "train_orchestration_transformer": "scripts.train_orchestration_transformer",
         "train_vision_backbone": "scripts.train_vision_backbone",
         "train_aligned_encoder": "scripts.train_aligned_encoder",
+        "train_shadow_replay_policy": "scripts.train_shadow_replay_policy",
+        "train_shadow_pricing_models": "scripts.train_shadow_pricing_models",
+        "train_shadow_offline_rl": "scripts.train_shadow_offline_rl",
     }
 
     def aggregate_trajectory_audits(self) -> List[TrajectoryAuditV1]:

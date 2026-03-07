@@ -1,0 +1,18 @@
+adapter:
+  enabled: true
+  latent_dim: 128
+  action_dim: 2
+  condition_dim: 1
+  skill_modes:
+    - efficiency_throughput
+  hidden_dim: 128
+  head_hidden_dim: 64
+  device: cpu
+  lr: 0.001
+  log_interval: 10
+  artifact_dir: artifacts/sac_contract_aware_smoke
+  consistency_loss_weight: 0.1
+  objective_loss_weight: 0.35
+  econ_loss_weight: 0.35
+  metadata:
+    purpose: additive_smoke

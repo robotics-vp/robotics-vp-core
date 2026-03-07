@@ -25,6 +25,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--episodes", type=int, default=4)
     parser.add_argument("--promotion-policy", default="configs/regality/promotion_default.yaml", type=str)
+    parser.add_argument("--receipt-label-dir", default=None, type=str)
+    parser.add_argument("--receipt-label-mode", default="synthetic_shadow", type=str)
     args = parser.parse_args()
 
     output_root = Path(args.output_dir)
@@ -48,12 +50,15 @@ def main() -> None:
     advisory = build_shadow_advisory_output(
         replay_dataset_dir=str(replay_dir),
         promotion_policy_path=args.promotion_policy,
+        receipt_label_dir=args.receipt_label_dir,
+        receipt_label_mode=args.receipt_label_mode,
     )
     payload = {
         "summary": advisory["adaptation_budget"]["summary"],
         "decisions": advisory["adaptation_budget"]["decisions"],
         "live_queue_selection": advisory["live_queue_selection"],
         "promotion_policy": advisory["promotion_policy"],
+        "receipt_label_coverage": advisory["receipt_label_coverage"],
     }
     json_path = output_root / "inferential_budget_gate_demo.json"
     md_path = output_root / "inferential_budget_gate_demo.md"
@@ -70,6 +75,7 @@ def _markdown(payload: dict) -> str:
         f"- Collect more data: {payload['summary']['collect_more_data']}",
         f"- Require review: {payload['summary']['require_review']}",
         f"- No-op: {payload['summary']['no_op']}",
+        f"- Receipt labels: {payload['receipt_label_coverage']['total_labels']}",
         "",
         "## Decisions",
     ]

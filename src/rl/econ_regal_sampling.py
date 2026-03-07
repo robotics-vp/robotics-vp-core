@@ -64,14 +64,17 @@ def recommend_sampling(
     if regal_support_score > 0.6:
         score += 0.1
         reasons.append("regal_support_risk_high")
+        tags.append("pricing_truth_review")
         tags.append("pricing_review")
     if pricing_recommendation != "publish":
         score += 0.1
+        tags.append("pricing_truth_review")
         tags.append("pricing_review")
     if datapack_recommendation in {"downweight", "review"}:
         tags.append("downweight_candidate")
     if provenance_quality < 0.55:
         score += 0.1
+        tags.append("low_provenance_review")
         tags.append("low_provenance")
     if replay_policy_error > 0.25:
         score += 0.1
@@ -99,6 +102,9 @@ def recommend_sampling(
     elif uncertainty > 0.45:
         action = "collect_more_like_this"
         weight_multiplier = 1.05
+        tags.append("collect_more_like_this")
+    else:
+        tags.append("holdout_candidate")
 
     return ReplaySamplingRecommendation(
         priority_score=score,
