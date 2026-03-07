@@ -1,0 +1,16 @@
+policy_id: shadow_pricing_default_v1
+base_task_hour_usd: 28.0
+econ_price_weight: 1.0
+frontier_gain_weight: 6.5
+constraint_penalty_weight: 4.5
+hard_violation_penalty: 8.0
+soft_violation_penalty: 2.5
+uncertainty_penalty_weight: 10.0
+uncertainty_discount_multiplier: 1.0
+data_share_credit_weight: 5.0
+max_credit_fraction: 0.35
+min_net_customer_rate: 8.0
+max_net_customer_rate: 120.0
+confidence_floor: 0.05
+confidence_high_threshold: 0.75
+confidence_medium_threshold: 0.45

@@ -1,0 +1,33 @@
+profile_id: balanced_contract
+scalarizer: constrained
+weights:
+  throughput: 1.4
+  error: 1.5
+  safety: 1.6
+  energy: 1.0
+maximize:
+  throughput: true
+  error: false
+  safety: true
+  energy: false
+constraints:
+  throughput:
+    min: 0.25
+  error:
+    max: 0.28
+  safety:
+    min: 0.72
+  energy:
+    max: 0.6875
+soft_constraints:
+  collision_rate:
+    max: 0.12
+  constraint_error_rate:
+    max: 0.10
+penalty_weights:
+  hard: 15.0
+  soft: 2.5
+metadata:
+  contract_family: balanced
+  customer_segment: balanced
+  description: The default shadow contract for proving unified accounting, pricing, and governance end to end.
