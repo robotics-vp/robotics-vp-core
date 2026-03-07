@@ -104,6 +104,19 @@ python3 scripts/smoke_test_dishwashing_sac.py --episodes 2
 # 4. Iterate
 ```
 
+## Economic World Model Roadmap
+
+When the task is part of the economic-world-model readiness initiative:
+
+- Read `docs/economic_world_model/architecture_gap_analysis.md`, `docs/economic_world_model/roadmap.md`, `docs/economic_world_model/progress_log.md`, `docs/economic_world_model/nightly_audit.md`, `docs/economic_world_model/implementation_notes.md`, and `scripts/TRAINING_MIGRATION_BACKLOG.json` before choosing work.
+- Use `codex_skills/economic-world-model-roadmap/SKILL.md` for roadmap and nightly audit work.
+- Prefer Codex app automation plus the repo-local skill as the primary autonomous execution path. Use the CLI or GitHub/cloud paths as fallbacks.
+- Prefer docs, scaffolding, tests, sidecars, and additive wiring before rewrites.
+- Keep VLA/OpenVLA/foundation-model outputs external and advisory; do not collapse them into native truth.
+- Update `docs/economic_world_model/progress_log.md` and `docs/economic_world_model/implementation_notes.md` whenever roadmap work lands.
+- For repeatable scans and actual nightly execution, use `python3 scripts/economic_world_model/nightly_audit.py` and `bash scripts/economic_world_model/run_nightly_codex_task.sh`.
+- Nightly automation claims must be real. If Codex CLI credentials, GitHub secrets, or app automation do not exist, say so explicitly instead of implying the task ran.
+
 ## Key Modules
 
 | Module | Purpose |
