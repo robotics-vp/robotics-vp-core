@@ -20,6 +20,8 @@ def main() -> None:
     parser.add_argument("--output-dir", type=str, required=True)
     parser.add_argument("--shadow-run-dir", type=str, default=None)
     parser.add_argument("--workcell-episode-log", type=str, default=None)
+    parser.add_argument("--rollout-bundle-dir", type=str, default=None)
+    parser.add_argument("--rollout-scenario-id", type=str, default=None)
     parser.add_argument("--generate-shadow-run", action="store_true")
     parser.add_argument("--shadow-run-output-dir", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -42,6 +44,8 @@ def main() -> None:
         builder.add_shadow_run(args.shadow_run_dir)
     if args.workcell_episode_log:
         builder.add_workcell_episode_log(args.workcell_episode_log)
+    if args.rollout_bundle_dir:
+        builder.add_rollout_bundle(args.rollout_bundle_dir, scenario_id=args.rollout_scenario_id)
 
     bundle = builder.write(args.output_dir)
     print(json.dumps(bundle.to_summary(), indent=2, sort_keys=True))

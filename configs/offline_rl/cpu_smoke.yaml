@@ -1,0 +1,21 @@
+algorithm: td3_bc_shadow
+device: cpu
+training:
+  seed: 42
+  epochs: 4
+  batch_size: 8
+  gamma: 0.98
+  tau: 0.02
+  policy_delay: 2
+  actor_lr: 0.001
+  critic_lr: 0.001
+  bc_weight: 2.5
+  val_fraction: 0.25
+model:
+  hidden_dim: 96
+  head_hidden_dim: 48
+  vision_dim: 16
+  use_condition_film: true
+  use_condition_vector_for_policy: true
+  condition_fusion_mode: film
+  default_skill_mode: efficiency_throughput

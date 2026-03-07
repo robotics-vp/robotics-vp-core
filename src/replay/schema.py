@@ -49,6 +49,7 @@ class ReplayStepRecord:
     seed: int
     timestamp: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    provenance: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def record_id(self) -> str:
@@ -82,6 +83,7 @@ class ReplayStepRecord:
             "seed": int(self.seed),
             "timestamp": self.timestamp,
             "metadata": dict(self.metadata),
+            "provenance": dict(self.provenance),
         }
 
     @classmethod
@@ -113,6 +115,7 @@ class ReplayStepRecord:
             seed=int(payload.get("seed", 0)),
             timestamp=str(payload.get("timestamp", "")),
             metadata=_mapping(payload.get("metadata")),
+            provenance=_mapping(payload.get("provenance")),
         )
 
 
@@ -145,6 +148,7 @@ class ReplayEpisodeRecord:
     datapack_summary: Dict[str, Any]
     ledger_event_ids: List[str]
     metadata: Dict[str, Any] = field(default_factory=dict)
+    provenance: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -173,6 +177,7 @@ class ReplayEpisodeRecord:
             "datapack_summary": dict(self.datapack_summary),
             "ledger_event_ids": list(self.ledger_event_ids),
             "metadata": dict(self.metadata),
+            "provenance": dict(self.provenance),
         }
 
     @classmethod
@@ -203,6 +208,7 @@ class ReplayEpisodeRecord:
             datapack_summary=_mapping(payload.get("datapack_summary")),
             ledger_event_ids=[str(value) for value in payload.get("ledger_event_ids", []) or []],
             metadata=_mapping(payload.get("metadata")),
+            provenance=_mapping(payload.get("provenance")),
         )
 
 
@@ -231,6 +237,7 @@ class ReplayWindowRecord:
     pricing_summary: Dict[str, Any]
     constraint_flags: List[Dict[str, Any]]
     metadata: Dict[str, Any] = field(default_factory=dict)
+    provenance: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -255,6 +262,7 @@ class ReplayWindowRecord:
             "pricing_summary": dict(self.pricing_summary),
             "constraint_flags": [dict(flag) for flag in self.constraint_flags],
             "metadata": dict(self.metadata),
+            "provenance": dict(self.provenance),
         }
 
     @classmethod
@@ -281,6 +289,7 @@ class ReplayWindowRecord:
             pricing_summary=_mapping(payload.get("pricing_summary")),
             constraint_flags=_rows(payload.get("constraint_flags")),
             metadata=_mapping(payload.get("metadata")),
+            provenance=_mapping(payload.get("provenance")),
         )
 
 
@@ -303,6 +312,8 @@ class ReplayDatasetManifest:
     dataset_digest: str
     created_at: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    artifact_schema_fingerprint: Dict[str, Any] = field(default_factory=dict)
+    provenance_summary: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -321,6 +332,8 @@ class ReplayDatasetManifest:
             "dataset_digest": self.dataset_digest,
             "created_at": self.created_at,
             "metadata": dict(self.metadata),
+            "artifact_schema_fingerprint": dict(self.artifact_schema_fingerprint),
+            "provenance_summary": dict(self.provenance_summary),
         }
 
     @property
@@ -345,4 +358,6 @@ class ReplayDatasetManifest:
             dataset_digest=str(payload.get("dataset_digest", "")),
             created_at=str(payload.get("created_at", "")),
             metadata=_mapping(payload.get("metadata")),
+            artifact_schema_fingerprint=_mapping(payload.get("artifact_schema_fingerprint")),
+            provenance_summary=_mapping(payload.get("provenance_summary")),
         )
