@@ -7,6 +7,31 @@ on:
     branches: [main]
 
 jobs:
+  golden_path_contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements-dev.txt
+
+      - name: Golden path compile check
+        run: python3 -m compileall src scripts/run_golden_path.py -q
+
+      - name: Golden path contract tests
+        run: python3 -m pytest tests/ -m golden_path -q
+
+      - name: Golden path smoke runner
+        run: python3 scripts/run_golden_path.py --env workcell --episodes 3 --seed 0 --emit artifacts/golden_path_ci
+
   test:
     runs-on: ubuntu-latest
     steps:
