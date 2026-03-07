@@ -1,0 +1,104 @@
+import json
+
+from src.replay.schema import ReplayDatasetManifest, ReplayEpisodeRecord, ReplayStepRecord, ReplayWindowRecord
+
+
+def test_replay_schema_round_trip_and_manifest_hash_stable():
+    step = ReplayStepRecord(
+        run_id="run_a",
+        episode_id="ep_001",
+        step_idx=1,
+        obs={"state_vector": [1.0, 2.0]},
+        obs_vector=[1.0, 2.0],
+        action={"action_type": "PLACE"},
+        action_vector=[0.1, 0.2],
+        reward=1.5,
+        reward_decomposition={"dense": 1.0},
+        done=False,
+        task_id="shadow_kitting",
+        env_id="workcell_simple",
+        condition_vector={"skill_mode": "efficiency_throughput"},
+        condition_vector_values=[0.5, 0.25],
+        skill_mode="efficiency_throughput",
+        objective_tensor_summary={"axes": {"throughput": 10.0}},
+        objective_tensor_ref="objective_tensor.json",
+        econ_tensor_summary={"axes": {"price_tick": 20.0}},
+        econ_tensor_ref="econ_tensor.json",
+        constraint_flags=[{"severity": "soft"}],
+        pricing_tick_ref="tick_1",
+        ledger_event_ref="ledger_1",
+        source_domain="synthetic",
+        seed=42,
+        timestamp="2026-01-01T00:00:00+00:00",
+    )
+    episode = ReplayEpisodeRecord(
+        run_id="run_a",
+        episode_id="ep_001",
+        task_id="shadow_kitting",
+        env_id="workcell_simple",
+        source_domain="synthetic",
+        seed=42,
+        status="completed",
+        started_at="2026-01-01T00:00:00+00:00",
+        ended_at="2026-01-01T00:10:00+00:00",
+        total_steps=2,
+        total_reward=2.0,
+        skill_mode="efficiency_throughput",
+        condition_vector={"skill_mode": "efficiency_throughput"},
+        condition_vector_values=[0.5, 0.25],
+        objective_tensor_summary={"axes": {"throughput": 10.0}},
+        objective_tensor_ref="objective_tensor.json",
+        econ_tensor_summary={"axes": {"price_tick": 20.0}},
+        econ_tensor_ref="econ_tensor.json",
+        pricing_summary={"net_customer_rate": 20.0},
+        pricing_tick_refs=["tick_1"],
+        constraint_flags=[{"severity": "soft"}],
+        regal_summary={"deploy_recommendation": "allow_shadow"},
+        datapack_summary={"data_share_credit": 1.0},
+        ledger_event_ids=["ledger_1"],
+    )
+    window = ReplayWindowRecord(
+        run_id="run_a",
+        episode_id="ep_001",
+        window_id="window_000_001",
+        start_step=0,
+        end_step=1,
+        task_id="shadow_kitting",
+        env_id="workcell_simple",
+        source_domain="synthetic",
+        seed=42,
+        timestamp="2026-01-01T00:00:00+00:00",
+        reward_sum=2.0,
+        obs_vector_mean=[1.5, 2.5],
+        action_vector_mean=[0.1, 0.2],
+        condition_vector={"skill_mode": "efficiency_throughput"},
+        condition_vector_values=[0.5, 0.25],
+        skill_mode="efficiency_throughput",
+        objective_tensor_summary={"axes": {"throughput": 10.0}},
+        econ_tensor_summary={"axes": {"price_tick": 20.0}},
+        pricing_summary={"net_customer_rate": 20.0},
+        constraint_flags=[{"severity": "soft"}],
+    )
+    manifest = ReplayDatasetManifest(
+        schema_version="shadow_replay_dataset_v1",
+        run_ids=["run_a"],
+        source_adapters=["shadow_control_plane_artifacts_v1"],
+        files={"episodes": "episodes.jsonl", "steps": "steps.jsonl", "windows": "windows.jsonl", "manifest": "manifest.json"},
+        num_episodes=1,
+        num_steps=1,
+        num_windows=1,
+        obs_dim=2,
+        action_dim=2,
+        condition_dim=2,
+        skill_modes=["efficiency_throughput"],
+        config_digest="cfg",
+        dataset_digest="data",
+        created_at="2026-01-01T00:00:00+00:00",
+    )
+
+    assert ReplayStepRecord.from_dict(step.to_dict()) == step
+    assert ReplayEpisodeRecord.from_dict(episode.to_dict()) == episode
+    assert ReplayWindowRecord.from_dict(window.to_dict()) == window
+    payload = manifest.to_dict()
+    assert ReplayDatasetManifest.from_dict(payload) == manifest
+    assert manifest.manifest_hash == ReplayDatasetManifest.from_dict(json.loads(json.dumps(payload))).manifest_hash

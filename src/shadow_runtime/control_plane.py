@@ -131,6 +131,7 @@ def run_shadow_control_plane(
         "regal_decisions": str(output_root / "regal_decisions.json"),
         "value_ledger": str(output_root / "value_ledger.jsonl"),
         "datapack_credit_update": str(output_root / "datapack_credit_update.json"),
+        "shadow_episode_traces": str(output_root / "shadow_episode_traces.json"),
         "summary_json": str(output_root / "summary.json"),
         "summary_md": str(output_root / "summary.md"),
     }
@@ -394,6 +395,13 @@ def run_shadow_control_plane(
     _write_jsonl(artifact_paths["pricing_ticks"], pricing_rows)
     _write_json(artifact_paths["regal_decisions"], regal_payload)
     _write_json(artifact_paths["datapack_credit_update"], datapack_payload)
+    _write_json(
+        artifact_paths["shadow_episode_traces"],
+        {
+            "run_id": run_id,
+            "episodes": [trace.to_dict() for trace in traces],
+        },
+    )
 
     summary = _build_summary(
         run_id=run_id,
