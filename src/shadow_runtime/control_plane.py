@@ -18,6 +18,12 @@ from src.objectives.tensor import ObjectiveTensor
 from src.ontology.shadow_updates import ShadowDatapackCreditUpdate, persist_shadow_episode
 from src.ontology.store import OntologyStore
 from src.regality import MetaRegalController, ShadowRegalContext
+from src.runtime.packets import (
+    RuntimePacket,
+    SchemaRef,
+    runtime_packet_from_record,
+    runtime_packet_sidecar_payload,
+)
 from src.shadow_runtime.demo_source import ShadowEpisodeTrace, generate_workcell_shadow_batch
 from src.utils.config_digest import sha256_json
 from src.utils.json_safe import to_json_safe
@@ -37,6 +43,7 @@ class ShadowEpisodeArtifacts:
     regal_decision: Dict[str, Any]
     datapack_credit_update: Dict[str, Any]
     ontology_refs: Dict[str, Any]
+    runtime_packet: Dict[str, Any]
     baseline_summary: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -51,6 +58,7 @@ class ShadowEpisodeArtifacts:
             "regal_decision": dict(self.regal_decision),
             "datapack_credit_update": dict(self.datapack_credit_update),
             "ontology_refs": dict(self.ontology_refs),
+            "runtime_packet": dict(self.runtime_packet),
             "baseline_summary": dict(self.baseline_summary),
         }
 
@@ -131,6 +139,7 @@ def run_shadow_control_plane(
         "regal_decisions": str(output_root / "regal_decisions.json"),
         "value_ledger": str(output_root / "value_ledger.jsonl"),
         "datapack_credit_update": str(output_root / "datapack_credit_update.json"),
+        "runtime_packets": str(output_root / "runtime_packets.json"),
         "shadow_episode_traces": str(output_root / "shadow_episode_traces.json"),
         "summary_json": str(output_root / "summary.json"),
         "summary_md": str(output_root / "summary.md"),
@@ -156,6 +165,7 @@ def run_shadow_control_plane(
     datapack_payload = {"run_id": run_id, "updates": []}
     pricing_rows: list[Dict[str, Any]] = []
     episode_artifacts: list[ShadowEpisodeArtifacts] = []
+    runtime_packets: list[RuntimePacket] = []
 
     for trace in traces:
         objective_tensor = runtime_builder.build(trace.runtime_record)
@@ -184,6 +194,15 @@ def run_shadow_control_plane(
             },
         )
         econ_summary = summarize_econ_tensor(econ_tensor)
+        runtime_packet = _build_runtime_packet(
+            trace=trace,
+            contract_profile=contract_profile,
+            objective_tensor=objective_tensor,
+            econ_tensor=econ_tensor,
+            constraint_set=constraint_set,
+            constraint_flags=combined_flags,
+        )
+        runtime_packets.append(runtime_packet)
         episode_tick = pricing_sentinel.emit_tick(
             PricingTickInput(
                 run_id=run_id,
@@ -298,6 +317,7 @@ def run_shadow_control_plane(
                     "objective_tensor": "objective_tensor.json",
                     "pricing_ticks": "pricing_ticks.jsonl",
                     "value_ledger": "value_ledger.jsonl",
+                    "runtime_packets": "runtime_packets.json",
                 },
             )
             regal_summary = regality.evaluate(regal_context).to_dict()
@@ -383,6 +403,7 @@ def run_shadow_control_plane(
                 regal_decision=regal_summary,
                 datapack_credit_update=datapack_update.to_dict(),
                 ontology_refs=ontology_refs,
+                runtime_packet=runtime_packet.to_dict(),
                 baseline_summary=trace.baseline_summary,
             )
         )
@@ -395,6 +416,10 @@ def run_shadow_control_plane(
     _write_jsonl(artifact_paths["pricing_ticks"], pricing_rows)
     _write_json(artifact_paths["regal_decisions"], regal_payload)
     _write_json(artifact_paths["datapack_credit_update"], datapack_payload)
+    _write_json(
+        artifact_paths["runtime_packets"],
+        runtime_packet_sidecar_payload(run_id=run_id, packets=runtime_packets),
+    )
     _write_json(
         artifact_paths["shadow_episode_traces"],
         {
@@ -487,6 +512,105 @@ def _build_constraint_set(
             "contract_profile_hash": contract_profile.profile_hash,
         },
     )
+
+
+def _build_runtime_packet(
+    *,
+    trace: ShadowEpisodeTrace,
+    contract_profile: ObjectiveContractProfile,
+    objective_tensor: ObjectiveTensor,
+    econ_tensor: Mapping[str, Any],
+    constraint_set: ConstraintSet,
+    constraint_flags: Sequence[Mapping[str, Any]],
+) -> RuntimePacket:
+    observation_schema, action_schema = _build_shadow_schema_refs(trace)
+    telemetry = trace.runtime_record.telemetry
+    return runtime_packet_from_record(
+        record=trace.runtime_record,
+        contract_id=_runtime_contract_id(
+            task_id=trace.task_id,
+            objective_profile_id=contract_profile.profile_id,
+            embodiment_id=trace.robot_id,
+        ),
+        objective_profile_id=contract_profile.profile_id,
+        objective_tensor=objective_tensor,
+        econ_tensor=econ_tensor,
+        constraint_set=constraint_set,
+        observation_schema=observation_schema,
+        action_schema=action_schema,
+        semantic_evidence={
+            "semantic_tags": list(telemetry.get("semantic_tags", []) or []),
+            "fragile": bool(telemetry.get("fragile", False)),
+            "vla_confidence": float(telemetry.get("vla_confidence", telemetry.get("trust_score", 0.0))),
+            "map_first_quality_score": float(telemetry.get("map_first_quality_score", 0.0)),
+            "semantic_fusion_confidence_mean": float(telemetry.get("semantic_fusion_confidence_mean", 0.0)),
+            "semantic_disagreement_vla_vs_map": float(telemetry.get("semantic_disagreement_vla_vs_map", 0.0)),
+            "source_adapter": "shadow_control_plane_artifacts_v1",
+        },
+        uncertainty={
+            "runtime": float(telemetry.get("uncertainty", 0.0)),
+            "constraint_error_rate": float(trace.constraint_observations.get("constraint_error_rate", 0.0)),
+            "semantic_disagreement": float(telemetry.get("semantic_disagreement_vla_vs_map", 0.0)),
+        },
+        provenance={
+            "source_adapter": "shadow_control_plane_artifacts_v1",
+            "trace_hash": sha256_json(trace.to_dict()),
+            "episode_log_hash": sha256_json(trace.episode_log),
+        },
+        metadata={
+            "contract_profile_hash": contract_profile.profile_hash,
+            "constraint_flag_count": len(list(constraint_flags)),
+            "datapack_id": trace.datapack_id,
+            "path": "shadow_control_plane",
+        },
+        semantic_schema_id="shadow_semantic_evidence_sidecar_v1",
+    )
+
+
+def _build_shadow_schema_refs(trace: ShadowEpisodeTrace) -> tuple[SchemaRef, SchemaRef]:
+    trajectory = list(trace.episode_log.get("trajectory", []) or [])
+    first_step = dict(trajectory[0] or {}) if trajectory else {}
+    obs = dict(first_step.get("obs", {}) or {})
+    action = dict(first_step.get("action", {}) or {})
+    time_step_s = float(trace.runtime_record.episode_metrics.get("time_step_s", 1.0) or 1.0)
+    sample_hz = (1.0 / time_step_s) if time_step_s > 0.0 else 0.0
+    observation_schema = SchemaRef(
+        schema_id="shadow_workcell_observation_v1",
+        version="v1",
+        shape={
+            "obs_keys": sorted(obs.keys()),
+            "state_vector_dim": len(list(obs.get("state_vector", []) or [])),
+        },
+        timing={"sample_hz": sample_hz, "time_step_s": time_step_s},
+        provenance={"source_adapter": "shadow_episode_log_v1"},
+        metadata={"env_id": trace.env_id},
+    )
+    action_schema = SchemaRef(
+        schema_id="shadow_workcell_action_v1",
+        version="v1",
+        shape={
+            "action_keys": sorted(action.keys()),
+            "action_vector_dim": len(list(action.get("action_vector", []) or [])),
+            "task_state_keys": sorted((action.get("task_state", {}) or {}).keys()),
+        },
+        timing={"apply_hz": sample_hz, "time_step_s": time_step_s},
+        provenance={"source_adapter": "shadow_episode_log_v1"},
+        metadata={"robot_id": trace.robot_id},
+    )
+    return observation_schema, action_schema
+
+
+def _runtime_contract_id(*, task_id: str, objective_profile_id: str, embodiment_id: str) -> str:
+    return "contract.{task}.{profile}.{embodiment}.v1".format(
+        task=_contract_fragment(task_id),
+        profile=_contract_fragment(objective_profile_id),
+        embodiment=_contract_fragment(embodiment_id),
+    )
+
+
+def _contract_fragment(value: str) -> str:
+    fragment = "".join(character.lower() if character.isalnum() else "_" for character in str(value))
+    return fragment.strip("_") or "unknown"
 
 
 def _merge_constraint_flags(

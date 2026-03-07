@@ -32,6 +32,7 @@ from src.replay.schema import (
     ReplayWindowRecord,
 )
 from src.regality.meta_regal import MetaRegalDecision
+from src.runtime.packets import RuntimePacket
 from src.utils.config_digest import sha256_json
 
 
@@ -62,6 +63,8 @@ def ingest_shadow_run(
     regal_payload = _load_json(root / "regal_decisions.json")
     pricing_rows = _load_jsonl(root / "pricing_ticks.jsonl")
     ledger_rows = _load_jsonl(root / "value_ledger.jsonl")
+    runtime_packet_path = root / "runtime_packets.json"
+    runtime_packet_payload = _load_json(runtime_packet_path) if runtime_packet_path.exists() else {}
 
     objective_by_episode = {
         str(row.get("episode_id")): dict(row.get("objective_tensor", {}))
@@ -99,6 +102,16 @@ def ingest_shadow_run(
     ledger_by_episode = defaultdict(list)
     for row in ledger_rows:
         ledger_by_episode[str(row.get("episode_id"))].append(dict(row))
+    runtime_packets_by_episode: Dict[str, RuntimePacket] = {}
+    if isinstance(runtime_packet_payload, Mapping):
+        for row in list(runtime_packet_payload.get("episodes", []) or []):
+            packet_payload = row.get("runtime_packet", row)
+            if not isinstance(packet_payload, Mapping):
+                continue
+            packet = RuntimePacket.from_dict(packet_payload)
+            if packet.episode_id:
+                runtime_packets_by_episode[packet.episode_id] = packet
+    runtime_packet_ref = runtime_packet_path.name if runtime_packets_by_episode else None
 
     condition_builder = ConditionVectorBuilder()
     episodes: List[ReplayEpisodeRecord] = []
@@ -125,6 +138,7 @@ def ingest_shadow_run(
         }
         episode_log = dict(trace_payload.get("episode_log", {}) or {})
         trajectory = list(episode_log.get("trajectory", []) or [])
+        runtime_packet = runtime_packets_by_episode.get(episode_id)
         seed = int(runtime_record.get("seed", 0))
         task_id = str(trace_payload.get("task_id", runtime_record.get("task_id", "")))
         env_id = str(trace_payload.get("env_id", runtime_record.get("env_id", "")))
@@ -178,6 +192,8 @@ def ingest_shadow_run(
                     "objective_profile_id": episode_pricing.get("objective_profile_id"),
                     "runtime_record_hash": sha256_json(runtime_record),
                     "trace_hash": sha256_json(trace_payload),
+                    "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
+                    "contract_id": runtime_packet.contract.contract_id if runtime_packet else None,
                 },
                 provenance={
                     "source_adapter": "shadow_control_plane_artifacts_v1",
@@ -185,6 +201,8 @@ def ingest_shadow_run(
                     "trace_sidecar": "shadow_episode_traces.json",
                     "objective_tensor_ref": "objective_tensor.json",
                     "econ_tensor_ref": "econ_tensor.json",
+                    "runtime_packet_ref": runtime_packet_ref,
+                    "runtime_packet_hash": sha256_json(runtime_packet.to_dict()) if runtime_packet else None,
                 },
             )
         )
@@ -244,11 +262,14 @@ def ingest_shadow_run(
                     metadata={
                         "success": bool(step.get("info", {}).get("success", False)),
                         "task_info": dict(step_trace.get("task_info", {}) or {}),
+                        "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
                     },
                     provenance={
                         "source_adapter": "shadow_control_plane_artifacts_v1",
                         "source_root": str(root),
                         "step_trace_hash": sha256_json(step_trace),
+                        "runtime_packet_ref": runtime_packet_ref,
+                        "contract_id": runtime_packet.contract.contract_id if runtime_packet else None,
                     },
                 )
             )
@@ -318,6 +339,8 @@ def ingest_shadow_run(
                         "source_adapter": "shadow_control_plane_artifacts_v1",
                         "source_root": str(root),
                         "window_id": window_id,
+                        "runtime_packet_ref": runtime_packet_ref,
+                        "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
                     },
                 )
             )
@@ -327,7 +350,15 @@ def ingest_shadow_run(
         "source_adapter": "shadow_control_plane_artifacts_v1",
         "source_root": str(root),
         "pricing_policy_path": str(pricing_policy_path),
-        "provenance_digest": sha256_json({"root": str(root), "schema_version": REPLAY_SCHEMA_VERSION}),
+        "runtime_packet_ref": runtime_packet_ref,
+        "runtime_packet_count": len(runtime_packets_by_episode),
+        "provenance_digest": sha256_json(
+            {
+                "root": str(root),
+                "schema_version": REPLAY_SCHEMA_VERSION,
+                "runtime_packet_count": len(runtime_packets_by_episode),
+            }
+        ),
     }
     return _sort_episode_records(episodes), _sort_step_records(steps), _sort_window_records(windows), metadata
 

@@ -12,6 +12,7 @@ from src.runtime.packets import (
     SchemaRef,
     build_contract_packet,
     runtime_packet_from_record,
+    runtime_packet_sidecar_payload,
 )
 
 
@@ -122,3 +123,32 @@ def test_contract_packet_hash_changes_when_action_schema_changes():
     )
 
     assert contract_a.contract_hash != contract_b.contract_hash
+
+
+def test_runtime_packet_sidecar_payload_keeps_packet_refs_stable():
+    record = _record()
+    objective_tensor = ObjectiveRuntimeBuilder().build(record)
+    econ_tensor = EconTensor(values=np.asarray([11.0, 22.0, 0.4, 0.0, 0.03], dtype=np.float32))
+    constraint_set = ConstraintSet.from_runtime(
+        hard_constraints={"throughput": {"min": 1.0}},
+        metadata={"source": "runtime_packet_sidecar_test"},
+    )
+    packet = runtime_packet_from_record(
+        record=record,
+        contract_id="contract.shadow.kitting.v1",
+        objective_profile_id="balanced_contract",
+        objective_tensor=objective_tensor,
+        econ_tensor=econ_tensor,
+        constraint_set=constraint_set,
+        observation_schema=SchemaRef(schema_id="observation_schema_v2"),
+        action_schema=SchemaRef(schema_id="action_schema_v2"),
+        metadata={"path": "shadow_control_plane"},
+    )
+
+    payload = runtime_packet_sidecar_payload(run_id=record.run_id, packets=[packet])
+
+    assert payload["schema_version"] == "runtime_packet_sidecar_v1"
+    assert payload["packet_count"] == 1
+    assert payload["episodes"][0]["episode_id"] == record.episode_id
+    assert payload["episodes"][0]["packet_id"] == packet.packet_id
+    assert RuntimePacket.from_dict(payload["episodes"][0]["runtime_packet"]).to_dict() == packet.to_dict()

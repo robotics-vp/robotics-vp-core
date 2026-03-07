@@ -28,6 +28,9 @@ def test_replay_dataset_builds_from_shadow_run(tmp_path):
     loaded = load_replay_dataset(dataset_dir)
     assert loaded.manifest.dataset_digest == bundle.manifest.dataset_digest
     assert loaded.steps[0].pricing_tick_ref is not None
+    assert loaded.episodes[0].provenance["runtime_packet_ref"] == "runtime_packets.json"
+    assert loaded.steps[0].metadata["runtime_packet_id"].startswith("runtime_")
+    assert bundle.manifest.metadata["sources"][0]["runtime_packet_count"] == 2
 
 
 def test_replay_dataset_builds_from_workcell_episode_log(tmp_path):
