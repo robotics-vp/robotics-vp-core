@@ -6,42 +6,6 @@
     "updated_at": "2026-03-07",
     "backlog": [
         {
-            "script": "train_shadow_replay_policy.py",
-            "priority": "P1",
-            "owner": "codex",
-            "blocked_by": null,
-            "downstream_dependents": [
-                "run_shadow_learning_ablations.py"
-            ],
-            "notes": "Shadow replay BC trainer; additive advisory path pending regal wrapper migration",
-            "created_at": "2026-03-07",
-            "updated_at": "2026-03-07"
-        },
-        {
-            "script": "train_shadow_pricing_models.py",
-            "priority": "P1",
-            "owner": "codex",
-            "blocked_by": null,
-            "downstream_dependents": [
-                "run_shadow_learning_ablations.py"
-            ],
-            "notes": "Shadow pricing/data-value model trainer; compare/residual only, pending regal wrapper migration",
-            "created_at": "2026-03-07",
-            "updated_at": "2026-03-07"
-        },
-        {
-            "script": "train_shadow_offline_rl.py",
-            "priority": "P1",
-            "owner": "codex",
-            "blocked_by": "train_shadow_replay_policy.py",
-            "downstream_dependents": [
-                "run_inferential_budget_gate_demo.py"
-            ],
-            "notes": "Experimental TD3+BC-style shadow bridge; SAC remains primary online backbone",
-            "created_at": "2026-03-07",
-            "updated_at": "2026-03-07"
-        },
-        {
             "script": "train_orchestration_transformer_v1_curriculum.py",
             "priority": "P1",
             "owner": "claude",
@@ -228,13 +192,28 @@
             "script": "train_aligned_encoder.py",
             "migrated_at": "2026-01-13",
             "notes": "P1 complete - representation alignment"
+        },
+        {
+            "script": "train_shadow_replay_policy.py",
+            "migrated_at": "2026-03-07",
+            "notes": "P1 complete - wrapped with RegalTrainingRunner and unified runtime manifest/checkpoint registry"
+        },
+        {
+            "script": "train_shadow_pricing_models.py",
+            "migrated_at": "2026-03-07",
+            "notes": "P1 complete - wrapped with RegalTrainingRunner and recurring promotion/receipt artifacts"
+        },
+        {
+            "script": "train_shadow_offline_rl.py",
+            "migrated_at": "2026-03-07",
+            "notes": "P1 complete - wrapped with RegalTrainingRunner while preserving SAC as main online backbone"
         }
     ],
     "summary": {
         "total": 16,
         "P0": 0,
-        "P1": 10,
+        "P1": 7,
         "P2": 6,
-        "migrated": 10
+        "migrated": 13
     }
 }

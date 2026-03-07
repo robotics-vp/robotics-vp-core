@@ -95,11 +95,17 @@ def train_replay_policy(
     config_path: str | Path,
     output_dir: str | Path,
     resume_checkpoint: Optional[str | Path] = None,
+    episode_ids: Optional[Sequence[str]] = None,
 ) -> ReplayPolicyTrainResult:
     dataset = load_replay_dataset(dataset_dir)
     config = load_training_config(config_path)
     output_root = Path(output_dir)
     output_root.mkdir(parents=True, exist_ok=True)
+    selected_episode_ids = {str(value) for value in (episode_ids or []) if str(value)}
+    if selected_episode_ids:
+        filtered_steps = [row for row in dataset.steps if row.episode_id in selected_episode_ids]
+    else:
+        filtered_steps = list(dataset.steps)
 
     training_cfg = dict(config.get("training", {}) or {})
     seed = int(training_cfg.get("seed", 42))
@@ -144,7 +150,7 @@ def train_replay_policy(
         )
 
     train_records, val_records = split_step_records(
-        dataset.steps,
+        filtered_steps,
         val_fraction=float(training_cfg.get("val_fraction", 0.25)),
     )
     train_loader = DataLoader(
@@ -216,6 +222,7 @@ def train_replay_policy(
         "dataset_digest": dataset.manifest.dataset_digest,
         "train_records": len(train_records),
         "val_records": len(val_records),
+        "selected_episode_count": len(selected_episode_ids) if selected_episode_ids else len({row.episode_id for row in filtered_steps}),
         "best_val_mse": best_val_mse,
         "epochs": epochs,
         "train_steps": train_steps,

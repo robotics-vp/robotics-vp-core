@@ -34,6 +34,8 @@ def main() -> None:
     parser.add_argument("--data-value-checkpoint", type=str, default=None)
     parser.add_argument("--regal-support-checkpoint", type=str, default=None)
     parser.add_argument("--promotion-policy", type=str, default="configs/regality/promotion_default.yaml")
+    parser.add_argument("--receipt-label-dir", type=str, default=None)
+    parser.add_argument("--receipt-label-mode", type=str, default="synthetic_shadow")
     args = parser.parse_args()
 
     output_root = Path(args.output_dir)
@@ -61,6 +63,8 @@ def main() -> None:
         data_value_advisor=DataValueAdvisor(mode=args.data_value_mode, checkpoint_path=args.data_value_checkpoint),
         regal_support_advisor=RegalSupportAdvisor(mode=args.regal_support_mode, checkpoint_path=args.regal_support_checkpoint),
         promotion_policy_path=args.promotion_policy,
+        receipt_label_dir=args.receipt_label_dir,
+        receipt_label_mode=args.receipt_label_mode,
     )
 
     json_path = output_root / "shadow_advisory.json"
@@ -81,6 +85,7 @@ def _advisory_markdown(advisory: dict) -> str:
         f"- Episodes: {advisory['summary']['episodes']}",
         f"- Collect more data: {advisory['summary']['collect_more_data_count']}",
         f"- Retrain: {advisory['summary']['retrain_count']}",
+        f"- Receipt labels: {advisory['summary']['receipt_label_coverage']['total_labels']}",
         "",
         "## Episode Decisions",
     ]
