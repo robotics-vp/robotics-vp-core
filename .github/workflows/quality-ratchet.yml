@@ -1,0 +1,30 @@
+name: Quality Ratchet
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ratchet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements-dev.txt
+
+      - name: Ruff ratchet (no regressions)
+        run: python3 scripts/ci/check_ruff_ratchet.py
+
+      - name: Mypy ratchet (no regressions)
+        run: python3 scripts/ci/check_mypy_ratchet.py
