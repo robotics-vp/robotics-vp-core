@@ -1,0 +1,37 @@
+profile_id: fragile_object_constrained
+scalarizer: constrained
+weights:
+  throughput: 0.9
+  error: 2.0
+  safety: 3.0
+  energy: 1.0
+maximize:
+  throughput: true
+  error: false
+  safety: true
+  energy: false
+constraints:
+  throughput:
+    min: 0.1667
+  error:
+    max: 0.15
+  safety:
+    min: 0.88
+  energy:
+    max: 0.725
+soft_constraints:
+  collision_rate:
+    max: 0.05
+  contact_force_n:
+    max: 6.0
+penalty_weights:
+  hard: 20.0
+  soft: 3.5
+metadata:
+  contract_family: fragile
+  customer_segment: fragile_object
+  fragile_object: true
+  required_tags:
+    - fragile
+    - low_force
+  description: Conservative contract for fragile-object handling, suitable for future real-lab safety envelopes.
