@@ -1,0 +1,144 @@
+name: Economic World Model Nightly
+
+on:
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+    inputs:
+      run_codex:
+        description: "Run Codex after the audit when CODEX_API_KEY is configured"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: economic-world-model-nightly
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      summary_digest: ${{ steps.collect.outputs.summary_digest }}
+      execute_now: ${{ steps.collect.outputs.execute_now }}
+      next_task_title: ${{ steps.collect.outputs.next_task_title }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements-dev.txt
+
+      - name: Run nightly audit
+        run: |
+          mkdir -p artifacts/economic_world_model
+          python3 scripts/economic_world_model/nightly_audit.py \
+            --output-json artifacts/economic_world_model/nightly_audit_summary.json \
+            --output-markdown artifacts/economic_world_model/nightly_audit_summary.md
+
+      - name: Collect outputs
+        id: collect
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          data = json.loads(
+              Path("artifacts/economic_world_model/nightly_audit_summary.json").read_text(encoding="utf-8")
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"summary_digest={data['summary_digest']}\n")
+              handle.write(f"execute_now={'true' if data['next_task'].get('execute_now') else 'false'}\n")
+              handle.write("next_task_title<<EOF\n")
+              handle.write(f"{data['next_task'].get('title', '')}\n")
+              handle.write("EOF\n")
+          PY
+
+      - name: Update or open status issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 scripts/economic_world_model/update_status_issue.py \
+            --summary-json artifacts/economic_world_model/nightly_audit_summary.json \
+            --summary-markdown artifacts/economic_world_model/nightly_audit_summary.md
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: economic-world-model-nightly-audit
+          path: artifacts/economic_world_model
+
+  codex_execute:
+    needs: audit
+    if: ${{ needs.audit.outputs.execute_now == 'true' && secrets.CODEX_API_KEY != '' && (github.event_name == 'schedule' || inputs.run_codex) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements-dev.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Download audit artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: economic-world-model-nightly-audit
+          path: artifacts/economic_world_model
+
+      - name: Run Codex nightly task
+        env:
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+        run: |
+          bash scripts/economic_world_model/run_nightly_codex_task.sh \
+            --mode cli \
+            --skip-audit \
+            --audit-json artifacts/economic_world_model/nightly_audit_summary.json \
+            --audit-markdown artifacts/economic_world_model/nightly_audit_summary.md \
+            --timeout 1800
+
+      - name: Capture diff artifact
+        run: |
+          mkdir -p artifacts/economic_world_model
+          if git diff --quiet; then
+            echo "no diff generated" > artifacts/economic_world_model/codex-nightly-status.txt
+          else
+            git diff --binary > artifacts/economic_world_model/codex-nightly.patch
+            echo "diff generated" > artifacts/economic_world_model/codex-nightly-status.txt
+          fi
+
+      - name: Upload Codex run artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: economic-world-model-codex-run
+          path: |
+            artifacts/economic_world_model
+            .agent/runs

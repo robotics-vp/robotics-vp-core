@@ -18,6 +18,11 @@ from src.embodiment.artifacts import (
 if TYPE_CHECKING:
     from src.embodiment.core import EmbodimentInputs, EmbodimentResult, compute_embodiment
     from src.embodiment.datapack_adapter import embodiment_profile_from_summary
+    from src.embodiment.registry import (
+        CapabilityProfile,
+        EmbodimentRegistry,
+        EmbodimentRegistryEntry,
+    )
 
 __all__ = [
     "EmbodimentConfig",
@@ -32,6 +37,9 @@ __all__ = [
     "EmbodimentProfileArtifact",
     "AffordanceGraphArtifact",
     "SkillSegmentsArtifact",
+    "CapabilityProfile",
+    "EmbodimentRegistry",
+    "EmbodimentRegistryEntry",
 ]
 
 _LAZY_ATTRS = {
@@ -39,6 +47,9 @@ _LAZY_ATTRS = {
     "EmbodimentResult": "src.embodiment.core",
     "compute_embodiment": "src.embodiment.core",
     "embodiment_profile_from_summary": "src.embodiment.datapack_adapter",
+    "CapabilityProfile": "src.embodiment.registry",
+    "EmbodimentRegistry": "src.embodiment.registry",
+    "EmbodimentRegistryEntry": "src.embodiment.registry",
 }
 
 
