@@ -1,0 +1,33 @@
+profile_id: safety_first
+scalarizer: constrained
+weights:
+  throughput: 0.7
+  error: 2.2
+  safety: 2.8
+  energy: 0.8
+maximize:
+  throughput: true
+  error: false
+  safety: true
+  energy: false
+constraints:
+  throughput:
+    min: 0.1667
+  error:
+    max: 0.18
+  safety:
+    min: 0.82
+  energy:
+    max: 0.9375
+soft_constraints:
+  collision_rate:
+    max: 0.10
+  constraint_error_rate:
+    max: 0.08
+penalty_weights:
+  hard: 18.0
+  soft: 3.0
+metadata:
+  contract_family: safety
+  customer_segment: premium_safety
+  description: High-integrity contract that treats constraint and safety degradation as the dominant concern.

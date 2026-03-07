@@ -39,6 +39,11 @@ What does not yet exist as a fully unified runtime layer:
 - Meta-regal governance nodes as the default control plane.
 - Real-time pricing sentinel integrated across deployment + learning loops.
 
+Additive shadow implementation available now:
+- [`docs/shadow_economic_control_plane.md`](/Users/amarmurray/robotics-vp-core/docs/shadow_economic_control_plane.md)
+- [`scripts/run_shadow_econ_control_plane.py`](/Users/amarmurray/robotics-vp-core/scripts/run_shadow_econ_control_plane.py)
+- [`scripts/run_shadow_econ_ablations.py`](/Users/amarmurray/robotics-vp-core/scripts/run_shadow_econ_ablations.py)
+
 This README defines that direction concretely.
 
 ## Economic Thesis
@@ -153,6 +158,42 @@ python3 scripts/smoke_test_phase_c_hrl_vla.py --episodes 3
 # Workcell env suite
 python3 scripts/smoke_workcell_env.py
 ```
+
+## Golden Path Demo (5 Minutes)
+Run one deterministic end-to-end proof that emits ObjectiveTensor, compiler scalar reward,
+Objective->Econ deltas, governance pass/fail reasons, and plots:
+
+```bash
+python3 scripts/run_golden_path.py --env workcell --episodes 10 --seed 0 --emit artifacts/golden_path
+```
+
+Expected outputs:
+- `artifacts/golden_path/objective_tensors.jsonl`
+- `artifacts/golden_path/scalar_rewards.json`
+- `artifacts/golden_path/econ_deltas.json`
+- `artifacts/golden_path/governance_report.json`
+- `artifacts/golden_path/artifact_bundle.json`
+- `artifacts/golden_path/plots/objective_scalar.png`
+- `artifacts/golden_path/plots/econ_governance.png`
+
+Whitepaper and architecture notes:
+- `docs/whitepaper/README.md`
+- `docs/whitepaper_objective_tensor_stack.md`
+
+## Quality Ratchet (Ruff + Mypy)
+The repo carries legacy lint/type debt. CI is configured to block regressions while cleanup proceeds.
+
+Ratchet baselines:
+- `config/quality_ratchet.json`
+
+Commands:
+```bash
+python3 scripts/ci/check_ruff_ratchet.py
+python3 scripts/ci/check_mypy_ratchet.py
+```
+
+Cleanup sequencing reference:
+- `docs/quality_ratcheting.md`
 
 ## Frozen and Additive Zones
 Phase B is frozen. Do not modify:

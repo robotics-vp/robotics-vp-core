@@ -8,6 +8,8 @@ Features:
 - Replay buffer with novelty-based prioritization
 - Integrated encoder training
 """
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -205,7 +207,8 @@ class SACAgent:
     def __init__(self, encoder, latent_dim=128, action_dim=2,
                  lr=3e-4, gamma=0.995, tau=5e-3,
                  buffer_capacity=int(1e6), batch_size=1024,
-                 target_entropy=None, device='cpu'):
+                 target_entropy=None, device='cpu',
+                 contract_aware_adapter: Optional[object] = None):
         """
         Args:
             encoder: EncoderWithAuxiliaries instance
@@ -226,6 +229,7 @@ class SACAgent:
         self.tau = float(tau)  # Ensure scalar
         self.batch_size = batch_size
         self.device = device
+        self.contract_aware_adapter = contract_aware_adapter
 
         # Actor
         self.actor = Actor(latent_dim, action_dim).to(device)
@@ -344,6 +348,15 @@ class SACAgent:
         td_errors = (target_value - q1).abs().detach().cpu().numpy().flatten()
         self.replay_buffer.update_priorities(indices, td_errors * novelties)
 
+        contract_aware_metrics = {}
+        if self.contract_aware_adapter is not None:
+            contract_aware_metrics = self.contract_aware_adapter.update_from_batch(
+                latent_batch=latent.detach(),
+                action_batch=actions_t.detach(),
+                reward_batch=rewards_t.detach().squeeze(-1),
+                done_batch=dones_t.detach().squeeze(-1),
+            )
+
         # --- Actor Update ---
         # Sample actions from current policy
         new_actions, logprobs = self.actor.sample(latent, return_log_prob=True)
@@ -402,7 +415,7 @@ class SACAgent:
         self.training_steps += 1
 
         # Return metrics
-        return {
+        metrics = {
             'critic_loss': critic_loss.item(),
             'actor_loss': actor_loss.item(),
             'alpha': self.alpha.item(),
@@ -413,6 +426,9 @@ class SACAgent:
             'mean_weight': weights.mean().item(),
             'q_mean': q_new.mean().item()
         }
+        for key, value in contract_aware_metrics.items():
+            metrics[f'contract_aware_{key}'] = value
+        return metrics
 
     def _obs_to_tensor(self, obs_dict):
         """Convert observation dict to tensor."""
@@ -428,7 +444,12 @@ class SACAgent:
             'critic': self.critic.state_dict(),
             'critic_target': self.critic_target.state_dict(),
             'log_alpha': self.log_alpha,
-            'training_steps': self.training_steps
+            'training_steps': self.training_steps,
+            'contract_aware_adapter': (
+                self.contract_aware_adapter.state_dict()
+                if self.contract_aware_adapter is not None and hasattr(self.contract_aware_adapter, 'state_dict')
+                else None
+            ),
         }, path)
 
     def load(self, path):
@@ -441,3 +462,9 @@ class SACAgent:
         self.log_alpha = checkpoint['log_alpha']
         self.alpha = self.log_alpha.exp()
         self.training_steps = checkpoint['training_steps']
+        if (
+            self.contract_aware_adapter is not None
+            and checkpoint.get('contract_aware_adapter') is not None
+            and hasattr(self.contract_aware_adapter, 'load_state_dict')
+        ):
+            self.contract_aware_adapter.load_state_dict(checkpoint['contract_aware_adapter'])

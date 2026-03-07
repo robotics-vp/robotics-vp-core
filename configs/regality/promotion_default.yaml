@@ -1,0 +1,160 @@
+schema_version: regal_promotion_policy_v1
+policy_name: promotion_default
+metadata:
+  description: Default staged promotion policy for shadow regal authority.
+nodes:
+  objective_integrity_regal:
+    current_stage: compare_only
+    allowed_actions:
+      compare_only: [log, compare]
+      advisory: [log, compare, queue_tagging, pricing_annotation, sampling_priority]
+      budget_gate: [log, compare, queue_tagging, pricing_annotation, sampling_priority, budget_gate]
+      narrow_hard_gate: [log, compare, queue_tagging, pricing_annotation, sampling_priority, budget_gate, adaptation_block]
+    promotion_criteria:
+      min_replay_coverage: 0.55
+      min_downstream_label_count: 6
+      min_deployment_receipt_count: 2
+      max_calibration_error: 0.18
+      min_baseline_agreement: 0.82
+      min_monotonicity: 0.8
+      min_sign_consistency: 0.85
+      max_false_positive_rate: 0.2
+      max_false_negative_rate: 0.2
+      max_drift_score: 0.4
+      min_residual_gain: -0.01
+    demotion_criteria:
+      min_replay_coverage: 0.4
+      min_downstream_label_count: 2
+      min_deployment_receipt_count: 0
+      max_calibration_error: 0.3
+      min_baseline_agreement: 0.65
+      min_monotonicity: 0.65
+      min_sign_consistency: 0.7
+      max_false_positive_rate: 0.35
+      max_false_negative_rate: 0.35
+      max_drift_score: 0.6
+      min_residual_gain: -0.05
+  plausibility_regal:
+    current_stage: compare_only
+    allowed_actions:
+      compare_only: [log, compare]
+      advisory: [log, compare, queue_tagging, sampling_priority]
+      budget_gate: [log, compare, queue_tagging, sampling_priority, budget_gate]
+      narrow_hard_gate: [log, compare, queue_tagging, sampling_priority, budget_gate, adaptation_block]
+    promotion_criteria:
+      min_replay_coverage: 0.6
+      min_downstream_label_count: 8
+      min_deployment_receipt_count: 2
+      max_calibration_error: 0.2
+      min_baseline_agreement: 0.8
+      min_monotonicity: 0.8
+      min_sign_consistency: 0.8
+      max_false_positive_rate: 0.18
+      max_false_negative_rate: 0.22
+      max_drift_score: 0.4
+      min_residual_gain: 0.0
+    demotion_criteria:
+      min_replay_coverage: 0.4
+      min_downstream_label_count: 3
+      min_deployment_receipt_count: 0
+      max_calibration_error: 0.32
+      min_baseline_agreement: 0.6
+      min_monotonicity: 0.65
+      min_sign_consistency: 0.7
+      max_false_positive_rate: 0.35
+      max_false_negative_rate: 0.35
+      max_drift_score: 0.6
+      min_residual_gain: -0.05
+  reward_safety_regal:
+    current_stage: compare_only
+    allowed_actions:
+      compare_only: [log, compare]
+      advisory: [log, compare, queue_tagging, sampling_priority, retrain_flag]
+      budget_gate: [log, compare, queue_tagging, sampling_priority, retrain_flag, budget_gate]
+      narrow_hard_gate: [log, compare, queue_tagging, sampling_priority, retrain_flag, budget_gate, adaptation_block]
+    promotion_criteria:
+      min_replay_coverage: 0.65
+      min_downstream_label_count: 10
+      min_deployment_receipt_count: 3
+      max_calibration_error: 0.16
+      min_baseline_agreement: 0.84
+      min_monotonicity: 0.82
+      min_sign_consistency: 0.86
+      max_false_positive_rate: 0.16
+      max_false_negative_rate: 0.18
+      max_drift_score: 0.35
+      min_residual_gain: 0.01
+    demotion_criteria:
+      min_replay_coverage: 0.45
+      min_downstream_label_count: 4
+      min_deployment_receipt_count: 1
+      max_calibration_error: 0.28
+      min_baseline_agreement: 0.65
+      min_monotonicity: 0.68
+      min_sign_consistency: 0.72
+      max_false_positive_rate: 0.3
+      max_false_negative_rate: 0.3
+      max_drift_score: 0.55
+      min_residual_gain: -0.02
+  pricing_truth_regal:
+    current_stage: compare_only
+    allowed_actions:
+      compare_only: [log, compare]
+      advisory: [log, compare, pricing_annotation, queue_tagging]
+      budget_gate: [log, compare, pricing_annotation, queue_tagging, budget_gate]
+      narrow_hard_gate: [log, compare, pricing_annotation, queue_tagging, budget_gate, pricing_suppress]
+    promotion_criteria:
+      min_replay_coverage: 0.65
+      min_downstream_label_count: 10
+      min_deployment_receipt_count: 4
+      max_calibration_error: 0.14
+      min_baseline_agreement: 0.87
+      min_monotonicity: 0.84
+      min_sign_consistency: 0.87
+      max_false_positive_rate: 0.14
+      max_false_negative_rate: 0.16
+      max_drift_score: 0.32
+      min_residual_gain: 0.02
+    demotion_criteria:
+      min_replay_coverage: 0.45
+      min_downstream_label_count: 4
+      min_deployment_receipt_count: 1
+      max_calibration_error: 0.25
+      min_baseline_agreement: 0.68
+      min_monotonicity: 0.68
+      min_sign_consistency: 0.72
+      max_false_positive_rate: 0.28
+      max_false_negative_rate: 0.28
+      max_drift_score: 0.55
+      min_residual_gain: -0.02
+  data_value_regal:
+    current_stage: compare_only
+    allowed_actions:
+      compare_only: [log, compare]
+      advisory: [log, compare, queue_tagging, sampling_priority, datapack_annotation]
+      budget_gate: [log, compare, queue_tagging, sampling_priority, datapack_annotation, budget_gate]
+      narrow_hard_gate: [log, compare, queue_tagging, sampling_priority, datapack_annotation, budget_gate, datapack_credit_block]
+    promotion_criteria:
+      min_replay_coverage: 0.6
+      min_downstream_label_count: 8
+      min_deployment_receipt_count: 3
+      max_calibration_error: 0.18
+      min_baseline_agreement: 0.8
+      min_monotonicity: 0.8
+      min_sign_consistency: 0.83
+      max_false_positive_rate: 0.18
+      max_false_negative_rate: 0.2
+      max_drift_score: 0.38
+      min_residual_gain: 0.0
+    demotion_criteria:
+      min_replay_coverage: 0.4
+      min_downstream_label_count: 3
+      min_deployment_receipt_count: 1
+      max_calibration_error: 0.3
+      min_baseline_agreement: 0.62
+      min_monotonicity: 0.66
+      min_sign_consistency: 0.7
+      max_false_positive_rate: 0.32
+      max_false_negative_rate: 0.32
+      max_drift_score: 0.58
+      min_residual_gain: -0.03

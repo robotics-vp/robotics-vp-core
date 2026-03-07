@@ -10,12 +10,16 @@ import copy
 import json
 import random
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Iterable, Tuple, TYPE_CHECKING
+from typing import Dict, Any, List, Optional, Iterable, Tuple, TYPE_CHECKING, Union
 import hashlib
 
 from src.objectives.compiler import ObjectiveCompiler
 from src.objectives.profile import ObjectiveProfile
 from src.objectives.tensor import ObjectiveTensor
+from src.orchestrator.queue_selection import (
+    QueueDispatchConfig,
+    apply_live_queue_selection,
+)
 from src.valuation.datapack_schema import DataPackMeta
 from src.rl.episode_descriptor_validator import (
     normalize_episode_descriptor,
@@ -32,6 +36,7 @@ from src.epiplexity.metadata import (
 
 if TYPE_CHECKING:
     from src.policies.registry import PolicyBundle
+    from src.replay.schema import ReplayEpisodeRecord
 
 
 def _load_recap_scores(path: Optional[str]) -> Dict[str, float]:
@@ -240,6 +245,60 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
     return descriptor
 
 
+def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> Dict[str, Any]:
+    """Convert a canonical replay episode into an RL sampler descriptor."""
+    objective_axes = dict(episode.objective_tensor_summary.get("axes", {}) or {})
+    descriptor = {
+        "pack_id": episode.episode_id,
+        "episode_id": episode.episode_id,
+        "datapack_type": "replay",
+        "env_name": episode.env_id,
+        "task_type": episode.task_id,
+        "backend": episode.source_domain,
+        "engine_type": episode.env_id,
+        "objective_vector": [
+            float(objective_axes.get("throughput", 0.0)),
+            float(objective_axes.get("error", 0.0)),
+            float(objective_axes.get("energy", 0.0)),
+            float(objective_axes.get("safety", 0.0)),
+            float(objective_axes.get("uncertainty", 0.0)),
+        ],
+        "objective_preset": str(episode.metadata.get("objective_profile_id", "balanced_contract")),
+        "semantic_tags": sorted(
+            {
+                str(tag)
+                for tag in list(episode.metadata.get("semantic_tags", []) or [])
+                + list(episode.condition_vector.get("semantic_tags", []) or [])
+            }
+        ),
+        "focus_areas": [str(episode.skill_mode)],
+        "priority": "high" if float(episode.pricing_summary.get("confidence", 0.0) or 0.0) >= 0.7 else "medium",
+        "tier": 2 if float(episode.datapack_summary.get("quality_score", 0.0) or 0.0) >= 0.8 else (1 if float(episode.datapack_summary.get("quality_score", 0.0) or 0.0) >= 0.45 else 0),
+        "trust_score": float(episode.pricing_summary.get("confidence", 0.0) or 0.0),
+        "delta_J": float(episode.econ_tensor_summary.get("axes", {}).get("value_earned", 0.0) or 0.0),
+        "sampling_weight": max(0.1, 1.0 + float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)),
+        "w_embodiment": 1.0,
+        "w_epi": max(0.0, float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)),
+        "episode_length": int(episode.total_steps),
+        "tags": {
+            "source": episode.source_domain,
+            "skill_mode": episode.skill_mode,
+            "status": episode.status,
+        },
+        "replay_summary": {
+            "source_domain": episode.source_domain,
+            "condition_vector": dict(episode.condition_vector),
+            "quality_score": float(episode.datapack_summary.get("quality_score", 0.0) or 0.0),
+            "pricing_confidence": float(episode.pricing_summary.get("confidence", 0.0) or 0.0),
+        },
+    }
+    descriptor = normalize_episode_descriptor(descriptor)
+    errors = validate_episode_descriptor(descriptor)
+    if errors:
+        raise ValueError(f"Replay episode descriptor validation failed: {errors}")
+    return descriptor
+
+
 def _infer_objective_preset(objective_vector: List[float]) -> str:
     """
     Infer objective preset from objective vector.
@@ -313,6 +372,11 @@ class DataPackRLSampler:
         use_condition_vector: bool = False,
         use_unified_quality: bool = True,
         unified_quality_profile: Optional[ObjectiveProfile] = None,
+        live_queue_selection: Optional[Union[Dict[str, Any], str]] = None,
+        queue_dispatch_mode: str = "disabled",
+        queue_max_upweight: float = 2.0,
+        queue_max_downweight: float = 0.5,
+        queue_allow_slice_removal_on_integrity_failure: bool = False,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
@@ -324,6 +388,14 @@ class DataPackRLSampler:
         self.trust_matrix = trust_matrix or {}
         self.use_condition_vector = bool(use_condition_vector)
         self.use_unified_quality = bool(use_unified_quality)
+        self.live_queue_selection = live_queue_selection
+        self.queue_dispatch_config = QueueDispatchConfig(
+            mode=queue_dispatch_mode,
+            max_upweight=queue_max_upweight,
+            max_downweight=queue_max_downweight,
+            allow_slice_removal_on_integrity_failure=queue_allow_slice_removal_on_integrity_failure,
+        )
+        self.last_queue_dispatch_artifact: Optional[Dict[str, Any]] = None
         if isinstance(unified_quality_profile, dict):
             unified_quality_profile = ObjectiveProfile.from_dict(unified_quality_profile)
         self.unified_quality_profile = unified_quality_profile
@@ -420,6 +492,57 @@ class DataPackRLSampler:
             "sources": sources,
         }
 
+    def dispatch_queue(
+        self,
+        *,
+        batch_size: Optional[int] = None,
+        seed: int = 0,
+        strategy: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build a bounded queue-dispatch artifact over the episode pool."""
+        effective_size = batch_size or len(self._eligible_pool())
+        strategy_name = self._select_strategy(strategy)
+        rng = random.Random(seed)
+        selected = self._sample_with_strategy(
+            batch_size=effective_size,
+            rng=rng,
+            strategy_name=strategy_name,
+        )
+        weight_strategy = self._weight_strategy_for_strategy(strategy_name)
+        weight_map = {
+            _episode_key(episode): float(weight)
+            for episode, weight in zip(selected, self._compute_weights(selected, strategy=weight_strategy))
+        }
+        dispatch = apply_live_queue_selection(
+            selected,
+            live_queue_selection=self.live_queue_selection,
+            base_weights=weight_map,
+            config=self.queue_dispatch_config,
+        )
+        episode_lookup = {_episode_key(episode): episode for episode in selected}
+        ordered_descriptors = []
+        for episode_id in dispatch["ordered_episode_ids"]:
+            episode = episode_lookup.get(episode_id)
+            if episode is None:
+                continue
+            decision = next(
+                (row for row in dispatch["entries"] if row.get("episode_id") == episode_id),
+                {},
+            )
+            ordered_descriptors.append(
+                self._format_output(
+                    episode,
+                    strategy_name,
+                    queue_dispatch={
+                        "mode": dispatch["mode"],
+                        "decision": decision,
+                    },
+                )
+            )
+        dispatch["ordered_descriptors"] = ordered_descriptors
+        self.last_queue_dispatch_artifact = dispatch
+        return dispatch
+
     def _select_strategy(self, strategy: Optional[str]) -> str:
         if strategy:
             return strategy.lower()
@@ -429,6 +552,47 @@ class DataPackRLSampler:
             ordered = sorted(weights.items(), key=lambda kv: (-kv[1], kv[0]))
             return ordered[0][0]
         return self.default_strategy.lower()
+
+    def _weight_strategy_for_strategy(self, strategy_name: str) -> str:
+        if strategy_name in {
+            "balanced",
+            "process_reward_conf",
+            "process_reward_progress",
+            "process_reward_quality",
+            "embodiment_quality",
+            "embodiment_drift_penalty",
+            "embodiment_quality_drift",
+            "epiplexity_roi",
+            "frontier_prioritized",
+            "econ_urgency",
+        }:
+            return "balanced" if strategy_name == "balanced" else strategy_name
+        return "balanced"
+
+    def _sample_with_strategy(
+        self,
+        *,
+        batch_size: int,
+        rng: random.Random,
+        strategy_name: str,
+    ) -> List[Dict[str, Any]]:
+        if strategy_name in {
+            "balanced",
+            "process_reward_conf",
+            "process_reward_progress",
+            "process_reward_quality",
+            "embodiment_quality",
+            "embodiment_drift_penalty",
+            "embodiment_quality_drift",
+            "epiplexity_roi",
+        }:
+            weight_strategy = "balanced" if strategy_name == "balanced" else strategy_name
+            return self._sample_balanced(batch_size, rng, weight_strategy=weight_strategy)
+        if strategy_name == "frontier_prioritized":
+            return self._sample_frontier_prioritized(batch_size, rng)
+        if strategy_name == "econ_urgency":
+            return self._sample_econ_urgency(batch_size, rng)
+        raise ValueError(f"Unknown sampling strategy: {strategy_name}")
 
     def _add_episode(self, descriptor: Dict[str, Any], source: str) -> None:
         normalized, errors = normalize_and_validate(descriptor)
@@ -722,7 +886,12 @@ class DataPackRLSampler:
         norm = max(-1.0, min(1.0, float(score) / 5.0))
         return max(0.8, min(1.2, 1.0 + 0.2 * norm))
 
-    def _format_output(self, episode: Dict[str, Any], strategy: str) -> Dict[str, Any]:
+    def _format_output(
+        self,
+        episode: Dict[str, Any],
+        strategy: str,
+        queue_dispatch: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         descriptor = copy.deepcopy(episode["descriptor"])
         descriptor["enrichment"] = copy.deepcopy(episode["enrichment"])
         descriptor["sampling_metadata"] = {
@@ -733,6 +902,8 @@ class DataPackRLSampler:
             "novelty_score": episode["novelty_score"],
             "expected_mpl_gain": episode["expected_mpl_gain"],
         }
+        if queue_dispatch:
+            descriptor["sampling_metadata"]["queue_dispatch"] = copy.deepcopy(queue_dispatch)
         if self.use_condition_vector:
             tags = descriptor.get("semantic_tags") or {}
             tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)

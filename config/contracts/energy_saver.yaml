@@ -1,0 +1,31 @@
+profile_id: energy_saver
+scalarizer: constrained
+weights:
+  throughput: 1.0
+  error: 1.3
+  safety: 1.2
+  energy: 2.4
+maximize:
+  throughput: true
+  error: false
+  safety: true
+  energy: false
+constraints:
+  throughput:
+    min: 0.2083
+  error:
+    max: 0.30
+  safety:
+    min: 0.65
+  energy:
+    max: 0.475
+soft_constraints:
+  energy_wh_per_unit:
+    max: 3.2
+penalty_weights:
+  hard: 14.0
+  soft: 2.0
+metadata:
+  contract_family: energy
+  customer_segment: energy_saver
+  description: Preserves usable throughput while strongly biasing for low energy per completed unit.

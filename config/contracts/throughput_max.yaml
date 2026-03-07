@@ -1,0 +1,31 @@
+profile_id: throughput_max
+scalarizer: constrained
+weights:
+  throughput: 2.2
+  error: 1.0
+  safety: 0.9
+  energy: 0.5
+maximize:
+  throughput: true
+  error: false
+  safety: true
+  energy: false
+constraints:
+  throughput:
+    min: 0.3333
+  error:
+    max: 0.35
+  safety:
+    min: 0.55
+  energy:
+    max: 0.8125
+soft_constraints:
+  collision_rate:
+    max: 0.20
+penalty_weights:
+  hard: 12.0
+  soft: 2.5
+metadata:
+  contract_family: throughput
+  customer_segment: throughput_max
+  description: Bias toward task-hour throughput while still suppressing obvious unsafe or wasteful runs.

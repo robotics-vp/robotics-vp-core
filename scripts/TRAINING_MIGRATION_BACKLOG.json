@@ -3,7 +3,7 @@
     "description": "Training script migration backlog for @regal_training wrapper",
     "goal": "Reduce pending count to 0",
     "created_at": "2026-01-13",
-    "updated_at": "2026-01-13",
+    "updated_at": "2026-03-07",
     "backlog": [
         {
             "script": "train_orchestration_transformer_v1_curriculum.py",
@@ -192,13 +192,28 @@
             "script": "train_aligned_encoder.py",
             "migrated_at": "2026-01-13",
             "notes": "P1 complete - representation alignment"
+        },
+        {
+            "script": "train_shadow_replay_policy.py",
+            "migrated_at": "2026-03-07",
+            "notes": "P1 complete - wrapped with RegalTrainingRunner and unified runtime manifest/checkpoint registry"
+        },
+        {
+            "script": "train_shadow_pricing_models.py",
+            "migrated_at": "2026-03-07",
+            "notes": "P1 complete - wrapped with RegalTrainingRunner and recurring promotion/receipt artifacts"
+        },
+        {
+            "script": "train_shadow_offline_rl.py",
+            "migrated_at": "2026-03-07",
+            "notes": "P1 complete - wrapped with RegalTrainingRunner while preserving SAC as main online backbone"
         }
     ],
     "summary": {
-        "total": 13,
+        "total": 16,
         "P0": 0,
         "P1": 7,
         "P2": 6,
-        "migrated": 10
+        "migrated": 13
     }
 }
