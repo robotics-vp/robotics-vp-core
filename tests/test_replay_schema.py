@@ -30,8 +30,16 @@ def test_replay_schema_round_trip_and_manifest_hash_stable():
         source_domain="synthetic",
         seed=42,
         timestamp="2026-01-01T00:00:00+00:00",
-        metadata={"runtime_packet_id": "runtime_packet_1"},
-        provenance={"runtime_packet_ref": "runtime_packets.json"},
+        metadata={
+            "runtime_packet_id": "runtime_packet_1",
+            "event_refs": ["event_1"],
+            "decision_refs": ["decision_1"],
+        },
+        provenance={
+            "runtime_packet_ref": "runtime_packets.json",
+            "event_spine_ref": "event_spine.json",
+            "decision_ledger_ref": "decision_ledger.json",
+        },
     )
     episode = ReplayEpisodeRecord(
         run_id="run_a",
@@ -58,8 +66,17 @@ def test_replay_schema_round_trip_and_manifest_hash_stable():
         regal_summary={"deploy_recommendation": "allow_shadow"},
         datapack_summary={"data_share_credit": 1.0},
         ledger_event_ids=["ledger_1"],
-        metadata={"runtime_packet_id": "runtime_packet_1", "contract_id": "contract.shadow.kitting.v1"},
-        provenance={"runtime_packet_ref": "runtime_packets.json"},
+        metadata={
+            "runtime_packet_id": "runtime_packet_1",
+            "contract_id": "contract.shadow.kitting.v1",
+            "event_refs": ["event_1"],
+            "decision_refs": ["decision_1"],
+        },
+        provenance={
+            "runtime_packet_ref": "runtime_packets.json",
+            "event_spine_ref": "event_spine.json",
+            "decision_ledger_ref": "decision_ledger.json",
+        },
     )
     window = ReplayWindowRecord(
         run_id="run_a",
@@ -82,8 +99,16 @@ def test_replay_schema_round_trip_and_manifest_hash_stable():
         econ_tensor_summary={"axes": {"price_tick": 20.0}},
         pricing_summary={"net_customer_rate": 20.0},
         constraint_flags=[{"severity": "soft"}],
-        metadata={"runtime_packet_id": "runtime_packet_1"},
-        provenance={"runtime_packet_ref": "runtime_packets.json"},
+        metadata={
+            "runtime_packet_id": "runtime_packet_1",
+            "event_refs": ["event_1"],
+            "decision_refs": ["decision_1"],
+        },
+        provenance={
+            "runtime_packet_ref": "runtime_packets.json",
+            "event_spine_ref": "event_spine.json",
+            "decision_ledger_ref": "decision_ledger.json",
+        },
     )
     manifest = ReplayDatasetManifest(
         schema_version="shadow_replay_dataset_v1",

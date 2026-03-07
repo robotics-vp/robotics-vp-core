@@ -16,3 +16,9 @@
 - Wired `ingest_shadow_run(...)` to load `runtime_packets.json` when present and thread packet IDs, contract IDs, and sidecar refs into replay metadata/provenance while remaining backward-compatible with older runs that do not have packet sidecars.
 - Extended targeted tests to cover sidecar payload serialization, shadow artifact emission, replay metadata round-tripping, and replay-dataset ingestion of packet refs.
 - Kept the change additive: no replay dataclass shape changes, no frozen Phase B math changes, and no broad adapter refactor.
+
+- Added `src/runtime/event_spine.py` with `RuntimeEvent`, `DecisionLedgerEntry`, and deterministic EventSpine / DecisionLedger sidecar payload builders so ordered runtime events and governance/economic decisions can be persisted without touching the replay schema.
+- Wired `src/shadow_runtime/control_plane.py` to emit `event_spine.json` and `decision_ledger.json` with stable event kinds including `queue_reweight`, `pricing_tick_published`, `pricing_tick_suppressed`, `regal_warn`, `regal_veto`, `adaptation_admitted`, `adaptation_denied`, `collect_more_data`, `datapack_credit_assigned`, `promotion_hold`, and `promotion_recommend_promote` when applicable.
+- Threaded stable `event_refs` and `decision_refs` through replay episode/step/window `metadata`, with sidecar file refs stored in `provenance`, so downstream consumers can join against the sidecars without requiring replay dataclass changes.
+- Bound each emitted event and decision to the new runtime packet layer via `runtime_packet_id`, `contract_id`, objective/econ/pricing/regal artifact refs, and actor/critic/advisor provenance; receipt label refs are present as empty placeholders for future downstream linkage.
+- Verified the new layer with targeted sidecar round-trip tests, shadow runner artifact tests, replay schema/dataset tests, receipt-ingest coverage, and `python3 -m compileall src -q`.

@@ -29,8 +29,14 @@ def test_replay_dataset_builds_from_shadow_run(tmp_path):
     assert loaded.manifest.dataset_digest == bundle.manifest.dataset_digest
     assert loaded.steps[0].pricing_tick_ref is not None
     assert loaded.episodes[0].provenance["runtime_packet_ref"] == "runtime_packets.json"
+    assert loaded.episodes[0].provenance["event_spine_ref"] == "event_spine.json"
+    assert loaded.episodes[0].provenance["decision_ledger_ref"] == "decision_ledger.json"
     assert loaded.steps[0].metadata["runtime_packet_id"].startswith("runtime_")
+    assert loaded.steps[0].metadata["event_refs"]
+    assert loaded.windows[0].metadata["decision_refs"]
     assert bundle.manifest.metadata["sources"][0]["runtime_packet_count"] == 2
+    assert bundle.manifest.metadata["sources"][0]["event_count"] >= 10
+    assert bundle.manifest.metadata["sources"][0]["decision_count"] >= 8
 
 
 def test_replay_dataset_builds_from_workcell_episode_log(tmp_path):
