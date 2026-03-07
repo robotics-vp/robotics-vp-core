@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from src.constraints.constraint_set import ConstraintSet
 from src.economics.econ_tensor import EconTensor
@@ -364,10 +364,39 @@ def runtime_packet_from_record(
     )
 
 
+def runtime_packet_sidecar_payload(
+    *,
+    run_id: str,
+    packets: Sequence[RuntimePacket],
+    schema_version: str = "runtime_packet_sidecar_v1",
+) -> Dict[str, Any]:
+    """Serialize a deterministic run-level runtime packet sidecar payload."""
+
+    ordered_packets = sorted(
+        list(packets),
+        key=lambda packet: (packet.run_id, packet.episode_id, packet.packet_id),
+    )
+    return {
+        "schema_version": str(schema_version),
+        "run_id": str(run_id),
+        "packet_count": len(ordered_packets),
+        "episodes": [
+            {
+                "episode_id": packet.episode_id,
+                "packet_id": packet.packet_id,
+                "contract_id": packet.contract.contract_id,
+                "runtime_packet": packet.to_dict(),
+            }
+            for packet in ordered_packets
+        ],
+    }
+
+
 __all__ = [
     "ContractPacket",
     "RuntimePacket",
     "SchemaRef",
     "build_contract_packet",
     "runtime_packet_from_record",
+    "runtime_packet_sidecar_payload",
 ]
