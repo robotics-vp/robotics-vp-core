@@ -1,0 +1,29 @@
+name: Shadow Promotion Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e .
+          python3 -m pip install -r requirements-dev.txt
+
+      - name: Verify compile, lint, types, and tests
+        run: python3 scripts/run_full_repo_verification.py

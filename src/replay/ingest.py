@@ -8,11 +8,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+import numpy as np
+
 from src.constraints.constraint_set import ConstraintSet
 from src.economics.functor import ObjectiveEconFunctor
 from src.economics.pricing_sentinel import PricingSentinel, PricingTickInput
 from src.economics.value_ledger import ValueLedger, summarize_econ_tensor
 from src.envs.workcell_env.base import EpisodeLog
+from src.motor_backend.rollout_capture import finalize_rollout_bundle
 from src.objectives.runtime_builder import (
     ObjectiveRuntimeBuilder,
     ObjectiveRuntimeRecord,
@@ -176,6 +179,13 @@ def ingest_shadow_run(
                     "runtime_record_hash": sha256_json(runtime_record),
                     "trace_hash": sha256_json(trace_payload),
                 },
+                provenance={
+                    "source_adapter": "shadow_control_plane_artifacts_v1",
+                    "source_root": str(root),
+                    "trace_sidecar": "shadow_episode_traces.json",
+                    "objective_tensor_ref": "objective_tensor.json",
+                    "econ_tensor_ref": "econ_tensor.json",
+                },
             )
         )
 
@@ -234,6 +244,11 @@ def ingest_shadow_run(
                     metadata={
                         "success": bool(step.get("info", {}).get("success", False)),
                         "task_info": dict(step_trace.get("task_info", {}) or {}),
+                    },
+                    provenance={
+                        "source_adapter": "shadow_control_plane_artifacts_v1",
+                        "source_root": str(root),
+                        "step_trace_hash": sha256_json(step_trace),
                     },
                 )
             )
@@ -299,6 +314,11 @@ def ingest_shadow_run(
                     pricing_summary=dict(window_tick),
                     constraint_flags=[dict(flag) for flag in constraint_flags],
                     metadata={"window_hash": sha256_json(window)},
+                    provenance={
+                        "source_adapter": "shadow_control_plane_artifacts_v1",
+                        "source_root": str(root),
+                        "window_id": window_id,
+                    },
                 )
             )
 
@@ -307,6 +327,7 @@ def ingest_shadow_run(
         "source_adapter": "shadow_control_plane_artifacts_v1",
         "source_root": str(root),
         "pricing_policy_path": str(pricing_policy_path),
+        "provenance_digest": sha256_json({"root": str(root), "schema_version": REPLAY_SCHEMA_VERSION}),
     }
     return _sort_episode_records(episodes), _sort_step_records(steps), _sort_window_records(windows), metadata
 
@@ -425,6 +446,10 @@ def ingest_workcell_episode_log(
             datapack_summary={},
             ledger_event_ids=[],
             metadata={"episode_log_source": str(episode_log_path)},
+            provenance={
+                "source_adapter": "workcell_episode_log_v1",
+                "source_path": str(episode_log_path),
+            },
         )
     ]
     step_records: List[ReplayStepRecord] = []
@@ -474,6 +499,10 @@ def ingest_workcell_episode_log(
                 seed=runtime_record.seed,
                 timestamp=_timestamp_for_step(runtime_record.timestamp, step_idx=step_idx, time_step_s=float(metrics.get("time_step_s", 1.0))),
                 metadata={},
+                provenance={
+                    "source_adapter": "workcell_episode_log_v1",
+                    "source_path": str(episode_log_path),
+                },
             )
         )
     window_records = _episode_log_window_records(
@@ -487,8 +516,116 @@ def ingest_workcell_episode_log(
         "schema_version": REPLAY_SCHEMA_VERSION,
         "source_adapter": "workcell_episode_log_v1",
         "source_path": str(episode_log_path),
+        "provenance_digest": sha256_json({"source_path": str(episode_log_path), "schema_version": REPLAY_SCHEMA_VERSION}),
     }
     return episode_records, _sort_step_records(step_records), _sort_window_records(window_records), metadata_payload
+
+
+def ingest_rollout_bundle(
+    rollout_root: str | Path,
+    *,
+    scenario_id: Optional[str] = None,
+    run_id: Optional[str] = None,
+    source_domain: str = SourceDomain.SYNTHETIC.value,
+    objective_profile_id: str = "balanced_contract",
+    pricing_policy_path: str | Path = "config/pricing/default.yaml",
+) -> Tuple[List[ReplayEpisodeRecord], List[ReplayStepRecord], List[ReplayWindowRecord], Dict[str, Any]]:
+    """Ingest rollout-capture bundles into canonical replay records."""
+
+    root = Path(rollout_root)
+    resolved_scenario_id = scenario_id
+    base_dir = root
+    if resolved_scenario_id is None:
+        if any(root.glob("episode_*")):
+            resolved_scenario_id = root.name
+            base_dir = root.parent
+        else:
+            scenario_dirs = [path for path in sorted(root.iterdir()) if path.is_dir() and any(path.glob("episode_*"))]
+            if len(scenario_dirs) == 1:
+                resolved_scenario_id = scenario_dirs[0].name
+                base_dir = root
+            else:
+                raise ReplayIngestionError(
+                    f"Could not infer rollout scenario under {root}; provide scenario_id explicitly"
+                )
+    bundle = finalize_rollout_bundle(resolved_scenario_id, base_dir)
+    episodes: List[ReplayEpisodeRecord] = []
+    steps: List[ReplayStepRecord] = []
+    windows: List[ReplayWindowRecord] = []
+
+    for rollout in bundle.episodes:
+        trajectory_rows = _load_rollout_trajectory(rollout.trajectory_path, metrics=rollout.metrics)
+        episode_log = EpisodeLog(
+            metadata=rollout.metadata,
+            trajectory=trajectory_rows,
+            info_history=[dict(row.get("info", {}) or {}) for row in trajectory_rows],
+            metrics={
+                "reward_total": float(rollout.metrics.get("reward", 0.0)),
+                "steps": len(trajectory_rows),
+                "time_step_s": 1.0,
+                "throughput_units_per_hour": max(0.0, float(len(trajectory_rows)) * 12.0),
+                "error_rate": float(rollout.metrics.get("error_rate", 0.0)),
+                "safety_score": float(rollout.metrics.get("safety_score", 0.9)),
+                "energy_wh_per_unit": float(rollout.metrics.get("energy_wh_per_unit", 2.0)),
+            },
+        )
+        temp_payload = episode_log.to_dict()
+        temp_payload["metadata"]["seed"] = rollout.metadata.seed
+        temp_path = root / f".rollout_replay_{rollout.metadata.episode_id}.json"
+        temp_path.write_text(json.dumps(temp_payload), encoding="utf-8")
+        try:
+            e_rows, s_rows, w_rows, _ = ingest_workcell_episode_log(
+                temp_path,
+                run_id=run_id or f"rollout_replay_{sha256_json({'scenario_id': resolved_scenario_id, 'episode_id': rollout.metadata.episode_id})[:10]}",
+                source_domain=source_domain,
+                objective_profile_id=objective_profile_id,
+                pricing_policy_path=pricing_policy_path,
+            )
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+        for episode in e_rows:
+            episode_payload = episode.to_dict()
+            episode_payload["provenance"] = {
+                **dict(episode_payload.get("provenance", {}) or {}),
+                "source_adapter": "rollout_capture_bundle_v1",
+                "scenario_id": resolved_scenario_id,
+                "trajectory_path": str(rollout.trajectory_path),
+            }
+            episodes.append(
+                ReplayEpisodeRecord.from_dict(episode_payload)
+            )
+        for step in s_rows:
+            step_payload = step.to_dict()
+            step_payload["provenance"] = {
+                **dict(step_payload.get("provenance", {}) or {}),
+                "source_adapter": "rollout_capture_bundle_v1",
+                "scenario_id": resolved_scenario_id,
+                "trajectory_path": str(rollout.trajectory_path),
+            }
+            steps.append(
+                ReplayStepRecord.from_dict(step_payload)
+            )
+        for window in w_rows:
+            window_payload = window.to_dict()
+            window_payload["provenance"] = {
+                **dict(window_payload.get("provenance", {}) or {}),
+                "source_adapter": "rollout_capture_bundle_v1",
+                "scenario_id": resolved_scenario_id,
+                "trajectory_path": str(rollout.trajectory_path),
+            }
+            windows.append(
+                ReplayWindowRecord.from_dict(window_payload)
+            )
+
+    metadata = {
+        "schema_version": REPLAY_SCHEMA_VERSION,
+        "source_adapter": "rollout_capture_bundle_v1",
+        "scenario_id": resolved_scenario_id,
+        "source_root": str(root),
+        "provenance_digest": sha256_json({"source_root": str(root), "scenario_id": resolved_scenario_id}),
+    }
+    return _sort_episode_records(episodes), _sort_step_records(steps), _sort_window_records(windows), metadata
 
 
 def build_shadow_condition_vector(
@@ -832,3 +969,47 @@ def _sort_step_records(records: Sequence[ReplayStepRecord]) -> List[ReplayStepRe
 
 def _sort_window_records(records: Sequence[ReplayWindowRecord]) -> List[ReplayWindowRecord]:
     return sorted(records, key=lambda record: (record.run_id, record.episode_id, record.start_step, record.window_id))
+
+
+def _load_rollout_trajectory(path: Path, *, metrics: Mapping[str, Any]) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    try:
+        payload = np.load(path, allow_pickle=True)
+        trajectory = payload.get("trajectory")
+    except Exception:
+        trajectory = None
+    if trajectory is None:
+        return []
+    if isinstance(trajectory, np.ndarray):
+        trajectory = trajectory.tolist()
+    if isinstance(trajectory, Mapping):
+        trajectory = list(trajectory.get("trajectory", []) or [])
+    if not isinstance(trajectory, list):
+        trajectory = [trajectory]
+
+    rows: List[Dict[str, Any]] = []
+    per_step_reward = float(metrics.get("reward", 0.0)) / float(max(1, len(trajectory)))
+    for index, entry in enumerate(trajectory):
+        if isinstance(entry, Mapping):
+            rows.append(
+                {
+                    "step": int(entry.get("step", index)),
+                    "obs": dict(entry.get("obs", {}) or {"state_vector": _flatten_numeric_payload(entry)}),
+                    "action": dict(entry.get("action", {}) or {"action_vector": [0.0]}),
+                    "done": bool(entry.get("done", index == len(trajectory) - 1)),
+                    "info": dict(entry.get("info", {}) or {"reward": per_step_reward}),
+                }
+            )
+            continue
+        values = _flatten_numeric_payload(entry)
+        rows.append(
+            {
+                "step": index,
+                "obs": {"state_vector": values or [float(index)]},
+                "action": {"action_vector": [0.0]},
+                "done": index == len(trajectory) - 1,
+                "info": {"reward": per_step_reward},
+            }
+        )
+    return rows

@@ -33,6 +33,7 @@ def main() -> None:
     parser.add_argument("--pricing-checkpoint", type=str, default=None)
     parser.add_argument("--data-value-checkpoint", type=str, default=None)
     parser.add_argument("--regal-support-checkpoint", type=str, default=None)
+    parser.add_argument("--promotion-policy", type=str, default="configs/regality/promotion_default.yaml")
     args = parser.parse_args()
 
     output_root = Path(args.output_dir)
@@ -59,12 +60,17 @@ def main() -> None:
         pricing_advisor=PricingAdvisor(mode=args.pricing_mode, checkpoint_path=args.pricing_checkpoint),
         data_value_advisor=DataValueAdvisor(mode=args.data_value_mode, checkpoint_path=args.data_value_checkpoint),
         regal_support_advisor=RegalSupportAdvisor(mode=args.regal_support_mode, checkpoint_path=args.regal_support_checkpoint),
+        promotion_policy_path=args.promotion_policy,
     )
 
     json_path = output_root / "shadow_advisory.json"
     md_path = output_root / "shadow_advisory.md"
+    queue_json_path = output_root / "live_queue_selection.json"
+    budget_json_path = output_root / "adaptation_budget.json"
     json_path.write_text(json.dumps(advisory, indent=2, sort_keys=True), encoding="utf-8")
     md_path.write_text(_advisory_markdown(advisory), encoding="utf-8")
+    queue_json_path.write_text(json.dumps(advisory["live_queue_selection"], indent=2, sort_keys=True), encoding="utf-8")
+    budget_json_path.write_text(json.dumps(advisory["adaptation_budget"], indent=2, sort_keys=True), encoding="utf-8")
     print(json.dumps(advisory["summary"], indent=2, sort_keys=True))
 
 
@@ -85,8 +91,10 @@ def _advisory_markdown(advisory: dict) -> str:
                 f"- Sampling priority: {episode['sampling_priority']} ({episode['sampling_priority_score']:.2f})",
                 f"- Slice weight multiplier: {episode['slice_weight_multiplier']:.2f}",
                 f"- Replay queue tags: {', '.join(episode['replay_queue_tags'])}",
+                f"- Replay action: {episode['replay_action']}",
                 f"- Collect more data: {episode['collect_more_data']}",
                 f"- Retrain: {episode['retrain']}",
+                f"- Inferential budget decision: {episode['inferential_budget_decision']['decision']}",
                 "",
             ]
         )

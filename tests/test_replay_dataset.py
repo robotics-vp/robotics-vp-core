@@ -1,5 +1,6 @@
 import json
 
+from src.motor_backend.rollout_capture import EpisodeMetadata, record_episode_rollout, start_rollout_capture
 from src.replay.dataset import ReplayDatasetBuilder, load_replay_dataset
 from src.shadow_runtime.control_plane import run_shadow_control_plane
 
@@ -49,3 +50,36 @@ def test_replay_dataset_builds_from_workcell_episode_log(tmp_path):
     assert bundle.manifest.num_episodes == 1
     assert bundle.manifest.num_steps > 0
     assert bundle.steps[0].task_id == "shadow_kitting"
+
+
+def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
+    base_dir = tmp_path / "rollouts"
+    scenario_id = "scenario_shadow"
+    start_rollout_capture(scenario_id, base_dir)
+    record_episode_rollout(
+        scenario_id=scenario_id,
+        episode_idx=0,
+        metadata=EpisodeMetadata(
+            episode_id="ep_rollout_001",
+            task_id="shadow_kitting",
+            robot_family="sim_robot",
+            seed=7,
+            env_params={"config": {"topology_type": "workcell_rollout"}},
+        ),
+        trajectory_data=[
+            {"step": 0, "obs": {"state_vector": [0.0, 1.0]}, "action": {"action_vector": [0.2]}, "info": {"reward": 0.5}},
+            {"step": 1, "obs": {"state_vector": [1.0, 2.0]}, "action": {"action_vector": [0.1]}, "done": True, "info": {"reward": 0.6}},
+        ],
+        rgb_frames=None,
+        depth_frames=None,
+        metrics={"reward": 1.1, "quality_score": 0.7},
+        base_dir=base_dir,
+    )
+
+    dataset_dir = tmp_path / "replay_rollout_dataset"
+    bundle = ReplayDatasetBuilder().add_rollout_bundle(base_dir, scenario_id=scenario_id).write(dataset_dir)
+
+    assert bundle.manifest.num_episodes == 1
+    assert "rollout_capture_bundle_v1" in bundle.manifest.source_adapters
+    assert bundle.episodes[0].provenance["source_adapter"] == "rollout_capture_bundle_v1"
+    assert bundle.manifest.metadata["schema_compatibility"][0]["compatible"] is True

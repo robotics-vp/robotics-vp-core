@@ -1,6 +1,7 @@
 """Shadow runtime helpers for the economic control plane."""
 
 from src.shadow_runtime.advisors import (
+    AdvisorPromotionGuard,
     AdvisorMode,
     DataValueAdvisor,
     PolicyAdvisor,
@@ -11,6 +12,7 @@ from src.shadow_runtime.control_plane import ShadowRunResult, run_shadow_control
 from src.shadow_runtime.demo_source import ShadowEpisodeTrace, generate_workcell_shadow_batch
 
 __all__ = [
+    "AdvisorPromotionGuard",
     "AdvisorMode",
     "DataValueAdvisor",
     "PolicyAdvisor",

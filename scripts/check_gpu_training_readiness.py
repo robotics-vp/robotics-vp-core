@@ -19,6 +19,8 @@ def main() -> None:
     configs = [
         "configs/replay_policy/cpu_smoke.yaml",
         "configs/replay_policy/gpu_full.yaml",
+        "configs/offline_rl/cpu_smoke.yaml",
+        "configs/offline_rl/gpu_full.yaml",
         "configs/shadow_models/cpu_smoke.yaml",
         "configs/shadow_models/gpu_full.yaml",
     ]
