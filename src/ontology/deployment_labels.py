@@ -20,8 +20,14 @@ class DeploymentOutcomeLabel:
     predicted_value: float
     realized_value: float
     pricing_accepted: bool
+    task_success: Optional[bool] = None
+    objective_satisfied: Optional[bool] = None
+    realized_reward: Optional[float] = None
     failure_events: List[str] = field(default_factory=list)
     risk_events: List[str] = field(default_factory=list)
+    incident_events: List[str] = field(default_factory=list)
+    human_review_label: Optional[str] = None
+    override_label: Optional[str] = None
     provenance: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -49,8 +55,14 @@ class DeploymentOutcomeLabel:
             "predicted_value": float(self.predicted_value),
             "realized_value": float(self.realized_value),
             "pricing_accepted": bool(self.pricing_accepted),
+            "task_success": self.task_success,
+            "objective_satisfied": self.objective_satisfied,
+            "realized_reward": self.realized_reward,
             "failure_events": list(self.failure_events),
             "risk_events": list(self.risk_events),
+            "incident_events": list(self.incident_events),
+            "human_review_label": self.human_review_label,
+            "override_label": self.override_label,
             "provenance": dict(self.provenance),
             "metadata": dict(self.metadata),
         }
@@ -67,8 +79,18 @@ class DeploymentOutcomeLabel:
             predicted_value=float(payload.get("predicted_value", 0.0)),
             realized_value=float(payload.get("realized_value", 0.0)),
             pricing_accepted=bool(payload.get("pricing_accepted", False)),
+            task_success=payload.get("task_success"),
+            objective_satisfied=payload.get("objective_satisfied"),
+            realized_reward=(
+                float(payload.get("realized_reward"))
+                if payload.get("realized_reward") is not None
+                else None
+            ),
             failure_events=[str(value) for value in payload.get("failure_events", []) or []],
             risk_events=[str(value) for value in payload.get("risk_events", []) or []],
+            incident_events=[str(value) for value in payload.get("incident_events", []) or []],
+            human_review_label=payload.get("human_review_label"),
+            override_label=payload.get("override_label"),
             provenance=dict(payload.get("provenance", {}) or {}),
             metadata=dict(payload.get("metadata", {}) or {}),
         )
@@ -81,6 +103,7 @@ class AdaptationOutcomeLabel:
     schema_version: str
     run_id: str
     adaptation_id: str
+    source_domain: str
     recommended_mode: str
     realized_mode: str
     expected_gain: float
@@ -101,6 +124,7 @@ class AdaptationOutcomeLabel:
             "label_id": self.label_id,
             "run_id": self.run_id,
             "adaptation_id": self.adaptation_id,
+            "source_domain": self.source_domain,
             "recommended_mode": self.recommended_mode,
             "realized_mode": self.realized_mode,
             "expected_gain": float(self.expected_gain),
@@ -118,6 +142,7 @@ class AdaptationOutcomeLabel:
             schema_version=str(payload.get("schema_version", "adaptation_outcome_label_v1")),
             run_id=str(payload.get("run_id", "")),
             adaptation_id=str(payload.get("adaptation_id", "")),
+            source_domain=str(payload.get("source_domain", "")),
             recommended_mode=str(payload.get("recommended_mode", "no_op")),
             realized_mode=str(payload.get("realized_mode", "no_op")),
             expected_gain=float(payload.get("expected_gain", 0.0)),
@@ -137,6 +162,7 @@ class DatapackContributionLabel:
     schema_version: str
     datapack_id: str
     run_id: str
+    source_domain: str
     marginal_frontier_gain_predicted: float
     marginal_frontier_gain_realized: float
     data_share_credit_predicted: float
@@ -155,6 +181,7 @@ class DatapackContributionLabel:
             "label_id": self.label_id,
             "datapack_id": self.datapack_id,
             "run_id": self.run_id,
+            "source_domain": self.source_domain,
             "marginal_frontier_gain_predicted": float(self.marginal_frontier_gain_predicted),
             "marginal_frontier_gain_realized": float(self.marginal_frontier_gain_realized),
             "data_share_credit_predicted": float(self.data_share_credit_predicted),
@@ -170,6 +197,7 @@ class DatapackContributionLabel:
             schema_version=str(payload.get("schema_version", "datapack_contribution_label_v1")),
             datapack_id=str(payload.get("datapack_id", "")),
             run_id=str(payload.get("run_id", "")),
+            source_domain=str(payload.get("source_domain", "")),
             marginal_frontier_gain_predicted=float(payload.get("marginal_frontier_gain_predicted", 0.0)),
             marginal_frontier_gain_realized=float(payload.get("marginal_frontier_gain_realized", 0.0)),
             data_share_credit_predicted=float(payload.get("data_share_credit_predicted", 0.0)),

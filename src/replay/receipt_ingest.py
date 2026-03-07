@@ -12,7 +12,8 @@ from src.ontology.deployment_labels import (
     DatapackContributionLabel,
     DeploymentOutcomeLabel,
 )
-from src.replay.dataset import ReplayDatasetBundle
+from src.replay.dataset import ReplayDatasetBuilder, ReplayDatasetBundle, load_replay_dataset
+from src.training.training_manifest import load_training_runtime_manifest
 from src.utils.config_digest import sha256_json
 
 
@@ -47,18 +48,20 @@ class ReceiptLabelBundle:
         }
 
     def coverage_summary(self) -> Dict[str, Any]:
-        source_domains = sorted(
-            {
-                row.source_domain
-                for row in self.deployment_outcomes
-                if row.source_domain
-            }
-            | {
-                row.source_domain
-                for row in self.deployment_receipts
-                if row.source_domain
-            }
-        )
+        source_domain_counts: Dict[str, int] = {}
+        for row in self.deployment_outcomes:
+            if row.source_domain:
+                source_domain_counts[row.source_domain] = source_domain_counts.get(row.source_domain, 0) + 1
+        for row in self.adaptation_outcomes:
+            if row.source_domain:
+                source_domain_counts[row.source_domain] = source_domain_counts.get(row.source_domain, 0) + 1
+        for row in self.datapack_contributions:
+            if row.source_domain:
+                source_domain_counts[row.source_domain] = source_domain_counts.get(row.source_domain, 0) + 1
+        for row in self.deployment_receipts:
+            if row.source_domain:
+                source_domain_counts[row.source_domain] = source_domain_counts.get(row.source_domain, 0) + 1
+        source_domains = sorted(source_domain_counts)
         episode_ids = sorted(
             {
                 row.episode_id
@@ -85,6 +88,7 @@ class ReceiptLabelBundle:
             "covered_episode_ids": episode_ids,
             "covered_episode_count": len(episode_ids),
             "source_domains": source_domains,
+            "source_domain_counts": dict(sorted(source_domain_counts.items())),
             "bundle_digest": self.bundle_digest,
         }
 
@@ -165,7 +169,12 @@ def resolve_receipt_label_bundle(
     if receipt_label_dir:
         root = Path(receipt_label_dir)
         if root.exists():
-            return load_receipt_label_bundle(root)
+            if (root / "receipt_label_bundle.json").exists() or (root / "deployment_receipts.jsonl").exists():
+                return load_receipt_label_bundle(root)
+            if (root / "training_runtime_manifest.json").exists() or (root / "online_episode_receipts.jsonl").exists():
+                return build_training_run_receipt_label_bundle(root, replay_dataset_dir=dataset.root_dir, label_mode=label_mode)
+            if any(root.glob("episode_*")):
+                return build_rollout_receipt_label_bundle(root, label_mode="sim_rollout")
     if not allow_synthetic:
         return ReceiptLabelBundle(
             schema_version=RECEIPT_LABEL_BUNDLE_SCHEMA_VERSION,
@@ -184,75 +193,190 @@ def build_synthetic_receipt_label_bundle(
     *,
     label_mode: str = "synthetic_shadow",
 ) -> ReceiptLabelBundle:
+    return _build_receipt_label_bundle(
+        dataset=dataset,
+        observed_outcomes={},
+        label_mode=label_mode,
+        metadata={
+            "dataset_digest": dataset.manifest.dataset_digest,
+            "run_ids": list(dataset.manifest.run_ids),
+            "observation_source": "synthetic_defaults",
+        },
+    )
+
+
+def build_workcell_episode_log_receipt_label_bundle(
+    episode_log_path: str | Path,
+    *,
+    run_id: Optional[str] = None,
+    source_domain: str = "sim_rollout",
+    objective_profile_id: str = "balanced_contract",
+    label_mode: str = "sim_rollout",
+) -> ReceiptLabelBundle:
+    dataset = ReplayDatasetBuilder().add_workcell_episode_log(
+        episode_log_path,
+        run_id=run_id,
+        source_domain=source_domain,
+        objective_profile_id=objective_profile_id,
+    ).build()
+    return _build_receipt_label_bundle(
+        dataset=dataset,
+        observed_outcomes=_observed_outcomes_from_dataset(dataset, label_mode=label_mode),
+        label_mode=label_mode,
+        metadata={
+            "episode_log_path": str(episode_log_path),
+            "observation_source": "workcell_episode_log",
+        },
+    )
+
+
+def build_rollout_receipt_label_bundle(
+    rollout_root: str | Path,
+    *,
+    scenario_id: Optional[str] = None,
+    run_id: Optional[str] = None,
+    source_domain: str = "sim_rollout",
+    objective_profile_id: str = "balanced_contract",
+    label_mode: str = "sim_rollout",
+) -> ReceiptLabelBundle:
+    dataset = ReplayDatasetBuilder().add_rollout_bundle(
+        rollout_root,
+        scenario_id=scenario_id,
+        run_id=run_id,
+        source_domain=source_domain,
+        objective_profile_id=objective_profile_id,
+    ).build()
+    return _build_receipt_label_bundle(
+        dataset=dataset,
+        observed_outcomes=_observed_outcomes_from_dataset(dataset, label_mode=label_mode),
+        label_mode=label_mode,
+        metadata={
+            "rollout_root": str(rollout_root),
+            "scenario_id": scenario_id,
+            "observation_source": "rollout_bundle",
+        },
+    )
+
+
+def build_training_run_receipt_label_bundle(
+    training_run_root: str | Path,
+    *,
+    replay_dataset_dir: Optional[str | Path] = None,
+    label_mode: str = "training_run",
+) -> ReceiptLabelBundle:
+    root = Path(training_run_root)
+    bundle_path = root / "receipt_labels" / "receipt_label_bundle.json"
+    if bundle_path.exists():
+        return load_receipt_label_bundle(bundle_path.parent)
+
+    manifest = None
+    manifest_path = root / "training_runtime_manifest.json"
+    if manifest_path.exists():
+        manifest = load_training_runtime_manifest(manifest_path)
+        receipt_bundle_path = _existing_path(
+            manifest.artifact_paths.get("receipt_label_bundle"),
+            manifest.artifact_paths.get("receipt_label_summary"),
+        )
+        if receipt_bundle_path and Path(receipt_bundle_path).name == "receipt_label_bundle.json":
+            return load_receipt_label_bundle(Path(receipt_bundle_path).parent)
+
+    dataset = None
+    dataset_root = _resolve_training_run_dataset_root(root, manifest=manifest, replay_dataset_dir=replay_dataset_dir)
+    if dataset_root is not None:
+        dataset = load_replay_dataset(dataset_root)
+    elif _resolve_episode_logs_dir(root, manifest=manifest) is not None:
+        dataset = _build_dataset_from_episode_logs(_resolve_episode_logs_dir(root, manifest=manifest))
+
+    observed_outcomes = _load_observed_outcomes(
+        _resolve_observed_episode_receipt_path(root, manifest=manifest),
+    )
+    if dataset is None:
+        return ReceiptLabelBundle(
+            schema_version=RECEIPT_LABEL_BUNDLE_SCHEMA_VERSION,
+            label_mode="unavailable",
+            deployment_outcomes=[],
+            adaptation_outcomes=[],
+            datapack_contributions=[],
+            deployment_receipts=[],
+            metadata={
+                "reason": "training_run_receipt_dataset_unavailable",
+                "training_run_root": str(root),
+            },
+        )
+    if not observed_outcomes:
+        observed_outcomes = _observed_outcomes_from_dataset(dataset, label_mode=label_mode)
+    return _build_receipt_label_bundle(
+        dataset=dataset,
+        observed_outcomes=observed_outcomes,
+        label_mode=label_mode,
+        metadata={
+            "training_run_root": str(root),
+            "training_runtime_manifest": str(manifest_path) if manifest_path.exists() else None,
+            "observation_source": (
+                "online_episode_receipts"
+                if _resolve_observed_episode_receipt_path(root, manifest=manifest) is not None
+                else "training_run_dataset"
+            ),
+        },
+    )
+
+
+def _build_receipt_label_bundle(
+    *,
+    dataset: ReplayDatasetBundle,
+    observed_outcomes: Mapping[str, Mapping[str, Any]],
+    label_mode: str,
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> ReceiptLabelBundle:
     deployment_outcomes: list[DeploymentOutcomeLabel] = []
     adaptation_outcomes: list[AdaptationOutcomeLabel] = []
     datapack_contributions: list[DatapackContributionLabel] = []
     deployment_receipts: list[DeploymentReceiptRecord] = []
 
     for episode in dataset.episodes:
-        axes = dict(episode.econ_tensor_summary.get("axes", {}) or {})
-        predicted_value = float(
-            axes.get(
-                "value_earned",
-                episode.pricing_summary.get("net_customer_rate", 0.0),
-            )
-        )
-        quality = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
-        frontier_gain = float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)
-        hard_flags = sum(
-            1
-            for flag in episode.constraint_flags
-            if str(flag.get("severity", "")).lower() == "hard"
-        )
-        warn_flags = sum(
-            1
-            for flag in episode.constraint_flags
-            if str(flag.get("severity", "")).lower() == "warn"
-        )
-        realized_multiplier = max(
-            0.25,
-            min(
-                1.35,
-                0.82
-                + 0.18 * quality
-                + 0.12 * frontier_gain
-                - 0.14 * hard_flags
-                - 0.05 * warn_flags,
-            ),
-        )
-        realized_value = float(predicted_value * realized_multiplier)
-        quoted_rate = float(episode.pricing_summary.get("net_customer_rate", 0.0) or 0.0)
-        billed_rate = max(0.0, min(quoted_rate, realized_value + 0.05 * max(1, episode.total_steps)))
-        pricing_accepted = bool(quoted_rate <= max(0.0, realized_value + 0.1))
-        objective_satisfied = hard_flags == 0 and realized_value >= 0.0
-        failure_events = ["constraint_integrity_failure"] * hard_flags
-        risk_events = ["constraint_warning"] * warn_flags
-        datapack_id = str(
-            episode.metadata.get("datapack_id")
-            or episode.datapack_summary.get("datapack_id")
-            or episode.episode_id
-        )
+        defaults = _default_episode_outcome_payload(episode)
+        observed = dict(observed_outcomes.get(episode.episode_id, {}) or {})
+        source_domain = str(observed.get("source_domain", defaults["source_domain"]) or defaults["source_domain"])
+        predicted_value = float(observed.get("predicted_value", defaults["predicted_value"]))
+        realized_value = float(observed.get("realized_value", defaults["realized_value"]))
+        quoted_rate = float(observed.get("quoted_rate", defaults["quoted_rate"]))
+        billed_rate = float(observed.get("accepted_rate", observed.get("billed_rate", defaults["billed_rate"])))
+        pricing_accepted = bool(observed.get("pricing_accepted", defaults["pricing_accepted"]))
+        task_success = observed.get("task_success", defaults["task_success"])
+        objective_satisfied = observed.get("objective_satisfied", defaults["objective_satisfied"])
+        realized_reward = observed.get("realized_reward", defaults["realized_reward"])
+        failure_events = [str(value) for value in observed.get("failure_events", defaults["failure_events"]) or []]
+        risk_events = [str(value) for value in observed.get("risk_events", defaults["risk_events"]) or []]
+        incident_events = [str(value) for value in observed.get("incident_events", defaults["incident_events"]) or []]
+        human_review_label = observed.get("human_review_label", defaults["human_review_label"])
+        override_label = observed.get("override_label", defaults["override_label"])
+        datapack_id = str(observed.get("datapack_id", defaults["datapack_id"]) or defaults["datapack_id"])
 
         outcome = DeploymentOutcomeLabel(
             schema_version="deployment_outcome_label_v1",
             run_id=episode.run_id,
             episode_id=episode.episode_id,
-            source_domain=episode.source_domain,
+            source_domain=source_domain,
             deployment_id=f"deploy_{episode.episode_id}",
             objective_profile_id=str(episode.metadata.get("objective_profile_id", "balanced_contract")),
             predicted_value=predicted_value,
             realized_value=realized_value,
             pricing_accepted=pricing_accepted,
+            task_success=task_success,
+            objective_satisfied=objective_satisfied,
+            realized_reward=realized_reward,
             failure_events=failure_events,
             risk_events=risk_events,
+            incident_events=incident_events,
+            human_review_label=human_review_label,
+            override_label=override_label,
             provenance={
                 "source": label_mode,
                 "dataset_digest": dataset.manifest.dataset_digest,
             },
             metadata={
-                "objective_satisfied": objective_satisfied,
-                "quality_score": quality,
-                "frontier_gain": frontier_gain,
+                "quality_score": defaults["quality_score"],
+                "frontier_gain": defaults["frontier_gain"],
             },
         )
         pricing = PricingAcceptanceLabel(
@@ -263,20 +387,27 @@ def build_synthetic_receipt_label_bundle(
             quoted_rate=quoted_rate,
             accepted_rate=billed_rate,
             accepted=pricing_accepted,
-            reasons=["synthetic_shadow_accept"] if pricing_accepted else ["synthetic_shadow_reject"],
+            reasons=[
+                str(value)
+                for value in observed.get(
+                    "pricing_reasons",
+                    defaults["pricing_reasons"],
+                ) or []
+            ],
             metadata={"label_mode": label_mode},
         )
         adaptation = AdaptationOutcomeLabel(
             schema_version="adaptation_outcome_label_v1",
             run_id=episode.run_id,
             adaptation_id=f"adapt_{episode.episode_id}",
-            recommended_mode="offline_td3_bc_shadow",
-            realized_mode="offline_td3_bc_shadow" if realized_value >= predicted_value * 0.8 else "behavior_cloning_refresh",
-            expected_gain=max(0.0, frontier_gain + 0.15 * predicted_value),
-            realized_gain=max(0.0, frontier_gain + 0.15 * realized_value - 0.05 * hard_flags),
-            compute_cost=max(0.01, 0.04 * max(1, episode.total_steps)),
-            risk_cost=float(hard_flags) * 0.15,
-            review_required=hard_flags > 0,
+            source_domain=source_domain,
+            recommended_mode=str(observed.get("recommended_mode", defaults["recommended_mode"])),
+            realized_mode=str(observed.get("realized_mode", defaults["realized_mode"])),
+            expected_gain=float(observed.get("expected_adaptation_benefit", defaults["expected_adaptation_benefit"])),
+            realized_gain=float(observed.get("realized_adaptation_benefit", defaults["realized_adaptation_benefit"])),
+            compute_cost=float(observed.get("adaptation_compute_cost", defaults["adaptation_compute_cost"])),
+            risk_cost=float(observed.get("adaptation_risk_cost", defaults["adaptation_risk_cost"])),
+            review_required=bool(observed.get("adaptation_review_required", defaults["adaptation_review_required"])),
             provenance={"source": label_mode},
             metadata={"episode_id": episode.episode_id},
         )
@@ -284,14 +415,12 @@ def build_synthetic_receipt_label_bundle(
             schema_version="datapack_contribution_label_v1",
             datapack_id=datapack_id,
             run_id=episode.run_id,
-            marginal_frontier_gain_predicted=frontier_gain,
-            marginal_frontier_gain_realized=max(0.0, frontier_gain * realized_multiplier),
-            data_share_credit_predicted=float(episode.datapack_summary.get("data_share_credit", 0.0) or 0.0),
-            data_share_credit_realized=max(
-                0.0,
-                float(episode.datapack_summary.get("data_share_credit", 0.0) or 0.0) * realized_multiplier,
-            ),
-            downweight_recommended=quality < 0.45 or hard_flags > 0,
+            source_domain=source_domain,
+            marginal_frontier_gain_predicted=float(observed.get("marginal_frontier_gain_predicted", defaults["marginal_frontier_gain_predicted"])),
+            marginal_frontier_gain_realized=float(observed.get("marginal_frontier_gain_realized", defaults["marginal_frontier_gain_realized"])),
+            data_share_credit_predicted=float(observed.get("data_share_credit_predicted", defaults["data_share_credit_predicted"])),
+            data_share_credit_realized=float(observed.get("data_share_credit_realized", defaults["data_share_credit_realized"])),
+            downweight_recommended=bool(observed.get("downweight_recommended", defaults["downweight_recommended"])),
             provenance={"source": label_mode},
             metadata={"episode_id": episode.episode_id},
         )
@@ -300,17 +429,26 @@ def build_synthetic_receipt_label_bundle(
             run_id=episode.run_id,
             episode_id=episode.episode_id,
             deployment_id=outcome.deployment_id,
-            source_domain=episode.source_domain,
+            source_domain=source_domain,
             objective_profile_id=outcome.objective_profile_id,
             predicted_value=predicted_value,
             realized_value=realized_value,
             quoted_rate=quoted_rate,
             billed_rate=billed_rate,
             pricing_acceptance=pricing,
+            realized_reward=realized_reward,
+            task_success=task_success,
+            objective_satisfied=objective_satisfied,
+            incident_events=incident_events,
+            human_review_label=human_review_label,
+            override_label=override_label,
             adaptation_outcome_ref=adaptation.label_id,
             datapack_label_ref=datapack.label_id,
             provenance={"source": label_mode},
-            metadata={"quality_score": quality, "frontier_gain": frontier_gain},
+            metadata={
+                "quality_score": defaults["quality_score"],
+                "frontier_gain": defaults["frontier_gain"],
+            },
         )
         deployment_outcomes.append(outcome)
         adaptation_outcomes.append(adaptation)
@@ -339,8 +477,230 @@ def build_synthetic_receipt_label_bundle(
         metadata={
             "dataset_digest": dataset.manifest.dataset_digest,
             "run_ids": list(dataset.manifest.run_ids),
+            **dict(metadata or {}),
         },
     )
+
+
+def _default_episode_outcome_payload(episode) -> Dict[str, Any]:
+    axes = dict(episode.econ_tensor_summary.get("axes", {}) or {})
+    predicted_value = float(
+        axes.get(
+            "value_earned",
+            episode.pricing_summary.get("net_customer_rate", 0.0),
+        )
+    )
+    quality = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
+    frontier_gain = float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)
+    data_share_credit = float(episode.datapack_summary.get("data_share_credit", 0.0) or 0.0)
+    hard_flags = sum(
+        1
+        for flag in episode.constraint_flags
+        if str(flag.get("severity", "")).lower() == "hard"
+    )
+    warn_flags = sum(
+        1
+        for flag in episode.constraint_flags
+        if str(flag.get("severity", "")).lower() == "warn"
+    )
+    realized_multiplier = max(
+        0.25,
+        min(
+            1.35,
+            0.82
+            + 0.18 * quality
+            + 0.12 * frontier_gain
+            - 0.14 * hard_flags
+            - 0.05 * warn_flags,
+        ),
+    )
+    realized_value = float(predicted_value * realized_multiplier)
+    quoted_rate = float(episode.pricing_summary.get("net_customer_rate", 0.0) or 0.0)
+    billed_rate = max(0.0, min(quoted_rate, realized_value + 0.05 * max(1, episode.total_steps)))
+    pricing_accepted = bool(quoted_rate <= max(0.0, realized_value + 0.1))
+    objective_satisfied = hard_flags == 0 and realized_value >= 0.0
+    failure_events = ["constraint_integrity_failure"] * hard_flags
+    risk_events = ["constraint_warning"] * warn_flags
+    incident_events = failure_events + risk_events
+    task_success = episode.status.lower() not in {"failed", "error"} and hard_flags == 0
+    datapack_id = str(
+        episode.metadata.get("datapack_id")
+        or episode.datapack_summary.get("datapack_id")
+        or episode.episode_id
+    )
+    return {
+        "source_domain": episode.source_domain,
+        "predicted_value": predicted_value,
+        "realized_value": realized_value,
+        "quoted_rate": quoted_rate,
+        "billed_rate": billed_rate,
+        "pricing_accepted": pricing_accepted,
+        "pricing_reasons": ["synthetic_shadow_accept"] if pricing_accepted else ["synthetic_shadow_reject"],
+        "task_success": task_success,
+        "objective_satisfied": objective_satisfied,
+        "realized_reward": float(episode.total_reward),
+        "failure_events": failure_events,
+        "risk_events": risk_events,
+        "incident_events": incident_events,
+        "human_review_label": None,
+        "override_label": None,
+        "recommended_mode": "offline_td3_bc_shadow",
+        "realized_mode": "offline_td3_bc_shadow" if realized_value >= predicted_value * 0.8 else "behavior_cloning_refresh",
+        "expected_adaptation_benefit": max(0.0, frontier_gain + 0.15 * predicted_value),
+        "realized_adaptation_benefit": max(0.0, frontier_gain + 0.15 * realized_value - 0.05 * hard_flags),
+        "adaptation_compute_cost": max(0.01, 0.04 * max(1, episode.total_steps)),
+        "adaptation_risk_cost": float(hard_flags) * 0.15,
+        "adaptation_review_required": hard_flags > 0,
+        "datapack_id": datapack_id,
+        "marginal_frontier_gain_predicted": frontier_gain,
+        "marginal_frontier_gain_realized": max(0.0, frontier_gain * realized_multiplier),
+        "data_share_credit_predicted": data_share_credit,
+        "data_share_credit_realized": max(0.0, data_share_credit * realized_multiplier),
+        "downweight_recommended": quality < 0.45 or hard_flags > 0,
+        "quality_score": quality,
+        "frontier_gain": frontier_gain,
+    }
+
+
+def _observed_outcomes_from_dataset(
+    dataset: ReplayDatasetBundle,
+    *,
+    label_mode: str,
+) -> Dict[str, Dict[str, Any]]:
+    observed: Dict[str, Dict[str, Any]] = {}
+    for episode in dataset.episodes:
+        defaults = _default_episode_outcome_payload(episode)
+        axes = dict(episode.econ_tensor_summary.get("axes", {}) or {})
+        observed[episode.episode_id] = {
+            "source_domain": episode.source_domain or label_mode,
+            "predicted_value": defaults["predicted_value"],
+            "realized_value": float(axes.get("value_earned", episode.total_reward)),
+            "quoted_rate": defaults["quoted_rate"],
+            "billed_rate": defaults["billed_rate"],
+            "pricing_accepted": defaults["pricing_accepted"],
+            "task_success": defaults["task_success"],
+            "objective_satisfied": defaults["objective_satisfied"],
+            "realized_reward": float(episode.total_reward),
+            "failure_events": list(defaults["failure_events"]),
+            "risk_events": list(defaults["risk_events"]),
+            "incident_events": list(defaults["incident_events"]),
+            "expected_adaptation_benefit": defaults["expected_adaptation_benefit"],
+            "realized_adaptation_benefit": max(0.0, float(episode.total_reward) * 0.1),
+            "adaptation_compute_cost": defaults["adaptation_compute_cost"],
+            "adaptation_risk_cost": defaults["adaptation_risk_cost"],
+            "adaptation_review_required": defaults["adaptation_review_required"],
+            "marginal_frontier_gain_predicted": defaults["marginal_frontier_gain_predicted"],
+            "marginal_frontier_gain_realized": max(0.0, defaults["marginal_frontier_gain_predicted"]),
+            "data_share_credit_predicted": defaults["data_share_credit_predicted"],
+            "data_share_credit_realized": max(0.0, defaults["data_share_credit_predicted"]),
+            "downweight_recommended": defaults["downweight_recommended"],
+        }
+    return observed
+
+
+def _build_dataset_from_episode_logs(episode_logs_dir: Optional[str | Path]) -> Optional[ReplayDatasetBundle]:
+    if episode_logs_dir is None:
+        return None
+    root = Path(episode_logs_dir)
+    if not root.exists():
+        return None
+    builder = ReplayDatasetBuilder()
+    for path in sorted(root.glob("*.json")):
+        builder.add_workcell_episode_log(path, source_domain="training_run")
+    try:
+        return builder.build()
+    except ValueError:
+        return None
+
+
+def _resolve_training_run_dataset_root(
+    root: Path,
+    *,
+    manifest,
+    replay_dataset_dir: Optional[str | Path],
+) -> Optional[Path]:
+    candidates: list[Optional[str | Path]] = [
+        replay_dataset_dir,
+        getattr(manifest, "replay_dataset_dir", None) if manifest is not None else None,
+        root / "online_replay_dataset",
+        root / "replay_dataset",
+    ]
+    if manifest is not None:
+        candidates.extend(
+            [
+                _artifact_parent(manifest.artifact_paths.get("online_replay_dataset_manifest")),
+                _artifact_parent(manifest.artifact_paths.get("replay_dataset_manifest")),
+            ]
+        )
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.is_file() and path.name == "manifest.json":
+            path = path.parent
+        if (path / "manifest.json").exists():
+            return path
+    return None
+
+
+def _resolve_episode_logs_dir(root: Path, *, manifest) -> Optional[Path]:
+    candidates: list[Optional[str | Path]] = [
+        root / "online_episode_logs",
+        manifest.artifact_paths.get("online_episode_logs") if manifest is not None else None,
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.exists() and path.is_dir():
+            return path
+    return None
+
+
+def _resolve_observed_episode_receipt_path(root: Path, *, manifest) -> Optional[Path]:
+    candidates: list[Optional[str | Path]] = [
+        root / "online_episode_receipts.jsonl",
+        manifest.artifact_paths.get("online_episode_receipts") if manifest is not None else None,
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.exists():
+            return path
+    return None
+
+
+def _load_observed_outcomes(path: Optional[Path]) -> Dict[str, Dict[str, Any]]:
+    if path is None or not path.exists():
+        return {}
+    observed: Dict[str, Dict[str, Any]] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            episode_id = str(payload.get("episode_id", ""))
+            if episode_id:
+                observed[episode_id] = dict(payload)
+    return observed
+
+
+def _existing_path(*candidates: Optional[str | Path]) -> Optional[Path]:
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.exists():
+            return path
+    return None
+
+
+def _artifact_parent(path: Optional[str | Path]) -> Optional[Path]:
+    if not path:
+        return None
+    candidate = Path(path)
+    return candidate.parent if candidate.exists() else None
 
 
 def _load_jsonl(path: Path, factory) -> list[Any]:
@@ -368,4 +728,7 @@ __all__ = [
     "write_receipt_label_bundle",
     "resolve_receipt_label_bundle",
     "build_synthetic_receipt_label_bundle",
+    "build_workcell_episode_log_receipt_label_bundle",
+    "build_rollout_receipt_label_bundle",
+    "build_training_run_receipt_label_bundle",
 ]

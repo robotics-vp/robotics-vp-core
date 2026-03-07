@@ -1,0 +1,22 @@
+adapter:
+  enabled: true
+  latent_dim: 128
+  action_dim: 2
+  condition_dim: 8
+  skill_modes:
+    - efficiency_throughput
+    - frontier_exploration
+    - safety_critical
+  hidden_dim: 256
+  head_hidden_dim: 128
+  device: cpu
+  lr: 0.0005
+  mode: live_loss
+  log_interval: 25
+  artifact_dir: artifacts/sac_contract_aware_full
+  consistency_loss_weight: 0.15
+  objective_loss_weight: 0.4
+  econ_loss_weight: 0.4
+  critic_alignment_weight: 0.2
+  metadata:
+    purpose: online_live_contract_aware
