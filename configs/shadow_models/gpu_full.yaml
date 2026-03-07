@@ -1,0 +1,6 @@
+training:
+  seed: 42
+  device: cuda
+  epochs: 32
+  lr: 0.0003
+  hidden_dim: 128

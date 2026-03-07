@@ -1,0 +1,22 @@
+"""Replay dataset schema and builders for shadow learning."""
+
+from src.replay.dataset import ReplayDatasetBuilder, ReplayDatasetBundle, load_replay_dataset
+from src.replay.ingest import ingest_shadow_run, ingest_workcell_episode_log
+from src.replay.schema import (
+    ReplayDatasetManifest,
+    ReplayEpisodeRecord,
+    ReplayStepRecord,
+    ReplayWindowRecord,
+)
+
+__all__ = [
+    "ReplayDatasetBuilder",
+    "ReplayDatasetBundle",
+    "ReplayDatasetManifest",
+    "ReplayEpisodeRecord",
+    "ReplayStepRecord",
+    "ReplayWindowRecord",
+    "ingest_shadow_run",
+    "ingest_workcell_episode_log",
+    "load_replay_dataset",
+]
