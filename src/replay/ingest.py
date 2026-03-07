@@ -32,6 +32,7 @@ from src.replay.schema import (
     ReplayWindowRecord,
 )
 from src.regality.meta_regal import MetaRegalDecision
+from src.runtime.event_spine import DecisionLedgerEntry, RuntimeEvent
 from src.runtime.packets import RuntimePacket
 from src.utils.config_digest import sha256_json
 
@@ -64,7 +65,11 @@ def ingest_shadow_run(
     pricing_rows = _load_jsonl(root / "pricing_ticks.jsonl")
     ledger_rows = _load_jsonl(root / "value_ledger.jsonl")
     runtime_packet_path = root / "runtime_packets.json"
+    event_spine_path = root / "event_spine.json"
+    decision_ledger_path = root / "decision_ledger.json"
     runtime_packet_payload = _load_json(runtime_packet_path) if runtime_packet_path.exists() else {}
+    event_spine_payload = _load_json(event_spine_path) if event_spine_path.exists() else {}
+    decision_ledger_payload = _load_json(decision_ledger_path) if decision_ledger_path.exists() else {}
 
     objective_by_episode = {
         str(row.get("episode_id")): dict(row.get("objective_tensor", {}))
@@ -112,6 +117,22 @@ def ingest_shadow_run(
             if packet.episode_id:
                 runtime_packets_by_episode[packet.episode_id] = packet
     runtime_packet_ref = runtime_packet_path.name if runtime_packets_by_episode else None
+    events_by_episode: Dict[str, List[RuntimeEvent]] = defaultdict(list)
+    if isinstance(event_spine_payload, Mapping):
+        for row in list(event_spine_payload.get("events", []) or []):
+            if isinstance(row, Mapping):
+                event = RuntimeEvent.from_dict(row)
+                if event.episode_id:
+                    events_by_episode[event.episode_id].append(event)
+    decisions_by_episode: Dict[str, List[DecisionLedgerEntry]] = defaultdict(list)
+    if isinstance(decision_ledger_payload, Mapping):
+        for row in list(decision_ledger_payload.get("decisions", []) or []):
+            if isinstance(row, Mapping):
+                decision = DecisionLedgerEntry.from_dict(row)
+                if decision.episode_id:
+                    decisions_by_episode[decision.episode_id].append(decision)
+    event_spine_ref = event_spine_path.name if events_by_episode else None
+    decision_ledger_ref = decision_ledger_path.name if decisions_by_episode else None
 
     condition_builder = ConditionVectorBuilder()
     episodes: List[ReplayEpisodeRecord] = []
@@ -139,6 +160,11 @@ def ingest_shadow_run(
         episode_log = dict(trace_payload.get("episode_log", {}) or {})
         trajectory = list(episode_log.get("trajectory", []) or [])
         runtime_packet = runtime_packets_by_episode.get(episode_id)
+        episode_events = sorted(events_by_episode.get(episode_id, []), key=lambda row: (row.sequence_idx, row.event_id))
+        episode_decisions = sorted(
+            decisions_by_episode.get(episode_id, []),
+            key=lambda row: (row.sequence_idx, row.decision_id),
+        )
         seed = int(runtime_record.get("seed", 0))
         task_id = str(trace_payload.get("task_id", runtime_record.get("task_id", "")))
         env_id = str(trace_payload.get("env_id", runtime_record.get("env_id", "")))
@@ -194,6 +220,10 @@ def ingest_shadow_run(
                     "trace_hash": sha256_json(trace_payload),
                     "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
                     "contract_id": runtime_packet.contract.contract_id if runtime_packet else None,
+                    "event_refs": [event.event_id for event in episode_events],
+                    "decision_refs": [decision.decision_id for decision in episode_decisions],
+                    "event_kinds": [event.event_kind for event in episode_events],
+                    "decision_kinds": [decision.decision_kind for decision in episode_decisions],
                 },
                 provenance={
                     "source_adapter": "shadow_control_plane_artifacts_v1",
@@ -203,6 +233,8 @@ def ingest_shadow_run(
                     "econ_tensor_ref": "econ_tensor.json",
                     "runtime_packet_ref": runtime_packet_ref,
                     "runtime_packet_hash": sha256_json(runtime_packet.to_dict()) if runtime_packet else None,
+                    "event_spine_ref": event_spine_ref,
+                    "decision_ledger_ref": decision_ledger_ref,
                 },
             )
         )
@@ -232,6 +264,8 @@ def ingest_shadow_run(
                 time_step_s=float(runtime_record.get("episode_metrics", {}).get("time_step_s", 1.0)),
             )
             price_ref = _pick_window_tick_id(pricing_ticks, step_idx=step_idx) or episode_pricing.get("tick_id")
+            step_events = _events_for_step(episode_events, step_idx=step_idx)
+            step_decisions = _decisions_for_step(episode_decisions, step_idx=step_idx)
             steps.append(
                 ReplayStepRecord(
                     run_id=str(trace_payload.get("run_id", "")),
@@ -263,6 +297,8 @@ def ingest_shadow_run(
                         "success": bool(step.get("info", {}).get("success", False)),
                         "task_info": dict(step_trace.get("task_info", {}) or {}),
                         "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
+                        "event_refs": [event.event_id for event in step_events],
+                        "decision_refs": [decision.decision_id for decision in step_decisions],
                     },
                     provenance={
                         "source_adapter": "shadow_control_plane_artifacts_v1",
@@ -270,6 +306,8 @@ def ingest_shadow_run(
                         "step_trace_hash": sha256_json(step_trace),
                         "runtime_packet_ref": runtime_packet_ref,
                         "contract_id": runtime_packet.contract.contract_id if runtime_packet else None,
+                        "event_spine_ref": event_spine_ref,
+                        "decision_ledger_ref": decision_ledger_ref,
                     },
                 )
             )
@@ -312,6 +350,16 @@ def ingest_shadow_run(
                 episode_step=start_step,
             )
             window_steps = [row for row in steps if row.episode_id == episode_id and start_step <= row.step_idx <= end_step]
+            window_events = _events_for_window(
+                episode_events,
+                start_step=start_step,
+                end_step=end_step,
+            )
+            window_decisions = _decisions_for_window(
+                episode_decisions,
+                start_step=start_step,
+                end_step=end_step,
+            )
             windows.append(
                 ReplayWindowRecord(
                     run_id=str(trace_payload.get("run_id", "")),
@@ -334,13 +382,19 @@ def ingest_shadow_run(
                     econ_tensor_summary=window_econ,
                     pricing_summary=dict(window_tick),
                     constraint_flags=[dict(flag) for flag in constraint_flags],
-                    metadata={"window_hash": sha256_json(window)},
+                    metadata={
+                        "window_hash": sha256_json(window),
+                        "event_refs": [event.event_id for event in window_events],
+                        "decision_refs": [decision.decision_id for decision in window_decisions],
+                    },
                     provenance={
                         "source_adapter": "shadow_control_plane_artifacts_v1",
                         "source_root": str(root),
                         "window_id": window_id,
                         "runtime_packet_ref": runtime_packet_ref,
                         "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
+                        "event_spine_ref": event_spine_ref,
+                        "decision_ledger_ref": decision_ledger_ref,
                     },
                 )
             )
@@ -352,11 +406,17 @@ def ingest_shadow_run(
         "pricing_policy_path": str(pricing_policy_path),
         "runtime_packet_ref": runtime_packet_ref,
         "runtime_packet_count": len(runtime_packets_by_episode),
+        "event_spine_ref": event_spine_ref,
+        "event_count": sum(len(rows) for rows in events_by_episode.values()),
+        "decision_ledger_ref": decision_ledger_ref,
+        "decision_count": sum(len(rows) for rows in decisions_by_episode.values()),
         "provenance_digest": sha256_json(
             {
                 "root": str(root),
                 "schema_version": REPLAY_SCHEMA_VERSION,
                 "runtime_packet_count": len(runtime_packets_by_episode),
+                "event_count": sum(len(rows) for rows in events_by_episode.values()),
+                "decision_count": sum(len(rows) for rows in decisions_by_episode.values()),
             }
         ),
     }
@@ -970,6 +1030,80 @@ def _timestamp_for_step(timestamp: str, *, step_idx: int, time_step_s: float) ->
     except ValueError:
         return timestamp
     return (dt + timedelta(seconds=float(time_step_s) * int(step_idx))).isoformat()
+
+
+def _events_for_step(
+    events: Sequence[RuntimeEvent],
+    *,
+    step_idx: int,
+) -> List[RuntimeEvent]:
+    return [event for event in events if _scope_applies_to_step(event.scope, step_idx=step_idx)]
+
+
+def _decisions_for_step(
+    decisions: Sequence[DecisionLedgerEntry],
+    *,
+    step_idx: int,
+) -> List[DecisionLedgerEntry]:
+    return [decision for decision in decisions if _scope_applies_to_step(decision.scope, step_idx=step_idx)]
+
+
+def _events_for_window(
+    events: Sequence[RuntimeEvent],
+    *,
+    start_step: int,
+    end_step: int,
+) -> List[RuntimeEvent]:
+    return [
+        event
+        for event in events
+        if _scope_applies_to_window(event.scope, start_step=start_step, end_step=end_step)
+    ]
+
+
+def _decisions_for_window(
+    decisions: Sequence[DecisionLedgerEntry],
+    *,
+    start_step: int,
+    end_step: int,
+) -> List[DecisionLedgerEntry]:
+    return [
+        decision
+        for decision in decisions
+        if _scope_applies_to_window(decision.scope, start_step=start_step, end_step=end_step)
+    ]
+
+
+def _scope_applies_to_step(scope: Mapping[str, Any], *, step_idx: int) -> bool:
+    scope_kind = str(scope.get("scope_kind", "episode"))
+    if scope_kind == "episode":
+        return True
+    if scope_kind == "step":
+        return int(scope.get("step_idx", -1)) == int(step_idx)
+    start_step = scope.get("start_step")
+    end_step = scope.get("end_step")
+    if start_step is None or end_step is None:
+        return scope_kind == "window"
+    return int(start_step) <= int(step_idx) <= int(end_step)
+
+
+def _scope_applies_to_window(
+    scope: Mapping[str, Any],
+    *,
+    start_step: int,
+    end_step: int,
+) -> bool:
+    scope_kind = str(scope.get("scope_kind", "episode"))
+    if scope_kind == "episode":
+        return True
+    if scope_kind == "step":
+        step_idx = int(scope.get("step_idx", -1))
+        return int(start_step) <= step_idx <= int(end_step)
+    event_start = scope.get("start_step")
+    event_end = scope.get("end_step")
+    if event_start is None or event_end is None:
+        return scope_kind == "window"
+    return not (int(event_end) < int(start_step) or int(event_start) > int(end_step))
 
 
 def _load_json(path: Path) -> Any:

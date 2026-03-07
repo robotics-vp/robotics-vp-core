@@ -13,3 +13,8 @@
 - Verification: `python3 -m pytest -q tests/test_runtime_packets.py tests/test_shadow_econ_runner.py tests/test_replay_schema.py tests/test_replay_dataset.py`, plus `python3 -m compileall src -q`.
 - Blocked: packet schemas are still shadow-workcell-derived and not yet backed by a generalized observation/action adapter layer; older shadow runs without `runtime_packets.json` still ingest in compatibility mode with no packet refs.
 - Next recommended task: add an additive `EventSpine` / `DecisionLedger` sidecar for per-window decisions, vetoes, and pricing/adaptation events, then thread its refs into replay metadata beside the new packet refs.
+
+- Changed: added additive `EventSpine` and `DecisionLedger` sidecars under `event_spine.json` and `decision_ledger.json`, emitted stable event/decision IDs tied to runtime packet IDs, contract IDs, artifact refs, and actor/critic/advisor provenance, and threaded those refs into replay episode/step/window `metadata` and `provenance` without changing replay record shapes.
+- Verification: `python3 -m pytest -q tests/test_event_spine.py tests/test_shadow_econ_runner.py tests/test_replay_schema.py tests/test_replay_dataset.py tests/test_receipt_ingest.py`, plus `python3 -m compileall src -q`.
+- Blocked: receipt label refs are currently empty placeholders because receipt labels are still attached downstream, and current event producers are shadow-only rather than shared with `sim_rollout` or training-run producers.
+- Next recommended task: consume `event_spine.json` and `decision_ledger.json` in promotion reporting and multi-run stage movement so promotion holds, vetoes, pricing suppression, and collect-more-data decisions stop being inferred indirectly from summary fields.

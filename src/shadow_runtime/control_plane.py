@@ -18,6 +18,12 @@ from src.objectives.tensor import ObjectiveTensor
 from src.ontology.shadow_updates import ShadowDatapackCreditUpdate, persist_shadow_episode
 from src.ontology.store import OntologyStore
 from src.regality import MetaRegalController, ShadowRegalContext
+from src.runtime.event_spine import (
+    DecisionLedgerEntry,
+    RuntimeEvent,
+    decision_ledger_sidecar_payload,
+    event_spine_sidecar_payload,
+)
 from src.runtime.packets import (
     RuntimePacket,
     SchemaRef,
@@ -44,6 +50,8 @@ class ShadowEpisodeArtifacts:
     datapack_credit_update: Dict[str, Any]
     ontology_refs: Dict[str, Any]
     runtime_packet: Dict[str, Any]
+    event_refs: list[str]
+    decision_refs: list[str]
     baseline_summary: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -59,6 +67,8 @@ class ShadowEpisodeArtifacts:
             "datapack_credit_update": dict(self.datapack_credit_update),
             "ontology_refs": dict(self.ontology_refs),
             "runtime_packet": dict(self.runtime_packet),
+            "event_refs": list(self.event_refs),
+            "decision_refs": list(self.decision_refs),
             "baseline_summary": dict(self.baseline_summary),
         }
 
@@ -140,6 +150,8 @@ def run_shadow_control_plane(
         "value_ledger": str(output_root / "value_ledger.jsonl"),
         "datapack_credit_update": str(output_root / "datapack_credit_update.json"),
         "runtime_packets": str(output_root / "runtime_packets.json"),
+        "event_spine": str(output_root / "event_spine.json"),
+        "decision_ledger": str(output_root / "decision_ledger.json"),
         "shadow_episode_traces": str(output_root / "shadow_episode_traces.json"),
         "summary_json": str(output_root / "summary.json"),
         "summary_md": str(output_root / "summary.md"),
@@ -166,6 +178,10 @@ def run_shadow_control_plane(
     pricing_rows: list[Dict[str, Any]] = []
     episode_artifacts: list[ShadowEpisodeArtifacts] = []
     runtime_packets: list[RuntimePacket] = []
+    runtime_events: list[RuntimeEvent] = []
+    decision_entries: list[DecisionLedgerEntry] = []
+    event_sequence_idx = 0
+    decision_sequence_idx = 0
 
     for trace in traces:
         objective_tensor = runtime_builder.build(trace.runtime_record)
@@ -391,6 +407,20 @@ def run_shadow_control_plane(
         regal_payload["episodes"].append({"episode_id": trace.episode_id, "regal_decision": regal_summary})
         datapack_payload["updates"].append(datapack_update.to_dict())
 
+        episode_events, episode_decisions, event_sequence_idx, decision_sequence_idx = _build_episode_event_artifacts(
+            trace=trace,
+            runtime_packet=runtime_packet,
+            episode_tick=episode_tick.to_dict(),
+            window_ticks=window_ticks,
+            regal_summary=regal_summary,
+            datapack_update=datapack_update,
+            artifact_refs=_episode_artifact_refs(),
+            event_sequence_start=event_sequence_idx,
+            decision_sequence_start=decision_sequence_idx,
+        )
+        runtime_events.extend(episode_events)
+        decision_entries.extend(episode_decisions)
+
         episode_artifacts.append(
             ShadowEpisodeArtifacts(
                 episode_id=trace.episode_id,
@@ -404,6 +434,8 @@ def run_shadow_control_plane(
                 datapack_credit_update=datapack_update.to_dict(),
                 ontology_refs=ontology_refs,
                 runtime_packet=runtime_packet.to_dict(),
+                event_refs=[event.event_id for event in episode_events],
+                decision_refs=[decision.decision_id for decision in episode_decisions],
                 baseline_summary=trace.baseline_summary,
             )
         )
@@ -421,6 +453,14 @@ def run_shadow_control_plane(
         runtime_packet_sidecar_payload(run_id=run_id, packets=runtime_packets),
     )
     _write_json(
+        artifact_paths["event_spine"],
+        event_spine_sidecar_payload(run_id=run_id, events=runtime_events),
+    )
+    _write_json(
+        artifact_paths["decision_ledger"],
+        decision_ledger_sidecar_payload(run_id=run_id, decisions=decision_entries),
+    )
+    _write_json(
         artifact_paths["shadow_episode_traces"],
         {
             "run_id": run_id,
@@ -434,6 +474,8 @@ def run_shadow_control_plane(
         include_regal=include_regal,
         traces=traces,
         episode_artifacts=episode_artifacts,
+        runtime_events=runtime_events,
+        decision_entries=decision_entries,
         pricing_rows=pricing_rows,
         artifact_paths=artifact_paths,
     )
@@ -600,6 +642,407 @@ def _build_shadow_schema_refs(trace: ShadowEpisodeTrace) -> tuple[SchemaRef, Sch
     return observation_schema, action_schema
 
 
+def _build_episode_event_artifacts(
+    *,
+    trace: ShadowEpisodeTrace,
+    runtime_packet: RuntimePacket,
+    episode_tick: Mapping[str, Any],
+    window_ticks: Sequence[Mapping[str, Any]],
+    regal_summary: Mapping[str, Any],
+    datapack_update: ShadowDatapackCreditUpdate,
+    artifact_refs: Mapping[str, Any],
+    event_sequence_start: int,
+    decision_sequence_start: int,
+) -> tuple[list[RuntimeEvent], list[DecisionLedgerEntry], int, int]:
+    events: list[RuntimeEvent] = []
+    decisions: list[DecisionLedgerEntry] = []
+    event_sequence_idx = int(event_sequence_start)
+    decision_sequence_idx = int(decision_sequence_start)
+    receipt_label_refs: list[str] = []
+    governance_reasons = [str(reason) for reason in regal_summary.get("reasons", []) or []]
+    queue_weight_multiplier = _queue_weight_multiplier(
+        regal_summary=regal_summary,
+        datapack_update=datapack_update,
+    )
+    queue_event = RuntimeEvent.from_components(
+        run_id=trace.run_id,
+        episode_id=trace.episode_id,
+        timestamp=trace.ended_at,
+        event_kind="queue_reweight",
+        sequence_idx=event_sequence_idx,
+        scope={"scope_kind": "episode"},
+        runtime_packet_id=runtime_packet.packet_id,
+        contract_id=runtime_packet.contract.contract_id,
+        receipt_label_refs=receipt_label_refs,
+        artifact_refs=artifact_refs,
+        provenance={
+            "advisor": {
+                "component": "shadow_control_plane",
+                "authority": "replay_queue_advisory",
+            }
+        },
+        metadata={
+            "queue_weight_multiplier": queue_weight_multiplier,
+            "datapack_recommendation": regal_summary.get("datapack_recommendation", datapack_update.recommendation),
+            "deploy_recommendation": regal_summary.get("deploy_recommendation", "allow_shadow"),
+        },
+    )
+    events.append(queue_event)
+    event_sequence_idx += 1
+    decisions.append(
+        DecisionLedgerEntry.from_components(
+            run_id=trace.run_id,
+            episode_id=trace.episode_id,
+            timestamp=trace.ended_at,
+            decision_kind="queue_reweight",
+            outcome=_queue_reweight_outcome(queue_weight_multiplier),
+            sequence_idx=decision_sequence_idx,
+            scope={"scope_kind": "episode"},
+            reasons=governance_reasons
+            or [str(regal_summary.get("datapack_recommendation", datapack_update.recommendation))],
+            source_event_ids=[queue_event.event_id],
+            runtime_packet_id=runtime_packet.packet_id,
+            contract_id=runtime_packet.contract.contract_id,
+            receipt_label_refs=receipt_label_refs,
+            artifact_refs=artifact_refs,
+            provenance=queue_event.provenance,
+            metadata={"queue_weight_multiplier": queue_weight_multiplier},
+        )
+    )
+    decision_sequence_idx += 1
+
+    pricing_event_kind = (
+        "pricing_tick_suppressed"
+        if str(regal_summary.get("pricing_recommendation", "publish")) == "suppress"
+        else "pricing_tick_published"
+    )
+    tick_rows = [dict(episode_tick), *[dict(row) for row in window_ticks]]
+    window_index = {
+        str(window.window_id): window
+        for window in trace.runtime_record.windows
+    }
+    for tick in tick_rows:
+        scope = _event_scope_for_tick(tick=tick, window_index=window_index)
+        tick_event = RuntimeEvent.from_components(
+            run_id=trace.run_id,
+            episode_id=trace.episode_id,
+            timestamp=str(tick.get("timestamp", trace.ended_at)),
+            event_kind=pricing_event_kind,
+            sequence_idx=event_sequence_idx,
+            scope=scope,
+            runtime_packet_id=runtime_packet.packet_id,
+            contract_id=runtime_packet.contract.contract_id,
+            receipt_label_refs=receipt_label_refs,
+            artifact_refs=artifact_refs,
+            provenance={
+                "actor": {
+                    "component": "pricing_sentinel",
+                    "authority": "pricing_policy",
+                }
+            },
+            metadata={
+                "tick_id": tick.get("tick_id"),
+                "mode": tick.get("mode"),
+                "net_customer_rate": float(tick.get("net_customer_rate", 0.0)),
+                "confidence": float(tick.get("confidence", 0.0)),
+                "pricing_recommendation": regal_summary.get("pricing_recommendation", "publish"),
+            },
+        )
+        events.append(tick_event)
+        event_sequence_idx += 1
+        decisions.append(
+            DecisionLedgerEntry.from_components(
+                run_id=trace.run_id,
+                episode_id=trace.episode_id,
+                timestamp=str(tick.get("timestamp", trace.ended_at)),
+                decision_kind=pricing_event_kind,
+                outcome=str(regal_summary.get("pricing_recommendation", "publish")),
+                sequence_idx=decision_sequence_idx,
+                scope=scope,
+                reasons=governance_reasons or [str(regal_summary.get("pricing_recommendation", "publish"))],
+                source_event_ids=[tick_event.event_id],
+                runtime_packet_id=runtime_packet.packet_id,
+                contract_id=runtime_packet.contract.contract_id,
+                receipt_label_refs=receipt_label_refs,
+                artifact_refs=artifact_refs,
+                provenance=tick_event.provenance,
+                metadata={"tick_id": tick.get("tick_id"), "mode": tick.get("mode")},
+            )
+        )
+        decision_sequence_idx += 1
+
+    regal_event_kind = _regal_event_kind(regal_summary)
+    if regal_event_kind is not None:
+        regal_event = RuntimeEvent.from_components(
+            run_id=trace.run_id,
+            episode_id=trace.episode_id,
+            timestamp=trace.ended_at,
+            event_kind=regal_event_kind,
+            sequence_idx=event_sequence_idx,
+            scope={"scope_kind": "episode"},
+            runtime_packet_id=runtime_packet.packet_id,
+            contract_id=runtime_packet.contract.contract_id,
+            receipt_label_refs=receipt_label_refs,
+            artifact_refs=artifact_refs,
+            provenance={
+                "critic": {
+                    "component": "meta_regal_controller",
+                    "authority": "governance_gate",
+                }
+            },
+            metadata={
+                "overall_status": regal_summary.get("overall_status", "pass"),
+                "deploy_recommendation": regal_summary.get("deploy_recommendation", "allow_shadow"),
+                "node_count": len(list(regal_summary.get("node_decisions", []) or [])),
+            },
+        )
+        events.append(regal_event)
+        event_sequence_idx += 1
+        decisions.append(
+            DecisionLedgerEntry.from_components(
+                run_id=trace.run_id,
+                episode_id=trace.episode_id,
+                timestamp=trace.ended_at,
+                decision_kind=regal_event_kind,
+                outcome=str(regal_summary.get("deploy_recommendation", "allow_shadow")),
+                sequence_idx=decision_sequence_idx,
+                scope={"scope_kind": "episode"},
+                reasons=governance_reasons or [str(regal_summary.get("overall_status", "pass"))],
+                source_event_ids=[regal_event.event_id],
+                runtime_packet_id=runtime_packet.packet_id,
+                contract_id=runtime_packet.contract.contract_id,
+                receipt_label_refs=receipt_label_refs,
+                artifact_refs=artifact_refs,
+                provenance=regal_event.provenance,
+                metadata={"pricing_recommendation": regal_summary.get("pricing_recommendation", "publish")},
+            )
+        )
+        decision_sequence_idx += 1
+
+    adaptation_event_kind = _adaptation_event_kind(regal_summary)
+    adaptation_event = RuntimeEvent.from_components(
+        run_id=trace.run_id,
+        episode_id=trace.episode_id,
+        timestamp=trace.ended_at,
+        event_kind=adaptation_event_kind,
+        sequence_idx=event_sequence_idx,
+        scope={"scope_kind": "episode"},
+        runtime_packet_id=runtime_packet.packet_id,
+        contract_id=runtime_packet.contract.contract_id,
+        receipt_label_refs=receipt_label_refs,
+        artifact_refs=artifact_refs,
+        provenance={
+            "advisor": {
+                "component": "meta_regal_controller",
+                "authority": "adaptation_policy",
+            }
+        },
+        metadata={
+            "adaptation_recommendation": regal_summary.get("adaptation_recommendation", "no_op"),
+            "marginal_frontier_gain": float(datapack_update.marginal_frontier_gain),
+        },
+    )
+    events.append(adaptation_event)
+    event_sequence_idx += 1
+    decisions.append(
+        DecisionLedgerEntry.from_components(
+            run_id=trace.run_id,
+            episode_id=trace.episode_id,
+            timestamp=trace.ended_at,
+            decision_kind=adaptation_event_kind,
+            outcome=str(regal_summary.get("adaptation_recommendation", "no_op")),
+            sequence_idx=decision_sequence_idx,
+            scope={"scope_kind": "episode"},
+            reasons=governance_reasons or [str(regal_summary.get("adaptation_recommendation", "no_op"))],
+            source_event_ids=[adaptation_event.event_id],
+            runtime_packet_id=runtime_packet.packet_id,
+            contract_id=runtime_packet.contract.contract_id,
+            receipt_label_refs=receipt_label_refs,
+            artifact_refs=artifact_refs,
+            provenance=adaptation_event.provenance,
+            metadata={"data_share_credit": float(datapack_update.data_share_credit)},
+        )
+    )
+    decision_sequence_idx += 1
+
+    credit_event = RuntimeEvent.from_components(
+        run_id=trace.run_id,
+        episode_id=trace.episode_id,
+        timestamp=trace.ended_at,
+        event_kind="datapack_credit_assigned",
+        sequence_idx=event_sequence_idx,
+        scope={"scope_kind": "episode"},
+        runtime_packet_id=runtime_packet.packet_id,
+        contract_id=runtime_packet.contract.contract_id,
+        receipt_label_refs=receipt_label_refs,
+        artifact_refs=artifact_refs,
+        provenance={
+            "actor": {
+                "component": "value_ledger",
+                "authority": "economic_credit",
+            }
+        },
+        metadata={
+            "datapack_id": datapack_update.datapack_id,
+            "data_share_credit": float(datapack_update.data_share_credit),
+            "recommendation": datapack_update.recommendation,
+        },
+    )
+    events.append(credit_event)
+    event_sequence_idx += 1
+    decisions.append(
+        DecisionLedgerEntry.from_components(
+            run_id=trace.run_id,
+            episode_id=trace.episode_id,
+            timestamp=trace.ended_at,
+            decision_kind="datapack_credit_assigned",
+            outcome=str(datapack_update.recommendation),
+            sequence_idx=decision_sequence_idx,
+            scope={"scope_kind": "episode"},
+            reasons=[str(datapack_update.recommendation)],
+            source_event_ids=[credit_event.event_id],
+            runtime_packet_id=runtime_packet.packet_id,
+            contract_id=runtime_packet.contract.contract_id,
+            receipt_label_refs=receipt_label_refs,
+            artifact_refs=artifact_refs,
+            provenance=credit_event.provenance,
+            metadata={
+                "datapack_id": datapack_update.datapack_id,
+                "data_share_credit": float(datapack_update.data_share_credit),
+            },
+        )
+    )
+    decision_sequence_idx += 1
+
+    promotion_event_kind = (
+        "promotion_recommend_promote"
+        if str(regal_summary.get("deploy_recommendation", "allow_shadow")) in {"recommend_promote", "promote"}
+        else "promotion_hold"
+    )
+    promotion_event = RuntimeEvent.from_components(
+        run_id=trace.run_id,
+        episode_id=trace.episode_id,
+        timestamp=trace.ended_at,
+        event_kind=promotion_event_kind,
+        sequence_idx=event_sequence_idx,
+        scope={"scope_kind": "episode"},
+        runtime_packet_id=runtime_packet.packet_id,
+        contract_id=runtime_packet.contract.contract_id,
+        receipt_label_refs=receipt_label_refs,
+        artifact_refs=artifact_refs,
+        provenance={
+            "advisor": {
+                "component": "shadow_control_plane",
+                "authority": "promotion_readiness",
+            }
+        },
+        metadata={
+            "deploy_recommendation": regal_summary.get("deploy_recommendation", "allow_shadow"),
+            "overall_status": regal_summary.get("overall_status", "pass"),
+        },
+    )
+    events.append(promotion_event)
+    event_sequence_idx += 1
+    decisions.append(
+        DecisionLedgerEntry.from_components(
+            run_id=trace.run_id,
+            episode_id=trace.episode_id,
+            timestamp=trace.ended_at,
+            decision_kind=promotion_event_kind,
+            outcome=str(regal_summary.get("deploy_recommendation", "allow_shadow")),
+            sequence_idx=decision_sequence_idx,
+            scope={"scope_kind": "episode"},
+            reasons=governance_reasons or [str(regal_summary.get("deploy_recommendation", "allow_shadow"))],
+            source_event_ids=[promotion_event.event_id],
+            runtime_packet_id=runtime_packet.packet_id,
+            contract_id=runtime_packet.contract.contract_id,
+            receipt_label_refs=receipt_label_refs,
+            artifact_refs=artifact_refs,
+            provenance=promotion_event.provenance,
+            metadata={"shadow_only": True},
+        )
+    )
+    decision_sequence_idx += 1
+    return events, decisions, event_sequence_idx, decision_sequence_idx
+
+
+def _episode_artifact_refs() -> Dict[str, str]:
+    return {
+        "runtime_packets": "runtime_packets.json",
+        "objective_tensor": "objective_tensor.json",
+        "objective_compile": "objective_compile.json",
+        "constraint_flags": "constraint_flags.json",
+        "econ_tensor": "econ_tensor.json",
+        "pricing_ticks": "pricing_ticks.jsonl",
+        "regal_decisions": "regal_decisions.json",
+        "datapack_credit_update": "datapack_credit_update.json",
+        "value_ledger": "value_ledger.jsonl",
+    }
+
+
+def _event_scope_for_tick(
+    *,
+    tick: Mapping[str, Any],
+    window_index: Mapping[str, Any],
+) -> Dict[str, Any]:
+    if str(tick.get("mode", "")) != "step_window":
+        return {"scope_kind": "episode"}
+    metadata = dict(tick.get("metadata", {}) or {})
+    window_id = str(metadata.get("window_id", ""))
+    window = window_index.get(window_id)
+    if window is None:
+        return {"scope_kind": "window", "window_id": window_id}
+    return {
+        "scope_kind": "window",
+        "window_id": window_id,
+        "start_step": int(getattr(window, "start_step", 0)),
+        "end_step": int(getattr(window, "end_step", 0)),
+    }
+
+
+def _queue_weight_multiplier(
+    *,
+    regal_summary: Mapping[str, Any],
+    datapack_update: ShadowDatapackCreditUpdate,
+) -> float:
+    deploy_recommendation = str(regal_summary.get("deploy_recommendation", "allow_shadow"))
+    datapack_recommendation = str(regal_summary.get("datapack_recommendation", datapack_update.recommendation))
+    if deploy_recommendation == "deny_shadow" or datapack_recommendation == "downweight":
+        return 0.5
+    if deploy_recommendation == "require_review" or datapack_recommendation == "review":
+        return 0.75
+    if datapack_recommendation == "reward_credit" or float(datapack_update.data_share_credit) > 0.0:
+        return 1.25
+    return 1.0
+
+
+def _queue_reweight_outcome(multiplier: float) -> str:
+    if multiplier > 1.0:
+        return "upweight"
+    if multiplier < 1.0:
+        return "downweight"
+    return "hold"
+
+
+def _regal_event_kind(regal_summary: Mapping[str, Any]) -> Optional[str]:
+    deploy_recommendation = str(regal_summary.get("deploy_recommendation", "allow_shadow"))
+    overall_status = str(regal_summary.get("overall_status", "pass"))
+    if deploy_recommendation == "deny_shadow":
+        return "regal_veto"
+    if overall_status != "pass" or deploy_recommendation == "require_review":
+        return "regal_warn"
+    return None
+
+
+def _adaptation_event_kind(regal_summary: Mapping[str, Any]) -> str:
+    recommendation = str(regal_summary.get("adaptation_recommendation", "no_op"))
+    if recommendation == "adapt":
+        return "adaptation_admitted"
+    if recommendation == "collect_data":
+        return "collect_more_data"
+    return "adaptation_denied"
+
+
 def _runtime_contract_id(*, task_id: str, objective_profile_id: str, embodiment_id: str) -> str:
     return "contract.{task}.{profile}.{embodiment}.v1".format(
         task=_contract_fragment(task_id),
@@ -653,6 +1096,8 @@ def _build_summary(
     include_regal: bool,
     traces: Sequence[ShadowEpisodeTrace],
     episode_artifacts: Sequence[ShadowEpisodeArtifacts],
+    runtime_events: Sequence[RuntimeEvent],
+    decision_entries: Sequence[DecisionLedgerEntry],
     pricing_rows: Sequence[Mapping[str, Any]],
     artifact_paths: Mapping[str, str],
 ) -> Dict[str, Any]:
@@ -660,6 +1105,8 @@ def _build_summary(
     deploy_counter: Counter[str] = Counter()
     pricing_counter: Counter[str] = Counter()
     datapack_counter: Counter[str] = Counter()
+    event_kind_counter: Counter[str] = Counter()
+    decision_kind_counter: Counter[str] = Counter()
     total_credit = 0.0
     episode_ticks = [row for row in pricing_rows if row.get("mode") == "episode"]
     for artifact in episode_artifacts:
@@ -687,6 +1134,10 @@ def _build_summary(
     success_rate = sum(1 for trace in traces if trace.baseline_summary.get("success")) / max(len(traces), 1)
     mean_reward = sum(float(trace.baseline_summary.get("reward_total", 0.0)) for trace in traces) / max(len(traces), 1)
     mean_net_rate = sum(float(row.get("net_customer_rate", 0.0)) for row in episode_ticks) / max(len(episode_ticks), 1)
+    for event in runtime_events:
+        event_kind_counter[event.event_kind] += 1
+    for decision in decision_entries:
+        decision_kind_counter[decision.decision_kind] += 1
     return {
         "run_id": run_id,
         "objective_profile_id": objective_profile.profile_id,
@@ -700,6 +1151,10 @@ def _build_summary(
         "deploy_recommendations": dict(deploy_counter),
         "pricing_recommendations": dict(pricing_counter),
         "datapack_recommendations": dict(datapack_counter),
+        "event_count": len(runtime_events),
+        "decision_count": len(decision_entries),
+        "event_kind_counts": dict(event_kind_counter),
+        "decision_kind_counts": dict(decision_kind_counter),
         "determinism": get_context_summary(),
         "artifact_paths": dict(artifact_paths),
         "episode_summaries": episode_summaries,

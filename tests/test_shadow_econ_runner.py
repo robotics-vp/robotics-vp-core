@@ -18,16 +18,28 @@ def test_shadow_control_plane_runner_smoke(tmp_path):
 
     summary = json.loads((output_dir / "summary.json").read_text())
     runtime_packets = json.loads((output_dir / "runtime_packets.json").read_text())
+    event_spine = json.loads((output_dir / "event_spine.json").read_text())
+    decision_ledger = json.loads((output_dir / "decision_ledger.json").read_text())
     assert result.run_id == summary["run_id"]
     assert (output_dir / "objective_tensor.json").exists()
     assert (output_dir / "runtime_packets.json").exists()
+    assert (output_dir / "event_spine.json").exists()
+    assert (output_dir / "decision_ledger.json").exists()
     assert (output_dir / "pricing_ticks.jsonl").exists()
     assert (output_dir / "value_ledger.jsonl").exists()
     assert len((output_dir / "value_ledger.jsonl").read_text().strip().splitlines()) == 2
     assert summary["artifact_paths"]["runtime_packets"].endswith("runtime_packets.json")
+    assert summary["artifact_paths"]["event_spine"].endswith("event_spine.json")
+    assert summary["artifact_paths"]["decision_ledger"].endswith("decision_ledger.json")
     assert runtime_packets["packet_count"] == 2
+    assert event_spine["event_count"] >= 10
+    assert decision_ledger["decision_count"] >= 8
+    assert "pricing_tick_published" in {row["event_kind"] for row in event_spine["events"]}
+    assert "datapack_credit_assigned" in {row["decision_kind"] for row in decision_ledger["decisions"]}
     assert runtime_packets["episodes"][0]["runtime_packet"]["contract"]["task_id"] == "shadow_kitting"
     assert result.episode_artifacts[0]["runtime_packet"]["contract"]["embodiment_id"] == "shadow_sim_arm_v1"
+    assert result.episode_artifacts[0]["event_refs"]
+    assert result.episode_artifacts[0]["decision_refs"]
 
     store = OntologyStore(root_dir=str(output_dir / "ontology"))
     assert len(store.list_episodes()) == 2
