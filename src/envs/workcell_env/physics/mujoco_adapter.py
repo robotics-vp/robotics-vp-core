@@ -40,6 +40,7 @@ class MujocoPhysicsAdapter:
     def reset(self, scene_spec: WorkcellSceneSpec, seed: Optional[int] = None) -> None:
         import mujoco  # type: ignore
 
+        self.close()
         xml = _build_mjcf(scene_spec)
         self._model = mujoco.MjModel.from_xml_string(xml)
         self._data = mujoco.MjData(self._model)
@@ -156,6 +157,11 @@ class MujocoPhysicsAdapter:
             or getattr(self._renderer, "width", None) != width
             or getattr(self._renderer, "height", None) != height
         ):
+            if self._renderer is not None:
+                try:
+                    self._renderer.close()
+                except Exception:
+                    pass
             self._renderer = mujoco.Renderer(self._model, height=height, width=width)
         try:
             self._renderer.update_scene(self._data, camera=camera_name)
@@ -181,6 +187,22 @@ class MujocoPhysicsAdapter:
             return self._renderer.render(depth=depth, segmentation=segmentation)
         except TypeError:
             return self._renderer.render()
+
+    def close(self) -> None:
+        if self._renderer is not None:
+            try:
+                self._renderer.close()
+            except Exception:
+                pass
+        self._renderer = None
+        self._data = None
+        self._model = None
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 def _build_mjcf(scene_spec: WorkcellSceneSpec) -> str:

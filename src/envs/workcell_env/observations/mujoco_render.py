@@ -80,11 +80,26 @@ def _render_with_mujoco(
     frames: List[np.ndarray] = []
     depth_frames: List[np.ndarray] = []
     seg_frames: List[np.ndarray] = []
+    camera_params: Optional[CameraParams] = None
 
-    if states:
-        count = min(len(states), max_frames or len(states))
-        for idx in range(count):
-            _apply_state(adapter, states[idx])
+    try:
+        if states:
+            count = min(len(states), max_frames or len(states))
+            for idx in range(count):
+                _apply_state(adapter, states[idx])
+                rgb = adapter.render(camera_name=camera_name, width=width, height=height)
+                frames.append(_ensure_uint8(rgb))
+                try:
+                    depth = adapter.render(camera_name=camera_name, width=width, height=height, depth=True)
+                    depth_frames.append(np.asarray(depth))
+                except Exception:
+                    depth_frames = []
+                try:
+                    seg = adapter.render(camera_name=camera_name, width=width, height=height, segmentation=True)
+                    seg_frames.append(_ensure_segmentation(seg))
+                except Exception:
+                    seg_frames = []
+        else:
             rgb = adapter.render(camera_name=camera_name, width=width, height=height)
             frames.append(_ensure_uint8(rgb))
             try:
@@ -97,43 +112,33 @@ def _render_with_mujoco(
                 seg_frames.append(_ensure_segmentation(seg))
             except Exception:
                 seg_frames = []
-    else:
-        rgb = adapter.render(camera_name=camera_name, width=width, height=height)
-        frames.append(_ensure_uint8(rgb))
-        try:
-            depth = adapter.render(camera_name=camera_name, width=width, height=height, depth=True)
-            depth_frames.append(np.asarray(depth))
-        except Exception:
-            depth_frames = []
-        try:
-            seg = adapter.render(camera_name=camera_name, width=width, height=height, segmentation=True)
-            seg_frames.append(_ensure_segmentation(seg))
-        except Exception:
-            seg_frames = []
 
-    if not seg_frames:
-        _, _, fallback_seg, _ = _render_simple(
-            scene_spec=scene_spec,
-            states=states,
-            camera_name=camera_name,
-            width=width,
-            height=height,
-            max_frames=len(frames),
-            seed=None,
-        )
-        seg_frames = fallback_seg or []
-    if not depth_frames:
-        _, fallback_depth, _, _ = _render_simple(
-            scene_spec=scene_spec,
-            states=states,
-            camera_name=camera_name,
-            width=width,
-            height=height,
-            max_frames=len(frames),
-            seed=None,
-        )
-        depth_frames = fallback_depth or []
-    camera_params = _build_camera_params_from_mujoco(adapter, camera_name, width, height, len(frames))
+        if not seg_frames:
+            _, _, fallback_seg, _ = _render_simple(
+                scene_spec=scene_spec,
+                states=states,
+                camera_name=camera_name,
+                width=width,
+                height=height,
+                max_frames=len(frames),
+                seed=None,
+            )
+            seg_frames = fallback_seg or []
+        if not depth_frames:
+            _, fallback_depth, _, _ = _render_simple(
+                scene_spec=scene_spec,
+                states=states,
+                camera_name=camera_name,
+                width=width,
+                height=height,
+                max_frames=len(frames),
+                seed=None,
+            )
+            depth_frames = fallback_depth or []
+        camera_params = _build_camera_params_from_mujoco(adapter, camera_name, width, height, len(frames))
+    finally:
+        adapter.close()
+
     if camera_params is None:
         camera_params = _build_camera_params(camera_name, width, height, len(frames))
     return frames, depth_frames or None, seg_frames or None, camera_params

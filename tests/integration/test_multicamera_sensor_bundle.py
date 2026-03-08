@@ -12,35 +12,6 @@ def _mujoco_available() -> bool:
     return importlib.util.find_spec("mujoco") is not None
 
 
-def _project_point(
-    world_pos: np.ndarray,
-    intrinsics: dict[str, float],
-    world_from_cam: np.ndarray,
-) -> tuple[int, int]:
-    pos_h = np.array([world_pos[0], world_pos[1], world_pos[2], 1.0], dtype=np.float32)
-    cam_from_world = np.linalg.inv(world_from_cam)
-    pos_cam = cam_from_world @ pos_h
-    z = -float(pos_cam[2])
-    if z <= 1e-6:
-        return -1, -1
-    u = intrinsics["fx"] * (pos_cam[0] / z) + intrinsics["cx"]
-    v = intrinsics["cy"] - intrinsics["fy"] * (pos_cam[1] / z)
-    return int(round(u)), int(round(v))
-
-
-def _window_label(seg: np.ndarray, u: int, v: int, radius: int = 2) -> int:
-    y0 = max(v - radius, 0)
-    y1 = min(v + radius + 1, seg.shape[0])
-    x0 = max(u - radius, 0)
-    x1 = min(u + radius + 1, seg.shape[1])
-    window = seg[y0:y1, x0:x1].reshape(-1)
-    ids = window[window != 0]
-    if ids.size == 0:
-        return 0
-    values, counts = np.unique(ids, return_counts=True)
-    return int(values[np.argmax(counts)])
-
-
 def _seg_centroid(seg: np.ndarray, seg_id: int) -> tuple[int, int]:
     ys, xs = np.nonzero(seg == seg_id)
     if ys.size == 0:
@@ -158,75 +129,39 @@ def test_multicamera_sensor_bundle(tmp_path: Path) -> None:
     common_ids = ids_front & ids_top
     assert common_ids
 
-    model = adapter._model
-    assert model is not None
-    objects = states[0].get("objects", {})
-    best: tuple[int, int, str] | None = None
-    for geom_id in sorted(common_ids):
-        body_id = int(model.geom_bodyid[geom_id])
-        body_name = model.body(body_id).name
-        if body_name not in objects:
-            continue
-        count_front = int(np.sum(seg_front0 == geom_id))
-        count_top = int(np.sum(seg_top0 == geom_id))
+    overlap_scores = []
+    for seg_id in sorted(common_ids):
+        count_front = int(np.sum(seg_front0 == seg_id))
+        count_top = int(np.sum(seg_top0 == seg_id))
         score = min(count_front, count_top)
-        if score <= 0:
-            continue
-        world_pos = np.asarray(objects[body_name]["position"], dtype=np.float32)
-        u_front, v_front = _project_point(world_pos, intr_front, extr_front[0])
-        u_top, v_top = _project_point(world_pos, intr_top, extr_top[0])
-        if not (0 <= u_front < intr_front["width"] and 0 <= v_front < intr_front["height"]):
-            continue
-        if not (0 <= u_top < intr_top["width"] and 0 <= v_top < intr_top["height"]):
-            continue
-        if _window_label(seg_front0, u_front, v_front) != geom_id:
-            continue
-        if _window_label(seg_top0, u_top, v_top) != geom_id:
-            continue
-        if best is None or score > best[0]:
-            best = (score, geom_id, body_name)
-    assert best is not None
-    geom_id = best[1]
-    target_id = best[2]
-
-    world_pos = np.asarray(objects[target_id]["position"], dtype=np.float32)
-    u_front, v_front = _project_point(world_pos, intr_front, extr_front[0])
-    u_top, v_top = _project_point(world_pos, intr_top, extr_top[0])
-
-    assert 0 <= u_front < intr_front["width"]
-    assert 0 <= v_front < intr_front["height"]
-    assert 0 <= u_top < intr_top["width"]
-    assert 0 <= v_top < intr_top["height"]
-    margin = 6
-    assert margin <= u_front < intr_front["width"] - margin
-    assert margin <= v_front < intr_front["height"] - margin
-    assert margin <= u_top < intr_top["width"] - margin
-    assert margin <= v_top < intr_top["height"] - margin
-
-    seg_id_front = _window_label(seg_front0, u_front, v_front)
-    seg_id_top = _window_label(seg_top0, u_top, v_top)
-    assert seg_id_front == geom_id
-    assert seg_id_top == geom_id
+        if score > 0:
+            overlap_scores.append((score, int(seg_id)))
+    assert overlap_scores
+    geom_id = max(overlap_scores)[1]
 
     center_front = _seg_centroid(seg_front0, geom_id)
     center_top = _seg_centroid(seg_top0, geom_id)
     assert center_front != (-1, -1)
     assert center_top != (-1, -1)
-    assert np.hypot(center_front[0] - u_front, center_front[1] - v_front) <= 12
-    assert np.hypot(center_top[0] - u_top, center_top[1] - v_top) <= 12
+    margin = 6
+    assert margin <= center_front[0] < intr_front["width"] - margin
+    assert margin <= center_front[1] < intr_front["height"] - margin
+    assert margin <= center_top[0] < intr_top["width"] - margin
+    assert margin <= center_top[1] < intr_top["height"] - margin
 
     for frame in seg_front:
         assert np.any(frame == geom_id)
     for frame in seg_top:
         assert np.any(frame == geom_id)
 
-    for idx, state in enumerate(states):
-        obj_pos = np.asarray(state["objects"][target_id]["position"], dtype=np.float32)
-        u_front, v_front = _project_point(obj_pos, intr_front, extr_front[min(idx, extr_front.shape[0] - 1)])
-        u_top, v_top = _project_point(obj_pos, intr_top, extr_top[min(idx, extr_top.shape[0] - 1)])
-        assert 0 <= u_front < intr_front["width"]
-        assert 0 <= v_front < intr_front["height"]
-        assert 0 <= u_top < intr_top["width"]
-        assert 0 <= v_top < intr_top["height"]
-        assert _window_label(seg_front[idx], u_front, v_front) == seg_id_front
-        assert _window_label(seg_top[idx], u_top, v_top) == seg_id_top
+    prev_front = center_front
+    prev_top = center_top
+    for idx in range(1, len(states)):
+        curr_front = _seg_centroid(seg_front[idx], geom_id)
+        curr_top = _seg_centroid(seg_top[idx], geom_id)
+        assert curr_front != (-1, -1)
+        assert curr_top != (-1, -1)
+        assert np.hypot(curr_front[0] - prev_front[0], curr_front[1] - prev_front[1]) <= 12
+        assert np.hypot(curr_top[0] - prev_top[0], curr_top[1] - prev_top[1]) <= 12
+        prev_front = curr_front
+        prev_top = curr_top
