@@ -6,6 +6,7 @@
 - **Package status**: as of 2026-03-09, `src/world_model/` is reopened for additive successor modules such as governed video-state scaffolding.
 - **What remains frozen**: the stable checkpoint itself, the legacy contractive dynamics math as the reference baseline, trust-net, `w_econ`, and lambda controller math.
 - **What is now allowed**: additive world-model modules that sit beside the baseline and consume the newer packet/evidence/governance substrate.
+- **What counts as complete on the successor track**: a new module is not "done" when it only compiles; it is done when at least one live path emits its sidecars/contracts so the work is replayable and supervised in practice.
 
 ## Current Phase B Mental Model
 
@@ -18,7 +19,7 @@ Phase B is no longer treated as one undifferentiated frozen zone.
 - **Layer 2: additive successor track**
   - governed video-state services
   - evidence-first and geometry-first hypothesis generation
-  - future supervision bundles and training seams that remain advisory until proven
+  - supervision bundles, reconstruction sidecars, and training seams that remain advisory until proven
 
 The baseline still defines rollback, comparison, and economic continuity. The successor track exists to modernize the repo toward governed video-world-model preconditions without rewriting the baseline first.
 

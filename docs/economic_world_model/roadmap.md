@@ -10,6 +10,7 @@
 - Sequence work so each stage leaves behind reusable docs, schemas, tests, and automation hooks.
 - Treat video-world-model work as a subset of economic-world-model readiness: geometry/evidence/governance first, rendering and training second.
 - Do not overfit the stack to one paper architecture. Keep predictor, planner, context, and rollout configuration modular.
+- Treat a tranche as incomplete until it is wired into at least one already-executed path. For the current subset that means the Stage-1 video loop, rollout labeling, shadow runtime, replay ingest, or another live path must emit the new artifacts.
 
 ## Workstream Summary
 
@@ -192,6 +193,7 @@
   - `GovernedVideoWorldModel` service that consumes belief-state/evidence-first inputs and proposes candidate futures before any rendering step.
   - Stage-1 sidecars for `EvidenceBus`, `BeliefState`, governed video state, and ranked hypotheses.
   - Diffusion/render stub that can render governed hypotheses instead of inventing futures first.
+  - Geometry/plausibility gating in the live Stage-1 loop so governed hypotheses are judged by `RegalGenPlausibilityNode` before datapacks are admitted.
   - Configurable SceneTracks stub usage rather than hardwired `use_stub_adapters=True`.
   - Clear separation between frozen stable checkpoint baseline and new advisory video-state scaffolding.
 - Acceptance tests / verification commands:
@@ -274,7 +276,7 @@
   - D4RT-style reconstruction sidecars with camera calibration, confidence windows, and provenance.
   - Teacher runtime envelopes with explicit fallback metadata, latency, and adapter contract refs.
   - Real-video stage wiring that prefers grounded reconstruction and non-stub adapters before heuristic fallback.
-  - Stage-1 outputs that carry reconstruction refs, calibration refs, and teacher-runtime refs alongside governed video-state artifacts.
+  - Stage-1 outputs that carry reconstruction refs, calibration refs, and teacher-runtime refs alongside governed video-state artifacts, and rollout-labeling outputs that always emit teacher contract/action sidecars even when the teacher is disabled or unavailable.
   - Runner and ingestion paths where stub usage is explicit, inspectable, and never silently treated as production truth.
 - Concrete implementation order:
   - Wire `src/vision/reconstruction/four_d_reconstruction.py` into `scripts/run_stage1_pipeline.py` so each processed video emits a reconstruction sidecar.
@@ -307,6 +309,7 @@
   - Counterfactual economic evaluations derived from candidate futures rather than only post hoc episode summaries.
   - Replayable receipts that join candidate futures back to `RuntimePacket`, `BeliefState`, `EvidenceBus`, and downstream datapack context.
   - Evaluation artifacts that keep geometry plausibility, regality, and economic value distinct instead of collapsing them into one scalar too early.
+  - Live-loop datapack linkage so accepted datapacks carry counterfactual/value-target refs and blocked branches still retain governance/counterfactual artifacts for replay.
 - Concrete implementation order:
   - Wire `src/world_model/governed_video_supervision.py` into the governed Stage-1 loop immediately after hypothesis ranking.
   - Emit `CounterfactualEval`, `ValueTargetPack`, and governance-trace sidecars for each accepted or vetoed branch.
@@ -361,10 +364,10 @@
 
 The next autonomous passes should consume the video-world-model subset in this order:
 
-1. Week 6.5 reconstruction sidecars and calibration plumbing.
-2. Week 6.5 teacher-runtime hardening and explicit fallback semantics.
-3. Week 6.75 governed supervision bundle wiring into the Stage-1 loop.
-4. Test and smoke coverage that proves the new refs and sidecars persist end to end.
+1. Deepen real-video grounding with non-stub SceneTracks adapters, richer calibration metadata, and stronger reconstruction joins in the live Stage-1 path.
+2. Keep teacher-runtime hardening live by pushing explicit contract/action fallback semantics through every remaining real-video or ingestion boundary, not just rollout labeling.
+3. Export governed supervision artifacts cleanly into replay and dataset-bridge paths so Stage-1 outputs are directly trainable later.
+4. Test and smoke coverage that proves the new refs and sidecars persist end to end in live loops.
 5. Only after those land cleanly, refresh the training backlog and consider `train_governed_video_world_model.py`.
 
-Nightly or autonomous execution should not skip directly to training or raw model experimentation while Week 6.5 and Week 6.75 remain incomplete.
+Nightly or autonomous execution should not skip directly to training or raw model experimentation while live grounding and live supervision wiring remain incomplete.

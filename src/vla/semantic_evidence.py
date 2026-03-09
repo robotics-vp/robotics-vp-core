@@ -56,6 +56,8 @@ def build_vla_semantic_evidence_payload(
     semantic_tags: Optional[list[str]] = None,
     instruction: Optional[str] = None,
     teacher_trace_ref: Optional[str] = None,
+    teacher_contract_ref: Optional[str] = None,
+    teacher_action_ref: Optional[str] = None,
 ) -> Dict[str, np.ndarray]:
     """Build a governed VLA_SemanticEvidence_v1 payload.
 
@@ -104,6 +106,8 @@ def build_vla_semantic_evidence_payload(
         "instruction": instruction or "",
         "vla_available": bool(vla_payload.get("vla_available", False)) if isinstance(vla_payload, Mapping) else False,
         "teacher_trace_ref": teacher_trace_ref or "",
+        "teacher_contract_ref": teacher_contract_ref or "",
+        "teacher_action_ref": teacher_action_ref or "",
         "fallback_mode": fallback_mode,
     }
 

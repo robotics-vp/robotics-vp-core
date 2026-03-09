@@ -38,7 +38,7 @@ def test_rollout_labeler_stub_without_openvla(monkeypatch, tmp_path: Path):
 
     monkeypatch.delenv("OPENVLA_ENABLE", raising=False)
     monkeypatch.delenv("VLA_ENABLE", raising=False)
-    monkeypatch.setattr(labeler, "_get_openvla_controller", lambda: (_ for _ in ()).throw(AssertionError("OpenVLA not expected")))
+    monkeypatch.setattr(labeler, "_get_openvla_teacher_runtime", lambda: (_ for _ in ()).throw(AssertionError("OpenVLA not expected")))
 
     base = DatapackConfig(
         id="dp_base",
@@ -61,8 +61,18 @@ def test_rollout_labeler_stub_without_openvla(monkeypatch, tmp_path: Path):
     labeled = labeler.label_rollouts_with_vla(bundle, base_datapack=base)
     assert labeled
     assert "auto_labeled" in labeled[0].tags
+    teacher_contract_path = tmp_path / "trajectory_teacher_contract_v1.json"
+    teacher_action_path = tmp_path / "trajectory_teacher_action_envelope_v1.json"
     teacher_trace_path = tmp_path / "trajectory_teacher_trace_v1.json"
+    assert teacher_contract_path.exists()
+    assert teacher_action_path.exists()
     assert teacher_trace_path.exists()
+    teacher_contract = json.loads(teacher_contract_path.read_text())
+    assert teacher_contract["available"] is False
+    assert teacher_contract["metadata"]["availability_reason"] == "openvla_disabled"
+    teacher_action = json.loads(teacher_action_path.read_text())
+    assert teacher_action["available"] is False
+    assert teacher_action["failure_mode"] == "openvla_disabled"
     teacher_trace = json.loads(teacher_trace_path.read_text())
     assert teacher_trace["advisory_only"] is True
 
@@ -71,7 +81,7 @@ def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):
     import src.vla.rollout_labeler as labeler
 
     monkeypatch.setenv("OPENVLA_ENABLE", "1")
-    monkeypatch.setattr(labeler, "_get_openvla_controller", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(labeler, "_get_openvla_teacher_runtime", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
 
     base = DatapackConfig(
         id="dp_base",
@@ -94,3 +104,11 @@ def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):
     labeled = labeler.label_rollouts_with_vla(bundle, base_datapack=base)
     assert labeled
     assert "vla_error" in labeled[0].tags
+    teacher_contract_path = tmp_path / "trajectory_teacher_contract_v1.json"
+    teacher_action_path = tmp_path / "trajectory_teacher_action_envelope_v1.json"
+    assert teacher_contract_path.exists()
+    assert teacher_action_path.exists()
+    teacher_contract = json.loads(teacher_contract_path.read_text())
+    teacher_action = json.loads(teacher_action_path.read_text())
+    assert teacher_contract["metadata"]["availability_reason"] == "boom"
+    assert teacher_action["failure_mode"] == "boom"
