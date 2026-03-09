@@ -6,6 +6,6 @@
   },
   "mypy": {
     "command": "python3 -m mypy src/",
-    "baseline_errors": 186
+    "baseline_errors": 185
   }
 }

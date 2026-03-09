@@ -142,7 +142,7 @@ class R3D18Encoder(nn.Module):
     def __init__(self, latent_dim=128, pretrained=True):
         super().__init__()
         try:
-            import torchvision.models.video as video_models
+            import torchvision.models.video as video_models  # type: ignore[import-not-found]
         except ImportError:
             raise ImportError("torchvision not installed. Install with: pip install torchvision")
 

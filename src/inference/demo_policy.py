@@ -255,7 +255,7 @@ class DemoPolicy:
             if checkpoint_path and Path(checkpoint_path).exists():
                 checkpoint = torch.load(checkpoint_path, map_location=self.config.device)
                 # Instantiate model (simplified)
-                from src.ontology.sima2_segmenter import SIMA2Segmenter
+                from src.ontology.sima2_segmenter import SIMA2Segmenter  # type: ignore[import-untyped]
                 model = SIMA2Segmenter()
                 model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
                 model.to(self.config.device)

@@ -84,7 +84,7 @@ def get_gpu_utilization(device_idx: int = 0) -> Optional[int]:
         GPU utilization percentage (0-100) or None if unavailable
     """
     try:
-        import pynvml
+        import pynvml  # type: ignore[import-not-found]
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(device_idx)
         util = pynvml.nvmlDeviceGetUtilizationRates(handle)

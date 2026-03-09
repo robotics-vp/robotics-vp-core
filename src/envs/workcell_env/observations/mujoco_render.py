@@ -373,7 +373,16 @@ def _debug_state_signature(state: Dict[str, Any]) -> Tuple[Tuple[str, Tuple[floa
         pos = objects[key].get("position")
         if pos is None:
             continue
-        items.append((key, tuple(round(float(p), 4) for p in pos)))
+        items.append(
+            (
+                str(key),
+                (
+                    round(float(pos[0]), 4),
+                    round(float(pos[1]), 4),
+                    round(float(pos[2]), 4),
+                ),
+            )
+        )
     return tuple(items)
 
 

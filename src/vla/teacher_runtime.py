@@ -90,8 +90,10 @@ class TeacherActionEnvelope:
             {
                 "vla_available": bool(self.available),
                 "confidence": float(self.confidence),
-                "source": self.model_name,
-                "fallback_mode": self.failure_mode or ("teacher_available" if self.available else "teacher_unavailable"),
+                "source": str(self.model_name),
+                "fallback_mode": str(
+                    self.failure_mode or ("teacher_available" if self.available else "teacher_unavailable")
+                ),
             }
         )
         return payload

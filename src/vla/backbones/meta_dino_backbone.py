@@ -59,7 +59,7 @@ class MetaDINOBackbone(VisionBackbone):
         # Try HuggingFace transformers first
         try:
             import torch
-            from transformers import AutoModel, AutoFeatureExtractor
+            from transformers import AutoModel, AutoFeatureExtractor  # type: ignore[import-not-found]
 
             self._model = AutoModel.from_pretrained(self._model_name)
             self._processor = AutoFeatureExtractor.from_pretrained(self._model_name)
@@ -90,7 +90,7 @@ class MetaDINOBackbone(VisionBackbone):
         # Try timm as fallback
         try:
             import torch
-            import timm
+            import timm  # type: ignore[import-not-found]
 
             # Map model names
             timm_name = self._model_name.replace("facebook/", "").replace("-", "_")

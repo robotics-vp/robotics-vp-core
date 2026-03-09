@@ -25,9 +25,9 @@ from src.objectives.economic_objective import (
 )
 
 try:  # pragma: no cover
-    import holosoma
-    import holosoma_inference
-    import holosoma_retargeting
+    import holosoma  # type: ignore[import-not-found]
+    import holosoma_inference  # type: ignore[import-not-found]
+    import holosoma_retargeting  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover
     holosoma = None
     holosoma_inference = None
@@ -131,7 +131,7 @@ class DefaultHolosomaRunner:
         before = {p for p in project_dir.iterdir() if p.is_dir()}
 
         self._ensure_pythonpath()
-        from holosoma.holosoma.train_agent import train as holosoma_train
+        from holosoma.holosoma.train_agent import train as holosoma_train  # type: ignore[import-not-found]
 
         holosoma_train(config)
 
@@ -160,8 +160,8 @@ class DefaultHolosomaRunner:
         if num_episodes <= 0:
             return HolosomaRunResult(policy_id=policy_id, raw_metrics={})
         try:
-            from holosoma.holosoma.eval_agent import run_eval_with_tyro
-            from holosoma.utils.eval_utils import CheckpointConfig, load_saved_experiment_config
+            from holosoma.holosoma.eval_agent import run_eval_with_tyro  # type: ignore[import-not-found]
+            from holosoma.utils.eval_utils import CheckpointConfig, load_saved_experiment_config  # type: ignore[import-not-found]
         except Exception as exc:
             raise RuntimeError("Holosoma evaluation entrypoints are unavailable.") from exc
 
@@ -196,9 +196,9 @@ class DefaultHolosomaRunner:
         return HolosomaPolicyHandle(policy_id)
 
     def _build_experiment_config(self, task_spec: HolosomaTaskSpec, num_envs: int, max_steps: int, seed: int | None):
-        from holosoma.config_values import experiment as holo_experiment
-        from holosoma.config_values import logger as holo_logger
-        from holosoma.config_values import simulator as holo_simulator
+        from holosoma.config_values import experiment as holo_experiment  # type: ignore[import-not-found]
+        from holosoma.config_values import logger as holo_logger  # type: ignore[import-not-found]
+        from holosoma.config_values import simulator as holo_simulator  # type: ignore[import-not-found]
 
         if task_spec.exp_name not in holo_experiment.DEFAULTS:
             raise ValueError(f"Unknown Holosoma experiment preset: {task_spec.exp_name}")
@@ -234,7 +234,7 @@ class DefaultHolosomaRunner:
     def _apply_reward_overlay(self, config: Any, overlay: CompiledRewardOverlay):
         if not overlay.reward_scales:
             return config
-        from holosoma.config_types.reward import RewardTermCfg
+        from holosoma.config_types.reward import RewardTermCfg  # type: ignore[import-not-found]
 
         reward_cfg = getattr(config, "reward", None)
         if reward_cfg is None:
@@ -363,7 +363,7 @@ class HolosomaPolicyHandle:
         if holosoma_inference is None:
             return
         try:
-            import onnxruntime as ort
+            import onnxruntime as ort  # type: ignore[import-not-found]
         except Exception:
             return
         self._session = ort.InferenceSession(policy_id)

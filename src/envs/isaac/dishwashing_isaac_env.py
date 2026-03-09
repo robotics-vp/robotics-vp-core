@@ -12,7 +12,7 @@ NO tuning, NO refactors - just verify it works.
 
 import numpy as np
 import torch
-from isaacgym import gymapi, gymtorch
+from isaacgym import gymapi, gymtorch  # type: ignore[import-not-found]
 from typing import Tuple, Dict, Any
 
 

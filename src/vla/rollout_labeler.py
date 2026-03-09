@@ -440,7 +440,7 @@ def _load_first_frame(episode: EpisodeRollout):
         except Exception:
             return None
     try:
-        import imageio.v2 as imageio
+        import imageio.v2 as imageio  # type: ignore[import-not-found]
 
         reader = imageio.get_reader(str(path))
         frame = reader.get_data(0)
