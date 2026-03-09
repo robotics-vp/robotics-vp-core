@@ -8,6 +8,8 @@ This repo should be prepared for a future multimodal economic world model that s
 
 The repo already has unusually strong typed scaffolding for objective tensors, econ tensors, pricing, ledgers, replay schemas, semantic fusion, and advisory regality. The biggest gap is not "missing ML." The biggest gap is the lack of one canonical runtime packet and one dense append-only event/evidence/governance spine that make the stack legible to itself across training, inference, replay, simulation, and deployment.
 
+As of 2026-03-09, `src/world_model/` is no longer treated as globally frozen. The stable Phase B checkpoint remains the anchor baseline, but the package is now reopened for additive governed video-state modules that consume packets, evidence, geometry, and governance without rewriting the stable latent dynamics math. The working mental model is now two-layered: preserve the baseline for rollback/comparison, and modernize around it with governed successor scaffolding.
+
 ## Repo Crosswalk
 
 | Precondition | Current status | Existing ground truth | Additive scaffolding to build now | Defer until later maturity |
@@ -119,6 +121,39 @@ Build now:
 Defer later:
 
 - Learned calibration of evidence reliability under deployment shift.
+
+### Video-World-Model Preconditions
+
+Already landed or now in scope:
+
+- `src/runtime/action_adapter_v2.py` and `src/runtime/observation_adapter_v2.py` make action/observation schema identity explicit instead of implicit in packet callers.
+- `src/evidence/bus.py`, `src/evidence/belief_state.py`, and `src/evidence/teacher_trace.py` give the repo a first-class evidence publication layer and advisory teacher traces.
+- `src/world_model/governed_video_world_model.py` reopens the world-model package with a model-neutral video-state service that proposes geometry-first futures before rendering.
+- `scripts/run_stage1_pipeline.py` now emits governed video sidecars and can consume a real video manifest instead of only simulating random semantic tags.
+- `src/diffusion/real_video_diffusion_stub.py` now renders governed hypotheses when available instead of always originating futures itself.
+- `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` no longer hardwires stub adapters in the runner API; stub usage is configurable.
+
+Still missing for production-ready v-JEPA-2-grade plumbing:
+
+- Real non-stub SceneTracks adapters and calibration at the production runner boundary.
+- A D4RT-style 4D reconstruction sidecar tying cameras, trajectories, and geometry together for real robot footage.
+- Real evaluator-driven branching and test-time compute over governed video states rather than heuristic branching alone.
+- Action-conditioned latent predictor training over fused video / scene-track / BEV / embodiment / econ tokens.
+- Honest production support for non-stub OpenVLA or other teacher models beyond soft-fail sidecars.
+
+Recommendation:
+
+- Keep rendering downstream of governed hypotheses.
+- Keep external FM/VLA traces advisory.
+- Use the evidence bus and belief state as the supervision surface for later video-state predictor training.
+- Do not replace the stable Phase B baseline checkpoint until the new path has real replay/eval evidence.
+
+Immediate autonomous next tranche:
+
+- Wire `four_d_reconstruction.py` into Stage-1 and ingestion so every governed video run emits camera-grounded reconstruction sidecars.
+- Route teacher outputs through `teacher_runtime.py` before they become semantic evidence or teacher traces.
+- Emit governed supervision bundles, counterfactual evals, governance traces, and value targets directly from governed video hypotheses.
+- Treat learned video-state training as backlog-only until those traces are real and replayable.
 
 ### 5. Dense economic supervision
 
@@ -236,7 +271,8 @@ The training migration backlog is useful, but it is not the same thing as middle
 | `train_vla_recap_offline.py` | External teacher traces and advisory evidence | 4, TeacherTrace sidecars |
 | `train_offline_with_local_synth.py` | Counterfactual evaluation and dense local econ supervision | 3, 5 |
 | `train_trust_weighted_offline.py` | Governance-aware admission and weighting | 5, 7 |
-| `train_w_econ_lattice.py` / `train_w_econ_lattice_from_J.py` | Important to economics, but Phase B frozen and not a first-pass roadmap entry point | Frozen zone; do not touch now |
+| `train_governed_video_world_model.py` | Future video-state predictor over governed fused tokens rather than a raw pixel generator | 1, 2, 4, 5, 7 |
+| `train_w_econ_lattice.py` / `train_w_econ_lattice_from_J.py` | Important to economics, but part of the stable Phase B baseline and not a first-pass roadmap entry point | Frozen zone; do not touch now |
 
 ## Immediate Conclusion
 

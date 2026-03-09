@@ -10,7 +10,7 @@ Economics-first robotics stack: robots priced like labor, not software. Full-sta
 
 | Action | Command |
 |--------|---------|
-| Install dependencies | `pip install -e .` |
+| Install dependencies | `python3 -m pip install -r requirements-dev.txt` |
 | Test | `pytest` |
 | Lint | `ruff check .` |
 | Format | `ruff format .` |
@@ -47,19 +47,23 @@ A task is complete when:
 1. **Tests pass** - `pytest tests/ -v` passes
 2. **No regressions** - Existing functionality works as before
 3. **Compiles** - `python3 -m compileall src/` has no errors
-4. **Phase B frozen** - Do NOT modify world model, trust_net, w_econ_lattice, or λ controller math
+4. **Phase B baseline preserved** - Do NOT modify the stable checkpoint, legacy baseline world-model math, trust_net, w_econ_lattice, or λ controller math unless explicitly authorized
 5. **Docs updated** - README or module docs updated if behavior changed
 6. **Commits are clean** - Small, focused commits with clear messages
 
 ## Architecture Constraints
 
-### Phase B is FROZEN
+### Phase B Baseline Is Frozen, Package Is Reopenable Additively
 
 Do not modify:
-- World model math (`src/world_model/`)
+- the stable checkpoint or legacy baseline world-model math
 - `checkpoints/stable_world_model.pt`
 - Trust net, w_econ lattice, λ controller equations
 - `src/controllers/synthetic_weight_controller.py` core logic
+
+Allowed with explicit roadmap alignment:
+- additive successor modules in `src/world_model/` that sit beside the stable baseline
+- governed video-state, evidence, and evaluation scaffolding that preserve the baseline as the canonical fallback
 
 ### Additive-only zones
 
@@ -126,7 +130,7 @@ When the task is part of the economic-world-model readiness initiative:
 | `src/rl/reward_shaping.py` | MPL/EP/error + wage penalty |
 | `src/controllers/` | Synthetic weight, λ budget controllers |
 | `src/valuation/` | Data valuation, datapacks, w_econ lattice |
-| `src/world_model/` | World model (FROZEN) |
+| `src/world_model/` | Stable Phase B baseline plus additive successor scaffolding |
 | `src/hrl/`, `src/vla/`, `src/sima/` | Phase C scaffolding |
 
 ## Getting Help

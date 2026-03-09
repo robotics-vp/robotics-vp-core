@@ -324,4 +324,4 @@ This is a **physics-first** environment ready for HRL, VLA, and SIMA-2 integrati
 ---
 
 *Phase C Environment created on 2025-11-16*
-*Compatible with Phase B frozen architecture*
+*Compatible with the stable frozen Phase B baseline architecture*

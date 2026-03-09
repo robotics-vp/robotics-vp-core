@@ -1,4 +1,26 @@
-# Phase B: Stable World Model Frozen
+# Phase B: Stable Baseline and Successor Track
+
+## Status Update
+
+- **Stable checkpoint status**: still frozen and preserved as the canonical fallback baseline.
+- **Package status**: as of 2026-03-09, `src/world_model/` is reopened for additive successor modules such as governed video-state scaffolding.
+- **What remains frozen**: the stable checkpoint itself, the legacy contractive dynamics math as the reference baseline, trust-net, `w_econ`, and lambda controller math.
+- **What is now allowed**: additive world-model modules that sit beside the baseline and consume the newer packet/evidence/governance substrate.
+
+## Current Phase B Mental Model
+
+Phase B is no longer treated as one undifferentiated frozen zone.
+
+- **Layer 1: stable baseline**
+  - the canonical checkpoint
+  - the legacy contractive latent dynamics math
+  - trust-net, `w_econ`, and lambda controller math
+- **Layer 2: additive successor track**
+  - governed video-state services
+  - evidence-first and geometry-first hypothesis generation
+  - future supervision bundles and training seams that remain advisory until proven
+
+The baseline still defines rollback, comparison, and economic continuity. The successor track exists to modernize the repo toward governed video-world-model preconditions without rewriting the baseline first.
 
 **Date Frozen**: 2025-11-15
 **Checkpoint**: `checkpoints/world_model_stable_canonical.pt`
@@ -139,6 +161,6 @@ z_trajectory = model.rollout(z_init, actions)  # (T+1, latent_dim)
 
 ## Status
 
-**FROZEN** - This is canonical Phase B world model infrastructure.
+**BASELINE FROZEN, PACKAGE REOPENED** - this checkpoint remains the canonical anchor point, but new successor modules may now be added beside it.
 
-Same as z_V encoder freeze: if something breaks later, this is the anchor point.
+If something breaks later, this checkpoint and architecture remain the rollback anchor.

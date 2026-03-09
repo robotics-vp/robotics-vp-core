@@ -6,7 +6,7 @@ Current implemented chain:
 
 `workcell sim episode -> ObjectiveTensor runtime builder -> ConstraintSet -> ObjectiveCompiler -> ObjectiveEconFunctor -> PricingSentinel -> ValueLedger -> shadow regal nodes -> ontology/datapack shadow updates`
 
-This is deliberately a shadow path. It does not modify the baseline SAC/PPO reward path, does not touch frozen Phase B math, and does not silently change legacy scripts when the new mode is off.
+This is deliberately a shadow path. It does not modify the baseline SAC/PPO reward path, does not touch the stable frozen Phase B math, and does not silently change legacy scripts when the new mode is off.
 
 ## Why It Exists
 

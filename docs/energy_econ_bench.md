@@ -1,6 +1,6 @@
 # Energy Economics Bench
 
-The arm-based “energy bench” environments provide a safe place to exercise τ·ω energy attribution without touching the frozen Phase B stack (trust_net, w_econ_lattice, λ controller, SyntheticWeightController, rewards).
+The arm-based “energy bench” environments provide a safe place to exercise τ·ω energy attribution without touching the stable frozen Phase B baseline stack (trust_net, w_econ_lattice, λ controller, SyntheticWeightController, rewards).
 
 ## What it is
 - `src/envs/dishwashing_arm_env.py`: articulated KUKA iiwa arm in a dishwashing proxy task; joint-velocity control; emits per-joint/limb/effector energy and coordination metrics.
@@ -15,5 +15,5 @@ The arm-based “energy bench” environments provide a safe place to exercise �
 - **Inspection**: `scripts/inspect_phase_c_datapacks.py` can be pointed at arm datapacks to group by env type and energy_driver_tags.
 
 ## What it is not
-- It does **not** modify Phase B economics, weighting, or rewards.
+- It does **not** modify the stable Phase B economics, weighting, or rewards.
 - It is an additive bench to validate energy attribution and control; integration with RL/econ weighting is future work.

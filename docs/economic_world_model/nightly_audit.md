@@ -61,11 +61,20 @@ The nightly pass should prefer, in order:
 4. tests and verification hardening
 5. behavior-changing work only behind explicit flags and only after the previous layers exist
 
+For the active video-world-model subset, the nightly pass should further prefer:
+
+1. Week 6.5 real-video grounding and reconstruction sidecars
+2. Week 6.5 teacher-runtime hardening and explicit fallback semantics
+3. Week 6.75 governed supervision/value-target wiring
+4. test and smoke coverage for the above
+5. training-backlog refresh only after the previous items are materially landed
+
 ## Skip Rules
 
 - Do not update the GitHub status issue when the audit digest is unchanged.
 - Do not run Codex automatically when the audit does not mark a task as safe to execute.
-- Do not touch frozen zones.
+- Do not modify the stable Phase B checkpoint, legacy baseline world-model math, trust-net, `w_econ`, or lambda controller math.
+- Additive successor modules in `src/world_model/` are allowed only when they preserve the stable baseline as the rollback anchor and remain advisory/governed.
 - Do not claim GitHub/cloud or app automation execution unless the relevant credentials or UI automation actually exist.
 
 ## Current Baseline
