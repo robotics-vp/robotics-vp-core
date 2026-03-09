@@ -41,7 +41,23 @@ def build_vla_semantic_evidence_stub(
     semantic_tags: Optional[list[str]] = None,
     instruction: Optional[str] = None,
 ) -> Dict[str, np.ndarray]:
-    """Build a stub VLA_SemanticEvidence_v1 payload.
+    """Backward-compatible wrapper around the governed VLA evidence payload."""
+    return build_vla_semantic_evidence_payload(
+        scene_tracks=scene_tracks,
+        vla_payload=vla_payload,
+        semantic_tags=semantic_tags,
+        instruction=instruction,
+    )
+
+
+def build_vla_semantic_evidence_payload(
+    scene_tracks: Optional[Dict[str, Any]],
+    vla_payload: Optional[Mapping[str, Any]] = None,
+    semantic_tags: Optional[list[str]] = None,
+    instruction: Optional[str] = None,
+    teacher_trace_ref: Optional[str] = None,
+) -> Dict[str, np.ndarray]:
+    """Build a governed VLA_SemanticEvidence_v1 payload.
 
     This emits a minimal numpy-only evidence packet so downstream Map-First
     can consume a consistent sidecar, even when no per-entity logits exist.
@@ -66,16 +82,29 @@ def build_vla_semantic_evidence_stub(
         vla_available = False
         if isinstance(vla_payload, Mapping):
             vla_available = bool(vla_payload.get("vla_available", False))
-        base_conf = 0.2 if vla_available else 0.05
+        base_conf = 0.35 if vla_available else 0.05
         confidence_arr = np.full((T, K), base_conf, dtype=np.float32)
+    elif np.isscalar(confidence):
+        confidence_arr = np.full((T, K), float(confidence), dtype=np.float32)
     else:
         confidence_arr = np.asarray(confidence, dtype=np.float32)
 
+    source = "vla_stub"
+    fallback_mode = "no_teacher"
+    if isinstance(vla_payload, Mapping):
+        if bool(vla_payload.get("vla_available", False)):
+            source = str(vla_payload.get("source", "openvla"))
+            fallback_mode = str(vla_payload.get("fallback_mode", "teacher_available"))
+        else:
+            fallback_mode = str(vla_payload.get("fallback_mode", "teacher_unavailable"))
+
     provenance = {
-        "source": "vla_stub",
+        "source": source,
         "semantic_tags": semantic_tags or [],
         "instruction": instruction or "",
         "vla_available": bool(vla_payload.get("vla_available", False)) if isinstance(vla_payload, Mapping) else False,
+        "teacher_trace_ref": teacher_trace_ref or "",
+        "fallback_mode": fallback_mode,
     }
 
     payload = {

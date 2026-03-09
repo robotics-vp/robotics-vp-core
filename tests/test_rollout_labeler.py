@@ -1,4 +1,5 @@
 """Tests for rollout labeler."""
+import json
 from pathlib import Path
 
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
@@ -60,6 +61,10 @@ def test_rollout_labeler_stub_without_openvla(monkeypatch, tmp_path: Path):
     labeled = labeler.label_rollouts_with_vla(bundle, base_datapack=base)
     assert labeled
     assert "auto_labeled" in labeled[0].tags
+    teacher_trace_path = tmp_path / "trajectory_teacher_trace_v1.json"
+    assert teacher_trace_path.exists()
+    teacher_trace = json.loads(teacher_trace_path.read_text())
+    assert teacher_trace["advisory_only"] is True
 
 
 def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):

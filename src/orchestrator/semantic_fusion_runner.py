@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+from src.evidence import EvidenceBus, EvidenceRecord, TeacherTrace, belief_state_from_evidence_bus
 from src.motor_backend.rollout_capture import RolloutBundle
 from src.orchestrator.semantic_fusion import SEMANTIC_FUSION_PREFIX, fuse_semantic_evidence_mvp
 from src.vision.map_first_supervision.artifacts import MAP_FIRST_PREFIX
@@ -18,6 +19,16 @@ logger = logging.getLogger(__name__)
 
 def _load_npz(path: Path) -> Dict[str, np.ndarray]:
     return dict(np.load(path, allow_pickle=False))
+
+
+def _load_json(path: Path) -> Optional[Dict[str, Any]]:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text())
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _load_trajectory_payload(path: Path) -> Optional[Dict[str, Any]]:
@@ -81,6 +92,13 @@ def _find_vla_path(trajectory_path: Path) -> Optional[Path]:
     return None
 
 
+def _find_teacher_trace_path(trajectory_path: Path) -> Optional[Path]:
+    candidate = trajectory_path.with_name(f"{trajectory_path.stem}_teacher_trace_v1.json")
+    if candidate.exists():
+        return candidate
+    return None
+
+
 def _get_map_first_array(data: Optional[Dict[str, np.ndarray]], key: str) -> Optional[np.ndarray]:
     if data is None:
         return None
@@ -102,7 +120,12 @@ def _write_summary_jsonl(summary_path: Path, rows: list[Dict[str, Any]]) -> None
             f.write(json.dumps(row) + "\n")
 
 
-def _update_episode_metadata(episode_dir: Path, metrics: Dict[str, float], fusion_path: Path) -> None:
+def _update_episode_metadata(
+    episode_dir: Path,
+    metrics: Dict[str, float],
+    fusion_path: Optional[Path],
+    extra_fields: Optional[Dict[str, Any]] = None,
+) -> None:
     meta_path = episode_dir / "metadata.json"
     if not meta_path.exists():
         return
@@ -115,7 +138,10 @@ def _update_episode_metadata(episode_dir: Path, metrics: Dict[str, float], fusio
         existing_metrics = {}
     existing_metrics.update(metrics)
     payload["metrics"] = existing_metrics
-    payload["semantic_fusion_path"] = str(fusion_path)
+    if fusion_path is not None:
+        payload["semantic_fusion_path"] = str(fusion_path)
+    for key, value in dict(extra_fields or {}).items():
+        payload[str(key)] = value
     meta_path.write_text(json.dumps(payload, indent=2))
 
 
@@ -126,10 +152,26 @@ def _safe_episode_id(episode_id: str) -> str:
     return safe or "episode"
 
 
+def _write_json(path: Path, payload: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2))
+
+
+def _extract_teacher_trace(payload: Optional[Dict[str, Any]]) -> Optional[TeacherTrace]:
+    if not isinstance(payload, dict):
+        return None
+    try:
+        return TeacherTrace.from_dict(payload)
+    except Exception:
+        return None
+
+
 def run_semantic_fusion_for_rollouts(
     rollout_bundle: RolloutBundle,
     summary_path: Optional[Path] = None,
     emit_semantic_fusion: bool = True,
+    emit_evidence_bus: bool = True,
+    emit_belief_state: bool = True,
 ) -> list[Dict[str, Any]]:
     """Run semantic fusion for each episode in a rollout bundle."""
     summaries: list[Dict[str, Any]] = []
@@ -137,9 +179,11 @@ def run_semantic_fusion_for_rollouts(
         trajectory_path = episode.trajectory_path
         map_first_path = _find_map_first_path(trajectory_path)
         vla_path = _find_vla_path(trajectory_path)
+        teacher_trace_path = _find_teacher_trace_path(trajectory_path)
 
         map_first_data = _load_npz(map_first_path) if map_first_path else None
         vla_payload = _load_npz(vla_path) if vla_path else None
+        teacher_trace = _extract_teacher_trace(_load_json(teacher_trace_path)) if teacher_trace_path else None
 
         scene_payload = _load_trajectory_payload(trajectory_path)
         scene_track_ids = _extract_scene_track_ids(scene_payload)
@@ -218,6 +262,7 @@ def run_semantic_fusion_for_rollouts(
             "semantic_disagreement_vla_vs_map": disagreement_mean,
             "semantic_fusion_quality_score": confidence_mean,
         }
+        fusion_path: Optional[Path] = None
         if emit_semantic_fusion:
             episode_id = getattr(episode.metadata, "episode_id", "") or ""
             fusion_basename = f"{_safe_episode_id(episode_id)}_semantic_fusion_v1.npz"
@@ -231,7 +276,123 @@ def run_semantic_fusion_for_rollouts(
                     "semantic_fusion_prefix": SEMANTIC_FUSION_PREFIX,
                 }
             )
-            _update_episode_metadata(trajectory_path.parent, metrics, fusion_path)
+        evidence_bus_path: Optional[Path] = None
+        belief_state_path: Optional[Path] = None
+        if emit_semantic_fusion and (emit_evidence_bus or emit_belief_state):
+            episode_id = getattr(episode.metadata, "episode_id", "") or ""
+            evidence_records: list[EvidenceRecord] = []
+            if map_first_path is not None:
+                evidence_records.append(
+                    EvidenceRecord.from_components(
+                        episode_id=episode_id,
+                        timestamp=f"{episode_id}:semantic_fusion",
+                        source="map_first",
+                        kind="map_first_semantics",
+                        confidence=float(np.mean(map_stability)) if map_stability is not None else 0.0,
+                        disagreement=float(np.mean(geom_residual)) if geom_residual is not None else 0.0,
+                        validity={"frame_count": int(map_semantics.shape[0]) if map_semantics is not None else 0},
+                        metrics={
+                            "map_first_quality_score": float(np.mean(map_stability)) if map_stability is not None else 0.0,
+                        },
+                        artifact_refs={"map_first_path": str(map_first_path)},
+                    )
+                )
+            if vla_path is not None:
+                vla_source = "vla_semantic_evidence"
+                if vla_evidence is not None and isinstance(vla_evidence.provenance, dict):
+                    vla_source = str(vla_evidence.provenance.get("source", vla_source))
+                evidence_records.append(
+                    EvidenceRecord.from_components(
+                        episode_id=episode_id,
+                        timestamp=f"{episode_id}:semantic_fusion",
+                        source=vla_source,
+                        kind="teacher_semantics",
+                        confidence=float(np.mean(vla_confidence)) if vla_confidence is not None else 0.0,
+                        disagreement=disagreement_mean,
+                        validity={"frame_count": int(vla_class_probs.shape[0]) if vla_class_probs is not None else 0},
+                        metrics={
+                            "vla_confidence_mean": float(np.mean(vla_confidence)) if vla_confidence is not None else 0.0,
+                        },
+                        artifact_refs={"vla_semantic_evidence_path": str(vla_path)},
+                        provenance=vla_evidence.provenance if vla_evidence is not None else {},
+                    )
+                )
+            if teacher_trace is not None and teacher_trace_path is not None:
+                teacher_confidence = float(
+                    teacher_trace.summary.get("teacher_confidence_mean", 0.0)
+                    or np.mean([step.confidence for step in teacher_trace.steps] or [0.0])
+                )
+                evidence_records.append(
+                    EvidenceRecord.from_components(
+                        episode_id=episode_id,
+                        timestamp=f"{episode_id}:semantic_fusion",
+                        source=teacher_trace.teacher_id,
+                        kind="teacher_trace",
+                        confidence=teacher_confidence,
+                        disagreement=0.0,
+                        validity={"step_count": len(teacher_trace.steps)},
+                        metrics={"teacher_confidence_mean": teacher_confidence},
+                        artifact_refs={"teacher_trace_path": str(teacher_trace_path)},
+                        provenance=teacher_trace.provenance,
+                    )
+                )
+            if fusion_path is not None:
+                evidence_records.append(
+                    EvidenceRecord.from_components(
+                        episode_id=episode_id,
+                        timestamp=f"{episode_id}:semantic_fusion",
+                        source="semantic_fusion_runner",
+                        kind="semantic_fusion",
+                        confidence=confidence_mean,
+                        disagreement=disagreement_mean,
+                        validity={"frame_count": int(fusion_result.fused_confidence.shape[0])},
+                        metrics=metrics,
+                        artifact_refs={"semantic_fusion_path": str(fusion_path)},
+                    )
+                )
+
+            evidence_bus = EvidenceBus(evidence_records)
+            if emit_evidence_bus:
+                evidence_bus_path = trajectory_path.with_name(f"{_safe_episode_id(episode_id)}_evidence_bus_v1.json")
+                _write_json(evidence_bus_path, evidence_bus.to_dict())
+                summary["evidence_bus_path"] = str(evidence_bus_path)
+
+            if emit_belief_state:
+                semantic_tags = []
+                if teacher_trace is not None and isinstance(teacher_trace.metadata, dict):
+                    semantic_tags.extend(teacher_trace.metadata.get("semantic_tags", []) or [])
+                if vla_evidence is not None and isinstance(vla_evidence.provenance, dict):
+                    semantic_tags.extend(vla_evidence.provenance.get("semantic_tags", []) or [])
+                belief_state = belief_state_from_evidence_bus(
+                    evidence_bus=evidence_bus,
+                    episode_id=episode_id,
+                    timestamp=f"{episode_id}:semantic_fusion",
+                    semantic_tags=semantic_tags,
+                    artifact_refs={
+                        "semantic_fusion_path": str(fusion_path) if fusion_path is not None else "",
+                        "teacher_trace_path": str(teacher_trace_path) if teacher_trace_path is not None else "",
+                    },
+                    extra_state={
+                        "scene_ir_quality": float(episode.metrics.get("scene_ir_quality", 0.0)),
+                        "semantic_fusion_confidence_mean": confidence_mean,
+                    },
+                )
+                belief_state_path = trajectory_path.with_name(
+                    f"{_safe_episode_id(episode_id)}_belief_state_v1.json"
+                )
+                _write_json(belief_state_path, belief_state.to_dict())
+                summary["belief_state_path"] = str(belief_state_path)
+
+        if emit_semantic_fusion:
+            _update_episode_metadata(
+                trajectory_path.parent,
+                metrics,
+                fusion_path,
+                extra_fields={
+                    "evidence_bus_path": str(evidence_bus_path) if evidence_bus_path is not None else None,
+                    "belief_state_path": str(belief_state_path) if belief_state_path is not None else None,
+                },
+            )
 
         summaries.append(summary)
         episode.metrics = dict(episode.metrics, **metrics)

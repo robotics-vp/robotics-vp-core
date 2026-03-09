@@ -5,10 +5,14 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
+from src.evidence.teacher_trace import TeacherTrace, save_teacher_trace_json
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
 from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
 from src.sima2.semantic_primitive_extractor import extract_primitives_from_rollout
-from src.vla.semantic_evidence import build_vla_semantic_evidence_stub, save_vla_semantic_evidence_npz
+from src.vla.semantic_evidence import (
+    build_vla_semantic_evidence_payload,
+    save_vla_semantic_evidence_npz,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,7 @@ def label_rollouts_with_vla(
             semantic_tags=sorted(episode_tags),
             vla_action=vla_action,
             instruction=base_datapack.objective_hint or base_datapack.description or "",
+            vla_error_reason=vla_error_reason,
         )
 
         if derived_objective_hint is None:
@@ -162,15 +167,28 @@ def _write_vla_semantic_evidence_sidecar(
     semantic_tags: list[str],
     vla_action: Optional[Mapping[str, Any]],
     instruction: str,
+    vla_error_reason: Optional[str],
 ) -> None:
     try:
         trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
         scene_tracks = _extract_scene_tracks_payload(trajectory_payload)
-        evidence = build_vla_semantic_evidence_stub(
+        teacher_trace = TeacherTrace.from_vla_action(
+            episode_id=episode.metadata.episode_id,
+            instruction=instruction,
+            semantic_tags=semantic_tags,
+            action=vla_action,
+            availability_reason=vla_error_reason,
+        )
+        teacher_trace_path = episode.trajectory_path.with_name(
+            f"{episode.trajectory_path.stem}_teacher_trace_v1.json"
+        )
+        save_teacher_trace_json(teacher_trace_path, teacher_trace)
+        evidence = build_vla_semantic_evidence_payload(
             scene_tracks=scene_tracks,
             vla_payload=vla_action,
             semantic_tags=semantic_tags,
             instruction=instruction,
+            teacher_trace_ref=str(teacher_trace_path),
         )
         evidence_path = episode.trajectory_path.with_name(
             f"{episode.trajectory_path.stem}_vla_semantic_evidence_v1.npz"

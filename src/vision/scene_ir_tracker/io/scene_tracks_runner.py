@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -75,6 +76,7 @@ def run_scene_tracks(
     min_quality: float = 0.2,
     allow_low_quality: bool = False,
     quality_config: Optional[SceneTracksQualityConfig] = None,
+    use_stub_adapters: Optional[bool] = None,
 ) -> SceneTracksRunResult:
     """Run SceneIRTracker on a datapack and persist SceneTracks_v1."""
     if seed is not None:
@@ -87,9 +89,16 @@ def run_scene_tracks(
         seed=seed,
     )
 
+    if use_stub_adapters is None:
+        use_stub_adapters = str(os.environ.get("SCENE_TRACKS_USE_STUB_ADAPTERS", "1")).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+
     tracker_config = SceneIRTrackerConfig(
         device="cpu",
-        use_stub_adapters=True,
+        use_stub_adapters=use_stub_adapters,
         sam3d_objects_config={"stub_seed": seed},
         sam3d_body_config={"stub_seed": seed},
     )
@@ -128,6 +137,7 @@ def run_scene_tracks(
             "max_frames": max_frames,
             "camera": frames_contract.camera_name,
             "mode": mode,
+            "use_stub_adapters": use_stub_adapters,
         },
     }
     frame_meta["runner"] = runner_meta
