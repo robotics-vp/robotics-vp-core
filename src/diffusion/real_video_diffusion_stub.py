@@ -70,6 +70,57 @@ class VideoDiffusionStub:
         self.model_version = "stub-v1.0"
         self.proposal_counter = 0
 
+    def render_hypotheses(
+        self,
+        *,
+        episode_id: str,
+        media_refs: List[str],
+        semantic_tags: List[str],
+        objective_preset: str,
+        hypotheses: List[Dict[str, Any]],
+        energy_profile: str = "BASE",
+        econ_context: Optional[Dict[str, float]] = None,
+        constraint_set: Optional[Dict[str, Any]] = None,
+    ) -> List[DiffusionProposal]:
+        """Render already-scored hypotheses into diffusion-style proposals."""
+        if econ_context is None:
+            econ_context = {
+                "wage_human": 18.0,
+                "energy_price_kWh": 0.12,
+                "customer_segment": "balanced",
+            }
+
+        proposals: List[DiffusionProposal] = []
+        for hypothesis in hypotheses:
+            self.proposal_counter += 1
+            scores = hypothesis.get("scores", {}) if isinstance(hypothesis, dict) else {}
+            render_intent = hypothesis.get("render_intent", {}) if isinstance(hypothesis, dict) else {}
+            rationale = str(hypothesis.get("rationale", "Governed geometry-first hypothesis"))
+            action_conditioning = hypothesis.get("action_conditioning", {}) if isinstance(hypothesis, dict) else {}
+            mode = str(hypothesis.get("mode", "geometry_guarded_continuation"))
+            proposal = DiffusionProposal(
+                proposal_id=f"diff_prop_{self.proposal_counter}_{int(time.time())}",
+                episode_id=episode_id,
+                media_refs=media_refs,
+                augmentation_type=mode,
+                semantic_tags=semantic_tags,
+                objective_preset=objective_preset,
+                energy_profile=energy_profile,
+                econ_context=econ_context,
+                confidence=float(scores.get("plausibility", 0.5)),
+                estimated_novelty=float(scores.get("novelty", 0.4)),
+                rationale=rationale,
+                timestamp=time.time(),
+                constraint_set={
+                    **(constraint_set or {}),
+                    "render_intent": render_intent,
+                    "action_conditioning": action_conditioning,
+                    "hypothesis_id": hypothesis.get("hypothesis_id") if isinstance(hypothesis, dict) else None,
+                },
+            )
+            proposals.append(proposal)
+        return proposals
+
     def propose_augmented_clips(
         self,
         episode_id: str,
@@ -79,6 +130,7 @@ class VideoDiffusionStub:
         energy_profile: str = "BASE",
         econ_context: Optional[Dict[str, float]] = None,
         constraint_set: Optional[Dict[str, Any]] = None,
+        hypotheses: Optional[List[Dict[str, Any]]] = None,
         num_proposals: int = 3,
     ) -> List[DiffusionProposal]:
         """
@@ -105,6 +157,18 @@ class VideoDiffusionStub:
                 "energy_price_kWh": 0.12,
                 "customer_segment": "balanced",
             }
+
+        if hypotheses:
+            return self.render_hypotheses(
+                episode_id=episode_id,
+                media_refs=media_refs,
+                semantic_tags=semantic_tags,
+                objective_preset=objective_preset,
+                hypotheses=hypotheses[:num_proposals],
+                energy_profile=energy_profile,
+                econ_context=econ_context,
+                constraint_set=constraint_set,
+            )
 
         proposals = []
 

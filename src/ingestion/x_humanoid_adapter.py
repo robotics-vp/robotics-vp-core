@@ -15,10 +15,10 @@ from src.embodiment.config import EmbodimentConfig
 from src.embodiment.runner import run_embodiment_for_rollouts
 from src.motor_backend.rollout_capture import EpisodeMetadata, EpisodeRollout, RolloutBundle
 from src.orchestrator.semantic_fusion_runner import run_semantic_fusion_for_rollouts
-from src.vision.map_first_supervision.node import MapFirstSupervisionNode
 from src.vision.map_first_supervision.config import MapFirstSupervisionConfig
+from src.vision.map_first_supervision.node import MapFirstPseudoSupervisionNode
 from src.vision.scene_ir_tracker.io.scene_tracks_runner import run_scene_tracks
-from src.vla.semantic_evidence import build_vla_semantic_evidence_stub, save_vla_semantic_evidence_npz
+from src.vla.semantic_evidence import build_vla_semantic_evidence_payload, save_vla_semantic_evidence_npz
 
 
 @dataclass
@@ -35,6 +35,7 @@ class XHumanoidIngestConfig:
     ontology_root: Path = Path("data/ontology")
     camera: str = "front"
     scene_tracks_mode: str = "rgb"
+    scene_tracks_use_stub_adapters: Optional[bool] = None
     allow_low_quality: bool = True
     min_scene_tracks_quality: float = 0.2
     semantic_fusion_emit: bool = True
@@ -98,6 +99,7 @@ class XHumanoidIngestAdapter:
                 ontology_root=cfg.ontology_root,
                 min_quality=cfg.min_scene_tracks_quality,
                 allow_low_quality=cfg.allow_low_quality,
+                use_stub_adapters=cfg.scene_tracks_use_stub_adapters,
             )
             scene_tracks_path = result.scene_tracks_path
         except Exception:
@@ -111,7 +113,7 @@ class XHumanoidIngestAdapter:
             map_first_path = episode_dir / "map_first_supervision_v1.npz"
             try:
                 scene_tracks = dict(np.load(scene_tracks_path, allow_pickle=False))
-                node = MapFirstSupervisionNode(MapFirstSupervisionConfig())
+                node = MapFirstPseudoSupervisionNode(MapFirstSupervisionConfig())
                 node.run(scene_tracks, episode_assets=None, output_path=str(map_first_path))
             except Exception:
                 map_first_path = None
@@ -119,7 +121,7 @@ class XHumanoidIngestAdapter:
         if cfg.vla_enabled and scene_tracks_path is not None:
             try:
                 scene_tracks = dict(np.load(scene_tracks_path, allow_pickle=False))
-                evidence = build_vla_semantic_evidence_stub(
+                evidence = build_vla_semantic_evidence_payload(
                     scene_tracks=scene_tracks,
                     semantic_tags=list(clip.metadata.get("semantic_tags", [])),
                     instruction=str(clip.metadata.get("instruction", "")),
@@ -151,7 +153,8 @@ class XHumanoidIngestAdapter:
             )
             summaries = run_semantic_fusion_for_rollouts(bundle, emit_semantic_fusion=True)
             if summaries:
-                semantic_fusion_path = Path(summaries[0].get("semantic_fusion_path")) if summaries[0].get("semantic_fusion_path") else None
+                fusion_value = summaries[0].get("semantic_fusion_path")
+                semantic_fusion_path = Path(fusion_value) if isinstance(fusion_value, str) and fusion_value else None
 
         embodiment_summary = None
         if cfg.embodiment_enabled:
@@ -256,7 +259,7 @@ class XHumanoidIngestAdapter:
             "episode_id": episode_id,
             "scene_tracks_path": str(scene_tracks_path),
         }
-        np.savez_compressed(trajectory_path, trajectory=payload)
+        np.savez_compressed(trajectory_path, trajectory=np.array(payload, dtype=object))
 
     def _update_metadata_with_gate(
         self,
@@ -294,7 +297,11 @@ class XHumanoidIngestAdapter:
             mode="trust_econ_lambda",
             lambda_target=cfg.lambda_target,
         )
-        quality = float(weights.get("quality", np.array([0.0], dtype=np.float32))[0])
+        quality_values = np.asarray(
+            weights.get("quality", np.array([0.0], dtype=np.float32)),
+            dtype=np.float32,
+        ).reshape(-1)
+        quality = float(quality_values[0]) if quality_values.size > 0 else 0.0
         w_embodiment = float(summary.get("w_embodiment", 1.0)) if summary else 1.0
         admission_score = quality * w_embodiment
         override_candidate = bool(summary.get("trust_override_candidate", False)) if summary else False

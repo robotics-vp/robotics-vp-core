@@ -14,17 +14,23 @@ No GPU, no actual generation - just structural correctness.
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
-from dataclasses import asdict
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import numpy as np
+
+if __package__ is None or __package__ == "":
+    REPO_ROOT = Path(__file__).resolve().parents[1]
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
 
 from src.diffusion.real_video_diffusion_stub import (
     VideoDiffusionStub,
     DiffusionProposal,
 )
+from src.evidence import EvidenceBus, EvidenceRecord, belief_state_from_evidence_bus
 from src.vla.transformer_planner import VLATransformerPlanner, VLAInput, VLAPlan
 from src.valuation.datapack_schema import (
     DataPackMeta,
@@ -33,83 +39,306 @@ from src.valuation.datapack_schema import (
     GuidanceProfile,
     AttributionProfile,
 )
-from src.orchestrator.diffusion_requests import (
-    DiffusionPromptSpec,
-    prompt_to_diffusion_stub_input,
-)
-from src.hrl.skills import SkillID
 from src.regal.gen_plausibility import RegalGenPlausibilityNode
 from src.regal.base import RegalDecision
+from src.world_model import GovernedVideoWorldModel
 
 
-def simulate_real_video_reference() -> Dict[str, Any]:
+SEMANTIC_KEYWORDS = {
+    "drawer": ["drawer", "handle", "grasp", "open"],
+    "vase": ["vase", "fragile", "avoid_collision", "safety"],
+    "safety": ["safety", "avoid_collision"],
+    "energy": ["energy_efficient"],
+    "recover": ["error_recovery"],
+    "error": ["error_recovery"],
+    "precision": ["high_precision", "careful"],
+    "fast": ["high_speed"],
+}
+
+
+def simulate_real_video_reference(index: int = 0) -> Dict[str, Any]:
     """
-    Simulate a real video demonstration reference.
+    Deterministic fallback when no real video manifest is supplied.
 
-    In production, this would be actual video files from robot operation.
+    In production, callers should pass a manifest of real video references.
     """
-    episode_id = f"real_demo_{int(time.time())}_{np.random.randint(1000)}"
+    episode_id = f"real_demo_sim_{index:03d}"
+    duration_s = 12.0 + 2.5 * float(index % 4)
+    success = (index % 5) != 4
+    task_type = "drawer_vase" if index % 2 == 0 else "workcell_pick_place"
 
     return {
         "episode_id": episode_id,
         "video_path": f"/data/demonstrations/{episode_id}.mp4",
         "depth_path": f"/data/demonstrations/{episode_id}_depth.npy",
-        "timestamp": time.time(),
-        "task_type": "drawer_vase",
+        "timestamp": float(1_700_000_000 + index),
+        "task_type": task_type,
         "demonstrator": "human_expert",
+        "source_type": "simulated_reference",
+        "instruction": (
+            "Open the drawer without hitting the vase."
+            if task_type == "drawer_vase"
+            else "Move the part safely across the bench."
+        ),
         "metadata": {
-            "duration_s": np.random.uniform(10, 30),
-            "success": np.random.random() > 0.2,
-            "num_frames": np.random.randint(300, 900),
+            "duration_s": duration_s,
+            "success": success,
+            "num_frames": int(duration_s * 30.0),
         },
     }
 
 
+def _normalize_video_reference(record: Dict[str, Any], index: int) -> Dict[str, Any]:
+    metadata = record.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    episode_id = str(record.get("episode_id") or f"video_manifest_{index:03d}")
+    video_path = str(record.get("video_path") or record.get("rgb_video_path") or "")
+    task_type = str(record.get("task_type") or metadata.get("task_type") or "drawer_vase")
+    instruction = str(record.get("instruction") or metadata.get("instruction") or "")
+    normalized = {
+        "episode_id": episode_id,
+        "video_path": video_path,
+        "depth_path": record.get("depth_path"),
+        "timestamp": float(record.get("timestamp", time.time())),
+        "task_type": task_type,
+        "demonstrator": str(record.get("demonstrator", "unknown")),
+        "instruction": instruction,
+        "source_type": str(record.get("source_type", "video_manifest")),
+        "metadata": metadata,
+    }
+    if "semantic_tags" in record and isinstance(record["semantic_tags"], list):
+        normalized["metadata"] = dict(metadata, semantic_tags=list(record["semantic_tags"]))
+    return normalized
+
+
+def load_video_references(num_videos: int, manifest_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    if manifest_path is None:
+        return [simulate_real_video_reference(index=i) for i in range(num_videos)]
+
+    path = Path(manifest_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Video manifest not found: {path}")
+    if path.suffix.lower() == ".jsonl":
+        raw_records = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    else:
+        payload = json.loads(path.read_text())
+        if isinstance(payload, list):
+            raw_records = payload
+        elif isinstance(payload, dict):
+            raw_records = payload.get("videos", [])
+        else:
+            raw_records = []
+
+    references = [
+        _normalize_video_reference(record, index=i)
+        for i, record in enumerate(raw_records[:num_videos])
+        if isinstance(record, dict)
+    ]
+    if len(references) < num_videos:
+        references.extend(
+            simulate_real_video_reference(index=len(references) + i)
+            for i in range(num_videos - len(references))
+        )
+    return references[:num_videos]
+
+
+def _tokenize_video_reference(video_ref: Dict[str, Any]) -> List[str]:
+    fields = [
+        str(video_ref.get("task_type", "")),
+        str(video_ref.get("instruction", "")),
+        str(video_ref.get("video_path", "")),
+        str(video_ref.get("demonstrator", "")),
+    ]
+    metadata = video_ref.get("metadata", {})
+    if isinstance(metadata, dict):
+        fields.extend(str(value) for value in metadata.values())
+        fields.extend(str(tag) for tag in metadata.get("semantic_tags", []) or [])
+    tokens: List[str] = []
+    for field in fields:
+        cleaned = field.replace("/", " ").replace("_", " ").replace("-", " ").lower()
+        tokens.extend(part for part in cleaned.split() if part)
+    return tokens
+
+
 def extract_semantic_tags_from_video(video_ref: Dict[str, Any]) -> List[str]:
     """
-    Extract semantic tags from video (stub).
+    Extract semantic tags from video metadata and filenames.
 
-    In production, this would use a vision model (DINO, CLIP, etc.)
-    to extract semantic information from the video.
+    This is still lightweight, but it is deterministic and manifest-aware
+    rather than random.
     """
-    # Simulated tag extraction based on task type
-    base_tags = ["robot_arm", "gripper", "workspace"]
+    base_tags = {"robot_arm", "gripper", "workspace"}
+    tokens = _tokenize_video_reference(video_ref)
+    for token in tokens:
+        for key, tags in SEMANTIC_KEYWORDS.items():
+            if key in token:
+                base_tags.update(tags)
 
-    if "drawer" in video_ref.get("task_type", ""):
-        base_tags.extend(["drawer", "handle", "grasp", "open"])
+    metadata = video_ref.get("metadata", {})
+    if isinstance(metadata, dict):
+        base_tags.update(str(tag) for tag in metadata.get("semantic_tags", []) or [])
+        if bool(metadata.get("success")) is False:
+            base_tags.add("error_recovery")
+        duration_s = float(metadata.get("duration_s", 0.0) or 0.0)
+        if duration_s >= 20.0:
+            base_tags.add("long_horizon")
+        if duration_s <= 8.0:
+            base_tags.add("short_horizon")
 
-    if "vase" in video_ref.get("task_type", ""):
-        base_tags.extend(["vase", "fragile", "avoid_collision", "safety"])
+    return sorted(base_tags)
 
-    # Random additional tags
-    possible_tags = [
-        "slow_motion", "high_precision", "energy_efficient", "high_speed",
-        "careful", "error_recovery", "multiple_attempts",
-    ]
-    num_extra = np.random.randint(1, 4)
-    base_tags.extend(np.random.choice(possible_tags, size=num_extra, replace=False).tolist())
 
-    return base_tags
+def build_video_evidence(
+    video_ref: Dict[str, Any],
+    semantic_tags: List[str],
+    objective_preset: str,
+) -> tuple[EvidenceBus, Any]:
+    metadata = video_ref.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    path_exists = Path(str(video_ref.get("video_path", ""))).exists()
+    reference_conf = 0.85 if path_exists else 0.35
+    semantic_conf = min(0.95, 0.35 + 0.04 * float(len(semantic_tags)))
+    disagreement = 0.0 if metadata.get("success", True) else 0.2
+
+    evidence_bus = EvidenceBus(
+        [
+            EvidenceRecord.from_components(
+                episode_id=str(video_ref["episode_id"]),
+                timestamp=str(video_ref.get("timestamp", "")),
+                source=str(video_ref.get("source_type", "video_reference")),
+                kind="video_reference",
+                confidence=reference_conf,
+                disagreement=0.0,
+                metrics={
+                    "video_path_exists": 1.0 if path_exists else 0.0,
+                    "duration_s": float(metadata.get("duration_s", 0.0) or 0.0),
+                },
+                payload={"task_type": video_ref.get("task_type", "")},
+                artifact_refs={"video_path": str(video_ref.get("video_path", ""))},
+            ),
+            EvidenceRecord.from_components(
+                episode_id=str(video_ref["episode_id"]),
+                timestamp=str(video_ref.get("timestamp", "")),
+                source="stage1_semantic_extractor",
+                kind="semantic_tags",
+                confidence=semantic_conf,
+                disagreement=disagreement,
+                metrics={
+                    "semantic_tag_count": float(len(semantic_tags)),
+                    "teacher_confidence_mean": semantic_conf if "human" in str(video_ref.get("demonstrator", "")).lower() else 0.0,
+                },
+                payload={"semantic_tags": semantic_tags, "objective_preset": objective_preset},
+                artifact_refs={"video_path": str(video_ref.get("video_path", ""))},
+            ),
+        ]
+    )
+    belief_state = belief_state_from_evidence_bus(
+        evidence_bus=evidence_bus,
+        episode_id=str(video_ref["episode_id"]),
+        timestamp=str(video_ref.get("timestamp", "")),
+        semantic_tags=semantic_tags,
+        extra_state={
+            "geometry_quality": reference_conf,
+            "semantic_quality": semantic_conf,
+        },
+        metadata={"source_type": video_ref.get("source_type", "video_reference")},
+        artifact_refs={"video_path": str(video_ref.get("video_path", ""))},
+    )
+    return evidence_bus, belief_state
+
+
+def build_stage1_constraint_set(
+    semantic_tags: List[str],
+    objective_preset: str,
+    belief_state: Any,
+) -> Dict[str, Any]:
+    hard_bounds: Dict[str, Any] = {}
+    if {"fragile", "avoid_collision", "safety"} & set(semantic_tags):
+        hard_bounds["clearance_m"] = {"min": 0.05}
+        hard_bounds["semantic_disagreement"] = {"max": 0.3}
+    if objective_preset == "energy_saver":
+        hard_bounds["energy_profile"] = {"target": 0.5}
+    return {
+        "hard_bounds": hard_bounds,
+        "belief_state_id": getattr(belief_state, "belief_id", ""),
+        "evidence_coverage": getattr(belief_state, "state_vector", {}).get("evidence_coverage", 0.0),
+    }
+
+
+def write_stage1_sidecars(
+    output_dir: str,
+    video_ref: Dict[str, Any],
+    evidence_bus: EvidenceBus,
+    belief_state: Any,
+    snapshot: Any,
+    hypotheses: List[Any],
+) -> Dict[str, str]:
+    sidecar_dir = Path(output_dir) / "governed_video"
+    sidecar_dir.mkdir(parents=True, exist_ok=True)
+    episode_id = str(video_ref["episode_id"])
+    evidence_bus_path = sidecar_dir / f"{episode_id}_evidence_bus_v1.json"
+    belief_state_path = sidecar_dir / f"{episode_id}_belief_state_v1.json"
+    snapshot_path = sidecar_dir / f"{episode_id}_video_state_v1.json"
+    hypotheses_path = sidecar_dir / f"{episode_id}_hypotheses_v1.json"
+    evidence_bus_path.write_text(json.dumps(evidence_bus.to_dict(), indent=2))
+    belief_state_path.write_text(json.dumps(belief_state.to_dict(), indent=2))
+    snapshot_path.write_text(json.dumps(snapshot.to_dict(), indent=2))
+    hypotheses_path.write_text(
+        json.dumps(
+            {
+                "episode_id": episode_id,
+                "hypotheses": [hypothesis.to_dict() for hypothesis in hypotheses],
+            },
+            indent=2,
+        )
+    )
+    return {
+        "evidence_bus_path": str(evidence_bus_path),
+        "belief_state_path": str(belief_state_path),
+        "video_state_path": str(snapshot_path),
+        "hypotheses_path": str(hypotheses_path),
+    }
 
 
 def generate_diffusion_proposals(
     video_ref: Dict[str, Any],
     semantic_tags: List[str],
     diffusion_stub: VideoDiffusionStub,
+    world_model: GovernedVideoWorldModel,
+    belief_state: Any,
     objective_preset: str = "balanced",
     num_proposals: int = 3,
-) -> List[DiffusionProposal]:
+) -> tuple[List[DiffusionProposal], Any, List[Any], Dict[str, Any]]:
     """
-    Generate augmented video clip proposals using diffusion stub.
+    Generate governed video hypotheses and render them into proposals.
     """
+    constraint_set = build_stage1_constraint_set(semantic_tags, objective_preset, belief_state)
+    snapshot = world_model.build_state_snapshot(
+        episode_id=str(video_ref["episode_id"]),
+        timestamp=str(video_ref.get("timestamp", "")),
+        belief_state=belief_state,
+        objective_preset=objective_preset,
+        semantic_tags=semantic_tags,
+        media_refs=[str(video_ref["video_path"])],
+        artifact_refs={"video_path": str(video_ref["video_path"])},
+        metadata={"task_type": video_ref.get("task_type", "")},
+    )
+    hypotheses = world_model.propose_hypotheses(
+        snapshot=snapshot,
+        constraint_set=constraint_set,
+    )
     proposals = diffusion_stub.propose_augmented_clips(
         episode_id=video_ref["episode_id"],
         media_refs=[video_ref["video_path"]],
         semantic_tags=semantic_tags,
         objective_preset=objective_preset,
+        constraint_set=constraint_set,
+        hypotheses=[hypothesis.to_dict() for hypothesis in hypotheses],
         num_proposals=num_proposals,
     )
-    return proposals
+    return proposals, snapshot, hypotheses, constraint_set
 
 
 def extract_vla_plan_from_proposal(
@@ -273,6 +502,7 @@ def run_stage1_pipeline(
     proposals_per_video: int = 3,
     objective_preset: str = "balanced",
     output_dir: str = "results/stage1_pipeline",
+    video_manifest: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Run full Stage 1 pipeline.
@@ -286,39 +516,64 @@ def run_stage1_pipeline(
     diffusion_stub = VideoDiffusionStub()
     vla_planner = VLATransformerPlanner()
     plausibility_node = RegalGenPlausibilityNode()
+    world_model = GovernedVideoWorldModel()
 
     all_datapacks = []
     all_proposals = []
     all_plans = []
     pipeline_log = []
+    generated_proposal_count = 0
+    video_refs = load_video_references(num_videos=num_videos, manifest_path=video_manifest)
 
-    print(f"Running Stage 1 pipeline with {num_videos} videos...")
+    print(f"Running Stage 1 pipeline with {len(video_refs)} videos...")
 
-    for i in range(num_videos):
-        print(f"\n--- Video {i+1}/{num_videos} ---")
+    for i, video_ref in enumerate(video_refs):
+        print(f"\n--- Video {i+1}/{len(video_refs)} ---")
 
-        # Step 1: Simulate real video reference
-        video_ref = simulate_real_video_reference()
+        # Step 1: Load real or manifest-backed video reference
         print(f"  Video: {video_ref['episode_id']}")
 
         # Step 2: Extract semantic tags
         semantic_tags = extract_semantic_tags_from_video(video_ref)
         print(f"  Tags: {semantic_tags[:5]}...")
 
-        # Step 3: Generate diffusion proposals
-        proposals = generate_diffusion_proposals(
-            video_ref, semantic_tags, diffusion_stub, objective_preset, proposals_per_video
+        # Step 3: Build evidence and belief state
+        evidence_bus, belief_state = build_video_evidence(video_ref, semantic_tags, objective_preset)
+
+        # Step 4: Generate governed hypotheses, then render proposals
+        proposals, snapshot, hypotheses, constraint_set = generate_diffusion_proposals(
+            video_ref,
+            semantic_tags,
+            diffusion_stub,
+            world_model,
+            belief_state,
+            objective_preset,
+            proposals_per_video,
         )
+        generated_proposal_count += len(proposals)
+        sidecar_paths = write_stage1_sidecars(output_dir, video_ref, evidence_bus, belief_state, snapshot, hypotheses)
         print(f"  Generated {len(proposals)} diffusion proposals")
 
-        # Step 4: For each proposal, generate VLA plan and create datapack
+        # Step 5: For each proposal, generate VLA plan and create datapack
         for j, proposal in enumerate(proposals):
             print(f"    Proposal {j+1}: {proposal.augmentation_type}")
 
             plausibility_context = {
-                "map_first_quality_score": max(0.0, min(1.0, proposal.estimated_novelty)),
-                "semantic_disagreement_vla_vs_map": max(0.0, min(1.0, 1.0 - proposal.confidence)),
-                "vla_evidence_coverage": max(0.0, min(1.0, len(semantic_tags) / 12.0)),
+                "map_first_quality_score": max(
+                    0.0,
+                    min(1.0, belief_state.state_vector.get("geometry_quality", proposal.confidence)),
+                ),
+                "semantic_disagreement_vla_vs_map": max(
+                    0.0,
+                    min(
+                        1.0,
+                        belief_state.state_vector.get("evidence_disagreement_mean", 1.0 - proposal.confidence),
+                    ),
+                ),
+                "vla_evidence_coverage": max(
+                    0.0,
+                    min(1.0, belief_state.state_vector.get("evidence_coverage", len(semantic_tags) / 12.0)),
+                ),
             }
             plausibility_report = plausibility_node.evaluate(plausibility_context)
             if plausibility_report.decision == RegalDecision.BLOCK:
@@ -333,6 +588,8 @@ def run_stage1_pipeline(
                         "augmentation_type": proposal.augmentation_type,
                         "plausibility_gate": plausibility_report.to_dict(),
                         "blocked": True,
+                        "video_state_id": snapshot.state_id,
+                        **sidecar_paths,
                     }
                 )
                 continue
@@ -347,6 +604,9 @@ def run_stage1_pipeline(
             )
             datapack.regal_annotations = {
                 "gen_plausibility": plausibility_report.to_dict(),
+                "governed_video_state_id": snapshot.state_id,
+                "governed_video_constraint_set": constraint_set,
+                "governed_video_hypothesis_mode": proposal.augmentation_type,
             }
             print(f"      DataPack: {datapack.pack_id}")
             print(f"      Tier: {datapack.attribution.tier}, Trust: {datapack.attribution.trust_score:.3f}")
@@ -367,6 +627,9 @@ def run_stage1_pipeline(
                 "tier": datapack.attribution.tier,
                 "trust_score": datapack.attribution.trust_score,
                 "estimated_novelty": proposal.estimated_novelty,
+                "video_state_id": snapshot.state_id,
+                "constraint_set": constraint_set,
+                **sidecar_paths,
             })
 
     # Save outputs
@@ -404,19 +667,21 @@ def run_stage1_pipeline(
     avg_novelty = 0.0
     augmentation_types = {}
 
-    for entry in pipeline_log:
+    completed_entries = [entry for entry in pipeline_log if not entry.get("blocked")]
+    for entry in completed_entries:
         tier_counts[entry["tier"]] += 1
         avg_trust += entry["trust_score"]
         avg_novelty += entry["estimated_novelty"]
         aug_type = entry["augmentation_type"]
         augmentation_types[aug_type] = augmentation_types.get(aug_type, 0) + 1
 
-    avg_trust /= len(pipeline_log)
-    avg_novelty /= len(pipeline_log)
+    if completed_entries:
+        avg_trust /= len(completed_entries)
+        avg_novelty /= len(completed_entries)
 
     stats = {
-        "total_videos": num_videos,
-        "total_proposals": len(all_proposals),
+        "total_videos": len(video_refs),
+        "total_proposals": generated_proposal_count,
         "total_datapacks": len(all_datapacks),
         "tier_distribution": tier_counts,
         "avg_trust_score": avg_trust,
@@ -440,6 +705,7 @@ def main():
     parser.add_argument("--objective-preset", type=str, default="balanced",
                         choices=["balanced", "throughput", "safety", "energy_saver"])
     parser.add_argument("--output-dir", type=str, default="results/stage1_pipeline")
+    parser.add_argument("--video-manifest", type=str, default=None, help="Optional JSON/JSONL manifest of real video references")
     args = parser.parse_args()
 
     print("=" * 70)
@@ -455,6 +721,7 @@ def main():
         proposals_per_video=args.proposals_per_video,
         objective_preset=args.objective_preset,
         output_dir=args.output_dir,
+        video_manifest=args.video_manifest,
     )
 
     print("\n" + "=" * 70)

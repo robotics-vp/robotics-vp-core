@@ -98,6 +98,9 @@ class OpenVLAController:
                 "dyaw": 0.0,
                 "gripper": 0.0,
                 "vla_available": False,
+                "confidence": 0.0,
+                "source": "openvla_stub",
+                "fallback_mode": "zero_action",
                 "raw_action": [0.0] * 7,
             }
         else:
@@ -120,6 +123,9 @@ class OpenVLAController:
                 "dyaw": float(clipped[5]),
                 "gripper": float(clipped[6]),
                 "vla_available": True,
+                "confidence": 0.35,
+                "source": self.cfg.model_name,
+                "fallback_mode": "teacher_available",
                 "raw_action": raw,
             }
 

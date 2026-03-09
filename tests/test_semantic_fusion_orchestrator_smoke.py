@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import numpy as np
 
+from src.evidence.teacher_trace import TeacherTrace, save_teacher_trace_json
 from src.motor_backend.rollout_capture import EpisodeMetadata, EpisodeRollout, RolloutBundle
 from src.orchestrator.semantic_fusion_runner import run_semantic_fusion_for_rollouts
 
@@ -47,6 +49,16 @@ def test_semantic_fusion_runner_smoke(tmp_path) -> None:
     }
     vla_path = episode_dir / "trajectory_vla_semantic_evidence_v1.npz"
     np.savez_compressed(vla_path, **vla_payload)
+    teacher_trace_path = episode_dir / "trajectory_teacher_trace_v1.json"
+    save_teacher_trace_json(
+        teacher_trace_path,
+        TeacherTrace.from_vla_action(
+            episode_id="episode_test",
+            instruction="Open the drawer safely.",
+            semantic_tags=["drawer", "fragile"],
+            action={"vla_available": True, "confidence": 0.4},
+        ),
+    )
 
     metadata = EpisodeMetadata(
         episode_id="episode_test",
@@ -62,7 +74,11 @@ def test_semantic_fusion_runner_smoke(tmp_path) -> None:
     assert len(summaries) == 1
 
     fusion_path = episode_dir / "episode_test_semantic_fusion_v1.npz"
+    evidence_bus_path = episode_dir / "episode_test_evidence_bus_v1.json"
+    belief_state_path = episode_dir / "episode_test_belief_state_v1.json"
     assert fusion_path.exists()
+    assert evidence_bus_path.exists()
+    assert belief_state_path.exists()
     data = dict(np.load(fusion_path, allow_pickle=False))
     prefix = "semantic_fusion_v1/"
 
@@ -73,3 +89,6 @@ def test_semantic_fusion_runner_smoke(tmp_path) -> None:
     fused = data[f"{prefix}fused_class_probs"]
     assert fused.shape == (T, K, C)
     assert np.allclose(np.sum(fused, axis=-1), 1.0, atol=1e-4)
+
+    evidence_payload = json.loads(evidence_bus_path.read_text())
+    assert any(record["kind"] == "teacher_trace" for record in evidence_payload["records"])

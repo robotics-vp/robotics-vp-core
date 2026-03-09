@@ -49,6 +49,18 @@ def _constraint_payload(constraint_set: ConstraintSet | Mapping[str, Any]) -> Di
     return _mapping(constraint_set)
 
 
+def _schema_ref_payload(schema: Any) -> "SchemaRef":
+    if isinstance(schema, SchemaRef):
+        return schema
+    if hasattr(schema, "to_schema_ref") and callable(schema.to_schema_ref):
+        resolved = schema.to_schema_ref()
+        if isinstance(resolved, SchemaRef):
+            return resolved
+    if isinstance(schema, Mapping):
+        return SchemaRef.from_dict(schema)
+    raise TypeError("Expected SchemaRef-compatible object")
+
+
 @dataclass(frozen=True)
 class SchemaRef:
     """Canonical reference to an action, observation, or evidence schema."""
@@ -191,35 +203,46 @@ class RuntimePacket:
         packet_id: Optional[str] = None,
         version: str = "runtime_packet_v1",
     ) -> "RuntimePacket":
-        payload = {
+        resolved_run_id = str(run_id)
+        resolved_episode_id = str(episode_id)
+        resolved_timestamp = str(timestamp)
+        resolved_objective_tensor = _objective_payload(objective_tensor)
+        resolved_econ_tensor = _econ_payload(econ_tensor)
+        resolved_constraint_set = _constraint_payload(constraint_set)
+        resolved_semantic_evidence = _mapping(semantic_evidence)
+        resolved_uncertainty = _float_mapping(uncertainty)
+        resolved_provenance = _mapping(provenance)
+        resolved_metadata = _mapping(metadata)
+        resolved_version = str(version)
+        payload: Dict[str, Any] = {
             "contract": contract.to_dict(),
-            "run_id": run_id,
-            "episode_id": episode_id,
-            "timestamp": timestamp,
-            "objective_tensor": _objective_payload(objective_tensor),
-            "econ_tensor": _econ_payload(econ_tensor),
-            "constraint_set": _constraint_payload(constraint_set),
-            "semantic_evidence": _mapping(semantic_evidence),
-            "uncertainty": _float_mapping(uncertainty),
-            "provenance": _mapping(provenance),
-            "metadata": _mapping(metadata),
-            "version": version,
+            "run_id": resolved_run_id,
+            "episode_id": resolved_episode_id,
+            "timestamp": resolved_timestamp,
+            "objective_tensor": resolved_objective_tensor,
+            "econ_tensor": resolved_econ_tensor,
+            "constraint_set": resolved_constraint_set,
+            "semantic_evidence": resolved_semantic_evidence,
+            "uncertainty": resolved_uncertainty,
+            "provenance": resolved_provenance,
+            "metadata": resolved_metadata,
+            "version": resolved_version,
         }
         resolved_packet_id = packet_id or f"runtime_{sha256_json(payload)[:16]}"
         return cls(
             packet_id=resolved_packet_id,
             contract=contract,
-            run_id=str(run_id),
-            episode_id=str(episode_id),
-            timestamp=str(timestamp),
-            objective_tensor=payload["objective_tensor"],
-            econ_tensor=payload["econ_tensor"],
-            constraint_set=payload["constraint_set"],
-            semantic_evidence=payload["semantic_evidence"],
-            uncertainty=payload["uncertainty"],
-            provenance=payload["provenance"],
-            metadata=payload["metadata"],
-            version=version,
+            run_id=resolved_run_id,
+            episode_id=resolved_episode_id,
+            timestamp=resolved_timestamp,
+            objective_tensor=resolved_objective_tensor,
+            econ_tensor=resolved_econ_tensor,
+            constraint_set=resolved_constraint_set,
+            semantic_evidence=resolved_semantic_evidence,
+            uncertainty=resolved_uncertainty,
+            provenance=resolved_provenance,
+            metadata=resolved_metadata,
+            version=resolved_version,
         )
 
     def summary(self) -> Dict[str, Any]:
@@ -279,8 +302,8 @@ def build_contract_packet(
     objective_profile_id: str,
     embodiment_id: str,
     source_domain: str,
-    observation_schema: SchemaRef,
-    action_schema: SchemaRef,
+    observation_schema: Any,
+    action_schema: Any,
     objective_tensor: ObjectiveTensor | Mapping[str, Any],
     econ_tensor: EconTensor | Mapping[str, Any],
     constraint_set: ConstraintSet | Mapping[str, Any],
@@ -297,8 +320,8 @@ def build_contract_packet(
         objective_profile_id=str(objective_profile_id),
         embodiment_id=str(embodiment_id),
         source_domain=str(source_domain),
-        observation_schema=observation_schema,
-        action_schema=action_schema,
+        observation_schema=_schema_ref_payload(observation_schema),
+        action_schema=_schema_ref_payload(action_schema),
         objective_schema_id=str(
             objective_payload.get("schema_id")
             or objective_payload.get("schema", {}).get("schema_id", "")
@@ -319,8 +342,8 @@ def runtime_packet_from_record(
     objective_tensor: ObjectiveTensor | Mapping[str, Any],
     econ_tensor: EconTensor | Mapping[str, Any],
     constraint_set: ConstraintSet | Mapping[str, Any],
-    observation_schema: SchemaRef,
-    action_schema: SchemaRef,
+    observation_schema: Any,
+    action_schema: Any,
     semantic_evidence: Optional[Mapping[str, Any]] = None,
     uncertainty: Optional[Mapping[str, Any]] = None,
     provenance: Optional[Mapping[str, Any]] = None,
