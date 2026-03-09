@@ -5,13 +5,20 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
-from src.evidence.teacher_trace import TeacherTrace, save_teacher_trace_json
+from src.evidence.teacher_trace import TeacherStep, TeacherTrace, save_teacher_trace_json
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
 from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
 from src.sima2.semantic_primitive_extractor import extract_primitives_from_rollout
 from src.vla.semantic_evidence import (
     build_vla_semantic_evidence_payload,
     save_vla_semantic_evidence_npz,
+)
+from src.vla.teacher_runtime import (
+    OpenVLATeacherRuntime,
+    TeacherActionEnvelope,
+    TeacherAdapterContract,
+    save_teacher_action_envelope_json,
+    save_teacher_adapter_contract_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,13 +45,28 @@ def label_rollouts_with_vla(
     vla_tags: set[str] = set()
 
     openvla_enabled = _openvla_enabled()
-    controller = None
-    vla_error_reason = None
+    teacher_runtime = None
+    teacher_contract = _fallback_teacher_contract(
+        enabled=openvla_enabled,
+        availability_reason="openvla_disabled" if not openvla_enabled else "",
+    )
+    vla_error_reason = "openvla_disabled" if not openvla_enabled else None
     if openvla_enabled:
         try:
-            controller, vla_error_reason = _get_openvla_controller()
+            teacher_runtime, vla_error_reason = _get_openvla_teacher_runtime()
+            if teacher_runtime is not None:
+                teacher_contract = teacher_runtime.describe_contract()
+            elif teacher_contract is not None and vla_error_reason:
+                teacher_contract = _fallback_teacher_contract(
+                    enabled=True,
+                    availability_reason=vla_error_reason,
+                )
         except Exception as exc:
             vla_error_reason = str(exc)
+            teacher_contract = _fallback_teacher_contract(
+                enabled=True,
+                availability_reason=vla_error_reason,
+            )
             logger.warning("OpenVLA initialization failed; falling back to stub labels: %s", exc)
 
     for episode in rollouts.episodes:
@@ -61,10 +83,17 @@ def label_rollouts_with_vla(
             risk_levels.add(prim.risk_level)
             derived_task_tags.update(_select_task_tags(prim.tags))
 
+        teacher_envelope = None
         vla_action = None
-        if controller is not None:
-            vla_action, vla_action_error = _try_openvla_action(controller, episode, base_datapack)
-            if vla_action:
+        if teacher_contract is not None:
+            teacher_envelope, vla_action_error = _try_openvla_action(
+                teacher_runtime,
+                teacher_contract,
+                episode,
+                base_datapack,
+            )
+            if teacher_envelope is not None:
+                vla_action = teacher_envelope.to_vla_payload()
                 vla_action_tags = _tags_from_vla_action(vla_action)
                 vla_tags.update(vla_action_tags)
                 episode_tags.update(vla_action_tags)
@@ -75,6 +104,8 @@ def label_rollouts_with_vla(
             episode=episode,
             semantic_tags=sorted(episode_tags),
             vla_action=vla_action,
+            teacher_contract=teacher_contract,
+            teacher_envelope=teacher_envelope,
             instruction=base_datapack.objective_hint or base_datapack.description or "",
             vla_error_reason=vla_error_reason,
         )
@@ -166,18 +197,66 @@ def _write_vla_semantic_evidence_sidecar(
     episode: EpisodeRollout,
     semantic_tags: list[str],
     vla_action: Optional[Mapping[str, Any]],
+    teacher_contract: Optional[TeacherAdapterContract],
+    teacher_envelope: Optional[TeacherActionEnvelope],
     instruction: str,
     vla_error_reason: Optional[str],
 ) -> None:
     try:
         trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
         scene_tracks = _extract_scene_tracks_payload(trajectory_payload)
-        teacher_trace = TeacherTrace.from_vla_action(
+        teacher_contract_ref = ""
+        teacher_action_ref = ""
+        if teacher_contract is not None:
+            teacher_contract_path = episode.trajectory_path.with_name(
+                f"{episode.trajectory_path.stem}_teacher_contract_v1.json"
+            )
+            save_teacher_adapter_contract_json(teacher_contract_path, teacher_contract)
+            teacher_contract_ref = str(teacher_contract_path)
+        if teacher_envelope is not None:
+            teacher_action_path = episode.trajectory_path.with_name(
+                f"{episode.trajectory_path.stem}_teacher_action_envelope_v1.json"
+            )
+            save_teacher_action_envelope_json(teacher_action_path, teacher_envelope)
+            teacher_action_ref = str(teacher_action_path)
+
+        teacher_trace = TeacherTrace.from_components(
             episode_id=episode.metadata.episode_id,
+            teacher_id=teacher_contract.teacher_id if teacher_contract is not None else "openvla",
+            modality="action_semantics",
+            advisory_only=True,
             instruction=instruction,
-            semantic_tags=semantic_tags,
-            action=vla_action,
-            availability_reason=vla_error_reason,
+            steps=[
+                TeacherStep(
+                    step_idx=0,
+                    instruction=instruction,
+                    action=dict(vla_action or {}),
+                    confidence=float(vla_action.get("confidence", 0.0)) if isinstance(vla_action, Mapping) else 0.0,
+                    semantic_tags=semantic_tags,
+                    artifact_refs={
+                        "teacher_contract_ref": teacher_contract_ref,
+                        "teacher_action_ref": teacher_action_ref,
+                    },
+                    metadata={
+                        "availability_reason": str(vla_error_reason or ""),
+                        "vla_available": bool(vla_action.get("vla_available", False)) if isinstance(vla_action, Mapping) else False,
+                    },
+                )
+            ],
+            summary={
+                "teacher_confidence_mean": float(vla_action.get("confidence", 0.0)) if isinstance(vla_action, Mapping) else 0.0,
+                "step_count": 1.0,
+            },
+            provenance={
+                "source": teacher_contract.teacher_id if teacher_contract is not None else "openvla",
+                "contract_id": teacher_contract.contract_id if teacher_contract is not None else "",
+                "availability_reason": str(vla_error_reason or ""),
+            },
+            metadata={
+                "semantic_tags": semantic_tags,
+                "teacher_contract_ref": teacher_contract_ref,
+                "teacher_action_ref": teacher_action_ref,
+            },
         )
         teacher_trace_path = episode.trajectory_path.with_name(
             f"{episode.trajectory_path.stem}_teacher_trace_v1.json"
@@ -189,6 +268,8 @@ def _write_vla_semantic_evidence_sidecar(
             semantic_tags=semantic_tags,
             instruction=instruction,
             teacher_trace_ref=str(teacher_trace_path),
+            teacher_contract_ref=teacher_contract_ref,
+            teacher_action_ref=teacher_action_ref,
         )
         evidence_path = episode.trajectory_path.with_name(
             f"{episode.trajectory_path.stem}_vla_semantic_evidence_v1.npz"
@@ -251,15 +332,33 @@ def _openvla_enabled() -> bool:
     return False
 
 
-_OPENVLA_CONTROLLER = None
+def _fallback_teacher_contract(
+    *,
+    enabled: bool,
+    availability_reason: str,
+) -> TeacherAdapterContract:
+    return TeacherAdapterContract(
+        teacher_id="openvla",
+        model_name=os.getenv("OPENVLA_MODEL_NAME") or os.getenv("OPENVLA_MODEL") or "openvla/openvla-7b",
+        modality="action_semantics",
+        advisory_only=True,
+        available=False,
+        metadata={
+            "enabled": bool(enabled),
+            "availability_reason": str(availability_reason),
+        },
+    )
+
+
+_OPENVLA_RUNTIME = None
 _OPENVLA_INITIALIZED = False
 _OPENVLA_ERROR: str | None = None
 
 
-def _get_openvla_controller() -> Tuple[Any | None, str | None]:
-    global _OPENVLA_CONTROLLER, _OPENVLA_INITIALIZED, _OPENVLA_ERROR
+def _get_openvla_teacher_runtime() -> Tuple[OpenVLATeacherRuntime | None, str | None]:
+    global _OPENVLA_RUNTIME, _OPENVLA_INITIALIZED, _OPENVLA_ERROR
     if _OPENVLA_INITIALIZED:
-        return _OPENVLA_CONTROLLER, _OPENVLA_ERROR
+        return _OPENVLA_RUNTIME, _OPENVLA_ERROR
     _OPENVLA_INITIALIZED = True
     try:
         from src.vla.openvla_controller import OpenVLAConfig, OpenVLAController
@@ -275,29 +374,56 @@ def _get_openvla_controller() -> Tuple[Any | None, str | None]:
     )
     controller = OpenVLAController(cfg)
     controller.load_model()
+    runtime = OpenVLATeacherRuntime(controller)
+    _OPENVLA_RUNTIME = runtime
     if not controller.available:
         logger.warning("OpenVLA unavailable; falling back to stub labels.")
         _OPENVLA_ERROR = "OpenVLA unavailable"
-        return None, _OPENVLA_ERROR
-    _OPENVLA_CONTROLLER = controller
+        return runtime, _OPENVLA_ERROR
     _OPENVLA_ERROR = None
-    return controller, None
+    return runtime, None
 
 
 def _try_openvla_action(
-    controller: Any,
+    teacher_runtime: OpenVLATeacherRuntime | None,
+    teacher_contract: TeacherAdapterContract,
     episode: EpisodeRollout,
     base_datapack: DatapackConfig,
-) -> Tuple[Mapping[str, Any] | None, str | None]:
+) -> Tuple[TeacherActionEnvelope | None, str | None]:
+    instruction = base_datapack.objective_hint or base_datapack.description or "Execute the task safely."
+    if teacher_runtime is None:
+        unavailable = TeacherActionEnvelope.unavailable(
+            teacher_id=teacher_contract.teacher_id,
+            model_name=teacher_contract.model_name,
+            instruction=instruction,
+            failure_mode=str(teacher_contract.metadata.get("availability_reason", "teacher_unavailable")),
+            metadata={"contract_id": teacher_contract.contract_id},
+        )
+        return unavailable, unavailable.failure_mode
     frame = _load_first_frame(episode)
     if frame is None:
-        return None, None
-    instruction = base_datapack.objective_hint or base_datapack.description or "Execute the task safely."
+        missing_frame = TeacherActionEnvelope.unavailable(
+            teacher_id=teacher_contract.teacher_id,
+            model_name=teacher_contract.model_name,
+            instruction=instruction,
+            failure_mode="missing_frame",
+            metadata={"contract_id": teacher_contract.contract_id},
+        )
+        return missing_frame, "missing_frame"
     try:
-        return controller.predict_action(frame, instruction), None
+        envelope = teacher_runtime.predict_action(frame, instruction)
+        error = envelope.failure_mode if not envelope.available and envelope.failure_mode else None
+        return envelope, error
     except Exception as exc:
         logger.warning("OpenVLA inference failed; falling back to stub labels: %s", exc)
-        return None, str(exc)
+        unavailable = TeacherActionEnvelope.unavailable(
+            teacher_id=teacher_contract.teacher_id,
+            model_name=teacher_contract.model_name,
+            instruction=instruction,
+            failure_mode=str(exc),
+            metadata={"contract_id": teacher_contract.contract_id},
+        )
+        return unavailable, str(exc)
 
 
 def _load_first_frame(episode: EpisodeRollout):

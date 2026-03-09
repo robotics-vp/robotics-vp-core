@@ -31,6 +31,8 @@ from src.diffusion.real_video_diffusion_stub import (
     DiffusionProposal,
 )
 from src.evidence import EvidenceBus, EvidenceRecord, belief_state_from_evidence_bus
+from src.governance import governance_trace_sidecar_payload
+from src.runtime import decision_ledger_sidecar_payload, event_spine_sidecar_payload
 from src.vla.transformer_planner import VLATransformerPlanner, VLAInput, VLAPlan
 from src.valuation.datapack_schema import (
     DataPackMeta,
@@ -42,6 +44,11 @@ from src.valuation.datapack_schema import (
 from src.regal.gen_plausibility import RegalGenPlausibilityNode
 from src.regal.base import RegalDecision
 from src.world_model import GovernedVideoWorldModel
+from src.world_model.governed_video_supervision import build_governed_video_supervision_bundle
+from src.vision.reconstruction import (
+    build_four_d_reconstruction_sidecar,
+    save_four_d_reconstruction_sidecar,
+)
 
 
 SEMANTIC_KEYWORDS = {
@@ -274,7 +281,10 @@ def write_stage1_sidecars(
     belief_state: Any,
     snapshot: Any,
     hypotheses: List[Any],
-) -> Dict[str, str]:
+    semantic_tags: List[str],
+    objective_preset: str,
+    constraint_set: Dict[str, Any],
+) -> tuple[Dict[str, str], Any]:
     sidecar_dir = Path(output_dir) / "governed_video"
     sidecar_dir.mkdir(parents=True, exist_ok=True)
     episode_id = str(video_ref["episode_id"])
@@ -294,12 +304,127 @@ def write_stage1_sidecars(
             indent=2,
         )
     )
-    return {
+    sidecar_paths = {
         "evidence_bus_path": str(evidence_bus_path),
         "belief_state_path": str(belief_state_path),
         "video_state_path": str(snapshot_path),
         "hypotheses_path": str(hypotheses_path),
     }
+    metadata = video_ref.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    frame_count = int(metadata.get("num_frames", 0) or 0)
+    reconstruction_path = sidecar_dir / f"{episode_id}_reconstruction_sidecar_v1.json"
+    sensor_bundle_meta = metadata.get("sensor_bundle") if isinstance(metadata.get("sensor_bundle"), dict) else None
+    if sensor_bundle_meta is None:
+        camera_name = str(video_ref.get("camera", "front"))
+        sensor_bundle_meta = {
+            "cameras": [camera_name],
+            "intrinsics": {camera_name: metadata.get("intrinsics_ref", f"intrinsics://{camera_name}")},
+            "extrinsics": {camera_name: metadata.get("extrinsics_ref", f"extrinsics://{camera_name}")},
+            "depth_unit": metadata.get("depth_unit", "unknown"),
+        }
+    reconstruction_sidecar = build_four_d_reconstruction_sidecar(
+        episode_id=episode_id,
+        source_type=str(video_ref.get("source_type", "video_reference")),
+        media_refs=[ref for ref in [video_ref.get("video_path"), video_ref.get("depth_path")] if ref],
+        sensor_bundle_meta=sensor_bundle_meta,
+        frame_count=frame_count,
+        frame_range=[0, max(0, frame_count - 1)] if frame_count else None,
+        geometry_refs={
+            "video_state_path": sidecar_paths["video_state_path"],
+            "hypotheses_path": sidecar_paths["hypotheses_path"],
+            "depth_path": str(video_ref.get("depth_path", "")),
+        },
+        evidence_refs={
+            "evidence_bus_path": sidecar_paths["evidence_bus_path"],
+            "belief_state_path": sidecar_paths["belief_state_path"],
+        },
+        quality={
+            "geometry_quality": float(belief_state.state_vector.get("geometry_quality", 0.0)),
+            "evidence_coverage": float(belief_state.state_vector.get("evidence_coverage", 0.0)),
+        },
+        metadata={"task_type": str(video_ref.get("task_type", ""))},
+    )
+    save_four_d_reconstruction_sidecar(reconstruction_path, reconstruction_sidecar)
+    sidecar_paths["reconstruction_sidecar_path"] = str(reconstruction_path)
+
+    supervision_bundle = build_governed_video_supervision_bundle(
+        run_id=f"stage1_governed_{episode_id}",
+        video_ref=video_ref,
+        semantic_tags=semantic_tags,
+        belief_state=belief_state,
+        snapshot=snapshot,
+        hypotheses=hypotheses,
+        objective_preset=objective_preset,
+        constraint_set=constraint_set,
+        sidecar_refs=sidecar_paths,
+    )
+    runtime_packet_path = sidecar_dir / f"{episode_id}_runtime_packet_v1.json"
+    pricing_tick_path = sidecar_dir / f"{episode_id}_pricing_tick_v1.json"
+    branch_eval_path = sidecar_dir / f"{episode_id}_branch_evaluations_v1.json"
+    event_spine_path = sidecar_dir / f"{episode_id}_event_spine_v1.json"
+    decision_ledger_path = sidecar_dir / f"{episode_id}_decision_ledger_v1.json"
+    governance_trace_path = sidecar_dir / f"{episode_id}_governance_trace_v1.json"
+    counterfactual_eval_path = sidecar_dir / f"{episode_id}_counterfactual_eval_v1.json"
+    value_target_pack_path = sidecar_dir / f"{episode_id}_value_target_pack_v1.json"
+    value_ledger_receipt_path = sidecar_dir / f"{episode_id}_value_ledger_receipt_v1.json"
+
+    runtime_packet_path.write_text(json.dumps(supervision_bundle.runtime_packet.to_dict(), indent=2))
+    pricing_tick_path.write_text(json.dumps(supervision_bundle.pricing_tick.to_dict(), indent=2))
+    branch_eval_path.write_text(
+        json.dumps(
+            {
+                "episode_id": episode_id,
+                "branch_evaluations": [evaluation.to_dict() for evaluation in supervision_bundle.branch_evaluations],
+            },
+            indent=2,
+        )
+    )
+    event_spine_path.write_text(
+        json.dumps(
+            event_spine_sidecar_payload(
+                run_id=f"stage1_governed_{episode_id}",
+                events=supervision_bundle.events,
+            ),
+            indent=2,
+        )
+    )
+    decision_ledger_path.write_text(
+        json.dumps(
+            decision_ledger_sidecar_payload(
+                run_id=f"stage1_governed_{episode_id}",
+                decisions=supervision_bundle.decisions,
+            ),
+            indent=2,
+        )
+    )
+    governance_trace_path.write_text(
+        json.dumps(
+            governance_trace_sidecar_payload(
+                run_id=f"stage1_governed_{episode_id}",
+                traces=supervision_bundle.governance_traces,
+            ),
+            indent=2,
+        )
+    )
+    counterfactual_eval_path.write_text(json.dumps(supervision_bundle.counterfactual_eval.to_dict(), indent=2))
+    value_target_pack_path.write_text(json.dumps(supervision_bundle.value_target_pack.to_dict(), indent=2))
+    value_ledger_receipt_path.write_text(json.dumps(supervision_bundle.value_ledger_receipt.to_dict(), indent=2))
+    sidecar_paths.update(
+        {
+            "runtime_packet_path": str(runtime_packet_path),
+            "pricing_tick_path": str(pricing_tick_path),
+            "branch_evaluations_path": str(branch_eval_path),
+            "event_spine_path": str(event_spine_path),
+            "decision_ledger_path": str(decision_ledger_path),
+            "governance_trace_path": str(governance_trace_path),
+            "counterfactual_eval_path": str(counterfactual_eval_path),
+            "value_target_pack_path": str(value_target_pack_path),
+            "value_ledger_receipt_path": str(value_ledger_receipt_path),
+        }
+    )
+    return sidecar_paths, supervision_bundle
 
 
 def generate_diffusion_proposals(
@@ -551,7 +676,17 @@ def run_stage1_pipeline(
             proposals_per_video,
         )
         generated_proposal_count += len(proposals)
-        sidecar_paths = write_stage1_sidecars(output_dir, video_ref, evidence_bus, belief_state, snapshot, hypotheses)
+        sidecar_paths, supervision_bundle = write_stage1_sidecars(
+            output_dir,
+            video_ref,
+            evidence_bus,
+            belief_state,
+            snapshot,
+            hypotheses,
+            semantic_tags,
+            objective_preset,
+            constraint_set,
+        )
         print(f"  Generated {len(proposals)} diffusion proposals")
 
         # Step 5: For each proposal, generate VLA plan and create datapack
@@ -589,6 +724,7 @@ def run_stage1_pipeline(
                         "plausibility_gate": plausibility_report.to_dict(),
                         "blocked": True,
                         "video_state_id": snapshot.state_id,
+                        "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
                         **sidecar_paths,
                     }
                 )
@@ -607,6 +743,8 @@ def run_stage1_pipeline(
                 "governed_video_state_id": snapshot.state_id,
                 "governed_video_constraint_set": constraint_set,
                 "governed_video_hypothesis_mode": proposal.augmentation_type,
+                "governed_video_counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
+                "governed_video_value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
             }
             print(f"      DataPack: {datapack.pack_id}")
             print(f"      Tier: {datapack.attribution.tier}, Trust: {datapack.attribution.trust_score:.3f}")
@@ -629,6 +767,8 @@ def run_stage1_pipeline(
                 "estimated_novelty": proposal.estimated_novelty,
                 "video_state_id": snapshot.state_id,
                 "constraint_set": constraint_set,
+                "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
+                "value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
                 **sidecar_paths,
             })
 

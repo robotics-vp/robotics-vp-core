@@ -132,6 +132,8 @@ Already landed or now in scope:
 - `scripts/run_stage1_pipeline.py` now emits governed video sidecars and can consume a real video manifest instead of only simulating random semantic tags.
 - `src/diffusion/real_video_diffusion_stub.py` now renders governed hypotheses when available instead of always originating futures itself.
 - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` no longer hardwires stub adapters in the runner API; stub usage is configurable.
+- `scripts/run_stage1_pipeline.py` now also emits reconstruction sidecars, runtime packets, branch evaluations, event-spine rows, decision-ledger rows, governance traces, counterfactual evals, value-target packs, and value-ledger receipts directly from the live governed video loop.
+- `src/vla/rollout_labeler.py` plus `src/vla/teacher_runtime.py` now emit teacher adapter contracts and teacher action envelopes in the live labeling path even when OpenVLA is disabled or unavailable, so fallback becomes explicit supervision rather than silent absence.
 
 Still missing for production-ready v-JEPA-2-grade plumbing:
 
@@ -140,6 +142,7 @@ Still missing for production-ready v-JEPA-2-grade plumbing:
 - Real evaluator-driven branching and test-time compute over governed video states rather than heuristic branching alone.
 - Action-conditioned latent predictor training over fused video / scene-track / BEV / embodiment / econ tokens.
 - Honest production support for non-stub OpenVLA or other teacher models beyond soft-fail sidecars.
+- Consistent teacher-runtime ingestion in the Stage-1 real-video path itself rather than only in rollout labeling and auxiliary evidence paths.
 
 Recommendation:
 
@@ -150,10 +153,10 @@ Recommendation:
 
 Immediate autonomous next tranche:
 
-- Wire `four_d_reconstruction.py` into Stage-1 and ingestion so every governed video run emits camera-grounded reconstruction sidecars.
-- Route teacher outputs through `teacher_runtime.py` before they become semantic evidence or teacher traces.
-- Emit governed supervision bundles, counterfactual evals, governance traces, and value targets directly from governed video hypotheses.
-- Treat learned video-state training as backlog-only until those traces are real and replayable.
+- Deepen the now-live reconstruction sidecars with real SceneTracks calibration joins and richer camera metadata at the ingestion/runner boundary.
+- Push teacher-runtime contracts/envelopes through any remaining real-video consumers so fallback stays explicit everywhere, not only in rollout labeling.
+- Export the now-live governed supervision artifacts into replay and dataset-bridge paths so later training can consume them without bespoke joins.
+- Treat learned video-state training as backlog-only until those traces are real, replayable, and grounded by non-stub perception.
 
 ### 5. Dense economic supervision
 
