@@ -10,6 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = ROOT / "config" / "quality_ratchet.json"
+TARGET_PYTHON_VERSION = "3.9"
+EXCLUDE_REGEX = r"^(build|dist|.+\.egg-info)/"
 
 
 def _load_baseline() -> int:
@@ -23,13 +25,20 @@ def _run_mypy() -> tuple[int, list[str]]:
         "-m",
         "mypy",
         "src/",
+        "--python-version",
+        TARGET_PYTHON_VERSION,
+        "--exclude",
+        EXCLUDE_REGEX,
         "--hide-error-context",
         "--no-color-output",
         "--show-error-codes",
     ]
     completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
     if completed.returncode not in (0, 1):
-        sys.stderr.write(completed.stderr)
+        if completed.stdout:
+            sys.stderr.write(completed.stdout)
+        if completed.stderr:
+            sys.stderr.write(completed.stderr)
         raise SystemExit(completed.returncode)
     lines = [line for line in completed.stdout.splitlines() if ": error:" in line]
     return len(lines), lines

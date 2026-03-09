@@ -21,6 +21,13 @@ dependencies = [
 where = ["."]
 include = ["src", "src.*"]
 
+[tool.ruff]
+extend-exclude = [
+  "build",
+  "dist",
+  "*.egg-info",
+]
+
 [tool.ruff.lint.per-file-ignores]
 "experiments/*.py" = ["E402"]
 "experiments/**/*.py" = ["E402"]
