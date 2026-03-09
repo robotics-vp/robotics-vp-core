@@ -5,7 +5,7 @@
     "baseline_errors": 338
   },
   "mypy": {
-    "command": "python3 -m mypy src/ --python-version 3.9",
+    "command": "python3 -m mypy src/ --python-version 3.9 --exclude '^(build|dist|.+\\\\.egg-info)/'",
     "baseline_errors": 185
   }
 }
