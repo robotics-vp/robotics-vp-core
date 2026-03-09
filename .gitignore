@@ -30,6 +30,8 @@ tmp_*.json
 .venv/
 
 # packaging/build artifacts
+build/
+dist/
 *.egg-info/
 __pycache__/
 
