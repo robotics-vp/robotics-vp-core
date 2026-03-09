@@ -1,6 +1,5 @@
 """Tests for hardening features: audit registry, exposure manifest, hysteresis, plan determinism."""
 import json
-from pathlib import Path
 
 import pytest
 

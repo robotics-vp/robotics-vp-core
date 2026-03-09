@@ -25,7 +25,6 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 from src.valuation.datapack_repo import DataPackRepo
-from src.valuation.phase_b_integration import PhaseBDataPackIntegration
 from src.valuation.episode_features import make_full_datapack_features
 from src.training.wrap_training_entrypoint import regal_training
 
@@ -198,7 +197,7 @@ def train_world_model_from_datapacks(
     print("=" * 70)
 
     # Query datapacks
-    print(f"\n1. Loading datapacks from repository...")
+    print("\n1. Loading datapacks from repository...")
     datapacks = repo.query(
         task_name=task_name,
         min_trust=min_trust,
@@ -224,7 +223,7 @@ def train_world_model_from_datapacks(
         dp.attribution.wm_role = "wm_train"
 
     # Create dataset
-    print(f"\n3. Creating PyTorch dataset...")
+    print("\n3. Creating PyTorch dataset...")
     dataset = DataPackWorldModelDataset(datapacks, use_trust_weighting=use_trust_weighting)
     print(f"   Feature dim: {dataset.features.shape[1]}")
     print(f"   Target dim: {dataset.targets.shape[1]}")
@@ -246,7 +245,7 @@ def train_world_model_from_datapacks(
     print(f"   Val samples: {n_val}")
 
     # Create model
-    print(f"\n4. Creating world model...")
+    print("\n4. Creating world model...")
     input_dim = dataset.features.shape[1]
     output_dim = dataset.targets.shape[1]
     model = SimpleWorldModel(input_dim, output_dim)
@@ -320,11 +319,11 @@ def train_world_model_from_datapacks(
         if (epoch + 1) % 10 == 0 or epoch == 0:
             print(f"   Epoch {epoch+1:4d}: train_loss={epoch_train_loss:.6f}, val_loss={epoch_val_loss:.6f}")
 
-    print(f"\n6. Training complete!")
+    print("\n6. Training complete!")
     print(f"   Best val loss: {best_val_loss:.6f}")
 
     # Evaluate on test set
-    print(f"\n7. Evaluating model...")
+    print("\n7. Evaluating model...")
     model.eval()
     all_predictions = []
     all_targets = []
@@ -350,7 +349,7 @@ def train_world_model_from_datapacks(
     mae_per_dim = np.mean(np.abs(all_predictions - all_targets), axis=0)
 
     target_names = ['delta_J', 'delta_mpl', 'delta_error', 'delta_ep']
-    print(f"\n   Per-target metrics:")
+    print("\n   Per-target metrics:")
     for i, name in enumerate(target_names):
         print(f"     {name}: MSE={mse_per_dim[i]:.6f}, MAE={mae_per_dim[i]:.6f}")
 
@@ -380,7 +379,7 @@ def train_world_model_from_datapacks(
     print(f"\n8. Saved training history to {history_path}")
 
     # Generate synthetic datapacks
-    print(f"\n9. Generating synthetic datapacks...")
+    print("\n9. Generating synthetic datapacks...")
     n_synthetic = min(100, len(datapacks) // 10)
     synthetic_packs = generate_synthetic_datapacks(
         model, datapacks[:n_synthetic], run_id
@@ -390,7 +389,7 @@ def train_world_model_from_datapacks(
     # Store synthetic datapacks
     if synthetic_packs:
         repo.append_batch(synthetic_packs)
-        print(f"   Appended to repository")
+        print("   Appended to repository")
 
     return {
         'run_id': run_id,
@@ -417,8 +416,6 @@ def generate_synthetic_datapacks(model, source_datapacks, run_id, horizon=10):
         List of synthetic DataPackMeta objects
     """
     from src.valuation.datapack_schema import (
-        DataPackMeta,
-        ConditionProfile,
         AttributionProfile,
         create_positive_datapack,
         create_negative_datapack,

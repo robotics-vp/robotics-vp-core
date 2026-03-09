@@ -129,10 +129,11 @@ def _extract_joint_state(payload: Optional[Dict[str, Any]]) -> Optional[list[Any
 def _extract_failure_events(payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not payload:
         return None
-    info_history = payload.get("info_history") if isinstance(payload.get("info_history"), list) else []
+    info_history_value = payload.get("info_history")
+    info_history = info_history_value if isinstance(info_history_value, list) else []
     resets = 0
     clamps = 0
-    taxonomy = []
+    taxonomy: list[Any] = []
     for entry in info_history:
         if not isinstance(entry, dict):
             continue
@@ -236,7 +237,7 @@ def _write_summary_jsonl(summary_path: Path, rows: list[Dict[str, Any]]) -> None
 def _update_episode_metadata(
     episode_dir: Path,
     metrics: Dict[str, Any],
-    artifact_paths: Dict[str, str],
+    artifact_paths: Dict[str, Any],
     summary: Dict[str, Any],
 ) -> None:
     meta_path = episode_dir / "metadata.json"
@@ -269,6 +270,7 @@ def run_embodiment_for_rollouts(
 
     for episode in rollout_bundle.episodes:
         episode_dir = episode.trajectory_path.parent
+        episode_metrics: Dict[str, Any] = dict(episode.metrics)
         trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
         scene_tracks_payload = _find_scene_tracks_payload(episode_dir, trajectory_payload)
         if scene_tracks_payload is None:
@@ -291,8 +293,8 @@ def run_embodiment_for_rollouts(
             task_constraints=task_constraints,
             backend_tags=_extract_backend_tags(episode),
             failure_events=_extract_failure_events(trajectory_payload),
-            episode_metrics=episode.metrics,
-            econ_attribution=_infer_econ_attribution(episode.metrics, task_constraints),
+            episode_metrics=episode_metrics,
+            econ_attribution=_infer_econ_attribution(episode_metrics, task_constraints),
         )
 
         result = compute_embodiment(inputs, config=cfg)

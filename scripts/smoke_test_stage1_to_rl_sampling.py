@@ -10,7 +10,6 @@ Validates:
 """
 
 import sys
-import json
 from pathlib import Path
 
 # Add repo root to path
@@ -102,7 +101,7 @@ def test_stage1_to_rl_sampling():
         # Test 2: Convert to episode descriptor
         print("\n[2/5] Converting to RL episode descriptor...")
         descriptor = datapack_to_rl_episode_descriptor(datapack)
-        print(f"✓ Created episode descriptor")
+        print("✓ Created episode descriptor")
 
         # Test 3: Validate required fields
         print("\n[3/5] Validating required fields...")
@@ -182,11 +181,11 @@ def test_stage1_to_rl_sampling():
         print("Stage 1 → RL Sampling Handshake Smoke Test: PASSED")
         print("=" * 70)
         print("Summary:")
-        print(f"  ✓ Datapack creation")
-        print(f"  ✓ Episode descriptor conversion")
-        print(f"  ✓ Required fields validation")
-        print(f"  ✓ Field values validation")
-        print(f"  ✓ Batch conversion")
+        print("  ✓ Datapack creation")
+        print("  ✓ Episode descriptor conversion")
+        print("  ✓ Required fields validation")
+        print("  ✓ Field values validation")
+        print("  ✓ Batch conversion")
         print("\nDescriptor keys:")
         for key in sorted(descriptor.keys()):
             print(f"  - {key}")

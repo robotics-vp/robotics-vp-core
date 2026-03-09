@@ -1,2 +1,2 @@
 # Runtime dependencies live in pyproject.toml.
--e .
+.

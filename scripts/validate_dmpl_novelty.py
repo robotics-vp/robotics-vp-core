@@ -317,7 +317,7 @@ def validate_dmpl_novelty(config_path, n_episodes=50, output_dir='reports', chec
         if checkpoint_path:
             f.write(f"Encoder checkpoint: {checkpoint_path}\n")
         else:
-            f.write(f"Encoder: Untrained (for degeneracy check)\n")
+            f.write("Encoder: Untrained (for degeneracy check)\n")
         f.write("\n")
 
         f.write("Novelty Statistics:\n")
@@ -349,7 +349,7 @@ def validate_dmpl_novelty(config_path, n_episodes=50, output_dir='reports', chec
 
         # Check 1: Novelty diversity
         novelty_unique = len(np.unique(novelty_scores.round(6)))
-        f.write(f"1. Novelty Diversity:\n")
+        f.write("1. Novelty Diversity:\n")
         f.write(f"   Unique values: {novelty_unique}/{n_episodes}\n")
 
         if novelty_scores.std() < 1e-6:
@@ -364,7 +364,7 @@ def validate_dmpl_novelty(config_path, n_episodes=50, output_dir='reports', chec
         f.write("\n")
 
         # Check 2: Correlation strength
-        f.write(f"2. Novelty-ΔMPL Correlation:\n")
+        f.write("2. Novelty-ΔMPL Correlation:\n")
         if abs(corr_novelty_dmpl) < 0.05:
             f.write("   ⚠️  WARNING: Very weak correlation (|ρ| < 0.05)\n")
             f.write("       Novelty may not be predictive of ΔMPL\n")
@@ -377,7 +377,7 @@ def validate_dmpl_novelty(config_path, n_episodes=50, output_dir='reports', chec
         f.write("\n")
 
         # Check 3: MPL variance
-        f.write(f"3. MPL Variance:\n")
+        f.write("3. MPL Variance:\n")
         if mpls.std() < 1.0:
             f.write("   ⚠️  WARNING: MPL variance very low (std < 1.0)\n")
             f.write("       Environment may not be exploring diverse states\n")
@@ -391,7 +391,7 @@ def validate_dmpl_novelty(config_path, n_episodes=50, output_dir='reports', chec
         latents = np.array([ep['latent'] for ep in episodes])
         latent_std_mean = latents.std(axis=0).mean()
 
-        f.write(f"4. Latent Space Collapse:\n")
+        f.write("4. Latent Space Collapse:\n")
         f.write(f"   Latent dimension: {latent_dim}\n")
         f.write(f"   Mean std across dims: {latent_std_mean:.4f}\n")
 

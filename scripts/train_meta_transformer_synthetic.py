@@ -15,7 +15,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from src.orchestrator.meta_transformer import MetaTransformer
 
 
 class TinyMetaModel(nn.Module):

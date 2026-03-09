@@ -10,24 +10,25 @@ from __future__ import annotations
 
 import json
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 
 from src.process_reward.schemas import (
+    ProcessRewardEpisodeOutput,
     ProcessRewardConfig,
-    EpisodeFeatures,
-    FrameFeatures,
     HopLabel,
 )
 from src.process_reward.features import FeatureExtractor
 from src.process_reward.hop_model import (
     LabelProvider,
     OracleDistanceLabelProvider,
-    TaskSuccessLabelProvider,
 )
+
+if TYPE_CHECKING:
+    from src.process_reward.schemas import ProcessRewardEpisodeOutput
 
 
 @dataclass
@@ -197,15 +198,17 @@ class HopDataset:
             labels = all_labels[(before_idx, after_idx)]
 
             # Aggregate: weighted average by confidence
-            total_weight = sum(l.confidence for l in labels)
+            total_weight = sum(label.confidence for label in labels)
             if total_weight == 0:
                 continue
 
-            hop_value = sum(l.hop_value * l.confidence for l in labels) / total_weight
+            hop_value = sum(
+                label.hop_value * label.confidence for label in labels
+            ) / total_weight
             avg_confidence = total_weight / len(labels)
 
             # Determine primary source
-            source = max(labels, key=lambda l: l.confidence).source
+            source = max(labels, key=lambda label: label.confidence).source
 
             example = HopTrainingExample(
                 before_features=episode_features.frame_features[before_idx].pooled.copy(),
@@ -396,7 +399,7 @@ class FusionDataset:
 
     def add_from_episode_output(
         self,
-        output: "ProcessRewardEpisodeOutput",
+        output: ProcessRewardEpisodeOutput,
         target_weights: Optional[np.ndarray] = None,
     ) -> int:
         """Add examples from an episode output.

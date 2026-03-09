@@ -13,7 +13,6 @@ from src.orchestrator.datapack_engine import DatapackEngine
 from src.orchestrator.semantic_orchestrator import SemanticOrchestrator
 from src.orchestrator.pipeline_manager import run_semantic_feedback_pass
 from src.valuation.datapack_repo import DataPackRepo
-from src.valuation.datapack_schema import ObjectiveProfile
 from src.config.econ_params import EconParams
 from src.valuation.datapack_validators import validate_datapack_meta
 
@@ -76,7 +75,6 @@ def main():
     suggestions = []
 
     # Aggregate econ signals from datapacks
-    from src.orchestrator.economic_controller import EconSignals
     econ_signals = econ.compute_signals([])  # Empty for demo - uses default signals
     datapack_signals = datapacks.compute_datapack_stats()  # Returns coverage/tier signals
 

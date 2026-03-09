@@ -118,7 +118,7 @@ def _write_video_stub(path: Path, frames: Any | None) -> Path | None:
     if frames is None:
         return None
     try:
-        import imageio.v3 as iio
+        import imageio.v3 as iio  # type: ignore[import-not-found]
 
         iio.imwrite(path, frames, fps=30)
         return path

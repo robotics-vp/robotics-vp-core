@@ -12,10 +12,10 @@ class RegalEconConsistencyNode(RegalNode):
     node_id = "regal_econ_consistency"
 
     def evaluate(self, context: Mapping[str, object]) -> RegalReport:
-        objective_score = float(context.get("objective_score", 0.0) or 0.0)
-        econ_delta_value = float(context.get("econ_delta_value", 0.0) or 0.0)
-        constraint_violations = list(context.get("constraint_violations", []) or [])
-        uncertainty = float(context.get("uncertainty", 0.0) or 0.0)
+        objective_score = _as_float(context.get("objective_score"), 0.0)
+        econ_delta_value = _as_float(context.get("econ_delta_value"), 0.0)
+        constraint_violations = _as_list(context.get("constraint_violations"))
+        uncertainty = _as_float(context.get("uncertainty"), 0.0)
 
         if econ_delta_value > 0 and constraint_violations:
             return RegalReport(
@@ -57,3 +57,24 @@ class RegalEconConsistencyNode(RegalNode):
             },
             confidence=0.85,
         )
+
+
+def _as_float(value: object, default: float) -> float:
+    try:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            return float(value)
+        return default
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_list(value: object) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    return []

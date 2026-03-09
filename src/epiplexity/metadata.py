@@ -75,8 +75,9 @@ def extract_epiplexity_summary_metric(
     budget_bucket = repr_bucket.get(budget_id, {}) if isinstance(repr_bucket, dict) else {}
     mean = budget_bucket.get("mean", {}) if isinstance(budget_bucket, dict) else {}
     if metric in mean:
+        metric_value = mean.get(metric)
         try:
-            return float(mean.get(metric))
+            return float(metric_value) if metric_value is not None else None
         except Exception:
             return None
     return None

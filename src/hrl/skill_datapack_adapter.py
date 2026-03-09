@@ -11,12 +11,13 @@ Works with unified 2.0-energy schema across:
 - Phase C drawer_vase datapacks (including HRL skills)
 """
 
-import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from .skills import SkillID, SkillParams
+import numpy as np
+
+from .skills import SkillID
 from src.valuation.datapack_repo import DataPackRepo
-from src.valuation.datapack_schema import DataPackMeta, AttributionProfile
+from src.valuation.datapack_schema import DataPackMeta
 
 
 class SkillDataPackAdapter:
@@ -253,7 +254,7 @@ class SkillDataPackAdapter:
             sort_descending=True
         )
 
-        sequence_counts = {}
+        sequence_counts: Dict[Tuple[int, ...], int] = {}
         for dp in datapacks:
             skill_seq = tuple(dp.get_skill_ids())
             sequence_counts[skill_seq] = sequence_counts.get(skill_seq, 0) + 1
@@ -327,7 +328,7 @@ class SkillDataPackAdapter:
             List of (skill_id, expected_delta_j) sorted by performance
         """
         # Query datapacks matching conditions
-        condition_filters = {}
+        condition_filters: Dict[str, Any] = {}
         for tag in condition_tags:
             condition_filters[tag] = True
 
@@ -340,7 +341,7 @@ class SkillDataPackAdapter:
         )
 
         # Compute average ΔJ per skill
-        skill_performance = {}
+        skill_performance: Dict[int, List[float]] = {}
         for dp in positive_packs:
             for skill_id in dp.get_skill_ids():
                 if skill_id not in skill_performance:
@@ -350,7 +351,7 @@ class SkillDataPackAdapter:
         # Average and rank
         recommendations = []
         for skill_id, delta_js in skill_performance.items():
-            avg_delta_j = np.mean(delta_js)
+            avg_delta_j = float(np.mean(delta_js))
             recommendations.append((skill_id, avg_delta_j))
 
         recommendations.sort(key=lambda x: x[1], reverse=True)
@@ -387,11 +388,11 @@ class SkillDataPackAdapter:
         )
 
         # Pair by similar conditions
-        pairs = []
+        pairs: List[Tuple[DataPackMeta, DataPackMeta]] = []
         for pos in positive:
             # Find most similar negative
             best_match = None
-            best_sim = -1
+            best_sim = -1.0
 
             for neg in negative:
                 # Compute condition similarity
@@ -418,7 +419,7 @@ class SkillDataPackAdapter:
         # Vase offset similarity (inverse distance)
         offset1 = np.array(cond1.vase_offset)
         offset2 = np.array(cond2.vase_offset)
-        offset_dist = np.linalg.norm(offset1 - offset2)
+        offset_dist = float(np.linalg.norm(offset1 - offset2))
         score += 1.0 / (1.0 + offset_dist)
         total += 1.0
 
@@ -657,7 +658,7 @@ class SkillDataPackAdapter:
         """
         all_packs = self.repo.load_all(task_name)
 
-        env_stats = {}
+        env_stats: Dict[str, Dict[str, Any]] = {}
         for dp in all_packs:
             env_type = dp.env_type
             if env_type not in env_stats:
@@ -673,7 +674,7 @@ class SkillDataPackAdapter:
                     'trust_scores': [],
                 }
 
-            stats = env_stats[env_type]
+            stats: Dict[str, Any] = env_stats[env_type]
             stats['count'] += 1
             if dp.bucket == "positive":
                 stats['positive'] += 1
@@ -753,7 +754,7 @@ class SkillDataPackAdapter:
         wh_per_units = [dp.energy.Wh_per_unit for dp in all_packs]
 
         # Aggregate limb energy
-        limb_totals = {}
+        limb_totals: Dict[str, float] = {}
         for dp in all_packs:
             for limb, data in dp.energy.energy_per_limb.items():
                 if limb not in limb_totals:
@@ -761,7 +762,7 @@ class SkillDataPackAdapter:
                 limb_totals[limb] += data.get('Wh', 0.0)
 
         # Aggregate skill energy
-        skill_totals = {}
+        skill_totals: Dict[str, float] = {}
         for dp in all_packs:
             for skill, data in dp.energy.energy_per_skill.items():
                 if skill not in skill_totals:
@@ -788,7 +789,7 @@ class SkillDataPackAdapter:
         """
         import json
 
-        report = {
+        report: Dict[str, Any] = {
             'task_name': task_name,
             'skills': {},
             'sequence_patterns': {},

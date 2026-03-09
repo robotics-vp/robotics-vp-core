@@ -3,11 +3,8 @@
 Verifies that run_manifest and ledger records include econ basis
 and tensor SHAs when computed.
 """
-import pytest
-from typing import Optional
 
 from src.contracts.schemas import (
-    RunManifestV1,
     ValueLedgerRecordV1,
     LedgerEconV1,
     LedgerWindowV1,

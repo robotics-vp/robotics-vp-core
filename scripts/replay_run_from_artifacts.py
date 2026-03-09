@@ -15,7 +15,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -30,9 +30,9 @@ from src.contracts.schemas import (
     TrajectoryAuditV1,
     EconTensorV1,
 )
-from src.regal.regal_evaluator import evaluate_regals, RegalPhaseV1, write_ledger_regal
+from src.regal.regal_evaluator import evaluate_regals, RegalPhaseV1
 from src.valuation.valuation_verifier import verify_run
-from src.utils.config_digest import sha256_file, sha256_json
+from src.utils.config_digest import sha256_file
 
 
 def load_artifact(path: Path, model_class=None) -> Optional[Any]:
@@ -185,7 +185,7 @@ def replay_run(run_dir: str, verbose: bool = False) -> Dict[str, Any]:
             results["all_match"] = False
             results["errors"].append("regality_thresholds.json missing but SHA in manifest - replay refuses")
             if verbose:
-                print(f"  regality_thresholds_sha: ✗ FILE MISSING (replay refuses)")
+                print("  regality_thresholds_sha: ✗ FILE MISSING (replay refuses)")
     
     # 6. Run full verification
     if verbose:

@@ -25,6 +25,7 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 from src.process_reward.schemas import (
+    EpisodeFeatures,
     ProcessRewardConfig,
     FusionOverride,
     ProgressPerspectives,
@@ -92,7 +93,7 @@ if TORCH_AVAILABLE:
             self.input_dim = base_input_dim
 
             # Encoder MLP
-            layers = []
+            layers: List[nn.Module] = []
             in_dim = base_input_dim
             for i in range(num_layers):
                 layers.append(nn.Linear(in_dim, hidden_dim))
@@ -359,12 +360,12 @@ if TORCH_AVAILABLE:
             self.fusion_net.eval()
 
 else:
-    class FusionNet:
+    class FusionNet:  # type: ignore[no-redef]
         """Placeholder when PyTorch not available."""
         def __init__(self, *args, **kwargs):
             raise RuntimeError("PyTorch required for FusionNet")
 
-    class FusionNetWrapper:
+    class FusionNetWrapper:  # type: ignore[no-redef]
         """Placeholder when PyTorch not available."""
         def __init__(self, *args, **kwargs):
             raise RuntimeError("PyTorch required for FusionNetWrapper")
@@ -516,7 +517,7 @@ def create_fusion(
 
 
 def build_context_features(
-    episode_features: "EpisodeFeatures",
+    episode_features: EpisodeFeatures,
     mhn_summary: Optional[MHNSummary] = None,
 ) -> np.ndarray:
     """Build context features for fusion from episode features.
@@ -528,8 +529,6 @@ def build_context_features(
     Returns:
         (T, context_dim) array of context features.
     """
-    from src.process_reward.schemas import EpisodeFeatures
-
     T = len(episode_features.frame_features)
     context_dim = 8  # Fixed dimension
 

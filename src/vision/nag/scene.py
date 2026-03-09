@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 
@@ -61,7 +61,10 @@ class NAGScene(nn.Module):
     @property
     def nodes(self) -> Dict[NAGNodeId, NAGPlaneNode]:
         """Get dictionary of nodes."""
-        return {make_node_id(k): v for k, v in self._nodes.items()}
+        return {
+            make_node_id(k): cast(NAGPlaneNode, v)
+            for k, v in self._nodes.items()
+        }
 
     def add_node(self, node_id: NAGNodeId, node: NAGPlaneNode) -> None:
         """
@@ -92,7 +95,7 @@ class NAGScene(nn.Module):
         key = str(node_id)
         if key not in self._nodes:
             raise KeyError(f"Node {node_id} not found in scene")
-        return self._nodes[key]
+        return cast(NAGPlaneNode, self._nodes[key])
 
     def has_node(self, node_id: NAGNodeId) -> bool:
         """Check if a node exists in the scene."""
@@ -111,7 +114,7 @@ class NAGScene(nn.Module):
         key = str(node_id)
         if key not in self._nodes:
             raise KeyError(f"Node {node_id} not found in scene")
-        node = self._nodes[key]
+        node = cast(NAGPlaneNode, self._nodes[key])
         del self._nodes[key]
         return node
 
@@ -236,8 +239,9 @@ class NAGScene(nn.Module):
         if self.num_nodes() == 0:
             return np.zeros(3), np.zeros(3)
 
-        all_points = []
-        for node in self._nodes.values():
+        all_points: list[np.ndarray] = []
+        for raw_node in self._nodes.values():
+            node = cast(NAGPlaneNode, raw_node)
             # Get corners of the plane
             extent = node.extent
             corners_local = np.array([
@@ -248,12 +252,15 @@ class NAGScene(nn.Module):
             ], dtype=np.float32)
 
             # Transform to world (using t=0)
-            pose = node.pose_at(torch.tensor(0.0)).detach().cpu().numpy()
+            pose = np.asarray(
+                node.pose_at(torch.tensor(0.0)).detach().cpu().tolist(),
+                dtype=np.float32,
+            )
             corners_world = (pose[:3, :3] @ corners_local.T).T + pose[:3, 3]
             all_points.append(corners_world)
 
-        all_points = np.concatenate(all_points, axis=0)
-        return all_points.min(axis=0), all_points.max(axis=0)
+        stacked_points = np.concatenate(all_points, axis=0)
+        return stacked_points.min(axis=0), stacked_points.max(axis=0)
 
 
 @dataclass

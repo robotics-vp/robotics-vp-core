@@ -67,14 +67,16 @@ def extract_task_progress(task_info: Mapping[str, Any]) -> float:
         return _clamp01(task_info.get("progress"))
     if "correct_count" in task_info:
         remaining = task_info.get("remaining")
-        total = _safe_float(task_info.get("correct_count"), 0.0) + _safe_float(remaining, 0.0)
+        correct_count = _safe_float(task_info.get("correct_count"), 0.0)
+        total = correct_count + _safe_float(remaining, 0.0)
         if total > 0.0:
-            return _clamp01(task_info.get("correct_count") / total)
+            return _clamp01(correct_count / total)
     if "correct_sorted" in task_info:
         remaining = task_info.get("remaining")
-        total = _safe_float(task_info.get("correct_sorted"), 0.0) + _safe_float(remaining, 0.0)
+        correct_sorted = _safe_float(task_info.get("correct_sorted"), 0.0)
+        total = correct_sorted + _safe_float(remaining, 0.0)
         if total > 0.0:
-            return _clamp01(task_info.get("correct_sorted") / total)
+            return _clamp01(correct_sorted / total)
     if "correct_pick" in task_info:
         return 1.0 if bool(task_info.get("correct_pick")) else 0.0
     if "completed" in task_info:

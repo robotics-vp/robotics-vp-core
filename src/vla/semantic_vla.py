@@ -1,12 +1,14 @@
 from typing import Any, Dict
 
+
 class SemanticVLA:
     """
     Semantic VLA analyzer placeholder.
     """
+
     def analyze_episode(self, datapack_or_episode: Any) -> Dict[str, Any]:
         # Stub: extract tags if present
-        tags = []
+        tags: list[Any] = []
         if hasattr(datapack_or_episode, "semantic_tags"):
             tags = getattr(datapack_or_episode, "semantic_tags", [])
         elif isinstance(datapack_or_episode, dict):

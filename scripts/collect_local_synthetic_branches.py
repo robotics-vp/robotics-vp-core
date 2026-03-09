@@ -274,11 +274,11 @@ def main():
     if branches:
         trust_scores = np.array([b['trust_score'] for b in branches])
         std_ratios = np.array([b['std_ratio'] for b in branches])
-        print(f"\nCollected branch statistics:")
+        print("\nCollected branch statistics:")
         print(f"  Trust: {trust_scores.mean():.6f} +/- {trust_scores.std():.6f}")
         print(f"  Std ratio: {std_ratios.mean():.4f} +/- {std_ratios.std():.4f}")
 
-        print(f"\nBy brick:")
+        print("\nBy brick:")
         for brick_id in sorted(stats['by_brick'].keys()):
             brick_stats = stats['by_brick'][brick_id]
             pct = 100 * brick_stats['passed'] / max(1, brick_stats['attempted'])
@@ -348,7 +348,7 @@ def main():
     print("DONE")
     print("="*70)
     print(f"Collected {len(branches)} trusted local synthetic branches")
-    print(f"Ready for trust + econ-weighted offline RL A/B test")
+    print("Ready for trust + econ-weighted offline RL A/B test")
 
 
 if __name__ == '__main__':

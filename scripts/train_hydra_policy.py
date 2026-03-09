@@ -26,7 +26,7 @@ from src.datasets.base import set_deterministic_seeds
 from src.observation.condition_vector import ConditionVector
 from src.rl.hydra_heads import HydraActor
 from src.utils.json_safe import to_json_safe
-from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
+from src.utils.training_env import should_use_amp, run_with_oom_recovery
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
 from src.utils.failure_sentinel import FailureSentinel
 from src.training.wrap_training_entrypoint import regal_training

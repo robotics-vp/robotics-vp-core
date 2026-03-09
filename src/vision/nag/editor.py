@@ -10,8 +10,7 @@ Provides structured editing operations for generating counterfactuals:
 
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -67,7 +66,6 @@ def edit_texture_from_rgba(
     rgba_frame = rgba_frame.to(device)
     mask = mask.to(device)
 
-    H, W = camera.height, camera.width
     t_tensor = torch.tensor(t_ref, device=device)
 
     # Get node pose at reference time
@@ -286,9 +284,7 @@ def render_clip(
     """
     _check_torch()
 
-    device = times.device
     T = times.shape[0]
-    H, W = camera.height, camera.width
 
     frames = []
     for t_idx in range(T):
@@ -340,7 +336,7 @@ def apply_color_shift(
             cos_h = np.cos(hue_shift)
             sin_h = np.sin(hue_shift)
             # Simple RGB rotation approximation
-            r, g, b = tex[0], tex[1], tex[2]
+            r, g = tex[0], tex[1]
             tex[0] = cos_h * r + sin_h * g
             tex[1] = -sin_h * r + cos_h * g
             tex = torch.clamp(tex, 0, 1)

@@ -8,7 +8,6 @@ Verifies:
 """
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
 from pathlib import Path
 
 
@@ -140,7 +139,7 @@ def print_consumer_surplus_summary(df):
 
     # Validate guarantee
     validation = validate_consumer_surplus_guarantee(df)
-    print(f"\n[CONSUMER SURPLUS GUARANTEE]")
+    print("\n[CONSUMER SURPLUS GUARANTEE]")
     print(f"  Total episodes: {validation['n_total']}")
     print(f"  Valid episodes (cost <= wage): {validation['n_total'] - validation['n_violations']}")
     print(f"  Violations: {validation['n_violations']}")
@@ -153,7 +152,7 @@ def print_consumer_surplus_summary(df):
         print("\n  ✅ Consumer surplus guarantee holds for ALL episodes")
 
     # Consumer surplus stats
-    print(f"\n[CONSUMER SURPLUS STATISTICS]")
+    print("\n[CONSUMER SURPLUS STATISTICS]")
     print(f"  Mean: ${df['consumer_surplus'].mean():.2f}/hr")
     print(f"  Std: ${df['consumer_surplus'].std():.2f}/hr")
     print(f"  Min: ${df['consumer_surplus'].min():.2f}/hr")
@@ -161,14 +160,14 @@ def print_consumer_surplus_summary(df):
     print(f"  Median: ${df['consumer_surplus'].median():.2f}/hr")
 
     # Customer cost stats
-    print(f"\n[CUSTOMER COST STATISTICS]")
+    print("\n[CUSTOMER COST STATISTICS]")
     print(f"  Mean: ${df['customer_cost'].mean():.2f}/hr")
     print(f"  Std: ${df['customer_cost'].std():.2f}/hr")
     print(f"  Min: ${df['customer_cost'].min():.2f}/hr")
     print(f"  Max: ${df['customer_cost'].max():.2f}/hr")
 
     # Wage indexing
-    print(f"\n[WAGE INDEXING]")
+    print("\n[WAGE INDEXING]")
     print(f"  Initial wₕ: ${df['w_h_indexed'].iloc[0]:.2f}/hr")
     print(f"  Final wₕ: ${df['w_h_indexed'].iloc[-1]:.2f}/hr")
     print(f"  Change: ${df['w_h_indexed'].iloc[-1] - df['w_h_indexed'].iloc[0]:.2f}/hr ({100*(df['w_h_indexed'].iloc[-1]/df['w_h_indexed'].iloc[0] - 1):.2f}%)")
@@ -176,7 +175,7 @@ def print_consumer_surplus_summary(df):
 
     # Customer savings
     avg_savings_pct = 100 * df['consumer_surplus'].mean() / df['w_h_indexed'].mean()
-    print(f"\n[CUSTOMER SAVINGS]")
+    print("\n[CUSTOMER SAVINGS]")
     print(f"  Avg savings vs human: {avg_savings_pct:.2f}%")
     print(f"  Total savings (all episodes): ${df['consumer_surplus'].sum():.2f}")
 

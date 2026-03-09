@@ -9,7 +9,6 @@ Visualizes:
 """
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
 from pathlib import Path
 
 
@@ -120,28 +119,28 @@ def plot_spread_allocation(log_path='logs/sac_train.csv',
     if n_with_spread > 0:
         spread_df = df[has_spread]
 
-        print(f"\nSpread value:")
+        print("\nSpread value:")
         print(f"  Mean: ${spread_df['spread_value'].mean():.4f}")
         print(f"  Std:  ${spread_df['spread_value'].std():.4f}")
         print(f"  Min:  ${spread_df['spread_value'].min():.4f}")
         print(f"  Max:  ${spread_df['spread_value'].max():.4f}")
 
-        print(f"\nCustomer rebate:")
+        print("\nCustomer rebate:")
         print(f"  Mean: ${spread_df['rebate'].mean():.4f}")
         print(f"  Total: ${spread_df['rebate'].sum():.2f}")
 
-        print(f"\nPlatform captured:")
+        print("\nPlatform captured:")
         print(f"  Mean: ${spread_df['captured_spread'].mean():.4f}")
         print(f"  Total: ${spread_df['captured_spread'].sum():.2f}")
 
-        print(f"\nContribution shares (when spread > 0):")
+        print("\nContribution shares (when spread > 0):")
         print(f"  s_cust mean: {spread_df['s_cust'].mean():.4f}")
         print(f"  s_plat mean: {spread_df['s_plat'].mean():.4f}")
 
         # Check allocation accuracy
         sum_allocated = spread_df['rebate'] + spread_df['captured_spread']
         error = (sum_allocated - spread_df['spread_value']).abs()
-        print(f"\nAllocation accuracy:")
+        print("\nAllocation accuracy:")
         print(f"  Mean absolute error: ${error.mean():.6f}")
         print(f"  Max absolute error:  ${error.max():.6f}")
 

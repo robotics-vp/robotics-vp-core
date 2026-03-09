@@ -4,13 +4,21 @@ Parametric part primitives for workcell scenes.
 from __future__ import annotations
 
 import random
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, TypedDict
 
 from src.envs.workcell_env.scene.scene_spec import PartSpec
 
 PartDimensions = Tuple[float, float, float]
 
-PART_LIBRARY: Dict[str, Dict[str, object]] = {
+
+class PartLibraryEntry(TypedDict):
+    dimensions_mm: PartDimensions
+    mass_kg: float
+    material: str
+    variation: float
+
+
+PART_LIBRARY: Dict[str, PartLibraryEntry] = {
     "bolt": {
         "dimensions_mm": (8.0, 8.0, 40.0),
         "mass_kg": 0.02,
@@ -64,7 +72,12 @@ def sample_part_dimensions_mm(
     entry = PART_LIBRARY.get(part_type, PART_LIBRARY["bolt"])
     base = entry["dimensions_mm"]
     variation = float(entry.get("variation", 0.15))
-    return tuple(dim * (1.0 + rng.uniform(-variation, variation)) for dim in base)
+    width, height, depth = base
+    return (
+        width * (1.0 + rng.uniform(-variation, variation)),
+        height * (1.0 + rng.uniform(-variation, variation)),
+        depth * (1.0 + rng.uniform(-variation, variation)),
+    )
 
 
 def generate_part_spec(

@@ -245,23 +245,23 @@ def analyze_datapacks(
     print("Economic Semantic Analysis Results")
     print("=" * 70)
     print(f"Total datapacks: {stats['total_datapacks']}")
-    print(f"\nObjective preset distribution:")
+    print("\nObjective preset distribution:")
     for preset, count in stats['objective_preset_distribution'].items():
         print(f"  {preset}: {count}")
 
-    print(f"\nMain driver distribution:")
+    print("\nMain driver distribution:")
     for driver, count in stats['main_driver_distribution'].items():
         print(f"  {driver}: {count}")
 
-    print(f"\nTier distribution:")
+    print("\nTier distribution:")
     for tier, count in stats['tier_distribution'].items():
         print(f"  Tier {tier}: {count}")
 
-    print(f"\nSuggested action distribution:")
+    print("\nSuggested action distribution:")
     for action, count in stats['suggested_action_distribution'].items():
         print(f"  {action}: {count}")
 
-    print(f"\nAverage economic deltas:")
+    print("\nAverage economic deltas:")
     print(f"  ΔMPL: {stats['avg_delta_mpl']:.3f}")
     print(f"  Δerror: {stats['avg_delta_error']:.3f}")
     print(f"  ΔJ: {stats['avg_delta_J']:.3f}")

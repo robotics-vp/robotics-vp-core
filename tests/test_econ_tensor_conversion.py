@@ -3,10 +3,8 @@
 Verifies deterministic conversion between econ dicts and EconTensorV1.
 """
 import pytest
-from typing import Dict
 
 from src.contracts.schemas import EconBasisSpecV1, EconTensorV1, RegimeFeaturesV1
-from src.economics.econ_basis_registry import get_default_basis, ECON_BASIS_V1
 from src.economics.econ_tensor import (
     econ_to_tensor,
     tensor_to_econ_dict,
@@ -93,7 +91,6 @@ class TestEconToTensor:
 
     def test_nan_inf_handling(self):
         """Test NaN and Inf values are replaced with 0.0."""
-        import math
         econ_data = {
             "mpl_units_per_hour": float("nan"),
             "wage_parity": float("inf"),

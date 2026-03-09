@@ -1,6 +1,5 @@
 """Tests for probe epiplexity harness and homeostasis gates."""
 import numpy as np
-import pytest
 
 from src.contracts.schemas import (
     ProbeEpiReportV1, ProbeConfigV1,
@@ -9,8 +8,6 @@ from src.contracts.schemas import (
 from src.evaluation.probe_harness import (
     ProbeHarness,
     ProbeHarnessConfig,
-    LinearProbe,
-    MLPProbe,
     create_probe,
     get_probe_harness,
 )
@@ -18,9 +15,7 @@ from src.orchestrator.homeostatic_plan_writer import (
     build_signal_bundle_for_plan,
     build_plan_from_signals,
     check_gates,
-    GateStatus,
 )
-from src.representation.homeostasis import SignalType, ActionType
 
 
 class TestProbeHarness:

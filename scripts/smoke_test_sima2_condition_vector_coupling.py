@@ -201,7 +201,7 @@ def test_determinism():
     vec2 = cv2.to_vector()
     assert (vec1 == vec2).all(), "Vectors should be deterministic"
 
-    print(f"  ✓ SIMA-2 coupling is deterministic")
+    print("  ✓ SIMA-2 coupling is deterministic")
 
 
 def test_bounded_outputs():
@@ -249,7 +249,7 @@ def test_bounded_outputs():
         assert 0.0 <= cv.recovery_priority <= 1.0, \
             f"Context {i}: Recovery priority out of bounds: {cv.recovery_priority}"
 
-    print(f"  ✓ All outputs correctly bounded to [0, 1]")
+    print("  ✓ All outputs correctly bounded to [0, 1]")
 
 
 def main():

@@ -15,7 +15,6 @@ from src.contracts.schemas import (
     RegalPhaseV1,
     RegalContextV1,
     LedgerRegalV1,
-    PlanPolicyConfigV1,
 )
 from src.valuation.trajectory_audit import (
     create_trajectory_audit,

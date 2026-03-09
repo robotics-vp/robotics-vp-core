@@ -183,7 +183,7 @@ def test_difficulty_features() -> bool:
     print("=" * 60)
 
     try:
-        from src.envs.workcell_env.config import WorkcellEnvConfig, PRESETS
+        from src.envs.workcell_env.config import PRESETS
         from src.envs.workcell_env.difficulty.difficulty_features import compute_difficulty_features
 
         for name, config in PRESETS.items():

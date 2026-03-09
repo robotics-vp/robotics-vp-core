@@ -57,7 +57,7 @@ if TORCH_AVAILABLE:
     class UNetEncoder(nn.Module):
         """U-Net encoder (downsampling path)."""
 
-        def __init__(self, in_channels: int = 3, features: List[int] = None):
+        def __init__(self, in_channels: int = 3, features: Optional[List[int]] = None):
             super().__init__()
             if features is None:
                 features = [64, 128, 256, 512]
@@ -149,7 +149,7 @@ if TORCH_AVAILABLE:
             self,
             in_channels: int = 3,
             num_primitives: int = 10,
-            features: List[int] = None,
+            features: Optional[List[int]] = None,
             freeze_encoder: bool = False,
             seed: int = 0,
         ):

@@ -2,7 +2,6 @@
 """
 Smoke test for importing SIMA-2 semantics into ontology.
 """
-import json
 import tempfile
 from pathlib import Path
 import sys

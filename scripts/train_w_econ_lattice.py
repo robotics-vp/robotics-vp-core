@@ -420,7 +420,7 @@ def main():
             print(f"  Loaded {n_real} real episode samples")
 
             # Show real data statistics
-            print(f"\nReal episode data statistics:")
+            print("\nReal episode data statistics:")
             print(f"  ΔMPL: mean={real_data['delta_mpl'].mean():.4f}, "
                   f"std={real_data['delta_mpl'].std():.4f}, "
                   f"range=[{real_data['delta_mpl'].min():.4f}, {real_data['delta_mpl'].max():.4f}]")
@@ -476,14 +476,14 @@ def main():
     print(f"Training: {n_train}, Validation: {total_samples - n_train}")
 
     # Teacher weight statistics
-    print(f"\nTeacher weight statistics:")
+    print("\nTeacher weight statistics:")
     print(f"  Mean: {all_data['teacher_weight'].mean():.4f}")
     print(f"  Std:  {all_data['teacher_weight'].std():.4f}")
     print(f"  Min:  {all_data['teacher_weight'].min():.4f}")
     print(f"  Max:  {all_data['teacher_weight'].max():.4f}")
 
     # Create model
-    print(f"\nCreating lattice model...")
+    print("\nCreating lattice model...")
     model = WEconLattice(
         n_bricks=n_bricks,
         brick_emb_dim=8,
@@ -533,7 +533,7 @@ def main():
     mae = torch.abs(val_pred - val_target).mean().item()
     corr = np.corrcoef(val_pred.cpu().numpy(), val_target.cpu().numpy())[0, 1]
 
-    print(f"\nFinal evaluation:")
+    print("\nFinal evaluation:")
     print(f"  MSE: {mse:.6f}")
     print(f"  MAE: {mae:.4f}")
     print(f"  Correlation: {corr:.4f}")
@@ -576,13 +576,13 @@ def main():
     os.makedirs('results', exist_ok=True)
     with open('results/w_econ_lattice_training.json', 'w') as f:
         json.dump(report, f, indent=2)
-    print(f"Saved report to results/w_econ_lattice_training.json")
+    print("Saved report to results/w_econ_lattice_training.json")
 
     print("\n" + "="*70)
     print("DONE")
     print("="*70)
-    print(f"Deep lattice economic weighting network trained successfully")
-    print(f"Ready for integration into offline RL with trust + econ weights")
+    print("Deep lattice economic weighting network trained successfully")
+    print("Ready for integration into offline RL with trust + econ weights")
 
 
 if __name__ == '__main__':

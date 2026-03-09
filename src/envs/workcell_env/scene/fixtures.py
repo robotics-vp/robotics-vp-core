@@ -4,6 +4,7 @@ Parametric fixture definitions for workcell scenes.
 from __future__ import annotations
 
 import random
+from typing import cast
 from typing import Dict, Optional, Sequence, Tuple
 
 from src.envs.workcell_env.scene.scene_spec import ConveyorSpec, FixtureSpec
@@ -40,7 +41,10 @@ def sample_fixture_dimensions_mm(
     rng = rng or random.Random()
     base = DEFAULT_FIXTURE_DIMENSIONS_MM.get(fixture_type, (300.0, 200.0, 120.0))
     variation = FIXTURE_VARIATION_FRACTION.get(fixture_type, 0.1)
-    return tuple(dim * (1.0 + rng.uniform(-variation, variation)) for dim in base)
+    return cast(
+        FixtureDimensions,
+        tuple(dim * (1.0 + rng.uniform(-variation, variation)) for dim in base),
+    )
 
 
 def sample_clamp_force_n(

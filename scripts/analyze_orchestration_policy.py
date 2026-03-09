@@ -5,7 +5,6 @@ Analyze orchestration transformer policy vs heuristic teacher across regimes.
 import argparse
 import json
 import os
-import numpy as np
 import torch
 
 from src.orchestrator.orchestration_transformer import OrchestrationTransformer, decode_tool

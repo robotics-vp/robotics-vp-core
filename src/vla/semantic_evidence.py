@@ -87,7 +87,9 @@ def build_vla_semantic_evidence_payload(
         base_conf = 0.35 if vla_available else 0.05
         confidence_arr = np.full((T, K), base_conf, dtype=np.float32)
     elif np.isscalar(confidence):
-        confidence_arr = np.full((T, K), float(confidence), dtype=np.float32)
+        confidence_scalar = np.asarray(confidence, dtype=np.float32).reshape(-1)
+        confidence_value = float(confidence_scalar[0]) if confidence_scalar.size > 0 else 0.0
+        confidence_arr = np.full((T, K), confidence_value, dtype=np.float32)
     else:
         confidence_arr = np.asarray(confidence, dtype=np.float32)
 

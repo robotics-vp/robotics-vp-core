@@ -150,7 +150,7 @@ class HeuristicSegmenter:
                             start_t=current_segment_start,
                             end_t=end_t,
                             label=current_label,
-                            object_name=current_object,
+                            object_name=current_object or "unknown",
                             contact_state=prev_contact,
                             event_lookup=event_lookup,
                         )
@@ -174,7 +174,7 @@ class HeuristicSegmenter:
                     start_t=current_segment_start,
                     end_t=end_t,
                     label=current_label,
-                    object_name=current_object,
+                    object_name=current_object or "unknown",
                     contact_state=prev_contact,
                     event_lookup=event_lookup,
                 )

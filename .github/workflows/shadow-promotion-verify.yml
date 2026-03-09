@@ -22,8 +22,12 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install -e .
           python3 -m pip install -r requirements-dev.txt
+
+      - name: Quality ratchet
+        run: |
+          python3 scripts/ci/check_ruff_ratchet.py
+          python3 scripts/ci/check_mypy_ratchet.py
 
       - name: Verify compile and tests
         run: python3 scripts/run_full_repo_verification.py --skip-ruff --skip-format --skip-mypy

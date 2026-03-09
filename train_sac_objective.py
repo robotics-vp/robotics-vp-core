@@ -10,13 +10,11 @@ import json
 import os
 import time
 import numpy as np
-import torch
 
 from src.config.econ_params import load_econ_params
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.objective_profile import ObjectiveVector
 from src.envs.dishwashing_env import DishwashingEnv, summarize_episode_info
-from src.rl.sac import SACAgent
 from src.rl.reward_shaping import compute_econ_reward
 from src.valuation.reward_builder import build_reward_terms, combine_reward, default_objective_vector
 from src.utils.experimental_flags import assert_experimental_flag_acknowledged
@@ -38,9 +36,6 @@ def train_sac_objective(
     # NOTE: SAC agent creation is deferred due to encoder requirements.
     # For experimental objective-conditioned training, we run episodes with random policy
     # to demonstrate the reward builder integration. Full SAC training requires encoder setup.
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    agent = None  # Placeholder - use random actions for now
-
     # Get objective vector from preset
     try:
         obj_vec_obj = ObjectiveVector.from_preset(objective_preset)
@@ -76,7 +71,7 @@ def train_sac_objective(
     print(f"  Save dir: {run_dir}")
 
     for ep in range(episodes):
-        obs = env.reset()
+        env.reset()
         done = False
         info_history = []
         legacy_reward_sum = 0.0
@@ -132,7 +127,6 @@ def train_sac_objective(
             # In full implementation, agent.store_transition + agent.update() here
             legacy_reward_sum += legacy_reward
             objective_reward_sum += reward_to_use
-            obs = next_obs
             steps += 1
             if steps > 500:
                 break

@@ -14,7 +14,6 @@ from src.valuation.portable_datapacks import (
     compute_slice_labels_v1,
     compute_repr_tokens_v1,
 )
-from src.representation.token_providers import SceneGraphTokenProvider
 
 
 def _scene_graphs_from_scene_tracks(scene_tracks_payload):

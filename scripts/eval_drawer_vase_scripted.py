@@ -185,7 +185,7 @@ def evaluate_scripted_policy(n_episodes=20, render=False, datapack_path=None, us
     print(f"Clearance: mean={mean_clearance:.4f}, std={std_clearance:.4f}, min={min_clearance:.4f}")
     print(f"Energy usage: mean={mean_energy:.4f} Wh")
     print(f"Episode length: mean={mean_length:.1f} steps")
-    print(f"\nTermination reasons:")
+    print("\nTermination reasons:")
     for reason, count in sorted(termination_reasons.items(), key=lambda x: -x[1]):
         print(f"  {reason}: {count} ({count/n_episodes:.1%})")
 
@@ -229,7 +229,7 @@ def evaluate_scripted_policy(n_episodes=20, render=False, datapack_path=None, us
 
     with open('results/drawer_vase_scripted_eval.json', 'w') as f:
         json.dump(results, f, indent=2)
-    print(f"\nSaved results to results/drawer_vase_scripted_eval.json")
+    print("\nSaved results to results/drawer_vase_scripted_eval.json")
 
     # Save via DataPackRepo (unified format)
     if use_repo and datapack_metas:

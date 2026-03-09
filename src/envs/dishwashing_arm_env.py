@@ -5,11 +5,12 @@ This runs in parallel to the existing kinematic env (src/envs/dishwashing_env.py
 is intended as an "energy bench" to exercise τ·ω-based energy metrics without touching
 the frozen Phase B stack.
 """
-import numpy as np
-import pybullet as p
-import pybullet_data
 from collections import deque
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import pybullet as p  # type: ignore[import-not-found]
+import pybullet_data  # type: ignore[import-not-found,import-untyped]
 
 from src.config.econ_params import EconParams
 from src.envs.dishwashing_env import EpisodeInfoSummary, summarize_episode_info
@@ -29,8 +30,14 @@ class DishwashingArmEnv:
     Uses torque/velocity from joint states to populate energy attribution.
     """
 
-    def __init__(self, frames: int = 4, image_size: Tuple[int, int] = (64, 64),
-                 max_steps: int = 120, headless: bool = True, econ_params: EconParams = None):
+    def __init__(
+        self,
+        frames: int = 4,
+        image_size: Tuple[int, int] = (64, 64),
+        max_steps: int = 120,
+        headless: bool = True,
+        econ_params: Optional[EconParams] = None,
+    ):
         self.frames = frames
         self.image_height, self.image_width = image_size
         self.max_steps = max_steps
@@ -65,21 +72,21 @@ class DishwashingArmEnv:
         self.attempts = 0
         self.errors = 0
         self.energy_Wh = 0.0
-        self.limb_energy_Wh = {k: 0.0 for k in LIMB_GROUPS}
-        self.joint_energy_Wh = {}
-        self.skill_energy_Wh = {}
-        self.limb_power_sum_W = {k: 0.0 for k in LIMB_GROUPS}
-        self.limb_peak_power_W = {k: 0.0 for k in LIMB_GROUPS}
-        self.joint_power_sum_W = {}
-        self.joint_peak_power_W = {}
-        self.joint_abs_vel_sum = {}
-        self.joint_abs_tau_sum = {}
-        self.joint_max_vel = {}
-        self.joint_max_tau = {}
-        self.joint_dir_counts = {}
-        self.effector_energy_Wh = {"ee_main": 0.0}
+        self.limb_energy_Wh: Dict[str, float] = {k: 0.0 for k in LIMB_GROUPS}
+        self.joint_energy_Wh: Dict[str, float] = {}
+        self.skill_energy_Wh: Dict[str, float] = {}
+        self.limb_power_sum_W: Dict[str, float] = {k: 0.0 for k in LIMB_GROUPS}
+        self.limb_peak_power_W: Dict[str, float] = {k: 0.0 for k in LIMB_GROUPS}
+        self.joint_power_sum_W: Dict[str, float] = {}
+        self.joint_peak_power_W: Dict[str, float] = {}
+        self.joint_abs_vel_sum: Dict[str, float] = {}
+        self.joint_abs_tau_sum: Dict[str, float] = {}
+        self.joint_max_vel: Dict[str, float] = {}
+        self.joint_max_tau: Dict[str, float] = {}
+        self.joint_dir_counts: Dict[str, Dict[str, int]] = {}
+        self.effector_energy_Wh: Dict[str, float] = {"ee_main": 0.0}
 
-        self.frame_buffer = deque(maxlen=frames)
+        self.frame_buffer: deque[Any] = deque(maxlen=frames)
 
     def reset(self):
         if self.physics_client is not None:
@@ -209,7 +216,7 @@ class DishwashingArmEnv:
         attempt_prob = 0.2
         if np.random.rand() < attempt_prob:
             self.attempts += 1
-            speed_mag = np.linalg.norm(target_vel)
+            speed_mag = float(np.linalg.norm(target_vel))
             error_prob = 0.1 + 0.4 * max(0.0, speed_mag - 0.5)
             if np.random.rand() < error_prob:
                 self.errors += 1

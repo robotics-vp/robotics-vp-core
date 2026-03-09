@@ -8,7 +8,7 @@ with time-varying pose and view-dependent appearance.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
 import numpy as np
 
@@ -23,7 +23,7 @@ except ImportError:
     F = None  # type: ignore
     TORCH_AVAILABLE = False
 
-from src.vision.nag.types import NAGNodeId, PlaneParams, PoseSplineParams
+from src.vision.nag.types import CameraParams, NAGNodeId, PlaneParams, PoseSplineParams
 
 
 def _check_torch() -> None:
@@ -46,7 +46,7 @@ class SmallMLP(nn.Module):
         super().__init__()
         _check_torch()
 
-        layers = []
+        layers: list[nn.Module] = []
         dims = [in_dim] + [hidden_dim] * (num_layers - 1) + [out_dim]
 
         for i in range(len(dims) - 1):
@@ -160,10 +160,13 @@ class NAGPlaneNode(nn.Module):
 
     def get_pose_spline(self) -> PoseSplineParams:
         """Get current pose spline with updated parameters."""
+        knot_times = cast(torch.Tensor, self.spline_knot_times)
+        translations = cast(torch.Tensor, self.spline_translations)
+        euler_angles = cast(torch.Tensor, self.spline_euler_angles)
         return PoseSplineParams(
-            knot_times=self.spline_knot_times.detach().cpu().numpy(),
-            translations=self.spline_translations.detach().cpu().numpy(),
-            euler_angles=self.spline_euler_angles.detach().cpu().numpy(),
+            knot_times=np.asarray(knot_times.detach().cpu().tolist(), dtype=np.float32),
+            translations=np.asarray(translations.detach().cpu().tolist(), dtype=np.float32),
+            euler_angles=np.asarray(euler_angles.detach().cpu().tolist(), dtype=np.float32),
         )
 
     def pose_at(self, t: torch.Tensor) -> torch.Tensor:
@@ -181,26 +184,28 @@ class NAGPlaneNode(nn.Module):
             t = t.unsqueeze(0)
 
         B = t.shape[0]
-        device = t.device
+        knot_times = cast(torch.Tensor, self.spline_knot_times)
+        spline_translations = cast(torch.Tensor, self.spline_translations)
+        spline_euler_angles = cast(torch.Tensor, self.spline_euler_angles)
 
         # Clamp t to valid range
-        t_min = self.spline_knot_times[0]
-        t_max = self.spline_knot_times[-1]
+        t_min = knot_times[0]
+        t_max = knot_times[-1]
         t_clamped = torch.clamp(t, t_min, t_max)
 
         # Find segment indices
         # Note: simple linear interpolation for now
-        idx = torch.searchsorted(self.spline_knot_times, t_clamped, right=True) - 1
-        idx = torch.clamp(idx, 0, len(self.spline_knot_times) - 2)
+        idx = torch.searchsorted(knot_times, t_clamped, right=True) - 1
+        idx = torch.clamp(idx, 0, len(knot_times) - 2)
 
-        t0 = self.spline_knot_times[idx]
-        t1 = self.spline_knot_times[idx + 1]
+        t0 = knot_times[idx]
+        t1 = knot_times[idx + 1]
         alpha = (t_clamped - t0) / (t1 - t0 + 1e-8)
         alpha = torch.clamp(alpha, 0, 1).unsqueeze(-1)
 
         # Interpolate translation and Euler angles
-        trans = (1 - alpha) * self.spline_translations[idx] + alpha * self.spline_translations[idx + 1]
-        euler = (1 - alpha) * self.spline_euler_angles[idx] + alpha * self.spline_euler_angles[idx + 1]
+        trans = (1 - alpha) * spline_translations[idx] + alpha * spline_translations[idx + 1]
+        euler = (1 - alpha) * spline_euler_angles[idx] + alpha * spline_euler_angles[idx + 1]
 
         # Build rotation matrices
         transforms = self._euler_to_matrix_batch(trans, euler)
@@ -415,7 +420,7 @@ def create_plane_node_from_box(
     node_id: NAGNodeId,
     box: np.ndarray,
     depth: float,
-    camera: "CameraParams",
+    camera: CameraParams,
     t_ref: float = 0.0,
     atlas_size: Tuple[int, int] = (256, 256),
 ) -> NAGPlaneNode:
@@ -433,8 +438,6 @@ def create_plane_node_from_box(
     Returns:
         Initialized NAGPlaneNode
     """
-    from src.vision.nag.types import CameraParams
-
     _check_torch()
 
     x1, y1, x2, y2 = box

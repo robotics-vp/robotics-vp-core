@@ -163,6 +163,8 @@ class SemanticAggregator:
             for mt in mobility_tags:
                 achieved = getattr(mt, "achieved_mm", None) or (mt.get("achieved_mm") if isinstance(mt, dict) else 0.0)
                 target = getattr(mt, "target_mm", None) or (mt.get("target_mm") if isinstance(mt, dict) else 1.0)
+                if achieved is None or target is None:
+                    continue
                 drift = max(float(achieved) - float(target), 0.0)
                 drift_rates.append(drift / max(float(target), 1.0))
         drift_rate = float(sum(drift_rates) / len(drift_rates)) if drift_rates else 0.0

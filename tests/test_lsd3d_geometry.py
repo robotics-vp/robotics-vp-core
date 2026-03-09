@@ -3,7 +3,6 @@ Tests for LSD-3D style geometry (voxels, mesh, gaussians).
 """
 
 import numpy as np
-import pytest
 
 from src.envs.lsd3d_env.proxy_geometry import (
     Mesh,

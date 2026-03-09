@@ -14,7 +14,6 @@ import numpy as np
 import torch
 import pandas as pd
 import matplotlib.pyplot as plt
-from pathlib import Path
 
 from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
 from src.rl.sac import SACAgent
@@ -257,7 +256,7 @@ def lambda_shadow_price_curve(checkpoint_path='checkpoints/sac_final.pt'):
 
     plt.tight_layout()
     plt.savefig('plots/lambda_shadow_price.png', dpi=150)
-    print(f"  Saved: plots/lambda_shadow_price.png")
+    print("  Saved: plots/lambda_shadow_price.png")
 
     return logs[['episode', 'err_rate', 'err_target', 'lambda_dual']]
 
@@ -295,7 +294,7 @@ def profit_vs_wage_parity_trajectory():
 
     plt.tight_layout()
     plt.savefig('plots/profit_vs_wage_parity.png', dpi=150)
-    print(f"  Saved: plots/profit_vs_wage_parity.png")
+    print("  Saved: plots/profit_vs_wage_parity.png")
 
     return logs[['episode', 'profit', 'wage_parity']]
 
@@ -351,7 +350,7 @@ def plot_elasticity_results(price_df, damage_df, wage_df):
 
     plt.tight_layout()
     plt.savefig('plots/elasticity_curves.png', dpi=150)
-    print(f"  Saved: plots/elasticity_curves.png")
+    print("  Saved: plots/elasticity_curves.png")
 
 
 def run_all_experiments(checkpoint_path='checkpoints/sac_final.pt',
@@ -376,8 +375,8 @@ def run_all_experiments(checkpoint_path='checkpoints/sac_final.pt',
     wage_df = wage_benchmark_elasticity(agent, base_params, episodes_per_point)
 
     # Training analysis
-    lambda_df = lambda_shadow_price_curve(checkpoint_path)
-    trajectory_df = profit_vs_wage_parity_trajectory()
+    lambda_shadow_price_curve(checkpoint_path)
+    profit_vs_wage_parity_trajectory()
 
     # Generate plots
     plot_elasticity_results(price_df, damage_df, wage_df)

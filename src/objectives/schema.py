@@ -28,7 +28,7 @@ class ObjectiveTensorSchema:
             "energy": "wh_per_unit",
         }
     )
-    normalization: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    normalization: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     allowed_transforms: Tuple[str, ...] = (
         "identity",
         "scale",

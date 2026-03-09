@@ -109,11 +109,11 @@ class OracleDistanceLabelProvider(LabelProvider):
             goal_idx = T - 1
 
         # Compute distances to goal
-        distances = []
+        distances_list: List[float] = []
         for ff in episode_features.frame_features:
             dist = np.linalg.norm(ff.pooled - goal_features)
-            distances.append(dist)
-        distances = np.array(distances)
+            distances_list.append(float(dist))
+        distances = np.asarray(distances_list, dtype=np.float32)
 
         # Max distance for normalization
         max_dist = max(distances.max(), 1e-6)
@@ -186,7 +186,7 @@ class TaskSuccessLabelProvider(LabelProvider):
 
         # Use success flag from global stats if not provided
         if success is None:
-            success = episode_features.global_stats.get("success", False)
+            success = bool(episode_features.global_stats.get("success", False))
 
         total_value = self.success_value if success else self.failure_value
 
@@ -287,7 +287,7 @@ if TORCH_AVAILABLE:
             input_dim = 4 * feature_dim + instruction_dim
 
             # Build MLP
-            layers = []
+            layers: List[nn.Module] = []
             in_dim = input_dim
             for i in range(num_layers):
                 layers.append(nn.Linear(in_dim, hidden_dim))
@@ -300,6 +300,7 @@ if TORCH_AVAILABLE:
 
             # Output heads
             self.hop_head = nn.Linear(hidden_dim, 1)  # hop prediction
+            self.uncertainty_head: Optional[nn.Linear]
 
             if output_uncertainty:
                 self.uncertainty_head = nn.Linear(hidden_dim, 1)  # log variance or confidence
@@ -466,12 +467,12 @@ if TORCH_AVAILABLE:
 
 else:
     # Fallback when PyTorch not available
-    class HopNet:
+    class HopNet:  # type: ignore[no-redef]
         """Placeholder when PyTorch not available."""
         def __init__(self, *args, **kwargs):
             raise RuntimeError("PyTorch required for HopNet")
 
-    class HopNetWrapper:
+    class HopNetWrapper:  # type: ignore[no-redef]
         """Placeholder when PyTorch not available."""
         def __init__(self, *args, **kwargs):
             raise RuntimeError("PyTorch required for HopNetWrapper")
@@ -518,7 +519,7 @@ class HeuristicHopPredictor:
         dist_after = np.linalg.norm(after_features - goal_features)
 
         # Normalize by initial distance
-        dist_init = np.linalg.norm(init_features - goal_features)
+        dist_init = float(np.linalg.norm(init_features - goal_features))
         if dist_init < 1e-6:
             dist_init = 1.0
 

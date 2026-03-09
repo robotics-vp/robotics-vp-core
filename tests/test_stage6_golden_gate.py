@@ -8,7 +8,6 @@ This test proves:
 3. Mutating artifacts without updating SHA fails the gate
 4. Deterministic seed produces same artifacts
 """
-import pytest
 import json
 import sys
 from pathlib import Path

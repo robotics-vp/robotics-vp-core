@@ -3,17 +3,13 @@
 Tests that applying a SemanticUpdatePlanV1 actually shifts the sampling distribution.
 """
 import json
-import tempfile
 from collections import Counter
-from pathlib import Path
 
-import pytest
 
 from src.contracts.schemas import (
     SemanticUpdatePlanV1,
     TaskGraphOp,
     PlanOpType,
-    TaskSamplerOverrides,
 )
 from src.orchestrator.plan_applier import PlanApplier
 

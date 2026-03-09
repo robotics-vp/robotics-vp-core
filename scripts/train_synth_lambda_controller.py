@@ -60,7 +60,6 @@ def run_single_lambda_experiment(
     Returns:
         run_data: dict with per-window metrics and final J
     """
-    from src.valuation.w_econ_lattice import WEconLattice
 
     # Load real and synthetic data
     real_data_path = profile['real_data_path']
@@ -204,7 +203,7 @@ def generate_training_data(lambda_grid, profile, n_runs_per_lambda=3):
     mean_j = {lam: np.mean(js) for lam, js in j_by_lambda.items()}
     lambda_best = max(mean_j.keys(), key=lambda k: mean_j[k])
 
-    print(f"\nMean J by λ:")
+    print("\nMean J by λ:")
     for lam in sorted(mean_j.keys()):
         marker = " <-- BEST" if lam == lambda_best else ""
         print(f"  λ={lam:.2f}: J={mean_j[lam]:.4f}{marker}")
@@ -331,7 +330,7 @@ def train_controller(training_samples, max_synth_share, n_epochs=200, lr=1e-3):
         mae = torch.abs(pred_val - y_val_unnorm).mean().item()
         mse = ((pred_val - y_val_unnorm) ** 2).mean().item()
 
-    print(f"\nFinal evaluation:")
+    print("\nFinal evaluation:")
     print(f"  MSE: {mse:.6f}")
     print(f"  MAE: {mae:.4f}")
     print(f"  Predicted mean: {pred_val.mean():.4f}")
@@ -419,13 +418,13 @@ def main():
     }
     with open('results/synth_lambda_controller_training.json', 'w') as f:
         json.dump(log, f, indent=2)
-    print(f"Saved training log to results/synth_lambda_controller_training.json")
+    print("Saved training log to results/synth_lambda_controller_training.json")
 
     print("\n" + "="*70)
     print("DONE")
     print("="*70)
     print(f"Controller trained to predict λ_best = {lambda_best:.2f}")
-    print(f"Based on meta-objective J computed from actual physics/econ outcomes")
+    print("Based on meta-objective J computed from actual physics/econ outcomes")
     print(f"Controller respects max_synth_share = {max_synth_share}")
     print()
     print("Next: Integrate into train_offline_with_local_synth.py")

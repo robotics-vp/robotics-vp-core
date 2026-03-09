@@ -8,8 +8,6 @@ Tests:
 3. RegalTrainingRunner defaults to env_type="workcell"
 4. All wrapped trainers use env_type="workcell"
 """
-import pytest
-import re
 import sys
 from pathlib import Path
 
@@ -168,7 +166,6 @@ class TestPendingMigrationTracking:
             check_script_compliance,
             find_training_scripts,
             load_migration_backlog,
-            TRAINING_SCRIPT_ALLOWLIST,
         )
         
         scripts_dir = ROOT / "scripts"
@@ -256,12 +253,12 @@ class TestPendingMigrationTracking:
         pending_count = len(data.get("backlog", []))
         migrated_count = len(data.get("migrated", []))
         
-        print(f"\n=== Migration Progress ===")
+        print("\n=== Migration Progress ===")
         print(f"  Pending: {pending_count}")
         print(f"  Migrated: {migrated_count}")
-        print(f"  Legacy: 5 (allowlisted)")
+        print("  Legacy: 5 (allowlisted)")
         print(f"  Compliant: {30 - pending_count - 5}")  # 30 total - pending - legacy
-        print(f"==========================")
+        print("==========================")
         
         # Track that we're making progress
         assert migrated_count >= 0, "Should track migrated scripts"

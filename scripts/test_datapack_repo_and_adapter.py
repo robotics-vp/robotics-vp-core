@@ -12,7 +12,6 @@ Demonstrates unified 2.0-energy schema with:
 
 import os
 import sys
-import json
 import shutil
 import numpy as np
 
@@ -248,7 +247,7 @@ def test_datapack_repo():
 
         # Get statistics
         stats = repo.get_statistics("drawer_vase")
-        print(f"\nRepository statistics:")
+        print("\nRepository statistics:")
         print(f"  Total: {stats['total']}")
         print(f"  Positive: {stats['positive']}")
         print(f"  Negative: {stats['negative']}")
@@ -367,7 +366,7 @@ def test_skill_datapack_adapter():
 
         # Test energy summary
         energy_summary = adapter.summarize_energy_usage("drawer_vase")
-        print(f"\nEnergy summary:")
+        print("\nEnergy summary:")
         print(f"  Mean total Wh: {energy_summary['total_wh_mean']:.4f}")
         print(f"  Mean Wh/unit: {energy_summary['wh_per_unit_mean']:.4f}")
 
@@ -437,13 +436,13 @@ def test_sima_vla_annotations():
         vla_plan=vla_plan
     )
 
-    print(f"SIMA Annotation:")
+    print("SIMA Annotation:")
     print(f"  Instruction: {dp.sima_annotation.instruction}")
     print(f"  Narration count: {dp.sima_annotation.narration_count}")
     print(f"  Avg narration length: {dp.sima_annotation.average_narration_length:.1f}")
     print(f"  Derived skill plan: {dp.sima_annotation.derived_skill_plan}")
 
-    print(f"\nVLA Plan:")
+    print("\nVLA Plan:")
     print(f"  Instruction: {dp.vla_plan['instruction']}")
     print(f"  Skill sequence: {dp.vla_plan['skill_sequence']}")
     print(f"  Confidence: {dp.vla_plan['confidence']}")
@@ -515,7 +514,7 @@ def test_legacy_conversion():
     # Convert to DataPackMeta
     dp = wrap_legacy_datapack(legacy_dict)
 
-    print(f"Converted from legacy format:")
+    print("Converted from legacy format:")
     print(f"  Schema version: {dp.schema_version}")
     print(f"  Env type: {dp.env_type}")
     print(f"  Bucket: {dp.bucket}")
@@ -526,7 +525,7 @@ def test_legacy_conversion():
 
     # Convert back to legacy
     back_to_legacy = dp.to_legacy_energy_dict()
-    print(f"\nConverted back to legacy:")
+    print("\nConverted back to legacy:")
     print(f"  Schema version: {back_to_legacy['schema_version']}")
     print(f"  Env type: {back_to_legacy['env_type']}")
     print(f"  Trust: {back_to_legacy['attribution']['trust']}")

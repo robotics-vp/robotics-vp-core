@@ -24,8 +24,7 @@ from src.config.internal_profile import get_internal_experiment_profile
 from src.valuation.w_econ_lattice import WEconLattice
 from src.controllers.synth_lambda_controller import (
     load_controller as load_lambda_controller,
-    build_feature_vector,
-    compute_meta_objective
+    build_feature_vector
 )
 
 
@@ -502,7 +501,7 @@ def run_ab_test():
 
     with open('results/3mode_ab_test.json', 'w') as f:
         json.dump(output, f, indent=2)
-    print(f"\nSaved results to results/3mode_ab_test.json")
+    print("\nSaved results to results/3mode_ab_test.json")
 
     return results, baseline_mse
 

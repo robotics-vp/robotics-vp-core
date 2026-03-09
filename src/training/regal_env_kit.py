@@ -102,7 +102,7 @@ def validate_env_regality(env: Any) -> Dict[str, Any]:
         - missing: list of missing requirements
         - reason: str if BASIC
     """
-    result = {
+    result: Dict[str, Any] = {
         "level": "NONE",
         "valid": False,
         "missing": [],

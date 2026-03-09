@@ -23,7 +23,6 @@ from src.orchestrator.training_dataset import (
     generate_heuristic_tool_sequence,
     context_to_sample,
     build_mixed_training_dataset,
-    split_dataset_by_source,
 )
 
 
@@ -212,29 +211,29 @@ def print_comparison(comparison: dict, index: int):
     print(f"Sample {index+1}")
     print(f"{'='*60}")
 
-    print(f"Context:")
+    print("Context:")
     print(f"  Customer: {ctx['customer_segment']}")
     print(f"  Energy Price: ${ctx['energy_price_kWh']:.3f}/kWh")
     print(f"  Objective: {[round(w, 2) for w in ctx['objective_vector']]}")
     print(f"  Trust: {ctx['mean_trust']:.3f}")
     print(f"  ΔMPL: {ctx['mean_delta_mpl']:.2f}, ΔError: {ctx['mean_delta_error']:.3f}")
 
-    print(f"\nHeuristic Teacher:")
+    print("\nHeuristic Teacher:")
     print(f"  Tool: {heur['tool']}")
     print(f"  Rationale: {heur['rationale']}")
 
-    print(f"\nModel Prediction:")
+    print("\nModel Prediction:")
     print(f"  Tool: {model['tool']}")
-    print(f"  Top Probabilities:")
+    print("  Top Probabilities:")
     sorted_probs = sorted(model["probabilities"].items(), key=lambda x: -x[1])
     for tool, prob in sorted_probs[:3]:
         marker = "*" if tool == model["tool"] else " "
         print(f"    {marker} {tool}: {prob:.3f}")
 
     if agree:
-        print(f"\n  ✓ AGREE")
+        print("\n  ✓ AGREE")
     else:
-        print(f"\n  ✗ DISAGREE")
+        print("\n  ✗ DISAGREE")
         print(f"    Model chose {model['tool']} instead of {heur['tool']}")
 
 
@@ -274,7 +273,7 @@ def main():
     print("\nLoading model...")
     try:
         model = load_model(args.checkpoint, args.hidden, args.ctx_dim, args.vocab_size)
-        print(f"Model loaded successfully")
+        print("Model loaded successfully")
     except Exception as e:
         print(f"Error loading model: {e}")
         print("\nTrying to infer context dimension from checkpoint...")
@@ -314,7 +313,7 @@ def main():
     # Analyze disagreements
     disagreements = [c for c in comparisons if not c["agree"]]
     if disagreements:
-        print(f"\nDisagreement patterns:")
+        print("\nDisagreement patterns:")
         tool_disagree = {}
         for d in disagreements:
             key = f"{d['heuristic']['tool']} -> {d['model']['tool']}"

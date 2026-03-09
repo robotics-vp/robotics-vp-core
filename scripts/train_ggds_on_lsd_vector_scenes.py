@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import sys
 import time
@@ -224,7 +223,6 @@ def train_ggds_on_scenes(
     Returns:
         Training summary with results per scene
     """
-    from src.config.lsd_vector_scene_config import LSDVectorSceneConfig
     from src.envs.lsd_vector_scene_env import (
         LSDVectorSceneEnv,
         LSDVectorSceneEnvConfig,

@@ -19,10 +19,13 @@ def make_motor_backend(
     if name == "holosoma":
         from src.motor_backend.holosoma_backend import HolosomaBackend
 
+        assert econ_meter is not None
+        assert store is not None
         return HolosomaBackend(econ_meter=econ_meter, datapack_provider=DatapackProvider(store))
     if name == "synthetic":
         from src.motor_backend.synthetic_backend import SyntheticBackend
 
+        assert econ_meter is not None
         return SyntheticBackend(econ_meter=econ_meter)
     if name == "lsd_vector_scene":
         from src.motor_backend.lsd_vector_scene_backend import LSDVectorSceneBackend
@@ -36,6 +39,7 @@ def make_motor_backend(
                 from src.config.lsd_vector_scene_config import load_lsd_vector_scene_config
                 lsd_config = load_lsd_vector_scene_config(backend_config)
 
+        assert econ_meter is not None
         return LSDVectorSceneBackend(econ_meter=econ_meter, default_config=lsd_config)
     if name == "workcell_env":
         from src.motor_backend.workcell_env_backend import WorkcellEnvBackend
@@ -48,6 +52,8 @@ def make_motor_backend(
             elif isinstance(backend_config, dict):
                 workcell_config = load_workcell_env_config(backend_config)
 
+        assert econ_meter is not None
+        assert store is not None
         return WorkcellEnvBackend(
             econ_meter=econ_meter,
             datapack_provider=DatapackProvider(store),
@@ -71,6 +77,8 @@ def make_motor_backend(
                 "Isaac Lab backend module is missing `WorkcellIsaacLabBackend`. "
                 "Add it to `src/motor_backend/workcell_isaaclab_backend.py`."
             ) from None
+        if econ_meter is None or store is None:
+            raise ValueError("make_motor_backend requires econ_meter and store for backend 'workcell_isaaclab'.")
         return backend_cls(
             econ_meter=econ_meter,
             datapack_provider=DatapackProvider(store),

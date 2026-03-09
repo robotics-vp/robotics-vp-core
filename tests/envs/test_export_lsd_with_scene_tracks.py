@@ -5,12 +5,10 @@ Verifies that scene_tracks_v1 exports have correct structure and dtypes.
 """
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 
 class TestExportWithSceneTracks:
@@ -21,7 +19,6 @@ class TestExportWithSceneTracks:
         from src.vision.scene_ir_tracker.types import SceneTracks, SceneEntity3D, SceneTrackerMetrics
         from src.vision.scene_ir_tracker.serialization import (
             serialize_scene_tracks_v1,
-            validate_no_object_arrays,
         )
         
         # Create sample tracks

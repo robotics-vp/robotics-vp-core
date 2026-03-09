@@ -142,13 +142,13 @@ def run_smoke_test(
         online_mode=False,  # Offline eval allows hindsight (goal from last frame)
     )
 
-    print(f"\nConfig:")
+    print("\nConfig:")
     print(f"  gamma: {cfg.gamma}")
     print(f"  use_confidence_gating: {cfg.use_confidence_gating}")
     print(f"  feature_dim: {cfg.feature_dim}")
 
     # Run process reward
-    print(f"\nComputing process reward...")
+    print("\nComputing process reward...")
     print(f"  Instruction: '{instruction}'")
 
     result = process_reward_episode(

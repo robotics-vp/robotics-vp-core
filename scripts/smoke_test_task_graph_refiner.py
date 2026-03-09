@@ -143,7 +143,7 @@ def main():
         assert ref.priority, "priority required"
         assert isinstance(ref.proposed_changes, dict), "proposed_changes must be dict"
         assert ref.rationale, "rationale required"
-    print(f"[TEST 3 PASS] All refinements have required fields")
+    print("[TEST 3 PASS] All refinements have required fields")
 
     # Test 4: Constraint compliance
     valid_refinements = refiner.validate_refinements(refinements)
@@ -200,7 +200,7 @@ def main():
             assert ref.proposed_changes["reordered_task_ids"] != ref.proposed_changes["original_order"]
         print(f"[TEST 8 PASS] Safety reordering working ({len(reorder_refs)} reorders)")
     else:
-        print(f"[TEST 8 SKIP] No reorder proposals (task graph may be optimal)")
+        print("[TEST 8 SKIP] No reorder proposals (task graph may be optimal)")
 
     # Test 9: Priority assignment
     critical_refs = [r for r in refinements if r.priority == RefinementPriority.CRITICAL]
@@ -214,20 +214,20 @@ def main():
     json_1 = json.dumps([r.to_dict() for r in refinements])
     json_2 = json.dumps([r.to_dict() for r in refinements_2])
     assert json_1 == json_2, "Determinism check: refinements must be identical"
-    print(f"[TEST 10 PASS] Determinism validated (stable ordering and content)")
+    print("[TEST 10 PASS] Determinism validated (stable ordering and content)")
 
     # Test 11: No DAG cycles (validation check)
     # All valid refinements should preserve DAG topology
     for ref in valid_refinements:
         assert ref.respects_dag_topology, "DAG topology must be preserved"
-    print(f"[TEST 11 PASS] DAG topology preserved (no cycles)")
+    print("[TEST 11 PASS] DAG topology preserved (no cycles)")
 
     # Test 12: Node preservation
     # Only SPLIT_TASK and MERGE_TASKS can replace nodes
     for ref in valid_refinements:
         if ref.refinement_type not in {RefinementType.SPLIT_TASK, RefinementType.MERGE_TASKS}:
             assert "delete_task" not in ref.proposed_changes, "Forbidden node deletion"
-    print(f"[TEST 12 PASS] Node preservation validated")
+    print("[TEST 12 PASS] Node preservation validated")
 
     print("[smoke_test_task_graph_refiner] All tests passed!")
 

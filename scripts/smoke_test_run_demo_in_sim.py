@@ -49,7 +49,7 @@ def test_run_demo_in_sim():
         "--output-dir", str(output_dir),
     ]
 
-    print(f"[smoke_test_run_demo_in_sim] Running command:")
+    print("[smoke_test_run_demo_in_sim] Running command:")
     print(f"  {' '.join(cmd)}")
     print()
 
@@ -80,7 +80,7 @@ def test_run_demo_in_sim():
         # Check episodes.jsonl exists
         episodes_path = output_dir / "episodes.jsonl"
         assert episodes_path.exists(), f"episodes.jsonl not found at {episodes_path}"
-        print(f"  ✓ episodes.jsonl created")
+        print("  ✓ episodes.jsonl created")
 
         # Parse episodes.jsonl
         with open(episodes_path, "r") as f:
@@ -104,30 +104,30 @@ def test_run_demo_in_sim():
         ]
         for field in required_fields:
             assert field in ep, f"Episode missing required field: {field}"
-        print(f"  ✓ Episode summary has all required fields")
+        print("  ✓ Episode summary has all required fields")
 
         # Check econ_summary structure
         econ_fields = ["avg_mpl", "avg_energy", "total_errors"]
         for field in econ_fields:
             assert field in ep["econ_summary"], f"econ_summary missing field: {field}"
-        print(f"  ✓ econ_summary has all required fields")
+        print("  ✓ econ_summary has all required fields")
 
         # Check ood_stats structure
         ood_fields = ["max_ood_risk", "ood_step_count", "ood_step_fraction"]
         for field in ood_fields:
             assert field in ep["ood_stats"], f"ood_stats missing field: {field}"
-        print(f"  ✓ ood_stats has all required fields")
+        print("  ✓ ood_stats has all required fields")
 
         # Check recovery_stats structure
         recovery_fields = ["max_recovery_priority", "recovery_step_count", "recovery_step_fraction"]
         for field in recovery_fields:
             assert field in ep["recovery_stats"], f"recovery_stats missing field: {field}"
-        print(f"  ✓ recovery_stats has all required fields")
+        print("  ✓ recovery_stats has all required fields")
 
         # Check steps.jsonl exists
         steps_path = output_dir / "steps.jsonl"
         assert steps_path.exists(), f"steps.jsonl not found at {steps_path}"
-        print(f"  ✓ steps.jsonl created")
+        print("  ✓ steps.jsonl created")
 
         # Parse steps.jsonl
         with open(steps_path, "r") as f:
@@ -149,7 +149,7 @@ def test_run_demo_in_sim():
         ]
         for field in step_fields:
             assert field in step, f"Step missing required field: {field}"
-        print(f"  ✓ Step log has all required fields")
+        print("  ✓ Step log has all required fields")
 
         # Check JSON-safe
         try:
@@ -157,7 +157,7 @@ def test_run_demo_in_sim():
             json.dumps(step)
         except Exception as e:
             raise AssertionError(f"Outputs not JSON-safe: {e}")
-        print(f"  ✓ All outputs are JSON-safe")
+        print("  ✓ All outputs are JSON-safe")
 
         print()
         print("="*80)

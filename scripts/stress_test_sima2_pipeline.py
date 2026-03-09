@@ -9,6 +9,7 @@ Implements SIMA2_SCALING_AND_STRESS_TESTS.md:
 - Tag frequency analytics and proposal explosion detection
 - Performance counters (throughput/latency)
 """
+
 import argparse
 import gc
 import json
@@ -17,7 +18,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence
 
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
@@ -26,12 +27,13 @@ from src.analytics.econ_correlator import load_trust_matrix
 from src.sima2.client import Sima2Client
 from src.sima2.config import load_sima2_config, extract_provenance
 from src.sima2.segmentation_engine import SegmentationEngine
-from src.sima2.semantic_primitive_extractor import SemanticPrimitiveExtractor, SemanticPrimitive
+from src.sima2.semantic_primitive_extractor import (
+    SemanticPrimitiveExtractor,
+    SemanticPrimitive,
+)
 from src.sima2.ontology_update_engine import OntologyUpdateEngine
 from src.sima2.task_graph_refiner import TaskGraphRefiner
 from src.sima2.semantic_tag_propagator import SemanticTagPropagator
-from src.sima2.ontology_proposals import OntologyUpdateProposal
-from src.sima2.task_graph_proposals import TaskGraphRefinementProposal
 from src.ontology.sima2_adapters import datapack_from_sima2_rollout
 from src.ontology.models import Task, Robot, Datapack, Episode, EconVector, EpisodeEvent
 from src.ontology.store import OntologyStore
@@ -89,9 +91,13 @@ def _episode_events(episode_id: str, rollout: Dict[str, Any]) -> List[EpisodeEve
     return events
 
 
-def _econ_vector(episode_id: str, task_id: str, primitives: List[Dict[str, Any]]) -> EconVector:
+def _econ_vector(
+    episode_id: str, task_id: str, primitives: List[Dict[str, Any]]
+) -> EconVector:
     energy_cost = float(len(primitives)) * 0.1
-    damage_cost = -0.1 * float(sum(1 for p in primitives if p.get("risk_level") == "high"))
+    damage_cost = -0.1 * float(
+        sum(1 for p in primitives if p.get("risk_level") == "high")
+    )
     mpl = float(len(primitives)) or 1.0
     return EconVector(
         episode_id=episode_id,
@@ -110,10 +116,24 @@ def _noise_rollout(task_id: str, idx: int) -> Dict[str, Any]:
         "episode_id": f"{task_id}_ep_{idx}",
         "task": task_id,
         "primitives": [
-            {"timestep": 0, "object": "noise", "action": "noop", "risk": "low", "contact": False},
-            {"timestep": 1, "object": "noise", "action": "wiggle", "risk": "medium", "contact": bool(idx % 2)},
+            {
+                "timestep": 0,
+                "object": "noise",
+                "action": "noop",
+                "risk": "low",
+                "contact": False,
+            },
+            {
+                "timestep": 1,
+                "object": "noise",
+                "action": "wiggle",
+                "risk": "medium",
+                "contact": bool(idx % 2),
+            },
         ],
-        "events": [{"timestep": 1, "event_type": "primitive", "payload": {"action": "wiggle"}}],
+        "events": [
+            {"timestep": 1, "event_type": "primitive", "payload": {"action": "wiggle"}}
+        ],
         "metadata": {"objects_present": ["noise"], "debug_mode": False},
     }
 
@@ -164,11 +184,17 @@ def main():
     parser = argparse.ArgumentParser(description="Stress test SIMA-2 pipeline")
     parser.add_argument("--num-rollouts", type=int, default=10000)
     parser.add_argument("--batch-size", type=int, default=500)
-    parser.add_argument("--task-distribution", type=str, default="dataset_stress_mix_v1")
+    parser.add_argument(
+        "--task-distribution", type=str, default="dataset_stress_mix_v1"
+    )
     parser.add_argument("--output-dir", type=str, default="results/sima2_stress")
-    parser.add_argument("--ontology-root", type=str, default="results/sima2_stress/ontology_store")
+    parser.add_argument(
+        "--ontology-root", type=str, default="results/sima2_stress/ontology_store"
+    )
     parser.add_argument("--emit-policy-datasets", action="store_true")
-    parser.add_argument("--policy-dataset-dir", type=str, default="results/policy_datasets_sima2_stress")
+    parser.add_argument(
+        "--policy-dataset-dir", type=str, default="results/policy_datasets_sima2_stress"
+    )
     parser.add_argument("--max-write-multiplier", type=float, default=50.0)
     args = parser.parse_args()
 
@@ -180,7 +206,9 @@ def main():
         },
         "dataset_edge_cases_v1": {"distribution": {"noise": 1.0}},
     }
-    preset = dataset_presets.get(args.task_distribution) or cfg.get("task_distribution", {}).get(args.task_distribution, {})
+    preset = dataset_presets.get(args.task_distribution) or cfg.get(
+        "task_distribution", {}
+    ).get(args.task_distribution, {})
     if not preset:
         preset = {"distribution": {"drawer_open": 0.5, "dish_place": 0.5}}
     tasks = _task_sequence(preset.get("distribution", preset), args.num_rollouts)
@@ -192,11 +220,23 @@ def main():
     primitive_extractor = SemanticPrimitiveExtractor()
 
     ontology = EnvironmentOntology(ontology_id="sima2_stress", name="sima2_stress")
-    task_graph = TaskGraph(TaskNode(task_id="root", name="root", task_type=TaskType.ROOT))
+    task_graph = TaskGraph(
+        TaskNode(task_id="root", name="root", task_type=TaskType.ROOT)
+    )
     econ_signals = EconSignals()
     datapack_signals = DatapackSignals()
-    ontology_engine = OntologyUpdateEngine(ontology=ontology, task_graph=task_graph, econ_signals=econ_signals, datapack_signals=datapack_signals)
-    refiner = TaskGraphRefiner(task_graph=task_graph, ontology=ontology, econ_signals=econ_signals, datapack_signals=datapack_signals)
+    ontology_engine = OntologyUpdateEngine(
+        ontology=ontology,
+        task_graph=task_graph,
+        econ_signals=econ_signals,
+        datapack_signals=datapack_signals,
+    )
+    refiner = TaskGraphRefiner(
+        task_graph=task_graph,
+        ontology=ontology,
+        econ_signals=econ_signals,
+        datapack_signals=datapack_signals,
+    )
     propagator = SemanticTagPropagator()
 
     store = OntologyStore(root_dir=args.ontology_root)
@@ -228,13 +268,17 @@ def main():
 
         for local_idx, task_id in enumerate(batch_tasks):
             idx = batch_idx + local_idx
-            store.upsert_task(Task(task_id=task_id, name=task_id, environment_id="sima2"))
+            store.upsert_task(
+                Task(task_id=task_id, name=task_id, environment_id="sima2")
+            )
             template = _template_for_task(idx)
             t0 = time.perf_counter()
             if task_id in {"noise", "random_noise"}:
                 rollout = _noise_rollout(task_id, idx)
             else:
-                rollout = client.run_episode({"task_id": task_id, "episode_index": idx, "template": template})
+                rollout = client.run_episode(
+                    {"task_id": task_id, "episode_index": idx, "template": template}
+                )
             seg_out = seg_engine.segment_rollout(rollout)
             seg_rollout = seg_out["rollout"]
             batch_segmented_rollouts.append(seg_rollout)
@@ -267,7 +311,9 @@ def main():
                 episode_id=seg_rollout.get("episode_id", f"{task_id}_ep_{idx}"),
                 task_id=task_id,
                 robot_id="sima2_stub_robot",
-                datapack_id=getattr(dp, "datapack_id", None) if isinstance(dp, Datapack) else None,
+                datapack_id=getattr(dp, "datapack_id", None)
+                if isinstance(dp, Datapack)
+                else None,
                 status="success",
                 metadata={"segmented": True, "sima2_provenance": prov},
                 sima2_backend_id=prov.get("sima2_backend_id"),
@@ -281,15 +327,26 @@ def main():
             batch_latency.append(time.perf_counter() - t0)
 
         ontology_proposals = ontology_engine.generate_proposals(batch_primitive_models)
-        task_graph_proposals = refiner.generate_refinements(ontology_proposals, primitives=batch_primitive_models)
+        task_graph_proposals = refiner.generate_refinements(
+            ontology_proposals, primitives=batch_primitive_models
+        )
         econ_outputs = {
-            r.get("episode_id"): {"novelty_delta": 0.0, "trust_matrix": trust_matrix} for r in batch_segmented_rollouts
+            r.get("episode_id"): {"novelty_delta": 0.0, "trust_matrix": trust_matrix}
+            for r in batch_segmented_rollouts
         }
         tag_enrichments = propagator.generate_proposals(
-            batch_segmented_rollouts, ontology_proposals, task_graph_proposals, econ_outputs
+            batch_segmented_rollouts,
+            ontology_proposals,
+            task_graph_proposals,
+            econ_outputs,
         )
 
-        _guardrails(ontology_proposals, task_graph_proposals, len(batch_tasks), args.max_write_multiplier)
+        _guardrails(
+            ontology_proposals,
+            task_graph_proposals,
+            len(batch_tasks),
+            args.max_write_multiplier,
+        )
 
         _write_jsonl(primitives_path, batch_primitives)
         _write_jsonl(ontology_path, ontology_proposals)
@@ -306,11 +363,15 @@ def main():
         for proposal in tag_enrichments:
             try:
                 # Count tag types directly
-                tag_frequency["risk_tags"] = tag_frequency.get("risk_tags", 0) + len(proposal.risk_tags)
-                tag_frequency["recovery_tags"] = tag_frequency.get("recovery_tags", 0) + len(
-                    getattr(proposal, "recovery_tags", [])
+                tag_frequency["risk_tags"] = tag_frequency.get("risk_tags", 0) + len(
+                    proposal.risk_tags
                 )
-                tag_frequency["ood_tags"] = tag_frequency.get("ood_tags", 0) + len(getattr(proposal, "ood_tags", []))
+                tag_frequency["recovery_tags"] = tag_frequency.get(
+                    "recovery_tags", 0
+                ) + len(getattr(proposal, "recovery_tags", []))
+                tag_frequency["ood_tags"] = tag_frequency.get("ood_tags", 0) + len(
+                    getattr(proposal, "ood_tags", [])
+                )
             except Exception:
                 continue
 

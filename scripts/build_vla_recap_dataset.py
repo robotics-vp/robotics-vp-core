@@ -3,7 +3,6 @@
 CLI wrapper to build RECAP dataset from ontology store.
 """
 import argparse
-from pathlib import Path
 
 from src.vla.recap_dataset_builder import build_recap_dataset
 from src.ontology.store import OntologyStore

@@ -8,7 +8,6 @@ This prevents "cute demo envs" from polluting the training graph.
 """
 import pytest
 import sys
-import importlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,8 +23,6 @@ class TestRegalEnvKitProtocol:
         from src.training.regal_env_kit import (
             RegalEnvKit,
             RegalityLevel,
-            validate_env_regality,
-            is_stage6_eligible,
         )
         
         assert RegalEnvKit is not None

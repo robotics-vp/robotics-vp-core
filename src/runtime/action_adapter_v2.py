@@ -47,11 +47,12 @@ class ActionAdapterV2:
         else:
             values = list(action)
             vector = []
-            action_map: Dict[str, float] = {}
+            sequence_action_map: Dict[str, float] = {}
             for idx, channel in enumerate(self.channel_order):
                 value = float(values[idx]) if idx < len(values) else 0.0
-                action_map[channel] = value
+                sequence_action_map[channel] = value
                 vector.append(value)
+            action_map = sequence_action_map
         return {
             "schema_id": self.schema_id,
             "channel_order": list(self.channel_order),

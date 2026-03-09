@@ -1,12 +1,9 @@
 import pytest
-from unittest.mock import Mock, ANY
-from typing import Dict, Optional
+from typing import Optional
 
 from src.contracts.schemas import (
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
-    TaskGraphOp,
-    PlanOpType,
 )
 from src.representation.homeostasis import (
     ActionPlan,

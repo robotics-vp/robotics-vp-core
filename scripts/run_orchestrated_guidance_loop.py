@@ -95,7 +95,7 @@ def main():
                 vla_confusing += 1
 
     if vla_count > 0:
-        print(f"\n  VLA Annotations:")
+        print("\n  VLA Annotations:")
         print(f"    Datapacks with VLA: {vla_count}/{len(annotated)}")
         print(f"    Confident grasps: {vla_confident}")
         print(f"    Confusing scenes: {vla_confusing}")
@@ -105,7 +105,7 @@ def main():
         for tag in vla_semantic_tags:
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
         if tag_counts:
-            print(f"    VLA semantic tag distribution:")
+            print("    VLA semantic tag distribution:")
             for tag, count in sorted(tag_counts.items(), key=lambda x: -x[1])[:5]:
                 print(f"      {tag}: {count}")
 

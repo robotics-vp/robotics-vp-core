@@ -96,7 +96,7 @@ class DatapackSignals:
     @classmethod
     def from_raw_dict(cls, raw: Dict[str, Any]) -> "DatapackSignals":
         """Lenient constructor that clamps fractions into [0,1] and defaults NaNs to 0."""
-        filtered = {k: raw.get(k) for k in cls.__dataclass_fields__.keys()}
+        filtered: Dict[str, Any] = {k: raw.get(k) for k in cls.__dataclass_fields__.keys()}
         frac_fields = [
             "positive_fraction",
             "negative_fraction",
@@ -127,6 +127,12 @@ class DatapackSignals:
                     filtered[key] = 0.0
             if val is None and key not in frac_fields:
                 filtered[key] = 0.0 if key not in ["data_gaps", "recommended_collection_focus"] else filtered[key]
+        data_gaps = filtered.get("data_gaps")
+        filtered["data_gaps"] = [str(item) for item in data_gaps] if isinstance(data_gaps, list) else []
+        recommended_collection_focus = filtered.get("recommended_collection_focus")
+        filtered["recommended_collection_focus"] = (
+            "" if recommended_collection_focus is None else str(recommended_collection_focus)
+        )
         return cls(**{k: v for k, v in filtered.items() if k in cls.__dataclass_fields__})
 
 
@@ -148,7 +154,7 @@ class DatapackEngine:
         self.epi_baseline_repr = self.config.get("epi_baseline_repr")
 
     def compute_datapack_stats(self) -> Dict[str, Any]:
-        stats = {}
+        stats: Dict[str, Any] = {}
         for task_file in self.repo._cache.keys():
             task_name = task_file
             dps = self.repo.load_all(task_name)
@@ -167,14 +173,14 @@ class DatapackEngine:
         return stats
 
     def _aggregate_tags(self, dps: List[DataPackMeta], field: str):
-        tags = {}
+        tags: Dict[str, int] = {}
         for dp in dps:
             for t in getattr(dp, field, []) or []:
                 tags[t] = tags.get(t, 0) + 1
         return tags.items()
 
     def _aggregate_guidance_tags(self, dps: List[DataPackMeta]):
-        tags = {}
+        tags: Dict[str, int] = {}
         for dp in dps:
             gp = dp.guidance_profile
             if gp:
@@ -184,7 +190,7 @@ class DatapackEngine:
 
     def compute_novelty_scores(self) -> Dict[str, float]:
         # Placeholder: novelty based on inverse density of energy_Wh
-        scores = {}
+        scores: Dict[str, float] = {}
         for task_file in self.repo._cache.keys():
             dps = self.repo.load_all(task_file)
             energies = np.array([dp.energy.total_Wh for dp in dps]) if dps else np.array([])
@@ -200,7 +206,7 @@ class DatapackEngine:
         target_skill_id: Optional[int] = None,
         objective_profile: Optional[ObjectiveProfile] = None,
     ) -> Dict[str, float]:
-        weights = {}
+        weights: Dict[str, float] = {}
         novelty = self.compute_novelty_scores()
         for task_file in self.repo._cache.keys():
             dps = self.repo.load_all(task_file)
@@ -379,7 +385,7 @@ class DatapackEngine:
         signals.data_coverage_score = min(1.0, signals.tier2_fraction * 2.0 + signals.tier1_fraction)
 
         # Identify data gaps
-        gaps = []
+        gaps: List[str] = []
         if signals.tier2_fraction < 0.1:
             gaps.append("frontier_cases")
         if signals.vla_annotation_fraction < 0.5:
@@ -390,7 +396,7 @@ class DatapackEngine:
             gaps.append("negative_examples")
 
         # Check for specific condition gaps
-        conditions = {}
+        conditions: Dict[str, int] = {}
         for dp in datapacks:
             lighting = dp.condition.lighting_profile
             conditions[lighting] = conditions.get(lighting, 0) + 1

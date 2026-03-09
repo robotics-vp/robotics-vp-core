@@ -6,7 +6,6 @@ These tests prove that:
 3. Knob deltas cross-validation works
 """
 import json
-import pytest
 import tempfile
 from pathlib import Path
 
@@ -481,7 +480,6 @@ class TestVerificationBlocksDeploy:
         """FULL run with blocking verification failure → allow_deploy=False."""
         from src.deployment.deploy_gate import compute_deploy_decision
         from src.contracts.schemas import DeployGateInputsV1
-        from src.valuation.valuation_verifier import BLOCKING_CHECK_IDS, get_blocking_failures
         
         # Simulate a FULL run with a blocking verification failure
         inputs = DeployGateInputsV1(

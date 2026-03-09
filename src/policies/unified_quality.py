@@ -20,12 +20,15 @@ Formula:
 Each component is in [0, 1], so combined weight is also in [0, 1].
 """
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from src.objectives.compiler import ObjectiveCompiler
 from src.objectives.profile import ObjectiveProfile
 from src.objectives.tensor import objective_tensor_from_axes
 from src.utils.json_safe import to_json_safe
+
+if TYPE_CHECKING:
+    from src.valuation.datapack_schema import DataPackMeta
 
 
 @dataclass
@@ -168,7 +171,7 @@ class UnifiedQualityPolicy:
             UnifiedQualityWeights with combined weight and eligibility.
         """
         cfg = self.config
-        components = {}
+        components: Dict[str, Any] = {}
 
         # --- MHN weight ---
         # w_mhn = plausibility * (1 - difficulty_penalty * difficulty)
@@ -496,7 +499,11 @@ def _extract_scene_tracks_quality(value: Optional[Any]) -> Optional[float]:
         except (TypeError, ValueError):
             return None
     if isinstance(value, dict):
-        score = value.get("quality_score") or value.get("scene_tracks_quality")
+        score = value.get("quality_score")
+        if score is None:
+            score = value.get("scene_tracks_quality")
+        if score is None:
+            return None
         try:
             return float(score)
         except (TypeError, ValueError):

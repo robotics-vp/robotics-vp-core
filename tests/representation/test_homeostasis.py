@@ -1,6 +1,4 @@
 """Tests for homeostatic controller."""
-import numpy as np
-import pytest
 
 from src.representation.homeostasis import (
     SignalType,
@@ -8,7 +6,6 @@ from src.representation.homeostasis import (
     SignalBundle,
     ActionType,
     ActionPlan,
-    ControllerConfig,
     HomeostaticController,
     build_signal_bundle_from_leaderboard,
 )

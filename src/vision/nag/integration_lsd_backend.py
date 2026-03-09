@@ -40,6 +40,7 @@ from src.vision.nag.types import (
 if TYPE_CHECKING:
     from src.vision.nag.gaussian_renderer import SplattingGaussianRenderer
     from src.envs.lsd3d_env.gaussian_scene import GaussianScene
+    from src.vision.nag.scene import NAGScene
 
 logger = logging.getLogger(__name__)
 
@@ -305,7 +306,7 @@ def _render_stub_frames(
         means = gaussian_scene.means
         colors = gaussian_scene.colors
 
-        frames = []
+        frames: List[torch.Tensor] = []
         for t in range(num_frames):
             # Simple projection of Gaussians to image
             frame = torch.ones(3, H, W, device=device, dtype=torch.float32) * 0.5
@@ -334,8 +335,8 @@ def _render_stub_frames(
         return torch.stack(frames, dim=0)
 
     # Fallback: gradient noise frames (more visually distinct than pure noise)
-    frames = torch.rand(num_frames, 3, H, W, device=device, dtype=torch.float32) * 0.5 + 0.25
-    return frames
+    fallback_frames = torch.rand(num_frames, 3, H, W, device=device, dtype=torch.float32) * 0.5 + 0.25
+    return fallback_frames
 
 
 def extract_object_masks_from_scene_graph(
@@ -555,7 +556,7 @@ def build_nag_scene_from_lsd_rollout(
     )
 
     try:
-        scene = fit_nag_to_sequence(
+        fit_result = fit_nag_to_sequence(
             frames=frames,
             masks=masks,
             boxes=boxes,
@@ -564,6 +565,7 @@ def build_nag_scene_from_lsd_rollout(
             config=fitter_config,
             verbose=False,
         )
+        scene = fit_result[0] if isinstance(fit_result, tuple) else fit_result
     except Exception as e:
         logger.error(f"build_nag_scene: fitting failed: {e}")
         # Fall back to background-only scene
@@ -666,8 +668,10 @@ def generate_nag_counterfactuals_for_lsd_episode(
         if summary_obj is None:
             tree_stats = mh_raw.get("tree_stats") or mh_raw.get("stats") or {}
             resid_stats = mh_raw.get("delta_resid_stats") or {}
-            mean_tree_depth = tree_stats.get("mean_tree_depth", mh_raw.get("mean_tree_depth", 0.0))
-            mean_branch_factor = tree_stats.get("mean_branch_factor", mh_raw.get("mean_branch_factor", 0.0))
+            mean_tree_depth = float(tree_stats.get("mean_tree_depth", mh_raw.get("mean_tree_depth", 0.0)) or 0.0)
+            mean_branch_factor = float(
+                tree_stats.get("mean_branch_factor", mh_raw.get("mean_branch_factor", 0.0)) or 0.0
+            )
             resid_mean = mh_raw.get("residual_mean", resid_stats.get("residual_mean"))
             if resid_mean is None:
                 mean_payload = resid_stats.get("mean", 0.0)

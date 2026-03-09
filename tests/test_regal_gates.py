@@ -1,6 +1,5 @@
 """Tests for meta-regal gates (Stage-6 deterministic audit nodes)."""
-import pytest
-from typing import Dict, Any, Optional, List
+from typing import Dict
 
 from src.contracts.schemas import (
     RegalGatesV1,
@@ -12,7 +11,6 @@ from src.contracts.schemas import (
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
     RegalContextV1,
-    RegalPhaseV1,
 )
 from src.representation.homeostasis import SignalBundle, ControlSignal, SignalType
 from src.regal.regal_evaluator import (

@@ -133,7 +133,7 @@ class SceneTracksLite:
 def serialize_scene_tracks_v1(
     scene_tracks: SceneTracks,
     include_latents: bool = False,
-    latent_dtype: np.dtype = np.float16,
+    latent_dtype: np.dtype[Any] = np.dtype(np.float16),
 ) -> Dict[str, np.ndarray]:
     """Serialize SceneTracks to numpy-only format.
     

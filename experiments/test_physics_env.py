@@ -51,7 +51,7 @@ def test_env_initialization():
         headless=True
     )
 
-    print(f"✓ Environment created")
+    print("✓ Environment created")
     print(f"  - Observation shape: {env.observation_space_shape}")
     print(f"  - Frames: {env.frames}")
     print(f"  - Image size: {env.image_height}x{env.image_width}")
@@ -67,7 +67,7 @@ def test_reset(env):
 
     obs = env.reset()
 
-    print(f"✓ Reset successful")
+    print("✓ Reset successful")
     print(f"  - Observation shape: {obs.shape}")
     print(f"  - Observation dtype: {obs.dtype}")
     print(f"  - Observation range: [{obs.min():.3f}, {obs.max():.3f}]")
@@ -110,7 +110,7 @@ def test_step(env, n_steps=10):
             print(f"✓ Episode terminated at step {i+1}")
             break
 
-    print(f"✓ All steps completed successfully")
+    print("✓ All steps completed successfully")
 def test_video_consistency(env, n_steps=5):
     """Test that video observations change over time."""
     print("\n" + "="*60)
@@ -131,14 +131,14 @@ def test_video_consistency(env, n_steps=5):
     print(f"  - Mean frame difference: {frame_diff:.6f}")
 
     if frame_diff > 1e-6:
-        print(f"✓ Frames are changing (good)")
+        print("✓ Frames are changing (good)")
     else:
-        print(f"⚠ Frames appear static (may be issue)")
+        print("⚠ Frames appear static (may be issue)")
 
 def save_sample_frames(env, n_frames=10):
     """Save sample frames to disk."""
     print("\n" + "="*60)
-    print(f"Test 5: Saving Sample Frames")
+    print("Test 5: Saving Sample Frames")
     print("="*60)
 
     # Create output directory
@@ -237,7 +237,7 @@ def test_long_episode(env, n_steps=100):
             print(f"Episode terminated at step {i+1}")
             break
 
-    print(f"✓ Long episode completed")
+    print("✓ Long episode completed")
     print(f"  - Total steps: {i+1}")
     print(f"  - Completed: {completed_count}")
     print(f"  - Errors: {error_count}")

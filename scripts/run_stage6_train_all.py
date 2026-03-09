@@ -30,14 +30,7 @@ from src.training.regal_training_runner import (
 )
 from src.contracts.schemas import (
     TrajectoryAuditV1,
-    EconTensorV1,
-    RegalGatesV1,
-    RegalPhaseV1,
-    SelectionManifestV1,
-    OrchestratorStateV1,
 )
-from src.regal.regal_evaluator import evaluate_regals
-from src.valuation.valuation_verifier import verify_run, write_verification_report
 from src.utils.config_digest import sha256_json, sha256_file
 
 
@@ -466,10 +459,10 @@ def main():
     
     # Exit with error if verification failed
     if not result.verify_all_passed:
-        print(f"\n[Stage6] ERROR: Verification failed")
+        print("\n[Stage6] ERROR: Verification failed")
         sys.exit(1)
     
-    print(f"\n[Stage6] Success!")
+    print("\n[Stage6] Success!")
 
 
 if __name__ == "__main__":

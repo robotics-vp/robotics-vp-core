@@ -4,7 +4,6 @@ Tests for combined MH × SceneIR curriculum.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from src.analytics.combined_curriculum import (
     compute_curriculum_weights,

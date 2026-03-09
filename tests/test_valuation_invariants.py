@@ -13,7 +13,6 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
-from pydantic import ValidationError
 
 from src.contracts.schemas import (
     RunManifestV1,
@@ -29,9 +28,8 @@ from src.contracts.schemas import (
     RegalAnnotationsV1,
     DatapackSelectionOverrides,
 )
-from src.valuation.value_ledger import ValueLedger
 from src.valuation.exposure_manifest import ExposureTracker
-from src.valuation.valuation_verifier import verify_run, VerificationReportV1
+from src.valuation.valuation_verifier import verify_run
 from src.utils.config_digest import sha256_json
 
 
@@ -414,7 +412,7 @@ class TestOrchestratorStateTamperDetection:
 
     def test_orchestrator_state_sha_deterministic(self):
         """OrchestratorStateV1 produces deterministic SHA."""
-        from src.contracts.schemas import OrchestratorStateV1, KnobDeltaV1
+        from src.contracts.schemas import OrchestratorStateV1
 
         state1 = OrchestratorStateV1(
             failure_counts={"gate_a": 2},

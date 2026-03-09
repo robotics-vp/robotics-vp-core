@@ -12,11 +12,8 @@ Usage:
     python train_ppo_ablate.py C  # Full model
 """
 import os
-import sys
-import yaml
 import torch
 import numpy as np
-from pathlib import Path
 import argparse
 
 from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
@@ -25,12 +22,6 @@ from src.economics.mpl import mpl
 from src.economics.wage import implied_robot_wage
 from src.rl.reward_shaping import compute_econ_reward
 from src.config.internal_profile import get_internal_experiment_profile
-from src.data_value.novelty_diffusion import (
-    DiffusionNoveltyTracker,
-    StubDenoiser,
-    StubShortDenoise,
-    gaussian_noise_sampler
-)
 from src.utils.logger import CsvLogger
 from src.observation.condition_vector_builder import ConditionVectorBuilder
 from src.rl.trunk_net import TrunkNet

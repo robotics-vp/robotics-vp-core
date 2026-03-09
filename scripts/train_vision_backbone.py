@@ -51,7 +51,6 @@ def _compute_target(sample: Dict[str, Any]) -> float:
 
 def _model_checksum(head) -> float:
     try:
-        import torch
 
         checksum = 0.0
         for _, param in head.state_dict().items():

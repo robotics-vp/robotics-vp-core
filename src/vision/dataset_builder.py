@@ -77,7 +77,10 @@ def build_frame_dataset_from_ontology(
                     },
                 )
                 array = _deterministic_frame_array(int(width), int(height), channels, ep.episode_id, ev.timestep, dtype)
-                np.save(frame.rgb_path, array)
+                rgb_path = frame.rgb_path
+                if rgb_path is None:
+                    raise ValueError("VisionFrame.rgb_path must be set for dataset_builder outputs")
+                np.save(rgb_path, array)
                 latent = encoder.encode_frame(frame)
                 mf.write(
                     json.dumps(

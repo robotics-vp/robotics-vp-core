@@ -9,7 +9,6 @@ import argparse
 import json
 import numpy as np
 
-from dataclasses import asdict
 
 from src.envs.drawer_vase_arm_env import DrawerVaseArmEnv
 from src.envs.dishwashing_env import EpisodeInfoSummary

@@ -3,7 +3,7 @@ Shared trunk that fuses vision/state/condition features for Hydra policies.
 
 Minimal, deterministic, and flag-free: callers control which encoders to pass.
 """
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -85,9 +85,9 @@ class TrunkNet(nn.Module):
         )
         # Zero-init conditioning heads so enabling the flag keeps outputs identical until trained
         for layer in (self.condition_film[-1], self.condition_context[-1]):
-            if hasattr(layer, "weight"):
+            if isinstance(layer, nn.Linear):
                 nn.init.zeros_(layer.weight)
-            if hasattr(layer, "bias") and layer.bias is not None:
+            if isinstance(layer, nn.Linear) and layer.bias is not None:
                 nn.init.zeros_(layer.bias)
 
     def forward(
@@ -96,7 +96,7 @@ class TrunkNet(nn.Module):
         condition: Optional[ConditionVector] = None,
         use_condition: Optional[bool] = None,
         use_condition_vector_for_policy: Optional[bool] = None,
-    ) -> torch.Tensor:
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         device = next(self.parameters()).device
         use_condition = self.use_condition_vector if use_condition is None else use_condition
         use_policy_condition = (
@@ -184,20 +184,22 @@ class TrunkNet(nn.Module):
     def _extract_conditioned_vision(self, obs: Any, device: torch.device) -> Optional[torch.Tensor]:
         if isinstance(obs, dict):
             if "conditioned_vision_vector" in obs:
-                tensor = _tensor_from_iterable(obs["conditioned_vision_vector"], device, self.vision_dim)
+                tensor = _tensor_from_iterable(
+                    obs["conditioned_vision_vector"], device, self.vision_dim
+                )
                 if tensor.numel() > 0:
                     return tensor
             container = obs.get("policy_observation") or {}
             if container and "vision" in container:
-                tensor = self._flatten_vision_block(container.get("vision"), device)
-                if tensor is not None and tensor.numel() > 0:
-                    return tensor
+                flattened_tensor = self._flatten_vision_block(container.get("vision"), device)
+                if flattened_tensor is not None and flattened_tensor.numel() > 0:
+                    return flattened_tensor
         if hasattr(obs, "policy_observation"):
             policy_obs = getattr(obs, "policy_observation")
             if isinstance(policy_obs, dict):
-                tensor = self._flatten_vision_block(policy_obs.get("vision"), device)
-                if tensor is not None and tensor.numel() > 0:
-                    return tensor
+                flattened_tensor = self._flatten_vision_block(policy_obs.get("vision"), device)
+                if flattened_tensor is not None and flattened_tensor.numel() > 0:
+                    return flattened_tensor
         return None
 
     def _flatten_vision_block(self, vision_block: Any, device: torch.device) -> Optional[torch.Tensor]:
@@ -218,9 +220,9 @@ class TrunkNet(nn.Module):
                 vision_block.get("features_modulated"),
                 vision_block.get("z_v"),
             ):
-                tensor = self._flatten_pyramid_candidate(candidate, device)
-                if tensor is not None and tensor.numel() > 0:
-                    return tensor
+                flattened_tensor = self._flatten_pyramid_candidate(candidate, device)
+                if flattened_tensor is not None and flattened_tensor.numel() > 0:
+                    return flattened_tensor
             if "risk_map" in vision_block and vision_block["risk_map"] is not None:
                 tensor = _tensor_from_iterable(vision_block["risk_map"], device, self.vision_dim)
                 if tensor.numel() > 0:

@@ -217,24 +217,24 @@ def main():
     # Load trust-augmented data
     buffer = TrustWeightedReplayBuffer(max_size=200000)
 
-    print(f"\nLoading trust-augmented real data...")
+    print("\nLoading trust-augmented real data...")
     buffer.load_from_trust_augmented_npz(args.real, source='real')
 
     if args.synthetic and os.path.exists(args.synthetic):
-        print(f"\nLoading trust-augmented synthetic data...")
+        print("\nLoading trust-augmented synthetic data...")
         buffer.load_from_trust_augmented_npz(args.synthetic, source='synthetic')
 
     # Report composition
     source_stats = buffer.get_source_stats()
     total = len(buffer)
-    print(f"\nReplay Buffer Composition:")
+    print("\nReplay Buffer Composition:")
     for source, count in source_stats.items():
         print(f"  {source}: {count} transitions ({100*count/total:.1f}%)")
     print(f"  Total: {total} transitions")
 
     # Analyze weight distribution
     weights = np.array(buffer.weights)
-    print(f"\nWeight Distribution:")
+    print("\nWeight Distribution:")
     print(f"  Mean: {weights.mean():.6f}")
     print(f"  Std:  {weights.std():.6f}")
     print(f"  Min:  {weights.min():.6f}")
@@ -248,10 +248,10 @@ def main():
     real_contribution = sum(real_weights) / total_weight * 100
     syn_contribution = sum(syn_weights) / total_weight * 100
 
-    print(f"\nEffective Contribution:")
+    print("\nEffective Contribution:")
     print(f"  Real: {real_contribution:.2f}%")
     print(f"  Synthetic: {syn_contribution:.2f}%")
-    print(f"  (Synthetic should be ~0% if trust≈0)")
+    print("  (Synthetic should be ~0% if trust≈0)")
 
     # Initialize networks
     latent_dim = 128
@@ -345,14 +345,14 @@ def main():
     os.makedirs('results', exist_ok=True)
     with open('results/trust_weighted_training.json', 'w') as f:
         json.dump(results, f, indent=2)
-    print(f"\nSaved results to results/trust_weighted_training.json")
+    print("\nSaved results to results/trust_weighted_training.json")
 
     print("\n" + "="*60)
     print("NEXT STEPS")
     print("="*60)
     print("1. Compare trust-weighted vs baseline performance:")
-    print(f"   python scripts/eval_offline_policy.py \\")
-    print(f"       --model checkpoints/offline_baseline_actor.pt \\")
+    print("   python scripts/eval_offline_policy.py \\")
+    print("       --model checkpoints/offline_baseline_actor.pt \\")
     print(f"       --compare {model_path}")
     print()
     print("2. If performance ≈ baseline:")

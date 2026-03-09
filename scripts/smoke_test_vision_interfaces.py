@@ -12,7 +12,7 @@ from src.physics.backends.pybullet_backend import PyBulletBackend
 from src.physics.backends.isaac_stub_backend import IsaacStubBackend
 from src.policies.registry import build_all_policies
 from src.vision.policy_observation_builder import PolicyObservationBuilder
-from src.vision.interfaces import VisionFrame, PolicyObservation
+from src.vision.interfaces import PolicyObservation
 
 
 def main():

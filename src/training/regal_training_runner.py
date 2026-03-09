@@ -20,18 +20,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src.contracts.schemas import (
-    RunManifestV1,
     TrajectoryAuditV1,
     AuditAggregateV1,
     EconTensorV1,
-    RegalContextV1,
     LedgerWindowV1,
     LedgerExposureV1,
     LedgerPolicyV1,
-    OrchestratorStateV1,
-    SelectionManifestV1,
-    DeployGateInputsV1,
-    DeployGateDecisionV1,
 )
 from src.valuation.value_ledger import ValueLedger
 from src.valuation.exposure_manifest import (
@@ -604,7 +598,7 @@ class RegalTrainingRunner:
         print(f"{'='*60}")
         print(f"Run ID: {self.run_id}")
         print(f"Output: {self.output_dir}")
-        print(f"\nArtifact SHAs:")
+        print("\nArtifact SHAs:")
         print(f"  manifest_sha:             {manifest_sha[:16] if manifest_sha else 'N/A'}")
         print(f"  exposure_sha:             {exposure_sha[:16]}")
         print(f"  selection_manifest_sha:   {selection_sha[:16]}")
@@ -620,7 +614,7 @@ class RegalTrainingRunner:
 
         # Fail hard if configured
         if self.config.fail_on_verify_error and not verification_report.all_passed:
-            print(f"\nERROR: Verification failed, exiting with error")
+            print("\nERROR: Verification failed, exiting with error")
             sys.exit(1)
 
         return result

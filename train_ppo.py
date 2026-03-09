@@ -8,7 +8,10 @@ Integrates:
 - Economic metrics (MPL, profit, wage parity)
 - Data valuation (ΔMPL regression → pricing)
 """
-import os, yaml, random, argparse
+import os
+import yaml
+import random
+import argparse
 from typing import Optional
 import numpy as np
 import torch
@@ -411,12 +414,12 @@ def run(
                   f"KL={train_metrics['kl_divergence']:.4f}  Premium=${nonshare_premium:.2f}  "
                   f"PolLoss={train_metrics['policy_loss']:.3f}")
 
-    print(f"\n✅ Training complete! Logs saved to logs/ppo_training.csv")
+    print("\n✅ Training complete! Logs saved to logs/ppo_training.csv")
 
     # Save final model
     os.makedirs("checkpoints", exist_ok=True)
     agent.save("checkpoints/ppo_final.pt")
-    print(f"✅ Model saved to checkpoints/ppo_final.pt")
+    print("✅ Model saved to checkpoints/ppo_final.pt")
 
 
 if __name__ == "__main__":

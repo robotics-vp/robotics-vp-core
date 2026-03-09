@@ -16,7 +16,6 @@ import argparse
 import yaml
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
@@ -145,7 +144,7 @@ def build_student_encoder(config):
         temperature=aligned_config.get('temperature', 0.1),
     )
 
-    print(f"[Student] Built AlignedVideoEncoder (trainable)")
+    print("[Student] Built AlignedVideoEncoder (trainable)")
     print(f"  Architecture: {aligned_config.get('arch', 'simple2dcnn')}")
     print(f"  Alignment: {aligned_config.get('alignment_type', 'mse')}")
     print(f"  Parameters: {sum(p.numel() for p in student.parameters()):,}")
@@ -400,11 +399,11 @@ def main(runner=None):
     print("\n" + "="*60)
     print("Next steps:")
     print("="*60)
-    print(f"1. Validate aligned encoder:")
-    print(f"   python scripts/validate_dmpl_novelty.py \\")
+    print("1. Validate aligned encoder:")
+    print("   python scripts/validate_dmpl_novelty.py \\")
     print(f"     --config {args.config} \\")
     print(f"     --checkpoint {checkpoint_path} \\")
-    print(f"     --episodes 50")
+    print("     --episodes 50")
     print()
     print("2. Use in SAC training:")
     print(f"   python train_sac_v2.py {args.config}")

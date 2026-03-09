@@ -1,6 +1,5 @@
 """Test token-only mode for curated slices evaluation."""
 import sys
-from pathlib import Path
 
 import numpy as np
 import pytest

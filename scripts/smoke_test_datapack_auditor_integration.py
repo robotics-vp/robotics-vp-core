@@ -2,7 +2,6 @@
 """
 Smoke test for DatapackAuditor integration with ontology + reports.
 """
-import json
 import shutil
 import subprocess
 import sys

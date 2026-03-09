@@ -14,36 +14,35 @@ Compatible with Phase B synthetic flywheel (trust + econ + λ weighting).
 """
 
 import numpy as np
-from typing import Dict, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 # Try gymnasium first, fallback to gym, fallback to stub
 try:
-    import gymnasium as gym
-    from gymnasium import spaces
+    import gymnasium as _gym_mod  # type: ignore[import-not-found]
+    from gymnasium import spaces as _spaces_mod  # type: ignore[import-not-found]
     GYM_AVAILABLE = True
 except ImportError:
     try:
-        import gym
-        from gym import spaces
+        import gym as _gym_mod  # type: ignore[import-not-found]
+        from gym import spaces as _spaces_mod  # type: ignore[import-not-found]
         GYM_AVAILABLE = True
     except ImportError:
         GYM_AVAILABLE = False
         print("WARNING: Neither gymnasium nor gym available. Using stub base class.")
 
 try:
-    import pybullet as p
-    import pybullet_data
+    import pybullet as p  # type: ignore[import-not-found]
+    import pybullet_data  # type: ignore[import-not-found,import-untyped]
     PYBULLET_AVAILABLE = True
 except ImportError:
     PYBULLET_AVAILABLE = False
     print("WARNING: PyBullet not available. Using mock physics.")
 
 from src.config.econ_params import EconParams
-from src.hrl.skills import SkillID
 
 # Limb grouping placeholder (update with actual joint indices if available)
-LIMB_GROUPS = {
+LIMB_GROUPS: Dict[str, List[int]] = {
     "shoulder": [],
     "elbow": [],
     "wrist": [],
@@ -53,12 +52,12 @@ JOINT_NAMES = ["joint_0"]
 
 # Stub for when gym is not available
 if not GYM_AVAILABLE:
-    class spaces:
+    class _StubSpaces:
         @staticmethod
         def Box(low, high, shape, dtype):
             return {'type': 'Box', 'low': low, 'high': high, 'shape': shape, 'dtype': dtype}
 
-    class gym:
+    class _StubGym:
         class Env:
             def __init__(self):
                 self.observation_space = None
@@ -70,6 +69,9 @@ if not GYM_AVAILABLE:
 
             def step(self, action):
                 raise NotImplementedError
+
+    _spaces_mod = _StubSpaces
+    _gym_mod = _StubGym
 
 
 @dataclass
@@ -118,7 +120,7 @@ class DrawerVaseConfig:
     sla_violation_contacts: int = 5  # Repeated high-risk contacts
 
 
-class DrawerVasePhysicsEnv(gym.Env):
+class DrawerVasePhysicsEnv(_gym_mod.Env):
     """
     PyBullet-based Drawer+Vase environment.
 
@@ -152,7 +154,7 @@ class DrawerVasePhysicsEnv(gym.Env):
         self._setup_physics()
 
         # Action space: end-effector velocity (dx, dy, dz)
-        self.action_space = spaces.Box(
+        self.action_space = _spaces_mod.Box(
             low=-1.0, high=1.0, shape=(3,), dtype=np.float32
         )
 
@@ -160,12 +162,12 @@ class DrawerVasePhysicsEnv(gym.Env):
         if self.obs_mode == 'state':
             # State: [ee_pos(3), ee_vel(3), drawer_frac(1), vase_pos(3),
             #         vase_upright(1), min_clearance(1), grasp_state(1)]
-            self.observation_space = spaces.Box(
+            self.observation_space = _spaces_mod.Box(
                 low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32
             )
         elif self.obs_mode == 'vision':
             # RGB image
-            self.observation_space = spaces.Box(
+            self.observation_space = _spaces_mod.Box(
                 low=0, high=255,
                 shape=(self.config.camera_height, self.config.camera_width, 3),
                 dtype=np.uint8
@@ -183,7 +185,7 @@ class DrawerVasePhysicsEnv(gym.Env):
             "wrist": 0.0,
             "gripper": 0.0,
         }
-        self.skill_energy_Wh = {}
+        self.skill_energy_Wh: Dict[str, float] = {}
         self.limb_energy_Wh = {
             "shoulder": 0.0,
             "elbow": 0.0,
@@ -389,14 +391,11 @@ class DrawerVasePhysicsEnv(gym.Env):
         ee_vel = action * self.config.ee_max_velocity
 
         # Apply action and simulate
-        prev_energy = self.energy_Wh
-
         if PYBULLET_AVAILABLE:
             # Set EE velocity
             current_ee_pos, _ = p.getBasePositionAndOrientation(
                 self.ee_id, physicsClientId=self.physics_client
             )
-            target_pos = np.array(current_ee_pos) + ee_vel * self.config.control_dt
 
             # Use position control with velocity
             p.resetBaseVelocity(
@@ -647,7 +646,6 @@ class DrawerVasePhysicsEnv(gym.Env):
 
     def _get_info(self):
         """Get info dict compatible with EpisodeInfoSummary."""
-        dt_hours = self.t / 3600.0
         mpl_t = 0.0  # Drawer open is binary, not units/hour
         ep_t = 0.0  # Energy productivity N/A for drawer task
 

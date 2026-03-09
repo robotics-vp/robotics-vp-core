@@ -71,7 +71,7 @@ def main():
 
     # 4. Instantiate a random EconProfileNet
     net = EconProfileNet(hidden_dim=32)
-    print(f"\n4. EconProfileNet created:")
+    print("\n4. EconProfileNet created:")
     print(f"   Parameters: {sum(p.numel() for p in net.parameters())}")
 
     # Test forward pass
@@ -102,7 +102,7 @@ def main():
 
     # 7. Test the wrapper function
     params_via_wrapper = get_econ_params_with_profile(profile, "toy", ctx, net)
-    print(f"\n7. get_econ_params_with_profile wrapper:")
+    print("\n7. get_econ_params_with_profile wrapper:")
     print(f"   base_rate: {params_via_wrapper.base_rate:.4f}")
     print(f"   damage_cost: {params_via_wrapper.damage_cost:.4f}")
 

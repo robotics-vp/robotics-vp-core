@@ -5,10 +5,11 @@ Simplified version that uses an articulated arm (KUKA iiwa) and a goal geometry
 instead of the full PyBullet drawer mechanics. Energy attribution uses real joint
 τ·ω to populate metrics for analysis.
 """
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
-import pybullet as p
-import pybullet_data
-from typing import Dict, Any, Tuple
+import pybullet as p  # type: ignore[import-not-found]
+import pybullet_data  # type: ignore[import-not-found,import-untyped]
 
 from src.config.econ_params import EconParams
 from src.envs.dishwashing_env import EpisodeInfoSummary
@@ -28,7 +29,12 @@ class DrawerVaseArmEnv:
     Success: move EE to target box; error: collide near vase region.
     """
 
-    def __init__(self, max_steps: int = 200, headless: bool = True, econ_params: EconParams = None):
+    def __init__(
+        self,
+        max_steps: int = 200,
+        headless: bool = True,
+        econ_params: Optional[EconParams] = None,
+    ):
         self.max_steps = max_steps
         self.headless = headless
         # Provide a lightweight default so the env can be instantiated without a config.
@@ -53,8 +59,8 @@ class DrawerVaseArmEnv:
 
         self.physics_client = None
         self.robot_id = None
-        self.controlled_joint_ids = []
-        self.ee_link_id = None
+        self.controlled_joint_ids: List[int] = []
+        self.ee_link_id: Optional[int] = None
 
         # Episode state
         self.t = 0.0
@@ -62,19 +68,19 @@ class DrawerVaseArmEnv:
         self.success = False
         self.vase_intact = True
         self.energy_Wh = 0.0
-        self.limb_energy_Wh = {k: 0.0 for k in LIMB_GROUPS}
-        self.joint_energy_Wh = {}
-        self.limb_power_sum_W = {k: 0.0 for k in LIMB_GROUPS}
-        self.limb_peak_power_W = {k: 0.0 for k in LIMB_GROUPS}
-        self.joint_power_sum_W = {}
-        self.joint_peak_power_W = {}
-        self.joint_abs_vel_sum = {}
-        self.joint_abs_tau_sum = {}
-        self.joint_max_vel = {}
-        self.joint_max_tau = {}
-        self.joint_dir_counts = {}
-        self.effector_energy_Wh = {"ee_main": 0.0}
-        self.skill_energy_Wh = {}
+        self.limb_energy_Wh: Dict[str, float] = {k: 0.0 for k in LIMB_GROUPS}
+        self.joint_energy_Wh: Dict[str, float] = {}
+        self.limb_power_sum_W: Dict[str, float] = {k: 0.0 for k in LIMB_GROUPS}
+        self.limb_peak_power_W: Dict[str, float] = {k: 0.0 for k in LIMB_GROUPS}
+        self.joint_power_sum_W: Dict[str, float] = {}
+        self.joint_peak_power_W: Dict[str, float] = {}
+        self.joint_abs_vel_sum: Dict[str, float] = {}
+        self.joint_abs_tau_sum: Dict[str, float] = {}
+        self.joint_max_vel: Dict[str, float] = {}
+        self.joint_max_tau: Dict[str, float] = {}
+        self.joint_dir_counts: Dict[str, Dict[str, int]] = {}
+        self.effector_energy_Wh: Dict[str, float] = {"ee_main": 0.0}
+        self.skill_energy_Wh: Dict[str, float] = {}
         self.completed = 0
         self.attempts = 0
         self.errors = 0
@@ -246,7 +252,7 @@ class DrawerVaseArmEnv:
             self.success = True
             self.completed += 1
         dist_to_vase = np.linalg.norm(ee_pos - self.vase_pos)
-        speed = np.linalg.norm(ee_vel)
+        speed = float(np.linalg.norm(ee_vel))
         if dist_to_vase < 0.12 and speed > 0.8:
             self.vase_intact = False
             self.errors += 1

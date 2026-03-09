@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.vision.scene_ir_tracker.types import SceneTracks, SceneEntity3D, SceneTrackerMetrics
+from src.vision.scene_ir_tracker.types import SceneTracks, SceneEntity3D
 from src.vision.scene_ir_tracker.transforms import (
     validate_frame_consistency,
     transform_pose_camera_to_world,

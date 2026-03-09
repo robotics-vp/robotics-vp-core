@@ -119,7 +119,7 @@ def run_demo(
             print(f"  Episode {ep+1}/{episodes}: reward={episode_reward:.2f}, steps={steps}")
 
     if verbose:
-        print(f"\nCollection complete:")
+        print("\nCollection complete:")
         print(f"  Success rate: {100*successes/episodes:.1f}%")
         print(f"  Avg reward: {sum(total_rewards)/len(total_rewards):.2f}")
 
@@ -144,7 +144,7 @@ def run_demo(
     report = compute_suite_report(metrics_list)
 
     if verbose:
-        print(f"Suite report:")
+        print("Suite report:")
         print(f"  Total episodes: {report.num_episodes}")
         print(f"  Success rate: {report.success_rate*100:.1f}%")
         print(f"  Avg reward: {report.mean_reward:.2f}")
@@ -185,7 +185,7 @@ def run_demo(
     }
 
     if verbose:
-        print(f"Datapack assembled:")
+        print("Datapack assembled:")
         print(f"  Metadata: {len(datapack['metadata'])} fields")
         print(f"  Episodes: {len(datapack['episodes'])} entries")
         print(f"  Analytics: {len(datapack['analytics'])} metrics")

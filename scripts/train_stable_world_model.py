@@ -453,22 +453,22 @@ def train_stable_world_model(args):
     stds_60 = np.array(stds_60)
     var_growths = np.array(var_growths)
 
-    print(f"Trust scores (60-step rollouts):")
+    print("Trust scores (60-step rollouts):")
     print(f"  Mean: {trust_scores_60.mean():.6f}")
     print(f"  Std:  {trust_scores_60.std():.6f}")
     print(f"  Above 0.5: {(trust_scores_60 >= 0.5).sum()}/{len(trust_scores_60)}")
     print(f"  Above 0.9: {(trust_scores_60 >= 0.9).sum()}/{len(trust_scores_60)}")
 
-    print(f"\nPredicted std (60-step rollouts):")
+    print("\nPredicted std (60-step rollouts):")
     print(f"  Mean: {stds_60.mean():.6f}")
     print(f"  Real: {real_z_std:.6f}")
     print(f"  Ratio: {stds_60.mean() / real_z_std:.3f}x")
 
-    print(f"\nVariance growth:")
+    print("\nVariance growth:")
     print(f"  Mean: {var_growths.mean():.3f}x")
     print(f"  Max:  {var_growths.max():.3f}x")
 
-    print(f"\nModel parameters:")
+    print("\nModel parameters:")
     print(f"  Alpha (damping): {model.dynamics.alpha.item():.4f}")
     lipschitz = model.dynamics.get_lipschitz_bound()
     print(f"  Lipschitz bound: {lipschitz:.4f}")
@@ -512,7 +512,7 @@ def train_stable_world_model(args):
     os.makedirs('results', exist_ok=True)
     with open('results/stable_world_model.json', 'w') as f:
         json.dump(report, f, indent=2)
-    print(f"Saved report to results/stable_world_model.json")
+    print("Saved report to results/stable_world_model.json")
 
     # Verdict
     print("\n" + "="*70)

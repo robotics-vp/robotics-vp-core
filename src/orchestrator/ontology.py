@@ -247,7 +247,7 @@ class EnvironmentOntology:
 
     def get_object_graph(self) -> Dict[str, List[str]]:
         """Get containment/support graph as adjacency list."""
-        graph = {obj_id: [] for obj_id in self.objects}
+        graph: Dict[str, List[str]] = {obj_id: [] for obj_id in self.objects}
         for obj_id, obj in self.objects.items():
             graph[obj_id].extend(obj.contains)
             if obj.supported_by and obj.supported_by in graph:

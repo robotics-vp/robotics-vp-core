@@ -3,7 +3,6 @@
 Smoke: orchestrator plan → robot run specs (dry-run).
 """
 import json
-import uuid
 from src.orchestrator.context import build_orchestrator_context_from_datapacks
 from src.orchestrator.orchestration_transformer import OrchestrationTransformer, propose_orchestrated_plan
 from src.orchestrator.experiment_config import orchestration_plan_to_run_specs

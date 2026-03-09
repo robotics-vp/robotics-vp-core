@@ -213,16 +213,24 @@ def _build_mjcf(scene_spec: WorkcellSceneSpec) -> str:
         bodies.append(_static_body_xml(station.id, station.position, station.orientation, size))
     for fixture in scene_spec.fixtures:
         dims = DEFAULT_FIXTURE_DIMENSIONS_MM.get(fixture.fixture_type, (300.0, 200.0, 120.0))
-        size = tuple(d / 2000.0 for d in dims)
+        size = (dims[0] / 2000.0, dims[1] / 2000.0, dims[2] / 2000.0)
         bodies.append(_static_body_xml(fixture.id, fixture.position, fixture.orientation, size))
     for container in scene_spec.containers:
-        size = tuple(s / 2000.0 for s in container.slot_size_mm)
+        size = (
+            container.slot_size_mm[0] / 2000.0,
+            container.slot_size_mm[1] / 2000.0,
+            container.slot_size_mm[2] / 2000.0,
+        )
         bodies.append(_static_body_xml(container.id, container.position, container.orientation, size))
     for conveyor in scene_spec.conveyors:
         size = (conveyor.length_m / 2.0, conveyor.width_m / 2.0, 0.05)
         bodies.append(_static_body_xml(conveyor.id, conveyor.position, conveyor.orientation, size))
     for part in scene_spec.parts:
-        size = tuple(s / 2000.0 for s in part.dimensions_mm)
+        size = (
+            part.dimensions_mm[0] / 2000.0,
+            part.dimensions_mm[1] / 2000.0,
+            part.dimensions_mm[2] / 2000.0,
+        )
         bodies.append(_dynamic_body_xml(part.id, part.position, part.orientation, size))
     for tool in scene_spec.tools:
         size = (0.05, 0.05, 0.05)

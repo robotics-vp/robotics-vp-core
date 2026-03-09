@@ -1,6 +1,5 @@
 """Tests for representation isomorphism adapters."""
 import numpy as np
-import pytest
 
 from src.representation.space import RepresentationPayload, InvariantReport
 from src.representation.isomorphisms import LinearAlign, AlignmentReport

@@ -15,7 +15,7 @@ import numpy as np
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.vision.regnet_backbone import build_regnet_feature_pyramid, flatten_pyramid, DEFAULT_LEVELS
+from src.vision.regnet_backbone import build_regnet_feature_pyramid, flatten_pyramid
 from src.vision.bifpn_fusion import fuse_feature_pyramid
 from src.vision.interfaces import VisionFrame
 

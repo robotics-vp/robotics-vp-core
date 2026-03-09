@@ -265,10 +265,9 @@ def generate_report(stats_state, stats_video, stats_physics, output_dir):
 
         # Check convergence criteria
         human_mp = 60
-        human_wage = 18.0
 
         f.write("1. WAGE PARITY ANALYSIS:\n")
-        f.write(f"   Target: w_r ≈ w_h (parity ≈ 1.0, within ±10% tolerance)\n\n")
+        f.write("   Target: w_r ≈ w_h (parity ≈ 1.0, within ±10% tolerance)\n\n")
 
         for name, stats in [('State', stats_state), ('Video', stats_video), ('Physics', stats_physics)]:
             parity = stats['wage_parity_mean']

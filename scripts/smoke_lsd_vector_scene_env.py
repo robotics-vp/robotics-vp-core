@@ -133,14 +133,14 @@ def run_smoke_test(
         episode_log = env.get_episode_log(info_history)
 
         if verbose:
-            print(f"\n  Results:")
+            print("\n  Results:")
             print(f"    Steps: {step_count}")
             print(f"    Termination: {episode_log['episode_summary']['termination_reason']}")
             print(f"    MPL (units/hr): {episode_log['mpl_metrics']['mpl_units_per_hour']:.2f}")
             print(f"    Error rate: {episode_log['mpl_metrics']['error_rate']:.3f}")
             print(f"    Energy (Wh): {episode_log['mpl_metrics']['energy_wh']:.4f}")
             print(f"    Elapsed: {ep_elapsed:.2f}s")
-            print(f"\n  Difficulty features:")
+            print("\n  Difficulty features:")
             for key, value in episode_log['difficulty_features'].items():
                 print(f"    {key}: {value}")
 

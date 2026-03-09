@@ -66,7 +66,7 @@ def smoke_test_state_mode(n_episodes=5):
 
         # Episode summary
         summary = summarize_drawer_vase_episode(info_history)
-        print(f"  EpisodeInfoSummary:")
+        print("  EpisodeInfoSummary:")
         print(f"    termination_reason: {summary.termination_reason}")
         print(f"    mpl_episode: {summary.mpl_episode:.4f}")
         print(f"    error_rate_episode: {summary.error_rate_episode:.4f}")

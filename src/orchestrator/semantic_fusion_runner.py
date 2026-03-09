@@ -358,7 +358,7 @@ def run_semantic_fusion_for_rollouts(
                 summary["evidence_bus_path"] = str(evidence_bus_path)
 
             if emit_belief_state:
-                semantic_tags = []
+                semantic_tags: list[str] = []
                 if teacher_trace is not None and isinstance(teacher_trace.metadata, dict):
                     semantic_tags.extend(teacher_trace.metadata.get("semantic_tags", []) or [])
                 if vla_evidence is not None and isinstance(vla_evidence.provenance, dict):

@@ -4,7 +4,6 @@ Tests for LSD Vector Scene Environment.
 
 import numpy as np
 import pytest
-from pathlib import Path
 
 from src.envs.lsd_vector_scene_env import (
     LSDVectorSceneEnv,

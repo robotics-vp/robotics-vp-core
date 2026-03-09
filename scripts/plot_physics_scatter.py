@@ -72,22 +72,22 @@ def plot_physics_scatter(csv_path, output_dir='reports'):
     print(f"\n{'='*60}")
     print(f"Summary Statistics ({len(df_clean)} episodes)")
     print(f"{'='*60}")
-    print(f"\nMPL (dishes/hr):")
+    print("\nMPL (dishes/hr):")
     print(f"  Mean:  {df_clean[mpl_col].mean():>8.1f}")
     print(f"  Std:   {df_clean[mpl_col].std():>8.1f}")
     print(f"  Range: [{df_clean[mpl_col].min():.1f}, {df_clean[mpl_col].max():.1f}]")
 
-    print(f"\nAttempts:")
+    print("\nAttempts:")
     print(f"  Mean:  {df_clean['attempts'].mean():>8.2f}")
     print(f"  Std:   {df_clean['attempts'].std():>8.2f}")
     print(f"  Range: [{df_clean['attempts'].min():.0f}, {df_clean['attempts'].max():.0f}]")
 
-    print(f"\nError Rate:")
+    print("\nError Rate:")
     print(f"  Mean:  {df_clean[err_col].mean():>8.3f}")
     print(f"  Std:   {df_clean[err_col].std():>8.3f}")
     print(f"  Range: [{df_clean[err_col].min():.3f}, {df_clean[err_col].max():.3f}]")
 
-    print(f"\nCorrelations:")
+    print("\nCorrelations:")
     print(f"  Attempts ↔ MPL:    {corr_attempts_mpl:>6.3f}")
     print(f"  Error Rate ↔ MPL:  {corr_err_mpl:>6.3f}")
 

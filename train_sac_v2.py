@@ -7,16 +7,15 @@ Supports both:
 
 SAC, economics, and pricing logic UNCHANGED - only observation modality differs.
 """
-import sys
 import os
 import argparse
 import yaml
 import numpy as np
 import torch
 
-from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams, summarize_episode_info
+from src.envs.dishwashing_env import DishwashingEnv, summarize_episode_info
 from src.envs.video_wrappers import DishwashingVideoEnv
-from src.envs.physics import DishwashingPhysicsEnv, create_physics_env
+from src.envs.physics import DishwashingPhysicsEnv
 from src.rl.sac import SACAgent
 from src.encoders.mlp_encoder import EncoderWithAuxiliaries
 from src.encoders.builder import build_encoder
@@ -235,12 +234,12 @@ def train_sac(config_path, episodes=None, seed=42, econ_preset=None, use_conditi
                 encoder.load_state_dict(checkpoint)
                 print(f"Encoder: Aligned (loaded weights from {checkpoint_path})")
         else:
-            print(f"Encoder: Aligned (untrained)")
+            print("Encoder: Aligned (untrained)")
 
         # Freeze encoder for now (canonical visual backbone)
         for param in encoder.parameters():
             param.requires_grad = False
-        print(f"  Encoder frozen: True")
+        print("  Encoder frozen: True")
     else:
         raise ValueError(f"Unknown encoder type: {encoder_type}")
 

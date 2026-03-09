@@ -1,6 +1,5 @@
 """Test determinism of small-world graph construction and metrics."""
 import numpy as np
-import pytest
 
 from src.geometry_graphs.small_world import (
     build_small_world_graph,

@@ -17,24 +17,25 @@ Usage:
     python scripts/run_workcell_regal.py --task kitting --episodes 5
     python scripts/run_workcell_regal.py --include-regal --include-econ
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import sys
 import uuid
-from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.envs.workcell_env.env import WorkcellEnv
-from src.envs.workcell_env.config import WorkcellEnvConfig, PRESETS
-from src.envs.workcell_env.rewards.reward_breakdown import compute_workcell_reward_breakdown
+from src.envs.workcell_env.config import WorkcellEnvConfig
+from src.envs.workcell_env.rewards.reward_breakdown import (
+    compute_workcell_reward_breakdown,
+)
 from src.envs.workcell_env.trajectory_audit import WorkcellTrajectoryCollector
 
 from src.contracts.schemas import (
@@ -44,12 +45,10 @@ from src.contracts.schemas import (
     LedgerWindowV1,
     LedgerExposureV1,
     LedgerPolicyV1,
-    LedgerProbeV1,
     RegalGatesV1,
     RegalPhaseV1,
     RegalContextV1,
     TrajectoryAuditV1,
-    EconTensorV1,
 )
 from src.valuation.value_ledger import ValueLedger
 from src.valuation.exposure_manifest import (
@@ -164,16 +163,28 @@ def main():
     parser.add_argument("--training-steps", type=int, default=500)
 
     # Task selection
-    parser.add_argument("--task", type=str, default="kitting",
-                        choices=["kitting", "peg_in_hole", "conveyor_sorting", "assembly"])
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="kitting",
+        choices=["kitting", "peg_in_hole", "conveyor_sorting", "assembly"],
+    )
 
     # Quarantine
-    parser.add_argument("--quarantine", type=str, default="",
-                        help="Comma-separated datapack IDs to quarantine")
+    parser.add_argument(
+        "--quarantine",
+        type=str,
+        default="",
+        help="Comma-separated datapack IDs to quarantine",
+    )
 
     # Regal
     parser.add_argument("--include-regal", action="store_true")
-    parser.add_argument("--regal-ids", type=str, default="spec_guardian,world_coherence,reward_integrity")
+    parser.add_argument(
+        "--regal-ids",
+        type=str,
+        default="spec_guardian,world_coherence,reward_integrity",
+    )
 
     # Econ tensor
     parser.add_argument("--include-econ", action="store_true")
@@ -225,7 +236,7 @@ def main():
     print(f"  Plan SHA: {plan_sha[:16]}")
 
     # Run audit before (synthetic)
-    print(f"\n[2/8] Running pre-training audit...")
+    print("\n[2/8] Running pre-training audit...")
     audit_scenarios = [
         AuditScenario(f"{args.task}_01", args.task, args.task, num_episodes=2),
     ]
@@ -272,7 +283,9 @@ def main():
         audit = collector.build_audit()
         trajectory_audits.append(audit)
 
-        print(f"  Episode {ep_idx}: success={result['success']}, reward={result['total_reward']:.3f}, steps={result['steps']}")
+        print(
+            f"  Episode {ep_idx}: success={result['success']}, reward={result['total_reward']:.3f}, steps={result['steps']}"
+        )
         print(f"    Events: {collector.event_counts}")
 
     env.close()
@@ -282,7 +295,7 @@ def main():
     orchestrator_tracker.update_step(args.training_steps)
 
     # Aggregate trajectory audits
-    print(f"\n[4/8] Aggregating trajectory audits...")
+    print("\n[4/8] Aggregating trajectory audits...")
     aggregated_audit = None  # For regal evaluation
     if trajectory_audits:
         # aggregate_trajectory_audits returns SHA string directly
@@ -302,7 +315,9 @@ def main():
                 "num_episodes": len(trajectory_audits),
                 "total_return": total_return,
                 "total_steps": total_steps,
-                "episode_audits": [a.model_dump(mode="json") for a in trajectory_audits],
+                "episode_audits": [
+                    a.model_dump(mode="json") for a in trajectory_audits
+                ],
             }
             json.dump(audit_data, f, indent=2)
         print(f"  Aggregated {len(trajectory_audits)} audits")
@@ -318,7 +333,7 @@ def main():
     regal_context_sha = None
     regal_config = None
     if args.include_regal:
-        print(f"\n[4b/8] Running regal evaluation...")
+        print("\n[4b/8] Running regal evaluation...")
         from src.regal.regal_evaluator import evaluate_regals
 
         regal_config = RegalGatesV1(
@@ -355,14 +370,16 @@ def main():
     econ_tensor = None
     econ_basis_sha = None
     if args.include_econ:
-        print(f"\n[4c/8] Computing econ tensor...")
+        print("\n[4c/8] Computing econ tensor...")
         from src.economics.econ_basis_registry import get_default_basis
         from src.economics.econ_tensor import econ_to_tensor
 
         basis_def = get_default_basis()
         econ_basis_sha = basis_def.sha256
 
-        success_rate = sum(1 for r in episode_results if r["success"]) / max(len(episode_results), 1)
+        success_rate = sum(1 for r in episode_results if r["success"]) / max(
+            len(episode_results), 1
+        )
         econ_data = {
             "mpl_units_per_hour": 15.0 * success_rate,
             "wage_parity": 0.9,
@@ -373,7 +390,7 @@ def main():
         print(f"  Econ tensor SHA: {econ_tensor.sha256()[:16]}")
 
     # Run audit after (synthetic)
-    print(f"\n[5/8] Running post-training audit...")
+    print("\n[5/8] Running post-training audit...")
     audit_config_b = AuditSuiteConfig(
         suite_id="workcell_audit_v1",
         seed=args.seed + 100,
@@ -394,7 +411,7 @@ def main():
     final_weights_sha = sha256_json(final_weights)
 
     # Write artifacts
-    print(f"\n[6/8] Writing artifacts...")
+    print("\n[6/8] Writing artifacts...")
 
     # Exposure manifest
     exposure_tracker.update_step(args.training_steps)
@@ -413,7 +430,9 @@ def main():
     # Orchestrator state
     orchestrator_state = orchestrator_tracker.build_state()
     orchestrator_path = output_dir / "orchestrator_state.json"
-    orchestrator_sha = write_orchestrator_state(str(orchestrator_path), orchestrator_state)
+    orchestrator_sha = write_orchestrator_state(
+        str(orchestrator_path), orchestrator_state
+    )
     print(f"  orchestrator_state.json: {orchestrator_sha[:16]}")
 
     # Deploy gate
@@ -426,9 +445,13 @@ def main():
     deploy_inputs_path = output_dir / "deploy_gate_inputs.json"
     deploy_inputs_sha = write_deploy_gate_inputs(str(deploy_inputs_path), deploy_inputs)
 
-    deploy_decision = compute_deploy_decision(deploy_inputs, require_regal=args.include_regal)
+    deploy_decision = compute_deploy_decision(
+        deploy_inputs, require_regal=args.include_regal
+    )
     deploy_decision_path = output_dir / "deploy_gate_decision.json"
-    deploy_decision_sha = write_deploy_gate_decision(str(deploy_decision_path), deploy_decision)
+    deploy_decision_sha = write_deploy_gate_decision(
+        str(deploy_decision_path), deploy_decision
+    )
     print(f"  deploy_gate_inputs.json: {deploy_inputs_sha[:16]}")
     print(f"  deploy_gate_decision.json: {deploy_decision_sha[:16]}")
 
@@ -493,12 +516,14 @@ def main():
     print(f"  run_manifest.json: {manifest.run_id}")
 
     # Run verification (UNCONDITIONAL)
-    print(f"\n[7/8] Running verify_run() (UNCONDITIONAL)...")
+    print("\n[7/8] Running verify_run() (UNCONDITIONAL)...")
     verification_report = verify_run(str(output_dir))
 
     # Write verification report
     verification_path = output_dir / "verification_report.json"
-    verification_sha = write_verification_report(str(verification_path), verification_report)
+    verification_sha = write_verification_report(
+        str(verification_path), verification_report
+    )
     print(f"  verification_report.json: {verification_sha[:16]}")
 
     # Update manifest with verification SHA
@@ -506,7 +531,7 @@ def main():
     write_manifest(str(manifest_path), manifest)
 
     # Print verification result
-    print(f"\n[8/8] Verification Result:")
+    print("\n[8/8] Verification Result:")
     print(f"  All passed: {verification_report.all_passed}")
     print(f"  Checks: {len(verification_report.checks)}")
     for check in verification_report.checks:
@@ -517,10 +542,12 @@ def main():
     print("\n" + "=" * 60)
     print("WORKCELL REGAL RUN COMPLETE")
     print("=" * 60)
-    print(f"\nArtifact SHAs (populated in manifest):")
+    print("\nArtifact SHAs (populated in manifest):")
     print(f"  selection_manifest_sha:   {selection_sha[:16]}")
     print(f"  orchestrator_state_sha:   {orchestrator_sha[:16]}")
-    print(f"  trajectory_audit_sha:     {trajectory_audit_sha[:16] if trajectory_audit_sha else 'N/A'}")
+    print(
+        f"  trajectory_audit_sha:     {trajectory_audit_sha[:16] if trajectory_audit_sha else 'N/A'}"
+    )
     print(f"  verification_report_sha:  {verification_sha[:16]}")
     print(f"  deploy_gate_inputs_sha:   {deploy_inputs_sha[:16]}")
 
@@ -528,27 +555,27 @@ def main():
     print(f"  Reason: {deploy_decision.reason}")
 
     print(f"\nOutput directory: {output_dir}")
-    print(f"  - run_manifest.json")
-    print(f"  - ledger.jsonl")
-    print(f"  - exposure_manifest.json")
-    print(f"  - selection_manifest.json")
-    print(f"  - orchestrator_state.json")
-    print(f"  - trajectory_audit.json")
-    print(f"  - verification_report.json")
-    print(f"  - deploy_gate_inputs.json")
-    print(f"  - deploy_gate_decision.json")
+    print("  - run_manifest.json")
+    print("  - ledger.jsonl")
+    print("  - exposure_manifest.json")
+    print("  - selection_manifest.json")
+    print("  - orchestrator_state.json")
+    print("  - trajectory_audit.json")
+    print("  - verification_report.json")
+    print("  - deploy_gate_inputs.json")
+    print("  - deploy_gate_decision.json")
 
     # FAIL HARD on verification failure
     if not verification_report.all_passed:
-        print(f"\nERROR: Verification FAILED!")
+        print("\nERROR: Verification FAILED!")
         failed_checks = [c for c in verification_report.checks if not c.passed]
         for check in failed_checks:
             print(f"  FAILED: {check.check_id} - {check.message}")
         sys.exit(1)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("ALL CHECKS PASSED - Manufacturing cell regality verified")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     return 0
 

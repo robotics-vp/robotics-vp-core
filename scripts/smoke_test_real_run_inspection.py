@@ -1,5 +1,4 @@
 import subprocess
-import json
 import sys
 import shutil
 from pathlib import Path

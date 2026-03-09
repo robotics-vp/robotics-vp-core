@@ -10,7 +10,6 @@ No Phase B/RL integration - purely advisory orchestration.
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -29,7 +28,6 @@ from torch.utils.data import DataLoader, TensorDataset
 from src.orchestrator.orchestration_transformer import (
     OrchestrationTransformer,
     TOOL_NAMES,
-    _encode_ctx,
 )
 from src.orchestrator.training_dataset import (
     build_training_dataset,

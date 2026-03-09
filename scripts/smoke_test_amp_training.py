@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.utils.training_env import should_use_amp, run_with_oom_recovery
+from src.utils.training_env import run_with_oom_recovery
 
 def smoke_test_amp():
     print("[SmokeTest] Starting AMP training smoke test...")

@@ -6,7 +6,6 @@ Tests that:
 3. Combined inputs SHA recomputation works
 """
 import json
-import pytest
 import tempfile
 from pathlib import Path
 import sys

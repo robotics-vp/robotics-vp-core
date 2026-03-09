@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 import numpy as np
 
@@ -136,7 +136,6 @@ def main():
         sys.exit(1)
 
     from src.vision.nag import (
-        CameraParams,
         NAGFromLSDConfig,
         NAGEditPolicyConfig,
         build_nag_scene_from_lsd_rollout,
@@ -200,7 +199,7 @@ def main():
             device=device,
             renderer=renderer,
         )
-        logger.info(f"NAG scene built successfully!")
+        logger.info("NAG scene built successfully!")
         logger.info(f"Background node: {scene.background_node_id}")
         logger.info(f"Foreground nodes: {scene.get_foreground_nodes()}")
         logger.info(f"Metadata: {scene.metadata}")

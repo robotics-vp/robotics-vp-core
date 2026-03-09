@@ -13,9 +13,8 @@ Usage:
 import argparse
 import glob
 import json
-import sys
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from collections import defaultdict
 
 import numpy as np
@@ -217,7 +216,7 @@ def plot_demo_runs(
         all_episodes.extend(episodes)
 
     if not all_episodes:
-        print(f"  [WARN] No demo episodes loaded")
+        print("  [WARN] No demo episodes loaded")
         return
 
     # Extract data
@@ -244,7 +243,7 @@ def plot_demo_runs(
     plt.scatter(lengths, returns, c=colors, alpha=0.6, edgecolors='black')
     plt.xlabel("Episode Length (steps)")
     plt.ylabel("Total Return")
-    plt.title(f"Episode Length vs Return (green=success, red=failure)")
+    plt.title("Episode Length vs Return (green=success, red=failure)")
     plt.grid(True, alpha=0.3)
     plt.savefig(demo_output_dir / "episode_length_vs_return.png", dpi=150, bbox_inches='tight')
     plt.close()

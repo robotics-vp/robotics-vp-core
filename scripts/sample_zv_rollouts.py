@@ -12,11 +12,9 @@ Usage:
 """
 
 import os
-import sys
 import argparse
 import numpy as np
 import torch
-from pathlib import Path
 
 
 def load_latent_dynamics_model(model_path, device='cpu'):
@@ -373,7 +371,7 @@ def sample_zv_rollouts_main(
     dmpl_estimates = estimate_synthetic_dmpl(synthetic_rollouts, dataset_path)
 
     # Summary
-    print(f"\nSynthetic Rollouts Summary:")
+    print("\nSynthetic Rollouts Summary:")
     print(f"  Novelty: {np.mean(novelty_scores):.4f} ± {np.std(novelty_scores):.4f}")
     print(f"  ΔMPL Estimate: {np.mean(dmpl_estimates):.2f} ± {np.std(dmpl_estimates):.2f}")
 

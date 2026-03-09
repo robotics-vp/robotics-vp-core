@@ -25,7 +25,7 @@ def build_encoder(
     config: dict,
     obs_dim: Optional[int] = None,
     video_shape: Optional[Tuple[int, int, int, int]] = None,
-    device: torch.device = None
+    device: Optional[torch.device] = None
 ) -> nn.Module:
     """
     Build encoder based on config.
@@ -57,7 +57,7 @@ def build_encoder(
             raise ValueError("obs_dim must be provided for MLP encoder")
 
         mlp_config = config.get('mlp', {})
-        encoder = MLPEncoder(
+        encoder: nn.Module = MLPEncoder(
             obs_dim=obs_dim,
             latent_dim=latent_dim,
             hidden_dim=mlp_config.get('hidden_dim', 256),

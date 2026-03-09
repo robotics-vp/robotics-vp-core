@@ -1,12 +1,9 @@
 """Test small-world metrics sanity checks."""
 import numpy as np
-import pytest
 
 from src.geometry_graphs.small_world import (
     build_small_world_graph,
-    compute_graph_metrics,
     graph_summary_from_embeddings,
-    GraphEdgeCounts,
 )
 from src.contracts.schemas import GraphSpecV1
 

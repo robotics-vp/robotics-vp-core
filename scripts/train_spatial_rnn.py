@@ -12,7 +12,6 @@ Outputs:
 """
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -34,8 +33,7 @@ except ImportError:
     sys.exit(1)
 
 from src.vision.spatial_rnn import SpatialRNN
-from src.utils.json_safe import to_json_safe
-from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
+from src.utils.training_env import should_use_amp, run_with_oom_recovery
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
 from src.utils.failure_sentinel import FailureSentinel
 import hashlib

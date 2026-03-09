@@ -17,7 +17,6 @@ from src.vision.scene_ir_tracker.serialization import (
     deserialize_scene_tracks_v1,
     compute_scene_ir_quality_score,
     get_scene_ir_summary_dict,
-    SCENE_TRACKS_VERSION,
 )
 
 

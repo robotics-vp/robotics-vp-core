@@ -228,12 +228,12 @@ def train_lattice_on_J(n_epochs=200, lr=1e-3, batch_size=64):
                   f"val_loss={val_loss:.6f}, val_mae={val_mae:.4f}")
 
     # Final evaluation
-    print(f"\nFinal evaluation:")
+    print("\nFinal evaluation:")
     print(f"  MSE: {val_loss:.6f}")
     print(f"  MAE: {val_mae:.4f}")
 
     # Test monotonicity preservation
-    print(f"\nMonotonicity check (should be increasing):")
+    print("\nMonotonicity check (should be increasing):")
     with torch.no_grad():
         # Test ΔMPL monotonicity
         test_mpl = torch.linspace(-0.5, 2.0, 10)
@@ -310,7 +310,7 @@ def train_lattice_on_J(n_epochs=200, lr=1e-3, batch_size=64):
         'objective_vector': profile['default_objective_vector'],
     }
     torch.save(checkpoint, 'checkpoints/w_econ_lattice_J.pt')
-    print(f"\nSaved J-trained model to checkpoints/w_econ_lattice_J.pt")
+    print("\nSaved J-trained model to checkpoints/w_econ_lattice_J.pt")
 
     # Also save as the main checkpoint (overwrite old heuristic-trained)
     torch.save(checkpoint, profile['w_econ_lattice_path'])
@@ -337,7 +337,7 @@ def train_lattice_on_J(n_epochs=200, lr=1e-3, batch_size=64):
     }
     with open('results/w_econ_lattice_J_training.json', 'w') as f:
         json.dump(log, f, indent=2)
-    print(f"Saved training log to results/w_econ_lattice_J_training.json")
+    print("Saved training log to results/w_econ_lattice_J_training.json")
 
     print("\n" + "=" * 70)
     print("DONE")

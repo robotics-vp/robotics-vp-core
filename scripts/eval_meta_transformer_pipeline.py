@@ -16,7 +16,6 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -26,7 +25,6 @@ from src.orchestrator.meta_transformer_training import (
     collate_meta_transformer_batch,
     generate_meta_transformer_dataset,
     save_meta_transformer_dataset,
-    load_meta_transformer_dataset,
     forward_pass_test,
     evaluate_meta_transformer,
     encode_semantic_tokens,
@@ -243,7 +241,7 @@ def main():
     print("✓ Cross-attention between VLA and DINO works")
     print("✓ Semantic token encoding/decoding works")
     print("✓ Evaluation metrics computed")
-    print(f"\nModel is ready for pretraining!")
+    print("\nModel is ready for pretraining!")
     print(f"Results saved to: {results_path}")
 
 

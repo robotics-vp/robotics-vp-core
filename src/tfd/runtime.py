@@ -253,7 +253,7 @@ class TFDSession:
         canonical_cv = self.get_canonical_condition_vector()
         canonical_inst = self.get_canonical_instruction()
 
-        summary = {
+        summary: Dict[str, Any] = {
             "active": canonical_inst is not None,
             "instruction_count": len(self.instructions),
         }

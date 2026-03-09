@@ -103,45 +103,45 @@ class SceneTracksAdapter:
             initial_ori = tuple(track.orientations[0].tolist()) if len(track.orientations) > 0 else (0.0, 0.0, 0.0, 1.0)
 
             if obj_type == "fixture":
-                spec = FixtureSpec(
+                fixture_spec = FixtureSpec(
                     id=f"fixture_{len(fixtures)}",
                     position=initial_pos,
                     orientation=initial_ori,
                     fixture_type=track.object_type or "generic",
                 )
-                fixtures.append(spec)
-                track_mapping[track.track_id] = spec.id
+                fixtures.append(fixture_spec)
+                track_mapping[track.track_id] = fixture_spec.id
 
             elif obj_type == "container":
-                spec = ContainerSpec(
+                container_spec = ContainerSpec(
                     id=f"container_{len(containers)}",
                     position=initial_pos,
                     orientation=initial_ori,
                     container_type=track.object_type or "bin",
                     capacity=10,
                 )
-                containers.append(spec)
-                track_mapping[track.track_id] = spec.id
+                containers.append(container_spec)
+                track_mapping[track.track_id] = container_spec.id
 
             elif obj_type == "part":
-                spec = PartSpec(
+                part_spec = PartSpec(
                     id=f"part_{len(parts)}",
                     position=initial_pos,
                     orientation=initial_ori,
                     part_type=track.object_type or "generic",
                 )
-                parts.append(spec)
-                track_mapping[track.track_id] = spec.id
+                parts.append(part_spec)
+                track_mapping[track.track_id] = part_spec.id
 
             elif obj_type == "station":
-                spec = StationSpec(
+                station_spec = StationSpec(
                     id=f"station_{len(stations)}",
                     position=initial_pos,
                     orientation=initial_ori,
                     station_type=track.object_type or "bench",
                 )
-                stations.append(spec)
-                track_mapping[track.track_id] = spec.id
+                stations.append(station_spec)
+                track_mapping[track.track_id] = station_spec.id
 
         # Compute spatial bounds from track positions
         all_positions = np.concatenate([t.positions for t in tracks]) if tracks else np.zeros((1, 3))
@@ -237,19 +237,29 @@ class SceneTracksAdapter:
         # Handle different array shapes
         if positions.ndim == 3:  # (num_tracks, T, 3)
             for i, tid in enumerate(track_ids):
+                track_orientations = (
+                    np.asarray(orientations[i], dtype=np.float32)
+                    if orientations is not None and orientations.ndim >= 3
+                    else _default_orientations(len(positions[i]))
+                )
                 tracks.append(TrackInfo(
                     track_id=str(tid),
                     object_type="unknown",
                     positions=positions[i],
-                    orientations=orientations[i] if orientations is not None and orientations.ndim >= 3 else orientations,
+                    orientations=track_orientations,
                     semantic_labels=labels[i] if labels is not None and labels.ndim >= 2 else None,
                 ))
         elif positions.ndim == 2:  # (T, 3) single track or (num_tracks, 3) single frame
+            single_track_orientations = (
+                np.asarray(orientations, dtype=np.float32)
+                if orientations is not None
+                else _default_orientations(len(positions))
+            )
             tracks.append(TrackInfo(
                 track_id=str(track_ids[0]) if len(track_ids) > 0 else "track_0",
                 object_type="unknown",
                 positions=positions,
-                orientations=orientations,
+                orientations=single_track_orientations,
             ))
 
         return tracks
@@ -366,6 +376,10 @@ def _rotation_matrices_to_quat(rotations: np.ndarray) -> np.ndarray:
                 qz = 0.25 * s
         quats[idx] = np.array([qw, qx, qy, qz], dtype=np.float32)
     return quats
+
+
+def _default_orientations(length: int) -> np.ndarray:
+    return np.tile([0.0, 0.0, 0.0, 1.0], (max(length, 1), 1)).astype(np.float32)
 
 
 def reconstruct_workcell_from_video(

@@ -388,13 +388,15 @@ def compute_suite_report(
     difficulty_success_corr = 0.0
     difficulty_reward_corr = 0.0
 
-    metrics_with_difficulty = [m for m in episode_metrics if m.difficulty is not None]
+    metrics_with_difficulty = [
+        (m, m.difficulty) for m in episode_metrics if m.difficulty is not None
+    ]
     if len(metrics_with_difficulty) >= 3:
         difficulties = np.array([
-            m.difficulty.composite_difficulty() for m in metrics_with_difficulty
+            difficulty.composite_difficulty() for _, difficulty in metrics_with_difficulty
         ])
-        successes = np.array([float(m.success) for m in metrics_with_difficulty])
-        rewards = np.array([m.total_reward for m in metrics_with_difficulty])
+        successes = np.array([float(m.success) for m, _ in metrics_with_difficulty])
+        rewards = np.array([m.total_reward for m, _ in metrics_with_difficulty])
 
         if np.std(difficulties) > 0:
             difficulty_success_corr = float(np.corrcoef(difficulties, successes)[0, 1])
@@ -449,7 +451,9 @@ def _aggregate_manufacturing_kpis(
     Returns:
         AggregateManufacturingKPIs
     """
-    metrics_with_kpis = [m for m in episode_metrics if m.manufacturing_kpis is not None]
+    metrics_with_kpis = [
+        kpis for m in episode_metrics for kpis in [m.manufacturing_kpis] if kpis is not None
+    ]
 
     if not metrics_with_kpis:
         return AggregateManufacturingKPIs()
@@ -457,18 +461,18 @@ def _aggregate_manufacturing_kpis(
     n = len(metrics_with_kpis)
 
     # Mean KPIs
-    mean_cycle_time = sum(m.manufacturing_kpis.cycle_time_s for m in metrics_with_kpis) / n
-    mean_contact_force = sum(m.manufacturing_kpis.contact_force_proxy for m in metrics_with_kpis) / n
-    mean_contact_force_N = sum(m.manufacturing_kpis.contact_force_N for m in metrics_with_kpis) / n
-    mean_constraint_error = sum(m.manufacturing_kpis.constraint_error for m in metrics_with_kpis) / n
-    mean_scrap = sum(m.manufacturing_kpis.scrap_proxy for m in metrics_with_kpis) / n
+    mean_cycle_time = sum(kpis.cycle_time_s for kpis in metrics_with_kpis) / n
+    mean_contact_force = sum(kpis.contact_force_proxy for kpis in metrics_with_kpis) / n
+    mean_contact_force_N = sum(kpis.contact_force_N for kpis in metrics_with_kpis) / n
+    mean_constraint_error = sum(kpis.constraint_error for kpis in metrics_with_kpis) / n
+    mean_scrap = sum(kpis.scrap_proxy for kpis in metrics_with_kpis) / n
 
     # Aggregate failure taxonomy
     total_failures = {
-        "collision": sum(m.manufacturing_kpis.failure_taxonomy.collision_count for m in metrics_with_kpis),
-        "timeout": sum(m.manufacturing_kpis.failure_taxonomy.timeout_count for m in metrics_with_kpis),
-        "precision": sum(m.manufacturing_kpis.failure_taxonomy.precision_count for m in metrics_with_kpis),
-        "other": sum(m.manufacturing_kpis.failure_taxonomy.other_count for m in metrics_with_kpis),
+        "collision": sum(kpis.failure_taxonomy.collision_count for kpis in metrics_with_kpis),
+        "timeout": sum(kpis.failure_taxonomy.timeout_count for kpis in metrics_with_kpis),
+        "precision": sum(kpis.failure_taxonomy.precision_count for kpis in metrics_with_kpis),
+        "other": sum(kpis.failure_taxonomy.other_count for kpis in metrics_with_kpis),
     }
 
     total_all_failures = sum(total_failures.values())

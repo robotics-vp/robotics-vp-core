@@ -105,7 +105,7 @@ def test_openvla_controller_with_backbone():
         vision_backbone_type="dummy",
     )
     controller = OpenVLAController(cfg)
-    print(f"  Created OpenVLAController with config:")
+    print("  Created OpenVLAController with config:")
     print(f"    use_vision_backbone={cfg.use_vision_backbone}")
     print(f"    vision_backbone_type={cfg.vision_backbone_type}")
 
@@ -133,7 +133,7 @@ def test_openvla_controller_with_backbone():
 
     # End episode and get embedding
     episode_embedding = controller.end_episode()
-    print(f"  Episode embedding computed:")
+    print("  Episode embedding computed:")
     print(f"    Shape: {episode_embedding.shape}")
     print(f"    Norm: {np.linalg.norm(episode_embedding):.4f}")
     print(f"    Min: {np.min(episode_embedding):.4f}")
@@ -275,7 +275,7 @@ def test_datapack_embedding_serialization():
         semantic_tags=["fragile_glassware"],
         episode_embedding=[0.1, -0.2, 0.3, 0.4, -0.5],  # Small embedding for test
     )
-    print(f"  Created DataPackMeta with embedding:")
+    print("  Created DataPackMeta with embedding:")
     print(f"    pack_id: {dp.pack_id[:8]}...")
     print(f"    episode_embedding: {dp.episode_embedding}")
 
@@ -292,7 +292,7 @@ def test_datapack_embedding_serialization():
 
     # Deserialize from dict
     dp_restored = DataPackMeta.from_dict(d)
-    print(f"  Deserialized from dict:")
+    print("  Deserialized from dict:")
     print(f"    Restored embedding: {dp_restored.episode_embedding}")
     assert dp_restored.episode_embedding == [0.1, -0.2, 0.3, 0.4, -0.5]
 
@@ -367,7 +367,7 @@ def test_end_to_end_pipeline():
         with open(temp_path, 'r') as f:
             loaded_dict = json.load(f)
         dp_loaded = DataPackMeta.from_dict(loaded_dict)
-        print(f"  Saved and reloaded datapack:")
+        print("  Saved and reloaded datapack:")
         print(f"    Embedding preserved: {dp_loaded.episode_embedding == dp1.episode_embedding}")
         assert dp_loaded.episode_embedding == dp1.episode_embedding
     finally:

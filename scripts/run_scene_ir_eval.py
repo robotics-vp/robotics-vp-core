@@ -13,7 +13,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -73,7 +73,6 @@ def run_evaluation(
         Aggregate EvalMetrics.
     """
     from src.analytics.scene_ir_eval_report import (
-        compute_eval_metrics,
         EvalMetrics,
     )
     
@@ -319,7 +318,6 @@ def run_manifest_verification(
     passed_quality_gates = 0
     runtimes = []
     
-    from src.analytics.scene_ir_eval_report import generate_eval_report_md, save_eval_report
     
     all_metrics = []
     

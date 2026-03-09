@@ -60,8 +60,8 @@ def build_shadow_advisory_output(
     for step in dataset.steps:
         steps_by_episode[step.episode_id].append(step)
 
-    episode_outputs = []
-    budget_candidates = []
+    episode_outputs: list[Dict[str, Any]] = []
+    budget_candidates: list[InferentialTrainingCandidate] = []
     for episode in dataset.episodes:
         policy_result = (policy_advisor or PolicyAdvisor()).summarize_episode(steps_by_episode.get(episode.episode_id, []))
         pricing_result = (pricing_advisor or PricingAdvisor()).assess_episode(episode)
@@ -230,7 +230,7 @@ def build_shadow_advisory_output(
 
     gate = InferentialTrainingGate(promotion_policy=promotion_policy)
     budget_artifact = evaluate_adaptation_budget(gate=gate, candidates=budget_candidates)
-    decisions_by_episode = {
+    decisions_by_episode: Dict[str, Dict[str, Any]] = {
         str(row.get("artifact_summary", {}).get("episode_id", candidate.episode_id)): row
         for row, candidate in zip(budget_artifact.decisions, budget_candidates)
     }
@@ -245,7 +245,7 @@ def build_shadow_advisory_output(
                 "pricing_accepted": episode_output["receipt_feedback"]["deployment_outcome"]["pricing_accepted"],
             }
 
-    summary = {
+    summary: Dict[str, Any] = {
         "episodes": len(episode_outputs),
         "sampling_priorities": dict(Counter(output["sampling_priority"] for output in episode_outputs)),
         "collect_more_data_count": sum(1 for output in episode_outputs if output["collect_more_data"]),
@@ -263,7 +263,7 @@ def build_shadow_advisory_output(
             or output["advisor_evaluation"]["policy_alignment"] is not None
         ),
     }
-    payload = {
+    payload: Dict[str, Any] = {
         "summary": summary,
         "episodes": episode_outputs,
         "dataset_digest": dataset.manifest.dataset_digest,

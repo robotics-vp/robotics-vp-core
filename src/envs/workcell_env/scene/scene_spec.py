@@ -9,9 +9,16 @@ from typing import Any, Dict, List
 
 
 class _JsonMixin:
+    def to_dict(self) -> Dict[str, Any]:
+        raise NotImplementedError
+
     def to_json(self) -> str:
         """Serialize to JSON string."""
         return json.dumps(self.to_dict(), indent=2)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        raise NotImplementedError
 
     @classmethod
     def from_json(cls, json_str: str):

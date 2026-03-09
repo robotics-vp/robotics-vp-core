@@ -26,7 +26,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from collections import deque
 from pathlib import Path
 
 
@@ -419,7 +418,7 @@ def run_offline_experiment(
     # Report data composition
     source_stats = buffer.get_source_stats()
     total = len(buffer)
-    print(f"\nReplay Buffer Composition:")
+    print("\nReplay Buffer Composition:")
     for source, count in source_stats.items():
         print(f"  {source}: {count} transitions ({100*count/total:.1f}%)")
     print(f"  Total: {total} transitions")
@@ -505,7 +504,6 @@ def run_offline_experiment(
 
 
 # Add regality wrapper
-import sys
 repo_root_path = Path(__file__).parent.parent
 if str(repo_root_path) not in sys.path:
     sys.path.insert(0, str(repo_root_path))

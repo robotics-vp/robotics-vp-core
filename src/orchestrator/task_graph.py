@@ -198,8 +198,8 @@ class TaskGraph:
         Returns list of task_ids in execution order.
         """
         # Build dependency graph
-        in_degree = {}
-        graph = {}
+        in_degree: Dict[str, int] = {}
+        graph: Dict[str, List[str]] = {}
         all_nodes = self.get_all_nodes()
 
         for node in all_nodes:
@@ -239,8 +239,8 @@ class TaskGraph:
             return []
 
         # Build path lengths
-        path_length = {self.root.task_id: 1}
-        predecessor = {self.root.task_id: None}
+        path_length: Dict[str, int] = {self.root.task_id: 1}
+        predecessor: Dict[str, Optional[str]] = {self.root.task_id: None}
 
         for node in all_nodes:
             if node.task_id not in path_length:
@@ -259,8 +259,8 @@ class TaskGraph:
         max_leaf = max(leaves, key=lambda n: path_length.get(n.task_id, 0))
 
         # Reconstruct path
-        path = []
-        current = max_leaf.task_id
+        path: List[str] = []
+        current: Optional[str] = max_leaf.task_id
         while current is not None:
             path.append(current)
             current = predecessor.get(current)

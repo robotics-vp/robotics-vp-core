@@ -8,8 +8,7 @@ IMPORTANT:
 - Respects econ/datapack/ontology/DAG constraints
 """
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from src.sima2.semantic_primitive_extractor import SemanticPrimitive
 from src.sima2.ontology_proposals import OntologyUpdateProposal, ProposalType as OntologyProposalType
@@ -18,7 +17,7 @@ from src.sima2.task_graph_proposals import (
     RefinementType,
     RefinementPriority,
 )
-from src.orchestrator.task_graph import TaskGraph, TaskNode, TaskType, TaskStatus
+from src.orchestrator.task_graph import TaskGraph, TaskType
 from src.orchestrator.ontology import EnvironmentOntology
 from src.orchestrator.economic_controller import EconSignals
 from src.orchestrator.datapack_engine import DatapackSignals
@@ -71,7 +70,7 @@ class TaskGraphRefiner:
             List of TaskGraphRefinementProposals (advisory-only)
         """
         self._proposal_counter = 0  # reset per generation for determinism
-        refinements = []
+        refinements: List[TaskGraphRefinementProposal] = []
 
         # 1. Process ontology proposals
         for ont_prop in sorted(
@@ -131,7 +130,7 @@ class TaskGraphRefiner:
 
         Rule: If skill_id is gated, insert checkpoint before that skill's task.
         """
-        refinements = []
+        refinements: List[TaskGraphRefinementProposal] = []
 
         gated_skill_id = ont_prop.proposed_changes.get("gated_skill_id")
         if gated_skill_id is None:
@@ -183,7 +182,7 @@ class TaskGraphRefiner:
 
         Rule: Tasks involving fragile objects split into: check → act slowly → verify
         """
-        refinements = []
+        refinements: List[TaskGraphRefinementProposal] = []
 
         inferred_fragility = ont_prop.proposed_changes.get("inferred_fragility", 0.0)
         if inferred_fragility < 0.7:  # Only split if high fragility
@@ -250,14 +249,13 @@ class TaskGraphRefiner:
 
         Rule: Tasks with clearance requirements must execute before risky motions.
         """
-        refinements = []
+        refinements: List[TaskGraphRefinementProposal] = []
 
         constraint_type = ont_prop.proposed_changes.get("constraint_type")
         if constraint_type != "collision_avoidance":
             return refinements
 
         # Get affected objects and skills
-        objects = ont_prop.proposed_changes.get("objects", [])
         affected_skills = ont_prop.proposed_changes.get("applies_to_skills", [])
 
         # Find tasks that need reordering
@@ -293,7 +291,7 @@ class TaskGraphRefiner:
                     "original_order": original_order,
                     "reason": "safety",
                 },
-                rationale=f"Safety constraint requires checkpoints before risky motions",
+                rationale="Safety constraint requires checkpoints before risky motions",
                 confidence=0.9,
                 tags=["safety_reorder", "collision_avoidance"],
             )
@@ -310,7 +308,7 @@ class TaskGraphRefiner:
 
         Rule: If risk elevated significantly, add recovery task.
         """
-        refinements = []
+        refinements: List[TaskGraphRefinementProposal] = []
 
         old_risk = ont_prop.proposed_changes.get("old_risk_level", 0.0)
         new_risk = ont_prop.proposed_changes.get("new_risk_level", 0.0)
@@ -360,7 +358,7 @@ class TaskGraphRefiner:
 
         Rule: Low-energy tasks execute earlier to reduce total energy.
         """
-        refinements = []
+        refinements: List[TaskGraphRefinementProposal] = []
 
         if self.econ_signals.energy_urgency < 0.3:
             return refinements  # Energy not critical
@@ -410,7 +408,7 @@ class TaskGraphRefiner:
 
         Rule: High success rate primitives → merge tightly-coupled tasks.
         """
-        refinements = []
+        refinements: List[TaskGraphRefinementProposal] = []
 
         if prim.success_rate < 0.95:
             return refinements
@@ -488,7 +486,7 @@ class TaskGraphRefiner:
         for node in target_tasks:
             stop_task = {
                 "task_id": f"safety_stop_{node.task_id}",
-                "name": f"Safety Stop (OOD Detected)",
+                "name": "Safety Stop (OOD Detected)",
                 "task_type": "checkpoint",
                 "preconditions": [f"{node.task_id}_started"],
                 "postconditions": ["manual_intervention_required"],

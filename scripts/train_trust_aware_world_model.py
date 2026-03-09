@@ -23,7 +23,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from scripts.train_latent_diffusion import ZVTransitionDataset, LatentDynamicsModel
@@ -301,7 +301,7 @@ class TrustAwareWorldModelTrainer:
             'syn_z_std': [],
         }
 
-        print(f"\nTraining with trust-aware loss:")
+        print("\nTraining with trust-aware loss:")
         print(f"  lambda_trust: {self.lambda_trust}")
         print(f"  lambda_feat: {self.lambda_feat}")
         print(f"  rollout_steps: {self.rollout_steps}")
@@ -401,7 +401,7 @@ def main(runner=None):
         world_model.load_state_dict(wm_ckpt['model_state_dict'])
         print(f"  Original MSE: {wm_ckpt['final_mse']:.6f}")
     else:
-        print(f"\nInitializing new world model...")
+        print("\nInitializing new world model...")
         world_model = LatentDynamicsModel(
             latent_dim=latent_dim,
             action_dim=action_dim,
@@ -442,12 +442,12 @@ def main(runner=None):
     initial_std = history['syn_z_std'][0]
     final_std = history['syn_z_std'][-1]
 
-    print(f"Synthetic trust score:")
+    print("Synthetic trust score:")
     print(f"  Initial: {initial_trust:.6f}")
     print(f"  Final:   {final_trust:.6f}")
     print(f"  Change:  {final_trust - initial_trust:+.6f} ({100*(final_trust/initial_trust - 1):+.1f}%)")
 
-    print(f"\nSynthetic z_V std:")
+    print("\nSynthetic z_V std:")
     print(f"  Initial: {initial_std:.6f}")
     print(f"  Final:   {final_std:.6f}")
     print(f"  Real:    {trainer.real_z_std.mean().item():.6f}")
@@ -496,7 +496,7 @@ def main(runner=None):
     os.makedirs('results', exist_ok=True)
     with open('results/trust_aware_world_model.json', 'w') as f:
         json.dump(report, f, indent=2)
-    print(f"Saved report to results/trust_aware_world_model.json")
+    print("Saved report to results/trust_aware_world_model.json")
 
     # Verdict
     print("\n" + "="*60)

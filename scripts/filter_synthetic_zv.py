@@ -10,7 +10,6 @@ Usage:
 """
 
 import numpy as np
-from pathlib import Path
 
 
 def compute_episode_stats(z_sequence):
@@ -58,7 +57,7 @@ def filter_synthetic_by_stats(
     real_std = real_zs.std()
     real_per_dim_std = real_zs.std(axis=0).mean()
 
-    print(f"Real z_V reference stats:")
+    print("Real z_V reference stats:")
     print(f"  Global mean: {real_mean:.6f}")
     print(f"  Global std:  {real_std:.6f}")
     print(f"  Per-dim std: {real_per_dim_std:.6f}")
@@ -103,13 +102,13 @@ def filter_synthetic_by_stats(
                 'std_ok': std_ok,
             })
 
-    print(f"\nFiltering results:")
+    print("\nFiltering results:")
     print(f"  Total synthetic episodes: {n_syn}")
     print(f"  Kept: {len(kept_episodes)} ({100*len(kept_episodes)/n_syn:.1f}%)")
     print(f"  Dropped: {len(dropped_episodes)} ({100*len(dropped_episodes)/n_syn:.1f}%)")
 
     if dropped_episodes:
-        print(f"\nDropped episodes breakdown:")
+        print("\nDropped episodes breakdown:")
         mean_issues = sum(1 for d in dropped_episodes if not d['mean_ok'])
         std_issues = sum(1 for d in dropped_episodes if not d['std_ok'])
         both_issues = sum(1 for d in dropped_episodes if not d['mean_ok'] and not d['std_ok'])
@@ -118,7 +117,7 @@ def filter_synthetic_by_stats(
         print(f"  Both out of range: {both_issues}")
 
         # Show worst offenders
-        print(f"\nWorst std offenders (top 5):")
+        print("\nWorst std offenders (top 5):")
         by_std = sorted(dropped_episodes, key=lambda x: abs(x['std'] - real_std), reverse=True)
         for d in by_std[:5]:
             print(f"  Ep {d['ep']}: mean={d['mean']:.4f}, std={d['std']:.4f} (vs real std={real_std:.4f})")
@@ -171,7 +170,7 @@ def filter_synthetic_by_stats(
         filtered_zs.append(filtered_data[f'ep_{new_idx}_z_sequence'])
     filtered_zs = np.concatenate(filtered_zs, axis=0)
 
-    print(f"\nFinal filtered z_V stats:")
+    print("\nFinal filtered z_V stats:")
     print(f"  Global mean: {filtered_zs.mean():.6f} (real: {real_mean:.6f})")
     print(f"  Global std:  {filtered_zs.std():.6f} (real: {real_std:.6f})")
 

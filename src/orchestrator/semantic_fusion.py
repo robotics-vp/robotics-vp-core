@@ -53,7 +53,7 @@ def _normalize_probs(probs: np.ndarray) -> np.ndarray:
 
 def _weight_from_residual(residual: Optional[np.ndarray]) -> np.ndarray:
     if residual is None:
-        return 1.0
+        return np.array(1.0, dtype=np.float32)
     return 1.0 / (1.0 + np.maximum(residual, 0.0))
 
 
@@ -159,6 +159,7 @@ def fuse_semantic_evidence_mvp(
         evidence_used_mask = vla_weight > 0.1
         disagreement = np.zeros((T, K), dtype=np.float32)
     else:
+        assert map_probs is not None
         fused = map_probs
         weights = map_weight[..., None]
         chosen_policy_id = np.ones((T, K), dtype=np.int32)

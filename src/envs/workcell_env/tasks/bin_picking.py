@@ -3,7 +3,7 @@ Canonical bin picking task implementation.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Tuple
 
 from src.envs.workcell_env.tasks.task_base import TaskSpec
 

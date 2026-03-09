@@ -3,7 +3,7 @@ Canonical peg-in-hole assembly task implementation.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from src.envs.workcell_env.tasks.task_base import TaskSpec
 
@@ -59,8 +59,8 @@ class PegInHoleTask:
         """
         distance_mm = self._compute_distance_mm(task_state)
         if distance_mm is None:
-            info = {"missing_distance": True}
-            return 0.0, False, info
+            missing_info = {"missing_distance": True}
+            return 0.0, False, missing_info
 
         if self._initial_distance_mm is None:
             self._initial_distance_mm = distance_mm
@@ -86,7 +86,7 @@ class PegInHoleTask:
             reward += self.completion_bonus
             self._completed = True
 
-        info = {
+        info: Dict[str, Any] = {
             "distance_mm": float(distance_mm),
             "progress": float(progress),
             "force_violation": force_violation,

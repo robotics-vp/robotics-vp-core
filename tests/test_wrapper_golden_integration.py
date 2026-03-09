@@ -8,7 +8,6 @@ These tests validate:
 3. Verification works on minimal artifacts
 4. Tamper detection works
 """
-import pytest
 import json
 import sys
 from pathlib import Path

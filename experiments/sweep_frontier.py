@@ -165,8 +165,8 @@ def analyze_feasibility(speed_vals, care_vals, mp_grid, err_grid, sla_target=0.0
         best_speed = speed_vals[best_idx[1]]
         best_care = care_vals[best_idx[0]]
 
-        print(f"\n✅ FEASIBLE: SLA can be met!")
-        print(f"\nBest feasible operating point:")
+        print("\n✅ FEASIBLE: SLA can be met!")
+        print("\nBest feasible operating point:")
         print(f"  speed = {best_speed:.2f}")
         print(f"  care = {best_care:.2f}")
         print(f"  MP = {best_mp:.1f} dishes/hr")
@@ -179,7 +179,7 @@ def analyze_feasibility(speed_vals, care_vals, mp_grid, err_grid, sla_target=0.0
         print(f"\nViable points (err ≤ {sla_target:.1%} AND MP ≥ {mp_target}/hr): {viable_count}")
 
         if viable_count > 0:
-            print(f"✅ VIABLE: SLA + MP target both achievable!")
+            print("✅ VIABLE: SLA + MP target both achievable!")
 
             # Find middle-ground viable point
             viable_indices = np.argwhere(viable_mask)
@@ -189,19 +189,19 @@ def analyze_feasibility(speed_vals, care_vals, mp_grid, err_grid, sla_target=0.0
             mid_mp = mp_grid[mid_idx[0], mid_idx[1]]
             mid_err = err_grid[mid_idx[0], mid_idx[1]]
 
-            print(f"\nSample viable point:")
+            print("\nSample viable point:")
             print(f"  speed = {mid_speed:.2f}")
             print(f"  care = {mid_care:.2f}")
             print(f"  MP = {mid_mp:.1f} dishes/hr")
             print(f"  Error rate = {mid_err:.1%}")
         else:
             print(f"⚠️  SLA is feasible but MP < {mp_target}/hr")
-            print(f"   Consider increasing BASE_RATE or reducing k_err")
+            print("   Consider increasing BASE_RATE or reducing k_err")
 
     else:
         print(f"\n❌ INFEASIBLE: No (speed, care) achieves err ≤ {sla_target:.1%}")
         print(f"   Minimum error rate: {err_grid.min():.1%}")
-        print(f"   Increase p_min or reduce k_err to fix")
+        print("   Increase p_min or reduce k_err to fix")
 
     # Find unconstrained optimum (max MP, ignoring errors)
     max_mp_idx = np.unravel_index(np.argmax(mp_grid), mp_grid.shape)
@@ -210,7 +210,7 @@ def analyze_feasibility(speed_vals, care_vals, mp_grid, err_grid, sla_target=0.0
     max_mp_speed = speed_vals[max_mp_idx[1]]
     max_mp_care = care_vals[max_mp_idx[0]]
 
-    print(f"\nUnconstrained maximum MP:")
+    print("\nUnconstrained maximum MP:")
     print(f"  speed = {max_mp_speed:.2f}")
     print(f"  care = {max_mp_care:.2f}")
     print(f"  MP = {max_mp:.1f} dishes/hr")

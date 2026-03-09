@@ -32,7 +32,7 @@ class CLIPAdapter(nn.Module):
     def __init__(self, latent_dim=128, freeze=True):
         super().__init__()
         try:
-            import clip
+            import clip  # type: ignore[import-not-found]
             self.clip_model, self.preprocess = clip.load("ViT-B/32", device='cpu')
             if freeze:
                 for param in self.clip_model.parameters():
@@ -134,7 +134,7 @@ class R3DAdapter(nn.Module):
     def __init__(self, latent_dim=128, freeze=True):
         super().__init__()
         try:
-            import torchvision.models.video as video_models
+            import torchvision.models.video as video_models  # type: ignore[import-not-found]
             self.r3d = video_models.r3d_18(weights=video_models.R3D_18_Weights.KINETICS400_V1)
             if freeze:
                 for param in self.r3d.parameters():
@@ -240,6 +240,7 @@ class TeacherAdapter(nn.Module):
 
         self.teacher_type = teacher_type
         self.latent_dim = latent_dim
+        self.teacher: nn.Module
 
         if teacher_type not in self.TEACHERS:
             raise ValueError(f"Unknown teacher: {teacher_type}. Choose from {list(self.TEACHERS.keys())}")
@@ -247,8 +248,12 @@ class TeacherAdapter(nn.Module):
         # Build teacher
         if teacher_type == 'random':
             self.teacher = RandomProjectionAdapter(input_channels=input_channels, latent_dim=latent_dim)
-        elif teacher_type in ['clip', 'dino', 'r3d']:
-            self.teacher = self.TEACHERS[teacher_type](latent_dim=latent_dim, freeze=freeze)
+        elif teacher_type == 'clip':
+            self.teacher = CLIPAdapter(latent_dim=latent_dim, freeze=freeze)
+        elif teacher_type == 'dino':
+            self.teacher = DINOv2Adapter(latent_dim=latent_dim, freeze=freeze)
+        elif teacher_type == 'r3d':
+            self.teacher = R3DAdapter(latent_dim=latent_dim, freeze=freeze)
         else:
             raise ValueError(f"Unknown teacher type: {teacher_type}")
 

@@ -17,11 +17,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import time
-import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -31,33 +28,11 @@ from src.behaviour.ctrl_sim_like import (
     KDisksActionCoder,
     SceneObjectTrajectory,
     create_simple_behaviour_policy,
-    rollout_behaviour,
 )
 from src.config.econ_params import EconParams, load_econ_params
-
-
-def _default_econ_params() -> EconParams:
-    """Create default EconParams for LSD Vector Scene Environment."""
-    return load_econ_params({
-        "price_per_unit": 0.30,
-        "damage_cost": 1.0,
-        "energy_Wh_per_attempt": 0.01,
-        "time_step_s": 1.0,
-        "base_rate": 2.0,
-        "p_min": 0.02,
-        "k_err": 0.15,
-        "q_speed": 2.0,
-        "q_care": 1.5,
-        "care_cost": 0.3,
-        "max_steps": 500,
-        "max_catastrophic_errors": 3,
-        "max_error_rate_sla": 0.15,
-        "min_steps_for_sla": 10,
-        "zero_throughput_patience": 50,
-    }, preset="toy")
-from src.envs.dishwashing_env import EpisodeInfoSummary, summarize_episode_info
+from src.envs.dishwashing_env import summarize_episode_info
 from src.envs.lsd3d_env.gaussian_scene import GaussianScene, mesh_to_gaussians
-from src.envs.lsd3d_env.ggds import CameraRig, GGDSConfig, GGDSOptimizer, create_default_optimizer
+from src.envs.lsd3d_env.ggds import CameraRig, GGDSConfig, create_default_optimizer
 from src.envs.lsd3d_env.proxy_geometry import Mesh, VoxelGrid, scene_graph_to_voxels, voxels_to_mesh
 from src.scene.vector_scene.encoding import SceneGraphEncoder, ordered_scene_tensors
 from src.scene.vector_scene.graph import (
@@ -72,6 +47,30 @@ try:
     import torch
 except ImportError:
     torch = None  # type: ignore
+
+
+def _default_econ_params() -> EconParams:
+    """Create default EconParams for LSD Vector Scene Environment."""
+    return load_econ_params(
+        {
+            "price_per_unit": 0.30,
+            "damage_cost": 1.0,
+            "energy_Wh_per_attempt": 0.01,
+            "time_step_s": 1.0,
+            "base_rate": 2.0,
+            "p_min": 0.02,
+            "k_err": 0.15,
+            "q_speed": 2.0,
+            "q_care": 1.5,
+            "care_cost": 0.3,
+            "max_steps": 500,
+            "max_catastrophic_errors": 3,
+            "max_error_rate_sla": 0.15,
+            "min_steps_for_sla": 10,
+            "zero_throughput_patience": 50,
+        },
+        preset="toy",
+    )
 
 
 @dataclass
@@ -195,8 +194,6 @@ def _generate_scene_graph(config: SceneGraphConfig) -> SceneGraph:
     - WAREHOUSE_AISLES: Simple parallel aisles warehouse
     - Additional topology types can be added here
     """
-    rng = np.random.default_rng(config.seed)
-
     if config.topology_type == "WAREHOUSE_AISLES":
         num_aisles = max(2, int(config.num_nodes / 5))
         aisle_length = config.route_length / max(1, num_aisles / 2)
@@ -533,8 +530,6 @@ class LSDVectorSceneEnv:
         """
         prev_completed = self.completed
         prev_errors = self.errors
-        prev_energy = self.energy_Wh
-
         # Parse action
         if np.isscalar(action):
             speed, care = float(np.clip(action, 0.0, 1.0)), 0.5

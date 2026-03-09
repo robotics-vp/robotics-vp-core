@@ -24,15 +24,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
 import random
 import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -307,7 +305,6 @@ def export_dataset(
         Metadata about the exported dataset
     """
     # Late import to avoid circular dependencies
-    from src.config.lsd_vector_scene_config import LSDVectorSceneConfig
     from src.envs.lsd_vector_scene_env import (
         LSDVectorSceneEnv,
         LSDVectorSceneEnvConfig,

@@ -58,7 +58,7 @@ class ConditionedVisionAdapter:
         self,
         frame: VisionFrame,
         condition_vector: Optional[ConditionVector] = None,
-    ) -> Dict[str, np.ndarray]:
+    ) -> Dict[str, Any]:
         """
         Forward pass with optional conditioning.
 
@@ -223,7 +223,7 @@ def build_conditioned_vision_features(
     frame: VisionFrame,
     condition_vector: Optional[ConditionVector] = None,
     config: Optional[Dict[str, Any]] = None,
-) -> Dict[str, np.ndarray]:
+) -> Dict[str, Any]:
     """
     Convenience function to build conditioned vision features.
 

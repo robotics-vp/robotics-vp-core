@@ -74,37 +74,48 @@ class RuntimeEvent:
         event_id: Optional[str] = None,
         version: str = "runtime_event_v1",
     ) -> "RuntimeEvent":
-        payload = {
-            "run_id": str(run_id),
-            "episode_id": str(episode_id),
-            "timestamp": str(timestamp),
-            "event_kind": str(event_kind),
-            "sequence_idx": int(sequence_idx),
-            "scope": _mapping(scope),
+        resolved_run_id = str(run_id)
+        resolved_episode_id = str(episode_id)
+        resolved_timestamp = str(timestamp)
+        resolved_event_kind = str(event_kind)
+        resolved_sequence_idx = int(sequence_idx)
+        resolved_scope = _mapping(scope)
+        resolved_receipt_label_refs = _strings(receipt_label_refs)
+        resolved_artifact_refs = _mapping(artifact_refs)
+        resolved_provenance = _mapping(provenance)
+        resolved_metadata = _mapping(metadata)
+        resolved_version = str(version)
+        payload: Dict[str, Any] = {
+            "run_id": resolved_run_id,
+            "episode_id": resolved_episode_id,
+            "timestamp": resolved_timestamp,
+            "event_kind": resolved_event_kind,
+            "sequence_idx": resolved_sequence_idx,
+            "scope": resolved_scope,
             "runtime_packet_id": runtime_packet_id,
             "contract_id": contract_id,
-            "receipt_label_refs": _strings(receipt_label_refs),
-            "artifact_refs": _mapping(artifact_refs),
-            "provenance": _mapping(provenance),
-            "metadata": _mapping(metadata),
-            "version": str(version),
+            "receipt_label_refs": resolved_receipt_label_refs,
+            "artifact_refs": resolved_artifact_refs,
+            "provenance": resolved_provenance,
+            "metadata": resolved_metadata,
+            "version": resolved_version,
         }
         resolved_event_id = event_id or f"event_{sha256_json(payload)[:16]}"
         return cls(
             event_id=resolved_event_id,
-            run_id=payload["run_id"],
-            episode_id=payload["episode_id"],
-            timestamp=payload["timestamp"],
-            event_kind=payload["event_kind"],
-            sequence_idx=payload["sequence_idx"],
-            scope=payload["scope"],
+            run_id=resolved_run_id,
+            episode_id=resolved_episode_id,
+            timestamp=resolved_timestamp,
+            event_kind=resolved_event_kind,
+            sequence_idx=resolved_sequence_idx,
+            scope=resolved_scope,
             runtime_packet_id=runtime_packet_id,
             contract_id=contract_id,
-            receipt_label_refs=payload["receipt_label_refs"],
-            artifact_refs=payload["artifact_refs"],
-            provenance=payload["provenance"],
-            metadata=payload["metadata"],
-            version=payload["version"],
+            receipt_label_refs=resolved_receipt_label_refs,
+            artifact_refs=resolved_artifact_refs,
+            provenance=resolved_provenance,
+            metadata=resolved_metadata,
+            version=resolved_version,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -189,43 +200,57 @@ class DecisionLedgerEntry:
         decision_id: Optional[str] = None,
         version: str = "decision_ledger_entry_v1",
     ) -> "DecisionLedgerEntry":
-        payload = {
-            "run_id": str(run_id),
-            "episode_id": str(episode_id),
-            "timestamp": str(timestamp),
-            "decision_kind": str(decision_kind),
-            "outcome": str(outcome),
-            "sequence_idx": int(sequence_idx),
-            "scope": _mapping(scope),
-            "reasons": _strings(reasons),
-            "source_event_ids": _strings(source_event_ids),
+        resolved_run_id = str(run_id)
+        resolved_episode_id = str(episode_id)
+        resolved_timestamp = str(timestamp)
+        resolved_decision_kind = str(decision_kind)
+        resolved_outcome = str(outcome)
+        resolved_sequence_idx = int(sequence_idx)
+        resolved_scope = _mapping(scope)
+        resolved_reasons = _strings(reasons)
+        resolved_source_event_ids = _strings(source_event_ids)
+        resolved_receipt_label_refs = _strings(receipt_label_refs)
+        resolved_artifact_refs = _mapping(artifact_refs)
+        resolved_provenance = _mapping(provenance)
+        resolved_metadata = _mapping(metadata)
+        resolved_version = str(version)
+        payload: Dict[str, Any] = {
+            "run_id": resolved_run_id,
+            "episode_id": resolved_episode_id,
+            "timestamp": resolved_timestamp,
+            "decision_kind": resolved_decision_kind,
+            "outcome": resolved_outcome,
+            "sequence_idx": resolved_sequence_idx,
+            "scope": resolved_scope,
+            "reasons": resolved_reasons,
+            "source_event_ids": resolved_source_event_ids,
             "runtime_packet_id": runtime_packet_id,
             "contract_id": contract_id,
-            "receipt_label_refs": _strings(receipt_label_refs),
-            "artifact_refs": _mapping(artifact_refs),
-            "provenance": _mapping(provenance),
-            "metadata": _mapping(metadata),
-            "version": str(version),
+            "receipt_label_refs": resolved_receipt_label_refs,
+            "artifact_refs": resolved_artifact_refs,
+            "provenance": resolved_provenance,
+            "metadata": resolved_metadata,
+            "version": resolved_version,
         }
         resolved_decision_id = decision_id or f"decision_{sha256_json(payload)[:16]}"
         return cls(
             decision_id=resolved_decision_id,
-            run_id=payload["run_id"],
-            episode_id=payload["episode_id"],
-            timestamp=payload["timestamp"],
-            decision_kind=payload["decision_kind"],
-            outcome=payload["outcome"],
-            sequence_idx=payload["sequence_idx"],
-            scope=payload["scope"],
-            reasons=payload["reasons"],
-            source_event_ids=payload["source_event_ids"],
+            run_id=resolved_run_id,
+            episode_id=resolved_episode_id,
+            timestamp=resolved_timestamp,
+            decision_kind=resolved_decision_kind,
+            outcome=resolved_outcome,
+            sequence_idx=resolved_sequence_idx,
+            scope=resolved_scope,
+            reasons=resolved_reasons,
+            source_event_ids=resolved_source_event_ids,
             runtime_packet_id=runtime_packet_id,
             contract_id=contract_id,
-            receipt_label_refs=payload["receipt_label_refs"],
-            artifact_refs=payload["artifact_refs"],
-            provenance=payload["provenance"],
-            metadata=payload["metadata"],
-            version=payload["version"],
+            receipt_label_refs=resolved_receipt_label_refs,
+            artifact_refs=resolved_artifact_refs,
+            provenance=resolved_provenance,
+            metadata=resolved_metadata,
+            version=resolved_version,
         )
 
     def to_dict(self) -> Dict[str, Any]:

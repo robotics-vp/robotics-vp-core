@@ -86,7 +86,9 @@ class ShadowRegalDecision:
 
 
 class ShadowRegalNode(Protocol):
-    node_id: str
+    @property
+    def node_id(self) -> str:
+        ...
 
     def evaluate(self, context: ShadowRegalContext) -> ShadowRegalDecision:
         ...

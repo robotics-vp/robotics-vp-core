@@ -8,9 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import numpy as np
+
 from src.economics.econ_meter import EconomicMeter
 from src.envs.workcell_env import WorkcellEnv, WorkcellEnvConfig
 from src.envs.workcell_env.difficulty.difficulty_features import compute_difficulty_features
+from src.envs.workcell_env.scene.scene_spec import WorkcellSceneSpec
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
 from src.motor_backend.datapacks import DatapackBundle, DatapackConfig, DatapackProvider
 from src.motor_backend.rollout_capture import (
@@ -125,8 +128,12 @@ class WorkcellEnvBackend:
         if seed is not None:
             raw_metrics["seed"] = float(seed)
 
-        econ_metrics = dict(self._econ_meter.summarize(raw_metrics))
-        econ_metrics = _apply_anti_reward_hacking_flags(econ_metrics, raw_metrics)
+        econ_metrics = dict(
+            _apply_anti_reward_hacking_flags(
+                dict(self._econ_meter.summarize(raw_metrics)),
+                raw_metrics,
+            )
+        )
 
         rollout_bundle = None
         if scenario_id and rollout_base_dir and episode_results:
@@ -184,8 +191,12 @@ class WorkcellEnvBackend:
         if seed is not None:
             raw_metrics["seed"] = float(seed)
 
-        econ_metrics = dict(self._econ_meter.summarize(raw_metrics))
-        econ_metrics = _apply_anti_reward_hacking_flags(econ_metrics, raw_metrics)
+        econ_metrics = dict(
+            _apply_anti_reward_hacking_flags(
+                dict(self._econ_meter.summarize(raw_metrics)),
+                raw_metrics,
+            )
+        )
 
         rollout_bundle = None
         if scenario_id and rollout_base_dir and episode_results:
@@ -253,7 +264,7 @@ class WorkcellEnvBackend:
 
         while step_count < config.max_steps:
             action = self._select_action(obs, objective, rng)
-            obs, info, _ = env.step(action)
+            obs, _, _, _, info = env.step(action)
             state = env.physics_adapter.get_state()
             contact_force_sum += float(state.get("contact_force_N", 0.0))
             constraint_error_sum += float(state.get("constraint_error", 0.0))
@@ -374,7 +385,7 @@ class WorkcellEnvBackend:
         self,
         results: list[WorkcellEpisodeResult],
         phase: str,
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         if not results:
             return {}
         success_rate = sum(1 for r in results if r.success) / len(results)
@@ -541,7 +552,7 @@ def _render_frame(adapter: Any, config: WorkcellEnvConfig) -> Any | None:
 
 def _build_sensor_bundle(
     *,
-    scene_spec: Mapping[str, Any],
+    scene_spec: Mapping[str, Any] | WorkcellSceneSpec,
     states: Sequence[Mapping[str, Any]],
     config: WorkcellEnvConfig,
     seed: int | None,
@@ -551,7 +562,7 @@ def _build_sensor_bundle(
     indices = _select_frame_indices(len(states), config)
     if not indices:
         return None
-    selected_states = [states[i] for i in indices]
+    selected_states = [dict(states[i]) for i in indices]
     timestamps = []
     for idx, state in zip(indices, selected_states):
         ts = state.get("time_s") if isinstance(state, Mapping) else None
@@ -571,13 +582,12 @@ def _build_sensor_bundle(
 
     try:
         from src.envs.workcell_env.observations.mujoco_render import render_workcell_frames
-        from src.envs.workcell_env.scene.scene_spec import WorkcellSceneSpec
         from src.motor_backend.sensor_bundle import SensorBundleData
 
         if isinstance(scene_spec, WorkcellSceneSpec):
             spec = scene_spec
         else:
-            spec = WorkcellSceneSpec.from_dict(scene_spec)
+            spec = WorkcellSceneSpec.from_dict(dict(scene_spec))
 
         for camera in cameras:
             frames, depth_frames, seg_frames, camera_params = render_workcell_frames(

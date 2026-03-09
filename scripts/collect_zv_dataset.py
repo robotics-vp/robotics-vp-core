@@ -13,12 +13,10 @@ Usage:
 """
 
 import os
-import sys
 import argparse
 import yaml
 import numpy as np
 import torch
-from pathlib import Path
 
 
 def load_sac_policy(policy_path, latent_dim=128, action_dim=2, hidden_dim=256, device='cpu'):
@@ -370,13 +368,13 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("Next steps:")
     print("="*60)
-    print(f"1. Train latent dynamics model:")
-    print(f"   python scripts/train_latent_diffusion.py \\")
+    print("1. Train latent dynamics model:")
+    print("   python scripts/train_latent_diffusion.py \\")
     print(f"     --dataset {output_path} \\")
-    print(f"     --epochs 100")
+    print("     --epochs 100")
     print()
     print("2. Sample synthetic z_V trajectories:")
-    print(f"   python scripts/sample_zv_rollouts.py \\")
-    print(f"     --model checkpoints/latent_diffusion_zv.pt \\")
-    print(f"     --samples 50")
+    print("   python scripts/sample_zv_rollouts.py \\")
+    print("     --model checkpoints/latent_diffusion_zv.pt \\")
+    print("     --samples 50")
     print("="*60)

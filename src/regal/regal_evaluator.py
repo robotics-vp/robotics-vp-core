@@ -6,6 +6,7 @@ Evaluation is deterministic given the same inputs and seed.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Dict, List, Optional, Any, TYPE_CHECKING
 
 from src.contracts.schemas import (
@@ -160,11 +161,11 @@ class SpecGuardianRegal(RegalNode):
         if selection_manifest is not None:
             findings["selection_manifest_present"] = True
             findings["selected_datapack_count"] = len(selection_manifest.selected_datapack_ids)
-            findings["quarantined_count"] = len(selection_manifest.quarantined_datapack_ids)
+            findings["quarantined_count"] = len(selection_manifest.quarantine_datapack_ids)
             
             # CRITICAL: Quarantined IDs must never be selected
             selected_set = set(selection_manifest.selected_datapack_ids)
-            quarantined_set = set(selection_manifest.quarantined_datapack_ids)
+            quarantined_set = set(selection_manifest.quarantine_datapack_ids)
             forbidden_selected = selected_set & quarantined_set
             
             if forbidden_selected:
@@ -214,8 +215,9 @@ class SpecGuardianRegal(RegalNode):
 
         # Check 1: Validate task families against default_weights keys
         allowed_families = set()
-        if policy_config and policy_config.default_weights:
-            allowed_families = set(policy_config.default_weights.keys())
+        default_weights = policy_config.default_weights if policy_config is not None else {}
+        if default_weights:
+            allowed_families = set(default_weights.keys())
             findings["allowed_families"] = list(allowed_families)
 
         for op in plan.task_graph_changes:
@@ -227,10 +229,10 @@ class SpecGuardianRegal(RegalNode):
         if policy_config and policy_config.gain_schedule:
             max_change = policy_config.gain_schedule.max_abs_weight_change
 
-        if max_change:
+        if max_change is not None and policy_config is not None:
             for op in plan.task_graph_changes:
                 if op.weight is not None:
-                    default = policy_config.default_weights.get(op.task_family, 1.0)
+                    default = default_weights.get(op.task_family, 1.0)
                     delta = abs(op.weight - default)
                     if delta > max_change:
                         violations.append(
@@ -452,30 +454,38 @@ class RewardIntegrityRegal(RegalNode):
 
         # NEW: Orchestrator state oscillation detection
         if orchestrator_state is not None:
+            total_failures = sum(orchestrator_state.failure_counts.values())
+            total_clamps = len(orchestrator_state.clamp_decisions)
+            knob_deltas = orchestrator_state.applied_knob_deltas
             findings["orchestrator_state_present"] = True
             findings["orchestrator_step"] = orchestrator_state.step
-            findings["total_failures"] = orchestrator_state.total_failures
-            findings["total_clamps"] = orchestrator_state.total_clamps
+            findings["total_failures"] = total_failures
+            findings["total_clamps"] = total_clamps
             
             # Check 1a: Rapid failure accumulation (sign of repeated exploitation attempts)
-            if orchestrator_state.total_failures >= 5:
+            if total_failures >= 5:
                 violations.append(
-                    f"High failure count in orchestrator: {orchestrator_state.total_failures} failures"
+                    f"High failure count in orchestrator: {total_failures} failures"
                 )
                 integrity_flags.append("high_failures")
                 hack_indicators += 1
             
             # Check 1b: High clamp rate (sign of system fighting unstable policy)
-            if orchestrator_state.total_clamps >= 3:
+            if total_clamps >= 3:
                 violations.append(
-                    f"High clamp count in orchestrator: {orchestrator_state.total_clamps} clamps"
+                    f"High clamp count in orchestrator: {total_clamps} clamps"
                 )
                 integrity_flags.append("high_clamps")
                 hack_indicators += 1
             
             # Check 1c: Analyze knob delta history for oscillation patterns
-            if orchestrator_state.knob_deltas:
-                knob_values = [kd.new_value for kd in orchestrator_state.knob_deltas]
+            if knob_deltas:
+                knob_values = [
+                    kd.multiplier_reduction_factor
+                    if kd.multiplier_reduction_factor is not None
+                    else (0.5 if kd.prefer_conservative_multiplier else 1.0)
+                    for kd in knob_deltas
+                ]
                 if len(knob_values) >= 3:
                     # Detect sign oscillation in knob adjustments
                     sign_changes = 0

@@ -23,11 +23,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from scripts.train_latent_diffusion import LatentDynamicsModel
-from src.valuation.trust_net import TrustNet, extract_episode_features
+from src.valuation.trust_net import TrustNet
 from src.training.wrap_training_entrypoint import regal_training
 
 
@@ -342,7 +342,7 @@ class HorizonAgnosticTrainer:
             'pred_std': [],
         }
 
-        print(f"\nHorizon-Agnostic Training:")
+        print("\nHorizon-Agnostic Training:")
         print(f"  Max horizon: {self.max_horizon}")
         print(f"  lambda_trust: {self.lambda_trust}")
         print(f"  lambda_var: {self.lambda_var}")
@@ -503,13 +503,13 @@ def main(runner=None):
     trust_scores = np.array(trust_scores)
     stds = np.array(stds)
 
-    print(f"Trust scores (60-step rollouts):")
+    print("Trust scores (60-step rollouts):")
     print(f"  Mean: {trust_scores.mean():.6f}")
     print(f"  Std:  {trust_scores.std():.6f}")
     print(f"  Min:  {trust_scores.min():.6f}")
     print(f"  Max:  {trust_scores.max():.6f}")
 
-    print(f"\nPredicted std (60-step rollouts):")
+    print("\nPredicted std (60-step rollouts):")
     print(f"  Mean: {stds.mean():.6f}")
     print(f"  Real: {trainer.real_z_std:.6f}")
     print(f"  Ratio: {stds.mean() / trainer.real_z_std:.3f}x")
@@ -562,7 +562,7 @@ def main(runner=None):
     os.makedirs('results', exist_ok=True)
     with open('results/horizon_agnostic_world_model.json', 'w') as f:
         json.dump(report, f, indent=2)
-    print(f"Saved report to results/horizon_agnostic_world_model.json")
+    print("Saved report to results/horizon_agnostic_world_model.json")
 
     # Verdict
     print("\n" + "="*60)

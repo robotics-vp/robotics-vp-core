@@ -29,8 +29,8 @@ from typing import Any, Dict, List, Optional
 from src.orchestrator.economic_controller import EconomicController, EconSignals
 from src.orchestrator.datapack_engine import DatapackEngine, DatapackSignals
 from src.orchestrator.semantic_metrics import SemanticMetrics, write_semantic_metrics
-from src.orchestrator.task_graph import TaskGraph, TaskNode, TaskStatus
-from src.orchestrator.ontology import EnvironmentOntology, ObjectSpec, AffordanceType
+from src.orchestrator.task_graph import TaskGraph
+from src.orchestrator.ontology import EnvironmentOntology
 
 
 @dataclass
@@ -148,7 +148,7 @@ class SemanticOrchestrator:
         rationale_parts = []
 
         # 1. Prioritize tasks based on economic urgencies
-        task_priorities = {}
+        task_priorities: Dict[str, str] = {}
         if econ_signals.error_urgency > 0.5:
             # High error rate - prioritize safety-related tasks
             plan.urgency_driven = True
@@ -178,7 +178,7 @@ class SemanticOrchestrator:
         plan.task_graph_changes["task_priorities"] = task_priorities
 
         # 2. Adjust ontology based on economic constraints
-        ontology_adjustments = {}
+        ontology_adjustments: Dict[str, float] = {}
 
         # Increase fragility awareness if errors are high
         if econ_signals.error_urgency > 0.3:
@@ -200,7 +200,7 @@ class SemanticOrchestrator:
         plan.ontology_changes = ontology_adjustments
 
         # 3. Update primitive vocabulary based on datapack signals
-        primitive_updates = {}
+        primitive_updates: Dict[str, Any] = {}
 
         # Adjust skill emphasis based on data coverage
         if datapack_signals.tier2_fraction < 0.1:
@@ -210,7 +210,7 @@ class SemanticOrchestrator:
             rationale_parts.append("Low frontier data - encouraging exploration")
 
         # Semantic tag emphasis
-        tag_emphasis = []
+        tag_emphasis: List[str] = []
         if datapack_signals.vla_annotation_fraction < 0.5:
             tag_emphasis.append("vla:needs_annotation")
         if econ_signals.error_urgency > 0.5:
@@ -224,7 +224,7 @@ class SemanticOrchestrator:
         plan.primitive_updates = primitive_updates
 
         # 4. Cross-module constraints
-        cross_module = {}
+        cross_module: Dict[str, Any] = {}
 
         # VLA caution level
         if econ_signals.error_urgency > 0.7:
@@ -353,24 +353,18 @@ class SemanticOrchestrator:
         Returns:
             Aligned semantic mapping for all modules
         """
-        aligned = {
-            "shared_vocabulary": [],
-            "module_specific_mappings": {},
-            "constraints": self._current_constraints.copy(),
-        }
-
         # Build shared vocabulary from ontology
-        core_vocab = set()
+        core_vocab: set[str] = set()
         for obj in self.ontology.objects.values():
             core_vocab.add(obj.category.value)
             core_vocab.update(obj.tags)
             for aff in obj.affordances:
                 core_vocab.add(aff.affordance_type.value)
 
-        aligned["shared_vocabulary"] = list(core_vocab)
+        module_specific_mappings: Dict[str, Dict[str, str]] = {}
 
         # Map VLA tags to shared vocabulary
-        vla_mapping = {}
+        vla_mapping: Dict[str, str] = {}
         for tag, value in vla_tags.items():
             if "grasp" in tag.lower():
                 vla_mapping[tag] = "graspable"
@@ -381,11 +375,11 @@ class SemanticOrchestrator:
             else:
                 vla_mapping[tag] = tag
 
-        aligned["module_specific_mappings"]["vla"] = vla_mapping
+        module_specific_mappings["vla"] = vla_mapping
 
         # Map SIMA primitives if provided
         if sima_primitives:
-            sima_mapping = {}
+            sima_mapping: Dict[str, str] = {}
             for prim_name, prim_def in sima_primitives.items():
                 # Map to closest ontology concept
                 if "move" in prim_name.lower():
@@ -394,30 +388,32 @@ class SemanticOrchestrator:
                     sima_mapping[prim_name] = "graspable"
                 else:
                     sima_mapping[prim_name] = prim_name
-            aligned["module_specific_mappings"]["sima"] = sima_mapping
+            module_specific_mappings["sima"] = sima_mapping
 
         # Map diffusion tags if provided
         if diffusion_tags:
-            diff_mapping = {}
+            diff_mapping: Dict[str, str] = {}
             for tag, count in diffusion_tags.items():
                 if tag in core_vocab:
                     diff_mapping[tag] = tag
                 else:
                     diff_mapping[tag] = "unaligned"
-            aligned["module_specific_mappings"]["diffusion"] = diff_mapping
+            module_specific_mappings["diffusion"] = diff_mapping
 
-        return aligned
+        return {
+            "shared_vocabulary": list(core_vocab),
+            "module_specific_mappings": module_specific_mappings,
+            "constraints": self._current_constraints.copy(),
+        }
 
     def semantic_consistency_checks(self) -> Dict[str, Any]:
         """
         Return diagnostics on where semantics are drifting relative to
         econ/datapack priorities.
         """
-        checks = {
-            "drift_warnings": [],
-            "consistency_score": 1.0,
-            "recommended_fixes": [],
-        }
+        drift_warnings: List[str] = []
+        consistency_score = 1.0
+        recommended_fixes: List[str] = []
 
         # Check if task priorities align with economic urgencies
         urgency_driven_tasks = sum(
@@ -427,27 +423,31 @@ class SemanticOrchestrator:
         if urgency_driven_tasks == 0 and self._update_history:
             last_plan = self._update_history[-1]
             if last_plan.urgency_driven:
-                checks["drift_warnings"].append(
+                drift_warnings.append(
                     "Task priorities not reflecting economic urgencies"
                 )
-                checks["consistency_score"] -= 0.2
+                consistency_score -= 0.2
 
         # Check if ontology constraints match current economic state
         if "fragility_multiplier" not in self.ontology.metadata:
             fragile_count = len(self.ontology.get_fragile_objects())
             if fragile_count > 0:
-                checks["drift_warnings"].append(
+                drift_warnings.append(
                     "Fragility awareness not set despite fragile objects"
                 )
-                checks["recommended_fixes"].append("Apply semantic update plan")
-                checks["consistency_score"] -= 0.1
+                recommended_fixes.append("Apply semantic update plan")
+                consistency_score -= 0.1
 
         # Check cross-module constraints
         if not self._current_constraints:
-            checks["drift_warnings"].append("No cross-module constraints set")
-            checks["consistency_score"] -= 0.1
+            drift_warnings.append("No cross-module constraints set")
+            consistency_score -= 0.1
 
-        return checks
+        return {
+            "drift_warnings": drift_warnings,
+            "consistency_score": consistency_score,
+            "recommended_fixes": recommended_fixes,
+        }
 
     def snapshot(self) -> Dict[str, Any]:
         """

@@ -22,7 +22,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
 
-import numpy as np
 
 try:
     import torch
@@ -38,9 +37,7 @@ from src.config.pipeline import get_training_config, is_neural_mode_enabled, get
 from src.datasets import VisionPhase1Dataset
 from src.datasets.base import set_deterministic_seeds
 from src.utils.json_safe import to_json_safe
-from src.vision.regnet_backbone import RegNetBackbone
-from src.vision.bifpn_fusion import fuse_feature_pyramid
-from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
+from src.utils.training_env import should_use_amp, run_with_oom_recovery
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
 from src.utils.failure_sentinel import FailureSentinel
 

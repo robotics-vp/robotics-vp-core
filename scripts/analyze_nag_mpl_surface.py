@@ -16,7 +16,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -233,7 +233,6 @@ def main():
         # Run analyses
         from src.analytics.econ_reports import (
             compute_nag_edit_surface_summary,
-            compute_nag_counterfactual_mpl_analysis,
         )
 
         # Core NAG surface analysis

@@ -32,11 +32,10 @@ except ImportError:
 from src.sima2.segmenter_nn import (
     NeuralSegmenter,
     compute_segmentation_loss,
-    compute_f1_score,
     save_checkpoint,
 )
 from src.utils.json_safe import to_json_safe
-from src.utils.training_env import should_use_amp, device_info, run_with_oom_recovery
+from src.utils.training_env import should_use_amp, run_with_oom_recovery
 from src.utils.logging_schema import make_training_log_entry, write_training_log_entry
 from src.utils.failure_sentinel import FailureSentinel
 import hashlib
@@ -434,7 +433,7 @@ def main():
         with open(log_file, "a") as f:
             f.write(json.dumps(to_json_safe(epoch_log)) + "\n")
 
-    print(f"\nTraining complete!")
+    print("\nTraining complete!")
     print(f"Best F1: {best_f1:.4f}")
     if activation_epoch is not None:
         print(f"Neural segmenter activated at epoch {activation_epoch}")

@@ -397,7 +397,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     with open(summary_path, "w") as f:
         json.dump(to_json_safe(results), f, indent=2, sort_keys=True)
 
-    print(f"\n[run_phase1_data_build] Phase I data build complete!")
+    print("\n[run_phase1_data_build] Phase I data build complete!")
     print(f"  Canonical task: {canonical_task}")
     print(f"  Summary: {summary_path}")
     print(f"  Manifest: {manifest_path if not args.skip_manifest else 'skipped'}")

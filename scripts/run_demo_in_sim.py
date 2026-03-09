@@ -38,7 +38,6 @@ from src.utils.gpu_env import get_gpu_env_summary, get_gpu_utilization
 from src.utils.logging_schema import (
     make_demo_episode_log_with_process_reward,
     make_demo_step_log_entry,
-    write_demo_log_entry,
 )
 
 
@@ -125,7 +124,7 @@ def create_env(backend: str, task_id: str, seed: int, render: bool = False):
             underlying_env = DrawerVasePhysicsEnv(render=render)
             env = PyBulletBackend(underlying_env, env_name="drawer_vase")
             return env
-        except Exception as e:
+        except Exception:
             # Fallback to stub env
             return StubEnv(backend="pybullet", seed=seed)
 
@@ -136,7 +135,7 @@ def create_env(backend: str, task_id: str, seed: int, render: bool = False):
 
             adapter = IsaacAdapter(config={"seed": seed, "backend": "isaac_stub"})
             return IsaacStubEnv(adapter=adapter, seed=seed)
-        except Exception as e:
+        except Exception:
             return StubEnv(backend="isaac", seed=seed)
 
     else:
@@ -174,7 +173,7 @@ class StubEnv:
             "depth": None,
             "proprio": self.rng.uniform(-0.1, 0.1, size=7).astype(np.float32),
             "joint_positions": self.rng.uniform(-0.1, 0.1, size=7).astype(np.float32),
-            "episode_id": f"stub_episode",
+            "episode_id": "stub_episode",
         }
 
         # Stub reward (random walk)
@@ -402,7 +401,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     with open(gpu_log_path, "w") as f:
         json.dump({"event": "gpu_env", "summary": gpu_env}, f, indent=2)
 
-    print(f"[run_demo_in_sim] Starting demo simulation")
+    print("[run_demo_in_sim] Starting demo simulation")
     print(f"  Backend: {args.env_backend}")
     print(f"  Episodes: {args.num_episodes}")
     print(f"  Max steps: {args.max_steps}")
@@ -479,7 +478,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Print summary
     print(f"{'='*80}")
-    print(f"[run_demo_in_sim] Demo Summary")
+    print("[run_demo_in_sim] Demo Summary")
     print(f"{'='*80}")
     print(f"  Episodes: {args.num_episodes}")
     print(f"  Success rate: {num_success}/{args.num_episodes} ({100 * num_success / args.num_episodes:.1f}%)")

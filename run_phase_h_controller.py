@@ -153,7 +153,7 @@ def main():
             print(f"[Episode {episode}] Phase H Cycle {cycle_summary['cycle_count']}:")
             print(f"  - Timestamp: {cycle_summary['timestamp']}")
             print(f"  - Skill Multipliers: {cycle_summary['skill_multipliers']}")
-            print(f"  - Routing Advisories:")
+            print("  - Routing Advisories:")
             for key, val in cycle_summary['routing_advisories'].items():
                 print(f"    - {key}: {val}")
             print()

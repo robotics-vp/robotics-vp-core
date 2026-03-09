@@ -14,7 +14,6 @@ Metrics:
 import os
 import sys
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 
 
@@ -61,7 +60,7 @@ def print_comparison_table(summaries):
     print("\n" + "="*100)
     print("THREE-WAY COMPARISON: State vs Synthetic Video vs Physics")
     print("="*100)
-    print(f"Analysis window: Last 20 episodes (or fewer if training incomplete)")
+    print("Analysis window: Last 20 episodes (or fewer if training incomplete)")
     print("-"*100)
 
     # Header
@@ -241,7 +240,9 @@ def generate_markdown_report(summaries, output_path):
             f.write(f"(MPL = {summaries[mode]['mpl_r_mean']:.1f})\n")
 
         f.write("\n### Conclusion\n\n")
-        all_converged = all(summaries[m]['mpl_r_mean'] > 70 for m in modes)
+        all_converged = all(
+            summaries[mode]["mpl_r_mean"] > 70 for mode in ["state", "synthetic", "physics"]
+        )
         if all_converged:
             f.write("✅ **All three modes achieve reasonable performance.** ")
             f.write("Economics layer successfully operates across state, synthetic video, and physics-rendered observations.\n")

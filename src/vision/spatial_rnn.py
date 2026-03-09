@@ -183,10 +183,11 @@ if TORCH_AVAILABLE:
             device = next(self.parameters()).device
 
             # Initialize hidden states
+            hidden_states: Dict[str, Optional[torch.Tensor]]
             if initial_state is None:
                 hidden_states = {level: None for level in self.levels}
             else:
-                hidden_states = initial_state
+                hidden_states = dict(initial_state)
 
             # Process sequence
             for t, item in enumerate(sequence):
@@ -236,15 +237,17 @@ if TORCH_AVAILABLE:
 
             # Clamp to prevent NaN/Inf
             for level in hidden_states:
-                if hidden_states[level] is not None:
-                    hidden_states[level] = torch.clamp(hidden_states[level], min=-1e6, max=1e6)
+                state = hidden_states[level]
+                if state is not None:
+                    hidden_states[level] = torch.clamp(state, min=-1e6, max=1e6)
 
             # Aggregate summary
-            summary_parts = []
+            summary_parts: List[torch.Tensor] = []
             for level in self.levels:
-                if hidden_states.get(level) is not None:
+                state = hidden_states.get(level)
+                if state is not None:
                     # Global average pooling
-                    pooled = hidden_states[level].mean(dim=[2, 3])  # [B, hidden_dim]
+                    pooled = state.mean(dim=[2, 3])  # [B, hidden_dim]
                     summary_parts.append(pooled)
                 else:
                     summary_parts.append(torch.zeros(1, self.hidden_dim, device=device))
@@ -253,7 +256,11 @@ if TORCH_AVAILABLE:
             summary = self.summary_proj(summary_concat)  # [B, hidden_dim]
 
             # Return final states + summary
-            result = {level: hidden_states[level] for level in self.levels if hidden_states.get(level) is not None}
+            result: Dict[str, torch.Tensor] = {}
+            for level in self.levels:
+                state = hidden_states.get(level)
+                if state is not None:
+                    result[level] = state
             result["summary"] = summary
 
             return result
@@ -262,7 +269,7 @@ if TORCH_AVAILABLE:
             self,
             sequence: Union[List[Dict[str, np.ndarray]], List[np.ndarray]],
             targets: Union[List[Dict[str, np.ndarray]], List[np.ndarray]],
-        ) -> Dict[str, float]:
+        ) -> Dict[str, Any]:
             """
             Compute forward dynamics loss: || z_pred[t+1] - z_true[t+1] ||²
 
@@ -282,7 +289,9 @@ if TORCH_AVAILABLE:
             per_level_loss = {level: 0.0 for level in self.levels}
             num_steps = len(sequence)
 
-            hidden_states = {level: None for level in self.levels}
+            hidden_states: Dict[str, Optional[torch.Tensor]] = {
+                level: None for level in self.levels
+            }
 
             for t in range(num_steps - 1):
                 # Forward step
@@ -319,9 +328,10 @@ if TORCH_AVAILABLE:
                 # Compute prediction error vs target
                 if isinstance(target_next, dict):
                     for level in self.levels:
-                        if level not in target_next or hidden_states.get(level) is None:
+                        state = hidden_states.get(level)
+                        if level not in target_next or state is None:
                             continue
-                        pred = hidden_states[level].mean(dim=[2, 3])  # [B, hidden_dim]
+                        pred = state.mean(dim=[2, 3])  # [B, hidden_dim]
                         target_feat = torch.from_numpy(np.asarray(target_next[level], dtype=np.float32)).to(device)
                         if target_feat.dim() == 1:
                             target_feat = target_feat.unsqueeze(0)
@@ -337,10 +347,11 @@ if TORCH_AVAILABLE:
                     # Flat vector target
                     target_feat = torch.from_numpy(np.asarray(target_next, dtype=np.float32).flatten()).to(device)
                     # Aggregate prediction
-                    pred_parts = []
+                    pred_parts: List[torch.Tensor] = []
                     for level in self.levels:
-                        if hidden_states.get(level) is not None:
-                            pooled = hidden_states[level].mean(dim=[2, 3])
+                        state = hidden_states.get(level)
+                        if state is not None:
+                            pooled = state.mean(dim=[2, 3])
                             pred_parts.append(pooled)
                     if pred_parts:
                         pred = torch.cat(pred_parts, dim=1).flatten()

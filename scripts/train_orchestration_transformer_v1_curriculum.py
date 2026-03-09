@@ -12,7 +12,6 @@ This builds the "brain" that learns from econ/datapack/semantic feedback loops.
 
 import argparse
 import json
-import os
 from pathlib import Path
 from collections import defaultdict
 
@@ -20,17 +19,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, Dataset
+from torch.utils.data import DataLoader, TensorDataset
 
 from src.orchestrator.orchestration_transformer import (
-    OrchestrationTransformer,
     TOOL_NAMES,
     _encode_ctx,
 )
 from src.orchestrator.training_dataset import (
     build_training_dataset,
-    build_mixed_training_dataset,
-    split_dataset_by_source,
     dataset_to_tensors,
     save_dataset,
     OrchestrationSample,
@@ -201,7 +197,7 @@ def generate_pareto_optimal_sample(seed: int = None) -> OrchestrationSample:
     rationales = [
         f"Pareto-optimal preset for {pareto_class} configuration",
         f"Pareto-optimal profile {chosen_profile} (urgency={urgency})",
-        f"Backend consistent with env",
+        "Backend consistent with env",
     ]
 
     # Create econ/semantic summary
@@ -689,7 +685,7 @@ def main():
         num_semantic=args.num_semantic,
     )
 
-    print(f"\nDataset statistics:")
+    print("\nDataset statistics:")
     print(f"  Total: {dataset_stats['total_samples']}")
     print(f"  Source: {dataset_stats['source_distribution']}")
     print(f"  Profiles: {dataset_stats['profile_distribution']}")

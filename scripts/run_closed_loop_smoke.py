@@ -15,18 +15,17 @@ Usage:
     .venv/bin/python -m scripts.run_closed_loop_smoke --auto-plan --output-dir artifacts/hardened
     .venv/bin/python -m scripts.run_closed_loop_smoke --auto-plan --include-probe-epi --output-dir artifacts/probe
 """
+
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
-import tempfile
 import uuid
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -45,7 +44,6 @@ from src.contracts.schemas import (
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
     GraphSpecV1,
-    LedgerGraphV1,
     RegalGatesV1,
     LedgerRegalV1,
     TrajectoryAuditV1,
@@ -62,7 +60,7 @@ from src.orchestrator.homeostatic_plan_writer import (
     GateStatus,
 )
 from src.evaluation.audit_suite import AuditEvalSuite, AuditSuiteConfig, AuditScenario
-from src.evaluation.audit_registry import get_suite, get_suite_sha
+from src.evaluation.audit_registry import get_suite
 from src.evaluation.probe_harness import (
     ProbeHarness,
     ProbeHarnessConfig,
@@ -70,14 +68,12 @@ from src.evaluation.probe_harness import (
 )
 from src.valuation.value_ledger import ValueLedger
 from src.valuation.exposure_manifest import (
-    ExposureManifestV1,
     ExposureTracker,
     write_exposure_manifest,
 )
 from src.valuation.run_manifest import create_run_manifest, write_manifest
 from src.valuation.trajectory_audit import (
     create_trajectory_audit,
-    aggregate_trajectory_audits,
 )
 from src.determinism.determinism_context import set_determinism, get_context_summary
 from src.utils.config_digest import sha256_json, sha256_file
@@ -90,7 +86,9 @@ def create_baseline_plan() -> SemanticUpdatePlanV1:
         plan_id="baseline_v1",
         source_commit="smoke_test",
         task_graph_changes=[
-            TaskGraphOp(op=PlanOpType.SET_WEIGHT, task_family="manipulation", weight=0.5),
+            TaskGraphOp(
+                op=PlanOpType.SET_WEIGHT, task_family="manipulation", weight=0.5
+            ),
             TaskGraphOp(op=PlanOpType.SET_WEIGHT, task_family="navigation", weight=0.5),
         ],
         notes="Baseline equal-weight plan",
@@ -103,7 +101,9 @@ def create_updated_plan() -> SemanticUpdatePlanV1:
         plan_id="updated_v1",
         source_commit="smoke_test",
         task_graph_changes=[
-            TaskGraphOp(op=PlanOpType.SET_WEIGHT, task_family="manipulation", weight=0.8),
+            TaskGraphOp(
+                op=PlanOpType.SET_WEIGHT, task_family="manipulation", weight=0.8
+            ),
             TaskGraphOp(op=PlanOpType.SET_WEIGHT, task_family="navigation", weight=0.2),
         ],
         datapack_selection=DatapackSelectionConfig(
@@ -113,9 +113,12 @@ def create_updated_plan() -> SemanticUpdatePlanV1:
     )
 
 
-def sample_with_weights(weights: Dict[str, float], n_samples: int, seed: int) -> List[str]:
+def sample_with_weights(
+    weights: Dict[str, float], n_samples: int, seed: int
+) -> List[str]:
     """Simulate sampling with given task family weights."""
     import random
+
     rng = random.Random(seed)
 
     families = list(weights.keys())
@@ -178,7 +181,6 @@ def generate_synthetic_repr_data(
     return X, y
 
 
-
 def run_probe_harness(
     args: argparse.Namespace,
     output_dir: Path,
@@ -196,8 +198,8 @@ def run_probe_harness(
         return None, None
 
     # Use registry harness if available, else standard
-    from src.evaluation.probe_harness import get_probe_harness, ProbeHarnessDefinition, ProbeHarnessConfig
-    
+    from src.evaluation.probe_harness import get_probe_harness
+
     probe_registry_id = "smoke_probe_v1"
     print(f"\n[PROBE] Running probe epiplexity harness ({probe_registry_id})...")
 
@@ -242,7 +244,7 @@ def run_probe_harness(
     # Configure harness
     config.input_dim = input_dim
     config.hidden_dim = 32
-    
+
     harness = ProbeHarness(config)
     report = harness.run(
         baseline_data=(X_baseline, y_baseline),
@@ -261,7 +263,11 @@ def run_probe_harness(
     print(f"  ΔEpi/FLOP: {report.delta_epi_per_flop:.2e}")
     print(f"  Sign consistency: {report.sign_consistency:.2f}")
     print(f"  Stability gate: {'PASS' if report.stability_pass else 'FAIL'}")
-    print(f"  OOD delta: {report.ood_delta:.4f}" if report.ood_delta else "  OOD delta: N/A")
+    print(
+        f"  OOD delta: {report.ood_delta:.4f}"
+        if report.ood_delta
+        else "  OOD delta: N/A"
+    )
     print(f"  Transfer gate: {'PASS' if report.transfer_pass else 'FAIL'}")
     print(f"  Report SHA: {report.report_sha[:16]}")
 
@@ -276,52 +282,102 @@ def main():
     parser.add_argument("--training-steps", type=int, default=1000)
 
     # Mode flags
-    parser.add_argument("--manual-plan", action="store_true", default=True,
-                        help="Use hardcoded plans (default)")
-    parser.add_argument("--auto-plan", action="store_true",
-                        help="Generate plan from homeostatic signals")
-    parser.add_argument("--token-only", action="store_true",
-                        help="Use repr_tokens for signals (if available)")
+    parser.add_argument(
+        "--manual-plan",
+        action="store_true",
+        default=True,
+        help="Use hardcoded plans (default)",
+    )
+    parser.add_argument(
+        "--auto-plan",
+        action="store_true",
+        help="Generate plan from homeostatic signals",
+    )
+    parser.add_argument(
+        "--token-only",
+        action="store_true",
+        help="Use repr_tokens for signals (if available)",
+    )
 
     # Probe flags
-    parser.add_argument("--include-probe-epi", action="store_true",
-                        help="Run probe epiplexity harness")
-    parser.add_argument("--probe-steps", type=int, default=100,
-                        help="Probe training steps")
-    parser.add_argument("--probe-seeds", type=str, default="42,43,44",
-                        help="Comma-separated probe seeds")
-    parser.add_argument("--probe-variant", type=str, default="linear",
-                        choices=["linear", "mlp"],
-                        help="Probe model variant")
+    parser.add_argument(
+        "--include-probe-epi", action="store_true", help="Run probe epiplexity harness"
+    )
+    parser.add_argument(
+        "--probe-steps", type=int, default=100, help="Probe training steps"
+    )
+    parser.add_argument(
+        "--probe-seeds",
+        type=str,
+        default="42,43,44",
+        help="Comma-separated probe seeds",
+    )
+    parser.add_argument(
+        "--probe-variant",
+        type=str,
+        default="linear",
+        choices=["linear", "mlp"],
+        help="Probe model variant",
+    )
 
     # Graph metrics flags
-    parser.add_argument("--include-graph-summary", action="store_true",
-                        help="Compute and log graph small-world metrics")
+    parser.add_argument(
+        "--include-graph-summary",
+        action="store_true",
+        help="Compute and log graph small-world metrics",
+    )
 
     # Regal flags (Stage-6 meta-regal)
-    parser.add_argument("--include-regal", action="store_true",
-                        help="Run meta-regal gate evaluation (Stage-6)")
-    parser.add_argument("--regal-ids", type=str, default="spec_guardian,world_coherence,reward_integrity",
-                        help="Comma-separated regal IDs to enable")
-    parser.add_argument("--regal-patience", type=int, default=3,
-                        help="Regal patience (consecutive failures before action)")
-    parser.add_argument("--regal-penalty-mode", type=str, default="warn",
-                        choices=["warn", "noop", "clamp"],
-                        help="Regal penalty mode")
-    parser.add_argument("--regal-smoke-anomaly", action="store_true",
-                        help="Inject physics anomalies in trajectory audit to trip WorldCoherenceRegal")
+    parser.add_argument(
+        "--include-regal",
+        action="store_true",
+        help="Run meta-regal gate evaluation (Stage-6)",
+    )
+    parser.add_argument(
+        "--regal-ids",
+        type=str,
+        default="spec_guardian,world_coherence,reward_integrity",
+        help="Comma-separated regal IDs to enable",
+    )
+    parser.add_argument(
+        "--regal-patience",
+        type=int,
+        default=3,
+        help="Regal patience (consecutive failures before action)",
+    )
+    parser.add_argument(
+        "--regal-penalty-mode",
+        type=str,
+        default="warn",
+        choices=["warn", "noop", "clamp"],
+        help="Regal penalty mode",
+    )
+    parser.add_argument(
+        "--regal-smoke-anomaly",
+        action="store_true",
+        help="Inject physics anomalies in trajectory audit to trip WorldCoherenceRegal",
+    )
 
     # D4 Knob calibration flags
-    parser.add_argument("--use-learned-knobs", action="store_true",
-                        help="Use D4 learned/heuristic knob calibration")
+    parser.add_argument(
+        "--use-learned-knobs",
+        action="store_true",
+        help="Use D4 learned/heuristic knob calibration",
+    )
 
     # Trajectory audit flags (Stage-6 spatiotemporal grounding)
-    parser.add_argument("--include-trajectory-audit", action="store_true",
-                        help="Include synthetic trajectory audit data")
+    parser.add_argument(
+        "--include-trajectory-audit",
+        action="store_true",
+        help="Include synthetic trajectory audit data",
+    )
 
     # Econ tensor flags (canonical coordinate chart)
-    parser.add_argument("--include-econ-tensor", action="store_true",
-                        help="Compute and log econ tensor (canonical coordinate chart)")
+    parser.add_argument(
+        "--include-econ-tensor",
+        action="store_true",
+        help="Compute and log econ tensor (canonical coordinate chart)",
+    )
 
     args = parser.parse_args()
 
@@ -352,7 +408,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     run_id = str(uuid.uuid4())[:8]
-    print(f"=== Closed-Loop Smoke Test (Hardened) ===")
+    print("=== Closed-Loop Smoke Test (Hardened) ===")
     print(f"Run ID: {run_id}")
     print(f"Mode: {mode}")
     print(f"Output: {output_dir}")
@@ -376,7 +432,7 @@ def main():
         rng = np.random.default_rng(args.seed)
         H, W, D = 16, 16, 32  # Synthetic BEV grid: 16x16 cells, 32-dim embeddings
         embeddings = rng.standard_normal((H, W, D)).astype(np.float32)
-        
+
         graph_spec = GraphSpecV1(
             spec_id="smoke_graph_spec_v1",
             local_connectivity=4,
@@ -387,8 +443,10 @@ def main():
             max_hops=30,
             seed=args.seed,
         )
-        
-        graph_summary = graph_summary_from_embeddings(embeddings, (H, W), graph_spec, seed=args.seed)
+
+        graph_summary = graph_summary_from_embeddings(
+            embeddings, (H, W), graph_spec, seed=args.seed
+        )
 
         print(f"  Node count: {graph_summary.node_count}")
         print(f"  Local edges: {graph_summary.local_edge_count}")
@@ -396,10 +454,14 @@ def main():
         print(f"  Shortcut fraction: {graph_summary.shortcut_fraction:.2%}")
         print(f"  Select mode: {graph_summary.shortcut_select_mode}")
         if graph_summary.shortcut_score_threshold_used is not None:
-            print(f"  Score threshold: {graph_summary.shortcut_score_threshold_used:.3f}")
+            print(
+                f"  Score threshold: {graph_summary.shortcut_score_threshold_used:.3f}"
+            )
         print(f"  Score mode: {graph_summary.shortcut_score_mode}")
         if graph_summary.shortcut_edge_count > 0:
-            print(f"  Score stats: min={graph_summary.shortcut_score_min:.3f} p50={graph_summary.shortcut_score_p50:.3f} p90={graph_summary.shortcut_score_p90:.3f} max={graph_summary.shortcut_score_max:.3f}")
+            print(
+                f"  Score stats: min={graph_summary.shortcut_score_min:.3f} p50={graph_summary.shortcut_score_p50:.3f} p90={graph_summary.shortcut_score_p90:.3f} max={graph_summary.shortcut_score_max:.3f}"
+            )
         print(f"  σ (small-worldness): {graph_summary.sigma:.3f}")
         print(f"  Baseline type: {graph_summary.baseline_type}")
         print(f"  Nav success (full): {graph_summary.nav_success_rate:.2%}")
@@ -407,7 +469,6 @@ def main():
         print(f"  Nav gain (wormhole benefit): {graph_summary.nav_gain:.2%}")
         print(f"  Visited nodes/query: {graph_summary.nav_visited_nodes_mean:.1f}")
         print(f"  Compute time: {graph_summary.compute_time_ms:.1f}ms")
-
 
     # =========================================================================
     # Step 1: Create/generate baseline plan
@@ -433,7 +494,7 @@ def main():
     print(f"  Plan applied: {result.applied}")
     print(f"  Overrides: {applier.task_overrides.weights}")
     baseline_weights_sha = sha256_json(applier.task_overrides.weights)
-    final_weights_sha = baseline_weights_sha # Default if reload fails
+    final_weights_sha = baseline_weights_sha  # Default if reload fails
 
     baseline_samples = sample_with_weights(
         applier.task_overrides.weights, args.samples, args.seed
@@ -452,7 +513,7 @@ def main():
     try:
         registry_suite = get_suite("smoke_audit_v1")
         audit_suite_sha = registry_suite.sha256()
-        print(f"  Using registry suite: smoke_audit_v1")
+        print("  Using registry suite: smoke_audit_v1")
         print(f"  Audit suite SHA: {audit_suite_sha[:16]}")
         scenarios = [
             AuditScenario(s.scenario_id, s.task_name, s.task_family, s.num_episodes)
@@ -462,7 +523,9 @@ def main():
         audit_suite_sha = "inline"
         scenarios = [
             AuditScenario("balanced_01", "drawer_vase", "manipulation", num_episodes=3),
-            AuditScenario("occluded_01", "drawer_vase_occluded", "manipulation", num_episodes=3),
+            AuditScenario(
+                "occluded_01", "drawer_vase_occluded", "manipulation", num_episodes=3
+            ),
         ]
 
     audit_config = AuditSuiteConfig(
@@ -487,7 +550,7 @@ def main():
     gate_status: Optional[GateStatus] = None
 
     if args.auto_plan:
-        print(f"\n[4/8] Generating updated plan from signals...")
+        print("\n[4/8] Generating updated plan from signals...")
 
         # Build signal bundle from audit results + probe report
         audit_deltas = {"delta_success": 0.0, "delta_mpl": 0.0}
@@ -515,36 +578,48 @@ def main():
         knob_model = None
         if args.use_learned_knobs:
             from src.regal.knob_model import get_knob_model
+
             # Use stub learned model for smoke test (simulates learned behavior)
             knob_model = get_knob_model(use_learned=True)
             print(f"  Using D4 knob calibration: {knob_model.model_sha}")
 
         updated_plan, gate_status = build_plan_from_signals(
-            signals, config, plan_id="homeostatic_v1", source_commit="auto",
+            signals,
+            config,
+            plan_id="homeostatic_v1",
+            source_commit="auto",
             probe_report=probe_report,
             exposure_count=exposure_count,
             knob_model=knob_model,
         )
 
-        print(f"  Auto-generated from signals")
+        print("  Auto-generated from signals")
         if probe_report:
             print(f"  ΔEpi/FLOP: {probe_report.delta_epi_per_flop:.2e}")
-            print(f"  Stability gate: {'PASS' if probe_report.stability_pass else 'FAIL'}")
-            print(f"  Transfer gate: {'PASS' if probe_report.transfer_pass else 'FAIL'}")
-            
+            print(
+                f"  Stability gate: {'PASS' if probe_report.stability_pass else 'FAIL'}"
+            )
+            print(
+                f"  Transfer gate: {'PASS' if probe_report.transfer_pass else 'FAIL'}"
+            )
+
         if gate_status:
             if gate_status.raw_delta is not None:
                 print(f"  Raw Delta: {gate_status.raw_delta:.4f}")
             if gate_status.delta_per_exposure is not None:
                 print(f"  ΔEpi/Exp: {gate_status.delta_per_exposure:.2e}")
             if gate_status.transfer_patience_exceeded:
-                print(f"  Transfer Patience: EXCEEDED ({gate_status.transfer_failure_count} failures)")
-            
+                print(
+                    f"  Transfer Patience: EXCEEDED ({gate_status.transfer_failure_count} failures)"
+                )
+
             if gate_status.ledger_policy:
                 lp = gate_status.ledger_policy
-                print(f"  Applied Multiplier: {lp.applied_multiplier:.2f} ({lp.gain_schedule_source})")
+                print(
+                    f"  Applied Multiplier: {lp.applied_multiplier:.2f} ({lp.gain_schedule_source})"
+                )
                 if lp.clamped:
-                    print(f"  Scale Update: CLAMPED")
+                    print("  Scale Update: CLAMPED")
                 print(f"  Policy Config SHA: {lp.policy_config_sha[:16]}")
 
             # Print knob policy info if used
@@ -562,7 +637,7 @@ def main():
             if gate_status.forced_noop:
                 print(f"  Reason: {gate_status.reason}")
     else:
-        print(f"\n[4/8] Loading hardcoded updated plan...")
+        print("\n[4/8] Loading hardcoded updated plan...")
         updated_plan = create_updated_plan()
 
     updated_path = output_dir / "plan_updated.json"
@@ -614,30 +689,34 @@ def main():
             context=None,
         )
 
-        print(f"  Phase: POST_PLAN_PRE_APPLY")
+        print("  Phase: POST_PLAN_PRE_APPLY")
         print(f"  Regal config SHA: {regal_config.sha256()[:16]}")
         print(f"  Enabled regals: {regal_config.enabled_regal_ids}")
         print(f"  All passed: {regal_result.all_passed}")
         for report in regal_result.reports:
             status = "PASS" if report.passed else "FAIL"
-            print(f"    {report.regal_id}: {status} (phase={report.phase.value}, confidence={report.confidence:.2f})")
+            print(
+                f"    {report.regal_id}: {status} (phase={report.phase.value}, confidence={report.confidence:.2f})"
+            )
             if not report.passed:
                 print(f"      Rationale: {report.rationale}")
 
     # Generate trajectory audit if enabled (using real producer)
     trajectory_audit: Optional[TrajectoryAuditV1] = None
     trajectory_audit_sha: Optional[str] = None
-    if args.include_trajectory_audit or (args.include_regal and getattr(args, 'regal_smoke_anomaly', False)):
+    if args.include_trajectory_audit or (
+        args.include_regal and getattr(args, "regal_smoke_anomaly", False)
+    ):
         print("\n[4c/8] Generating trajectory audit via producer...")
         rng = np.random.default_rng(args.seed)
 
         # Check if we need to inject anomalies for testing
-        inject_anomalies = getattr(args, 'regal_smoke_anomaly', False)
-        
+        inject_anomalies = getattr(args, "regal_smoke_anomaly", False)
+
         # Generate synthetic episode data (simulates training loop output)
         num_steps = 50
         action_dim = 7  # e.g., 7-DoF robot
-        
+
         # Create synthetic actions/rewards (deterministic from seed)
         actions = [
             [float(x) for x in rng.standard_normal(action_dim) * 0.1]
@@ -645,26 +724,35 @@ def main():
         ]
         rewards = [float(rng.uniform(0.0, 0.05)) for _ in range(num_steps)]
         reward_components = {
-            "manipulation_reward": [float(rng.uniform(0.02, 0.04)) for _ in range(num_steps)],
-            "collision_penalty": [float(rng.uniform(-0.01, 0.0)) for _ in range(num_steps)],
-            "time_penalty": [float(rng.uniform(-0.005, -0.001)) for _ in range(num_steps)],
+            "manipulation_reward": [
+                float(rng.uniform(0.02, 0.04)) for _ in range(num_steps)
+            ],
+            "collision_penalty": [
+                float(rng.uniform(-0.01, 0.0)) for _ in range(num_steps)
+            ],
+            "time_penalty": [
+                float(rng.uniform(-0.005, -0.001)) for _ in range(num_steps)
+            ],
         }
         events = ["grasp_attempt", "grasp_success", "place_attempt"]
-        
+
         # Generate velocity data with optional spikes for anomaly testing
         if inject_anomalies:
             # Inject velocity spikes that will trip WorldCoherenceRegal
             velocities = [
-                [float(rng.uniform(15.0, 20.0)), 0.0, 0.0] if i % 5 == 0 else [1.0, 1.0, 1.0]
+                [float(rng.uniform(15.0, 20.0)), 0.0, 0.0]
+                if i % 5 == 0
+                else [1.0, 1.0, 1.0]
                 for i in range(num_steps)
             ]
-            print("  [ANOMALY MODE] Injecting physics anomalies to trip WorldCoherenceRegal")
+            print(
+                "  [ANOMALY MODE] Injecting physics anomalies to trip WorldCoherenceRegal"
+            )
         else:
             velocities = [
-                [float(x) for x in rng.uniform(0.5, 2.0, 3)]
-                for _ in range(num_steps)
+                [float(x) for x in rng.uniform(0.5, 2.0, 3)] for _ in range(num_steps)
             ]
-        
+
         # Use the REAL producer (canonical entrypoint)
         trajectory_audit = create_trajectory_audit(
             episode_id=f"smoke_episode_{run_id}",
@@ -676,15 +764,17 @@ def main():
             velocities=velocities,
             velocity_threshold=10.0,
         )
-        
+
         # For anomaly testing, also inject contact_anomaly_count and penetration_max
         if inject_anomalies:
             trajectory_audit = TrajectoryAuditV1(
-                **{**trajectory_audit.model_dump(), 
-                   "contact_anomaly_count": 5,
-                   "penetration_max": 0.05}
+                **{
+                    **trajectory_audit.model_dump(),
+                    "contact_anomaly_count": 5,
+                    "penetration_max": 0.05,
+                }
             )
-        
+
         # Compute SHA for provenance
         trajectory_audit_sha = trajectory_audit.sha256()
 
@@ -708,7 +798,9 @@ def main():
             run_id=run_id,
             step=1,
             plan_sha=updated_plan.sha256() if updated_plan else None,
-            trajectory_audit_sha=trajectory_audit.sha256() if trajectory_audit else None,
+            trajectory_audit_sha=trajectory_audit.sha256()
+            if trajectory_audit
+            else None,
         )
 
         regal_result_post_audit = evaluate_regals(
@@ -721,16 +813,20 @@ def main():
             trajectory_audit=trajectory_audit,
         )
 
-        print(f"  Phase: POST_AUDIT")
+        print("  Phase: POST_AUDIT")
         print(f"  RegalContext SHA: {regal_context.sha256()[:16]}")
         print(f"  All passed: {regal_result_post_audit.all_passed}")
         for report in regal_result_post_audit.reports:
             status = "PASS" if report.passed else "FAIL"
-            print(f"    {report.regal_id}: {status} (phase={report.phase.value}, confidence={report.confidence:.2f})")
+            print(
+                f"    {report.regal_id}: {status} (phase={report.phase.value}, confidence={report.confidence:.2f})"
+            )
             if not report.passed:
                 print(f"      Rationale: {report.rationale}")
                 if report.findings and "trajectory_audit_present" in report.findings:
-                    print(f"      Trajectory audit inspected: {report.findings['trajectory_audit_present']}")
+                    print(
+                        f"      Trajectory audit inspected: {report.findings['trajectory_audit_present']}"
+                    )
 
         # Capture regal_context for manifest (POST_AUDIT is the authoritative phase)
         regal_context_sha = regal_context.sha256()
@@ -776,7 +872,9 @@ def main():
         print(f"  Basis SHA: {econ_basis_sha[:16]}")
         print(f"  Tensor SHA: {econ_tensor.sha256()[:16]}")
         print(f"  Tensor norm: {tensor_summary.get('norm', 0):.4f}")
-        print(f"  Key values: mpl={econ_data['mpl_units_per_hour']:.2f}, success={econ_data['success_rate']:.2f}")
+        print(
+            f"  Key values: mpl={econ_data['mpl_units_per_hour']:.2f}, success={econ_data['success_rate']:.2f}"
+        )
 
     # =========================================================================
     # Step 5: Hot reload updated plan
@@ -787,13 +885,15 @@ def main():
     reload_result = applier.poll_and_apply(step=100)
 
     if reload_result and reload_result.applied:
-        print(f"  Plan applied: True")
-        print(f"  Previous SHA: {reload_result.prev_plan_sha[:16] if reload_result.prev_plan_sha else 'None'}")
+        print("  Plan applied: True")
+        print(
+            f"  Previous SHA: {reload_result.prev_plan_sha[:16] if reload_result.prev_plan_sha else 'None'}"
+        )
         print(f"  New SHA: {reload_result.plan_sha[:16]}")
         print(f"  New weights: {applier.task_overrides.weights}")
         final_weights_sha = sha256_json(applier.task_overrides.weights)
     else:
-        print(f"  Plan reload skipped or failed")
+        print("  Plan reload skipped or failed")
 
     exposure_tracker.set_plan(updated_plan.plan_id, updated_plan.sha256())
 
@@ -852,12 +952,13 @@ def main():
     exposure_manifest = exposure_tracker.build_manifest()
     exposure_path = output_dir / "exposure_manifest.json"
     exposure_sha = write_exposure_manifest(str(exposure_path), exposure_manifest)
-    print(f"  exposure_manifest.json written")
+    print("  exposure_manifest.json written")
     print(f"    Manifest SHA: {exposure_sha[:16]}")
     print(f"    Total samples: {exposure_manifest.total_samples}")
 
     # Ledger
     from src.contracts.schemas import LedgerExposureV1
+
     ledger = ValueLedger(str(output_dir / "ledger.jsonl"))
 
     # Build probe info for ledger if available
@@ -875,6 +976,7 @@ def main():
     ledger_econ: Optional[LedgerEconV1] = None
     if econ_tensor and econ_basis_sha:
         from src.economics.econ_tensor import compute_tensor_summary
+
         tensor_summary = compute_tensor_summary(econ_tensor)
         ledger_econ = LedgerEconV1(
             basis_sha=econ_basis_sha,
@@ -910,14 +1012,20 @@ def main():
     )
 
     ledger.append(record)
-    print(f"  ledger.jsonl written")
+    print("  ledger.jsonl written")
     print(f"    Record ID: {record.record_id}")
-    print(f"    Δ Success: {record.deltas.delta_success:+.4f}" if record.deltas.delta_success else "    Δ Success: N/A")
+    print(
+        f"    Δ Success: {record.deltas.delta_success:+.4f}"
+        if record.deltas.delta_success
+        else "    Δ Success: N/A"
+    )
     if ledger_probe:
-        print(f"    Probe: ΔEpi/FLOP={ledger_probe.delta_epi_per_flop:.2e}, stability={ledger_probe.stability_pass}")
+        print(
+            f"    Probe: ΔEpi/FLOP={ledger_probe.delta_epi_per_flop:.2e}, stability={ledger_probe.stability_pass}"
+        )
 
     manifest_path = output_dir / "run_manifest.json"
-    
+
     # Calculate plan_applied_events SHA if it exists
     plan_events_path = output_dir / "plan_applied_events.jsonl"
     plan_applied_events_sha = None
@@ -935,15 +1043,15 @@ def main():
         seeds=det_ctx.seed_bundle(),
         determinism_config=get_context_summary(),
     )
-    
+
     # Populate provenance fields
     manifest.baseline_weights_sha = baseline_weights_sha
     manifest.final_weights_sha = final_weights_sha
-    
+
     plan_events_path = output_dir / "plan_applied_events.jsonl"
     if plan_events_path.exists():
         manifest.plan_applied_events_sha = sha256_file(str(plan_events_path))
-    
+
     # Populate provenance fields
     manifest.baseline_weights_sha = baseline_weights_sha
     manifest.final_weights_sha = final_weights_sha
@@ -964,8 +1072,12 @@ def main():
         manifest.regal_config_sha = regal_config.sha256()
         # Compute aggregate report SHA from individual report SHAs (deterministic: sorted by phase, regal_id)
         if regal_result.reports:
-            sorted_reports = sorted(regal_result.reports, key=lambda r: (r.phase.value, r.regal_id))
-            manifest.regal_report_sha = sha256_json([r.report_sha for r in sorted_reports])
+            sorted_reports = sorted(
+                regal_result.reports, key=lambda r: (r.phase.value, r.regal_id)
+            )
+            manifest.regal_report_sha = sha256_json(
+                [r.report_sha for r in sorted_reports]
+            )
         manifest.regal_inputs_sha = regal_result.combined_inputs_sha
         # Add regal context SHA if context was built
         if regal_context_sha:
@@ -987,18 +1099,24 @@ def main():
         manifest.econ_tensor_sha = econ_tensor.sha256()
 
     write_manifest(str(manifest_path), manifest)
-    print(f"  run_manifest.json written")
+    print("  run_manifest.json written")
     print(f"    Run ID: {manifest.run_id}")
     print(f"    Plan SHA: {manifest.plan_sha[:16]}")
-    print(f"    Audit suite SHA: {audit_suite_sha[:16] if audit_suite_sha != 'inline' else 'inline'}")
+    print(
+        f"    Audit suite SHA: {audit_suite_sha[:16] if audit_suite_sha != 'inline' else 'inline'}"
+    )
     if manifest.probe_config_sha:
         print(f"    Probe config SHA: {manifest.probe_config_sha[:16]}")
     if manifest.graph_spec_sha:
         print(f"    Graph spec SHA: {manifest.graph_spec_sha[:16]}")
-        print(f"    Graph summary SHA: {manifest.graph_summary_sha[:16] if manifest.graph_summary_sha else 'N/A'}")
+        print(
+            f"    Graph summary SHA: {manifest.graph_summary_sha[:16] if manifest.graph_summary_sha else 'N/A'}"
+        )
     if manifest.regal_config_sha:
         print(f"    Regal config SHA: {manifest.regal_config_sha[:16]}")
-        print(f"    Regal report SHA: {manifest.regal_report_sha[:16] if manifest.regal_report_sha else 'N/A'}")
+        print(
+            f"    Regal report SHA: {manifest.regal_report_sha[:16] if manifest.regal_report_sha else 'N/A'}"
+        )
         if manifest.regal_context_sha:
             print(f"    Regal context SHA: {manifest.regal_context_sha[:16]}")
     if manifest.knob_policy_sha:
@@ -1008,7 +1126,9 @@ def main():
         print(f"    Trajectory audit SHA: {manifest.trajectory_audit_sha[:16]}")
     if manifest.econ_basis_sha:
         print(f"    Econ basis SHA: {manifest.econ_basis_sha[:16]}")
-        print(f"    Econ tensor SHA: {manifest.econ_tensor_sha[:16] if manifest.econ_tensor_sha else 'N/A'}")
+        print(
+            f"    Econ tensor SHA: {manifest.econ_tensor_sha[:16] if manifest.econ_tensor_sha else 'N/A'}"
+        )
     print(f"    Source commit: {manifest.source_commit or 'N/A'}")
 
     # =========================================================================
@@ -1020,21 +1140,25 @@ def main():
     print(f"\n✓ Mode: {mode}")
     print(f"✓ Plan applied: {baseline_plan.plan_id} → {updated_plan.plan_id}")
     print(f"✓ Sampling distribution shifted: {shift_detected}")
-    print(f"✓ Audit suite SHA: {audit_suite_sha[:16] if audit_suite_sha != 'inline' else 'inline'}")
+    print(
+        f"✓ Audit suite SHA: {audit_suite_sha[:16] if audit_suite_sha != 'inline' else 'inline'}"
+    )
     print(f"✓ Exposure manifest SHA: {exposure_sha[:16]}")
     print(f"✓ Ledger record: {record.record_id}")
     print(f"✓ Run manifest: {manifest.run_id}")
 
     if probe_report:
-        print(f"\nProbe Discriminator Results:")
+        print("\nProbe Discriminator Results:")
         print(f"  ΔEpi/FLOP: {probe_report.delta_epi_per_flop:.2e}")
-        print(f"  Stability: {probe_report.sign_consistency:.2f} ({'PASS' if probe_report.stability_pass else 'FAIL'})")
+        print(
+            f"  Stability: {probe_report.sign_consistency:.2f} ({'PASS' if probe_report.stability_pass else 'FAIL'})"
+        )
         print(f"  Transfer: {'PASS' if probe_report.transfer_pass else 'FAIL'}")
         if gate_status and gate_status.forced_noop:
             print(f"  Action: FORCED_NOOP ({gate_status.reason})")
 
     if regal_result:
-        print(f"\nMeta-Regal Gate Results (Stage-6):")
+        print("\nMeta-Regal Gate Results (Stage-6):")
         print(f"  All passed: {regal_result.all_passed}")
         for report in regal_result.reports:
             status = "PASS" if report.passed else "FAIL"
@@ -1043,7 +1167,7 @@ def main():
             print(f"  Config SHA: {regal_config.sha256()[:16]}")
 
     if gate_status and gate_status.knob_policy:
-        print(f"\nD4 Knob Calibration Results:")
+        print("\nD4 Knob Calibration Results:")
         kp = gate_status.knob_policy
         print(f"  Policy source: {kp.policy_source}")
         print(f"  Policy SHA: {kp.sha256()[:16]}")
@@ -1053,14 +1177,16 @@ def main():
             print(f"  Clamped: {', '.join(kp.clamp_reasons)}")
 
     if trajectory_audit:
-        print(f"\nTrajectory Audit (Stage-6 Spatiotemporal):")
+        print("\nTrajectory Audit (Stage-6 Spatiotemporal):")
         print(f"  Episode: {trajectory_audit.episode_id}")
         print(f"  Steps: {trajectory_audit.num_steps}")
         print(f"  Return: {trajectory_audit.total_return:.3f}")
-        print(f"  Physics anomalies: pen={trajectory_audit.penetration_max:.4f}, vel_spikes={trajectory_audit.velocity_spike_count}")
+        print(
+            f"  Physics anomalies: pen={trajectory_audit.penetration_max:.4f}, vel_spikes={trajectory_audit.velocity_spike_count}"
+        )
         print(f"  Audit SHA: {trajectory_audit.sha256()[:16]}")
 
-    print(f"\nArtifacts:")
+    print("\nArtifacts:")
     print(f"  {exposure_path}")
     print(f"  {output_dir / 'ledger.jsonl'}")
     print(f"  {manifest_path}")

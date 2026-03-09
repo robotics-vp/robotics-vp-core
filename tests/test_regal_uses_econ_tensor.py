@@ -3,25 +3,15 @@
 Verifies that RewardIntegrityRegal consumes econ tensor and produces
 stable flags, with fallback when tensor is absent.
 """
-import pytest
-from typing import Dict, Any
 
 from src.contracts.schemas import (
     RegalGatesV1,
-    RegalReportV1,
-    SemanticUpdatePlanV1,
-    TaskGraphOp,
-    PlanOpType,
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
-    EconTensorV1,
     RegalContextV1,
-    RegalPhaseV1,
 )
 from src.regal.regal_evaluator import (
     RewardIntegrityRegal,
-    SpecGuardianRegal,
-    WorldCoherenceRegal,
     evaluate_regals,
 )
 from src.economics.econ_tensor import econ_to_tensor

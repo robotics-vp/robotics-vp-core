@@ -15,7 +15,7 @@ from src.orchestrator.datapack_engine import DatapackSignals
 from src.orchestrator.economic_controller import EconSignals
 from src.orchestrator.ontology import build_drawer_vase_ontology
 from src.orchestrator.task_graph import build_drawer_vase_task_graph
-from src.sima2.ontology_proposals import ProposalPriority, ProposalType
+from src.sima2.ontology_proposals import ProposalType
 from src.sima2.ontology_update_engine import OntologyUpdateEngine
 from src.sima2.semantic_primitive_extractor import extract_primitives_from_rollout
 from src.sima2.task_graph_proposals import RefinementType

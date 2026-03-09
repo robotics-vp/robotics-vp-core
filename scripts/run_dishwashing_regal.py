@@ -18,6 +18,7 @@ Usage:
     python scripts/run_dishwashing_regal.py --output-dir artifacts/dishwashing_regal
     python scripts/run_dishwashing_regal.py --episodes 5 --econ-preset realistic
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,7 +27,7 @@ import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -34,7 +35,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import env from module, regality extensions from package
 from src.envs.dishwashing_env import DishwashingEnv, summarize_episode_info
-from src.envs.dishwashing_regal.rewards.reward_breakdown import compute_dishwashing_reward_breakdown
+from src.envs.dishwashing_regal.rewards.reward_breakdown import (
+    compute_dishwashing_reward_breakdown,
+)
 from src.envs.dishwashing_regal.trajectory_audit import DishwashingTrajectoryCollector
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
@@ -78,7 +81,9 @@ def create_dishwashing_plan() -> SemanticUpdatePlanV1:
         plan_id="dishwashing_regal_v1",
         source_commit="dishwashing_regal",
         task_graph_changes=[
-            TaskGraphOp(op=PlanOpType.SET_WEIGHT, task_family="dishwashing", weight=1.0),
+            TaskGraphOp(
+                op=PlanOpType.SET_WEIGHT, task_family="dishwashing", weight=1.0
+            ),
         ],
         notes="Dishwashing plan with full regality compliance",
     )
@@ -162,18 +167,22 @@ def run_episode(
     # Summarize episode
     summary = summarize_episode_info(info_history)
 
-    return {
-        "episode_id": episode_id,
-        "success": summary.error_rate_episode < 0.12,  # SLA compliance
-        "total_completed": env.completed,
-        "total_errors": env.errors,
-        "mpl_episode": summary.mpl_episode,
-        "error_rate": summary.error_rate_episode,
-        "energy_Wh": env.energy_Wh,
-        "profit": summary.profit,
-        "steps": env.steps,
-        "termination_reason": summary.termination_reason,
-    }, collector, info_history
+    return (
+        {
+            "episode_id": episode_id,
+            "success": summary.error_rate_episode < 0.12,  # SLA compliance
+            "total_completed": env.completed,
+            "total_errors": env.errors,
+            "mpl_episode": summary.mpl_episode,
+            "error_rate": summary.error_rate_episode,
+            "energy_Wh": env.energy_Wh,
+            "profit": summary.profit,
+            "steps": env.steps,
+            "termination_reason": summary.termination_reason,
+        },
+        collector,
+        info_history,
+    )
 
 
 def main():
@@ -183,11 +192,17 @@ def main():
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--max-steps", type=int, default=100)
     parser.add_argument("--training-steps", type=int, default=500)
-    parser.add_argument("--econ-preset", type=str, default="toy", choices=["toy", "realistic"])
+    parser.add_argument(
+        "--econ-preset", type=str, default="toy", choices=["toy", "realistic"]
+    )
 
     # Quarantine
-    parser.add_argument("--quarantine", type=str, default="",
-                        help="Comma-separated datapack IDs to quarantine")
+    parser.add_argument(
+        "--quarantine",
+        type=str,
+        default="",
+        help="Comma-separated datapack IDs to quarantine",
+    )
 
     args = parser.parse_args()
 
@@ -236,7 +251,7 @@ def main():
     print(f"  Plan SHA: {plan_sha[:16]}")
 
     # Run audit before (synthetic)
-    print(f"\n[2/8] Running pre-training audit...")
+    print("\n[2/8] Running pre-training audit...")
     audit_scenarios = [
         AuditScenario("dishwashing_01", "dishwashing", "dishwashing", num_episodes=2),
     ]
@@ -271,7 +286,9 @@ def main():
 
         # Sample datapack (with quarantine enforcement)
         dp_id = all_datapacks[ep_idx % len(all_datapacks)]
-        recorded = exposure_tracker.record_sample("dishwashing", dp_id, f"slice_{ep_idx}")
+        recorded = exposure_tracker.record_sample(
+            "dishwashing", dp_id, f"slice_{ep_idx}"
+        )
 
         if not recorded:
             print(f"  Episode {ep_idx}: QUARANTINED (dp={dp_id})")
@@ -284,10 +301,12 @@ def main():
         audit = collector.build_audit()
         trajectory_audits.append(audit)
 
-        print(f"  Episode {ep_idx}: success={result['success']}, "
-              f"MPL={result['mpl_episode']:.1f}/hr, "
-              f"err_rate={result['error_rate']:.2%}, "
-              f"profit=${result['profit']:.2f}")
+        print(
+            f"  Episode {ep_idx}: success={result['success']}, "
+            f"MPL={result['mpl_episode']:.1f}/hr, "
+            f"err_rate={result['error_rate']:.2%}, "
+            f"profit=${result['profit']:.2f}"
+        )
         print(f"    Events: {collector.event_counts}")
 
     # Record orchestrator decisions
@@ -295,7 +314,7 @@ def main():
     orchestrator_tracker.update_step(args.training_steps)
 
     # Aggregate trajectory audits
-    print(f"\n[4/8] Aggregating trajectory audits...")
+    print("\n[4/8] Aggregating trajectory audits...")
     if trajectory_audits:
         trajectory_audit_sha = aggregate_trajectory_audits(trajectory_audits)
         audit_path = output_dir / "trajectory_audit.json"
@@ -309,7 +328,9 @@ def main():
                 "num_episodes": len(trajectory_audits),
                 "total_return": total_return,
                 "total_steps": total_steps,
-                "episode_audits": [a.model_dump(mode="json") for a in trajectory_audits],
+                "episode_audits": [
+                    a.model_dump(mode="json") for a in trajectory_audits
+                ],
             }
             json.dump(audit_data, f, indent=2)
         print(f"  Aggregated {len(trajectory_audits)} audits")
@@ -320,7 +341,7 @@ def main():
         print("  WARNING: No trajectory audits collected!")
 
     # Run audit after (synthetic)
-    print(f"\n[5/8] Running post-training audit...")
+    print("\n[5/8] Running post-training audit...")
     audit_config_b = AuditSuiteConfig(
         suite_id="dishwashing_audit_v1",
         seed=args.seed + 100,
@@ -341,7 +362,7 @@ def main():
     final_weights_sha = sha256_json(final_weights)
 
     # Write artifacts
-    print(f"\n[6/8] Writing artifacts...")
+    print("\n[6/8] Writing artifacts...")
 
     # Exposure manifest
     exposure_tracker.update_step(args.training_steps)
@@ -360,7 +381,9 @@ def main():
     # Orchestrator state
     orchestrator_state = orchestrator_tracker.build_state()
     orchestrator_path = output_dir / "orchestrator_state.json"
-    orchestrator_sha = write_orchestrator_state(str(orchestrator_path), orchestrator_state)
+    orchestrator_sha = write_orchestrator_state(
+        str(orchestrator_path), orchestrator_state
+    )
     print(f"  orchestrator_state.json: {orchestrator_sha[:16]}")
 
     # Deploy gate
@@ -373,7 +396,9 @@ def main():
 
     deploy_decision = compute_deploy_decision(deploy_inputs, require_regal=False)
     deploy_decision_path = output_dir / "deploy_gate_decision.json"
-    deploy_decision_sha = write_deploy_gate_decision(str(deploy_decision_path), deploy_decision)
+    deploy_decision_sha = write_deploy_gate_decision(
+        str(deploy_decision_path), deploy_decision
+    )
     print(f"  deploy_gate_inputs.json: {deploy_inputs_sha[:16]}")
     print(f"  deploy_gate_decision.json: {deploy_decision_sha[:16]}")
 
@@ -433,12 +458,14 @@ def main():
     print(f"  run_manifest.json: {manifest.run_id}")
 
     # Run verification (UNCONDITIONAL)
-    print(f"\n[7/8] Running verify_run() (UNCONDITIONAL)...")
+    print("\n[7/8] Running verify_run() (UNCONDITIONAL)...")
     verification_report = verify_run(str(output_dir))
 
     # Write verification report
     verification_path = output_dir / "verification_report.json"
-    verification_sha = write_verification_report(str(verification_path), verification_report)
+    verification_sha = write_verification_report(
+        str(verification_path), verification_report
+    )
     print(f"  verification_report.json: {verification_sha[:16]}")
 
     # Update manifest with verification SHA
@@ -446,7 +473,7 @@ def main():
     write_manifest(str(manifest_path), manifest)
 
     # Print verification result
-    print(f"\n[8/8] Verification Result:")
+    print("\n[8/8] Verification Result:")
     print(f"  All passed: {verification_report.all_passed}")
     print(f"  Checks: {len(verification_report.checks)}")
     for check in verification_report.checks:
@@ -457,10 +484,12 @@ def main():
     print("\n" + "=" * 60)
     print("DISHWASHING REGAL RUN COMPLETE")
     print("=" * 60)
-    print(f"\nArtifact SHAs (populated in manifest):")
+    print("\nArtifact SHAs (populated in manifest):")
     print(f"  selection_manifest_sha:   {selection_sha[:16]}")
     print(f"  orchestrator_state_sha:   {orchestrator_sha[:16]}")
-    print(f"  trajectory_audit_sha:     {trajectory_audit_sha[:16] if trajectory_audit_sha else 'N/A'}")
+    print(
+        f"  trajectory_audit_sha:     {trajectory_audit_sha[:16] if trajectory_audit_sha else 'N/A'}"
+    )
     print(f"  verification_report_sha:  {verification_sha[:16]}")
     print(f"  deploy_gate_inputs_sha:   {deploy_inputs_sha[:16]}")
 
@@ -468,27 +497,27 @@ def main():
     print(f"  Reason: {deploy_decision.reason}")
 
     print(f"\nOutput directory: {output_dir}")
-    print(f"  - run_manifest.json")
-    print(f"  - ledger.jsonl")
-    print(f"  - exposure_manifest.json")
-    print(f"  - selection_manifest.json")
-    print(f"  - orchestrator_state.json")
-    print(f"  - trajectory_audit.json")
-    print(f"  - verification_report.json")
-    print(f"  - deploy_gate_inputs.json")
-    print(f"  - deploy_gate_decision.json")
+    print("  - run_manifest.json")
+    print("  - ledger.jsonl")
+    print("  - exposure_manifest.json")
+    print("  - selection_manifest.json")
+    print("  - orchestrator_state.json")
+    print("  - trajectory_audit.json")
+    print("  - verification_report.json")
+    print("  - deploy_gate_inputs.json")
+    print("  - deploy_gate_decision.json")
 
     # FAIL HARD on verification failure
     if not verification_report.all_passed:
-        print(f"\nERROR: Verification FAILED!")
+        print("\nERROR: Verification FAILED!")
         failed_checks = [c for c in verification_report.checks if not c.passed]
         for check in failed_checks:
             print(f"  FAILED: {check.check_id} - {check.message}")
         sys.exit(1)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("ALL CHECKS PASSED - Dishwashing regality verified")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     return 0
 

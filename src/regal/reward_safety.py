@@ -15,10 +15,10 @@ class RegalRewardSafetyNode(RegalNode):
         self.exploit_reward_ratio_threshold = float(exploit_reward_ratio_threshold)
 
     def evaluate(self, context: Mapping[str, object]) -> RegalReport:
-        reward_scalar = float(context.get("reward_scalar", 0.0) or 0.0)
-        productive_signal = float(context.get("productive_signal", 0.0) or 0.0)
-        constraint_violations = list(context.get("constraint_violations", []) or [])
-        anomaly_score = float(context.get("anomaly_score", 0.0) or 0.0)
+        reward_scalar = _as_float(context.get("reward_scalar"), 0.0)
+        productive_signal = _as_float(context.get("productive_signal"), 0.0)
+        constraint_violations = _as_list(context.get("constraint_violations"))
+        anomaly_score = _as_float(context.get("anomaly_score"), 0.0)
 
         ratio = reward_scalar / max(1e-6, abs(productive_signal)) if productive_signal != 0 else float("inf")
         exploit_like = ratio >= self.exploit_reward_ratio_threshold and reward_scalar > 0
@@ -46,3 +46,24 @@ class RegalRewardSafetyNode(RegalNode):
             details={"ratio": ratio, "anomaly_score": anomaly_score},
             confidence=0.8,
         )
+
+
+def _as_float(value: object, default: float) -> float:
+    try:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            return float(value)
+        return default
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_list(value: object) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    return []

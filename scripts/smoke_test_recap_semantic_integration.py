@@ -10,7 +10,7 @@ repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
 
 from src.semantic.aggregator import SemanticAggregator
-from src.semantic.models import SemanticSnapshot, EconSlice, MetaTransformerSlice
+from src.semantic.models import SemanticSnapshot
 from src.ontology.store import OntologyStore
 from src.ontology.models import Task, Robot, Episode, EconVector
 from src.sima2.ontology_proposals import OntologyUpdateProposal, ProposalType

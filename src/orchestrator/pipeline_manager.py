@@ -298,7 +298,7 @@ class PipelineManager:
             return {"iterations": 0, "progress": {}}
 
         # Track metrics over time
-        metrics_over_time = {}
+        metrics_over_time: Dict[str, List[float]] = {}
         for iteration in self.iterations:
             for key, value in iteration.summary_metrics.items():
                 if key not in metrics_over_time:
@@ -306,7 +306,7 @@ class PipelineManager:
                 metrics_over_time[key].append(value)
 
         # Compute trends
-        trends = {}
+        trends: Dict[str, float] = {}
         for key, values in metrics_over_time.items():
             if len(values) >= 2:
                 # Simple trend: last value minus first value
@@ -328,7 +328,7 @@ class PipelineManager:
 
         ADVISORY ONLY: Suggests actions but does not execute them.
         """
-        report = {
+        report: Dict[str, Any] = {
             "pipeline_id": self.pipeline_id,
             "name": self.name,
             "total_iterations": len(self.iterations),
@@ -340,7 +340,7 @@ class PipelineManager:
 
         # Aggregate stage-specific insights
         for stage in PipelineStage:
-            stage_stats = {
+            stage_stats: Dict[str, Any] = {
                 "total_runs": 0,
                 "successful": 0,
                 "failed": 0,
@@ -349,9 +349,9 @@ class PipelineManager:
                 "common_recommendations": [],
             }
 
-            durations = []
-            all_warnings = []
-            all_recommendations = []
+            durations: List[float] = []
+            all_warnings: List[str] = []
+            all_recommendations: List[str] = []
 
             for iteration in self.iterations:
                 result = iteration.get_stage_result(stage)
@@ -401,7 +401,7 @@ class PipelineManager:
         ADVISORY ONLY: Does not execute anything.
         """
         # Get insights from last iteration
-        last_results = {}
+        last_results: Dict[str, Any] = {}
         if self.iterations:
             last_iteration = self.iterations[-1]
             last_results = {
@@ -617,8 +617,12 @@ def run_semantic_feedback_pass(
       2) SemanticOrchestrator exports SemanticMetrics
       3) Feed metrics back into Econ/Datapack facades for advisory tweaks
     """
-    econ_signals = getattr(econ, "compute_signals", lambda dps, episodes=None: {})([])
-    datapack_signals = getattr(datapacks, "compute_signals", lambda dps, econ=None: {})([], econ_signals)
+    econ_signals: Dict[str, Any] = getattr(econ, "compute_signals", lambda dps, episodes=None: {})([])
+    datapack_signals: Dict[str, Any] = getattr(
+        datapacks,
+        "compute_signals",
+        lambda dps, econ=None: {},
+    )([], econ_signals)
 
     sem.export_semantic_metrics(econ_signals, datapack_signals, out_path)
 

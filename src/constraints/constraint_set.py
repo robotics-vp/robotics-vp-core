@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, overload
 
 import numpy as np
 
@@ -321,6 +321,16 @@ def _flatten_observations(payload: Mapping[str, Any]) -> Dict[str, float | bool]
             if coerced is not None:
                 flat[str(key)] = coerced
     return flat
+
+
+@overload
+def _safe_float(value: Any, default: None) -> Optional[float]:
+    ...
+
+
+@overload
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    ...
 
 
 def _safe_float(value: Any, default: Optional[float] = 0.0) -> Optional[float]:

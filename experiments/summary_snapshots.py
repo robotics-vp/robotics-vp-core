@@ -7,7 +7,6 @@ Backs quantitative statements in:
 - INVESTOR_STORY.md
 """
 import pandas as pd
-import numpy as np
 from pathlib import Path
 
 
@@ -241,7 +240,7 @@ def main(log_path='logs/sac_train.csv', output_path='experiments/summary_snapsho
     print(f"Loading logs: {log_path}")
     df = load_logs(log_path)
 
-    print(f"Computing summary statistics...")
+    print("Computing summary statistics...")
     summary = compute_summary_statistics(df, window=100)
 
     # Format and print

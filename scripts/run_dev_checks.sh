@@ -4,11 +4,11 @@ set -euo pipefail
 # Convenience script to run basic linting + core smokes.
 # This is advisory-only and does NOT touch Phase B math or reward behavior.
 
-echo "[dev-checks] Running formatters (black/isort/ruff)..."
+echo "[dev-checks] Running optional formatter hooks (if pre-commit is installed)..."
 if command -v pre-commit >/dev/null 2>&1; then
   pre-commit run --all-files || true
 else
-  echo "[dev-checks] pre-commit not installed; skipping formatter hooks."
+  echo "[dev-checks] pre-commit not installed; skipping optional formatter hooks."
 fi
 
 echo "[dev-checks] Running core smokes..."

@@ -12,10 +12,7 @@ from typing import Dict, Any
 
 from src.tfd.compiler import TextFrontDoor
 from src.observation.condition_vector_builder import ConditionVectorBuilder
-from src.observation.adapter import ObservationAdapter
-from src.logging.episode_logger import EpisodeLogger, _condition_summary
-from src.ontology.store import OntologyStore
-from src.ontology.models import Task, Robot
+from src.logging.episode_logger import _condition_summary
 
 
 def build_dummy_context() -> Dict[str, Any]:

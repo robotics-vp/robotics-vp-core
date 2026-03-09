@@ -324,7 +324,7 @@ def generate_impact_report(bricks, output_dir):
                 brick = bricks[idx]
                 report.append(f"    - {brick['brick_id']}: {', '.join(brick['semantic_tags'][:2])}")
         else:
-            report.append(f"    - No clusters optimized for this condition")
+            report.append("    - No clusters optimized for this condition")
         report.append("")
 
     # 5. Per-limb efficiency leaders

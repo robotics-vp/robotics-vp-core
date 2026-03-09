@@ -3,10 +3,8 @@ Integration tests for LSD Vector Scene orchestrator, MPL logging, and training h
 """
 
 import json
-import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
 
 import numpy as np
 import pytest
@@ -214,7 +212,6 @@ class TestDifficultyFeatures:
             LSDVectorSceneEnv,
             LSDVectorSceneEnvConfig,
             SceneGraphConfig,
-            VisualStyleConfig,
             BehaviourConfig,
         )
 

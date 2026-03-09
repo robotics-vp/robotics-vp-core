@@ -20,7 +20,7 @@ import numpy as np
 
 from src.orchestrator.context import OrchestratorContext
 from src.orchestrator.orchestration_transformer import TOOL_NAMES, _encode_ctx
-from src.orchestrator.toolspecs import ToolCall
+from src.orchestrator.toolspecs import ToolCall, ToolName
 from src.valuation.datapack_schema import DataPackMeta
 from src.orchestrator.semantic_metrics import SemanticMetrics
 
@@ -62,7 +62,7 @@ class OrchestrationSample:
 class HeuristicDecision:
     """Decision made by heuristic teacher."""
 
-    tool: str
+    tool: ToolName
     args: Dict[str, Any]
     rationale: str
 
@@ -284,7 +284,7 @@ def context_to_sample(ctx: OrchestratorContext) -> OrchestrationSample:
     )
 
 
-def generate_synthetic_context(seed: int = None) -> OrchestratorContext:
+def generate_synthetic_context(seed: Optional[int] = None) -> OrchestratorContext:
     """
     Generate synthetic OrchestratorContext for dataset augmentation.
 
@@ -471,14 +471,14 @@ def dataset_to_tensors(
     max_seq_len = max(len(s.target_tool_sequence) for s in samples)
 
     Y = np.zeros((len(samples), max_seq_len), dtype=np.int64)
-    tool_names = []
+    tool_names: List[List[str]] = []
 
     for i, sample in enumerate(samples):
-        seq = []
+        seq: List[str] = []
         for j, tc in enumerate(sample.target_tool_sequence):
             if j < max_seq_len:
                 Y[i, j] = tool_to_idx.get(tc.name, 0)
-                seq.append(tc.name)
+                seq.append(str(tc.name))
         tool_names.append(seq)
 
     return X, Y, tool_names
@@ -692,7 +692,9 @@ def build_econ_semantic_sample(
     )
 
 
-def generate_synthetic_econ_semantic_context(seed: int = None) -> Tuple[OrchestratorContext, Dict[str, Any], Dict[str, Any]]:
+def generate_synthetic_econ_semantic_context(
+    seed: Optional[int] = None,
+) -> Tuple[OrchestratorContext, Dict[str, Any], Dict[str, Any]]:
     """
     Generate synthetic context with matching econ/datapack signals.
 
@@ -775,7 +777,7 @@ def build_mixed_training_dataset(
     Returns:
         Tuple of (samples, dataset_stats)
     """
-    samples = []
+    samples: List[OrchestrationSample] = []
 
     # Generate heuristic samples
     for i in range(num_heuristic):
@@ -797,7 +799,7 @@ def build_mixed_training_dataset(
     heuristic_count = sum(1 for s in samples if s.source_type == "heuristic")
     econ_semantic_count = sum(1 for s in samples if s.source_type == "econ_semantic")
 
-    stats = {
+    stats: Dict[str, Any] = {
         "total_samples": len(samples),
         "heuristic_count": heuristic_count,
         "econ_semantic_count": econ_semantic_count,
@@ -807,10 +809,10 @@ def build_mixed_training_dataset(
 
     # Count econ/semantic summaries
     if econ_semantic_count > 0:
-        profiles = {}
-        presets = {}
-        pareto_classes = {}
-        urgencies = {}
+        profiles: Dict[str, int] = {}
+        presets: Dict[str, int] = {}
+        pareto_classes: Dict[str, int] = {}
+        urgencies: Dict[str, int] = {}
 
         for s in samples:
             if s.econ_semantic_summary:

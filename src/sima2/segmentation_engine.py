@@ -3,6 +3,7 @@ Config-driven segmentation engine for SIMA-2 rollouts.
 """
 import copy
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.sima2.config import extract_provenance, get_segmentation_config, load_sima2_config
@@ -67,8 +68,8 @@ class SegmentationEngine:
             self.raw_segmentation_config.get("use_neural_segmenter", False) or
             self.segmentation_config.get("use_neural_segmenter", False)
         )
-        self.neural_segmenter = None
-        self.neural_segmenter_checkpoint = None
+        self.neural_segmenter: Optional[Any] = None
+        self.neural_segmenter_checkpoint: Optional[str] = None
         if self.use_neural_segmenter:
             checkpoint_path = (
                 self.raw_segmentation_config.get("neural_segmenter_checkpoint") or
@@ -81,19 +82,19 @@ class SegmentationEngine:
         """Load neural segmenter from checkpoint."""
         try:
             from src.sima2.segmenter_nn import NeuralSegmenter, load_checkpoint
-            import torch
 
-            checkpoint = load_checkpoint(checkpoint_path)
+            checkpoint = load_checkpoint(Path(checkpoint_path))
             config = checkpoint.get("config", {})
 
-            self.neural_segmenter = NeuralSegmenter(
+            segmenter = NeuralSegmenter(
                 in_channels=3,
                 num_primitives=config.get("num_primitives", 10),
                 freeze_encoder=config.get("freeze_encoder", False),
                 seed=config.get("seed", 0),
             )
-            self.neural_segmenter.load_state_dict(checkpoint["model_state_dict"])
-            self.neural_segmenter.eval()
+            segmenter.load_state_dict(checkpoint["model_state_dict"])
+            segmenter.eval()
+            self.neural_segmenter = segmenter
             self.neural_segmenter_checkpoint = checkpoint_path
 
             print(f"Loaded neural segmenter from {checkpoint_path}")
@@ -121,7 +122,7 @@ class SegmentationEngine:
                 detected_prims, episode_id, provenance, rollout_copy.get("metadata", {})
             )
             boundaries = self._boundaries_from_segments(segments)
-            subtask_tags = []
+            subtask_tags: List[SubtaskTag] = []
         else:
             # Compatibility mode: use existing builder
             boundaries, subtask_tags = self.builder.build(rollout_copy)
@@ -198,8 +199,8 @@ class SegmentationEngine:
                     segment_id=seg_id,
                     episode_id=episode_id,
                     label=str(seg_meta.get("label") or "segment"),
-                    start_t=int(seg_meta.get("start")),
-                    end_t=int(seg_meta.get("end")),
+                    start_t=int(seg_meta.get("start") or 0),
+                    end_t=int(seg_meta.get("end") or 0),
                     outcome=outcome,
                     confidence=0.9,
                     metadata=seg_metadata,

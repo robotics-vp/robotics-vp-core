@@ -2,7 +2,6 @@
 """
 Sanity check for episode feature extraction.
 """
-import numpy as np
 
 from src.envs.dishwashing_env import EpisodeInfoSummary
 from src.config.econ_params import EconParams

@@ -4,7 +4,6 @@ These tests prove that mutation of selection_manifest.json (with everything else
 constant) causes verify_run() to FAIL with an attributable check ID.
 """
 import json
-import pytest
 import tempfile
 from pathlib import Path
 

@@ -3,12 +3,10 @@
 Verifies that regal gates respect patience configuration before triggering
 actions (noop/warn/clamp).
 """
-import pytest
-from typing import Dict, Any, Optional, List
+from typing import List
 
 from src.contracts.schemas import (
     RegalGatesV1,
-    RegalReportV1,
     LedgerRegalV1,
     SemanticUpdatePlanV1,
     TaskGraphOp,
@@ -19,12 +17,10 @@ from src.contracts.schemas import (
 )
 from src.representation.homeostasis import SignalBundle, ControlSignal, SignalType
 from src.regal.regal_evaluator import (
-    evaluate_regals,
     SpecGuardianRegal,
 )
 from src.orchestrator.homeostatic_plan_writer import (
     check_gates,
-    build_signal_bundle_for_plan,
 )
 
 

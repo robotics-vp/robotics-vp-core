@@ -114,7 +114,7 @@ def run_demo(
             print("Synthetic tracks generated.")
 
     if verbose:
-        print(f"\nSceneTracks summary:")
+        print("\nSceneTracks summary:")
         print(f"  Positions shape: {tracks_data['positions'].shape}")
         print(f"  Orientations shape: {tracks_data['orientations'].shape}")
         print(f"  Track IDs: {tracks_data['track_ids']}")
@@ -133,7 +133,7 @@ def run_demo(
     result = adapter.reconstruct_from_tracks(tracks_data)
 
     if verbose:
-        print(f"\nReconstruction result:")
+        print("\nReconstruction result:")
         print(f"  Scene spec: {len(result.scene_spec.parts)} parts")
         print(f"  Confidence score: {result.confidence_score:.3f}")
         print(f"  Track mapping: {result.track_mapping}")
@@ -199,7 +199,7 @@ def run_demo(
             break
 
     if verbose:
-        print(f"\nReplay complete:")
+        print("\nReplay complete:")
         print(f"  Total reward: {total_reward:.2f}")
         print(f"  Steps executed: {len(trajectory_log)}")
 
@@ -227,7 +227,7 @@ def run_demo(
     }
 
     if verbose:
-        print(f"Report summary:")
+        print("Report summary:")
         print(f"  Parts reconstructed: {replay_report['reconstruction']['num_parts']}")
         print(f"  Confidence: {replay_report['reconstruction']['confidence_score']:.3f}")
         print(f"  Total replay reward: {replay_report['replay']['total_reward']:.2f}")

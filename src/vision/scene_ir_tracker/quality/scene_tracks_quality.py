@@ -58,18 +58,17 @@ def compute_scene_tracks_quality(
 ) -> SceneTracksQuality:
     """Compute SceneTracks quality metrics from serialized data."""
     cfg = config or SceneTracksQualityConfig()
-    if not hasattr(scene_tracks, "poses_t"):
-        scene_tracks = deserialize_scene_tracks_v1(scene_tracks)
+    tracks: Any = scene_tracks if hasattr(scene_tracks, "poses_t") else deserialize_scene_tracks_v1(scene_tracks)
 
-    poses_t = np.asarray(scene_tracks.poses_t)
-    poses_R = np.asarray(scene_tracks.poses_R)
-    visibility = getattr(scene_tracks, "visibility", None)
+    poses_t = np.asarray(tracks.poses_t)
+    poses_R = np.asarray(tracks.poses_R)
+    visibility = getattr(tracks, "visibility", None)
     if visibility is None:
         visibility = np.ones((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
     else:
         visibility = np.asarray(visibility)
 
-    track_ids = [str(tid) for tid in list(getattr(scene_tracks, "track_ids", []))]
+    track_ids = [str(tid) for tid in list(getattr(tracks, "track_ids", []))]
     if poses_t.size == 0 or not track_ids:
         return SceneTracksQuality(
             quality_score=0.0,

@@ -12,11 +12,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

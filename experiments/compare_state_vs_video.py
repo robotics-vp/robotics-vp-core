@@ -14,7 +14,6 @@ import os
 import sys
 import subprocess
 import pandas as pd
-import numpy as np
 
 def run_training(config_path, episodes, log_suffix):
     """Run training and return log path."""
@@ -34,7 +33,7 @@ def run_training(config_path, episodes, log_suffix):
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"❌ Training failed:")
+        print("❌ Training failed:")
         print(result.stderr)
         return None
 
@@ -78,7 +77,7 @@ def generate_comparison_table(state_summary, video_summary):
     print("\n" + "="*80)
     print("STATE VS VIDEO COMPARISON")
     print("="*80)
-    print(f"Analysis window: Last 20 episodes")
+    print("Analysis window: Last 20 episodes")
     print("-"*80)
     print(f"{'Metric':<30} {'State Mode':<25} {'Video Mode':<25}")
     print("-"*80)
@@ -109,7 +108,7 @@ def generate_markdown_summary(state_summary, video_summary, output_path):
         f.write("# State vs Video Mode Comparison\n\n")
         f.write(f"**Date**: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         f.write(f"**Episodes**: {state_summary['episodes']} (each mode)\n\n")
-        f.write(f"**Analysis Window**: Last 20 episodes\n\n")
+        f.write("**Analysis Window**: Last 20 episodes\n\n")
 
         f.write("## Summary\n\n")
         f.write("| Metric | State Mode | Video Mode |\n")

@@ -20,6 +20,8 @@ import numpy as np
 from collections import deque
 import random
 
+Transition = tuple[Any, Any, Any, Any, Any, float]
+
 
 class Actor(nn.Module):
     """
@@ -154,9 +156,9 @@ class NoveltyReplayBuffer:
         sampling_log_interval: int = 50,
     ):
         self.capacity = capacity
-        self.buffer = deque(maxlen=capacity)
-        self.priorities = deque(maxlen=capacity)
-        self.transition_metadata = deque(maxlen=capacity)
+        self.buffer: deque[Transition] = deque(maxlen=capacity)
+        self.priorities: deque[float] = deque(maxlen=capacity)
+        self.transition_metadata: deque[dict[str, Any]] = deque(maxlen=capacity)
         self.dispatch_by_episode: Dict[str, Dict[str, Any]] = {}
         self.receipt_feedback_by_episode: Dict[str, Dict[str, Any]] = {}
         self.last_sampling_artifact: Optional[Dict[str, Any]] = None
@@ -188,7 +190,7 @@ class NoveltyReplayBuffer:
         """Add transition to buffer."""
         self.buffer.append((obs, action, reward, next_obs, done, novelty))
         self.priorities.append(1.0)  # Initial priority (will update)
-        transition_meta = {
+        transition_meta: dict[str, Any] = {
             "episode_id": str(episode_id or ""),
             "queue_dispatch": dict(queue_dispatch or {}),
             "source_domain": source_domain,
@@ -198,10 +200,13 @@ class NoveltyReplayBuffer:
             "metadata": dict(metadata or {}),
         }
         self.transition_metadata.append(transition_meta)
-        if transition_meta["episode_id"] and transition_meta["queue_dispatch"]:
-            self.dispatch_by_episode[transition_meta["episode_id"]] = dict(transition_meta["queue_dispatch"])
-        if transition_meta["episode_id"] and transition_meta["receipt_feedback"]:
-            self.receipt_feedback_by_episode[transition_meta["episode_id"]] = dict(transition_meta["receipt_feedback"])
+        episode_key = str(transition_meta.get("episode_id", "") or "")
+        queue_payload = transition_meta.get("queue_dispatch")
+        receipt_payload = transition_meta.get("receipt_feedback")
+        if episode_key and isinstance(queue_payload, Mapping) and queue_payload:
+            self.dispatch_by_episode[episode_key] = dict(queue_payload)
+        if episode_key and isinstance(receipt_payload, Mapping) and receipt_payload:
+            self.receipt_feedback_by_episode[episode_key] = dict(receipt_payload)
 
     def sample(self, batch_size, use_prioritization=True, return_metadata=False):
         """
@@ -727,7 +732,7 @@ class SACAgent:
 
 
 def _condition_batch_from_metadata(sample_metadata) -> Optional[np.ndarray]:
-    rows = []
+    rows: list[Optional[np.ndarray]] = []
     max_dim = 0
     for metadata in sample_metadata:
         condition = metadata.get("condition_vector")
@@ -747,16 +752,16 @@ def _condition_batch_from_metadata(sample_metadata) -> Optional[np.ndarray]:
         max_dim = max(max_dim, int(values.shape[0]))
     if max_dim <= 0:
         return None
-    padded = []
-    for values in rows:
-        if values is None:
+    padded: list[np.ndarray] = []
+    for row_values in rows:
+        if row_values is None:
             padded.append(np.zeros(max_dim, dtype=np.float32))
             continue
-        if values.shape[0] < max_dim:
-            values = np.pad(values, (0, max_dim - values.shape[0]))
-        elif values.shape[0] > max_dim:
-            values = values[:max_dim]
-        padded.append(values.astype(np.float32))
+        if row_values.shape[0] < max_dim:
+            row_values = np.pad(row_values, (0, max_dim - row_values.shape[0]))
+        elif row_values.shape[0] > max_dim:
+            row_values = row_values[:max_dim]
+        padded.append(row_values.astype(np.float32))
     return np.stack(padded, axis=0)
 
 

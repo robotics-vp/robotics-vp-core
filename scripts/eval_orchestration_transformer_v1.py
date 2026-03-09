@@ -19,22 +19,17 @@ from collections import defaultdict
 import numpy as np
 import torch
 
-from src.orchestrator.orchestration_transformer import TOOL_NAMES
 
 # Import from v1 curriculum script
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from train_orchestration_transformer_v1_curriculum import (
     OrchestrationTransformerWithAuxHeads,
-    PROFILE_TO_IDX, IDX_TO_PROFILE,
-    PRESET_TO_IDX, IDX_TO_PRESET,
-    URGENCY_TO_IDX, IDX_TO_URGENCY,
-    PARETO_TO_IDX, IDX_TO_PARETO,
+    IDX_TO_PROFILE,
     extract_auxiliary_labels,
 )
 
 from src.orchestrator.training_dataset import (
-    load_dataset,
     dataset_to_tensors,
     OrchestrationSample,
     EconSemanticDecisionSummary,

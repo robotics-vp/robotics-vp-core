@@ -102,7 +102,7 @@ def main():
         assert prop.source_primitive_id, "source_primitive_id required"
         assert isinstance(prop.proposed_changes, dict), "proposed_changes must be dict"
         assert prop.rationale, "rationale required"
-    print(f"[TEST 3 PASS] All proposals have required fields")
+    print("[TEST 3 PASS] All proposals have required fields")
 
     # Test 4: Constraint compliance
     valid_proposals = engine.validate_proposals(proposals)
@@ -168,7 +168,7 @@ def main():
     json_1 = json.dumps([p.to_dict() for p in proposals])
     json_2 = json.dumps([p.to_dict() for p in proposals_2])
     assert json_1 == json_2, "Determinism check: proposals must be identical"
-    print(f"[TEST 10 PASS] Determinism validated (stable ordering and content)")
+    print("[TEST 10 PASS] Determinism validated (stable ordering and content)")
 
     print("[smoke_test_ontology_update_engine] All tests passed!")
 

@@ -48,8 +48,8 @@ def _deserialize_list(records: List[Dict], model: Type[T]) -> List[T]:
     return [model(**rec) for rec in records]
 
 
-def _serialize(model_obj) -> Dict:
-    if is_dataclass(model_obj):
+def _serialize(model_obj: Any) -> Dict[str, Any]:
+    if is_dataclass(model_obj) and not isinstance(model_obj, type):
         return asdict(model_obj)
     if hasattr(model_obj, "dict"):
         return model_obj.dict()
@@ -110,7 +110,11 @@ class OntologyStore:
         ordered = [existing[k] for k in sorted(existing.keys())]
         _write_jsonl(self.paths["datapacks"], (_serialize(d) for d in ordered))
 
-    def list_datapacks(self, task_id: Optional[str] = None, filters: Dict = None) -> List[Datapack]:
+    def list_datapacks(
+        self,
+        task_id: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Datapack]:
         records = _load_jsonl(self.paths["datapacks"])
         datapacks = _deserialize_list(records, Datapack)
         filtered = []
@@ -132,7 +136,11 @@ class OntologyStore:
     def get_episode(self, episode_id: str) -> Optional[Episode]:
         return next((e for e in self.list_episodes() if e.episode_id == episode_id), None)
 
-    def list_episodes(self, task_id: Optional[str] = None, filters: Dict = None) -> List[Episode]:
+    def list_episodes(
+        self,
+        task_id: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Episode]:
         records = _load_jsonl(self.paths["episodes"])
         episodes = _deserialize_list(records, Episode)
         filtered = []
@@ -226,7 +234,9 @@ class OntologyStore:
         eval_metrics: Mapping[str, Any],
     ) -> None:
         records = _load_jsonl(self.paths["scenarios"])
-        existing = {r.get("scenario_id"): r for r in records if r.get("scenario_id")}
+        existing: Dict[str, Dict[str, Any]] = {
+            str(r.get("scenario_id")): r for r in records if r.get("scenario_id")
+        }
 
         record: Dict[str, Any] = {
             "scenario_id": scenario.scenario_id,
@@ -253,7 +263,7 @@ class OntologyStore:
         return _load_jsonl(self.paths["scenarios"])
 
     # Helpers
-    def _matches_filters(self, obj, filters: Dict) -> bool:
+    def _matches_filters(self, obj: Any, filters: Dict[str, Any]) -> bool:
         for key, value in filters.items():
             if getattr(obj, key, None) != value:
                 return False

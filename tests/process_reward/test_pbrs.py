@@ -13,10 +13,9 @@ import pytest
 
 from src.process_reward.shaping import (
     compute_pbrs,
-    verify_pbrs_telescoping,
     PBRSWrapper,
 )
-from src.process_reward.schemas import ProcessRewardConfig, FusionDiagnostics
+from src.process_reward.schemas import ProcessRewardConfig
 
 
 class TestPBRSTelescoping:

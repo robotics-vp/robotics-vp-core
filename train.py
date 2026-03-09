@@ -1,6 +1,7 @@
 # train.py
-import os, math, yaml, random, numpy as np
-from pathlib import Path
+import yaml
+import random
+import numpy as np
 
 from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
 from src.economics.mpl import mpl
@@ -48,7 +49,8 @@ def target_schedule(cfg, t_episode):
 
 def run():
     cfg = load_config()
-    random.seed(cfg["seed"]); np.random.seed(cfg["seed"])
+    random.seed(cfg["seed"])
+    np.random.seed(cfg["seed"])
 
     # Human benchmarks
     mp_h = float(cfg["human"]["mpl_units_per_hour"])
@@ -94,8 +96,6 @@ def run():
     for ep in range(episodes):
         obs = env.reset()
         info_hist = []
-        last_completed = 0
-        last_time_s = 0.0
         mp_r_prev = 1e-8  # avoid div by zero in first reward
 
         # episode roll

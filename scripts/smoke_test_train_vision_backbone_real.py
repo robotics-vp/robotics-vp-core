@@ -8,7 +8,6 @@ Assertions:
 - Checkpoint is created and frozen
 - Deterministic with fixed seed
 """
-import json
 import sys
 import tempfile
 from pathlib import Path

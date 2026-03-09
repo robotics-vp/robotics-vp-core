@@ -124,7 +124,7 @@ def print_run_summary(run_data: dict, label: str):
     print(f"{label}")
     print(f"{'='*60}")
 
-    print(f"Config:")
+    print("Config:")
     print(f"  Episodes: {config.get('episodes', 'N/A')}")
     print(f"  Objective reward: {config.get('use_objective_reward', False)}")
     print(f"  Objective preset: {config.get('objective_preset', 'N/A')}")
@@ -134,7 +134,7 @@ def print_run_summary(run_data: dict, label: str):
         stats = compute_trajectory_stats(history)
         pareto_pos = compute_pareto_position(stats)
 
-        print(f"\nTrajectory Statistics:")
+        print("\nTrajectory Statistics:")
         print(f"  MPL: {stats['mpl']['initial']:.2f} -> {stats['mpl']['final']:.2f} (trend: {stats['mpl']['trend']:+.2f})")
         print(f"  Error: {stats['error_rate']['initial']:.4f} -> {stats['error_rate']['final']:.4f} (trend: {stats['error_rate']['trend']:+.4f})")
         print(f"  Energy: {stats['energy_Wh']['initial']:.2f} -> {stats['energy_Wh']['final']:.2f} (trend: {stats['energy_Wh']['trend']:+.2f})")
@@ -143,7 +143,7 @@ def print_run_summary(run_data: dict, label: str):
 
         # Show reward decomposition if available
         if history and "r_mpl_total" in history[-1]:
-            print(f"\nFinal Episode Reward Decomposition:")
+            print("\nFinal Episode Reward Decomposition:")
             last = history[-1]
             print(f"  r_mpl: {last.get('r_mpl_total', 0):.3f}")
             print(f"  r_error: {last.get('r_error_total', 0):.3f}")
@@ -152,7 +152,7 @@ def print_run_summary(run_data: dict, label: str):
             print(f"  r_novelty: {last.get('r_novelty_total', 0):.3f}")
 
     if summary:
-        print(f"\nSummary Stats:")
+        print("\nSummary Stats:")
         print(f"  Mean legacy reward: {summary.get('mean_legacy_reward', 0):.3f}")
         print(f"  Mean objective reward: {summary.get('mean_objective_reward', 0):.3f}")
 
@@ -172,21 +172,21 @@ def compare_runs(legacy_run: dict, objective_run: dict):
 
     # MPL comparison
     mpl_diff = objective_stats["mpl"]["final"] - legacy_stats["mpl"]["final"]
-    print(f"\nMPL Final:")
+    print("\nMPL Final:")
     print(f"  Legacy: {legacy_stats['mpl']['final']:.2f}")
     print(f"  Objective: {objective_stats['mpl']['final']:.2f}")
     print(f"  Difference: {mpl_diff:+.2f}")
 
     # Error comparison
     error_diff = objective_stats["error_rate"]["final"] - legacy_stats["error_rate"]["final"]
-    print(f"\nError Rate Final:")
+    print("\nError Rate Final:")
     print(f"  Legacy: {legacy_stats['error_rate']['final']:.4f}")
     print(f"  Objective: {objective_stats['error_rate']['final']:.4f}")
     print(f"  Difference: {error_diff:+.4f}")
 
     # Energy comparison
     energy_diff = objective_stats["energy_Wh"]["final"] - legacy_stats["energy_Wh"]["final"]
-    print(f"\nEnergy (Wh) Final:")
+    print("\nEnergy (Wh) Final:")
     print(f"  Legacy: {legacy_stats['energy_Wh']['final']:.2f}")
     print(f"  Objective: {objective_stats['energy_Wh']['final']:.2f}")
     print(f"  Difference: {energy_diff:+.2f}")
@@ -194,14 +194,14 @@ def compare_runs(legacy_run: dict, objective_run: dict):
     # Pareto position comparison
     legacy_pareto = compute_pareto_position(legacy_stats)
     objective_pareto = compute_pareto_position(objective_stats)
-    print(f"\nPareto Position:")
+    print("\nPareto Position:")
     print(f"  Legacy: {legacy_pareto}")
     print(f"  Objective: {objective_pareto}")
 
     if legacy_pareto != objective_pareto:
-        print(f"  -> Objective-based reward pushes towards DIFFERENT Pareto point!")
+        print("  -> Objective-based reward pushes towards DIFFERENT Pareto point!")
     else:
-        print(f"  -> Both converge to similar Pareto region")
+        print("  -> Both converge to similar Pareto region")
 
     # Verdict
     print(f"\n{'='*60}")

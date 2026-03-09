@@ -32,13 +32,11 @@ import torch.nn as nn
 import torch.optim as optim
 
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
-from src.valuation.trust_net import TrustNet
 from src.valuation.w_econ_lattice import WEconLattice
 from src.config.internal_profile import get_internal_experiment_profile
 from src.controllers.synth_lambda_controller import (
     load_controller as load_lambda_controller,
-    build_feature_vector,
-    compute_meta_objective
+    build_feature_vector
 )
 from src.controllers.synthetic_weight_controller import SyntheticWeightController
 
@@ -363,7 +361,7 @@ def train_actor_with_controller(
     history = {'loss': [], 'action_mse': [], 'lambda_synth': []}
     lambda_trajectory = []
 
-    print(f"Starting adaptive training with lambda controller")
+    print("Starting adaptive training with lambda controller")
     print(f"Initial λ_synth = {current_lambda:.4f}")
     print(f"Objective vector: {objective_vector}")
 
@@ -595,7 +593,7 @@ def main():
     )
 
     baseline_eval = evaluate_actor(baseline_actor, real_test, device)
-    print(f"\nBaseline evaluation:")
+    print("\nBaseline evaluation:")
     print(f"  Action MSE: {baseline_eval['action_mse']:.6f} +/- {baseline_eval['action_mse_std']:.6f}")
 
     # Train augmented (real + synthetic)
@@ -659,7 +657,7 @@ def main():
             )
 
         augmented_eval = evaluate_actor(augmented_actor, real_test, device)
-        print(f"\nAugmented evaluation:")
+        print("\nAugmented evaluation:")
         print(f"  Action MSE: {augmented_eval['action_mse']:.6f} +/- {augmented_eval['action_mse_std']:.6f}")
 
     # Comparison

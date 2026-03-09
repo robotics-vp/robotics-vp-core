@@ -9,7 +9,6 @@ import pybullet as p
 
 from src.envs.drawer_vase_physics_env import DrawerVasePhysicsEnv, DrawerVaseConfig, summarize_drawer_vase_episode
 from src.envs.drawer_vase_arm_env import DrawerVaseArmEnv
-from src.envs.dishwashing_arm_env import DishwashingArmEnv
 from policies.scripted.drawer_open_avoid_vase import DrawerOpenAvoidVasePolicy
 from src.controllers.energy_profile import EnergyProfile, apply_energy_profile_to_action
 

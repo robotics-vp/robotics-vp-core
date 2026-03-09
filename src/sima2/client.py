@@ -8,7 +8,7 @@ Supports task library templates: success, failure, recovery, mixed
 """
 from dataclasses import dataclass
 from dataclasses import field
-from typing import Any, Dict, Iterable, Iterator, Optional
+from typing import Any, Dict, Iterator, Optional
 import itertools
 import json
 
@@ -25,7 +25,6 @@ def _gen_drawer_open_success(task_id: str, idx: int, seed: int) -> tuple[list, l
         {"timestep": 10, "object": "drawer", "action": "release", "risk": "low", "gripper_width": 0.08, "ee_velocity": 0.0, "contact": False},
     ]
     events = [{"timestep": p["timestep"], "event_type": "primitive", "payload": p} for p in prims]
-    robot_state = {"gripper_open": True, "joint_positions": [0.0] * 7, "ee_pose": [0.5, 0.0, 0.3, 0, 0, 0]}
     return prims, events, {"outcome": "success", "template": "success", "objects_present": ["drawer", "drawer_handle"]}
 
 
@@ -39,7 +38,6 @@ def _gen_drawer_open_failure(task_id: str, idx: int, seed: int) -> tuple[list, l
     ]
     events = [{"timestep": p["timestep"], "event_type": "primitive", "payload": p} for p in prims]
     events.append({"timestep": 8, "event_type": "failure", "payload": {"reason": "grasp_slip", "severity": "high"}})
-    robot_state = {"gripper_open": True, "joint_positions": [0.0] * 7, "ee_pose": [0.5, 0.0, 0.3, 0, 0, 0]}
     return prims, events, {"outcome": "failure", "template": "failure", "failure_mode": "grasp_slip", "objects_present": ["drawer", "drawer_handle"]}
 
 
@@ -58,7 +56,6 @@ def _gen_drawer_open_recovery(task_id: str, idx: int, seed: int) -> tuple[list, 
     events.append({"timestep": 8, "event_type": "failure", "payload": {"reason": "grasp_slip", "severity": "medium"}})
     events.append({"timestep": 10, "event_type": "recovery_start", "payload": {"strategy": "regrasp"}})
     events.append({"timestep": 17, "event_type": "recovery_complete", "payload": {"success": True}})
-    robot_state = {"gripper_open": True, "joint_positions": [0.0] * 7, "ee_pose": [0.5, 0.0, 0.3, 0, 0, 0]}
     return prims, events, {"outcome": "recovered", "template": "recovery", "failure_mode": "grasp_slip", "recovery_strategy": "regrasp", "objects_present": ["drawer", "drawer_handle"]}
 
 
@@ -72,7 +69,6 @@ def _gen_dish_place_success(task_id: str, idx: int, seed: int) -> tuple[list, li
         {"timestep": 15, "object": "rack", "action": "place", "risk": "medium", "gripper_width": 0.08, "ee_velocity": 0.0, "contact": False},
     ]
     events = [{"timestep": p["timestep"], "event_type": "primitive", "payload": p} for p in prims]
-    robot_state = {"gripper_open": True, "joint_positions": [0.0] * 7, "ee_pose": [0.4, 0.2, 0.5, 0, 0, 0]}
     return prims, events, {"outcome": "success", "template": "success", "objects_present": ["dish", "rack"]}
 
 
@@ -86,7 +82,6 @@ def _gen_dish_place_failure(task_id: str, idx: int, seed: int) -> tuple[list, li
     ]
     events = [{"timestep": p["timestep"], "event_type": "primitive", "payload": p} for p in prims]
     events.append({"timestep": 9, "event_type": "failure", "payload": {"reason": "drop", "severity": "high", "damage_cost": 2.5}})
-    robot_state = {"gripper_open": True, "joint_positions": [0.0] * 7, "ee_pose": [0.4, 0.2, 0.5, 0, 0, 0]}
     return prims, events, {"outcome": "failure", "template": "failure", "failure_mode": "drop", "objects_present": ["dish", "rack"]}
 
 
@@ -105,7 +100,6 @@ def _gen_dish_place_recovery(task_id: str, idx: int, seed: int) -> tuple[list, l
     events.append({"timestep": 9, "event_type": "failure", "payload": {"reason": "drop", "severity": "medium"}})
     events.append({"timestep": 12, "event_type": "recovery_start", "payload": {"strategy": "pick_from_drop"}})
     events.append({"timestep": 20, "event_type": "recovery_complete", "payload": {"success": True}})
-    robot_state = {"gripper_open": True, "joint_positions": [0.0] * 7, "ee_pose": [0.4, 0.2, 0.5, 0, 0, 0]}
     return prims, events, {"outcome": "recovered", "template": "recovery", "failure_mode": "drop", "recovery_strategy": "pick_from_drop", "objects_present": ["dish", "rack"]}
 
 
@@ -119,7 +113,6 @@ def _gen_wipe_surface_success(task_id: str, idx: int, seed: int) -> tuple[list, 
         {"timestep": 20, "object": "sponge", "action": "release", "risk": "low", "gripper_width": 0.08, "ee_velocity": 0.0, "contact": False},
     ]
     events = [{"timestep": p["timestep"], "event_type": "primitive", "payload": p} for p in prims]
-    robot_state = {"gripper_open": True, "joint_positions": [0.0] * 7, "ee_pose": [0.3, 0.0, 0.2, 0, 0, 0]}
     return prims, events, {"outcome": "success", "template": "success", "objects_present": ["sponge", "surface"]}
 
 
@@ -142,7 +135,6 @@ def _gen_mixed_rollout(task_id: str, idx: int, seed: int) -> tuple[list, list, d
     all_events.append({"timestep": offset + 9, "event_type": "failure", "payload": {"reason": "drop"}})
     all_events.append({"timestep": offset + 12, "event_type": "recovery_start", "payload": {"strategy": "pick_from_drop"}})
     all_events.append({"timestep": offset + 16, "event_type": "recovery_complete", "payload": {"success": True}})
-    robot_state = {"gripper_open": True, "joint_positions": [0.0] * 7, "ee_pose": [0.3, 0.0, 0.3, 0, 0, 0]}
     return all_prims, all_events, {"outcome": "mixed_success", "template": "mixed", "subtasks": ["drawer_open_success", "dish_place_recovery"], "objects_present": ["drawer", "drawer_handle", "dish", "rack"]}
 
 

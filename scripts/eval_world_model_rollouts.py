@@ -25,7 +25,6 @@ import argparse
 import json
 import numpy as np
 import torch
-import torch.nn as nn
 
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from scripts.train_latent_diffusion import LatentDynamicsModel

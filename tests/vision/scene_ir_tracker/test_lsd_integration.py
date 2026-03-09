@@ -1,6 +1,5 @@
 """Test LSD backend integration with scene IR tracker."""
 import numpy as np
-import pytest
 
 
 def test_scene_tracker_config_in_lsd_config():

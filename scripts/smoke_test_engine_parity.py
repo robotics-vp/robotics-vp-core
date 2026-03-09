@@ -11,13 +11,11 @@ Verifies:
 """
 
 import inspect
-from typing import get_type_hints
 
 # Physics backends
 from src.envs.physics.base_engine import PhysicsBackend
 from src.envs.physics.pybullet_backend import PyBulletBackend
 from src.envs.physics.isaac_backend import IsaacBackend
-from src.envs.physics.backend_factory import make_backend
 
 # Datapack and orchestrator integration
 from src.envs.dishwashing_env import EpisodeInfoSummary

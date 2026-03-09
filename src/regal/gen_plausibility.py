@@ -24,9 +24,11 @@ class RegalGenPlausibilityNode(RegalNode):
         self.thresholds = thresholds or PlausibilityThresholds()
 
     def evaluate(self, context: Mapping[str, object]) -> RegalReport:
-        map_first_quality = float(context.get("map_first_quality_score", 0.0) or 0.0)
-        semantic_disagreement = float(context.get("semantic_disagreement_vla_vs_map", 1.0) or 1.0)
-        vla_coverage = float(context.get("vla_evidence_coverage", 0.0) or 0.0)
+        map_first_quality = _as_float(context.get("map_first_quality_score"), 0.0)
+        semantic_disagreement = _as_float(
+            context.get("semantic_disagreement_vla_vs_map"), 1.0
+        )
+        vla_coverage = _as_float(context.get("vla_evidence_coverage"), 0.0)
 
         plausibility = (
             0.45 * map_first_quality
@@ -71,3 +73,18 @@ class RegalGenPlausibilityNode(RegalNode):
             },
             confidence=0.85,
         )
+
+
+def _as_float(value: object, default: float) -> float:
+    try:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            return float(value)
+        return default
+    except (TypeError, ValueError):
+        return default

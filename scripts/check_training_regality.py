@@ -11,7 +11,6 @@ Exit code 0: All scripts compliant
 Exit code 1: Non-compliant scripts found
 """
 import argparse
-import ast
 import re
 import sys
 from pathlib import Path
@@ -79,7 +78,7 @@ def check_script_compliance(
     
     # Check migration backlog (pending)
     if migration_backlog and script_name in migration_backlog:
-        return True, f"In migration backlog (pending wrapper)"
+        return True, "In migration backlog (pending wrapper)"
     
     # Read script content
     try:

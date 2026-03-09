@@ -13,7 +13,6 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from datetime import datetime
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -99,7 +98,6 @@ class TestRegalityEndToEndSmoke:
     def test_run_manifest_module_exists(self):
         """RunManifest module can be imported."""
         from src.valuation.run_manifest import (
-            RunManifestV1,
             create_run_manifest,
         )
         
@@ -217,7 +215,6 @@ class TestP0MigrationComplete:
     
     def test_no_p0_in_backlog(self):
         """P0 count must be zero."""
-        import json
         backlog_path = ROOT / "scripts" / "TRAINING_MIGRATION_BACKLOG.json"
         
         with open(backlog_path, "r") as f:
@@ -229,7 +226,6 @@ class TestP0MigrationComplete:
     
     def test_migrated_section_has_p0_scripts(self):
         """Migrated section should track P0 completions."""
-        import json
         backlog_path = ROOT / "scripts" / "TRAINING_MIGRATION_BACKLOG.json"
         
         with open(backlog_path, "r") as f:

@@ -228,6 +228,7 @@ class SAM3DObjectsAdapter:
             appearance_latent = rng.randn(self.config.latent_dim).astype(np.float32) * 0.1
 
             # Layout (pose estimation)
+            layout_scale = float(size * depth)
             layout = {
                 "position": [
                     (center_x - 0.5) * depth * 2,  # x in world
@@ -235,16 +236,17 @@ class SAM3DObjectsAdapter:
                     depth,  # z depth
                 ],
                 "rotation": [0.0, 0.0, 0.0, 1.0],  # quaternion (identity)
-                "scale": float(size * depth),
+                "scale": layout_scale,
             }
 
             # Generate synthetic geometry
+            object_scale = layout_scale
             if self.config.output_gaussians:
                 # Gaussian splat representation
                 num_gaussians = 100
                 geometry = {
                     "type": "gaussians",
-                    "means": rng.randn(num_gaussians, 3).astype(np.float32) * layout["scale"],
+                    "means": rng.randn(num_gaussians, 3).astype(np.float32) * object_scale,
                     "scales": np.abs(rng.randn(num_gaussians, 3).astype(np.float32) * 0.1),
                     "rotations": np.tile([0, 0, 0, 1], (num_gaussians, 1)).astype(np.float32),
                     "opacities": np.ones(num_gaussians, dtype=np.float32),
@@ -254,7 +256,7 @@ class SAM3DObjectsAdapter:
                 # Simple mesh representation
                 geometry = {
                     "type": "mesh",
-                    "vertices": rng.randn(100, 3).astype(np.float32) * layout["scale"],
+                    "vertices": rng.randn(100, 3).astype(np.float32) * object_scale,
                     "faces": np.arange(99).reshape(-1, 3).astype(np.int32),
                 }
 

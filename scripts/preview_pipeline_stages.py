@@ -16,7 +16,6 @@ execute actual training or modify Phase B.
 import argparse
 import json
 import os
-from datetime import datetime
 
 
 def main():
@@ -195,7 +194,7 @@ def main():
         iteration = simulate_pipeline_iteration(manager)
         print(f"  Iteration ID: {iteration.iteration_id[:8]}...")
         print(f"  Status: {'Complete' if iteration.is_complete else 'In Progress'}")
-        print(f"  Summary Metrics:")
+        print("  Summary Metrics:")
         for key, value in iteration.summary_metrics.items():
             print(f"    {key}: {value:.4f}")
         print()
@@ -253,7 +252,7 @@ def main():
     print("Next Iteration Preview:")
     next_preview = manager.preview_next_iteration()
     print(f"  Iteration Number: {next_preview['iteration_number']}")
-    print(f"  Suggested Config Adjustments:")
+    print("  Suggested Config Adjustments:")
     for key, value in next_preview["suggested_config"].items():
         if key not in manager.config or manager.config[key] != value:
             print(f"    {key}: {value}")

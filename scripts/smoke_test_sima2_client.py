@@ -2,7 +2,6 @@
 """
 Smoke test for SIMA-2 stub client rollouts.
 """
-import json
 from pathlib import Path
 import sys
 

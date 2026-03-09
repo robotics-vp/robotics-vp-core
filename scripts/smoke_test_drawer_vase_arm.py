@@ -5,7 +5,6 @@ Smoke test for DrawerVaseArmEnv to verify energy metrics are populated.
 import numpy as np
 
 from src.envs.drawer_vase_arm_env import DrawerVaseArmEnv
-from src.envs.dishwashing_env import EpisodeInfoSummary
 from src.envs.dishwashing_env import summarize_episode_info as summarize_dish
 
 

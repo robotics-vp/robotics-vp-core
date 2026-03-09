@@ -26,7 +26,7 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 from src.envs.drawer_vase_physics_env import DrawerVasePhysicsEnv, DrawerVaseConfig
-from src.hrl.skills import SkillID, SkillParams
+from src.hrl.skills import SkillID
 from src.hrl.low_level_policy import LowLevelSkillPolicy, ScriptedSkillPolicy
 from src.hrl.high_level_controller import (
     HighLevelController,
@@ -229,7 +229,7 @@ def evaluate_scripted_hrl(env, pi_l, n_episodes=100):
     mean_clearance = np.mean(clearances)
     mean_energy = np.mean(energy_usages)
 
-    print(f"\n" + "=" * 70)
+    print("\n" + "=" * 70)
     print("SCRIPTED HRL BASELINE RESULTS")
     print("=" * 70)
     print(f"Success Rate: {success_rate:.2%}")

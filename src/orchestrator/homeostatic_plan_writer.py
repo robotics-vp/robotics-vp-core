@@ -8,17 +8,15 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel, ConfigDict
 
 from src.contracts.schemas import (
     SemanticUpdatePlanV1,
     TaskGraphOp,
-    DatapackSelectionConfig,
     PlanOpType,
     ProbeEpiReportV1,
     PlanPolicyConfigV1,
@@ -36,11 +34,7 @@ from src.utils.config_digest import sha256_json
 from src.orchestrator.policy_hooks import (
     EconPlanPolicyProvider,
     RewardIntegrityGuard,
-    DefaultEconPolicyProvider,
-    DefaultRewardIntegrityGuard,
     KnobAwareEconPolicyProvider,
-    KnobAwareRewardIntegrityGuard,
-    build_regime_features,
 )
 from src.contracts.schemas import LedgerRegalV1, KnobPolicyV1
 
@@ -523,7 +517,6 @@ def map_action_to_plan_ops(
         if action == ActionType.NOOP:
             continue
 
-        target_new_weight = None
         task_list = list(weights.keys())
 
         if action in (ActionType.INCREASE_DATA, ActionType.DECREASE_DATA):
@@ -806,7 +799,6 @@ def write_plan(path: str, plan: SemanticUpdatePlanV1) -> str:
 
 
 __all__ = [
-    "PlanFromSignalsConfig",
     "GateStatus",
     "build_signal_bundle_for_plan",
     "check_gates",

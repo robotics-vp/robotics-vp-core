@@ -5,7 +5,6 @@ Useful for generating demo videos or verifying rendering consistency.
 """
 import argparse
 import sys
-import time
 import numpy as np
 from pathlib import Path
 

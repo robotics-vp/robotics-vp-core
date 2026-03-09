@@ -1,12 +1,10 @@
 import sys
 import os
-import json
-from typing import Dict, Any, List
 
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.analytics.econ_correlator import EconCorrelator, TrustEntry
+from src.analytics.econ_correlator import EconCorrelator
 
 def make_dummy_data():
     datapacks = [

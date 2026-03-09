@@ -145,7 +145,7 @@ class ConditionVectorBuilder:
         novelty_tier = overrides.get("novelty_tier")
         # TFD novelty_tier takes precedence if available
         if tfd_cv and tfd_cv.get("novelty_tier") is not None:
-            novelty_tier = int(tfd_cv.get("novelty_tier"))
+            novelty_tier = self._safe_int(tfd_cv.get("novelty_tier"), novelty_tier or 0)
         elif novelty_tier is None:
             novelty_tier = self._novelty_tier_from_context(advisory_context, tags, recap_scores)
 
@@ -229,6 +229,12 @@ class ConditionVectorBuilder:
                 return float(default)
             except Exception:
                 return 0.0
+
+    def _safe_int(self, value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
+        except Exception:
+            return int(default)
 
     def _get_trust(self, sima2_trust: Optional[Any]) -> float:
         if sima2_trust is None:
@@ -358,7 +364,7 @@ class ConditionVectorBuilder:
                 return 0
         return 0
 
-    def _extract_tfd_condition_vector(self, tfd_instruction: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _extract_tfd_condition_vector(self, tfd_instruction: Any) -> Optional[Dict[str, Any]]:
         """
         Extract TFDConditionVector from TFDInstruction or TFDSession and convert to dict.
 
@@ -410,7 +416,7 @@ class ConditionVectorBuilder:
                     return None
         return None
 
-    def _build_tfd_metadata(self, tfd_instruction: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _build_tfd_metadata(self, tfd_instruction: Any) -> Optional[Dict[str, Any]]:
         """
         Build compact TFD metadata for logging in ConditionVector.metadata and episode logs.
 

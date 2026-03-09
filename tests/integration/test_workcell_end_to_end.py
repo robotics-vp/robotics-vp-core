@@ -10,8 +10,6 @@ full integration is broken.
 from __future__ import annotations
 
 import math
-import pytest
-from typing import Any, Dict
 
 
 class TestWorkcellEnvIntegration:
@@ -87,7 +85,7 @@ class TestWorkcellEnvIntegration:
 
     def test_difficulty_features_integration(self) -> None:
         """Test: config -> difficulty features -> composite score."""
-        from src.envs.workcell_env.config import WorkcellEnvConfig, PRESETS
+        from src.envs.workcell_env.config import PRESETS
         from src.envs.workcell_env.difficulty import compute_difficulty_features
 
         # Test all presets produce valid difficulty scores

@@ -124,13 +124,13 @@ def main(runner=None):
     high_trust_threshold = 0.5
     high_trust_syn = (syn_trust >= high_trust_threshold).sum()
     print(f"\nHigh-trust synthetic episodes (>={high_trust_threshold}): {high_trust_syn}/{len(syn_trust)}")
-    print(f"  These are candidates for policy augmentation")
+    print("  These are candidates for policy augmentation")
 
     # Low-trust episodes to avoid
     low_trust_threshold = 0.3
     low_trust_syn = (syn_trust < low_trust_threshold).sum()
     print(f"\nLow-trust synthetic episodes (<{low_trust_threshold}): {low_trust_syn}/{len(syn_trust)}")
-    print(f"  These should be heavily downweighted or dropped")
+    print("  These should be heavily downweighted or dropped")
 
     # Save analysis report
     report = {
@@ -151,7 +151,7 @@ def main(runner=None):
     os.makedirs('results', exist_ok=True)
     with open('results/trust_net_analysis.json', 'w') as f:
         json.dump(report, f, indent=2)
-    print(f"\nSaved analysis to results/trust_net_analysis.json")
+    print("\nSaved analysis to results/trust_net_analysis.json")
 
     if runner:
         runner.update_step(100)  # Training steps approximate

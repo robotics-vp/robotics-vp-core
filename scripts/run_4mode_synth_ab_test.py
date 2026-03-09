@@ -536,7 +536,7 @@ def run_4mode_ab_test():
 
     with open('results/4mode_ab_test.json', 'w') as f:
         json.dump(output, f, indent=2)
-    print(f"\nSaved results to results/4mode_ab_test.json")
+    print("\nSaved results to results/4mode_ab_test.json")
 
     return results, baseline_mse
 

@@ -13,7 +13,6 @@ import json
 import numpy as np
 import torch
 
-from src.observation.condition_vector_builder import ConditionVectorBuilder
 from src.observation.adapter import ObservationAdapter
 from src.vision.policy_observation_builder import PolicyObservationBuilder
 from src.vision.interfaces import VisionFrame, VisionLatent

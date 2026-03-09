@@ -113,7 +113,7 @@ def test_stage1_pipeline():
         print("\n" + "=" * 70)
         print("Stage 1 Pipeline Smoke Test: PASSED")
         print("=" * 70)
-        print(f"Summary:")
+        print("Summary:")
         print(f"  Videos processed: {stats['total_videos']}")
         print(f"  Datapacks created: {stats['total_datapacks']}")
         print(f"  Tier distribution: {stats['tier_distribution']}")

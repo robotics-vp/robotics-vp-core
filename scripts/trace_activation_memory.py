@@ -3,7 +3,6 @@
 Trace activation memory footprint for Stage 6 models.
 Runs dummy forward/backward passes and reports peak memory usage.
 """
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -16,11 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.utils.gpu_env import get_gpu_memory_info, clear_gpu_cache
+from src.utils.gpu_env import clear_gpu_cache
 from src.vision.regnet_backbone import RegNetBackbone
 from src.vision.spatial_rnn import SpatialRNN
-from src.ontology.sima2_segmenter import SIMA2Segmenter
-from src.rl.hydra_heads import HydraPolicy
 
 def trace_model(name, model_fn, input_fn, device="cuda"):
     print(f"\n--- Tracing {name} ---")

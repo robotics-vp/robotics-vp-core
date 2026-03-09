@@ -296,14 +296,14 @@ def train_latent_dynamics(
             action_dim=action_dim,
             hidden_dim=hidden_dim,
         ).to(device)
-        print(f"Model: LatentDynamicsModel (MLP)")
+        print("Model: LatentDynamicsModel (MLP)")
     elif model_type == 'transformer':
         model = TemporalTransformer(
             latent_dim=latent_dim,
             action_dim=action_dim,
             hidden_dim=hidden_dim,
         ).to(device)
-        print(f"Model: TemporalTransformer")
+        print("Model: TemporalTransformer")
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -474,14 +474,14 @@ def main(runner=None):
     print("\n" + "="*60)
     print("Next steps:")
     print("="*60)
-    print(f"1. Sample synthetic z_V trajectories:")
-    print(f"   python scripts/sample_zv_rollouts.py \\")
+    print("1. Sample synthetic z_V trajectories:")
+    print("   python scripts/sample_zv_rollouts.py \\")
     print(f"     --model {save_path} \\")
-    print(f"     --samples 50")
+    print("     --samples 50")
     print()
     print("2. Run ΔMPL/novelty valuation on synthetic data:")
-    print(f"   python scripts/validate_dmpl_novelty.py \\")
-    print(f"     --synthetic data/synthetic_zv_rollouts.npz")
+    print("   python scripts/validate_dmpl_novelty.py \\")
+    print("     --synthetic data/synthetic_zv_rollouts.npz")
     print("="*60)
 
 

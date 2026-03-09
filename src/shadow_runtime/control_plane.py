@@ -139,7 +139,7 @@ def run_shadow_control_plane(
     sidecar_dir = output_root / "ontology_sidecars"
     ontology_store = OntologyStore(root_dir=str(ontology_root))
 
-    artifact_paths = {
+    artifact_paths: Dict[str, str] = {
         "objective_tensor": str(output_root / "objective_tensor.json"),
         "constraint_set": str(output_root / "constraint_set.json"),
         "constraint_flags": str(output_root / "constraint_flags.json"),
@@ -159,22 +159,22 @@ def run_shadow_control_plane(
     _reset_output_files([artifact_paths["pricing_ticks"], artifact_paths["value_ledger"]])
     ledger = ValueLedger(artifact_paths["value_ledger"])
 
-    objective_payload = {
+    objective_payload: Dict[str, Any] = {
         "run_id": run_id,
         "objective_profile_id": contract_profile.profile_id,
         "episodes": [],
         "windows": [],
     }
-    constraint_payload = {"run_id": run_id, "episodes": []}
-    constraint_flags_payload = {"run_id": run_id, "episodes": []}
-    compile_payload = {
+    constraint_payload: Dict[str, Any] = {"run_id": run_id, "episodes": []}
+    constraint_flags_payload: Dict[str, Any] = {"run_id": run_id, "episodes": []}
+    compile_payload: Dict[str, Any] = {
         "run_id": run_id,
         "objective_profile": contract_profile.to_dict(),
         "episodes": [],
     }
-    econ_payload = {"run_id": run_id, "episodes": [], "windows": []}
-    regal_payload = {"run_id": run_id, "enabled": include_regal, "episodes": []}
-    datapack_payload = {"run_id": run_id, "updates": []}
+    econ_payload: Dict[str, Any] = {"run_id": run_id, "episodes": [], "windows": []}
+    regal_payload: Dict[str, Any] = {"run_id": run_id, "enabled": include_regal, "episodes": []}
+    datapack_payload: Dict[str, Any] = {"run_id": run_id, "updates": []}
     pricing_rows: list[Dict[str, Any]] = []
     episode_artifacts: list[ShadowEpisodeArtifacts] = []
     runtime_packets: list[RuntimePacket] = []
@@ -214,7 +214,7 @@ def run_shadow_control_plane(
             trace=trace,
             contract_profile=contract_profile,
             objective_tensor=objective_tensor,
-            econ_tensor=econ_tensor,
+            econ_tensor=econ_tensor.to_dict(),
             constraint_set=constraint_set,
             constraint_flags=combined_flags,
         )

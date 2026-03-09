@@ -28,7 +28,6 @@ import os
 import sys
 import json
 import argparse
-import time
 import numpy as np
 from collections import defaultdict
 
@@ -45,7 +44,6 @@ from src.envs.drawer_vase_physics_env import (
     DrawerVaseConfig,
     summarize_drawer_vase_episode
 )
-from src.hrl.skills import SkillID, SkillParams
 from src.hrl.low_level_policy import ScriptedSkillPolicy
 from src.hrl.high_level_controller import (
     ScriptedHighLevelController,

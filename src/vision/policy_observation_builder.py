@@ -31,7 +31,7 @@ class PolicyObservationBuilder:
     def __init__(
         self,
         encoder: VisionEncoderPolicy,
-        observation_adapter: ObservationAdapter = None,
+        observation_adapter: Optional[ObservationAdapter] = None,
         use_observation_adapter: bool = False,
         observation_config: Optional[Dict[str, Any]] = None,
         vision_config: Optional[Dict[str, Any]] = None,
@@ -84,9 +84,9 @@ class PolicyObservationBuilder:
         state_summary: Dict[str, Any],
         *,
         use_observation_adapter: bool = False,
-        observation_adapter: ObservationAdapter = None,
-        adapter_kwargs: Dict[str, Any] = None,
-        condition_kwargs: Dict[str, Any] = None,
+        observation_adapter: Optional[ObservationAdapter] = None,
+        adapter_kwargs: Optional[Dict[str, Any]] = None,
+        condition_kwargs: Optional[Dict[str, Any]] = None,
         use_condition_vector: Optional[bool] = None,
         use_observation_components: Optional[bool] = None,
         frame_sequence: Optional[Sequence[VisionFrame]] = None,
@@ -193,21 +193,23 @@ class PolicyObservationBuilder:
                 pass
 
         if enable_conditioned_vision:
-            condition_for_vision = resolved_condition_vector or features.get("condition_vector")
+            condition_for_vision = (
+                resolved_condition_vector if isinstance(resolved_condition_vector, ConditionVector) else None
+            )
             adapter_cfg = {
                 "feature_dim": conditioned_feature_dim,
                 "levels": conditioned_levels or list(DEFAULT_LEVELS),
                 "enable_conditioning": conditioned_enable_flag,
             }
             vision_adapter = ConditionedVisionAdapter(config=adapter_cfg)
-            conditioned = vision_adapter.forward(primary_frame, condition_for_vision if condition_for_vision is not None else None)
+            conditioned = vision_adapter.forward(primary_frame, condition_for_vision)
 
             # Preserve invariants: never overwrite base latent/z_v
-            conditioned_flat = flatten_pyramid(conditioned.get("fused_features", {}))
+            conditioned_flat = self._flatten_conditioned_features(conditioned.get("fused_features"))
             if conditioned_flat.size == 0:
-                conditioned_flat = flatten_pyramid(conditioned.get("features_modulated", {}))
+                conditioned_flat = self._flatten_conditioned_features(conditioned.get("features_modulated"))
             if conditioned_flat.size == 0 and "z_v" in conditioned:
-                conditioned_flat = flatten_pyramid(conditioned.get("z_v", {}))
+                conditioned_flat = self._flatten_conditioned_features(conditioned.get("z_v"))
 
             condition_tensor = None
             if condition_for_vision is not None:
@@ -231,6 +233,13 @@ class PolicyObservationBuilder:
             "domain_randomization": primary_frame.metadata.get("domain_randomization"),
         }
         return features
+
+    def _flatten_conditioned_features(self, features: Any) -> np.ndarray:
+        if isinstance(features, dict):
+            return flatten_pyramid(features)
+        if isinstance(features, np.ndarray):
+            return np.asarray(features, dtype=np.float32).reshape(-1)
+        return np.array([], dtype=np.float32)
 
     def _flatten_state_summary(self, state_summary: Dict[str, Any]) -> list:
         """

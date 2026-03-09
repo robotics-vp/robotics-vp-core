@@ -3,8 +3,7 @@
 Verifies that knob model outputs are always bounded by hard constraints,
 regardless of learned/heuristic predictions.
 """
-import pytest
-from typing import Dict, Optional
+from typing import Optional
 
 from src.contracts.schemas import (
     RegimeFeaturesV1,
@@ -13,7 +12,6 @@ from src.contracts.schemas import (
     PlanGainScheduleV1,
 )
 from src.regal.knob_model import (
-    KnobModel,
     HeuristicKnobProvider,
     StubLearnedKnobModel,
     get_knob_model,

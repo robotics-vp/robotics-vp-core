@@ -4,7 +4,6 @@ Export demo frames to MP4 video.
 Requires ffmpeg installed.
 """
 import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path

@@ -90,7 +90,7 @@ def read_datapack_frames(
         frames, depth_frames, seg_frames = _load_frames_from_path(path, camera_name=camera_name)
     if not frames:
         if mode == "vector_proxy":
-            frames, depth_frames, seg_frames, camera_params = _render_vector_proxy_frames(
+            frames, depth_frames, seg_frames, proxy_camera_params = _render_vector_proxy_frames(
                 path,
                 camera_name=camera_name,
                 max_frames=max_frames,
@@ -101,7 +101,7 @@ def read_datapack_frames(
             contract = DatapackFramesContract(
                 frames=frames,
                 timestamps_s=timestamps,
-                camera_params=camera_params,
+                camera_params=proxy_camera_params,
                 camera_name=camera_name,
                 instance_masks=instance_masks,
                 depth_frames=depth_frames,
@@ -135,7 +135,7 @@ def read_datapack_frames(
 
     metadata = _load_metadata(path)
     _validate_camera(metadata, camera_name)
-    camera_params = None
+    camera_params: Optional[CameraParams] = None
     if sensor_bundle and sensor_bundle.camera_params is not None:
         camera_params = sensor_bundle.camera_params
     if camera_params is None:
@@ -286,11 +286,15 @@ def _load_bundle_camera_params(
 
     if None in (fx, fy, cx, cy):
         return None
+    fx_value = float(fx) if fx is not None else float(width)
+    fy_value = float(fy) if fy is not None else float(height)
+    cx_value = float(cx) if cx is not None else float(width) / 2.0
+    cy_value = float(cy) if cy is not None else float(height) / 2.0
     return CameraParams(
-        fx=float(fx),
-        fy=float(fy),
-        cx=float(cx),
-        cy=float(cy),
+        fx=fx_value,
+        fy=fy_value,
+        cx=cx_value,
+        cy=cy_value,
         width=width,
         height=height,
         world_from_cam=world_from_cam,
@@ -368,7 +372,7 @@ def _load_frames_from_dir(
         frames_dir = path / "frames"
         if frames_dir.exists():
             rgb_frames = _load_frames_from_dir_frames(frames_dir)
-    return rgb_frames, depth_frames, seg_frames
+    return rgb_frames or [], depth_frames, seg_frames
 
 
 def _load_frames_from_candidates(candidates: Iterable[Path]) -> Optional[List[np.ndarray]]:
@@ -398,7 +402,7 @@ def _load_frames_from_dir_frames(frames_dir: Path) -> List[np.ndarray]:
 
 def _read_video_frames(path: Path) -> List[np.ndarray]:
     try:
-        import imageio.v3 as iio
+        import imageio.v3 as iio  # type: ignore[import-not-found]
     except Exception as exc:
         raise DatapackFrameError(f"imageio is required to read video frames: {exc}") from exc
     try:

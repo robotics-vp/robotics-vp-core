@@ -6,7 +6,7 @@ Purely functional conversions; no side-effects.
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from src.ontology.models import Datapack, Episode
 from src.vision.interfaces import VisionFrame, compute_state_digest
@@ -39,10 +39,11 @@ def _extract_auditor_outputs(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         return {"auditor_rating": None, "auditor_score": None, "auditor_predicted_econ": None}
 
-    candidates = []
+    candidates: List[Dict[str, Any]] = []
     for key in ("auditor_result", "auditor", "audit", "audit_result"):
-        if isinstance(payload.get(key), dict):
-            candidates.append(payload.get(key))
+        candidate = payload.get(key)
+        if isinstance(candidate, dict):
+            candidates.append(candidate)
     if isinstance(payload.get("metadata"), dict) and isinstance(payload["metadata"].get("auditor"), dict):
         candidates.append(payload["metadata"]["auditor"])
     base = candidates[0] if candidates else payload

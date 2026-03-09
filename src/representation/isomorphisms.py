@@ -71,6 +71,28 @@ class LinearAlign(IsomorphismAdapter):
         self._fitted: bool = False
         self._version: str = "linear_align::v1"
 
+    def _require_fitted_params(
+        self,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Return fitted arrays after checking adapter state."""
+        if not self._fitted:
+            raise RuntimeError("Adapter not fitted. Call fit() first.")
+
+        rotation = self._rotation
+        source_mean = self._source_mean
+        target_mean = self._target_mean
+        source_scale = self._source_scale
+        target_scale = self._target_scale
+        if (
+            rotation is None
+            or source_mean is None
+            or target_mean is None
+            or source_scale is None
+            or target_scale is None
+        ):
+            raise RuntimeError("Adapter parameters are incomplete. Re-fit the adapter.")
+        return rotation, source_mean, target_mean, source_scale, target_scale
+
     def fit(
         self,
         source_payloads: List[RepresentationPayload],
@@ -119,7 +141,7 @@ class LinearAlign(IsomorphismAdapter):
 
         # Compute optimal rotation via Orthogonal Procrustes
         # Using scipy.linalg.orthogonal_procrustes for robust implementation
-        from scipy.linalg import orthogonal_procrustes
+        from scipy.linalg import orthogonal_procrustes  # type: ignore[import-untyped]
         R, scale = orthogonal_procrustes(source_centered, target_centered)
         self._rotation = R
 
@@ -135,21 +157,20 @@ class LinearAlign(IsomorphismAdapter):
         Returns:
             Transformed payload in target space
         """
-        if not self._fitted:
-            raise RuntimeError("Adapter not fitted. Call fit() first.")
+        rotation, source_mean, target_mean, source_scale, target_scale = self._require_fitted_params()
 
         features = payload.pooled()
         if features.shape[-1] != self._dim:
             raise ValueError(f"Expected dim {self._dim}, got {features.shape[-1]}")
 
         # Apply transform: center, scale, rotate, unscale, uncenter
-        centered = features - self._source_mean
+        centered = features - source_mean
         if self.whiten:
-            centered = centered / self._source_scale
-        rotated = centered @ self._rotation
+            centered = centered / source_scale
+        rotated = centered @ rotation
         if self.whiten:
-            rotated = rotated * self._target_scale
-        transformed = rotated + self._target_mean
+            rotated = rotated * target_scale
+        transformed = rotated + target_mean
 
         return RepresentationPayload(
             features=transformed,
@@ -175,21 +196,20 @@ class LinearAlign(IsomorphismAdapter):
         Returns:
             Transformed payload in source space
         """
-        if not self._fitted:
-            raise RuntimeError("Adapter not fitted. Call fit() first.")
+        rotation, source_mean, target_mean, source_scale, target_scale = self._require_fitted_params()
 
         features = payload.pooled()
         if features.shape[-1] != self._dim:
             raise ValueError(f"Expected dim {self._dim}, got {features.shape[-1]}")
 
         # Inverse transform: center, scale, inverse rotate, unscale, uncenter
-        centered = features - self._target_mean
+        centered = features - target_mean
         if self.whiten:
-            centered = centered / self._target_scale
-        rotated = centered @ self._rotation.T  # Inverse of orthogonal is transpose
+            centered = centered / target_scale
+        rotated = centered @ rotation.T  # Inverse of orthogonal is transpose
         if self.whiten:
-            rotated = rotated * self._source_scale
-        transformed = rotated + self._source_mean
+            rotated = rotated * source_scale
+        transformed = rotated + source_mean
 
         return RepresentationPayload(
             features=transformed,
@@ -213,8 +233,7 @@ class LinearAlign(IsomorphismAdapter):
         Returns:
             Mean reconstruction error (L2 distance after round-trip)
         """
-        if not self._fitted:
-            raise RuntimeError("Adapter not fitted. Call fit() first.")
+        rotation, _, _, _, _ = self._require_fitted_params()
 
         errors = []
         for payload in source_payloads:
@@ -243,6 +262,8 @@ class LinearAlign(IsomorphismAdapter):
         if not self._fitted:
             raise RuntimeError("Adapter not fitted. Call fit() first.")
 
+        rotation, _, _, _, _ = self._require_fitted_params()
+
         # Compute per-sample alignment errors
         errors = []
         for source, target in zip(source_payloads, target_payloads):
@@ -255,12 +276,12 @@ class LinearAlign(IsomorphismAdapter):
         cycle = self.cycle_error(source_payloads)
 
         # Compute condition number of the rotation matrix
-        cond = float(np.linalg.cond(self._rotation)) if self._rotation is not None else 1.0
+        cond = float(np.linalg.cond(rotation))
 
         return AlignmentReport(
             alignment_error=float(np.mean(errors)) if errors else 0.0,
             cycle_error=cycle,
-            rank=int(np.linalg.matrix_rank(self._rotation)) if self._rotation is not None else 0,
+            rank=int(np.linalg.matrix_rank(rotation)),
             condition_number=cond,
             per_sample_errors=errors,
             metadata={
@@ -274,8 +295,7 @@ class LinearAlign(IsomorphismAdapter):
 
     def export(self) -> Dict[str, Any]:
         """Export adapter parameters for serialization."""
-        if not self._fitted:
-            raise RuntimeError("Adapter not fitted. Call fit() first.")
+        rotation, source_mean, target_mean, source_scale, target_scale = self._require_fitted_params()
 
         return {
             "version": self._version,
@@ -284,11 +304,11 @@ class LinearAlign(IsomorphismAdapter):
             "whiten": self.whiten,
             "regularization": self.regularization,
             "dim": self._dim,
-            "rotation": self._rotation.tolist(),
-            "source_mean": self._source_mean.tolist(),
-            "target_mean": self._target_mean.tolist(),
-            "source_scale": self._source_scale.tolist(),
-            "target_scale": self._target_scale.tolist(),
+            "rotation": rotation.tolist(),
+            "source_mean": source_mean.tolist(),
+            "target_mean": target_mean.tolist(),
+            "source_scale": source_scale.tolist(),
+            "target_scale": target_scale.tolist(),
         }
 
     @classmethod

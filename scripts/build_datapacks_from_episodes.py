@@ -588,7 +588,7 @@ def main():
     positive_count = sum(1 for dp in datapacks if dp.bucket == 'positive')
     negative_count = sum(1 for dp in datapacks if dp.bucket == 'negative')
 
-    print(f"\nDatapack Statistics:")
+    print("\nDatapack Statistics:")
     print(f"  Total: {len(datapacks)}")
     print(f"  Positive (ΔJ ≥ 0): {positive_count} ({100*positive_count/len(datapacks):.1f}%)")
     print(f"  Negative (ΔJ < 0): {negative_count} ({100*negative_count/len(datapacks):.1f}%)")

@@ -1,9 +1,7 @@
 """Test navigability metrics."""
 import numpy as np
-import pytest
 
 from src.geometry_graphs.small_world import (
-    build_small_world_graph,
     graph_summary_from_embeddings,
 )
 from src.contracts.schemas import GraphSpecV1

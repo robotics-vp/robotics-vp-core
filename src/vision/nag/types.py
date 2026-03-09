@@ -479,25 +479,25 @@ class PlaneParams:
             extent: (width, height) of the plane
             normal: Normal direction of the plane
         """
-        center = np.asarray(center, dtype=np.float32)
-        normal = np.asarray(normal, dtype=np.float32)
-        normal = normal / (np.linalg.norm(normal) + 1e-8)
+        center_arr = np.asarray(center, dtype=np.float32)
+        normal_arr = np.asarray(normal, dtype=np.float32)
+        normal_arr = normal_arr / (np.linalg.norm(normal_arr) + 1e-8)
 
         # Build orthonormal basis
         up_hint = np.array([0, 1, 0], dtype=np.float32)
-        if abs(np.dot(normal, up_hint)) > 0.99:
+        if abs(float(np.dot(normal_arr, up_hint))) > 0.99:
             up_hint = np.array([1, 0, 0], dtype=np.float32)
 
-        right = np.cross(up_hint, normal)
+        right = np.cross(up_hint, normal_arr)
         right = right / (np.linalg.norm(right) + 1e-8)
-        up = np.cross(normal, right)
+        up = np.cross(normal_arr, right)
 
         # Build transform
         world_from_plane = np.eye(4, dtype=np.float32)
         world_from_plane[:3, 0] = right
         world_from_plane[:3, 1] = up
-        world_from_plane[:3, 2] = normal
-        world_from_plane[:3, 3] = center
+        world_from_plane[:3, 2] = normal_arr
+        world_from_plane[:3, 3] = center_arr
 
         return cls(
             world_from_plane=world_from_plane,

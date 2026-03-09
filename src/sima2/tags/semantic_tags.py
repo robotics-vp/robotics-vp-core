@@ -365,9 +365,9 @@ class SemanticEnrichmentProposal:
         for tag in self.segment_boundary_tags:
             if hasattr(tag, "validate"):
                 tag.validate()
-        for tag in self.subtask_tags:
-            if hasattr(tag, "validate"):
-                tag.validate()
+        for subtask_tag in self.subtask_tags:
+            if hasattr(subtask_tag, "validate"):
+                subtask_tag.validate()
 
     def to_jsonl_enrichment(self) -> dict:
         """Convert to merge-ready JSONL enrichment record."""
