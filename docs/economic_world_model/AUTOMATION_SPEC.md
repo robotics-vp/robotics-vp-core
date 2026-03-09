@@ -31,7 +31,8 @@ Read docs/economic_world_model/architecture_gap_analysis.md, docs/economic_world
 Run python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md.
 Choose the single highest-value additive next task.
 Prefer docs, scaffolding, tests, and sidecars before invasive rewrites.
-Do not touch src/world_model/, checkpoints/stable_world_model.pt, trust_net, w_econ lattice math, lambda controller equations, or src/controllers/synthetic_weight_controller.py core logic.
+Do not modify the stable Phase B checkpoint, legacy baseline world-model math, trust_net, w_econ lattice math, lambda controller equations, or src/controllers/synthetic_weight_controller.py core logic.
+Additive successor modules inside src/world_model/ are allowed only when they preserve the stable baseline as the rollback anchor and stay advisory/governed.
 If a safe task exists, implement it, run verification, update docs/economic_world_model/progress_log.md and docs/economic_world_model/implementation_notes.md, and leave a concise summary suitable for a GitHub issue comment.
 If no safe task exists, refresh the audit summary and explain why execution was skipped.
 ```
@@ -43,6 +44,15 @@ Expected output behavior:
 - make one scoped additive change or skip explicitly
 - update `docs/economic_world_model/progress_log.md`
 - update `docs/economic_world_model/implementation_notes.md`
+
+Current autonomous priority for the video-world-model subset:
+
+1. real-video reconstruction/calibration sidecars
+2. teacher-runtime hardening and explicit fallback metadata
+3. governed video supervision bundles with counterfactual/value targets
+4. only then refresh the learned video-state training backlog or training scaffolds
+
+The automation should not jump to model-training work while those prior stages remain open.
 
 ## Local Cron / Launchd Path
 

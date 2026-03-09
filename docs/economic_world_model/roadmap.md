@@ -5,8 +5,11 @@
 - Favor additive infrastructure over refactors.
 - Keep VLA and foundation-model paths external, pluggable, and sidecar/advisory.
 - Preserve objective integrity. No premature scalarization upstream of explicit contract compile.
-- Do not touch frozen Phase B math or `src/world_model/`.
+- Preserve the stable Phase B checkpoint and legacy contractive dynamics math as a baseline, but additive governed video-state work in `src/world_model/` is now in scope.
+- Treat Phase B as a two-layer program: frozen baseline for rollback/comparison, additive successor scaffolding for governed video-state and later learned top-layer work.
 - Sequence work so each stage leaves behind reusable docs, schemas, tests, and automation hooks.
+- Treat video-world-model work as a subset of economic-world-model readiness: geometry/evidence/governance first, rendering and training second.
+- Do not overfit the stack to one paper architecture. Keep predictor, planner, context, and rollout configuration modular.
 
 ## Workstream Summary
 
@@ -17,8 +20,11 @@
 | Week 2 | Normalize embodiment, action, and observation contracts | scaffolding-only + additive_wiring | `src/runtime/action_adapter_v2.py`, `src/runtime/observation_adapter_v2.py`, `src/embodiment/registry.py`, `src/inference/demo_policy.py` |
 | Week 3 | Create the temporal event spine and governance trace spec/code path | docs-only + scaffolding-only | `src/runtime/event_spine.py`, `src/governance/trace.py`, replay/ontology sidecars |
 | Week 4 | Build the evidence bus and belief-state layer, plus teacher trace sidecars | scaffolding-only + additive_wiring | `src/evidence/*`, `src/orchestrator/semantic_fusion_runner.py`, `src/vla/rollout_labeler.py` |
+| Week 4.5 | Reopen the world-model package with governed video-state and geometry-first hypothesis scaffolding | additive_wiring + scaffolding-only | `src/world_model/governed_video_world_model.py`, `scripts/run_stage1_pipeline.py`, `src/diffusion/real_video_diffusion_stub.py`, `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` |
 | Week 5 | Add dense economic supervision and counterfactual evaluation traces | scaffolding-only + additive_wiring | `src/economics/counterfactual_eval.py`, `src/economics/value_targets.py`, `src/economics/value_ledger.py`, datapack schema sidecars |
 | Week 6 | Train and evaluate a packet-native learned control-plane scaffold | additive_wiring + behavior-changing behind flags | `src/control_plane/*`, `src/phase_h/*`, `src/orchestrator/*`, training harnesses |
+| Week 6.5 | Ground real-video plumbing with 4D reconstruction and explicit teacher runtime contracts | scaffolding-only + additive_wiring | `src/vision/reconstruction/four_d_reconstruction.py`, `src/vla/teacher_runtime.py`, `scripts/run_stage1_pipeline.py`, `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` |
+| Week 6.75 | Emit governed video supervision bundles and economic targets from candidate futures | scaffolding-only + additive_wiring | `src/world_model/governed_video_supervision.py`, `src/economics/counterfactual_eval.py`, `src/economics/value_targets.py`, `src/governance/trace.py` |
 | Week 7+ | Add dataset bridges and opt-in integration passes | docs-only + additive_wiring | `src/dataset_bridges/*`, `src/valuation/portable_datapacks.py`, replay export/import |
 
 ## Week 0 - Current Pass
@@ -56,7 +62,7 @@
   - GitHub/cloud actual execution requires `CODEX_API_KEY` secret.
   - App automation still requires manual UI creation.
 - Do not touch:
-  - `src/world_model/`
+  - the stable baseline checkpoint or legacy baseline world-model math
   - `checkpoints/stable_world_model.pt`
   - `src/controllers/synthetic_weight_controller.py` core logic
   - Trust-net, `w_econ`, and lambda controller equations
@@ -170,6 +176,37 @@
   - Existing semantic fusion behavior unless behind flags
 - Classification: `scaffolding-only` plus small `additive_wiring`
 
+## Week 4.5 - Governed Video-World-Model Preconditions
+
+- Goal: Move the repo from diffusion-first video placeholders toward an evidence-first, geometry-first video-state loop.
+- Rationale: A future video world model should be supervised by the same contract/evidence/governance substrate as the broader economic world model. Rendering should stay downstream of state and plausibility.
+- Target modules/files:
+  - `src/world_model/governed_video_world_model.py`
+  - `src/diffusion/real_video_diffusion_stub.py`
+  - `scripts/run_stage1_pipeline.py`
+  - `src/orchestrator/semantic_fusion_runner.py`
+  - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py`
+  - `src/vla/openvla_controller.py`
+  - `src/vla/semantic_evidence.py`
+- Deliverables:
+  - `GovernedVideoWorldModel` service that consumes belief-state/evidence-first inputs and proposes candidate futures before any rendering step.
+  - Stage-1 sidecars for `EvidenceBus`, `BeliefState`, governed video state, and ranked hypotheses.
+  - Diffusion/render stub that can render governed hypotheses instead of inventing futures first.
+  - Configurable SceneTracks stub usage rather than hardwired `use_stub_adapters=True`.
+  - Clear separation between frozen stable checkpoint baseline and new advisory video-state scaffolding.
+- Acceptance tests / verification commands:
+  - `python3 -m compileall src scripts/run_stage1_pipeline.py tests -q`
+  - `python3 -m pytest -q tests/test_evidence_bus.py tests/test_runtime_adapters_v2.py tests/test_governed_video_world_model.py tests/test_rollout_labeler.py tests/test_semantic_fusion_orchestrator_smoke.py tests/test_stage1_pipeline_governed.py`
+  - `python3 scripts/run_stage1_pipeline.py --num-videos 1 --proposals-per-video 1 --output-dir /tmp/stage1_governed_smoke`
+- Dependencies / blockers:
+  - Real 4D reconstruction, real SceneTracks adapters, and non-stub teacher models still remain future work.
+  - No training loop lands here; the service is advisory and structural.
+- Do not touch:
+  - `checkpoints/world_model_stable_canonical.pt`
+  - Trust-net, `w_econ`, or lambda controller math
+  - Reward-path scalarization rules
+- Classification: `additive_wiring` plus `scaffolding-only`
+
 ## Week 5 - Dense Economic Supervision
 
 - Goal: Create trainable local targets for counterfactual economic decisions.
@@ -184,6 +221,7 @@
 - Deliverables:
   - `CounterfactualEval` traces for adapt vs no-op / collect-data vs no-op / route A vs B.
   - Dense supervision target sidecars tied to packets and event rows.
+  - Governance-aware value targets that can supervise successor video-state loops without touching the stable Phase B baseline.
   - No change to frozen valuation or reward equations.
 - Acceptance tests / verification commands:
   - `python3 -m compileall src -q`
@@ -221,6 +259,69 @@
   - Baseline online RL unless the new control-plane path is opt-in
 - Classification: `behavior-changing` only behind explicit flags
 
+## Week 6.5 - Real Video Grounding and Teacher Runtime Hardening
+
+- Goal: Replace fallback-heavy real-video plumbing with camera-grounded reconstruction sidecars and explicit teacher runtime contracts.
+- Rationale: Production-grade video-world-model preconditions require honest camera geometry, explicit adapter failure semantics, and replayable teacher envelopes before any serious learned predictor can be trusted.
+- Target modules/files:
+  - `src/vision/reconstruction/four_d_reconstruction.py`
+  - `src/vla/teacher_runtime.py`
+  - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py`
+  - `src/vla/openvla_controller.py`
+  - `src/ingestion/x_humanoid_adapter.py`
+  - `scripts/run_stage1_pipeline.py`
+- Deliverables:
+  - D4RT-style reconstruction sidecars with camera calibration, confidence windows, and provenance.
+  - Teacher runtime envelopes with explicit fallback metadata, latency, and adapter contract refs.
+  - Real-video stage wiring that prefers grounded reconstruction and non-stub adapters before heuristic fallback.
+  - Stage-1 outputs that carry reconstruction refs, calibration refs, and teacher-runtime refs alongside governed video-state artifacts.
+  - Runner and ingestion paths where stub usage is explicit, inspectable, and never silently treated as production truth.
+- Concrete implementation order:
+  - Wire `src/vision/reconstruction/four_d_reconstruction.py` into `scripts/run_stage1_pipeline.py` so each processed video emits a reconstruction sidecar.
+  - Thread reconstruction refs and calibration metadata through `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` and `src/ingestion/x_humanoid_adapter.py`.
+  - Route OpenVLA and similar teacher outputs through `src/vla/teacher_runtime.py` first, then publish them into semantic evidence and teacher traces.
+  - Keep fallback mode explicit in every packet, evidence record, and replayable sidecar.
+- Acceptance tests / verification commands:
+  - `python3 -m compileall src scripts/run_stage1_pipeline.py tests -q`
+  - `python3 -m pytest -q tests/test_scene_tracks_runner.py tests/test_openvla_controller.py tests/test_stage1_pipeline_governed.py`
+- Dependencies / blockers:
+  - Requires Week 2 and Week 4 contracts plus Week 4.5 governed video-state scaffolding.
+  - Real external models remain optional; fallback behavior must stay explicit.
+- Do not touch:
+  - Stable baseline checkpoint math
+  - Trust-net, `w_econ`, or lambda controller math
+- Classification: `scaffolding-only` plus `additive_wiring`
+
+## Week 6.75 - Governed Video Supervision and Economic Targets
+
+- Goal: Turn governed video hypotheses into replayable supervision artifacts for downstream economic-world-model training.
+- Rationale: Branches are only useful if they emit auditable value, governance, and counterfactual traces tied back to packets and replay.
+- Target modules/files:
+  - `src/world_model/governed_video_supervision.py`
+  - `src/economics/counterfactual_eval.py`
+  - `src/economics/value_targets.py`
+  - `src/governance/trace.py`
+  - `src/runtime/event_spine.py`
+- Deliverables:
+  - Governed video supervision bundles that attach branch evaluations, governance traces, value targets, and value-ledger receipts to the video loop.
+  - Counterfactual economic evaluations derived from candidate futures rather than only post hoc episode summaries.
+  - Replayable receipts that join candidate futures back to `RuntimePacket`, `BeliefState`, `EvidenceBus`, and downstream datapack context.
+  - Evaluation artifacts that keep geometry plausibility, regality, and economic value distinct instead of collapsing them into one scalar too early.
+- Concrete implementation order:
+  - Wire `src/world_model/governed_video_supervision.py` into the governed Stage-1 loop immediately after hypothesis ranking.
+  - Emit `CounterfactualEval`, `ValueTargetPack`, and governance-trace sidecars for each accepted or vetoed branch.
+  - Thread those refs into replay/datapack metadata so later training jobs can consume them without bespoke join logic.
+  - Verify that blocked branches still emit auditable supervision artifacts rather than disappearing from the trace.
+- Acceptance tests / verification commands:
+  - `python3 -m compileall src tests -q`
+  - `python3 -m pytest -q tests/test_value_ledger.py tests/test_runtime_packets.py tests/test_governed_video_world_model.py`
+- Dependencies / blockers:
+  - Requires Week 5 supervision seams and Week 6.5 grounded video plumbing.
+- Do not touch:
+  - Stable baseline checkpoint math
+  - Reward-path scalarization rules
+- Classification: `scaffolding-only` plus `additive_wiring`
+
 ## Week 7+ - Dataset Bridges and Integration Passes
 
 - Goal: Export/import standard dataset bridges without flattening the repo's richer internal schema.
@@ -245,6 +346,25 @@
 ## Explicitly Deferred
 
 - Training a multimodal economic world model before the packet/event/evidence/governance substrate exists.
+- Training a JEPA-style or DreamGen-style video model before real adapters, belief-state traces, and geometry-grounded supervision are in place.
 - Collapsing the stack into a monolithic model.
 - Making external VLA/FM traces native truth.
-- Rewriting frozen Phase B math.
+- Rewriting the stable Phase B baseline checkpoint instead of layering additive successor modules beside it.
+
+## Training Backlog Placement
+
+- Learned video-state modeling belongs in the training backlog, not the immediate middleware pass.
+- The first admissible training target is a governed, action-conditioned latent predictor over fused video, scene-track, geometry, embodiment, and economic context rather than a raw-pixel-only generator.
+- Training should begin only after real-video grounding, teacher-runtime hardening, and governed supervision bundles are present.
+
+## Active Autonomous Priority Order
+
+The next autonomous passes should consume the video-world-model subset in this order:
+
+1. Week 6.5 reconstruction sidecars and calibration plumbing.
+2. Week 6.5 teacher-runtime hardening and explicit fallback semantics.
+3. Week 6.75 governed supervision bundle wiring into the Stage-1 loop.
+4. Test and smoke coverage that proves the new refs and sidecars persist end to end.
+5. Only after those land cleanly, refresh the training backlog and consider `train_governed_video_world_model.py`.
+
+Nightly or autonomous execution should not skip directly to training or raw model experimentation while Week 6.5 and Week 6.75 remain incomplete.

@@ -129,7 +129,7 @@ The stack is moving toward these first-class artifacts:
 ## Existing Build and Verification Commands
 ```bash
 # Install
-pip install -e .
+python3 -m pip install -r requirements-dev.txt
 
 # Core checks
 python3 -m compileall src/
@@ -196,11 +196,19 @@ Cleanup sequencing reference:
 - `docs/quality_ratcheting.md`
 
 ## Frozen and Additive Zones
-Phase B is frozen. Do not modify:
-- `src/world_model/`
+Phase B now has a split posture:
+- the stable baseline remains frozen
+- additive successor modules beside that baseline are allowed
+
+Do not modify:
+- the stable checkpoint or legacy baseline world-model math
 - `checkpoints/stable_world_model.pt`
 - Trust net, `w_econ` lattice objective, lambda controller equations
 - `src/controllers/synthetic_weight_controller.py` core logic
+
+Allowed additive work:
+- governed video-state or other successor modules in `src/world_model/` that preserve the stable baseline as the rollback anchor
+- evidence, governance, and runtime sidecars that supervise future world-model work without collapsing external teachers into native truth
 
 Additive-only zones:
 - Energy bench extensions

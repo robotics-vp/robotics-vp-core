@@ -22,7 +22,8 @@ Use this skill when the task is to advance the roadmap, run the nightly audit, o
 
 - Keep VLA and foundation-model paths external, pluggable, and sidecar/advisory.
 - Prefer docs, scaffolding, tests, and additive wiring before invasive rewrites.
-- Never touch frozen Phase B zones unless explicitly authorized.
+- Preserve the stable Phase B checkpoint and legacy baseline math as frozen unless explicitly authorized.
+- Additive successor modules in `src/world_model/` are allowed only when they preserve the stable baseline as the rollback anchor and stay advisory/governed.
 - Land one highest-value additive step per pass.
 - Update `docs/economic_world_model/progress_log.md` and `docs/economic_world_model/implementation_notes.md` whenever a roadmap change lands.
 - Run verification before closing the pass.

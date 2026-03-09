@@ -3,7 +3,7 @@
     "description": "Training script migration backlog for @regal_training wrapper",
     "goal": "Reduce pending count to 0",
     "created_at": "2026-01-13",
-    "updated_at": "2026-03-07",
+    "updated_at": "2026-03-09",
     "backlog": [
         {
             "script": "train_orchestration_transformer_v1_curriculum.py",
@@ -140,6 +140,19 @@
             "notes": "Low priority - GGDS/LSD training",
             "created_at": "2026-01-13",
             "updated_at": "2026-01-13"
+        },
+        {
+            "script": "train_governed_video_world_model.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "real video grounding, teacher runtime hardening, governed supervision bundles",
+            "downstream_dependents": [
+                "economic world model preconditions",
+                "video-state planner evaluation"
+            ],
+            "notes": "High priority but intentionally deferred - action-conditioned latent predictor over fused video, scene tracks, geometry, embodiment, and economic context; successor to the stable Phase B baseline, not a rewrite of it.",
+            "created_at": "2026-03-09",
+            "updated_at": "2026-03-09"
         }
     ],
     "migrated": [
@@ -210,9 +223,9 @@
         }
     ],
     "summary": {
-        "total": 16,
+        "total": 17,
         "P0": 0,
-        "P1": 7,
+        "P1": 8,
         "P2": 6,
         "migrated": 13
     }
