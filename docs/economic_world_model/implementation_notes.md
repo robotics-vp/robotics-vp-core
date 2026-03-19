@@ -40,3 +40,18 @@
 - Wired `src/world_model/governed_video_supervision.py`, `src/economics/counterfactual_eval.py`, `src/economics/value_targets.py`, and `src/governance/trace.py` into the live Stage-1 loop so candidate futures now emit runtime packets, branch evaluations, event spine rows, decision-ledger rows, governance traces, counterfactual evals, value-target packs, and value-ledger receipts.
 - Tightened `src/vla/teacher_runtime.py` plus `src/vla/rollout_labeler.py` so the live rollout-labeling path emits explicit teacher adapter contracts and teacher action envelopes even when OpenVLA is disabled or unavailable; fallback is now replayable instead of implicit.
 - Expanded targeted coverage with `tests/test_four_d_reconstruction.py`, `tests/test_teacher_runtime.py`, and `tests/test_governed_video_supervision.py`, and extended Stage-1 / rollout-labeler tests to assert the new live-loop sidecars exist.
+
+## 2026-03-19
+
+- Updated `scripts/economic_world_model/nightly_audit.py` to fix stale roadmap drift evaluation:
+  - `_progress_latest_date()` now returns the last dated `## YYYY-MM-DD` heading in `docs/economic_world_model/progress_log.md`, not the first.
+  - Added `_event_spine_spec_pending()` and `_contains_phrase(...)` so EventSpine/GovernanceTrace recommendation state is derived from additive code/doc presence rather than a hardcoded `pending=True`.
+  - Updated the audit compile command to `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall src scripts/economic_world_model -q` to avoid sandbox cache-permission failures.
+- Added `tests/test_economic_world_model_nightly_audit.py` covering:
+  - most-recent progress date extraction
+  - EventSpine spec pending=false when code/docs are present
+  - fallback to `audit_only` when all candidate tasks are complete
+- Regenerated audit artifacts with the updated logic:
+  - `artifacts/economic_world_model/nightly_audit_summary.json`
+  - `artifacts/economic_world_model/nightly_audit_summary.md`
+  - current result: `status=ok`, `roadmap_drift.signals=[]`, `next_task.id=audit_only`.

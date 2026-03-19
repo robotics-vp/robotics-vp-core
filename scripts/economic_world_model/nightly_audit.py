@@ -41,7 +41,10 @@ REQUIRED_SCAFFOLDS = [
 ]
 DEFAULT_CHECKS = [
     ("agent_verify", "./scripts/agent/verify.sh"),
-    ("compileall", "python3 -m compileall src scripts/economic_world_model -q"),
+    (
+        "compileall",
+        "PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall src scripts/economic_world_model -q",
+    ),
     (
         "targeted_pytest",
         "python3 -m pytest -q "
@@ -90,9 +93,9 @@ def _search(rel_path: str, pattern: str) -> bool:
 
 def _progress_latest_date() -> Optional[str]:
     progress_text = _read_text(DOCS_ROOT / "progress_log.md")
-    match = re.search(r"^##\s+(\d{4}-\d{2}-\d{2})$", progress_text, re.MULTILINE)
-    if match:
-        return match.group(1)
+    matches = re.findall(r"^##\s+(\d{4}-\d{2}-\d{2})$", progress_text, re.MULTILINE)
+    if matches:
+        return matches[-1]
     return None
 
 
@@ -102,6 +105,28 @@ def _backlog_updated_at() -> Optional[str]:
         return None
     payload = json.loads(backlog_path.read_text(encoding="utf-8"))
     return payload.get("updated_at")
+
+
+def _contains_phrase(rel_path: str, phrase: str) -> bool:
+    text = _read_text(REPO_ROOT / rel_path)
+    return phrase.casefold() in text.casefold()
+
+
+def _event_spine_spec_pending() -> bool:
+    required_code_paths = [
+        "src/runtime/event_spine.py",
+        "src/governance/trace.py",
+    ]
+    if any(not _exists(path) for path in required_code_paths):
+        return True
+
+    required_doc_phrases = [
+        ("docs/economic_world_model/architecture_gap_analysis.md", "event spine"),
+        ("docs/economic_world_model/architecture_gap_analysis.md", "governance trace"),
+        ("docs/economic_world_model/roadmap.md", "event spine"),
+        ("docs/economic_world_model/roadmap.md", "governance trace"),
+    ]
+    return any(not _contains_phrase(rel_path, phrase) for rel_path, phrase in required_doc_phrases)
 
 
 def _run_check(name: str, command: str) -> Dict[str, Any]:
@@ -181,7 +206,7 @@ def _task_candidates() -> List[Dict[str, Any]]:
                 "docs/economic_world_model/progress_log.md",
             ],
             "execute_now": True,
-            "pending": True,
+            "pending": _event_spine_spec_pending(),
         },
     ]
 

@@ -36,3 +36,13 @@
 - Verification: `python3 -m compileall src scripts/run_stage1_pipeline.py tests -q` and `python3 -m pytest -q tests/test_rollout_labeler.py tests/test_stage1_pipeline_governed.py tests/test_four_d_reconstruction.py tests/test_teacher_runtime.py tests/test_governed_video_supervision.py` passed.
 - Blocked: the live Stage-1 path still lacks real SceneTracks adapters, richer calibration sources, and non-stub teacher execution from real video frames; current grounding remains truthful-but-advisory rather than production-final.
 - Next recommended task: push the same live-loop discipline into real-video ingestion boundaries, especially SceneTracks calibration joins and remaining teacher-runtime consumers, before any learned predictor training.
+
+## 2026-03-19
+
+- Changed: fixed `scripts/economic_world_model/nightly_audit.py` so progress-log freshness uses the most recent dated heading instead of the first heading, removing a stale false-positive drift signal against `scripts/TRAINING_MIGRATION_BACKLOG.json`.
+- Changed: replaced the hardcoded EventSpine pending flag with real completion detection via additive code/doc checks (`src/runtime/event_spine.py`, `src/governance/trace.py`, and roadmap/gap-analysis phrase checks), so the nightly next-task selector no longer recommends already-landed work.
+- Changed: updated audit compile verification to use `PYTHONPYCACHEPREFIX=/tmp/pycache` so sandboxed/local runs do not fail on unwritable default Python cache paths.
+- Changed: added regression tests in `tests/test_economic_world_model_nightly_audit.py` for latest-date parsing, EventSpine pending detection, and audit-only fallback selection.
+- Verification: `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall src scripts/economic_world_model -q`, `python3 -m pytest -q tests/test_economic_world_model_nightly_audit.py tests/test_runtime_packets.py tests/embodiment/test_registry.py tests/test_objective_runtime_builder.py tests/test_constraint_set.py tests/test_pricing_sentinel.py tests/test_value_ledger.py`, and `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (result: `Status: ok`, drift signals: none).
+- Blocked: `codex_api_key_present` remains `no`, so GitHub/cloud Codex execution is still credential-gated even though local CLI/app paths are ready.
+- Next recommended task: prioritize a Week 6.5 additive grounding pass that wires richer SceneTracks calibration joins and remaining teacher-runtime consumers into real-video ingestion boundaries, then add focused smoke/test coverage before any learned predictor training.
