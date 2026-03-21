@@ -129,6 +129,15 @@ def _event_spine_spec_pending() -> bool:
     return any(not _contains_phrase(rel_path, phrase) for rel_path, phrase in required_doc_phrases)
 
 
+def _dataset_bridge_scaffold_pending() -> bool:
+    required_code_paths = [
+        "src/dataset_bridges/rlds_bridge.py",
+        "src/dataset_bridges/lerobot_bridge.py",
+        "src/valuation/portable_datapacks.py",
+    ]
+    return any(not _exists(path) for path in required_code_paths)
+
+
 def _run_check(name: str, command: str) -> Dict[str, Any]:
     proc = subprocess.run(
         command,
@@ -207,6 +216,23 @@ def _task_candidates() -> List[Dict[str, Any]]:
             ],
             "execute_now": True,
             "pending": _event_spine_spec_pending(),
+        },
+        {
+            "id": "dataset_bridge_scaffold",
+            "title": "Add RLDS and LeRobot lossy bridge scaffolds with sidecar refs",
+            "classification": "additive_wiring",
+            "rationale": (
+                "Week 7+ requires standardized dataset adapters that keep internal economic, "
+                "governance, and evidence sidecars available for downstream replay/training joins."
+            ),
+            "targets": [
+                "src/dataset_bridges/rlds_bridge.py",
+                "src/dataset_bridges/lerobot_bridge.py",
+                "src/valuation/portable_datapacks.py",
+                "tests/test_dataset_bridges.py",
+            ],
+            "execute_now": True,
+            "pending": _dataset_bridge_scaffold_pending(),
         },
     ]
 

@@ -55,3 +55,12 @@
   - `artifacts/economic_world_model/nightly_audit_summary.json`
   - `artifacts/economic_world_model/nightly_audit_summary.md`
   - current result: `status=ok`, `roadmap_drift.signals=[]`, `next_task.id=audit_only`.
+
+## 2026-03-21
+
+- Added `src/dataset_bridges/rlds_bridge.py` and `src/dataset_bridges/lerobot_bridge.py` as additive, lossy adapters from canonical replay records to standard interchange formats.
+- Kept internal schema richness explicit by preserving objective/econ/pricing/ledger/event/decision/runtime/governance references in bridge metadata rather than flattening them away.
+- Added `src/dataset_bridges/__init__.py` exports so bridge adapters can be imported as a package-level surface.
+- Added `tests/test_dataset_bridges.py` to validate ordering, terminal-step flags, and sidecar-ref preservation for both RLDS and LeRobot adapter outputs.
+- Extended `scripts/economic_world_model/nightly_audit.py` with `_dataset_bridge_scaffold_pending()` and a corresponding `dataset_bridge_scaffold` candidate so roadmap selection includes Week 7+ bridge scaffolding status.
+- Extended `tests/test_economic_world_model_nightly_audit.py` with coverage that asserts dataset-bridge candidate selection when the new scaffold is pending.
