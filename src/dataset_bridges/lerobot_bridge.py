@@ -4,19 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List
 
+from src.dataset_bridges.sidecar_refs import extract_sidecar_refs
 from src.replay.schema import ReplayEpisodeRecord, ReplayStepRecord
 
 
 def _row_sidecars(step: ReplayStepRecord) -> Dict[str, Any]:
-    return {
-        "objective_tensor_ref": step.objective_tensor_ref,
-        "econ_tensor_ref": step.econ_tensor_ref,
-        "pricing_tick_ref": step.pricing_tick_ref,
-        "ledger_event_ref": step.ledger_event_ref,
-        "event_refs": step.metadata.get("event_refs", []),
-        "decision_refs": step.metadata.get("decision_refs", []),
-        "runtime_packet_ref": step.provenance.get("runtime_packet_ref"),
-    }
+    return extract_sidecar_refs(step)
 
 
 def lerobot_rows_from_replay(

@@ -8,20 +8,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List
 
+from src.dataset_bridges.sidecar_refs import extract_sidecar_refs
 from src.replay.schema import ReplayEpisodeRecord, ReplayStepRecord
 
 
 def _sidecar_refs(step: ReplayStepRecord) -> Dict[str, Any]:
-    return {
-        "objective_tensor_ref": step.objective_tensor_ref,
-        "econ_tensor_ref": step.econ_tensor_ref,
-        "pricing_tick_ref": step.pricing_tick_ref,
-        "ledger_event_ref": step.ledger_event_ref,
-        "event_refs": step.metadata.get("event_refs", []),
-        "decision_refs": step.metadata.get("decision_refs", []),
-        "governance_trace_ref": step.provenance.get("governance_trace_ref"),
-        "runtime_packet_ref": step.provenance.get("runtime_packet_ref"),
-    }
+    return extract_sidecar_refs(step)
 
 
 def rlds_episode_from_replay(
@@ -65,10 +57,7 @@ def rlds_episode_from_replay(
             "env_id": episode.env_id,
             "source_domain": episode.source_domain,
             "internal_sidecars": {
-                "objective_tensor_ref": episode.objective_tensor_ref,
-                "econ_tensor_ref": episode.econ_tensor_ref,
-                "pricing_tick_refs": list(episode.pricing_tick_refs),
-                "ledger_event_ids": list(episode.ledger_event_ids),
+                **extract_sidecar_refs(episode),
                 "provenance": dict(episode.provenance),
             },
         },

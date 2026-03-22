@@ -64,3 +64,10 @@
 - Added `tests/test_dataset_bridges.py` to validate ordering, terminal-step flags, and sidecar-ref preservation for both RLDS and LeRobot adapter outputs.
 - Extended `scripts/economic_world_model/nightly_audit.py` with `_dataset_bridge_scaffold_pending()` and a corresponding `dataset_bridge_scaffold` candidate so roadmap selection includes Week 7+ bridge scaffolding status.
 - Extended `tests/test_economic_world_model_nightly_audit.py` with coverage that asserts dataset-bridge candidate selection when the new scaffold is pending.
+
+## 2026-03-22
+
+- Added `src/dataset_bridges/sidecar_refs.py` with `extract_sidecar_refs(...)` to centralize replay sidecar extraction for bridge exports.
+- The extractor keeps bridge exports additive and forward-compatible by harvesting references from replay record fields and `metadata`/`provenance` keys that end in `*_ref`, `*_refs`, `*_id`, or `*_ids`.
+- Switched `src/dataset_bridges/rlds_bridge.py` and `src/dataset_bridges/lerobot_bridge.py` to use the shared extractor instead of hardcoded per-key sidecar mappings, reducing future maintenance when new governed-supervision refs are introduced.
+- Extended `tests/test_dataset_bridges.py` so RLDS/LeRobot bridge outputs assert preservation of representative Week 6.75/7+ sidecar refs (`counterfactual_eval_ref`, `value_target_refs`, `belief_state_ref`, `teacher_trace_ref`, and `governed_supervision_refs`).

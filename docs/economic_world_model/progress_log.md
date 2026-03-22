@@ -56,3 +56,12 @@
 - Verification: `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall src scripts/economic_world_model -q`, `python3 -m pytest -q tests/test_dataset_bridges.py tests/test_economic_world_model_nightly_audit.py tests/test_runtime_packets.py tests/embodiment/test_registry.py tests/test_objective_runtime_builder.py tests/test_constraint_set.py tests/test_pricing_sentinel.py tests/test_value_ledger.py`, and `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md`.
 - Blocked: `codex_api_key_present` remains `no` in this environment, so GitHub/cloud Codex execution is still credentials-gated.
 - Next recommended task: deepen Week 7+ replay export/import glue so Stage-1 governed supervision artifacts can be emitted through dataset-bridge bundles without bespoke joins.
+
+## 2026-03-22
+
+- Changed: deepened Week 7+ replay export glue by adding `src/dataset_bridges/sidecar_refs.py` and switching RLDS/LeRobot adapters to generic sidecar extraction across replay record fields plus `metadata`/`provenance` keys ending in `*_ref`, `*_refs`, `*_id`, or `*_ids`.
+- Changed: bridge exports now preserve newly added governed-supervision-style references (for example `counterfactual_eval_ref`, `value_target_refs`, and `belief_state_ref`) without requiring per-key adapter rewrites.
+- Changed: extended `tests/test_dataset_bridges.py` coverage so both adapters assert preservation of governed-supervision and teacher-trace oriented references from step and episode records.
+- Verification: `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall src scripts/economic_world_model -q`, `python3 -m pytest -q tests/test_dataset_bridges.py tests/test_economic_world_model_nightly_audit.py tests/test_runtime_packets.py tests/embodiment/test_registry.py tests/test_objective_runtime_builder.py tests/test_constraint_set.py tests/test_pricing_sentinel.py tests/test_value_ledger.py`, and `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md`.
+- Blocked: `codex_api_key_present` remains `no` in this environment, so GitHub/cloud Codex execution remains credentials-gated.
+- Next recommended task: add replay import glue that rehydrates bridge-exported sidecar refs into canonical replay metadata/provenance so RLDS/LeRobot roundtrips remain loss-bounded but trace-complete.

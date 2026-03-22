@@ -31,8 +31,8 @@ def _episode() -> ReplayEpisodeRecord:
         regal_summary={"status": "ok"},
         datapack_summary={"slice": "s1"},
         ledger_event_ids=["ledger-1"],
-        metadata={"note": "episode"},
-        provenance={"event_spine_ref": "event_spine.jsonl"},
+        metadata={"note": "episode", "governed_supervision_refs": ["supervision-1"]},
+        provenance={"event_spine_ref": "event_spine.jsonl", "teacher_trace_ref": "teacher_trace.json"},
     )
 
 
@@ -59,8 +59,17 @@ def _steps() -> list[ReplayStepRecord]:
         ledger_event_ref="ledger-1",
         source_domain="sim",
         seed=7,
-        metadata={"event_refs": ["event-1"], "decision_refs": ["decision-1"]},
-        provenance={"runtime_packet_ref": "packet.json", "governance_trace_ref": "trace.jsonl"},
+        metadata={
+            "event_refs": ["event-1"],
+            "decision_refs": ["decision-1"],
+            "counterfactual_eval_ref": "counterfactual.json",
+            "value_target_refs": ["value-target-1"],
+        },
+        provenance={
+            "runtime_packet_ref": "packet.json",
+            "governance_trace_ref": "trace.jsonl",
+            "belief_state_ref": "belief.json",
+        },
     )
     return [
         ReplayStepRecord(step_idx=0, reward=0.5, done=False, timestamp="2026-03-21T01:00:01Z", **base),
@@ -78,7 +87,13 @@ def test_rlds_bridge_converts_and_preserves_sidecar_refs() -> None:
     assert payload["steps"][0]["is_first"] is True
     assert payload["steps"][1]["is_last"] is True
     assert payload["steps"][1]["metadata"]["internal_sidecars"]["runtime_packet_ref"] == "packet.json"
+    assert payload["steps"][0]["metadata"]["internal_sidecars"]["counterfactual_eval_ref"] == "counterfactual.json"
+    assert payload["steps"][0]["metadata"]["internal_sidecars"]["value_target_refs"] == ["value-target-1"]
+    assert payload["steps"][0]["metadata"]["internal_sidecars"]["belief_state_ref"] == "belief.json"
+    assert "run_id" not in payload["steps"][0]["metadata"]["internal_sidecars"]
     assert payload["metadata"]["internal_sidecars"]["objective_tensor_ref"] == "objective.json"
+    assert payload["metadata"]["internal_sidecars"]["governed_supervision_refs"] == ["supervision-1"]
+    assert payload["metadata"]["internal_sidecars"]["teacher_trace_ref"] == "teacher_trace.json"
 
 
 def test_lerobot_bridge_converts_and_preserves_sidecar_refs() -> None:
@@ -89,3 +104,7 @@ def test_lerobot_bridge_converts_and_preserves_sidecar_refs() -> None:
     assert rows[1]["done"] is True
     assert rows[0]["metadata"]["internal_sidecars"]["event_refs"] == ["event-1"]
     assert rows[0]["metadata"]["internal_sidecars"]["runtime_packet_ref"] == "packet.json"
+    assert rows[0]["metadata"]["internal_sidecars"]["counterfactual_eval_ref"] == "counterfactual.json"
+    assert rows[0]["metadata"]["internal_sidecars"]["value_target_refs"] == ["value-target-1"]
+    assert rows[0]["metadata"]["internal_sidecars"]["belief_state_ref"] == "belief.json"
+    assert "episode_id" not in rows[0]["metadata"]["internal_sidecars"]
