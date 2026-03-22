@@ -108,9 +108,12 @@ Execute exactly one task: $NEXT_TITLE.
 Classification: $NEXT_CLASSIFICATION.
 Rationale: $NEXT_RATIONALE.
 Keep VLA and foundation-model paths external and sidecar/advisory.
-Do not touch frozen zones: src/world_model/, checkpoints/stable_world_model.pt, trust_net, w_econ lattice math, lambda controller equations, or src/controllers/synthetic_weight_controller.py core logic.
+Do not touch frozen zones: checkpoints/stable_world_model.pt, legacy baseline world-model math, trust_net, w_econ lattice math, lambda controller equations, or src/controllers/synthetic_weight_controller.py core logic.
+Additive successor modules in src/world_model/ are allowed only when they preserve the stable baseline as the rollback anchor and stay advisory/governed.
 Prefer additive docs, scaffolding, tests, and sidecars before invasive rewrites.
 After changes, run verification, update docs/economic_world_model/progress_log.md and docs/economic_world_model/implementation_notes.md, and summarize blockers and the next recommended task.
+If you create a commit, publish it before finishing by running bash scripts/economic_world_model/publish_codex_change.sh --base-branch main --feature-prefix codex/ewm-nightly.
+Prefer a direct push to origin/main when it is a safe fast-forward. If main rejects the push, let the helper publish a timestamped feature branch instead, and include the published ref or exact push blocker in the final summary.
 EOF
 )"
 

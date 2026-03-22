@@ -35,6 +35,8 @@ Treat a task as incomplete unless the new sidecars/contracts are emitted from at
 Do not modify the stable Phase B checkpoint, legacy baseline world-model math, trust_net, w_econ lattice math, lambda controller equations, or src/controllers/synthetic_weight_controller.py core logic.
 Additive successor modules inside src/world_model/ are allowed only when they preserve the stable baseline as the rollback anchor and stay advisory/governed.
 If a safe task exists, implement it, run verification, update docs/economic_world_model/progress_log.md and docs/economic_world_model/implementation_notes.md, and leave a concise summary suitable for a GitHub issue comment.
+If you create a commit, publish it before finishing by running bash scripts/economic_world_model/publish_codex_change.sh --base-branch main --feature-prefix codex/ewm-nightly.
+Prefer a direct push to origin/main when it is a safe fast-forward. If main rejects the push, let the helper publish a timestamped feature branch instead, and report the published ref or exact push blocker.
 If no safe task exists, refresh the audit summary and explain why execution was skipped.
 ```
 
@@ -45,6 +47,13 @@ Expected output behavior:
 - make one scoped additive change or skip explicitly
 - update `docs/economic_world_model/progress_log.md`
 - update `docs/economic_world_model/implementation_notes.md`
+- publish any created commit to `origin/main` when possible, or to a timestamped `codex/ewm-nightly-*` branch when main push is rejected
+
+Publication helper:
+
+```bash
+bash scripts/economic_world_model/publish_codex_change.sh --base-branch main --feature-prefix codex/ewm-nightly
+```
 
 Current autonomous priority for the video-world-model subset:
 
