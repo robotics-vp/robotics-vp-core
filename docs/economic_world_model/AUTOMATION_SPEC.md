@@ -8,12 +8,21 @@ Repo-implemented now:
 - `scripts/economic_world_model/run_nightly_codex_task.sh`
 - `scripts/economic_world_model/update_status_issue.py`
 - `.github/workflows/economic-world-model-nightly.yml`
+- `docs/economic_world_model/ewm-nightly.automation.toml`
 
 Manual setup still required:
 
 - creating a Codex app automation in the UI
 - configuring `CODEX_API_KEY` in GitHub secrets if you want GitHub/cloud Codex execution
 - optionally configuring `CODEX_CLOUD_ENV_ID` if you want the local runner to use Codex cloud mode instead of local CLI mode
+
+## Checked-In Live Automation State
+
+The current live Codex app automation is mirrored in:
+
+- `docs/economic_world_model/ewm-nightly.automation.toml`
+
+This file is the Git-tracked source of truth for the active app automation prompt, RRULE, execution environment, and workspace roots. Keep it aligned with `/Users/amarmurray/.codex/automations/ewm-nightly/automation.toml` whenever the live automation changes.
 
 ## Codex App Automation
 

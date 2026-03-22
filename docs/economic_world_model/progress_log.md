@@ -71,3 +71,9 @@
 - Verification: `bash -n scripts/economic_world_model/run_nightly_codex_task.sh`, `bash -n scripts/economic_world_model/publish_codex_change.sh`, and `bash scripts/economic_world_model/publish_codex_change.sh --base-branch main --feature-prefix codex/ewm-nightly`.
 - Blocked: none for local publication on this pass; the direct push to `origin/main` succeeded after this automation-substrate update.
 - Next recommended task: add replay import glue that rehydrates bridge-exported sidecar refs into canonical replay metadata/provenance so RLDS/LeRobot roundtrips remain loss-bounded but trace-complete.
+
+- Changed: checked in `docs/economic_world_model/ewm-nightly.automation.toml` as a Git-tracked mirror of the live Codex app automation so the active prompt, RRULE, execution environment, and workspace roots are no longer app-local only.
+- Changed: updated `docs/economic_world_model/AUTOMATION_SPEC.md` so the checked-in automation snapshot is documented as the source of truth to keep aligned with the live app automation config.
+- Verification: `git diff --check`.
+- Blocked: none.
+- Next recommended task: add replay import glue that rehydrates bridge-exported sidecar refs into canonical replay metadata/provenance so RLDS/LeRobot roundtrips remain loss-bounded but trace-complete.

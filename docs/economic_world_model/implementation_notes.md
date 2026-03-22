@@ -74,3 +74,5 @@
 - Added `scripts/economic_world_model/publish_codex_change.sh` to publish automation commits to `origin/main` when the local change is a safe fast-forward, while falling back to a timestamped `codex/ewm-nightly-*` branch when direct main pushes are rejected.
 - Updated `scripts/economic_world_model/run_nightly_codex_task.sh` so the generated Codex task now requires publication via the helper and reports either the published ref or the exact push blocker before the run is considered complete.
 - Updated `docs/economic_world_model/AUTOMATION_SPEC.md`, `codex_skills/economic-world-model-roadmap/SKILL.md`, and the live app automation prompt to treat unpublished local commits as incomplete automation output.
+- Added `docs/economic_world_model/ewm-nightly.automation.toml` as a checked-in mirror of the live Codex app automation config, omitting only local timestamp fields so the active prompt/schedule/environment are versioned with the repo.
+- Updated `docs/economic_world_model/AUTOMATION_SPEC.md` to point at the checked-in automation snapshot as the Git-tracked source of truth for the live app automation state.

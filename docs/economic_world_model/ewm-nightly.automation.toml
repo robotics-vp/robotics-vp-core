@@ -1,0 +1,11 @@
+# Checked-in mirror of the live Codex app automation configuration for
+# `ewm-nightly`. Local timestamp fields are intentionally omitted.
+
+version = 1
+id = "ewm-nightly"
+name = "EWM nightly"
+prompt = "Follow [$economic-world-model-roadmap](/Users/amarmurray/robotics-vp-core/codex_skills/economic-world-model-roadmap/SKILL.md). Read the roadmap docs and latest audit artifacts, choose the single highest-value additive next step, prefer docs/scaffolding/tests before invasive rewrites, avoid frozen zones, run verification, update docs/economic_world_model/progress_log.md and docs/economic_world_model/implementation_notes.md, and leave a concise status summary plus next recommended task. If you create a commit, publish it before finishing by running `bash scripts/economic_world_model/publish_codex_change.sh --base-branch main --feature-prefix codex/ewm-nightly`. Prefer a direct push to origin/main when it is a safe fast-forward; if main rejects the push, publish a timestamped feature branch instead and report the exact ref or blocker."
+status = "ACTIVE"
+rrule = "RRULE:FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0;BYDAY=SU,TU,TH,SA"
+execution_environment = "local"
+cwds = ["/Users/amarmurray/robotics-vp-core"]
