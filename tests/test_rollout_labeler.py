@@ -2,9 +2,12 @@
 import json
 from pathlib import Path
 
+from PIL import Image
+
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
 from src.motor_backend.rollout_capture import EpisodeMetadata, EpisodeRollout, RolloutBundle
 from src.vla.rollout_labeler import label_rollouts_with_vla
+from src.vla.teacher_runtime import TeacherAdapterContract, TeacherActionEnvelope
 
 
 def test_rollout_labeler_appends_tags(tmp_path: Path):
@@ -112,3 +115,66 @@ def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):
     teacher_action = json.loads(teacher_action_path.read_text())
     assert teacher_contract["metadata"]["availability_reason"] == "boom"
     assert teacher_action["failure_mode"] == "boom"
+
+
+def test_rollout_labeler_preserves_structured_teacher_semantics(monkeypatch, tmp_path: Path):
+    import src.vla.rollout_labeler as labeler
+
+    class _Runtime:
+        def describe_contract(self):
+            return TeacherAdapterContract(
+                teacher_id="openvla",
+                model_name="dummy/openvla",
+                modality="action_semantics",
+                advisory_only=True,
+                available=True,
+            )
+
+        def predict_action(self, image, instruction):
+            return TeacherActionEnvelope(
+                teacher_id="openvla",
+                model_name="dummy/openvla",
+                instruction=instruction,
+                available=True,
+                action={"dx": 0.3, "gripper": 0.5, "vla_available": 1.0, "confidence": 0.8},
+                confidence=0.8,
+                failure_mode="teacher_available",
+                semantic_tags=["object:drawer", "affordance:open", "risk:fragility"],
+                object_refs=["drawer"],
+                affordance_hints=["open"],
+                risk_hints=["fragility"],
+            )
+
+    monkeypatch.setenv("OPENVLA_ENABLE", "1")
+    monkeypatch.setattr(labeler, "_get_openvla_teacher_runtime", lambda: (_Runtime(), None))
+
+    rgb_path = tmp_path / "frame.png"
+    Image.new("RGB", (8, 8), "gray").save(rgb_path)
+
+    base = DatapackConfig(
+        id="dp_base",
+        description="Open the drawer carefully",
+        motion_clips=[MotionClipSpec(path="data/clip.npz")],
+        tags=["humanoid"],
+    )
+    rollout = EpisodeRollout(
+        metadata=EpisodeMetadata(
+            episode_id="ep1",
+            task_id="task_a",
+            robot_family="G1",
+            seed=None,
+            env_params={},
+        ),
+        trajectory_path=tmp_path / "trajectory.npz",
+        rgb_video_path=rgb_path,
+    )
+    bundle = RolloutBundle(scenario_id="scenario_structured", episodes=[rollout])
+
+    labeled = labeler.label_rollouts_with_vla(bundle, base_datapack=base)
+
+    assert labeled
+    teacher_trace = json.loads((tmp_path / "trajectory_teacher_trace_v1.json").read_text())
+    assert teacher_trace["metadata"]["object_refs"] == ["drawer"]
+    assert teacher_trace["metadata"]["affordance_hints"] == ["open"]
+    assert teacher_trace["metadata"]["risk_hints"] == ["fragility"]
+    assert "object:drawer" in teacher_trace["metadata"]["semantic_tags"]

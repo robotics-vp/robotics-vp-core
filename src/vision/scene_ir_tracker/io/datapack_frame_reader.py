@@ -28,6 +28,8 @@ class DatapackFramesContract:
     camera_params: CameraParams
     camera_name: str
     instance_masks: List[Dict[str, np.ndarray]]
+    class_labels: List[Dict[str, str]] = field(default_factory=list)
+    object_refs: List[Dict[str, str]] = field(default_factory=list)
     depth_frames: Optional[List[np.ndarray]] = None
     segmentation_frames: Optional[List[np.ndarray]] = None
     frame_indices: List[int] = field(default_factory=list)
@@ -98,12 +100,20 @@ def read_datapack_frames(
             )
             timestamps = _build_timestamps(len(frames))
             instance_masks = _build_instance_masks(seg_frames, len(frames))
+            class_labels, object_refs, semantic_context = _build_semantic_context(
+                path,
+                metadata=_load_metadata(path),
+                seg_frames=seg_frames,
+                num_frames=len(frames),
+            )
             contract = DatapackFramesContract(
                 frames=frames,
                 timestamps_s=timestamps,
                 camera_params=proxy_camera_params,
                 camera_name=camera_name,
                 instance_masks=instance_masks,
+                class_labels=class_labels,
+                object_refs=object_refs,
                 depth_frames=depth_frames,
                 segmentation_frames=seg_frames,
                 frame_indices=list(range(len(frames))),
@@ -112,6 +122,7 @@ def read_datapack_frames(
                     "source": "vector_proxy",
                     "seed": seed,
                     "max_frames": max_frames,
+                    "semantic_context": semantic_context,
                 },
             )
             _validate_contract(contract)
@@ -148,12 +159,20 @@ def read_datapack_frames(
         )
 
     instance_masks = _build_instance_masks(seg_frames, len(frames))
+    class_labels, object_refs, semantic_context = _build_semantic_context(
+        path,
+        metadata=metadata,
+        seg_frames=seg_frames,
+        num_frames=len(frames),
+    )
     contract = DatapackFramesContract(
         frames=frames,
         timestamps_s=timestamps,
         camera_params=camera_params,
         camera_name=camera_name,
         instance_masks=instance_masks,
+        class_labels=class_labels,
+        object_refs=object_refs,
         depth_frames=depth_frames,
         segmentation_frames=seg_frames,
         frame_indices=indices,
@@ -162,6 +181,7 @@ def read_datapack_frames(
             "source": "sensor_bundle" if sensor_bundle else "datapack",
             "seed": seed,
             "max_frames": max_frames,
+            "semantic_context": semantic_context,
         },
     )
     _validate_contract(contract)
@@ -618,6 +638,10 @@ def _validate_contract(contract: DatapackFramesContract) -> None:
         for depth in contract.depth_frames:
             if depth.shape[:2] != (height, width):
                 raise DatapackFrameError("Depth frames must match RGB resolution.")
+    if contract.class_labels and len(contract.class_labels) != len(contract.frames):
+        raise DatapackFrameError("Class labels length must match RGB frames.")
+    if contract.object_refs and len(contract.object_refs) != len(contract.frames):
+        raise DatapackFrameError("Object refs length must match RGB frames.")
 
 
 def _is_monotonic(values: List[float]) -> bool:
@@ -699,6 +723,244 @@ def _extract_states(trajectory: Optional[Dict[str, Any]]) -> Optional[List[Dict[
     if isinstance(states, list):
         return states
     return None
+
+
+def _build_semantic_context(
+    path: Path,
+    *,
+    metadata: Dict[str, Any],
+    seg_frames: Optional[List[np.ndarray]],
+    num_frames: int,
+) -> Tuple[List[Dict[str, str]], List[Dict[str, str]], Dict[str, Any]]:
+    trajectory = _load_trajectory_payload(path)
+    scene_spec = _extract_scene_spec(trajectory) or _extract_scene_spec_from_metadata(metadata)
+    object_catalog = _build_scene_object_catalog(scene_spec)
+    segmentation_map = _extract_segmentation_label_map(metadata)
+
+    if not segmentation_map and object_catalog:
+        segmentation_map = {
+            str(index): dict(obj)
+            for index, obj in enumerate(object_catalog, start=1)
+        }
+
+    class_labels: List[Dict[str, str]] = []
+    object_refs: List[Dict[str, str]] = []
+    known_class_names: set[str] = set()
+    observed_object_refs: set[str] = set()
+
+    if seg_frames:
+        for frame in seg_frames[:num_frames]:
+            labels_for_frame: Dict[str, str] = {}
+            refs_for_frame: Dict[str, str] = {}
+            frame_arr = frame[..., 0] if frame.ndim == 3 and frame.shape[-1] in (1, 2, 3, 4) else frame
+            for raw_uid in [value for value in np.unique(frame_arr) if int(value) != 0]:
+                uid = str(int(raw_uid))
+                label_meta = segmentation_map.get(uid, {})
+                class_name = _normalize_semantic_label(label_meta.get("class_name") or f"instance_{uid}")
+                object_id = str(label_meta.get("object_id") or "")
+                labels_for_frame[uid] = class_name
+                if object_id:
+                    refs_for_frame[uid] = object_id
+                    observed_object_refs.add(object_id)
+                if not class_name.startswith("instance_"):
+                    known_class_names.add(class_name)
+            class_labels.append(labels_for_frame)
+            object_refs.append(refs_for_frame)
+
+    while len(class_labels) < num_frames:
+        class_labels.append({})
+    while len(object_refs) < num_frames:
+        object_refs.append({})
+
+    semantic_tags: set[str] = set()
+    task_id = str(
+        (metadata.get("metadata") or {}).get("task_id")
+        if isinstance(metadata.get("metadata"), dict)
+        else metadata.get("task_id")
+        or ""
+    )
+    if task_id:
+        semantic_tags.add(f"task:{_normalize_semantic_label(task_id)}")
+    semantic_tags.update(
+        str(tag)
+        for tag in (metadata.get("semantic_tags") or metadata.get("tags") or [])
+        if str(tag).strip()
+    )
+    for obj in object_catalog:
+        semantic_tags.update(str(tag) for tag in obj.get("semantic_tags", []) if str(tag).strip())
+    for class_name in known_class_names:
+        semantic_tags.add(f"object:{class_name}")
+
+    label_source = "scene_spec_ordered" if object_catalog else "unlabeled"
+    if _extract_segmentation_label_map(metadata):
+        label_source = "metadata_segmentation_map"
+
+    task_metadata = metadata.get("metadata") if isinstance(metadata.get("metadata"), dict) else {}
+    semantic_context = {
+        "task_id": str(task_metadata.get("task_id") or metadata.get("task_id") or ""),
+        "episode_id": str(task_metadata.get("episode_id") or metadata.get("episode_id") or path.name),
+        "semantic_tags": sorted(tag for tag in semantic_tags if tag),
+        "label_source": label_source,
+        "scene_object_catalog": object_catalog,
+        "segmentation_labels": segmentation_map,
+        "class_label_coverage": float(len(known_class_names) / max(len(object_catalog), 1)) if object_catalog else 0.0,
+        "observed_object_ref_count": int(len(observed_object_refs)),
+    }
+    return class_labels, object_refs, semantic_context
+
+
+def _extract_scene_spec_from_metadata(metadata: Dict[str, Any]) -> Optional[Any]:
+    if not isinstance(metadata, dict):
+        return None
+    candidates = [
+        metadata.get("scene_spec"),
+        metadata.get("metadata", {}).get("env_params", {}).get("scene_spec")
+        if isinstance(metadata.get("metadata"), dict)
+        else None,
+    ]
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        try:
+            from src.envs.workcell_env.scene.scene_spec import WorkcellSceneSpec
+
+            if isinstance(candidate, WorkcellSceneSpec):
+                return candidate
+            if isinstance(candidate, dict):
+                return WorkcellSceneSpec.from_dict(candidate)
+        except Exception:
+            return None
+    return None
+
+
+def _build_scene_object_catalog(scene_spec: Optional[Any]) -> List[Dict[str, Any]]:
+    if scene_spec is None:
+        return []
+
+    catalog: List[Dict[str, Any]] = []
+
+    def _append(
+        *,
+        object_id: str,
+        class_name: str,
+        category: str,
+        semantic_tags: List[str],
+        affordances: Optional[List[str]] = None,
+    ) -> None:
+        catalog.append(
+            {
+                "object_id": str(object_id),
+                "class_name": _normalize_semantic_label(class_name),
+                "category": str(category),
+                "semantic_tags": sorted({str(tag) for tag in semantic_tags if str(tag).strip()}),
+                "affordances": sorted({str(tag) for tag in (affordances or []) if str(tag).strip()}),
+            }
+        )
+
+    for station in getattr(scene_spec, "stations", []) or []:
+        _append(
+            object_id=station.id,
+            class_name=getattr(station, "station_type", station.id),
+            category="station",
+            semantic_tags=["station", "support_surface", "category:station", f"object:{getattr(station, 'station_type', station.id)}"],
+            affordances=[str(cap).lower() for cap in getattr(station, "capabilities", ())],
+        )
+    for fixture in getattr(scene_spec, "fixtures", []) or []:
+        _append(
+            object_id=fixture.id,
+            class_name=getattr(fixture, "fixture_type", fixture.id),
+            category="fixture",
+            semantic_tags=["fixture", "category:fixture", f"object:{getattr(fixture, 'fixture_type', fixture.id)}"],
+            affordances=["stabilize", "clamp"],
+        )
+    for container in getattr(scene_spec, "containers", []) or []:
+        _append(
+            object_id=container.id,
+            class_name=getattr(container, "container_type", container.id),
+            category="container",
+            semantic_tags=["container", "category:container", f"object:{getattr(container, 'container_type', container.id)}"],
+            affordances=["contain", "receive"],
+        )
+    for conveyor in getattr(scene_spec, "conveyors", []) or []:
+        _append(
+            object_id=conveyor.id,
+            class_name="conveyor_segment",
+            category="conveyor",
+            semantic_tags=["conveyor", "support_surface", "dynamic_surface", "object:conveyor_segment"],
+            affordances=["transport"],
+        )
+    for part in getattr(scene_spec, "parts", []) or []:
+        semantic_tags = [
+            "part",
+            "category:part",
+            f"object:{getattr(part, 'part_type', part.id)}",
+        ]
+        material = str(getattr(part, "material", "") or "")
+        if material:
+            semantic_tags.append(f"material:{_normalize_semantic_label(material)}")
+        _append(
+            object_id=part.id,
+            class_name=getattr(part, "part_type", part.id),
+            category="part",
+            semantic_tags=semantic_tags,
+            affordances=["pick", "place"],
+        )
+    for tool in getattr(scene_spec, "tools", []) or []:
+        _append(
+            object_id=tool.id,
+            class_name=getattr(tool, "tool_type", tool.id),
+            category="tool",
+            semantic_tags=["tool", "category:tool", f"object:{getattr(tool, 'tool_type', tool.id)}"],
+            affordances=["grasp", "manipulate"],
+        )
+    if not getattr(scene_spec, "tools", []):
+        _append(
+            object_id="end_effector",
+            class_name="end_effector",
+            category="tool",
+            semantic_tags=["tool", "manipulator", "object:end_effector"],
+            affordances=["grasp", "manipulate"],
+        )
+    return catalog
+
+
+def _extract_segmentation_label_map(metadata: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    if not isinstance(metadata, dict):
+        return {}
+    candidates = [
+        metadata.get("segmentation_label_map"),
+        metadata.get("segmentation_labels"),
+        metadata.get("seg_label_map"),
+        metadata.get("sensor_bundle", {}).get("segmentation_label_map")
+        if isinstance(metadata.get("sensor_bundle"), dict)
+        else None,
+    ]
+    mapping: Dict[str, Dict[str, Any]] = {}
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        for key, value in candidate.items():
+            normalized_key = str(key)
+            if isinstance(value, dict):
+                mapping[normalized_key] = {
+                    "object_id": str(value.get("object_id") or value.get("id") or ""),
+                    "class_name": _normalize_semantic_label(value.get("class_name") or value.get("label") or value.get("type") or ""),
+                    "category": str(value.get("category") or ""),
+                }
+            else:
+                mapping[normalized_key] = {
+                    "object_id": "",
+                    "class_name": _normalize_semantic_label(value),
+                    "category": "",
+                }
+    return {key: value for key, value in mapping.items() if value.get("class_name")}
+
+
+def _normalize_semantic_label(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    return "_".join(part for part in text.replace("-", " ").split() if part)
 
 
 def compute_datapack_frame_hash(metadata: Dict[str, Any]) -> str:

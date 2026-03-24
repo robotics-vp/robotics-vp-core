@@ -710,6 +710,32 @@ class SemanticWorldModelBuilder:
             tags.add("teacher:available")
         return sorted(tags)
 
+    def _teacher_object_refs(self, teacher_trace: Optional[TeacherTrace]) -> list[str]:
+        if teacher_trace is None:
+            return []
+        refs = set(_strings(teacher_trace.metadata.get("object_refs")))
+        for step in teacher_trace.steps:
+            refs.update(_strings(step.metadata.get("object_refs")))
+        return sorted(_normalize_label(ref_) for ref_ in refs if _normalize_label(ref_))
+
+    def _teacher_affordances(self, teacher_trace: Optional[TeacherTrace]) -> list[str]:
+        if teacher_trace is None:
+            return []
+        affordances = set(_strings(teacher_trace.metadata.get("affordance_hints")))
+        for step in teacher_trace.steps:
+            affordances.update(_strings(step.metadata.get("affordance_hints")))
+        affordances.update(self._instruction_affordances(teacher_trace.instruction))
+        return sorted(_normalize_label(value) for value in affordances if _normalize_label(value))
+
+    def _teacher_risk_hints(self, teacher_trace: Optional[TeacherTrace]) -> list[str]:
+        if teacher_trace is None:
+            return []
+        risks = set(_strings(teacher_trace.metadata.get("risk_hints")))
+        for step in teacher_trace.steps:
+            risks.update(_strings(step.metadata.get("risk_hints")))
+        risks.update(tag.split("risk:", 1)[1] for tag in self._teacher_tags(teacher_trace) if tag.startswith("risk:"))
+        return sorted(_normalize_label(value) for value in risks if _normalize_label(value))
+
     def _instruction_affordances(self, instruction: str) -> list[str]:
         instruction = str(instruction or "").lower()
         affordances: set[str] = set()
@@ -784,6 +810,9 @@ class SemanticWorldModelBuilder:
         if teacher is not None:
             instruction = str(teacher.instruction or "")
         instruction_affordances = self._instruction_affordances(instruction)
+        teacher_object_refs = set(self._teacher_object_refs(teacher))
+        teacher_affordances = set(self._teacher_affordances(teacher))
+        teacher_risk_hints = set(self._teacher_risk_hints(teacher))
         track_sem_conf = {}
         if vla_evidence is not None and getattr(vla_evidence, "class_probs", None) is not None:
             probs = np.asarray(vla_evidence.class_probs, dtype=np.float32)
@@ -804,6 +833,17 @@ class SemanticWorldModelBuilder:
                         for idx in range(len(track_ids))
                     }
                 )
+        track_label_source = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_label_source", []))]
+        track_categories = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_category", []))]
+        track_label_confidence = np.asarray(
+            scene_tracks_dict.get("scene_tracks_v1/track_label_confidence", np.zeros((len(track_ids),), dtype=np.float32)),
+            dtype=np.float32,
+        ).reshape(-1)
+        track_source_instance_ids = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_source_instance_id", []))]
+        track_source_object_ids = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_source_object_id", []))]
+        track_hint_object_ids = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_hint_object_id", []))]
+        raw_track_tags = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_semantic_tags_json", []))]
+        raw_track_affordances = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_affordances_json", []))]
 
         grounded_objects: list[SemanticObjectState] = []
         grounded_tags: set[str] = set(_strings(semantic_tags))
@@ -819,6 +859,23 @@ class SemanticWorldModelBuilder:
                 class_names=class_names,
             )
             normalized_label = _normalize_label(label)
+            label_source = track_label_source[idx] if idx < len(track_label_source) else ""
+            label_confidence = float(track_label_confidence[idx]) if idx < track_label_confidence.shape[0] else 0.0
+            source_instance_id = _normalize_label(track_source_instance_ids[idx]) if idx < len(track_source_instance_ids) else ""
+            source_object_id = _normalize_label(track_source_object_ids[idx]) if idx < len(track_source_object_ids) else ""
+            hint_object_id = source_object_id or (_normalize_label(track_hint_object_ids[idx]) if idx < len(track_hint_object_ids) else "")
+            extra_track_tags: set[str] = set()
+            extra_track_affordances: set[str] = set()
+            if idx < len(raw_track_tags):
+                try:
+                    extra_track_tags.update(_strings(json.loads(raw_track_tags[idx])))
+                except Exception:
+                    pass
+            if idx < len(raw_track_affordances):
+                try:
+                    extra_track_affordances.update(_strings(json.loads(raw_track_affordances[idx])))
+                except Exception:
+                    pass
             prior = OBJECT_PRIORS.get(normalized_label, {})
             visibility_mean = _safe_mean(visibility[:, idx] if visibility.ndim >= 2 and idx < visibility.shape[1] else [0.0])
             occlusion_mean = _safe_mean(occlusion[:, idx] if occlusion.ndim >= 2 and idx < occlusion.shape[1] else [0.0])
@@ -829,8 +886,14 @@ class SemanticWorldModelBuilder:
             if position_seq.shape[0] > 1:
                 diffs = np.diff(position_seq, axis=0)
                 motion_score = float(np.mean(np.linalg.norm(diffs, axis=-1)))
-            teacher_match = float(any(normalized_label in tag or tag.endswith(normalized_label) for tag in teacher_tags))
-            semantic_conf = track_sem_conf.get(str(track_id), 0.0)
+            teacher_match = float(
+                bool(
+                    any(normalized_label in tag or tag.endswith(normalized_label) for tag in teacher_tags)
+                    or normalized_label in teacher_object_refs
+                    or (bool(hint_object_id) and hint_object_id in teacher_object_refs)
+                )
+            )
+            semantic_conf = max(track_sem_conf.get(str(track_id), 0.0), label_confidence * 0.75)
             confidence = _clip01(
                 0.2
                 + 0.3 * visibility_mean
@@ -850,6 +913,7 @@ class SemanticWorldModelBuilder:
             state_tags = list(prior.get("state_tags", []))
             affordances = list(prior.get("affordances", []))
             risk_tags = list(prior.get("risk_tags", []))
+            resolved_category = track_categories[idx] if idx < len(track_categories) and str(track_categories[idx]).strip() else ""
             if motion_score > 0.05:
                 state_tags.append("dynamic_track")
             else:
@@ -863,11 +927,28 @@ class SemanticWorldModelBuilder:
             for affordance in instruction_affordances:
                 if normalized_label in instruction.lower():
                     affordances.append(affordance)
+            if normalized_label in teacher_object_refs or hint_object_id in teacher_object_refs:
+                affordances.extend(teacher_affordances)
+                risk_tags.extend(teacher_risk_hints)
             if "fragile" in teacher_tags and normalized_label in {"vase", "glass", "fragile_object"}:
                 risk_tags.append("fragility")
-            category = str(prior.get("category", "human_body" if int(entity_types[idx]) == 1 else "tracked_object"))
+            for tag in extra_track_tags:
+                if tag.startswith("risk:"):
+                    risk_tags.append(tag.split("risk:", 1)[1])
+                elif tag.startswith("affordance:"):
+                    affordances.append(tag.split("affordance:", 1)[1])
+                else:
+                    state_tags.append(tag)
+            affordances.extend(extra_track_affordances)
+            if label_source:
+                state_tags.append(f"label_source:{_normalize_label(label_source)}")
+            category = str(
+                resolved_category
+                or prior.get("category", "human_body" if int(entity_types[idx]) == 1 else "tracked_object")
+            )
             object_id = f"track:{track_id}"
             grounded_tags.update(self._grounded_label_to_tags(normalized_label, category))
+            grounded_tags.update(_strings(extra_track_tags))
             grounded_objects.append(
                 SemanticObjectState(
                     object_id=object_id,
@@ -893,6 +974,11 @@ class SemanticWorldModelBuilder:
                         "mean_position": position_seq.mean(axis=0).tolist() if position_seq.size else [0.0, 0.0, 0.0],
                         "teacher_match": bool(teacher_match),
                         "semantic_confidence": semantic_conf,
+                        "label_source": label_source,
+                        "label_confidence": label_confidence,
+                        "hint_object_id": hint_object_id,
+                        "source_object_id": source_object_id,
+                        "source_instance_id": source_instance_id,
                     },
                 )
             )
@@ -967,6 +1053,8 @@ class SemanticWorldModelBuilder:
             "vla_semantic_evidence_present": bool(vla_evidence),
             "training_eligible": bool(summary.get("training_eligible", False)),
             "scene_ir_quality": quality_score,
+            "semantic_density_score": _safe_float(summary.get("semantic_density_score", 0.0)),
+            "semantic_grounding_ready": bool(summary.get("grounding_ready", False)),
         }
         return {
             "objects": grounded_objects,

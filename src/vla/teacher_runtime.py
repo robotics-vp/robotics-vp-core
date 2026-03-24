@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
 from src.evidence.preconditions import build_execution_preconditions
+from src.evidence.teacher_trace import infer_teacher_semantics
 from src.utils.config_digest import sha256_json
 from src.utils.json_safe import to_json_safe
 
@@ -67,6 +68,10 @@ class TeacherActionEnvelope:
     action: Dict[str, float] = field(default_factory=dict)
     confidence: float = 0.0
     failure_mode: str = ""
+    semantic_tags: list[str] = field(default_factory=list)
+    object_refs: list[str] = field(default_factory=list)
+    affordance_hints: list[str] = field(default_factory=list)
+    risk_hints: list[str] = field(default_factory=list)
     provenance: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     version: str = "teacher_action_envelope_v1"
@@ -80,6 +85,10 @@ class TeacherActionEnvelope:
             "action": _float_mapping(self.action),
             "confidence": float(self.confidence),
             "failure_mode": self.failure_mode,
+            "semantic_tags": list(self.semantic_tags),
+            "object_refs": list(self.object_refs),
+            "affordance_hints": list(self.affordance_hints),
+            "risk_hints": list(self.risk_hints),
             "provenance": _mapping(self.provenance),
             "metadata": _mapping(self.metadata),
             "version": self.version,
@@ -95,6 +104,10 @@ class TeacherActionEnvelope:
                 "fallback_mode": str(
                     self.failure_mode or ("teacher_available" if self.available else "teacher_unavailable")
                 ),
+                "semantic_tags": list(self.semantic_tags),
+                "object_refs": list(self.object_refs),
+                "affordance_hints": list(self.affordance_hints),
+                "risk_hints": list(self.risk_hints),
             }
         )
         return payload
@@ -109,6 +122,7 @@ class TeacherActionEnvelope:
         failure_mode: str,
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> "TeacherActionEnvelope":
+        semantic_bundle = infer_teacher_semantics(instruction=instruction, metadata=metadata)
         return cls(
             teacher_id=teacher_id,
             model_name=model_name,
@@ -117,6 +131,10 @@ class TeacherActionEnvelope:
             action={},
             confidence=0.0,
             failure_mode=str(failure_mode),
+            semantic_tags=semantic_bundle["semantic_tags"],
+            object_refs=semantic_bundle["object_refs"],
+            affordance_hints=semantic_bundle["affordance_hints"],
+            risk_hints=semantic_bundle["risk_hints"],
             metadata=_mapping(metadata),
         )
 
@@ -130,6 +148,10 @@ class TeacherActionEnvelope:
             action=_float_mapping(payload.get("action")),
             confidence=float(payload.get("confidence", 0.0)),
             failure_mode=str(payload.get("failure_mode", "")),
+            semantic_tags=[str(tag) for tag in payload.get("semantic_tags", []) or []],
+            object_refs=[str(tag) for tag in payload.get("object_refs", []) or []],
+            affordance_hints=[str(tag) for tag in payload.get("affordance_hints", []) or []],
+            risk_hints=[str(tag) for tag in payload.get("risk_hints", []) or []],
             provenance=_mapping(payload.get("provenance")),
             metadata=_mapping(payload.get("metadata")),
             version=str(payload.get("version", "teacher_action_envelope_v1")),
@@ -204,6 +226,10 @@ class OpenVLATeacherRuntime:
                 action=unavailable.action,
                 confidence=unavailable.confidence,
                 failure_mode=unavailable.failure_mode,
+                semantic_tags=unavailable.semantic_tags,
+                object_refs=unavailable.object_refs,
+                affordance_hints=unavailable.affordance_hints,
+                risk_hints=unavailable.risk_hints,
                 provenance={
                     "contract_id": contract.contract_id,
                     "action_schema_id": contract.action_schema_id,
@@ -222,6 +248,12 @@ class OpenVLATeacherRuntime:
             required_boolean_signals={"teacher_available": True},
             metadata={"instruction": instruction},
         )
+        semantic_bundle = infer_teacher_semantics(
+            instruction=instruction,
+            semantic_tags=payload.get("semantic_tags") if isinstance(payload, Mapping) else None,
+            action=payload if isinstance(payload, Mapping) else None,
+            metadata=payload if isinstance(payload, Mapping) else None,
+        )
         return TeacherActionEnvelope(
             teacher_id=contract.teacher_id,
             model_name=contract.model_name,
@@ -230,12 +262,17 @@ class OpenVLATeacherRuntime:
             action=_float_mapping(payload),
             confidence=float(payload.get("confidence", 0.0)),
             failure_mode=str(payload.get("fallback_mode", "teacher_available" if available else "teacher_unavailable")),
+            semantic_tags=semantic_bundle["semantic_tags"],
+            object_refs=semantic_bundle["object_refs"],
+            affordance_hints=semantic_bundle["affordance_hints"],
+            risk_hints=semantic_bundle["risk_hints"],
             provenance={
                 "contract_id": contract.contract_id,
                 "action_schema_id": contract.action_schema_id,
             },
             metadata={
                 "available": available,
+                "semantic_summary": semantic_bundle,
                 "execution_preconditions": execution_preconditions.to_dict(),
             },
         )

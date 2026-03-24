@@ -6,7 +6,7 @@ Provides dataclass configurations for the Scene IR Tracker module.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal
 import os
 
 
@@ -189,6 +189,7 @@ class SceneIRTrackerConfig:
         ir_refiner_config: Configuration for IR refinement.
         tracking_config: Configuration for Kalman tracking.
         use_stub_adapters: Use stub implementations (for testing without models).
+        zero_inference_passthrough: Reconstruct from segmentation/depth directly without SAM3D inference.
     """
 
     device: str = "cuda"
@@ -204,6 +205,9 @@ class SceneIRTrackerConfig:
     tracking_config: TrackingConfig = field(default_factory=TrackingConfig)
     use_stub_adapters: bool = True
     allow_fallbacks: bool = field(default_factory=lambda: os.environ.get("SCENE_IR_ALLOW_FALLBACKS", "0") == "1")
+    zero_inference_passthrough: bool = field(
+        default_factory=lambda: os.environ.get("SCENE_IR_ZERO_INFERENCE_PASSTHROUGH", "0") == "1"
+    )
 
     def __post_init__(self) -> None:
         self.device = str(self.device)
@@ -213,6 +217,7 @@ class SceneIRTrackerConfig:
         self.use_point_map = bool(self.use_point_map)
         self.use_stub_adapters = bool(self.use_stub_adapters)
         self.allow_fallbacks = bool(self.allow_fallbacks)
+        self.zero_inference_passthrough = bool(self.zero_inference_passthrough)
 
         # Convert nested configs from dicts if needed
         if isinstance(self.ir_refiner_config, dict):
@@ -234,6 +239,7 @@ class SceneIRTrackerConfig:
             "tracking_config": self.tracking_config.to_dict(),
             "use_stub_adapters": self.use_stub_adapters,
             "allow_fallbacks": self.allow_fallbacks,
+            "zero_inference_passthrough": self.zero_inference_passthrough,
         }
 
     @classmethod
@@ -262,4 +268,8 @@ class SceneIRTrackerConfig:
             tracking_config=tracking_config,
             use_stub_adapters=data.get("use_stub_adapters", True),
             allow_fallbacks=data.get("allow_fallbacks", os.environ.get("SCENE_IR_ALLOW_FALLBACKS", "0") == "1"),
+            zero_inference_passthrough=data.get(
+                "zero_inference_passthrough",
+                os.environ.get("SCENE_IR_ZERO_INFERENCE_PASSTHROUGH", "0") == "1",
+            ),
         )

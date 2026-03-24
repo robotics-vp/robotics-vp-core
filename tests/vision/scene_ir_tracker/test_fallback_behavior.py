@@ -146,3 +146,15 @@ class TestSceneIRTrackerConfigFallback:
         config = SceneIRTrackerConfig(use_stub_adapters=True, allow_fallbacks=False)
         assert config.use_stub_adapters is True
         assert config.allow_fallbacks is False
+
+    def test_zero_inference_passthrough_serialization(self):
+        """zero_inference_passthrough should serialize and deserialize correctly."""
+        from src.vision.scene_ir_tracker.config import SceneIRTrackerConfig
+
+        config = SceneIRTrackerConfig(zero_inference_passthrough=True, use_stub_adapters=False)
+        data = config.to_dict()
+
+        assert data["zero_inference_passthrough"] is True
+        restored = SceneIRTrackerConfig.from_dict(data)
+        assert restored.zero_inference_passthrough is True
+        assert restored.use_stub_adapters is False

@@ -95,16 +95,27 @@ def build_vla_semantic_evidence_payload(
 
     source = "vla_stub"
     fallback_mode = "no_teacher"
+    payload_tags = list(semantic_tags or [])
+    object_refs: list[str] = []
+    affordance_hints: list[str] = []
+    risk_hints: list[str] = []
     if isinstance(vla_payload, Mapping):
         if bool(vla_payload.get("vla_available", False)):
             source = str(vla_payload.get("source", "openvla"))
             fallback_mode = str(vla_payload.get("fallback_mode", "teacher_available"))
         else:
             fallback_mode = str(vla_payload.get("fallback_mode", "teacher_unavailable"))
+        payload_tags = sorted({str(tag) for tag in payload_tags + list(vla_payload.get("semantic_tags", []) or []) if str(tag).strip()})
+        object_refs = [str(item) for item in vla_payload.get("object_refs", []) or [] if str(item).strip()]
+        affordance_hints = [str(item) for item in vla_payload.get("affordance_hints", []) or [] if str(item).strip()]
+        risk_hints = [str(item) for item in vla_payload.get("risk_hints", []) or [] if str(item).strip()]
 
     provenance = {
         "source": source,
-        "semantic_tags": semantic_tags or [],
+        "semantic_tags": payload_tags,
+        "object_refs": object_refs,
+        "affordance_hints": affordance_hints,
+        "risk_hints": risk_hints,
         "instruction": instruction or "",
         "vla_available": bool(vla_payload.get("vla_available", False)) if isinstance(vla_payload, Mapping) else False,
         "teacher_trace_ref": teacher_trace_ref or "",

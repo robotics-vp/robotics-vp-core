@@ -152,6 +152,7 @@ class SAM3DBodyAdapter:
         self,
         config: Optional[SAM3DBodyConfig] = None,
         use_stub: bool = True,
+        allow_fallbacks: bool = False,
     ):
         """Initialize adapter.
 
@@ -161,7 +162,9 @@ class SAM3DBodyAdapter:
         """
         self.config = config or SAM3DBodyConfig()
         self.use_stub = use_stub
+        self.allow_fallbacks = bool(allow_fallbacks)
         self._model = None
+        self.backend_mode = "stub_requested" if use_stub else "uninitialized"
 
         if not use_stub:
             self._load_model()
@@ -176,19 +179,31 @@ class SAM3DBodyAdapter:
                 device=self.config.device,
                 use_fallback=False,
             )
-            
+
             if self._wrapper.is_real:
                 logger.info("SAM3D-Body loaded via third_party wrapper")
                 self.use_stub = False
+                self.backend_mode = "real"
             else:
-                logger.info("SAM3D-Body wrapper using fallback mode")
+                message = "SAM3D-Body wrapper returned fallback mode"
+                if not self.allow_fallbacks:
+                    raise RuntimeError(message)
+                logger.info("%s", message)
                 self.use_stub = True
+                self.backend_mode = "wrapper_fallback"
         except ImportError as e:
-            logger.warning(f"Failed to import third_party wrapper: {e}. Using stub.")
+            message = f"Failed to import third_party wrapper: {e}"
+            if not self.allow_fallbacks:
+                raise RuntimeError(message) from e
+            logger.warning("%s. Using stub.", message)
             self.use_stub = True
+            self.backend_mode = "import_failure_stub"
         except Exception as e:
+            if not self.allow_fallbacks:
+                raise
             logger.warning(f"Failed to load SAM3D-Body: {e}. Using stub.")
             self.use_stub = True
+            self.backend_mode = "load_failure_stub"
 
     def infer(
         self,

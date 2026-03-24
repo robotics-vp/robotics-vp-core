@@ -2,6 +2,17 @@
 
 ## 2026-03-24
 
+- SceneTracks backend selection is now precondition-driven instead of defaulting to stubs:
+  - `run_scene_tracks(...)` defaults to `backend_policy="auto"`
+  - `auto` first attempts a real local SAM3D tracker with `allow_fallbacks=False`, so installed packages + local checkpoints immediately activate on-device inference without extra caller wiring
+  - if real SAM3D is not locally ready and segmentation masks are available, `auto` falls back to `zero_inference_passthrough`
+  - stubs are now opt-in via explicit `backend_policy="stub"` or `use_stub_adapters=True`; they are no longer the silent default
+- Backend choice is now first-class runtime metadata:
+  - runner metadata records `backend_policy`, `backend_selected`, and `real_backend_failure`
+  - auto-selected real runs and passthrough runs can therefore be distinguished by replay/semantic consumers without re-deriving the decision from logs
+- Caller surface:
+  - `scripts/run_scene_tracks.py` now exposes `--backend-policy auto|real|passthrough|stub`
+  - `src/ingestion/x_humanoid_adapter.py` now exposes `scene_tracks_backend_policy`
 - SceneTracks now has an explicit no-spend backend alongside real/stub SAM3D:
   - `SceneIRTrackerConfig.zero_inference_passthrough` can be enabled directly or via `run_scene_tracks(...)` / `scripts/run_scene_tracks.py --zero-inference-passthrough`
   - when enabled, `SceneIRTracker` skips SAM3D adapter loading and inverse-rendering refinement, then reconstructs objects/bodies deterministically from segmentation masks plus depth/camera geometry

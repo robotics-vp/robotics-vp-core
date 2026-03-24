@@ -26,6 +26,18 @@ def main() -> int:
     parser.add_argument("--ontology-root", type=str, default="data/ontology", help="Ontology store root")
     parser.add_argument("--min-quality", type=float, default=0.2, help="Minimum quality threshold")
     parser.add_argument("--allow-low-quality", action="store_true", help="Allow low quality outputs")
+    parser.add_argument(
+        "--backend-policy",
+        type=str,
+        default="auto",
+        choices=["auto", "real", "passthrough", "stub"],
+        help="Backend selection policy. 'auto' prefers real on-device SAM3D and falls back to passthrough.",
+    )
+    parser.add_argument(
+        "--zero-inference-passthrough",
+        action="store_true",
+        help="Reconstruct from segmentation/depth directly without SAM3D inference.",
+    )
 
     args = parser.parse_args()
 
@@ -40,6 +52,8 @@ def main() -> int:
             ontology_root=args.ontology_root,
             min_quality=args.min_quality,
             allow_low_quality=args.allow_low_quality,
+            backend_policy=args.backend_policy,
+            zero_inference_passthrough=args.zero_inference_passthrough,
         )
     except SceneTracksQualityError as exc:
         print(f"[run_scene_tracks] quality gate failed: {exc}", file=sys.stderr)

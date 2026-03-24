@@ -8,8 +8,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
-import uuid
-
 import numpy as np
 
 from src.vision.scene_ir_tracker.config import TrackingConfig
@@ -43,6 +41,9 @@ class KalmanTrack:
     covariance: np.ndarray  # (8, 8)
     z_shape_ema: Optional[np.ndarray] = None
     z_tex_ema: Optional[np.ndarray] = None
+    source_instance_id: Optional[str] = None
+    source_object_id: Optional[str] = None
+    label_source: str = ""
     age: int = 0
     hits: int = 0
     time_since_update: int = 0
@@ -221,6 +222,13 @@ class KalmanTrackManager:
             else:
                 track.z_tex_ema = alpha * track.z_tex_ema + (1 - alpha) * entity.z_tex
 
+        if not track.source_instance_id and entity.source_instance_id:
+            track.source_instance_id = entity.source_instance_id
+        if not track.source_object_id and entity.source_object_id:
+            track.source_object_id = entity.source_object_id
+        if not track.label_source and entity.label_source:
+            track.label_source = entity.label_source
+
         track.hits += 1
         track.time_since_update = 0
         track.history.append(entity)
@@ -241,6 +249,9 @@ class KalmanTrackManager:
             covariance=covariance,
             z_shape_ema=entity.z_shape.copy() if entity.z_shape is not None else None,
             z_tex_ema=entity.z_tex.copy() if entity.z_tex is not None else None,
+            source_instance_id=entity.source_instance_id,
+            source_object_id=entity.source_object_id,
+            label_source=entity.label_source,
             age=0,
             hits=1,
             time_since_update=0,
@@ -274,6 +285,9 @@ class KalmanTrackManager:
             occlusion_score=entity.occlusion_score,
             ir_loss=entity.ir_loss,
             joints_3d=entity.joints_3d,
+            source_instance_id=entity.source_instance_id or track.source_instance_id,
+            source_object_id=entity.source_object_id or track.source_object_id,
+            label_source=entity.label_source or track.label_source,
         )
 
     def _associate(

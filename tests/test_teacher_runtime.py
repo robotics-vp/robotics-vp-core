@@ -27,6 +27,23 @@ class _DummyController:
         raise RuntimeError("teacher_missing")
 
 
+class _AvailableController:
+    cfg = _DummyConfig()
+    available = True
+
+    def predict_action(self, image: Image.Image, instruction: str):
+        return {
+            "vla_available": True,
+            "confidence": 0.82,
+            "dx": 0.35,
+            "gripper": 0.6,
+            "source": "dummy/openvla",
+            "semantic_tags": ["mode:recovery"],
+            "object_refs": ["drawer"],
+            "risk_hints": ["fragility"],
+        }
+
+
 def test_teacher_runtime_serialization_round_trip(tmp_path: Path) -> None:
     contract = TeacherAdapterContract(
         teacher_id="openvla",
@@ -68,3 +85,25 @@ def test_openvla_teacher_runtime_reports_unavailable_predictions() -> None:
     assert envelope.provenance["contract_id"] == contract.contract_id
     assert contract.metadata["execution_preconditions"]["ready"] is False
     assert envelope.metadata["execution_preconditions"]["ready"] is False
+    assert "object:drawer" in TeacherActionEnvelope.unavailable(
+        teacher_id="openvla",
+        model_name="dummy/openvla",
+        instruction="open the drawer carefully",
+        failure_mode="teacher_missing",
+    ).semantic_tags
+
+
+def test_openvla_teacher_runtime_enriches_semantic_hints() -> None:
+    runtime = OpenVLATeacherRuntime(_AvailableController())
+
+    envelope = runtime.predict_action(Image.new("RGB", (8, 8), "gray"), "open the drawer carefully")
+    vla_payload = envelope.to_vla_payload()
+
+    assert envelope.available is True
+    assert "object:drawer" in envelope.semantic_tags
+    assert "affordance:open" in envelope.semantic_tags
+    assert "drawer" in envelope.object_refs
+    assert "open" in envelope.affordance_hints
+    assert "fragility" in envelope.risk_hints
+    assert "drawer" in vla_payload["object_refs"]
+    assert "open" in vla_payload["affordance_hints"]

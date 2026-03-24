@@ -97,11 +97,19 @@ def test_multicamera_sensor_bundle(tmp_path: Path) -> None:
         extrinsics=extrinsics,
         timestamps_s=timestamps,
         depth_unit="meters",
+        segmentation_label_map={
+            "1": {"object_id": "hole", "class_name": "vise", "category": "fixture"},
+            "2": {"object_id": "peg", "class_name": "peg", "category": "part"},
+        },
+        scene_object_catalog=[
+            {"object_id": "hole", "class_name": "vise", "category": "fixture"},
+            {"object_id": "peg", "class_name": "peg", "category": "part"},
+        ],
     )
 
     episode_dir = tmp_path / "episode_000"
     episode_dir.mkdir(parents=True, exist_ok=True)
-    write_sensor_bundle(episode_dir, bundle)
+    metadata = write_sensor_bundle(episode_dir, bundle)
 
     for camera in cameras:
         assert (episode_dir / "rgb" / f"{camera}.npz").exists()
@@ -109,6 +117,11 @@ def test_multicamera_sensor_bundle(tmp_path: Path) -> None:
         assert (episode_dir / "seg" / f"{camera}.npz").exists()
         assert (episode_dir / "intrinsics" / f"{camera}.json").exists()
         assert (episode_dir / "extrinsics" / f"{camera}.npy").exists()
+
+    assert "segmentation_label_map" in metadata
+    assert metadata["segmentation_label_map"]
+    assert "scene_object_catalog" in metadata
+    assert any(item.get("object_id") == "peg" for item in metadata["scene_object_catalog"])
 
     seg_front = np.load(episode_dir / "seg" / "front.npz")["frames"]
     seg_top = np.load(episode_dir / "seg" / "top.npz")["frames"]

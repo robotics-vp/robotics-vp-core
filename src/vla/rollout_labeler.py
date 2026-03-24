@@ -205,6 +205,17 @@ def _write_vla_semantic_evidence_sidecar(
     try:
         trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
         scene_tracks = _extract_scene_tracks_payload(trajectory_payload)
+        effective_semantic_tags = sorted(
+            {
+                str(tag)
+                for tag in list(semantic_tags)
+                + list(getattr(teacher_envelope, "semantic_tags", []) or [])
+                if str(tag).strip()
+            }
+        )
+        object_refs = list(getattr(teacher_envelope, "object_refs", []) or [])
+        affordance_hints = list(getattr(teacher_envelope, "affordance_hints", []) or [])
+        risk_hints = list(getattr(teacher_envelope, "risk_hints", []) or [])
         teacher_contract_ref = ""
         teacher_action_ref = ""
         if teacher_contract is not None:
@@ -232,7 +243,7 @@ def _write_vla_semantic_evidence_sidecar(
                     instruction=instruction,
                     action=dict(vla_action or {}),
                     confidence=float(vla_action.get("confidence", 0.0)) if isinstance(vla_action, Mapping) else 0.0,
-                    semantic_tags=semantic_tags,
+                    semantic_tags=effective_semantic_tags,
                     artifact_refs={
                         "teacher_contract_ref": teacher_contract_ref,
                         "teacher_action_ref": teacher_action_ref,
@@ -240,12 +251,17 @@ def _write_vla_semantic_evidence_sidecar(
                     metadata={
                         "availability_reason": str(vla_error_reason or ""),
                         "vla_available": bool(vla_action.get("vla_available", False)) if isinstance(vla_action, Mapping) else False,
+                        "object_refs": object_refs,
+                        "affordance_hints": affordance_hints,
+                        "risk_hints": risk_hints,
                     },
                 )
             ],
             summary={
                 "teacher_confidence_mean": float(vla_action.get("confidence", 0.0)) if isinstance(vla_action, Mapping) else 0.0,
                 "step_count": 1.0,
+                "semantic_tag_count": float(len(effective_semantic_tags)),
+                "object_ref_count": float(len(object_refs)),
             },
             provenance={
                 "source": teacher_contract.teacher_id if teacher_contract is not None else "openvla",
@@ -253,7 +269,10 @@ def _write_vla_semantic_evidence_sidecar(
                 "availability_reason": str(vla_error_reason or ""),
             },
             metadata={
-                "semantic_tags": semantic_tags,
+                "semantic_tags": effective_semantic_tags,
+                "object_refs": object_refs,
+                "affordance_hints": affordance_hints,
+                "risk_hints": risk_hints,
                 "teacher_contract_ref": teacher_contract_ref,
                 "teacher_action_ref": teacher_action_ref,
             },
@@ -265,7 +284,7 @@ def _write_vla_semantic_evidence_sidecar(
         evidence = build_vla_semantic_evidence_payload(
             scene_tracks=scene_tracks,
             vla_payload=vla_action,
-            semantic_tags=semantic_tags,
+            semantic_tags=effective_semantic_tags,
             instruction=instruction,
             teacher_trace_ref=str(teacher_trace_path),
             teacher_contract_ref=teacher_contract_ref,

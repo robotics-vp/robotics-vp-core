@@ -6,7 +6,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Dict, Mapping, Sequence
 
 import numpy as np
 
@@ -581,7 +581,10 @@ def _build_sensor_bundle(
     extrinsics: dict[str, Any] = {}
 
     try:
-        from src.envs.workcell_env.observations.mujoco_render import render_workcell_frames
+        from src.envs.workcell_env.observations.mujoco_render import (
+            build_segmentation_label_map,
+            render_workcell_frames,
+        )
         from src.motor_backend.sensor_bundle import SensorBundleData
 
         if isinstance(scene_spec, WorkcellSceneSpec):
@@ -589,6 +592,7 @@ def _build_sensor_bundle(
         else:
             spec = WorkcellSceneSpec.from_dict(dict(scene_spec))
 
+        segmentation_label_map = _build_sensor_bundle_label_map(spec, build_segmentation_label_map(spec))
         for camera in cameras:
             frames, depth_frames, seg_frames, camera_params = render_workcell_frames(
                 scene_spec=spec,
@@ -627,6 +631,8 @@ def _build_sensor_bundle(
             depth_unit=config.sensor_depth_unit,
             noise_config=noise_config,
             noise_seed=noise_seed,
+            segmentation_label_map=segmentation_label_map,
+            scene_object_catalog=list(segmentation_label_map.values()),
         )
     except Exception:
         return None
@@ -650,6 +656,57 @@ def _target_steps(config: WorkcellEnvConfig, objective: EconomicObjectiveSpec) -
 def _error_probability(objective: EconomicObjectiveSpec) -> float:
     base = 0.05 + 0.02 * max(0.0, objective.error_weight) + 0.01 * max(0.0, objective.risk_weight)
     return max(0.0, min(0.3, base))
+
+
+def _build_sensor_bundle_label_map(
+    scene_spec: WorkcellSceneSpec,
+    object_id_to_seg: Mapping[str, int],
+) -> Dict[str, Dict[str, Any]]:
+    catalog: Dict[str, Dict[str, Any]] = {}
+
+    def _add(
+        *,
+        object_id: str,
+        seg_id: int,
+        class_name: str,
+        category: str,
+    ) -> None:
+        catalog[str(seg_id)] = {
+            "object_id": str(object_id),
+            "class_name": str(class_name),
+            "category": str(category),
+        }
+
+    for station in scene_spec.stations:
+        seg_id = object_id_to_seg.get(station.id)
+        if seg_id is not None:
+            _add(object_id=station.id, seg_id=seg_id, class_name=station.station_type, category="station")
+    for fixture in scene_spec.fixtures:
+        seg_id = object_id_to_seg.get(fixture.id)
+        if seg_id is not None:
+            _add(object_id=fixture.id, seg_id=seg_id, class_name=fixture.fixture_type, category="fixture")
+    for container in scene_spec.containers:
+        seg_id = object_id_to_seg.get(container.id)
+        if seg_id is not None:
+            _add(object_id=container.id, seg_id=seg_id, class_name=container.container_type, category="container")
+    for conveyor in scene_spec.conveyors:
+        seg_id = object_id_to_seg.get(conveyor.id)
+        if seg_id is not None:
+            _add(object_id=conveyor.id, seg_id=seg_id, class_name="conveyor_segment", category="conveyor")
+    for part in scene_spec.parts:
+        seg_id = object_id_to_seg.get(part.id)
+        if seg_id is not None:
+            _add(object_id=part.id, seg_id=seg_id, class_name=part.part_type, category="part")
+    for tool in scene_spec.tools:
+        seg_id = object_id_to_seg.get(tool.id)
+        if seg_id is not None:
+            _add(object_id=tool.id, seg_id=seg_id, class_name=tool.tool_type, category="tool")
+    if not scene_spec.tools:
+        seg_id = object_id_to_seg.get("end_effector")
+        if seg_id is not None:
+            _add(object_id="end_effector", seg_id=seg_id, class_name="end_effector", category="tool")
+
+    return catalog
 
 
 def _build_env_params(

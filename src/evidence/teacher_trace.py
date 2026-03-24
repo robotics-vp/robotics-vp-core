@@ -29,6 +29,95 @@ def _strings(values: Optional[Sequence[Any]]) -> list[str]:
     return [str(value) for value in (values or [])]
 
 
+def _normalize_token(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    return "_".join(part for part in text.replace("-", " ").split() if part)
+
+
+def infer_teacher_semantics(
+    *,
+    instruction: str,
+    semantic_tags: Optional[Sequence[Any]] = None,
+    action: Optional[Mapping[str, Any]] = None,
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, list[str]]:
+    tags = {str(tag) for tag in _strings(semantic_tags) if str(tag).strip()}
+    meta = dict(metadata or {})
+    object_refs = {_normalize_token(value) for value in _strings(meta.get("object_refs")) if _normalize_token(value)}
+    affordances = {_normalize_token(value) for value in _strings(meta.get("affordance_hints")) if _normalize_token(value)}
+    risk_hints = {_normalize_token(value) for value in _strings(meta.get("risk_hints")) if _normalize_token(value)}
+
+    instruction_lower = str(instruction or "").lower()
+    object_rules = {
+        "drawer": "drawer",
+        "vase": "vase",
+        "cup": "cup",
+        "glass": "glass",
+        "bin": "bin",
+        "tray": "tray",
+        "box": "box",
+        "peg": "peg",
+        "plate": "plate",
+        "tool": "tool",
+    }
+    affordance_rules = {
+        "open": "open",
+        "close": "close",
+        "pull": "pull",
+        "push": "push",
+        "place": "place",
+        "pick": "pick",
+        "grasp": "grasp",
+        "lift": "lift",
+        "insert": "insert",
+        "align": "align",
+        "inspect": "inspect",
+    }
+    risk_rules = {
+        "fragile": "fragility",
+        "careful": "safety",
+        "safe": "safety",
+        "avoid collision": "collision",
+        "collision": "collision",
+        "spill": "spill",
+        "break": "breakage",
+        "energy": "energy",
+    }
+
+    for token, object_ref in object_rules.items():
+        if token in instruction_lower:
+            object_refs.add(object_ref)
+            tags.add(f"object:{object_ref}")
+    for token, affordance in affordance_rules.items():
+        if token in instruction_lower:
+            affordances.add(affordance)
+            tags.add(f"affordance:{affordance}")
+    for token, risk in risk_rules.items():
+        if token in instruction_lower:
+            risk_hints.add(risk)
+            tags.add(f"risk:{risk}")
+
+    action_payload = _float_mapping(action)
+    if action_payload:
+        if bool(action_payload.get("vla_available", 0.0) > 0.0):
+            tags.add("teacher:available")
+        if abs(action_payload.get("gripper", 0.0)) > 0.2:
+            affordances.add("grasp")
+            tags.add("affordance:grasp")
+        if any(abs(action_payload.get(axis, 0.0)) > 0.2 for axis in ("dx", "dy", "dz")):
+            affordances.add("move")
+            tags.add("affordance:move")
+
+    return {
+        "semantic_tags": sorted(tags),
+        "object_refs": sorted(object_refs),
+        "affordance_hints": sorted(affordances),
+        "risk_hints": sorted(risk_hints),
+    }
+
+
 @dataclass(frozen=True)
 class TeacherStep:
     """Single advisory teacher output at one step or clip slice."""
@@ -187,16 +276,24 @@ class TeacherTrace:
         confidence = float(action_payload.get("confidence", 0.0))
         if confidence <= 0.0 and action_payload.get("vla_available", 0.0) > 0.0:
             confidence = 0.35
+        semantic_bundle = infer_teacher_semantics(
+            instruction=instruction,
+            semantic_tags=semantic_tags,
+            action=action_payload,
+        )
         step = TeacherStep(
             step_idx=0,
             timestamp=str(timestamp),
             instruction=str(instruction),
             action=action_payload,
             confidence=float(confidence),
-            semantic_tags=_strings(semantic_tags),
+            semantic_tags=semantic_bundle["semantic_tags"],
             metadata={
                 "availability_reason": str(availability_reason or ""),
                 "vla_available": bool(action_payload.get("vla_available", 0.0) > 0.0),
+                "object_refs": semantic_bundle["object_refs"],
+                "affordance_hints": semantic_bundle["affordance_hints"],
+                "risk_hints": semantic_bundle["risk_hints"],
             },
         )
         return cls.from_components(
@@ -209,12 +306,19 @@ class TeacherTrace:
             summary={
                 "teacher_confidence_mean": float(confidence),
                 "step_count": 1.0,
+                "semantic_tag_count": float(len(semantic_bundle["semantic_tags"])),
+                "object_ref_count": float(len(semantic_bundle["object_refs"])),
             },
             provenance={
                 "source": teacher_id,
                 "availability_reason": str(availability_reason or ""),
             },
-            metadata={"semantic_tags": _strings(semantic_tags)},
+            metadata={
+                "semantic_tags": semantic_bundle["semantic_tags"],
+                "object_refs": semantic_bundle["object_refs"],
+                "affordance_hints": semantic_bundle["affordance_hints"],
+                "risk_hints": semantic_bundle["risk_hints"],
+            },
         )
 
 
@@ -230,6 +334,7 @@ def load_teacher_trace_json(path: Path) -> TeacherTrace:
 __all__ = [
     "TeacherStep",
     "TeacherTrace",
+    "infer_teacher_semantics",
     "load_teacher_trace_json",
     "save_teacher_trace_json",
 ]

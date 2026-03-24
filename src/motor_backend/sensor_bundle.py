@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Sensor bundle I/O helpers for datapack episodes."""
+
+from __future__ import annotations
 
 import json
 from dataclasses import dataclass
@@ -24,6 +24,8 @@ class SensorBundleData:
     depth_unit: str = "meters"
     noise_config: Optional[Mapping[str, Any]] = None
     noise_seed: Optional[int] = None
+    segmentation_label_map: Optional[Mapping[str, Mapping[str, Any]]] = None
+    scene_object_catalog: Optional[Sequence[Mapping[str, Any]]] = None
 
 
 def write_sensor_bundle(episode_dir: Path, bundle: SensorBundleData) -> Dict[str, Any]:
@@ -83,4 +85,9 @@ def write_sensor_bundle(episode_dir: Path, bundle: SensorBundleData) -> Dict[str
         "timestamps_s": str(timestamps_path.relative_to(episode_dir)),
         "noise_config": dict(bundle.noise_config or {}),
         "noise_seed": bundle.noise_seed,
+        "segmentation_label_map": {
+            str(key): dict(value)
+            for key, value in dict(bundle.segmentation_label_map or {}).items()
+        },
+        "scene_object_catalog": [dict(item) for item in list(bundle.scene_object_catalog or [])],
     }

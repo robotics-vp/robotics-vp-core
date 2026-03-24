@@ -6,7 +6,7 @@ Core types for the Scene IR Tracker module including entity and track dataclasse
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
 
@@ -33,8 +33,11 @@ class SceneEntity3D:
         z_tex_ema: EMA-smoothed texture latent.
         visibility: Visibility fraction [0, 1].
         occlusion_score: Occlusion score [0, 1] (1=fully occluded).
-        ir_loss: Per-entity inverse rendering loss.
+    ir_loss: Per-entity inverse rendering loss.
         joints_3d: For bodies, dict of joint_name -> (3,) world position.
+        source_instance_id: Original per-frame instance/segment identifier before stable tracking.
+        source_object_id: Upstream object identity join when available from segmentation metadata.
+        label_source: Provenance for the semantic label/object join.
     """
 
     entity_type: Literal["body", "object"]
@@ -53,6 +56,9 @@ class SceneEntity3D:
     occlusion_score: float = 0.0
     ir_loss: float = 0.0
     joints_3d: Optional[Dict[str, np.ndarray]] = None
+    source_instance_id: Optional[str] = None
+    source_object_id: Optional[str] = None
+    label_source: str = ""
 
     def __post_init__(self) -> None:
         self.pose = np.asarray(self.pose, dtype=np.float32)
@@ -104,6 +110,9 @@ class SceneEntity3D:
             "visibility": self.visibility,
             "occlusion_score": self.occlusion_score,
             "ir_loss": self.ir_loss,
+            "source_instance_id": self.source_instance_id,
+            "source_object_id": self.source_object_id,
+            "label_source": self.label_source,
         }
         if self.joints_3d is not None:
             result["joints_3d"] = {k: v.tolist() for k, v in self.joints_3d.items()}
@@ -126,6 +135,9 @@ class SceneEntity3D:
             occlusion_score=data.get("occlusion_score", 0.0),
             ir_loss=data.get("ir_loss", 0.0),
             joints_3d=joints_3d,
+            source_instance_id=data.get("source_instance_id"),
+            source_object_id=data.get("source_object_id"),
+            label_source=data.get("label_source", ""),
         )
 
 

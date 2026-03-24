@@ -35,7 +35,9 @@ class XHumanoidIngestConfig:
     ontology_root: Path = Path("data/ontology")
     camera: str = "front"
     scene_tracks_mode: str = "rgb"
+    scene_tracks_backend_policy: str = "auto"
     scene_tracks_use_stub_adapters: Optional[bool] = None
+    scene_tracks_zero_inference_passthrough: Optional[bool] = None
     allow_low_quality: bool = True
     min_scene_tracks_quality: float = 0.2
     semantic_fusion_emit: bool = True
@@ -99,7 +101,9 @@ class XHumanoidIngestAdapter:
                 ontology_root=cfg.ontology_root,
                 min_quality=cfg.min_scene_tracks_quality,
                 allow_low_quality=cfg.allow_low_quality,
+                backend_policy=cfg.scene_tracks_backend_policy,
                 use_stub_adapters=cfg.scene_tracks_use_stub_adapters,
+                zero_inference_passthrough=cfg.scene_tracks_zero_inference_passthrough,
             )
             scene_tracks_path = result.scene_tracks_path
         except Exception:

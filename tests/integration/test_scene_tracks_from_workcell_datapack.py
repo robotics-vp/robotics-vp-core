@@ -70,10 +70,97 @@ def test_scene_tracks_from_workcell_datapack(tmp_path: Path) -> None:
     assert result.scene_tracks_path.exists()
     assert np.isfinite(result.quality.quality_score)
     assert result.quality.quality_score >= 0.1
-    assert result.frame_metadata["execution_preconditions"]["ready"] is False
-    assert result.frame_metadata["training_eligible"] is False
+    assert "adapter_status" in result.frame_metadata
+    assert result.adapter_status["overall_mode"] in {"real", "passthrough"}
+    assert result.frame_metadata["runner"]["run_config"]["backend_policy"] == "auto"
+    assert result.frame_metadata["runner"]["run_config"]["backend_selected"] in {"real", "passthrough"}
+    if result.adapter_status["overall_mode"] == "passthrough":
+        assert result.frame_metadata["execution_preconditions"]["ready"] is False
+        assert result.frame_metadata["training_eligible"] is False
+    assert result.frame_metadata["semantic_summary"]["semantic_density_score"] > 0.0
+    assert result.frame_metadata["semantic_summary"]["class_label_coverage"] > 0.0
+    assert "object:end_effector" in result.frame_metadata["semantic_tags"]
+
+    payload = dict(np.load(result.scene_tracks_path, allow_pickle=False))
+    assert "scene_tracks_v1/track_label_confidence" in payload
+    assert "scene_tracks_v1/track_semantic_tags_json" in payload
+    assert "scene_tracks_v1/track_source_object_id" in payload
+    summary_json = str(payload["scene_tracks_v1/summary_json"][0])
+    assert "semantic_density_score" in summary_json
 
     store = OntologyStore(root_dir=str(ontology_root))
     latest = get_latest_scene_tracks_artifact(store, datapack_id="ep_scene_tracks")
     assert latest is not None
     assert latest.get("path") == str(result.scene_tracks_path)
+
+
+def test_scene_tracks_zero_inference_passthrough_from_workcell_datapack(tmp_path: Path) -> None:
+    from src.envs.workcell_env import WorkcellEnv
+    from src.envs.workcell_env.config import WorkcellEnvConfig
+    from src.motor_backend.rollout_capture import EpisodeMetadata, record_episode_rollout, start_rollout_capture
+    from src.vision.scene_ir_tracker.io.scene_tracks_runner import run_scene_tracks
+
+    config = WorkcellEnvConfig(num_parts=2, max_steps=5)
+    env = WorkcellEnv(config=config, seed=321)
+    env.reset(seed=321, episode_id="ep_scene_tracks_passthrough")
+
+    states = []
+    actions = []
+    for _ in range(3):
+        action = {"object_id": "end_effector", "delta_position": (0.01, 0.0, 0.0)}
+        env.step(action)
+        states.append(env.physics_adapter.get_state())
+        actions.append(action)
+
+    trajectory_data = {
+        "scene_spec": env.scene_spec.to_dict(),
+        "states": states,
+        "actions": actions,
+    }
+
+    scenario_id = "scene_tracks_passthrough_test"
+    base_dir = tmp_path / "rollouts"
+    start_rollout_capture(scenario_id, base_dir)
+    episode_meta = EpisodeMetadata(
+        episode_id="ep_scene_tracks_passthrough",
+        task_id="workcell_task",
+        robot_family="workcell",
+        seed=321,
+        env_params={"config": config.to_dict(), "scene_spec": env.scene_spec.to_dict()},
+    )
+    record_episode_rollout(
+        scenario_id=scenario_id,
+        episode_idx=0,
+        metadata=episode_meta,
+        trajectory_data=trajectory_data,
+        rgb_frames=None,
+        depth_frames=None,
+        metrics={},
+        base_dir=base_dir,
+    )
+
+    episode_dir = base_dir / scenario_id / "episode_000"
+    output_dir = tmp_path / "scene_tracks_passthrough_out"
+
+    result = run_scene_tracks(
+        datapack_path=episode_dir,
+        output_path=output_dir,
+        seed=321,
+        max_frames=10,
+        camera="front",
+        mode="vector_proxy",
+        min_quality=0.1,
+        use_stub_adapters=False,
+        zero_inference_passthrough=True,
+    )
+
+    assert result.scene_tracks_path.exists()
+    assert result.adapter_status["overall_mode"] == "passthrough"
+    assert result.adapter_status["no_inference_backend"] is True
+    assert result.frame_metadata["training_eligible"] is False
+    assert (
+        result.frame_metadata["execution_preconditions"]["metadata"]["signal_values"]["scene_ir_backend_passthrough"]
+        is True
+    )
+    payload = dict(np.load(result.scene_tracks_path, allow_pickle=False))
+    assert "scene_tracks_v1/track_source_object_id" in payload
