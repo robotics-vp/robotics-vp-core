@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,10 @@ from src.replay.schema import (
     ReplayEpisodeRecord,
     ReplayStepRecord,
     ReplayWindowRecord,
+)
+from src.replay.preconditions import (
+    build_replay_execution_preconditions,
+    summarize_replay_execution_preconditions,
 )
 from src.utils.config_digest import sha256_json
 
@@ -115,10 +120,80 @@ class ReplayDatasetBuilder:
         self._metadata_rows.append(dict(metadata))
         return self
 
+    def add_rlds_episode(self, payload: Mapping[str, Any]) -> "ReplayDatasetBuilder":
+        from src.dataset_bridges.rlds_bridge import replay_episode_from_rlds
+
+        episode, steps = replay_episode_from_rlds(payload)
+        windows = _rehydrated_windows_from_steps(episode, steps)
+        self._episodes.append(episode)
+        self._steps.extend(steps)
+        self._windows.extend(windows)
+        self._source_adapters.append("rlds_bridge_rehydration_v1")
+        self._metadata_rows.append(
+            {
+                "schema_version": REPLAY_SCHEMA_VERSION,
+                "source_adapter": "rlds_bridge_rehydration_v1",
+                "episode_id": episode.episode_id,
+                "run_id": episode.run_id,
+                "step_count": len(steps),
+                "window_count": len(windows),
+            }
+        )
+        return self
+
+    def add_lerobot_rows(self, rows: Sequence[Mapping[str, Any]]) -> "ReplayDatasetBuilder":
+        from src.dataset_bridges.lerobot_bridge import replay_episode_from_lerobot
+
+        episode, steps = replay_episode_from_lerobot(rows)
+        windows = _rehydrated_windows_from_steps(episode, steps)
+        self._episodes.append(episode)
+        self._steps.extend(steps)
+        self._windows.extend(windows)
+        self._source_adapters.append("lerobot_bridge_rehydration_v1")
+        self._metadata_rows.append(
+            {
+                "schema_version": REPLAY_SCHEMA_VERSION,
+                "source_adapter": "lerobot_bridge_rehydration_v1",
+                "episode_id": episode.episode_id,
+                "run_id": episode.run_id,
+                "step_count": len(steps),
+                "window_count": len(windows),
+            }
+        )
+        return self
+
     def build(self) -> ReplayDatasetBundle:
         episodes = sorted(self._episodes, key=lambda row: (row.run_id, row.episode_id))
         steps = sorted(self._steps, key=lambda row: (row.run_id, row.episode_id, row.step_idx))
         windows = sorted(self._windows, key=lambda row: (row.run_id, row.episode_id, row.start_step, row.window_id))
+        steps_by_episode: Dict[str, List[ReplayStepRecord]] = {}
+        for row in steps:
+            steps_by_episode.setdefault(row.episode_id, []).append(row)
+        windows_by_episode: Dict[str, List[ReplayWindowRecord]] = {}
+        for row in windows:
+            windows_by_episode.setdefault(row.episode_id, []).append(row)
+        execution_preconditions = [
+            build_replay_execution_preconditions(
+                episode,
+                steps=steps_by_episode.get(episode.episode_id, []),
+                windows=windows_by_episode.get(episode.episode_id, []),
+            )
+            for episode in episodes
+        ]
+        reports_by_episode = {
+            report.subject_id: report
+            for report in execution_preconditions
+        }
+        episodes = [
+            replace(
+                episode,
+                metadata={
+                    **dict(episode.metadata),
+                    "execution_preconditions": reports_by_episode[episode.episode_id].to_dict(),
+                },
+            )
+            for episode in episodes
+        ]
         run_ids = sorted({row.run_id for row in episodes})
         skill_modes = sorted({row.skill_mode for row in episodes} | {row.skill_mode for row in steps})
         obs_dim = max((len(row.obs_vector) for row in steps), default=0)
@@ -165,6 +240,7 @@ class ReplayDatasetBuilder:
             metadata={
                 "sources": list(self._metadata_rows),
                 "schema_compatibility": [row.to_dict() for row in compatibility],
+                "execution_precondition_summary": summarize_replay_execution_preconditions(execution_preconditions),
             },
             artifact_schema_fingerprint=build_artifact_schema_fingerprint(artifact_payload),
             provenance_summary={
@@ -242,3 +318,55 @@ def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(dict(row), sort_keys=True) + "\n")
+
+
+def _rehydrated_windows_from_steps(
+    episode: ReplayEpisodeRecord,
+    steps: Sequence[ReplayStepRecord],
+) -> list[ReplayWindowRecord]:
+    if not steps:
+        return []
+    obs_dims = max((len(step.obs_vector) for step in steps), default=0)
+    action_dims = max((len(step.action_vector) for step in steps), default=0)
+    return [
+        ReplayWindowRecord(
+            run_id=episode.run_id,
+            episode_id=episode.episode_id,
+            window_id=f"rehydrated_{steps[0].step_idx:04d}_{steps[-1].step_idx:04d}",
+            start_step=int(steps[0].step_idx),
+            end_step=int(steps[-1].step_idx),
+            task_id=episode.task_id,
+            env_id=episode.env_id,
+            source_domain=episode.source_domain,
+            seed=episode.seed,
+            timestamp=str(steps[0].timestamp),
+            reward_sum=sum(step.reward for step in steps),
+            obs_vector_mean=_mean_vector([step.obs_vector for step in steps], obs_dims),
+            action_vector_mean=_mean_vector([step.action_vector for step in steps], action_dims),
+            condition_vector=dict(episode.condition_vector),
+            condition_vector_values=list(episode.condition_vector_values),
+            skill_mode=str(episode.skill_mode),
+            objective_tensor_summary=dict(episode.objective_tensor_summary),
+            econ_tensor_summary=dict(episode.econ_tensor_summary),
+            pricing_summary=dict(episode.pricing_summary),
+            constraint_flags=[dict(flag) for flag in episode.constraint_flags],
+            metadata={
+                "event_refs": list(episode.metadata.get("event_refs", []) or []),
+                "decision_refs": list(episode.metadata.get("decision_refs", []) or []),
+                "rehydrated": True,
+            },
+            provenance=dict(episode.provenance),
+        )
+    ]
+
+
+def _mean_vector(vectors: Sequence[Sequence[float]], dim: int) -> list[float]:
+    if dim <= 0:
+        return []
+    if not vectors:
+        return [0.0] * dim
+    totals = [0.0] * dim
+    for vector in vectors:
+        for index in range(min(len(vector), dim)):
+            totals[index] += float(vector[index])
+    return [value / float(len(vectors)) for value in totals]

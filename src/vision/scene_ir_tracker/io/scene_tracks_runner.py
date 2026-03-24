@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+from src.evidence.preconditions import build_execution_preconditions
 from src.ontology.datapack_registry import register_scene_tracks_artifact
 from src.ontology.store import OntologyStore
 from src.vision.scene_ir_tracker import SceneIRTracker, SceneIRTrackerConfig
@@ -144,6 +145,32 @@ def run_scene_tracks(
     frame_meta["runner_config_hash"] = _hash_payload(runner_meta)
     frame_meta["scene_ir_quality"] = float(scene_ir_quality)
     frame_meta["scene_tracks_quality"] = quality.to_dict()
+    execution_preconditions = build_execution_preconditions(
+        subject_id=str(_infer_episode_id(Path(datapack_path)) or output_path.stem),
+        subject_kind="scene_tracks_run",
+        artifact_refs={
+            "scene_tracks_path": str(output_path),
+            "datapack_path": str(datapack_path),
+        },
+        required_artifact_refs=["scene_tracks_path", "datapack_path"],
+        signal_values={
+            "scene_tracks_quality": float(quality.quality_score),
+            "scene_ir_quality": float(scene_ir_quality),
+            "use_stub_adapters": bool(use_stub_adapters),
+            "quality_gate_passed": bool(quality.quality_score >= float(min_quality)),
+        },
+        min_signal_thresholds={
+            "scene_tracks_quality": float(min_quality),
+            "scene_ir_quality": 0.2,
+        },
+        required_boolean_signals={
+            "quality_gate_passed": True,
+            "use_stub_adapters": False,
+        },
+        metadata={"camera": frames_contract.camera_name},
+    )
+    frame_meta["execution_preconditions"] = execution_preconditions.to_dict()
+    frame_meta["training_eligible"] = bool(execution_preconditions.ready)
 
     registry_entry = _register_artifact(
         datapack_path=Path(datapack_path),

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
+from src.evidence.preconditions import build_execution_preconditions
 from src.utils.config_digest import sha256_json
 from src.utils.json_safe import to_json_safe
 
@@ -145,6 +146,20 @@ class OpenVLATeacherRuntime:
         cfg = getattr(self.controller, "cfg", None)
         model_name = str(getattr(cfg, "model_name", "openvla"))
         available = bool(getattr(self.controller, "available", False))
+        preconditions = build_execution_preconditions(
+            subject_id="openvla",
+            subject_kind="teacher_runtime",
+            artifact_refs={"model_name": model_name},
+            signal_values={
+                "teacher_available": available,
+                "advisory_only": True,
+            },
+            required_boolean_signals={"teacher_available": True},
+            metadata={
+                "device": str(getattr(cfg, "device", "unknown")),
+                "dtype": str(getattr(cfg, "dtype", "unknown")),
+            },
+        )
         return TeacherAdapterContract(
             teacher_id="openvla",
             model_name=model_name,
@@ -154,6 +169,7 @@ class OpenVLATeacherRuntime:
             metadata={
                 "device": str(getattr(cfg, "device", "unknown")),
                 "dtype": str(getattr(cfg, "dtype", "unknown")),
+                "execution_preconditions": preconditions.to_dict(),
             },
         )
 
@@ -162,12 +178,23 @@ class OpenVLATeacherRuntime:
         try:
             payload = self.controller.predict_action(image, instruction)
         except Exception as exc:
+            execution_preconditions = build_execution_preconditions(
+                subject_id=contract.teacher_id,
+                subject_kind="teacher_runtime_prediction",
+                artifact_refs={"contract_id": contract.contract_id},
+                signal_values={"teacher_available": False, "failure_mode": str(exc)},
+                required_boolean_signals={"teacher_available": True},
+                metadata={"instruction": instruction},
+            )
             unavailable = TeacherActionEnvelope.unavailable(
                 teacher_id=contract.teacher_id,
                 model_name=contract.model_name,
                 instruction=instruction,
                 failure_mode=str(exc),
-                metadata={"contract_id": contract.contract_id},
+                metadata={
+                    "contract_id": contract.contract_id,
+                    "execution_preconditions": execution_preconditions.to_dict(),
+                },
             )
             return TeacherActionEnvelope(
                 teacher_id=unavailable.teacher_id,
@@ -184,6 +211,17 @@ class OpenVLATeacherRuntime:
                 metadata=unavailable.metadata,
             )
         available = bool(payload.get("vla_available", False))
+        execution_preconditions = build_execution_preconditions(
+            subject_id=contract.teacher_id,
+            subject_kind="teacher_runtime_prediction",
+            artifact_refs={"contract_id": contract.contract_id},
+            signal_values={
+                "teacher_available": available,
+                "confidence": float(payload.get("confidence", 0.0)),
+            },
+            required_boolean_signals={"teacher_available": True},
+            metadata={"instruction": instruction},
+        )
         return TeacherActionEnvelope(
             teacher_id=contract.teacher_id,
             model_name=contract.model_name,
@@ -196,7 +234,10 @@ class OpenVLATeacherRuntime:
                 "contract_id": contract.contract_id,
                 "action_schema_id": contract.action_schema_id,
             },
-            metadata={"available": available},
+            metadata={
+                "available": available,
+                "execution_preconditions": execution_preconditions.to_dict(),
+            },
         )
 
 

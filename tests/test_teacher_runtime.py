@@ -66,4 +66,5 @@ def test_openvla_teacher_runtime_reports_unavailable_predictions() -> None:
     assert envelope.available is False
     assert envelope.failure_mode == "teacher_missing"
     assert envelope.provenance["contract_id"] == contract.contract_id
-
+    assert contract.metadata["execution_preconditions"]["ready"] is False
+    assert envelope.metadata["execution_preconditions"]["ready"] is False

@@ -12,12 +12,32 @@ def test_semantic_fusion_runner_smoke(tmp_path) -> None:
     episode_dir = tmp_path / "episode_000"
     episode_dir.mkdir(parents=True, exist_ok=True)
 
+    T, K, C = 2, 2, 2
     track_ids = np.array(["track_a", "track_b"], dtype="U32")
-    trajectory_payload = {"scene_tracks_v1": {"track_ids": track_ids}}
+    trajectory_payload = {
+        "scene_tracks_v1": {
+            "track_ids": track_ids,
+            "entity_types": np.array([0, 0], dtype=np.int32),
+            "class_ids": np.array([0, 1], dtype=np.int32),
+            "class_names": np.array(["drawer", "vase"], dtype="U32"),
+            "poses_R": np.tile(np.eye(3, dtype=np.float32), (T, K, 1, 1)),
+            "poses_t": np.array(
+                [
+                    [[0.1, 0.0, 0.5], [0.18, 0.03, 0.5]],
+                    [[0.12, 0.0, 0.5], [0.18, 0.03, 0.5]],
+                ],
+                dtype=np.float32,
+            ),
+            "scales": np.ones((T, K), dtype=np.float32),
+            "visibility": np.ones((T, K), dtype=np.float32) * 0.95,
+            "occlusion": np.zeros((T, K), dtype=np.float32),
+            "ir_loss": np.zeros((T, K), dtype=np.float32) + 0.05,
+            "converged": np.ones((T, K), dtype=bool),
+        }
+    }
     trajectory_path = episode_dir / "trajectory.npz"
     np.savez_compressed(trajectory_path, trajectory=trajectory_payload)
 
-    T, K, C = 2, 2, 2
     map_semantics = np.array(
         [
             [[0.8, 0.2], [0.3, 0.7]],
@@ -76,9 +96,11 @@ def test_semantic_fusion_runner_smoke(tmp_path) -> None:
     fusion_path = episode_dir / "episode_test_semantic_fusion_v1.npz"
     evidence_bus_path = episode_dir / "episode_test_evidence_bus_v1.json"
     belief_state_path = episode_dir / "episode_test_belief_state_v1.json"
+    semantic_world_model_path = episode_dir / "episode_test_semantic_world_model_v1.json"
     assert fusion_path.exists()
     assert evidence_bus_path.exists()
     assert belief_state_path.exists()
+    assert semantic_world_model_path.exists()
     data = dict(np.load(fusion_path, allow_pickle=False))
     prefix = "semantic_fusion_v1/"
 
@@ -92,3 +114,5 @@ def test_semantic_fusion_runner_smoke(tmp_path) -> None:
 
     evidence_payload = json.loads(evidence_bus_path.read_text())
     assert any(record["kind"] == "teacher_trace" for record in evidence_payload["records"])
+    world_model_payload = json.loads(semantic_world_model_path.read_text())
+    assert world_model_payload["topology"]["grounded_track_object_count"] >= 2

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from src.constraints.constraint_set import ConstraintSet
@@ -129,6 +130,7 @@ def build_governed_video_supervision_bundle(
     objective_preset: str,
     constraint_set: ConstraintSet | Mapping[str, Any],
     sidecar_refs: Optional[Mapping[str, Any]] = None,
+    value_ledger_path: str | Path | None = None,
     timestamp: Optional[str] = None,
 ) -> GovernedVideoSupervisionBundle:
     timestamp = _timestamp(timestamp)
@@ -361,7 +363,8 @@ def build_governed_video_supervision_bundle(
 
     from src.economics.value_ledger import ValueLedger  # local import to avoid cycles
 
-    receipt = ValueLedger("/tmp/governed_video_value_ledger.jsonl").build_receipt(
+    ledger_path = Path(value_ledger_path) if value_ledger_path is not None else Path("/tmp/governed_video_value_ledger.jsonl")
+    receipt = ValueLedger(ledger_path).build_receipt(
         event_type="governed_video_episode",
         run_id=run_id,
         episode_id=runtime_record.episode_id,

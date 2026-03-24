@@ -99,6 +99,7 @@ def build_promotion_evidence_report(
     promotion_policy: RegalPromotionPolicy,
     receipt_bundle: Optional[ReceiptLabelBundle] = None,
     node_ids: Sequence[str] = DEFAULT_PROMOTION_NODE_IDS,
+    work_orders: Optional[Sequence[Mapping[str, Any]]] = None,
     evidence_pointers: Optional[Mapping[str, Any]] = None,
 ) -> PromotionEvidenceReport:
     deployment_by_episode = {
@@ -114,6 +115,16 @@ def build_promotion_evidence_report(
     adaptation_by_episode = {
         str(row.metadata.get("episode_id", "")): row
         for row in (receipt_bundle.adaptation_outcomes if receipt_bundle else [])
+    }
+    work_orders_by_episode: Dict[str, list[Dict[str, Any]]] = {}
+    for row in list(work_orders or []):
+        episode_id = str(row.get("subject_id", row.get("episode_id", "")) or "")
+        if not episode_id:
+            continue
+        work_orders_by_episode.setdefault(episode_id, []).append(dict(row))
+    trace_preconditions_by_episode = {
+        episode.episode_id: dict(episode.metadata.get("execution_preconditions", {}) or {})
+        for episode in dataset.episodes
     }
 
     node_reports: list[PromotionEvidenceRecord] = []
@@ -134,12 +145,25 @@ def build_promotion_evidence_report(
         disagreement_skill_counts: Dict[str, int] = {}
         false_positive_source_counts: Dict[str, int] = {}
         false_negative_source_counts: Dict[str, int] = {}
+        trace_ready_count = 0
+        counterfactual_count = 0
+        value_target_count = 0
+        executable_work_order_count = 0
 
         for episode in dataset.episodes:
             deployment_label = deployment_by_episode.get(episode.episode_id)
             receipt = receipt_by_episode.get(episode.episode_id)
             datapack_label = datapack_by_episode.get(episode.episode_id)
             adaptation_label = adaptation_by_episode.get(episode.episode_id)
+            trace_preconditions = trace_preconditions_by_episode.get(episode.episode_id, {})
+            if bool(trace_preconditions.get("ready", False)):
+                trace_ready_count += 1
+            episode_work_orders = work_orders_by_episode.get(episode.episode_id, [])
+            executable_work_order_count += sum(1 for row in episode_work_orders if row.get("ready"))
+            if _episode_has_ref(episode, "counterfactual_eval_ref", "counterfactual_eval_path"):
+                counterfactual_count += 1
+            if _episode_has_ref(episode, "value_target_pack_ref", "value_target_pack_path", "value_target_refs"):
+                value_target_count += 1
             prediction, confidence, baseline, outcome = _node_signals(
                 node_id=node_id,
                 episode=episode,
@@ -199,7 +223,13 @@ def build_promotion_evidence_report(
             drift_score=calibration.drift_score,
             residual_gain=_residual_gain(node_id=node_id, predictions=predictions, outcomes=outcomes, baselines=baselines),
             calibration_summary=calibration,
-            metadata={"node_id": node_id, "policy_node_id": policy_node_id},
+            metadata={
+                "node_id": node_id,
+                "policy_node_id": policy_node_id,
+                "trace_ready_rate": trace_ready_count / float(max(1, len(dataset.episodes))),
+                "counterfactual_coverage_rate": counterfactual_count / float(max(1, len(dataset.episodes))),
+                "value_target_coverage_rate": value_target_count / float(max(1, len(dataset.episodes))),
+            },
         )
         decision = promotion_policy.evaluate_node(
             policy_node_id,
@@ -218,6 +248,10 @@ def build_promotion_evidence_report(
                         if receipt_bundle
                         else 0
                     ),
+                    "trace_ready_episode_count": trace_ready_count,
+                    "trace_ready_rate": round(trace_ready_count / float(max(1, len(predictions))), 6),
+                    "counterfactual_episode_count": counterfactual_count,
+                    "value_target_episode_count": value_target_count,
                     "source_domains": sorted({episode.source_domain for episode in dataset.episodes}),
                 },
                 metrics=metrics.to_dict(),
@@ -250,8 +284,20 @@ def build_promotion_evidence_report(
                         len(disagreement_episode_ids) / float(max(1, len(predictions))),
                         6,
                     ),
+                    "executable_work_orders": executable_work_order_count,
                 },
-                evidence_pointers=dict(evidence_pointers or {}),
+                evidence_pointers={
+                    **dict(evidence_pointers or {}),
+                    "trace_preconditions": trace_preconditions_by_episode,
+                    "work_order_ids": sorted(
+                        {
+                            str(row.get("work_order_id", ""))
+                            for rows in work_orders_by_episode.values()
+                            for row in rows
+                            if row.get("work_order_id")
+                        }
+                    ),
+                },
             )
         )
 
@@ -271,6 +317,12 @@ def build_promotion_evidence_report(
             if receipt_bundle
             else 0
         ),
+        "trace_ready_episode_count": sum(
+            1
+            for episode in dataset.episodes
+            if bool(trace_preconditions_by_episode.get(episode.episode_id, {}).get("ready", False))
+        ),
+        "work_order_count": sum(len(rows) for rows in work_orders_by_episode.values()),
     }
     return PromotionEvidenceReport(
         schema_version="regal_promotion_evidence_v1",
@@ -424,6 +476,7 @@ def _promotion_markdown(report: PromotionEvidenceReport) -> str:
                 f"- Current stage: {row.current_stage}",
                 f"- Recommendation: {row.promotion_decision.get('outcome')} -> {row.promotion_decision.get('recommended_stage')}",
                 f"- Coverage: {row.coverage.get('episode_count', 0)} episodes / {row.coverage.get('receipt_coverage_count', 0)} receipts",
+                f"- Trace-ready coverage: {row.coverage.get('trace_ready_episode_count', 0)} episodes",
                 f"- Calibration error: {row.metrics.get('calibration_error')}",
                 f"- Baseline agreement: {row.metrics.get('baseline_agreement')}",
                 f"- Disagreements: {len(row.disagreement_episode_ids)}",
@@ -442,3 +495,12 @@ __all__ = [
     "build_promotion_evidence_report",
     "write_promotion_evidence_report",
 ]
+
+
+def _episode_has_ref(episode: Any, *keys: str) -> bool:
+    for key in keys:
+        if episode.metadata.get(key) not in (None, "", [], {}):
+            return True
+        if episode.provenance.get(key) not in (None, "", [], {}):
+            return True
+    return False

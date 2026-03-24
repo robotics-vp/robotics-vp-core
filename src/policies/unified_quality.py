@@ -143,6 +143,7 @@ class UnifiedQualityPolicy:
         # Semantic fusion diagnostics (observability only)
         semantic_fusion_confidence_mean: Optional[float] = None,
         semantic_disagreement_vla_vs_map: Optional[float] = None,
+        execution_preconditions: Optional[Any] = None,
         # Episode info
         num_frames: int = 0,
         # Optional sampler boundary scalarization profile
@@ -240,6 +241,9 @@ class UnifiedQualityPolicy:
                 "confidence_mean": semantic_fusion_confidence_mean,
                 "disagreement_vla_vs_map": semantic_disagreement_vla_vs_map,
             }
+        execution_summary = _extract_execution_preconditions(execution_preconditions)
+        if execution_summary is not None:
+            components["execution_preconditions"] = execution_summary
 
         # --- Embodiment weight ---
         w_embodiment = 1.0
@@ -306,6 +310,15 @@ class UnifiedQualityPolicy:
             is_eligible = False
             eligibility_reason = f"w_combined={w_combined:.3f} < {cfg.min_combined_weight}"
             constraint_flags.append("combined_weight_below_min")
+        elif execution_summary is not None and not execution_summary.get("ready", True):
+            is_eligible = False
+            blocking = execution_summary.get("blocking_preconditions", []) or []
+            eligibility_reason = (
+                f"execution_preconditions={blocking[0]}"
+                if blocking
+                else "execution_preconditions_failed"
+            )
+            constraint_flags.append("execution_preconditions_failed")
 
         # Stagnation detection
         is_stagnant = False
@@ -424,6 +437,11 @@ class UnifiedQualityPolicy:
             w_embodiment = emb.w_embodiment
             embodiment_drift = emb.drift_score
             embodiment_impossible = emb.physically_impossible_contacts
+        execution_preconditions = None
+        if datapack.episode_metrics:
+            execution_preconditions = datapack.episode_metrics.get("execution_preconditions")
+        if execution_preconditions is None and datapack.regal_annotations:
+            execution_preconditions = datapack.regal_annotations.get("execution_preconditions")
 
         return self.compute(
             mhn_plausibility=mhn_plausibility,
@@ -441,6 +459,7 @@ class UnifiedQualityPolicy:
             embodiment_impossible_contacts=embodiment_impossible,
             semantic_fusion_confidence_mean=sem_conf,
             semantic_disagreement_vla_vs_map=sem_disagreement,
+            execution_preconditions=execution_preconditions,
             num_frames=num_frames,
             objective_profile=objective_profile,
         )
@@ -514,3 +533,13 @@ def _extract_scene_tracks_quality(value: Optional[Any]) -> Optional[float]:
         except (TypeError, ValueError):
             return None
     return None
+
+
+def _extract_execution_preconditions(value: Optional[Any]) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return None
+    return {
+        "ready": bool(value.get("ready", True)),
+        "readiness_score": float(value.get("readiness_score", 1.0)),
+        "blocking_preconditions": list(value.get("blocking_preconditions", []) or []),
+    }

@@ -4,7 +4,6 @@ ObservationAdapter: unified observation construction + policy feature flattening
 Deterministic, JSON-safe, and flag-gated for Phase G observation unification.
 """
 import hashlib
-import json
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -376,10 +375,24 @@ class ObservationAdapter:
         tags = self._extract_semantic_tags(snapshot)
         trust_scores = {k: float(self.trust_matrix.get(k, {}).get("trust_score", 0.0)) for k in tags.keys()}
         md = getattr(snapshot, "metadata", {}) if snapshot else {}
+        semantic_world_model = getattr(snapshot, "semantic_world_model", None)
+        capability_scores = {}
+        meta_nodes = {}
+        if semantic_world_model is not None:
+            capability_scores = dict(getattr(semantic_world_model, "capability_scores", {}) or {})
+            meta_nodes = {
+                node.node_type: float(node.score)
+                for node in getattr(semantic_world_model, "meta_nodes", []) or []
+            }
         return SemanticSlice(
             tags=tags,
-            ood_score=_safe_float(md.get("ood_score", md.get("recap", {}).get("mean_goodness"))),
-            recovery_score=_safe_float(md.get("recovery_score")),
+            ood_score=_safe_float(
+                md.get(
+                    "ood_score",
+                    1.0 - capability_scores.get("relation_graph", md.get("recap", {}).get("mean_goodness", 0.0)),
+                )
+            ),
+            recovery_score=_safe_float(md.get("recovery_score", meta_nodes.get("recovery_router", 0.0))),
             trust_scores=trust_scores,
             metadata=md,
         )
@@ -627,6 +640,22 @@ class ObservationAdapter:
             advisory_context["skill_mode"] = sampling_md.get("skill_mode")
         if sampling_md.get("strategy") and "sampler_strategy" not in combined_episode_md:
             combined_episode_md["sampler_strategy"] = sampling_md.get("strategy")
+        if semantics and isinstance(semantics.metadata, dict):
+            world_model_payload = semantics.metadata.get("semantic_world_model_summary") or semantics.metadata.get("semantic_world_model")
+            if isinstance(world_model_payload, dict):
+                topology = world_model_payload.get("topology", {}) if isinstance(world_model_payload.get("topology"), dict) else {}
+                capabilities = world_model_payload.get("capability_scores", {}) if isinstance(world_model_payload.get("capability_scores"), dict) else {}
+                meta_nodes = world_model_payload.get("meta_nodes", {}) if isinstance(world_model_payload.get("meta_nodes"), dict) else {}
+                advisory_context.setdefault("semantic_capabilities", capabilities)
+                advisory_context.setdefault("meta_nodes", meta_nodes)
+                combined_episode_md.setdefault(
+                    "semantic_world_model_summary",
+                    {
+                        "object_count": topology.get("object_count", 0),
+                        "relation_count": topology.get("relation_count", 0),
+                        "meta_node_count": topology.get("meta_node_count", 0),
+                    },
+                )
 
         builder_inputs.setdefault("episode_config", descriptor or episode_metadata or {})
         builder_inputs.setdefault("econ_state", econ_slice or {})
@@ -673,4 +702,19 @@ class ObservationAdapter:
             else:
                 labels = str(tag_dict)
                 tags[labels] = tags.get(labels, 0.0) + 1.0
+        semantic_world_model = getattr(snapshot, "semantic_world_model", None)
+        if semantic_world_model is not None:
+            tags["semantic_world_model:present"] = 1.0
+            for key, value in sorted((semantic_world_model.capability_scores or {}).items(), key=lambda kv: kv[0]):
+                tags[f"capability:{key}"] = float(value)
+            topology = semantic_world_model.topology or {}
+            for key in ("object_count", "relation_count", "meta_node_count"):
+                if key in topology:
+                    tags[f"topology:{key}"] = _safe_float(topology.get(key))
+            for obj in getattr(semantic_world_model, "objects", []) or []:
+                tags[f"object:{obj.object_id}"] = max(tags.get(f"object:{obj.object_id}", 0.0), _safe_float(obj.confidence))
+                if obj.risk_tags:
+                    tags[f"risk_object:{obj.object_id}"] = float(len(obj.risk_tags))
+            for node in getattr(semantic_world_model, "meta_nodes", []) or []:
+                tags[f"meta_node:{node.node_type}"] = _safe_float(node.score)
         return dict(sorted(tags.items(), key=lambda kv: kv[0]))

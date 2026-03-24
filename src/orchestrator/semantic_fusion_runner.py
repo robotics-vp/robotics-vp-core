@@ -4,15 +4,24 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
 
-from src.evidence import EvidenceBus, EvidenceRecord, TeacherTrace, belief_state_from_evidence_bus
+from src.evidence import (
+    EvidenceBus,
+    EvidenceRecord,
+    TeacherTrace,
+    belief_state_from_evidence_bus,
+    build_execution_preconditions,
+    build_execution_work_order,
+)
 from src.motor_backend.rollout_capture import RolloutBundle
 from src.orchestrator.semantic_fusion import SEMANTIC_FUSION_PREFIX, fuse_semantic_evidence_mvp
+from src.semantic.runtime_backbone import SemanticRuntimeBackbone
 from src.vision.map_first_supervision.artifacts import MAP_FIRST_PREFIX
 from src.vision.map_first_supervision.semantics import parse_vla_semantic_evidence
+from src.world_model import SemanticWorldModelBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -166,15 +175,73 @@ def _extract_teacher_trace(payload: Optional[Dict[str, Any]]) -> Optional[Teache
         return None
 
 
+def _write_degraded_fusion_artifact(
+    *,
+    trajectory_path: Path,
+    episode_id: str,
+    reason: str,
+    artifact_refs: Mapping[str, Any],
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> Path:
+    failure_path = trajectory_path.with_name(f"{_safe_episode_id(episode_id)}_semantic_degraded_v1.json")
+    readiness = build_execution_preconditions(
+        subject_id=episode_id,
+        subject_kind="semantic_fusion_episode",
+        artifact_refs=artifact_refs,
+        required_artifact_refs=["trajectory_path"],
+        blocked_reasons=[reason],
+        metadata=metadata,
+    )
+    work_order = build_execution_work_order(
+        order_type="semantic_fusion_repair",
+        subject_id=episode_id,
+        subject_kind="semantic_fusion_episode",
+        decision="capture_negative_supervision",
+        priority=1.0,
+        recommended_mode="negative_counterexample",
+        readiness=readiness,
+        reasons=[reason],
+        artifact_refs=artifact_refs,
+        metadata=metadata,
+    )
+    _write_json(
+        failure_path,
+        {
+            "episode_id": episode_id,
+            "failure_reason": reason,
+            "artifact_refs": dict(artifact_refs),
+            "execution_preconditions": readiness.to_dict(),
+            "execution_work_order": work_order.to_dict(),
+            "metadata": dict(metadata or {}),
+            "version": "semantic_degraded_v1",
+        },
+    )
+    _update_episode_metadata(
+        trajectory_path.parent,
+        {"semantic_fusion_quality_score": 0.0},
+        None,
+        extra_fields={
+            "semantic_fusion_failure_path": str(failure_path),
+            "semantic_fusion_status": "blocked",
+        },
+    )
+    return failure_path
+
+
 def run_semantic_fusion_for_rollouts(
     rollout_bundle: RolloutBundle,
     summary_path: Optional[Path] = None,
     emit_semantic_fusion: bool = True,
     emit_evidence_bus: bool = True,
     emit_belief_state: bool = True,
+    emit_semantic_world_model: bool = True,
+    emit_semantic_snapshot: bool = True,
+    emit_orchestrator_advisory: bool = True,
 ) -> list[Dict[str, Any]]:
     """Run semantic fusion for each episode in a rollout bundle."""
     summaries: list[Dict[str, Any]] = []
+    semantic_world_model_builder = SemanticWorldModelBuilder()
+    semantic_backbone = SemanticRuntimeBackbone({"write_to_file": False})
     for episode in rollout_bundle.episodes:
         trajectory_path = episode.trajectory_path
         map_first_path = _find_map_first_path(trajectory_path)
@@ -209,23 +276,106 @@ def run_semantic_fusion_for_rollouts(
         occlusion = _get_map_first_array(map_first_data, "evidence_occlusion")
         dynamic_evidence = _get_map_first_array(map_first_data, "evidence_dynamics_score")
 
+        artifact_refs = {
+            "trajectory_path": str(trajectory_path),
+            "map_first_path": str(map_first_path) if map_first_path is not None else None,
+            "vla_semantic_evidence_path": str(vla_path) if vla_path is not None else None,
+            "teacher_trace_path": str(teacher_trace_path) if teacher_trace_path is not None else None,
+        }
+
         if map_semantics is None and vla_class_probs is None:
+            failure_path = _write_degraded_fusion_artifact(
+                trajectory_path=trajectory_path,
+                episode_id=episode.metadata.episode_id,
+                reason="missing_semantic_inputs",
+                artifact_refs=artifact_refs,
+            )
+            summaries.append(
+                {
+                    "episode_id": episode.metadata.episode_id,
+                    "semantic_fusion_status": "blocked",
+                    "semantic_fusion_failure_reason": "missing_semantic_inputs",
+                    "semantic_fusion_failure_path": str(failure_path),
+                    "semantic_fusion_quality_score": 0.0,
+                }
+            )
             continue
 
         scene_ids = _to_track_list(scene_track_ids)
         vla_ids = _to_track_list(vla_track_ids)
         if scene_ids is not None and vla_ids is not None and scene_ids != vla_ids:
             logger.warning("Semantic fusion skipped: track_ids mismatch for episode %s", episode.metadata.episode_id)
+            failure_path = _write_degraded_fusion_artifact(
+                trajectory_path=trajectory_path,
+                episode_id=episode.metadata.episode_id,
+                reason="track_ids_mismatch",
+                artifact_refs=artifact_refs,
+                metadata={"scene_ids": scene_ids, "vla_ids": vla_ids},
+            )
+            summaries.append(
+                {
+                    "episode_id": episode.metadata.episode_id,
+                    "semantic_fusion_status": "blocked",
+                    "semantic_fusion_failure_reason": "track_ids_mismatch",
+                    "semantic_fusion_failure_path": str(failure_path),
+                    "semantic_fusion_quality_score": 0.0,
+                }
+            )
             continue
         if scene_ids is not None and map_semantics is not None and len(scene_ids) != map_semantics.shape[1]:
             logger.warning("Semantic fusion skipped: SceneTracks size mismatch for episode %s", episode.metadata.episode_id)
+            failure_path = _write_degraded_fusion_artifact(
+                trajectory_path=trajectory_path,
+                episode_id=episode.metadata.episode_id,
+                reason="scene_tracks_size_mismatch",
+                artifact_refs=artifact_refs,
+            )
+            summaries.append(
+                {
+                    "episode_id": episode.metadata.episode_id,
+                    "semantic_fusion_status": "blocked",
+                    "semantic_fusion_failure_reason": "scene_tracks_size_mismatch",
+                    "semantic_fusion_failure_path": str(failure_path),
+                    "semantic_fusion_quality_score": 0.0,
+                }
+            )
             continue
         if vla_ids is not None and map_semantics is not None and len(vla_ids) != map_semantics.shape[1]:
             logger.warning("Semantic fusion skipped: VLA size mismatch for episode %s", episode.metadata.episode_id)
+            failure_path = _write_degraded_fusion_artifact(
+                trajectory_path=trajectory_path,
+                episode_id=episode.metadata.episode_id,
+                reason="vla_size_mismatch",
+                artifact_refs=artifact_refs,
+            )
+            summaries.append(
+                {
+                    "episode_id": episode.metadata.episode_id,
+                    "semantic_fusion_status": "blocked",
+                    "semantic_fusion_failure_reason": "vla_size_mismatch",
+                    "semantic_fusion_failure_path": str(failure_path),
+                    "semantic_fusion_quality_score": 0.0,
+                }
+            )
             continue
         if vla_class_probs is not None and map_semantics is not None:
             if vla_class_probs.shape != map_semantics.shape:
                 logger.warning("Semantic fusion skipped: shape mismatch for episode %s", episode.metadata.episode_id)
+                failure_path = _write_degraded_fusion_artifact(
+                    trajectory_path=trajectory_path,
+                    episode_id=episode.metadata.episode_id,
+                    reason="semantic_shape_mismatch",
+                    artifact_refs=artifact_refs,
+                )
+                summaries.append(
+                    {
+                        "episode_id": episode.metadata.episode_id,
+                        "semantic_fusion_status": "blocked",
+                        "semantic_fusion_failure_reason": "semantic_shape_mismatch",
+                        "semantic_fusion_failure_path": str(failure_path),
+                        "semantic_fusion_quality_score": 0.0,
+                    }
+                )
                 continue
 
         if scene_ids is None and vla_ids is None:
@@ -252,6 +402,7 @@ def run_semantic_fusion_for_rollouts(
         disagreement_mean = float(fusion_result.diagnostics.get("disagreement_mean", 0.0)) if fusion_result.diagnostics else 0.0
         summary = {
             "episode_id": episode.metadata.episode_id,
+            "semantic_fusion_status": "ready",
             "semantic_fusion_confidence_mean": confidence_mean,
             "semantic_disagreement_vla_vs_map": disagreement_mean,
             "semantic_fusion_quality_score": confidence_mean,
@@ -278,6 +429,9 @@ def run_semantic_fusion_for_rollouts(
             )
         evidence_bus_path: Optional[Path] = None
         belief_state_path: Optional[Path] = None
+        semantic_world_model_path: Optional[Path] = None
+        semantic_snapshot_path: Optional[Path] = None
+        orchestrator_advisory_path: Optional[Path] = None
         if emit_semantic_fusion and (emit_evidence_bus or emit_belief_state):
             episode_id = getattr(episode.metadata, "episode_id", "") or ""
             evidence_records: list[EvidenceRecord] = []
@@ -382,6 +536,80 @@ def run_semantic_fusion_for_rollouts(
                 )
                 _write_json(belief_state_path, belief_state.to_dict())
                 summary["belief_state_path"] = str(belief_state_path)
+                if emit_semantic_world_model or emit_semantic_snapshot or emit_orchestrator_advisory:
+                    objective_preset = (
+                        getattr(episode.metadata, "objective_preset", None)
+                        or episode.metrics.get("objective_preset")
+                        or "balanced"
+                    )
+                    task_id = (
+                        getattr(episode.metadata, "task_id", None)
+                        or getattr(episode.metadata, "task_name", None)
+                        or getattr(episode.metadata, "env_name", None)
+                        or episode_id
+                    )
+                    semantic_world_model = semantic_world_model_builder.build_from_runtime_fusion(
+                        episode_id=episode_id,
+                        task_id=str(task_id),
+                        objective_preset=str(objective_preset),
+                        belief_state=belief_state,
+                        semantic_tags=semantic_tags,
+                        scene_tracks_payload=scene_payload,
+                        teacher_trace=teacher_trace,
+                        vla_semantic_evidence=vla_evidence if vla_evidence is not None else vla_payload,
+                        semantic_fusion_summary={
+                            "track_ids": scene_ids or vla_ids or [],
+                            "semantic_fusion_path": str(fusion_path) if fusion_path is not None else "",
+                            "confidence_mean": confidence_mean,
+                            "disagreement_mean": disagreement_mean,
+                            "scene_ir_quality": float(episode.metrics.get("scene_ir_quality", 0.0) or 0.0),
+                        },
+                        artifact_refs={
+                            "semantic_fusion_path": str(fusion_path) if fusion_path is not None else "",
+                            "belief_state_path": str(belief_state_path),
+                            "evidence_bus_path": str(evidence_bus_path) if evidence_bus_path is not None else "",
+                        },
+                        metadata={
+                            "source_stage": "semantic_fusion_runner",
+                            "track_count": len(scene_ids or vla_ids or []),
+                        },
+                    )
+                    backbone_result = semantic_backbone.build(
+                        task_id=str(task_id),
+                        objective_preset=str(objective_preset),
+                        semantic_world_model=semantic_world_model,
+                        runtime_metrics={
+                            "avg_mpl_units_per_hour": confidence_mean * 100.0,
+                            "avg_wage_parity": float(episode.metrics.get("wage_parity", 1.0) or 1.0),
+                            "avg_energy_cost": float(episode.metrics.get("energy_cost", 0.0) or 0.0),
+                            "avg_error_rate": disagreement_mean,
+                            "mobility_drift_rate": float(episode.metrics.get("mobility_drift_rate", 0.0) or 0.0),
+                            "recovery_segment_fraction": 1.0
+                            if {"error_recovery", "mode:recovery"} & set(semantic_tags)
+                            else 0.0,
+                        },
+                        frontier_episodes=[episode_id],
+                        metadata={
+                            "source_stage": "semantic_fusion_runner",
+                            "semantic_fusion_path": str(fusion_path) if fusion_path is not None else "",
+                            "belief_state_path": str(belief_state_path),
+                        },
+                        backends=[str(getattr(episode.metadata, "backend", "semantic_fusion"))],
+                    )
+                    backbone_paths = semantic_backbone.write_sidecars(
+                        output_dir=trajectory_path.parent,
+                        file_stem=_safe_episode_id(episode_id),
+                        result=backbone_result,
+                    )
+                    semantic_world_model_path = Path(backbone_paths["semantic_world_model_path"])
+                    semantic_snapshot_path = Path(backbone_paths["semantic_snapshot_path"])
+                    orchestrator_advisory_path = Path(backbone_paths["orchestrator_advisory_path"])
+                    if emit_semantic_world_model:
+                        summary["semantic_world_model_path"] = str(semantic_world_model_path)
+                    if emit_semantic_snapshot:
+                        summary["semantic_snapshot_path"] = str(semantic_snapshot_path)
+                    if emit_orchestrator_advisory:
+                        summary["orchestrator_advisory_path"] = str(orchestrator_advisory_path)
 
         if emit_semantic_fusion:
             _update_episode_metadata(
@@ -391,6 +619,9 @@ def run_semantic_fusion_for_rollouts(
                 extra_fields={
                     "evidence_bus_path": str(evidence_bus_path) if evidence_bus_path is not None else None,
                     "belief_state_path": str(belief_state_path) if belief_state_path is not None else None,
+                    "semantic_world_model_path": str(semantic_world_model_path) if semantic_world_model_path is not None else None,
+                    "semantic_snapshot_path": str(semantic_snapshot_path) if semantic_snapshot_path is not None else None,
+                    "orchestrator_advisory_path": str(orchestrator_advisory_path) if orchestrator_advisory_path is not None else None,
                 },
             )
 

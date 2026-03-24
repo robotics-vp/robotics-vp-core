@@ -70,6 +70,8 @@ def test_scene_tracks_from_workcell_datapack(tmp_path: Path) -> None:
     assert result.scene_tracks_path.exists()
     assert np.isfinite(result.quality.quality_score)
     assert result.quality.quality_score >= 0.1
+    assert result.frame_metadata["execution_preconditions"]["ready"] is False
+    assert result.frame_metadata["training_eligible"] is False
 
     store = OntologyStore(root_dir=str(ontology_root))
     latest = get_latest_scene_tracks_artifact(store, datapack_id="ep_scene_tracks")

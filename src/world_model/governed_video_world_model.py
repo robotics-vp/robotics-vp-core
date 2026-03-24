@@ -281,13 +281,20 @@ class GovernedVideoWorldModel:
         modes = ["geometry_guarded_continuation"]
         if disagreement >= 0.2:
             modes.append("semantic_disambiguation")
-        if {"fragile", "avoid_collision", "safety"} & tags or snapshot.objective_preset == "safety":
+        if {
+            "fragile",
+            "avoid_collision",
+            "safety",
+            "risk:fragility",
+            "constraint:avoid_collision",
+            "priority:safety",
+        } & tags or snapshot.objective_preset == "safety":
             modes.append("fragile_object_preservation")
-        if snapshot.objective_preset == "throughput":
+        if snapshot.objective_preset == "throughput" or "objective:throughput" in tags:
             modes.append("throughput_push")
-        if snapshot.objective_preset == "energy_saver":
+        if snapshot.objective_preset == "energy_saver" or "objective:energy" in tags:
             modes.append("energy_saver_retiming")
-        if "error_recovery" in tags or disagreement >= 0.35:
+        if "error_recovery" in tags or "mode:recovery" in tags or disagreement >= 0.35:
             modes.append("recovery_branch")
         return modes
 

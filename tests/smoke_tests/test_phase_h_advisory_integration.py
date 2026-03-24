@@ -15,6 +15,7 @@ from src.phase_h.advisory_integration import (
     PhaseHAdvisory,
     apply_sampler_advisory,
     apply_orchestrator_advisory,
+    build_phase_h_activation_plan,
     build_phase_h_condition_fields,
     load_phase_h_advisory,
     MIN_MULTIPLIER,
@@ -427,6 +428,37 @@ def test_expired_advisory_ttl():
     print("✓ Expired advisories do not influence ConditionVector")
 
 
+def test_phase_h_activation_plan_uses_execution_preconditions():
+    """Phase H activation plan should promote to bounded execution only when ready."""
+    skills = {
+        "test": Skill(
+            "test", "Test", "Test", 10.0, 12.0, 20.0, 100.0, 1.0,
+            0.8, 0.2, 0.7, 0.8, 0.2, 1.0, 100, "2025-01-01T00:00:00Z", "training"
+        ),
+    }
+    budgets = {"test": ExplorationBudget("test", 1000.0, 200.0, 800.0, 0.4, 0.5, 0.1, 800)}
+    returns = [SkillReturns("test", 2.0, 20.0, 50.0, 2.0, 5.0, 0.05, 0.1, 2, 25.0)]
+    advisory = PhaseHAdvisory(skills, budgets, returns)
+
+    plan = build_phase_h_activation_plan(
+        advisory,
+        execution_precondition_summary={
+            "report_count": 1,
+            "ready_count": 1,
+            "blocked_count": 0,
+            "mean_readiness_score": 1.0,
+            "blocking_preconditions": {},
+            "satisfied_preconditions": {},
+        },
+        subject_id="phase_h_test",
+    )
+
+    assert plan["execution_mode"] == "preconditioned_routing"
+    assert plan["activation_plan"]["sampler_plan"]["max_delta_pct"] == MAX_ROUTING_DELTA
+    assert plan["activation_work_order"]["ready"] is True
+    print("✓ Phase H activation plan promotes when execution preconditions are ready")
+
+
 def run_all_tests():
     """Run all smoke tests."""
     print("\n=== Phase H Advisory Integration Smoke Tests ===\n")
@@ -441,6 +473,7 @@ def run_all_tests():
     test_json_safe_export()
     test_expired_advisory_ttl()
     test_load_phase_h_advisory()
+    test_phase_h_activation_plan_uses_execution_preconditions()
 
     print("\n=== All Tests Passed ===\n")
 

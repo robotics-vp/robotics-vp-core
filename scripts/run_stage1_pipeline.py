@@ -30,7 +30,13 @@ from src.diffusion.real_video_diffusion_stub import (
     VideoDiffusionStub,
     DiffusionProposal,
 )
-from src.evidence import EvidenceBus, EvidenceRecord, belief_state_from_evidence_bus
+from src.evidence import (
+    EvidenceBus,
+    EvidenceRecord,
+    belief_state_from_evidence_bus,
+    build_execution_preconditions,
+    build_execution_work_order,
+)
 from src.governance import governance_trace_sidecar_payload
 from src.runtime import decision_ledger_sidecar_payload, event_spine_sidecar_payload
 from src.vla.transformer_planner import VLATransformerPlanner, VLAInput, VLAPlan
@@ -43,7 +49,8 @@ from src.valuation.datapack_schema import (
 )
 from src.regal.gen_plausibility import RegalGenPlausibilityNode
 from src.regal.base import RegalDecision
-from src.world_model import GovernedVideoWorldModel
+from src.semantic.runtime_backbone import SemanticRuntimeBackbone
+from src.world_model import GovernedVideoWorldModel, SemanticWorldModelBuilder
 from src.world_model.governed_video_supervision import build_governed_video_supervision_bundle
 from src.vision.reconstruction import (
     build_four_d_reconstruction_sidecar,
@@ -170,12 +177,14 @@ def _tokenize_video_reference(video_ref: Dict[str, Any]) -> List[str]:
 
 def extract_semantic_tags_from_video(video_ref: Dict[str, Any]) -> List[str]:
     """
-    Extract semantic tags from video metadata and filenames.
+    Extract semantic seed tags from manifest metadata and instructions.
 
-    This is still lightweight, but it is deterministic and manifest-aware
-    rather than random.
+    This remains deterministic and lightweight, but it now emits a small
+    object/affordance/risk vocabulary that can seed a semantic world model
+    rather than only a flat keyword list.
     """
-    base_tags = {"robot_arm", "gripper", "workspace"}
+    builder = SemanticWorldModelBuilder()
+    base_tags = set(builder.infer_seed_tags(video_ref))
     tokens = _tokenize_video_reference(video_ref)
     for token in tokens:
         for key, tags in SEMANTIC_KEYWORDS.items():
@@ -281,6 +290,9 @@ def write_stage1_sidecars(
     belief_state: Any,
     snapshot: Any,
     hypotheses: List[Any],
+    semantic_world_model: Any,
+    semantic_snapshot: Any,
+    orchestrator_advisory: Any,
     semantic_tags: List[str],
     objective_preset: str,
     constraint_set: Dict[str, Any],
@@ -292,6 +304,9 @@ def write_stage1_sidecars(
     belief_state_path = sidecar_dir / f"{episode_id}_belief_state_v1.json"
     snapshot_path = sidecar_dir / f"{episode_id}_video_state_v1.json"
     hypotheses_path = sidecar_dir / f"{episode_id}_hypotheses_v1.json"
+    semantic_world_model_path = sidecar_dir / f"{episode_id}_semantic_world_model_v1.json"
+    semantic_snapshot_path = sidecar_dir / f"{episode_id}_semantic_snapshot_v1.json"
+    orchestrator_advisory_path = sidecar_dir / f"{episode_id}_orchestrator_advisory_v1.json"
     evidence_bus_path.write_text(json.dumps(evidence_bus.to_dict(), indent=2))
     belief_state_path.write_text(json.dumps(belief_state.to_dict(), indent=2))
     snapshot_path.write_text(json.dumps(snapshot.to_dict(), indent=2))
@@ -304,11 +319,17 @@ def write_stage1_sidecars(
             indent=2,
         )
     )
+    semantic_world_model_path.write_text(json.dumps(semantic_world_model.to_dict(), indent=2))
+    semantic_snapshot_path.write_text(json.dumps(semantic_snapshot.to_dict(), indent=2))
+    orchestrator_advisory_path.write_text(json.dumps(orchestrator_advisory.to_json(), indent=2))
     sidecar_paths = {
         "evidence_bus_path": str(evidence_bus_path),
         "belief_state_path": str(belief_state_path),
         "video_state_path": str(snapshot_path),
         "hypotheses_path": str(hypotheses_path),
+        "semantic_world_model_path": str(semantic_world_model_path),
+        "semantic_snapshot_path": str(semantic_snapshot_path),
+        "orchestrator_advisory_path": str(orchestrator_advisory_path),
     }
     metadata = video_ref.get("metadata", {})
     if not isinstance(metadata, dict):
@@ -359,6 +380,7 @@ def write_stage1_sidecars(
         objective_preset=objective_preset,
         constraint_set=constraint_set,
         sidecar_refs=sidecar_paths,
+        value_ledger_path=sidecar_dir / "governed_video_value_ledger.jsonl",
     )
     runtime_packet_path = sidecar_dir / f"{episode_id}_runtime_packet_v1.json"
     pricing_tick_path = sidecar_dir / f"{episode_id}_pricing_tick_v1.json"
@@ -425,6 +447,13 @@ def write_stage1_sidecars(
         }
     )
     return sidecar_paths, supervision_bundle
+
+
+def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
 
 
 def generate_diffusion_proposals(
@@ -494,6 +523,8 @@ def create_datapack_from_pipeline(
     semantic_tags: List[str],
     diffusion_proposal: DiffusionProposal,
     vla_plan: VLAPlan,
+    semantic_world_model: Any,
+    orchestrator_advisory: Any,
     objective_preset: str = "balanced",
 ) -> DataPackMeta:
     """
@@ -588,6 +619,18 @@ def create_datapack_from_pipeline(
     econ_semantic_tags = list(semantic_tags)
     econ_semantic_tags.append(f"objective:{objective_preset}")
     econ_semantic_tags.append(f"aug:{diffusion_proposal.augmentation_type}")
+    for capability, score in sorted(
+        getattr(semantic_world_model, "capability_scores", {}).items(),
+        key=lambda item: item[0],
+    ):
+        if float(score) >= 0.45:
+            econ_semantic_tags.append(f"capability:{capability}")
+    for node_type, score in sorted(
+        getattr(orchestrator_advisory, "meta_node_weights", {}).items(),
+        key=lambda item: item[0],
+    ):
+        if float(score) >= 0.4:
+            econ_semantic_tags.append(f"meta_node:{node_type}")
     semantic_quality = float(max(0.0, min(1.0, diffusion_proposal.estimated_novelty)))
 
     attribution_profile = AttributionProfile(
@@ -616,6 +659,16 @@ def create_datapack_from_pipeline(
         agent_profile={
             "policy": "stage1_vla",
             "source_type": "stage1_diffusion_vla",
+            "semantic_world_model_id": getattr(semantic_world_model, "world_model_id", ""),
+            "meta_node_weights": getattr(orchestrator_advisory, "meta_node_weights", {}),
+        },
+        signal_bundle={
+            "semantic_world_model": {
+                "world_model_id": getattr(semantic_world_model, "world_model_id", ""),
+                "topology": getattr(semantic_world_model, "topology", {}),
+                "capability_scores": getattr(semantic_world_model, "capability_scores", {}),
+            },
+            "meta_nodes": getattr(orchestrator_advisory, "meta_node_weights", {}),
         },
     )
 
@@ -628,6 +681,7 @@ def run_stage1_pipeline(
     objective_preset: str = "balanced",
     output_dir: str = "results/stage1_pipeline",
     video_manifest: Optional[str] = None,
+    plausibility_node: Optional[RegalGenPlausibilityNode] = None,
 ) -> Dict[str, Any]:
     """
     Run full Stage 1 pipeline.
@@ -640,13 +694,16 @@ def run_stage1_pipeline(
     # Initialize components
     diffusion_stub = VideoDiffusionStub()
     vla_planner = VLATransformerPlanner()
-    plausibility_node = RegalGenPlausibilityNode()
+    plausibility_node = plausibility_node or RegalGenPlausibilityNode()
     world_model = GovernedVideoWorldModel()
+    semantic_world_model_builder = SemanticWorldModelBuilder()
+    semantic_backbone = SemanticRuntimeBackbone({"write_to_file": False})
 
     all_datapacks = []
     all_proposals = []
     all_plans = []
     pipeline_log = []
+    admission_records: List[Dict[str, Any]] = []
     generated_proposal_count = 0
     video_refs = load_video_references(num_videos=num_videos, manifest_path=video_manifest)
 
@@ -675,6 +732,57 @@ def run_stage1_pipeline(
             objective_preset,
             proposals_per_video,
         )
+        semantic_world_model = semantic_world_model_builder.build_from_stage1(
+            video_ref=video_ref,
+            belief_state=belief_state,
+            video_state_snapshot=snapshot,
+            hypotheses=hypotheses,
+            constraint_set=constraint_set,
+            objective_preset=objective_preset,
+            semantic_tags=semantic_tags,
+            scene_tracks_payload=(
+                video_ref.get("scene_tracks_v1")
+                or video_ref.get("scene_tracks_path")
+                or video_ref.get("scene_tracks_npz")
+                or video_ref.get("metadata", {}).get("scene_tracks_v1")
+                or video_ref.get("metadata", {}).get("scene_tracks_path")
+                or video_ref.get("metadata", {}).get("scene_tracks_npz")
+            ),
+            teacher_trace=(
+                video_ref.get("teacher_trace")
+                or video_ref.get("teacher_trace_path")
+                or video_ref.get("metadata", {}).get("teacher_trace")
+                or video_ref.get("metadata", {}).get("teacher_trace_path")
+            ),
+            vla_semantic_evidence=(
+                video_ref.get("vla_semantic_evidence")
+                or video_ref.get("vla_semantic_evidence_path")
+                or video_ref.get("metadata", {}).get("vla_semantic_evidence")
+                or video_ref.get("metadata", {}).get("vla_semantic_evidence_path")
+            ),
+            artifact_refs={"video_path": str(video_ref.get("video_path", ""))},
+        )
+        semantic_backbone_result = semantic_backbone.build(
+            task_id=str(video_ref.get("task_type", video_ref.get("episode_id", ""))),
+            objective_preset=objective_preset,
+            semantic_world_model=semantic_world_model,
+            runtime_metrics={
+                "avg_energy_cost": 0.0,
+                "avg_error_rate": 0.0 if video_ref.get("metadata", {}).get("success", True) else 1.0,
+                "avg_wage_parity": 1.0,
+                "avg_mpl_units_per_hour": float(len(semantic_tags)),
+                "expected_delta_mpl": float(max((proposal.estimated_novelty for proposal in proposals), default=0.0)),
+                "recovery_segment_fraction": 1.0
+                if {"error_recovery", "mode:recovery"} & set(semantic_tags)
+                else 0.0,
+            },
+            frontier_episodes=[str(video_ref.get("episode_id", ""))],
+            metadata={
+                "source_stage": "stage1",
+                "video_episode_id": str(video_ref.get("episode_id", "")),
+            },
+            backends=["governed_video"],
+        )
         generated_proposal_count += len(proposals)
         sidecar_paths, supervision_bundle = write_stage1_sidecars(
             output_dir,
@@ -683,6 +791,9 @@ def run_stage1_pipeline(
             belief_state,
             snapshot,
             hypotheses,
+            semantic_world_model,
+            semantic_backbone_result.semantic_snapshot,
+            semantic_backbone_result.orchestrator_advisory,
             semantic_tags,
             objective_preset,
             constraint_set,
@@ -711,23 +822,82 @@ def run_stage1_pipeline(
                 ),
             }
             plausibility_report = plausibility_node.evaluate(plausibility_context)
+            execution_preconditions = build_execution_preconditions(
+                subject_id=proposal.proposal_id,
+                subject_kind="governed_video_proposal",
+                artifact_refs={
+                    **sidecar_paths,
+                    "proposal_id": proposal.proposal_id,
+                    "hypothesis_mode": proposal.augmentation_type,
+                },
+                required_artifact_refs=[
+                    "belief_state_path",
+                    "video_state_path",
+                    "reconstruction_sidecar_path",
+                    "runtime_packet_path",
+                    "governance_trace_path",
+                    "counterfactual_eval_path",
+                    "value_target_pack_path",
+                    "event_spine_path",
+                    "decision_ledger_path",
+                ],
+                signal_values={
+                    **plausibility_context,
+                    "estimated_novelty": float(proposal.estimated_novelty),
+                },
+                blocked_reasons=plausibility_report.reason_codes if plausibility_report.decision == RegalDecision.BLOCK else [],
+                metadata={
+                    "video_id": video_ref["episode_id"],
+                    "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
+                    "value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
+                },
+            )
+            work_order = build_execution_work_order(
+                order_type="governed_video_admission",
+                subject_id=proposal.proposal_id,
+                subject_kind="governed_video_proposal",
+                decision=(
+                    "admit_datapack"
+                    if plausibility_report.decision != RegalDecision.BLOCK
+                    else "capture_negative_supervision"
+                ),
+                priority=float(max(0.0, proposal.estimated_novelty)),
+                recommended_mode=(
+                    "stage1_datapack"
+                    if plausibility_report.decision != RegalDecision.BLOCK
+                    else "negative_counterexample"
+                ),
+                readiness=execution_preconditions,
+                reasons=plausibility_report.reason_codes or ["plausibility_ok"],
+                artifact_refs={
+                    **sidecar_paths,
+                    "proposal_id": proposal.proposal_id,
+                },
+                metadata={
+                    "video_id": video_ref["episode_id"],
+                    "augmentation_type": proposal.augmentation_type,
+                },
+            )
+            admission_record = {
+                "video_id": video_ref["episode_id"],
+                "proposal_id": proposal.proposal_id,
+                "augmentation_type": proposal.augmentation_type,
+                "blocked": plausibility_report.decision == RegalDecision.BLOCK,
+                "plausibility_gate": plausibility_report.to_dict(),
+                "execution_preconditions": execution_preconditions.to_dict(),
+                "execution_work_order": work_order.to_dict(),
+                "video_state_id": snapshot.state_id,
+                "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
+                "value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
+                **sidecar_paths,
+            }
+            admission_records.append(admission_record)
             if plausibility_report.decision == RegalDecision.BLOCK:
                 print(
                     "      Skipped by plausibility gate:",
                     ",".join(plausibility_report.reason_codes),
                 )
-                pipeline_log.append(
-                    {
-                        "video_id": video_ref["episode_id"],
-                        "proposal_id": proposal.proposal_id,
-                        "augmentation_type": proposal.augmentation_type,
-                        "plausibility_gate": plausibility_report.to_dict(),
-                        "blocked": True,
-                        "video_state_id": snapshot.state_id,
-                        "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
-                        **sidecar_paths,
-                    }
-                )
+                pipeline_log.append(dict(admission_record))
                 continue
 
             # Generate VLA plan
@@ -736,7 +906,13 @@ def run_stage1_pipeline(
 
             # Create datapack
             datapack = create_datapack_from_pipeline(
-                video_ref, semantic_tags, proposal, vla_plan, objective_preset
+                video_ref,
+                semantic_tags,
+                proposal,
+                vla_plan,
+                semantic_world_model,
+                semantic_backbone_result.orchestrator_advisory,
+                objective_preset,
             )
             datapack.regal_annotations = {
                 "gen_plausibility": plausibility_report.to_dict(),
@@ -745,7 +921,14 @@ def run_stage1_pipeline(
                 "governed_video_hypothesis_mode": proposal.augmentation_type,
                 "governed_video_counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
                 "governed_video_value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
+                "semantic_world_model_id": semantic_world_model.world_model_id,
+                "semantic_capabilities": semantic_world_model.capability_scores,
+                "orchestrator_meta_nodes": semantic_backbone_result.orchestrator_advisory.meta_node_weights,
+                "execution_preconditions": execution_preconditions.to_dict(),
+                "execution_work_order_id": work_order.work_order_id,
             }
+            datapack.episode_metrics["execution_preconditions"] = execution_preconditions.to_dict()
+            datapack.episode_metrics["execution_work_order"] = work_order.to_dict()
             print(f"      DataPack: {datapack.pack_id}")
             print(f"      Tier: {datapack.attribution.tier}, Trust: {datapack.attribution.trust_score:.3f}")
 
@@ -755,9 +938,7 @@ def run_stage1_pipeline(
 
             # Log
             pipeline_log.append({
-                "video_id": video_ref["episode_id"],
-                "proposal_id": proposal.proposal_id,
-                "augmentation_type": proposal.augmentation_type,
+                **dict(admission_record),
                 "semantic_tags": semantic_tags,
                 "vla_skills": vla_plan.skill_sequence[:5],
                 "vla_confidence": float(np.mean(vla_plan.confidence)),
@@ -765,11 +946,11 @@ def run_stage1_pipeline(
                 "tier": datapack.attribution.tier,
                 "trust_score": datapack.attribution.trust_score,
                 "estimated_novelty": proposal.estimated_novelty,
-                "video_state_id": snapshot.state_id,
+                "semantic_world_model_id": semantic_world_model.world_model_id,
+                "semantic_capabilities": semantic_world_model.capability_scores,
+                "meta_node_weights": semantic_backbone_result.orchestrator_advisory.meta_node_weights,
                 "constraint_set": constraint_set,
-                "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
-                "value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
-                **sidecar_paths,
+                "blocked": False,
             })
 
     # Save outputs
@@ -800,6 +981,9 @@ def run_stage1_pipeline(
     with open(log_path, "w") as f:
         json.dump(pipeline_log, f, indent=2)
     print(f"Saved pipeline log to {log_path}")
+    admission_log_path = Path(output_dir) / "governed_video" / "proposal_admission_v1.jsonl"
+    _write_jsonl(admission_log_path, admission_records)
+    print(f"Saved governed video admission log to {admission_log_path}")
 
     # Compute statistics
     tier_counts = {1: 0, 2: 0}
@@ -823,11 +1007,18 @@ def run_stage1_pipeline(
         "total_videos": len(video_refs),
         "total_proposals": generated_proposal_count,
         "total_datapacks": len(all_datapacks),
+        "blocked_proposals": sum(1 for row in admission_records if row.get("blocked")),
+        "admitted_proposals": sum(1 for row in admission_records if not row.get("blocked")),
+        "executable_work_orders": sum(
+            1 for row in admission_records
+            if dict(row.get("execution_work_order", {}) or {}).get("ready")
+        ),
         "tier_distribution": tier_counts,
         "avg_trust_score": avg_trust,
         "avg_novelty": avg_novelty,
         "augmentation_type_distribution": augmentation_types,
         "objective_preset": objective_preset,
+        "proposal_admission_log": str(admission_log_path),
     }
 
     stats_path = os.path.join(output_dir, "pipeline_stats.json")

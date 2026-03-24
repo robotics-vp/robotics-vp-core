@@ -1,15 +1,16 @@
 """
 Semantic spine models unifying semantic/econ/meta signals.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List
 from time import time
 
 from src.sima2.ontology_proposals import OntologyUpdateProposal
 from src.sima2.task_graph_proposals import TaskGraphRefinementProposal
-from src.sima2.tags.semantic_tags import SemanticEnrichmentProposal as SemanticTag  # alias
-from src.orchestrator.meta_transformer import MetaTransformerOutputs
 from src.utils.json_safe import to_json_safe
+from src.world_model.semantic_world_model import SemanticWorldModelState
 
 
 def _sorted_by_id(items, key_name: str = "proposal_id"):
@@ -62,6 +63,7 @@ class SemanticSnapshot:
     semantic_tags: List[Any]
     econ_slice: EconSlice
     meta_slice: MetaTransformerSlice
+    semantic_world_model: SemanticWorldModelState | None = None
     num_segments: int = 0
     segment_types: Dict[str, int] = field(default_factory=dict)
     subtask_label_histogram: Dict[str, int] = field(default_factory=dict)
@@ -78,6 +80,7 @@ class SemanticSnapshot:
             semantic_tags=_sorted_by_id(self.semantic_tags, key_name="proposal_id"),
             econ_slice=self.econ_slice,
             meta_slice=self.meta_slice,
+            semantic_world_model=self.semantic_world_model,
             num_segments=self.num_segments,
             segment_types=dict(self.segment_types),
             subtask_label_histogram=dict(self.subtask_label_histogram),
@@ -97,6 +100,9 @@ class SemanticSnapshot:
                 "semantic_tags": [t.to_dict() if hasattr(t, "to_dict") else t for t in snap.semantic_tags],
                 "econ_slice": snap.econ_slice.to_dict(),
                 "meta_slice": snap.meta_slice.to_dict(),
+                "semantic_world_model": snap.semantic_world_model.to_dict()
+                if snap.semantic_world_model is not None
+                else None,
                 "num_segments": snap.num_segments,
                 "segment_types": snap.segment_types,
                 "subtask_label_histogram": snap.subtask_label_histogram,
@@ -116,6 +122,9 @@ class SemanticSnapshot:
             semantic_tags=[t for t in d.get("semantic_tags", [])],
             econ_slice=EconSlice.from_dict(d["econ_slice"]),
             meta_slice=MetaTransformerSlice.from_dict(d["meta_slice"]),
+            semantic_world_model=SemanticWorldModelState.from_dict(d["semantic_world_model"])
+            if isinstance(d.get("semantic_world_model"), dict)
+            else None,
             num_segments=int(d.get("num_segments", 0)),
             segment_types=d.get("segment_types", {}),
             subtask_label_histogram=d.get("subtask_label_histogram", {}),

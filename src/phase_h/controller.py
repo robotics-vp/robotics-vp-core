@@ -7,14 +7,18 @@ Coordinates:
 - Pushing signals to Sampler/Orchestrator/ConditionVector
 - Logging cycle summaries
 
-Advisory-only, bounded, deterministic.
+Bounded, deterministic, and activation-capable once execution preconditions pass.
 """
 import json
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from src.phase_h.advisory_integration import load_phase_h_advisory, PhaseHAdvisory
+from src.phase_h.advisory_integration import (
+    PhaseHAdvisory,
+    build_phase_h_activation_plan,
+    load_phase_h_advisory,
+)
 from src.utils.json_safe import to_json_safe
 
 
@@ -40,6 +44,7 @@ class PhaseHCycleOrchestrator:
                 - enable_phase_h: Flag to enable Phase H (default False)
                 - log_dir: Directory for cycle logs (default "logs/phase_h")
         """
+        self.config = dict(config)
         self.ontology_root = Path(config.get("ontology_root", "data/ontology"))
         self.cycle_period_episodes = int(config.get("cycle_period_episodes", 1000))
         self.enable_phase_h = bool(config.get("enable_phase_h", False))
@@ -80,6 +85,18 @@ class PhaseHCycleOrchestrator:
             "exploration_priorities": advisory.exploration_priorities,
             "routing_advisories": advisory.routing_advisories,
         }
+        execution_summary = self.config.get("execution_precondition_summary")
+        if isinstance(execution_summary, dict) and execution_summary:
+            summary["execution_precondition_summary"] = execution_summary
+        activation = build_phase_h_activation_plan(
+            advisory,
+            execution_precondition_summary=execution_summary,
+            subject_id=f"{self.cycle_count}:{episode_count}",
+        )
+        summary["execution_mode"] = activation.get("execution_mode", "advisory")
+        summary["phase_h_activation"] = activation.get("activation_plan", {})
+        summary["phase_h_activation_work_order"] = activation.get("activation_work_order")
+        summary["shell_activation"] = activation.get("shell_activation", {})
 
         # Save cycle summary
         self._save_cycle_summary(summary)

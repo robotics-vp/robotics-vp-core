@@ -135,6 +135,8 @@ def build_live_queue_selection(
                     "signal_yield_score": episode.get("signal_yield_score"),
                     "inferential_signal_yield": episode.get("inferential_signal_yield"),
                     "inferential_budget_decision": episode.get("inferential_budget_decision"),
+                    "execution_preconditions": episode.get("execution_preconditions"),
+                    "execution_work_orders": episode.get("execution_work_orders"),
                     "promotion_stage": _episode_promotion_stage(episode),
                     "promotion_stages": _episode_promotion_stages(episode),
                     "influence_source": _episode_influence_source(episode),
@@ -142,6 +144,10 @@ def build_live_queue_selection(
                         "sampling_recommendation": dict(episode.get("sampling_recommendation", {}) or {}),
                         "receipt_feedback": dict(episode.get("receipt_feedback", {}) or {}),
                         "inferential_signal_yield": episode.get("inferential_signal_yield"),
+                        "execution_preconditions": dict(episode.get("execution_preconditions", {}) or {}),
+                        "execution_work_orders": [
+                            dict(row) for row in episode.get("execution_work_orders", []) or []
+                        ],
                         "inferential_reward": (
                             dict(
                                 (episode.get("inferential_budget_decision", {}) or {})

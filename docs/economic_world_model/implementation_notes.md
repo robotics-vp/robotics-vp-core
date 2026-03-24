@@ -67,6 +67,38 @@
 
 ## 2026-03-22
 
+- Added `src/world_model/semantic_world_model.py` as an additive object-centric semantic memory layer:
+  - `SemanticWorldModelState` now carries objects, relations, capability scores, topology, risk register, and meta-node routing state.
+  - `SemanticWorldModelBuilder` derives that state from Stage 1 governed video evidence or from rollout semantic-fusion evidence without touching frozen Phase B dynamics math.
+- `SemanticWorldModelBuilder` no longer relies only on flat tags when richer grounding exists:
+  - it now accepts `SceneTracks_v1`, teacher traces, and VLA semantic evidence as direct inputs
+  - it emits track-scoped objects (`track:<track_id>`) with confidence/salience derived from visibility, occlusion, convergence, IR loss, motion, and semantic confidence
+  - it derives grounded spatial relations such as `inside`, `near`, `moves_with`, and `rests_on` from real `poses_t` geometry before layering canonical priors on top
+- Added `src/semantic/runtime_backbone.py` so runtime producers can emit the same semantic packet family every time:
+  - world model sidecar
+  - semantic snapshot sidecar
+  - orchestrator advisory sidecar
+- Stage 1 is no longer only a keyword-tag pipeline:
+  - `scripts/run_stage1_pipeline.py` now seeds a richer semantic vocabulary, materializes semantic world-model/snapshot/advisory sidecars, and threads capability/meta-node context into datapack signal bundles and regal annotations.
+- Runtime semantic fusion now stops at a shared packet instead of dying at evidence fusion:
+  - `src/orchestrator/semantic_fusion_runner.py` now emits semantic world-model, snapshot, and orchestrator sidecars beside belief/evidence sidecars when fusion succeeds.
+- Runtime semantic fusion now passes the real grounding artifacts into that packet:
+  - `scene_payload` is used as the SceneTracks source
+  - `teacher_trace_v1` and VLA semantic evidence sidecars are passed into semantic world-model construction instead of being reduced to only flat semantic tags
+- Snapshot/orchestrator/observation/sampler wiring is now materially stronger:
+  - `src/semantic/models.py` gives `SemanticSnapshot` a first-class `semantic_world_model` field.
+  - `src/semantic/aggregator.py` can now carry that field through Stage 2 aggregation.
+  - `src/orchestrator/semantic_orchestrator_v2.py` now translates semantic topology/capabilities into meta-node weights rather than only shallow sampler tags.
+  - `src/observation/adapter.py` and `src/observation/condition_vector_builder.py` now expose capability/topology/meta-node signals in the observation/condition path.
+  - `src/rl/episode_sampling.py` now uses advisory meta-node weights as bounded replay-priority multipliers.
+- Added `docs/economic_world_model/semantic_gap_matrix.md` as the written semantic sweep and translation layer for the repo.
+- Verification for this semantic-world-model pass:
+  - `python3 -m compileall src scripts/run_stage1_pipeline.py tests -q`
+  - `python3 -m ruff check scripts/run_stage1_pipeline.py src/world_model/semantic_world_model.py src/semantic/models.py src/semantic/aggregator.py src/semantic/runtime_backbone.py src/orchestrator/semantic_orchestrator_v2.py src/orchestrator/semantic_fusion_runner.py src/observation/adapter.py src/observation/condition_vector_builder.py src/rl/episode_sampling.py tests/test_stage1_pipeline_governed.py tests/test_semantic_world_model_backbone.py`
+  - `python3 -m pytest -q tests/test_stage1_pipeline_governed.py tests/test_semantic_world_model_backbone.py tests/test_governed_video_world_model.py tests/test_semantic_fusion_emit_flag.py tests/test_semantic_fusion_orchestrator_smoke.py tests/test_semantic_policy.py`
+- Remaining blocker:
+  - grounded semantic memory now exists, but only when upstream producers emit usable SceneTracks/class labels/teacher evidence. The next upgrade is to improve those upstream producers so the semantic world model sees dense grounded artifacts more often and fewer stub/fallback cases.
+
 - Added `src/dataset_bridges/sidecar_refs.py` with `extract_sidecar_refs(...)` to centralize replay sidecar extraction for bridge exports.
 - The extractor keeps bridge exports additive and forward-compatible by harvesting references from replay record fields and `metadata`/`provenance` keys that end in `*_ref`, `*_refs`, `*_id`, or `*_ids`.
 - Switched `src/dataset_bridges/rlds_bridge.py` and `src/dataset_bridges/lerobot_bridge.py` to use the shared extractor instead of hardcoded per-key sidecar mappings, reducing future maintenance when new governed-supervision refs are introduced.
@@ -74,6 +106,7 @@
 - Added `scripts/economic_world_model/publish_codex_change.sh` to publish automation commits to `origin/main` when the local change is a safe fast-forward, while falling back to a timestamped `codex/ewm-nightly-*` branch when direct main pushes are rejected.
 - Updated `scripts/economic_world_model/run_nightly_codex_task.sh` so the generated Codex task now requires publication via the helper and reports either the published ref or the exact push blocker before the run is considered complete.
 - Updated `docs/economic_world_model/AUTOMATION_SPEC.md`, `codex_skills/economic-world-model-roadmap/SKILL.md`, and the live app automation prompt to treat unpublished local commits as incomplete automation output.
+
 - Added `src/economics/inferential_reward.py` as a shared successor-layer compiler for `InferentialSignalYield` and `InferentialRewardBreakdown`, keeping signal-yield math additive and outside frozen Phase B reward/dynamics code.
 - Extended `InferentialTrainingCandidate` and `InferentialTrainingGate` to carry frontier gain, epiplexity, transfer, governance, and optional signal-yield overrides, then compile a canonical inferential reward breakdown before making budget decisions.
 - Wired advisory consumers to use the compiled signal-yield path:
@@ -94,3 +127,37 @@
 - Kept the change additive: no edits to the stable Phase B checkpoint, no legacy world-model math rewrite, and no baseline reward-path mutation.
 - Added `docs/economic_world_model/ewm-nightly.automation.toml` as a checked-in mirror of the live Codex app automation config, omitting only local timestamp fields so the active prompt/schedule/environment are versioned with the repo.
 - Updated `docs/economic_world_model/AUTOMATION_SPEC.md` to point at the checked-in automation snapshot as the Git-tracked source of truth for the live app automation state.
+
+- Added `docs/economic_world_model/self_improvement_preconditions_sweep.md` to capture where the repo should stop at advisory sidecars versus where it now has enough substrate to promote those sidecars into self-improvement preconditions.
+- The sweep treats queue dispatch as the positive template because it already gives advisory outputs bounded influence in live training paths, and it argues that the next promotions should be work orders, promotion evidence joins, replay roundtrip/rehydration, governed-video admission contracts, and explicit degraded-evidence artifacts rather than broader controller sovereignty.
+- The same sweep also marks modules that should stay advisory for now, especially `src/orchestrator/semantic_orchestrator_v2.py`, `src/orchestrator/pipeline_manager.py`, `src/orchestrator/economic_controller.py`, and `src/hrl/high_level_controller.py`, because they still sit above insufficiently strict packet/event/evidence ingestion layers.
+
+- Added `src/evidence/preconditions.py` as the shared execution-readiness/work-order vocabulary:
+  - `ExecutionPreconditionsReport` now normalizes artifact presence, signal thresholds, boolean requirements, and explicit blockers into one JSON-safe artifact.
+  - `ExecutionWorkOrder` now gives downstream training/review/data-collection consumers a stable executable-vs-blocked order surface instead of requiring each module to reinterpret advisory summaries independently.
+- Added `src/replay/preconditions.py` plus `ReplayDatasetBuilder` wiring so canonical replay datasets now persist trace completeness as data, not just as latent sidecar refs:
+  - episodes now carry `metadata.execution_preconditions`
+  - manifests now carry `metadata.execution_precondition_summary`
+  - RLDS/LeRobot exports can now roundtrip back into canonical replay rows with sidecar refs rehydrated instead of dropped
+- Extended `src/orchestrator/adaptation_budgeting.py` and `src/orchestrator/shadow_advisory.py` so inferential budget decisions become actual work-order artifacts gated by replay trace completeness; this is the first place the repo now creates explicit preconditions for self-improvement rather than only reporting desirability.
+- Hardened governed-video admission and fusion failure handling:
+  - `scripts/run_stage1_pipeline.py` now emits `governed_video/proposal_admission_v1.jsonl` with proposal-level execution preconditions and admission work orders, and admitted datapacks carry those artifacts into `episode_metrics` / `regal_annotations`
+  - `src/world_model/governed_video_supervision.py` now accepts a stable ledger path instead of hardcoding `/tmp`
+  - `src/orchestrator/semantic_fusion_runner.py` now writes per-episode degraded-evidence artifacts/work orders on mismatch or missing-input failures instead of silently skipping them
+- Hardened weak execution substrates before widening planner authority:
+  - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` now classifies stub-adapter / low-quality outputs as not training-eligible in explicit precondition metadata
+  - `src/vla/teacher_runtime.py` now emits execution-precondition metadata for both contract availability and per-prediction failures
+  - `src/policies/unified_quality.py` and `src/rl/episode_sampling.py` now let execution preconditions block datapack/replay eligibility, making the new substrate materially affect who can train
+- Kept top-level shells advisory but no longer blind:
+  - `src/orchestrator/semantic_orchestrator_v2.py`, `src/orchestrator/pipeline_manager.py`, `src/phase_h/controller.py`, and `src/phase_h/economic_learner.py` now surface precondition summaries as advisory routing/repair context instead of pretending blocked substrates are ready.
+
+- Added `scripts/SHELL_ACTIVATION_BACKLOG.json` as the machine-readable higher-shell promotion backlog and `src/orchestrator/shell_activation.py` as the evaluator:
+  - backlog entries define per-shell activation thresholds (`min_report_count`, `min_ready_count`, `max_blocked_count`, `min_mean_readiness_score`)
+  - backlog entries can also carry future-training-only satisfied-precondition requirements such as `signal_bool::teacher_runtime_live` or `artifact::training_runtime_manifest`
+  - the evaluator normalizes either aggregated summaries or single readiness reports into one activation assessment shape
+- Promoted the higher shells from “advisory only” to “conditionally executable” where the substrate is already good enough:
+  - `src/orchestrator/semantic_orchestrator_v2.py` now emits `execution_mode`, a bounded routing `activation_plan`, and a typed shell work order when the current semantic-routing backlog item is activated
+  - `src/orchestrator/pipeline_manager.py` now builds a bounded next-iteration stage-activation plan and work order instead of only returning advisory preview text when readiness is green
+  - `src/phase_h/advisory_integration.py` now exposes `build_phase_h_activation_plan(...)`, letting Phase H routing become a bounded activation artifact while preserving the existing ±20% caps
+  - `src/phase_h/controller.py` and `src/phase_h/economic_learner.py` now surface shell activation state, activation work orders, and future-training backlog readiness in their cycle summaries
+- Added `docs/economic_world_model/shell_activation_backlog.md` to explain which shell promotions are auto-activating today versus which ones stay in the future-training backlog until stronger grounding and runtime evidence become explicit readiness checks.

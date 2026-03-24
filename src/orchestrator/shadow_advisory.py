@@ -20,7 +20,6 @@ from src.replay.compatibility import check_replay_manifest_compatibility
 from src.regality.promotion_policy import load_regal_promotion_policy
 from src.rl.econ_regal_sampling import recommend_sampling
 from src.shadow_runtime.advisors import (
-    AdvisorMode,
     DataValueAdvisor,
     PolicyAdvisor,
     PricingAdvisor,
@@ -70,6 +69,10 @@ def build_shadow_advisory_output(
 
     episode_outputs: list[Dict[str, Any]] = []
     budget_candidates: list[InferentialTrainingCandidate] = []
+    execution_preconditions_by_episode: Dict[str, Dict[str, Any]] = {
+        episode.episode_id: dict(episode.metadata.get("execution_preconditions", {}) or {})
+        for episode in dataset.episodes
+    }
     for episode in dataset.episodes:
         policy_result = (policy_advisor or PolicyAdvisor()).summarize_episode(steps_by_episode.get(episode.episode_id, []))
         pricing_result = (pricing_advisor or PricingAdvisor()).assess_episode(episode)
@@ -293,20 +296,29 @@ def build_shadow_advisory_output(
                         else None
                     ),
                 },
+                "execution_preconditions": execution_preconditions_by_episode.get(episode.episode_id, {}),
             }
         )
 
     gate = InferentialTrainingGate(promotion_policy=promotion_policy)
-    budget_artifact = evaluate_adaptation_budget(gate=gate, candidates=budget_candidates)
+    budget_artifact = evaluate_adaptation_budget(
+        gate=gate,
+        candidates=budget_candidates,
+        execution_preconditions=execution_preconditions_by_episode,
+    )
     decisions_by_episode: Dict[str, Dict[str, Any]] = {
         str(row.get("artifact_summary", {}).get("episode_id", candidate.episode_id)): row
         for row, candidate in zip(budget_artifact.decisions, budget_candidates)
     }
+    work_orders_by_episode: Dict[str, list[Dict[str, Any]]] = defaultdict(list)
+    for work_order in budget_artifact.work_orders:
+        work_orders_by_episode[str(work_order.get("subject_id", ""))].append(dict(work_order))
     for episode_output, candidate in zip(episode_outputs, budget_candidates):
         budget_decision = decisions_by_episode.get(candidate.episode_id) or gate.evaluate(candidate).to_dict()
         episode_output["inferential_budget_decision"] = budget_decision
         episode_output["collect_more_data"] = budget_decision["decision"] == "collect_more_data"
         episode_output["retrain"] = budget_decision["decision"] == "adapt_now"
+        episode_output["execution_work_orders"] = work_orders_by_episode.get(candidate.episode_id, [])
         if episode_output["receipt_feedback"]["deployment_outcome"] is not None:
             episode_output["inferential_budget_decision"]["artifact_summary"]["receipt_feedback"] = {
                 "realized_value": episode_output["receipt_feedback"]["deployment_outcome"]["realized_value"],
@@ -345,6 +357,18 @@ def build_shadow_advisory_output(
             "config_digest": promotion_policy.config_digest,
         },
         "adaptation_budget": budget_artifact.to_dict(),
+        "adaptation_work_orders": [
+            row for row in budget_artifact.work_orders
+            if row.get("order_type") == "adaptation_training"
+        ],
+        "collection_work_orders": [
+            row for row in budget_artifact.work_orders
+            if row.get("order_type") == "data_collection"
+        ],
+        "review_work_orders": [
+            row for row in budget_artifact.work_orders
+            if row.get("order_type") == "human_review"
+        ],
         "receipt_label_coverage": receipt_bundle.coverage_summary(),
     }
     payload["live_queue_selection"] = build_live_queue_selection(payload)

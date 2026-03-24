@@ -4,20 +4,27 @@ Pipeline Manager: Coordinates the 5-stage learning loop.
 Manages the flow from:
 1. Offline objective/guidance solving
 2. Data collection with annotations
-3. Policy training (advisory recommendations)
+3. Policy training activation planning
 4. Evaluation and metrics
 5. Feedback and iteration
 
 This is orchestrator-level infrastructure that provides visibility into the full
-learning pipeline. It is ADVISORY ONLY - does not execute training or modify Phase B.
+learning pipeline. It can emit bounded stage-activation plans once explicit
+readiness thresholds are met, but it does not directly execute training or modify
+Phase B.
 
 This is additive infrastructure - no changes to Phase B math or RL training loops.
 """
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
+from src.evidence.preconditions import build_execution_work_order
+from src.orchestrator.shell_activation import (
+    evaluate_shell_activation_backlog,
+    get_shell_activation_assessment,
+)
 from src.orchestrator.semantic_orchestrator import SemanticOrchestrator
-from src.orchestrator.semantic_metrics import write_semantic_metrics, load_semantic_metrics, SemanticMetrics
+from src.orchestrator.semantic_metrics import load_semantic_metrics
 from enum import Enum
 from datetime import datetime
 import json
@@ -249,8 +256,9 @@ class PipelineManager:
     """
     Manages the overall learning pipeline across multiple iterations.
 
-    IMPORTANT: This is ADVISORY ONLY. It provides structure and visibility
-    into the learning process but does NOT execute training or modify Phase B.
+    Provides structure and visibility into the learning process and can emit
+    bounded activation plans when explicit execution preconditions are satisfied.
+    It does NOT directly execute training or modify Phase B.
     """
     pipeline_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = "Default Pipeline"
@@ -322,12 +330,103 @@ class PipelineManager:
             "trends": trends,
         }
 
+    def _execution_summary(self) -> Dict[str, Any]:
+        execution_summary = (
+            self.metadata.get("execution_precondition_summary")
+            or self.config.get("execution_precondition_summary")
+            or {}
+        )
+        return dict(execution_summary) if isinstance(execution_summary, dict) else {}
+
+    def _last_iteration_summary(self) -> Dict[str, Any]:
+        last_results: Dict[str, Any] = {}
+        if self.iterations:
+            last_iteration = self.iterations[-1]
+            last_results = {
+                "summary_metrics": last_iteration.summary_metrics,
+                "recommendations": [],
+            }
+            for result in last_iteration.stage_results.values():
+                last_results["recommendations"].extend(result.recommendations)
+        return last_results
+
+    def build_iteration_activation_plan(self) -> Dict[str, Any]:
+        """Build a bounded stage-activation plan when shell readiness is satisfied."""
+
+        execution_summary = self._execution_summary()
+        shell_activation = evaluate_shell_activation_backlog(
+            execution_summary,
+            module_keys=["pipeline_manager"],
+            subject_prefix=f"pipeline:{self.pipeline_id}",
+        )
+        activation = get_shell_activation_assessment(
+            shell_activation,
+            "pipeline_manager_preconditioned_iteration",
+        )
+        future_training = get_shell_activation_assessment(
+            shell_activation,
+            "pipeline_manager_training_run_executor",
+        )
+        last_results = self._last_iteration_summary()
+        suggested_config = self.config.copy()
+        if last_results.get("summary_metrics", {}).get("error_rate", 0) > 0.1:
+            suggested_config["increase_safety_weight"] = True
+        if last_results.get("summary_metrics", {}).get("mpl_delta", 0) < 1.0:
+            suggested_config["increase_data_collection"] = True
+        if execution_summary and int(execution_summary.get("blocked_count", 0) or 0) > 0:
+            suggested_config["repair_execution_preconditions"] = True
+
+        execution_mode = "advisory"
+        activation_work_order = None
+        stage_activation_plan: Dict[str, Any] = {}
+        if activation and activation.get("state") == "activated":
+            execution_mode = str(activation.get("target_mode", "preconditioned_iteration"))
+            stage_activation_plan = {
+                "activation_id": activation.get("activation_id"),
+                "mode": execution_mode,
+                "stages": [
+                    {
+                        "stage": stage.value,
+                        "decision": "activate_stage",
+                        "config": dict(suggested_config),
+                    }
+                    for stage in PipelineStage
+                ],
+                "repair_hints": list(activation.get("pending_requirements", []) or []),
+                "future_training_backlog": list(shell_activation.get("future_training", [])),
+            }
+            activation_work_order = build_execution_work_order(
+                order_type="shell_activation",
+                subject_id=self.pipeline_id,
+                subject_kind="pipeline_manager",
+                decision=str(activation.get("activation_decision", "activate_pipeline_iteration")),
+                priority=float(activation.get("readiness", {}).get("readiness_score", 1.0)),
+                recommended_mode=str(activation.get("recommended_mode", "bounded_execution")),
+                readiness=dict(activation.get("readiness", {}) or {}),
+                reasons=list(activation.get("bounded_actions", []) or ["activate_pipeline_iteration"]),
+                metadata={
+                    "activation_id": activation.get("activation_id"),
+                    "pipeline_id": self.pipeline_id,
+                    "future_training_backlog_count": len(shell_activation.get("future_training", [])),
+                },
+            ).to_dict()
+
+        return {
+            "execution_mode": execution_mode,
+            "suggested_config": suggested_config,
+            "shell_activation": shell_activation,
+            "stage_activation_plan": stage_activation_plan,
+            "activation_work_order": activation_work_order,
+            "future_training_ready": bool(future_training and future_training.get("state") == "activation_ready"),
+        }
+
     def generate_advisory_report(self) -> Dict[str, Any]:
         """
         Generate advisory report based on pipeline history.
 
-        ADVISORY ONLY: Suggests actions but does not execute them.
+        Emits bounded activation metadata when explicit preconditions are met.
         """
+        activation_plan = self.build_iteration_activation_plan()
         report: Dict[str, Any] = {
             "pipeline_id": self.pipeline_id,
             "name": self.name,
@@ -336,6 +435,11 @@ class PipelineManager:
             "recommendations": self.global_recommendations.copy(),
             "stage_summaries": {},
             "action_items": [],
+            "execution_preconditions": {},
+            "execution_mode": activation_plan.get("execution_mode", "advisory"),
+            "shell_activation": activation_plan.get("shell_activation", {}),
+            "stage_activation_plan": activation_plan.get("stage_activation_plan", {}),
+            "activation_work_order": activation_plan.get("activation_work_order"),
         }
 
         # Aggregate stage-specific insights
@@ -391,6 +495,21 @@ class PipelineManager:
                 report["action_items"].append(
                     "Energy efficiency declining - review motion planning strategies"
                 )
+        execution_summary = self._execution_summary()
+        if execution_summary:
+            report["execution_preconditions"] = execution_summary
+            if int(execution_summary.get("blocked_count", 0) or 0) > 0:
+                report["action_items"].append(
+                    "Execution preconditions are blocked - prioritize substrate repair before wider planner escalation"
+                )
+        if activation_plan.get("execution_mode") != "advisory":
+            report["action_items"].append(
+                "Execution preconditions satisfied - next iteration can be activated through the bounded shell plan"
+            )
+        if activation_plan.get("future_training_ready"):
+            report["action_items"].append(
+                "Future training-run activation backlog is ready for manual review"
+            )
 
         return report
 
@@ -398,34 +517,23 @@ class PipelineManager:
         """
         Preview what the next iteration would look like.
 
-        ADVISORY ONLY: Does not execute anything.
+        Returns a bounded activation plan when readiness is satisfied.
         """
-        # Get insights from last iteration
-        last_results: Dict[str, Any] = {}
-        if self.iterations:
-            last_iteration = self.iterations[-1]
-            last_results = {
-                "summary_metrics": last_iteration.summary_metrics,
-                "recommendations": [],
-            }
-            for result in last_iteration.stage_results.values():
-                last_results["recommendations"].extend(result.recommendations)
-
-        # Suggest next iteration configuration
-        suggested_config = self.config.copy()
-
-        # Apply heuristic adjustments based on last iteration
-        if last_results.get("summary_metrics", {}).get("error_rate", 0) > 0.1:
-            suggested_config["increase_safety_weight"] = True
-        if last_results.get("summary_metrics", {}).get("mpl_delta", 0) < 1.0:
-            suggested_config["increase_data_collection"] = True
+        last_results = self._last_iteration_summary()
+        activation_plan = self.build_iteration_activation_plan()
+        execution_summary = self._execution_summary()
 
         return {
             "iteration_number": len(self.iterations) + 1,
             "last_iteration_summary": last_results,
-            "suggested_config": suggested_config,
+            "suggested_config": activation_plan.get("suggested_config", self.config.copy()),
             "expected_stages": [stage.value for stage in PipelineStage],
             "advisory_notes": self.global_recommendations,
+            "execution_preconditions": execution_summary,
+            "execution_mode": activation_plan.get("execution_mode", "advisory"),
+            "shell_activation": activation_plan.get("shell_activation", {}),
+            "stage_activation_plan": activation_plan.get("stage_activation_plan", {}),
+            "activation_work_order": activation_plan.get("activation_work_order"),
         }
 
     def to_dict(self) -> Dict[str, Any]:

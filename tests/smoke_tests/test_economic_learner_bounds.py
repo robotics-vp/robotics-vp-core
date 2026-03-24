@@ -112,6 +112,27 @@ class EconomicLearnerBoundsTests(unittest.TestCase):
         self.assertEqual(budget_a.max_episodes, 600)
         self.assertEqual(budget_b.max_episodes, 600)
 
+    def test_run_cycle_emits_budget_activation_when_ready(self):
+        """Economic learner should emit a bounded activation artifact when readiness is green."""
+        config = dict(self.config)
+        config["execution_precondition_summary"] = {
+            "report_count": 1,
+            "ready_count": 1,
+            "blocked_count": 0,
+            "mean_readiness_score": 1.0,
+            "blocking_preconditions": {},
+            "satisfied_preconditions": {},
+        }
+        learner = EconomicLearner(config)
+        learner.add_skill(_make_skill("budget_skill", SkillStatus.TRAINING.value))
+
+        summary = learner.run_cycle(10)
+
+        self.assertIsNotNone(summary)
+        self.assertEqual(summary["execution_mode"], "budget_activation")
+        self.assertTrue(summary["budget_activation_work_order"]["ready"])
+        self.assertIn("future_training_backlog", summary["budget_activation"])
+
 
 if __name__ == "__main__":
     unittest.main()

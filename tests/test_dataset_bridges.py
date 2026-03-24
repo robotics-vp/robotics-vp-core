@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from src.dataset_bridges.lerobot_bridge import lerobot_rows_from_replay
-from src.dataset_bridges.rlds_bridge import rlds_episode_from_replay
+from src.dataset_bridges.lerobot_bridge import replay_episode_from_lerobot
+from src.dataset_bridges.rlds_bridge import replay_episode_from_rlds, rlds_episode_from_replay
 from src.replay.schema import ReplayEpisodeRecord, ReplayStepRecord
 
 
@@ -108,3 +109,29 @@ def test_lerobot_bridge_converts_and_preserves_sidecar_refs() -> None:
     assert rows[0]["metadata"]["internal_sidecars"]["value_target_refs"] == ["value-target-1"]
     assert rows[0]["metadata"]["internal_sidecars"]["belief_state_ref"] == "belief.json"
     assert "episode_id" not in rows[0]["metadata"]["internal_sidecars"]
+
+
+def test_rlds_bridge_roundtrip_rehydrates_internal_sidecars() -> None:
+    episode = _episode()
+    steps = _steps()
+    payload = rlds_episode_from_replay(episode, steps)
+
+    restored_episode, restored_steps = replay_episode_from_rlds(payload)
+
+    assert restored_episode.episode_id == episode.episode_id
+    assert restored_episode.provenance["event_spine_ref"] == "event_spine.jsonl"
+    assert restored_episode.metadata["governed_supervision_refs"] == ["supervision-1"]
+    assert restored_steps[0].provenance["runtime_packet_ref"] == "packet.json"
+    assert restored_steps[0].metadata["counterfactual_eval_ref"] == "counterfactual.json"
+    assert restored_steps[0].metadata["value_target_refs"] == ["value-target-1"]
+
+
+def test_lerobot_bridge_roundtrip_rehydrates_internal_sidecars() -> None:
+    rows = lerobot_rows_from_replay(_episode(), _steps())
+
+    restored_episode, restored_steps = replay_episode_from_lerobot(rows)
+
+    assert restored_episode.episode_id == "ep-1"
+    assert restored_steps[0].metadata["event_refs"] == ["event-1"]
+    assert restored_steps[0].provenance["runtime_packet_ref"] == "packet.json"
+    assert restored_steps[0].metadata["belief_state_ref"] == "belief.json"

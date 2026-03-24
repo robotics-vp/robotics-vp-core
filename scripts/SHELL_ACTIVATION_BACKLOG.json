@@ -1,0 +1,251 @@
+{
+  "schema_version": "v1",
+  "description": "Higher-shell activation backlog keyed to execution-precondition readiness and future-training gates",
+  "goal": "Promote higher shells out of advisory mode only when explicit readiness thresholds are met",
+  "created_at": "2026-03-22",
+  "updated_at": "2026-03-22",
+  "backlog": [
+    {
+      "activation_id": "semantic_orchestrator_preconditioned_routing",
+      "module_key": "semantic_orchestrator_v2",
+      "module_path": "src/orchestrator/semantic_orchestrator_v2.py",
+      "title": "Activate bounded semantic routing once readiness is fully green",
+      "current_mode": "advisory",
+      "target_mode": "preconditioned_routing",
+      "activation_decision": "activate_semantic_routing",
+      "recommended_mode": "bounded_execution",
+      "priority": "P0",
+      "owner": "codex",
+      "auto_activate": true,
+      "future_training_only": false,
+      "bounded_actions": [
+        "route_only_ready_datapacks",
+        "emit_shell_activation_work_order",
+        "preserve_precondition_repair_tags"
+      ],
+      "activation_thresholds": {
+        "min_report_count": 1,
+        "min_ready_count": 1,
+        "max_blocked_count": 0,
+        "min_mean_readiness_score": 1.0
+      },
+      "notes": "This is the safe present-tense promotion: let the orchestrator emit a bounded execution plan and work order, but never train by itself.",
+      "created_at": "2026-03-22",
+      "updated_at": "2026-03-22"
+    },
+    {
+      "activation_id": "semantic_orchestrator_closed_loop_training",
+      "module_key": "semantic_orchestrator_v2",
+      "module_path": "src/orchestrator/semantic_orchestrator_v2.py",
+      "title": "Hold closed-loop training sovereignty until real grounding and manifests exist",
+      "current_mode": "preconditioned_routing",
+      "target_mode": "closed_loop_training_executor",
+      "activation_decision": "activate_closed_loop_training",
+      "recommended_mode": "future_training_executor",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_activate": false,
+      "future_training_only": true,
+      "bounded_actions": [
+        "require_live_teacher_grounding",
+        "require_non_stub_scene_tracks",
+        "require_training_runtime_manifest"
+      ],
+      "activation_thresholds": {
+        "min_report_count": 4,
+        "min_ready_count": 4,
+        "max_blocked_count": 0,
+        "min_mean_readiness_score": 1.0,
+        "required_satisfied_preconditions": {
+          "signal_bool::scene_tracks_non_stub": 1,
+          "signal_bool::teacher_runtime_live": 1,
+          "signal_bool::semantic_memory_grounded": 1,
+          "artifact::training_runtime_manifest": 1
+        }
+      },
+      "notes": "Keep this as backlog-only until future training runs can prove real grounding rather than heuristic or stub completeness.",
+      "created_at": "2026-03-22",
+      "updated_at": "2026-03-22"
+    },
+    {
+      "activation_id": "pipeline_manager_preconditioned_iteration",
+      "module_key": "pipeline_manager",
+      "module_path": "src/orchestrator/pipeline_manager.py",
+      "title": "Promote next-iteration planning into a bounded stage-activation plan",
+      "current_mode": "advisory",
+      "target_mode": "preconditioned_iteration",
+      "activation_decision": "activate_pipeline_iteration",
+      "recommended_mode": "bounded_execution",
+      "priority": "P0",
+      "owner": "codex",
+      "auto_activate": true,
+      "future_training_only": false,
+      "bounded_actions": [
+        "activate_stage_sequence",
+        "carry_repair_hints_forward",
+        "emit_iteration_work_order"
+      ],
+      "activation_thresholds": {
+        "min_report_count": 1,
+        "min_ready_count": 1,
+        "max_blocked_count": 0,
+        "min_mean_readiness_score": 0.95
+      },
+      "notes": "Safe now: the pipeline manager can stop at recommending and start emitting bounded stage-activation plans when the substrate is ready.",
+      "created_at": "2026-03-22",
+      "updated_at": "2026-03-22"
+    },
+    {
+      "activation_id": "pipeline_manager_training_run_executor",
+      "module_key": "pipeline_manager",
+      "module_path": "src/orchestrator/pipeline_manager.py",
+      "title": "Future backlog for direct training-run execution from the pipeline shell",
+      "current_mode": "preconditioned_iteration",
+      "target_mode": "training_run_executor",
+      "activation_decision": "activate_pipeline_training_run",
+      "recommended_mode": "future_training_executor",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_activate": false,
+      "future_training_only": true,
+      "bounded_actions": [
+        "require_replay_roundtrip_complete",
+        "require_promotion_trace_complete",
+        "require_training_runtime_manifest"
+      ],
+      "activation_thresholds": {
+        "min_report_count": 4,
+        "min_ready_count": 4,
+        "max_blocked_count": 0,
+        "min_mean_readiness_score": 1.0,
+        "required_satisfied_preconditions": {
+          "signal_bool::promotion_trace_complete": 1,
+          "signal_bool::replay_roundtrip_complete": 1,
+          "artifact::training_runtime_manifest": 1,
+          "artifact::promotion_ledger_ref": 1
+        }
+      },
+      "notes": "Do not let the pipeline shell directly kick training until runtime manifests, promotion evidence, and replay roundtrip are explicit and satisfied.",
+      "created_at": "2026-03-22",
+      "updated_at": "2026-03-22"
+    },
+    {
+      "activation_id": "phase_h_advisory_integration_preconditioned_routing",
+      "module_key": "phase_h_advisory_integration",
+      "module_path": "src/phase_h/advisory_integration.py",
+      "title": "Convert Phase H routing from advisory deltas into a bounded activation plan",
+      "current_mode": "advisory",
+      "target_mode": "preconditioned_routing",
+      "activation_decision": "activate_phase_h_routing",
+      "recommended_mode": "bounded_execution",
+      "priority": "P0",
+      "owner": "codex",
+      "auto_activate": true,
+      "future_training_only": false,
+      "bounded_actions": [
+        "emit_phase_h_sampler_plan",
+        "emit_phase_h_orchestrator_plan",
+        "cap_deltas_with_existing_phase_h_bounds"
+      ],
+      "activation_thresholds": {
+        "min_report_count": 1,
+        "min_ready_count": 1,
+        "max_blocked_count": 0,
+        "min_mean_readiness_score": 0.9
+      },
+      "notes": "Use current Phase H bounds as the safety rail, but let the integration surface graduate into a real activation plan once execution preconditions are green.",
+      "created_at": "2026-03-22",
+      "updated_at": "2026-03-22"
+    },
+    {
+      "activation_id": "phase_h_controller_cycle_executor",
+      "module_key": "phase_h_controller",
+      "module_path": "src/phase_h/controller.py",
+      "title": "Promote the Phase H cycle controller into a work-order emitter",
+      "current_mode": "advisory",
+      "target_mode": "cycle_activation",
+      "activation_decision": "activate_phase_h_cycle",
+      "recommended_mode": "bounded_execution",
+      "priority": "P0",
+      "owner": "codex",
+      "auto_activate": true,
+      "future_training_only": false,
+      "bounded_actions": [
+        "emit_cycle_activation_work_order",
+        "persist_phase_h_activation_summary",
+        "surface_pending_backlog"
+      ],
+      "activation_thresholds": {
+        "min_report_count": 1,
+        "min_ready_count": 1,
+        "max_blocked_count": 0,
+        "min_mean_readiness_score": 0.95
+      },
+      "notes": "This does not execute training directly; it makes Phase H cycles authoritative about bounded sampler/orchestrator changes once the substrate is ready.",
+      "created_at": "2026-03-22",
+      "updated_at": "2026-03-22"
+    },
+    {
+      "activation_id": "phase_h_economic_learner_budget_activation",
+      "module_key": "phase_h_economic_learner",
+      "module_path": "src/phase_h/economic_learner.py",
+      "title": "Promote budget reallocation into a bounded activation artifact",
+      "current_mode": "advisory",
+      "target_mode": "budget_activation",
+      "activation_decision": "activate_phase_h_budgeting",
+      "recommended_mode": "bounded_execution",
+      "priority": "P0",
+      "owner": "codex",
+      "auto_activate": true,
+      "future_training_only": false,
+      "bounded_actions": [
+        "emit_budget_activation_work_order",
+        "preserve_current_budget_bounds",
+        "surface_future_training_backlog"
+      ],
+      "activation_thresholds": {
+        "min_report_count": 1,
+        "min_ready_count": 1,
+        "max_blocked_count": 0,
+        "min_mean_readiness_score": 0.95
+      },
+      "notes": "Current bounded ROI and budget caps are strong enough to let the learner produce activation artifacts, but not yet enough to own full training-run execution.",
+      "created_at": "2026-03-22",
+      "updated_at": "2026-03-22"
+    },
+    {
+      "activation_id": "phase_h_portfolio_autonomy",
+      "module_key": "phase_h_economic_learner",
+      "module_path": "src/phase_h/economic_learner.py",
+      "title": "Future backlog for fully autonomous portfolio-level training allocation",
+      "current_mode": "budget_activation",
+      "target_mode": "portfolio_training_executor",
+      "activation_decision": "activate_phase_h_portfolio_autonomy",
+      "recommended_mode": "future_training_executor",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_activate": false,
+      "future_training_only": true,
+      "bounded_actions": [
+        "require_budget_settlement_live",
+        "require_promotion_trace_complete",
+        "require_training_runtime_manifest"
+      ],
+      "activation_thresholds": {
+        "min_report_count": 4,
+        "min_ready_count": 4,
+        "max_blocked_count": 0,
+        "min_mean_readiness_score": 1.0,
+        "required_satisfied_preconditions": {
+          "signal_bool::budget_settlement_live": 1,
+          "signal_bool::promotion_trace_complete": 1,
+          "signal_bool::teacher_runtime_live": 1,
+          "artifact::training_runtime_manifest": 1
+        }
+      },
+      "notes": "Future training runs should only let the economic learner allocate directly into training once settlement and promotion accountability are explicit, not inferred.",
+      "created_at": "2026-03-22",
+      "updated_at": "2026-03-22"
+    }
+  ]
+}

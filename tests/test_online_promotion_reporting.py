@@ -5,6 +5,7 @@ from src.regality.promotion_reporting import (
     build_promotion_evidence_report,
     write_promotion_evidence_report,
 )
+from src.orchestrator.shadow_advisory import build_shadow_advisory_output
 from src.replay.dataset import ReplayDatasetBuilder
 from src.replay.receipt_ingest import build_training_run_receipt_label_bundle
 from src.shadow_runtime.control_plane import run_shadow_control_plane
@@ -80,11 +81,13 @@ def test_online_promotion_reporting_includes_coverage_and_error_summaries(tmp_pa
         dataset=dataset,
         promotion_policy=load_regal_promotion_policy("configs/regality/promotion_default.yaml"),
         receipt_bundle=receipt_bundle,
+        work_orders=build_shadow_advisory_output(replay_dataset_dir=str(dataset.root_dir))["collection_work_orders"],
     )
     paths = write_promotion_evidence_report(output_dir, report)
 
     assert report.receipt_label_coverage["source_domain_counts"]["training_run"] >= 4
     assert report.node_reports[0].coverage["episode_count"] == 1
+    assert "trace_ready_episode_count" in report.node_reports[0].coverage
     assert "by_source_domain" in report.node_reports[0].disagreement_slices
     assert "count" in report.node_reports[0].false_positive_summary
     assert "count" in report.node_reports[0].false_negative_summary

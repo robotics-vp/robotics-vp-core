@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest import mock
 
 import numpy as np
@@ -119,3 +120,23 @@ def test_emit_flag_summaries_identical(tmp_path) -> None:
     assert len(summaries_emit) == 1 and len(summaries_no_emit) == 1
     for key in ("semantic_fusion_confidence_mean", "semantic_disagreement_vla_vs_map"):
         assert np.isclose(summaries_emit[0][key], summaries_no_emit[0][key])
+
+
+def test_semantic_fusion_writes_degraded_artifact_on_alignment_failure(tmp_path) -> None:
+    bundle, episode_dir, _ = _build_rollout_bundle(tmp_path)
+    mismatched_payload = {
+        "vla_semantic_evidence_v1/version": np.array(["v1"], dtype="U8"),
+        "vla_semantic_evidence_v1/class_probs": np.ones((2, 2, 2), dtype=np.float32) * 0.5,
+        "vla_semantic_evidence_v1/track_ids": np.array(["track_x", "track_y"], dtype="U32"),
+    }
+    np.savez_compressed(episode_dir / "trajectory_vla_semantic_evidence_v1.npz", **mismatched_payload)
+
+    summaries = run_semantic_fusion_for_rollouts(bundle)
+
+    assert len(summaries) == 1
+    assert summaries[0]["semantic_fusion_status"] == "blocked"
+    failure_path = episode_dir / "episode_test_semantic_degraded_v1.json"
+    assert failure_path.exists()
+    payload = json.loads(failure_path.read_text())
+    assert payload["failure_reason"] == "track_ids_mismatch"
+    assert payload["execution_work_order"]["decision"] == "capture_negative_supervision"

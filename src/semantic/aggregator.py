@@ -1,7 +1,7 @@
 """
 SemanticAggregator builds a unified SemanticSnapshot from Stage 2/3/meta outputs.
 """
-from typing import Any, Dict, Sequence, Optional, List
+from typing import Any, Dict, Sequence, Optional
 from datetime import datetime
 
 from src.semantic.models import SemanticSnapshot, EconSlice, MetaTransformerSlice
@@ -12,6 +12,7 @@ from src.sima2.ontology_proposals import OntologyUpdateProposal
 from src.sima2.task_graph_proposals import TaskGraphRefinementProposal
 from src.sima2.tags.semantic_tags import SemanticEnrichmentProposal as SemanticTag
 from src.policies.registry import build_all_policies
+from src.world_model.semantic_world_model import SemanticWorldModelState
 
 
 class SemanticAggregator:
@@ -27,6 +28,8 @@ class SemanticAggregator:
         stage2_tags: Sequence[SemanticTag],
         meta_outputs: Optional[MetaTransformerOutputs] = None,
         recap_scores: Optional[Dict[str, Dict[str, Any]]] = None,
+        semantic_world_model: Optional[SemanticWorldModelState] = None,
+        runtime_metadata: Optional[Dict[str, Any]] = None,
     ) -> SemanticSnapshot:
         econ_slice = self._build_econ_slice(task_id)
         meta_slice = self._build_meta_slice(task_id, meta_outputs)
@@ -45,15 +48,45 @@ class SemanticAggregator:
             semantic_tags=tags,
             econ_slice=econ_slice,
             meta_slice=meta_slice,
+            semantic_world_model=semantic_world_model,
             num_segments=segments_summary["num_segments"],
             segment_types=segments_summary["segment_types"],
             subtask_label_histogram=segments_summary["subtask_label_histogram"],
             mobility_drift_rate=mobility_summary["mobility_drift_rate"],
             recovery_segment_fraction=mobility_summary["recovery_segment_fraction"],
             timestamp=datetime.utcnow().timestamp(),
-            metadata={"recap": recap_summary} if recap_summary else {},
+            metadata=self._build_metadata(
+                recap_summary=recap_summary,
+                semantic_world_model=semantic_world_model,
+                runtime_metadata=runtime_metadata,
+            ),
         )
         return snapshot.sorted_copy()
+
+    def _build_metadata(
+        self,
+        *,
+        recap_summary: Dict[str, Any],
+        semantic_world_model: Optional[SemanticWorldModelState],
+        runtime_metadata: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        metadata: Dict[str, Any] = {}
+        if recap_summary:
+            metadata["recap"] = recap_summary
+        if semantic_world_model is not None:
+            metadata["semantic_world_model"] = semantic_world_model.to_dict()
+            metadata["semantic_world_model_summary"] = {
+                "world_model_id": semantic_world_model.world_model_id,
+                "topology": semantic_world_model.topology,
+                "capability_scores": semantic_world_model.capability_scores,
+                "meta_nodes": {
+                    item.node_type: item.score
+                    for item in semantic_world_model.meta_nodes
+                },
+            }
+        if runtime_metadata:
+            metadata.update(runtime_metadata)
+        return metadata
 
     def _build_econ_slice(self, task_id: str) -> EconSlice:
         summary = compute_task_econ_summary(self.store, task_id)

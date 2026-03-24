@@ -1,9 +1,8 @@
 """
 Phase H Advisory Integration: Wire Economic Learner outputs into Sampler + Orchestrator.
 
-ADVISORY ONLY - does not mutate reward or econ-controller.
-All changes bounded to ±20%.
-Flag-gated: enable_phase_h_advisories.
+Bounded by default and activation-capable once explicit execution preconditions
+are satisfied. Does not mutate reward or econ-controller.
 
 Per Phase H System Integration Requirements.
 """
@@ -11,6 +10,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.evidence.preconditions import build_execution_work_order
+from src.orchestrator.shell_activation import (
+    evaluate_shell_activation_backlog,
+    get_shell_activation_assessment,
+)
 from src.phase_h.models import ExplorationBudget, Skill, SkillReturns
 from src.utils.json_safe import to_json_safe
 
@@ -345,6 +349,84 @@ class PhaseHAdvisory:
             "exploration_priorities": self.exploration_priorities,
             "routing_advisories": self.routing_advisories,
         })
+
+
+def build_phase_h_activation_plan(
+    advisory: PhaseHAdvisory,
+    execution_precondition_summary: Optional[Dict[str, Any]] = None,
+    subject_id: str = "phase_h",
+) -> Dict[str, Any]:
+    """
+    Build a bounded Phase H activation artifact when shell readiness is satisfied.
+
+    The returned plan remains within the existing Phase H bounds; it upgrades the
+    shell from recommendation-only output into an activation-ready routing/budget
+    artifact once the substrate reports that it is safe to do so.
+    """
+
+    execution_summary = (
+        dict(execution_precondition_summary)
+        if isinstance(execution_precondition_summary, dict)
+        else {}
+    )
+    shell_activation = evaluate_shell_activation_backlog(
+        execution_summary,
+        module_keys=["phase_h_advisory_integration"],
+        subject_prefix=f"phase_h:{subject_id}",
+    )
+    activation = get_shell_activation_assessment(
+        shell_activation,
+        "phase_h_advisory_integration_preconditioned_routing",
+    )
+
+    avg_priority = (
+        sum(advisory.exploration_priorities.values()) / max(len(advisory.exploration_priorities), 1)
+    )
+    sampler_global_multiplier = max(0.9, min(1.1, 0.9 + (avg_priority * 0.2)))
+    routing = dict(advisory.routing_advisories or {})
+
+    execution_mode = "advisory"
+    activation_plan: Dict[str, Any] = {}
+    activation_work_order = None
+    if activation and activation.get("state") == "activated":
+        execution_mode = str(activation.get("target_mode", "preconditioned_routing"))
+        activation_plan = {
+            "activation_id": activation.get("activation_id"),
+            "mode": execution_mode,
+            "sampler_plan": {
+                "global_multiplier": sampler_global_multiplier,
+                "max_delta_pct": MAX_ROUTING_DELTA,
+                "skill_multipliers": dict(advisory.skill_multipliers),
+            },
+            "orchestrator_plan": {
+                "frontier_emphasis": float(routing.get("frontier_emphasis", 0.5)),
+                "safety_emphasis_target": float(routing.get("safety_emphasis", 0.5)),
+                "efficiency_emphasis": float(routing.get("efficiency_emphasis", 0.5)),
+                "skill_mode_suggestion": str(routing.get("skill_mode_suggestion", "balanced")),
+            },
+            "bounded_actions": list(activation.get("bounded_actions", []) or []),
+        }
+        activation_work_order = build_execution_work_order(
+            order_type="shell_activation",
+            subject_id=subject_id,
+            subject_kind="phase_h_advisory_integration",
+            decision=str(activation.get("activation_decision", "activate_phase_h_routing")),
+            priority=float(activation.get("readiness", {}).get("readiness_score", 1.0)),
+            recommended_mode=str(activation.get("recommended_mode", "bounded_execution")),
+            readiness=dict(activation.get("readiness", {}) or {}),
+            reasons=list(activation.get("bounded_actions", []) or ["activate_phase_h_routing"]),
+            metadata={
+                "activation_id": activation.get("activation_id"),
+                "subject_id": subject_id,
+            },
+        ).to_dict()
+
+    return {
+        "execution_mode": execution_mode,
+        "shell_activation": shell_activation,
+        "activation_plan": activation_plan,
+        "activation_work_order": activation_work_order,
+    }
 
 
 def apply_sampler_advisory(

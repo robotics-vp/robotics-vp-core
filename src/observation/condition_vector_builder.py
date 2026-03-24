@@ -118,11 +118,14 @@ class ConditionVectorBuilder:
             recap_bucket = self._bucketize_recap(recap_scores)
 
         sampler_strategy = episode_metadata.get("sampler_strategy") or meta.get("sampler_strategy")
+        meta_node_scores = advisory_context.get("meta_nodes", {}) if isinstance(advisory_context.get("meta_nodes"), dict) else {}
 
         skill_mode = overrides.get("skill_mode") or advisory_context.get("skill_mode")
         # TFD skill_mode takes precedence if integration enabled
         if tfd_cv and tfd_cv.get("skill_mode"):
             skill_mode = str(tfd_cv.get("skill_mode"))
+        elif not skill_mode and meta_node_scores:
+            skill_mode = self._skill_mode_from_meta_nodes(meta_node_scores)
         elif not skill_mode:
             skill_mode = self.skill_resolver.resolve(
                 tags=tags,
@@ -275,8 +278,21 @@ class ConditionVectorBuilder:
                 "priority": advisory_context.get("priority"),
                 "skill_mode": advisory_context.get("skill_mode"),
             }
+            if isinstance(advisory_context.get("meta_nodes"), dict):
+                meta["advisory"]["meta_nodes"] = {
+                    k: float(v)
+                    for k, v in sorted(advisory_context.get("meta_nodes", {}).items(), key=lambda kv: kv[0])
+                }
+            if isinstance(advisory_context.get("semantic_capabilities"), dict):
+                meta["advisory"]["semantic_capabilities"] = {
+                    k: float(v)
+                    for k, v in sorted(advisory_context.get("semantic_capabilities", {}).items(), key=lambda kv: kv[0])
+                }
         if semantic_tags:
             meta["semantic_tags"] = {k: float(v) for k, v in sorted(semantic_tags.items(), key=lambda kv: kv[0])}
+        semantic_world_model_summary = episode_metadata.get("semantic_world_model_summary")
+        if isinstance(semantic_world_model_summary, dict):
+            meta["semantic_world_model_summary"] = dict(semantic_world_model_summary)
         if recap_scores is not None:
             try:
                 recap_score = _get(recap_scores, "recap_goodness_score", recap_scores if isinstance(recap_scores, (int, float)) else None)
@@ -363,6 +379,23 @@ class ConditionVectorBuilder:
             except Exception:
                 return 0
         return 0
+
+    def _skill_mode_from_meta_nodes(self, meta_node_scores: Dict[str, Any]) -> Optional[str]:
+        if not meta_node_scores:
+            return None
+        recovery_score = self._safe_float(meta_node_scores.get("recovery_router", 0.0))
+        risk_score = self._safe_float(meta_node_scores.get("risk_triage", 0.0))
+        efficiency_score = self._safe_float(meta_node_scores.get("efficiency_router", 0.0))
+        memory_score = self._safe_float(meta_node_scores.get("semantic_memory_refresh", 0.0))
+        if recovery_score >= 0.6:
+            return "recovery_heavy"
+        if risk_score >= 0.6:
+            return "safety_critical"
+        if efficiency_score >= 0.6:
+            return "efficiency_throughput"
+        if memory_score >= 0.6:
+            return "frontier_exploration"
+        return None
 
     def _extract_tfd_condition_vector(self, tfd_instruction: Any) -> Optional[Dict[str, Any]]:
         """

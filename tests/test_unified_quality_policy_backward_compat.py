@@ -44,3 +44,24 @@ def test_unified_quality_sampler_profile_scalarizes_at_boundary():
     )
     assert weights.objective_tensor_slice is not None
     assert weights.w_combined >= 0.0
+
+
+def test_unified_quality_execution_preconditions_can_block_eligibility():
+    policy = UnifiedQualityPolicy()
+    weights = policy.compute(
+        mhn_plausibility=0.8,
+        scene_ir_convergence=0.8,
+        scene_ir_visibility=0.8,
+        process_reward_conf=0.8,
+        process_reward_conf_p10=0.8,
+        process_reward_delta=0.2,
+        process_reward_disagreement=0.1,
+        map_first_quality=0.8,
+        execution_preconditions={
+            "ready": False,
+            "blocking_preconditions": ["artifact::runtime_packet_ref"],
+            "readiness_score": 0.5,
+        },
+    )
+    assert weights.is_eligible is False
+    assert weights.eligibility_reason == "execution_preconditions=artifact::runtime_packet_ref"

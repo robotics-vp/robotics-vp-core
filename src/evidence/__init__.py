@@ -2,6 +2,14 @@
 
 from src.evidence.belief_state import BeliefState, belief_state_from_evidence_bus
 from src.evidence.bus import EvidenceBus, EvidenceRecord
+from src.evidence.preconditions import (
+    ExecutionPreconditionsReport,
+    ExecutionWorkOrder,
+    PreconditionCheck,
+    build_execution_preconditions,
+    build_execution_work_order,
+    summarize_execution_preconditions,
+)
 from src.evidence.teacher_trace import (
     TeacherStep,
     TeacherTrace,
@@ -13,9 +21,15 @@ __all__ = [
     "BeliefState",
     "EvidenceBus",
     "EvidenceRecord",
+    "ExecutionPreconditionsReport",
+    "ExecutionWorkOrder",
+    "PreconditionCheck",
     "TeacherStep",
     "TeacherTrace",
     "belief_state_from_evidence_bus",
+    "build_execution_preconditions",
+    "build_execution_work_order",
     "load_teacher_trace_json",
     "save_teacher_trace_json",
+    "summarize_execution_preconditions",
 ]

@@ -8,6 +8,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.evidence.preconditions import build_execution_work_order
+from src.orchestrator.shell_activation import (
+    evaluate_shell_activation_backlog,
+    get_shell_activation_assessment,
+)
 from src.phase_h.models import Skill, SkillStatus, ExplorationBudget, SkillReturns, update_skill_status
 
 
@@ -133,6 +138,7 @@ class EconomicLearner:
                 - price_per_unit: Price per output unit
                 - hours_deployed: Deployment horizon for ROI calc
         """
+        self.config = dict(config)
         self.total_budget_usd = float(config.get("total_exploration_budget", 10000.0))
         self.reallocation_period = int(config.get("reallocation_period_episodes", 1000))
         self.price_per_unit = float(config.get("price_per_unit", 0.30))
@@ -194,6 +200,51 @@ class EconomicLearner:
             "roi_by_skill": roi_by_skill,
             "budgets": {sid: b.to_dict() for sid, b in self.budgets.items()},
         }
+        execution_summary = self.config.get("execution_precondition_summary")
+        if isinstance(execution_summary, dict) and execution_summary:
+            summary["execution_precondition_summary"] = execution_summary
+
+        shell_activation = evaluate_shell_activation_backlog(
+            execution_summary if isinstance(execution_summary, dict) else {},
+            module_keys=["phase_h_economic_learner"],
+            subject_prefix=f"phase_h_budget:{episode_count}",
+        )
+        activation = get_shell_activation_assessment(
+            shell_activation,
+            "phase_h_economic_learner_budget_activation",
+        )
+        future_training = get_shell_activation_assessment(
+            shell_activation,
+            "phase_h_portfolio_autonomy",
+        )
+        summary["execution_mode"] = "advisory"
+        summary["shell_activation"] = shell_activation
+        if activation and activation.get("state") == "activated":
+            summary["execution_mode"] = str(activation.get("target_mode", "budget_activation"))
+            summary["budget_activation"] = {
+                "activation_id": activation.get("activation_id"),
+                "mode": summary["execution_mode"],
+                "roi_by_skill": roi_by_skill,
+                "budgets": {sid: b.to_dict() for sid, b in self.budgets.items()},
+                "bounded_actions": list(activation.get("bounded_actions", []) or []),
+                "future_training_backlog": list(shell_activation.get("future_training", [])),
+            }
+            summary["budget_activation_work_order"] = build_execution_work_order(
+                order_type="shell_activation",
+                subject_id=f"phase_h_budget:{episode_count}",
+                subject_kind="phase_h_economic_learner",
+                decision=str(activation.get("activation_decision", "activate_phase_h_budgeting")),
+                priority=float(activation.get("readiness", {}).get("readiness_score", 1.0)),
+                recommended_mode=str(activation.get("recommended_mode", "bounded_execution")),
+                readiness=dict(activation.get("readiness", {}) or {}),
+                reasons=list(activation.get("bounded_actions", []) or ["activate_phase_h_budgeting"]),
+                metadata={
+                    "activation_id": activation.get("activation_id"),
+                    "episode_count": episode_count,
+                },
+            ).to_dict()
+        if future_training:
+            summary["future_training_ready"] = future_training.get("state") == "activation_ready"
 
         return summary
 

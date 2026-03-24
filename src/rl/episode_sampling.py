@@ -267,18 +267,17 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
             "is_good": datapack.guidance_profile.is_good if datapack.guidance_profile else False,
             "main_driver": focus_areas[0] if focus_areas else "unknown",
             "source": "stage1_diffusion_vla" if "stage1" in datapack.pack_id else "runtime",
-        }
+        },
     }
     unified_weights = None
-    pr_profile = datapack.process_reward_profile
     if pr_profile is not None and getattr(pr_profile, "has_data", lambda: True)():
         descriptor["process_reward_profile"] = pr_profile.to_dict()
-        try:
-            from src.policies.unified_quality import UnifiedQualityPolicy
+    try:
+        from src.policies.unified_quality import UnifiedQualityPolicy
 
-            unified_weights = UnifiedQualityPolicy().compute_from_datapack(datapack)
-        except Exception:
-            unified_weights = None
+        unified_weights = UnifiedQualityPolicy().compute_from_datapack(datapack)
+    except Exception:
+        unified_weights = None
     if unified_weights is not None:
         descriptor["unified_quality_weight"] = max(0.0, float(unified_weights.w_combined))
         descriptor["unified_quality_eligible"] = bool(unified_weights.is_eligible)
@@ -356,6 +355,7 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
             "skill_mode": episode.skill_mode,
             "status": episode.status,
         },
+        "execution_preconditions": dict(episode.metadata.get("execution_preconditions", {}) or {}),
         "replay_summary": {
             "source_domain": episode.source_domain,
             "condition_vector": dict(episode.condition_vector),
@@ -364,6 +364,15 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
             "signal_yield_score": float(signal_yield_score),
         },
     }
+    execution_preconditions = dict(episode.metadata.get("execution_preconditions", {}) or {})
+    if execution_preconditions:
+        descriptor["unified_quality_weight"] = max(0.0, float(execution_preconditions.get("readiness_score", 1.0)))
+        descriptor["unified_quality_eligible"] = bool(execution_preconditions.get("ready", True))
+        descriptor["unified_quality_reason"] = (
+            "passed"
+            if descriptor["unified_quality_eligible"]
+            else ",".join(execution_preconditions.get("blocking_preconditions", []) or ["execution_preconditions_failed"])
+        )
     descriptor = normalize_episode_descriptor(descriptor)
     errors = validate_episode_descriptor(descriptor)
     if errors:
@@ -1143,10 +1152,20 @@ def _balanced_weight(episode: Dict[str, Any]) -> float:
     novelty = float(episode.get("novelty_score", 0.0))
     base = max(0.1, 0.4 * sampling_weight + 0.4 * trust + 0.2 * novelty)
     advisory = episode.get("advisory")
+    tags = {str(tag) for tag in (desc.get("semantic_tags", []) or [])}
     if advisory and getattr(advisory, "datapack_priority_tags", None):
-        tags = desc.get("semantic_tags", []) or []
         if any(tag in advisory.datapack_priority_tags for tag in tags):
             base *= 1.2
+    if advisory and getattr(advisory, "meta_node_weights", None):
+        meta_nodes = getattr(advisory, "meta_node_weights", {}) or {}
+        if {"fragile", "safety", "constraint:avoid_collision", "risk:fragility"} & tags:
+            base *= 1.0 + 0.2 * float(meta_nodes.get("risk_triage", 0.0))
+        if {"error_recovery", "mode:recovery"} & tags:
+            base *= 1.0 + 0.2 * float(meta_nodes.get("recovery_router", 0.0))
+        if any(tag.startswith("object:") for tag in tags):
+            base *= 1.0 + 0.1 * float(meta_nodes.get("semantic_memory_refresh", 0.0))
+        if {"objective:throughput", "objective:energy", "high_speed"} & tags:
+            base *= 1.0 + 0.15 * float(meta_nodes.get("efficiency_router", 0.0))
     base *= episode.get("recap_weight_multiplier", 1.0)
     base *= episode.get("auditor_weight_multiplier", 1.0)
     return base
