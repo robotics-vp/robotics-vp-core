@@ -158,10 +158,7 @@ class MujocoPhysicsAdapter:
             or getattr(self._renderer, "height", None) != height
         ):
             if self._renderer is not None:
-                try:
-                    self._renderer.close()
-                except Exception:
-                    pass
+                _safe_close_renderer(self._renderer)
             self._renderer = mujoco.Renderer(self._model, height=height, width=width)
         try:
             self._renderer.update_scene(self._data, camera=camera_name)
@@ -190,10 +187,7 @@ class MujocoPhysicsAdapter:
 
     def close(self) -> None:
         if self._renderer is not None:
-            try:
-                self._renderer.close()
-            except Exception:
-                pass
+            _safe_close_renderer(self._renderer)
         self._renderer = None
         self._data = None
         self._model = None
@@ -253,6 +247,22 @@ def _build_mjcf(scene_spec: WorkcellSceneSpec) -> str:
 </mujoco>
 """
     return xml
+
+
+def _safe_close_renderer(renderer: Any) -> None:
+    """Close a MuJoCo renderer defensively to avoid teardown-time attribute errors."""
+    if renderer is None:
+        return
+    # Some MuJoCo versions may hit __del__ paths expecting this attribute to exist.
+    if not hasattr(renderer, "_mjr_context"):
+        try:
+            setattr(renderer, "_mjr_context", None)
+        except Exception:
+            pass
+    try:
+        renderer.close()
+    except Exception:
+        pass
 
 
 def _static_body_xml(name: str, position: Tuple[float, float, float], orientation: Tuple[float, float, float, float], size: Tuple[float, float, float]) -> str:

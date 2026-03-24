@@ -215,7 +215,8 @@ def _build_trajectory_audit(
     }
 
     events = ["step"] * num_steps
-    if constraint_flags:
+    # Golden-path baseline should only emit violation events when an anomaly is explicitly injected.
+    if anomaly and constraint_flags:
         events.append("constraint_violation")
     if anomaly:
         events.extend(["physics_violation", "velocity_violation"])
@@ -776,6 +777,11 @@ def _parse_args() -> argparse.Namespace:
         default=-1,
         help="Optional episode index for injected trajectory anomaly (default: disabled).",
     )
+    parser.add_argument(
+        "--fail-on-governance-failure",
+        action="store_true",
+        help="Exit with code 1 if any episode fails governance checks.",
+    )
     return parser.parse_args()
 
 
@@ -805,6 +811,12 @@ def main() -> None:
     _print_governance_explain(
         bundle.get("governance_explain", {}), output_dir / "governance_explain.json"
     )
+    if args.fail_on_governance_failure and not bool(summary["all_governance_passed"]):
+        print(
+            "Governance failure gate enabled: exiting non-zero due to failed governance checks.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

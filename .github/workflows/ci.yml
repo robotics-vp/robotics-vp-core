@@ -30,7 +30,7 @@ jobs:
         run: python3 -m pytest tests/ -m golden_path -q
 
       - name: Golden path smoke runner
-        run: python3 scripts/run_golden_path.py --env workcell --episodes 3 --seed 0 --emit artifacts/golden_path_ci
+        run: python3 scripts/run_golden_path.py --env workcell --episodes 3 --seed 0 --emit artifacts/golden_path_ci --fail-on-governance-failure
 
   test:
     runs-on: ubuntu-latest
