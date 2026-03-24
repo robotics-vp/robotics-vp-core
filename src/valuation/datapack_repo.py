@@ -9,6 +9,8 @@ import os
 import json
 import numpy as np
 from typing import List, Optional, Dict, Any, Iterator
+
+from src.epiplexity.metadata import apply_epiplexity_overlay, load_epiplexity_overlay_map, write_epiplexity_overlays
 from .datapack_schema import DataPackMeta
 
 
@@ -38,6 +40,7 @@ class DataPackRepo:
         # In-memory cache (optional, for faster queries)
         self._cache: Dict[str, List[DataPackMeta]] = {}
         self._cache_dirty: Dict[str, bool] = {}
+        self._epiplexity_overlay_mtime: Optional[float] = None
 
     def _get_file_path(self, task_name):
         """Get JSONL file path for task."""
@@ -118,11 +121,12 @@ class DataPackRepo:
             List of DataPackMeta objects
         """
         # Check cache
-        if task_name in self._cache and not self._cache_dirty.get(task_name, False):
+        if task_name in self._cache and not self._cache_dirty.get(task_name, False) and not self._epiplexity_overlay_changed():
             return self._cache[task_name]
 
         # Load from file
         datapacks = list(self.iter_all(task_name))
+        self._apply_epiplexity_overlays(datapacks)
 
         # Update cache
         self._cache[task_name] = datapacks
@@ -274,6 +278,47 @@ class DataPackRepo:
                     )
                     + "\n"
                 )
+
+    def write_epiplexity_overlays(self, datapacks: List[DataPackMeta], outfile: Optional[str] = None) -> int:
+        overlay_path = outfile or self._get_epiplexity_overlay_path()
+        count = write_epiplexity_overlays(datapacks, overlay_path)
+        self._epiplexity_overlay_mtime = os.path.getmtime(overlay_path) if count > 0 and os.path.exists(overlay_path) else None
+        for task_name in list(self._cache.keys()):
+            self._cache_dirty[task_name] = True
+        return count
+
+    def _get_epiplexity_overlay_path(self) -> str:
+        return os.path.join(self.base_dir, "epiplexity_overlays.jsonl")
+
+    def _epiplexity_overlay_changed(self) -> bool:
+        overlay_path = self._get_epiplexity_overlay_path()
+        if not os.path.exists(overlay_path):
+            self._epiplexity_overlay_mtime = None
+            return False
+        mtime = os.path.getmtime(overlay_path)
+        if self._epiplexity_overlay_mtime is None:
+            self._epiplexity_overlay_mtime = mtime
+            return True
+        if mtime != self._epiplexity_overlay_mtime:
+            self._epiplexity_overlay_mtime = mtime
+            return True
+        return False
+
+    def _apply_epiplexity_overlays(self, datapacks: List[DataPackMeta]) -> None:
+        overlay_path = self._get_epiplexity_overlay_path()
+        overlays = load_epiplexity_overlay_map(overlay_path)
+        if not overlays:
+            self._epiplexity_overlay_mtime = None if not os.path.exists(overlay_path) else os.path.getmtime(overlay_path)
+            return
+        for dp in datapacks:
+            overlay = overlays.get(str(dp.pack_id))
+            if overlay is None:
+                continue
+            task_name = overlay.get("task_name")
+            if task_name and str(task_name) != str(dp.task_name):
+                continue
+            apply_epiplexity_overlay(dp, overlay)
+        self._epiplexity_overlay_mtime = os.path.getmtime(overlay_path)
 
     def get_positive_for_skill(
         self,

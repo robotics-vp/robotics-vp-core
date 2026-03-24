@@ -6,6 +6,7 @@ from src.orchestrator.task_graph import TaskGraph, TaskNode
 from src.orchestrator.ontology import EnvironmentOntology
 from src.config.econ_params import EconParams
 from src.valuation.datapack_repo import DataPackRepo
+from src.valuation.datapack_schema import DataPackMeta
 
 
 def test_sampler_weights_epiplexity_roi():
@@ -16,6 +17,17 @@ def test_sampler_weights_epiplexity_roi():
     ]
     features = policy.build_features(episodes)
     weights = policy.evaluate(features, strategy="epiplexity_roi")
+    assert weights["ep1"] > weights["ep0"]
+
+
+def test_sampler_weights_inferential_yield():
+    policy = HeuristicSamplerWeightPolicy()
+    episodes = [
+        {"descriptor": {"pack_id": "ep0", "inferential_replay_weight": 0.15}, "recap_weight_multiplier": 1.0},
+        {"descriptor": {"pack_id": "ep1", "inferential_replay_weight": 0.45}, "recap_weight_multiplier": 1.0},
+    ]
+    features = policy.build_features(episodes)
+    weights = policy.evaluate(features, strategy="inferential_yield")
     assert weights["ep1"] > weights["ep0"]
 
 
@@ -58,3 +70,32 @@ def test_semantic_orchestrator_epiplexity_term():
 
     assert "epiplexity_term" in plan.cross_module_constraints
     assert plan.cross_module_constraints["epiplexity_term"]["epi_alpha"] == 0.5
+
+
+def test_datapack_engine_uses_default_epiplexity_selector(tmp_path):
+    repo = DataPackRepo(base_dir=str(tmp_path))
+    datapack = DataPackMeta(task_name="drawer_vase")
+    datapack.epiplexity_summary = {
+        "vision_rgb": {
+            "steps_5_bs_4": {
+                "mean": {"delta_epi_vs_baseline": 0.0, "epi_per_flop": 0.1},
+                "confidence": 0.4,
+            }
+        },
+        "canonical_tokens": {
+            "steps_5_bs_4": {
+                "mean": {"delta_epi_vs_baseline": 0.3, "epi_per_flop": 0.4},
+                "confidence": 0.9,
+            }
+        },
+        "_default": {"repr_id": "canonical_tokens", "budget_id": "steps_5_bs_4"},
+    }
+    repo.append(datapack)
+
+    engine = DatapackEngine(
+        repo,
+        config={"use_epiplexity_term": True, "epi_baseline_repr": "vision_rgb"},
+    )
+    signals = engine.compute_signals(repo.load_all("drawer_vase"))
+
+    assert signals.mean_delta_epi_per_flop == 0.3

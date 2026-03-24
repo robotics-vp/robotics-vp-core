@@ -31,6 +31,12 @@ This layer promotes the economic and regal stack into the adaptation loop withou
   - `collect_more_data`
   - `no_op`
   - `require_review`
+- A compiled inferential reward breakdown:
+  - base value gain
+  - adaptation gain
+  - data-value support
+  - signal yield from frontier gain plus epiplexity
+  - uncertainty / governance penalties
 - Advisory replay sampling and a live queue-selection shim
 - Deployment label and receipt schemas ready for future live robot receipts
 
@@ -96,6 +102,7 @@ The gate evaluates:
 - risk cost
 - uncertainty and OOD
 - data quality and provenance quality
+- signal yield from learnability / frontier evidence
 - regal failures and maturity stages
 
 The result is a capital-allocation decision, not a reward rewrite.
@@ -115,6 +122,7 @@ Advisory outputs now emit:
 - replay actions (`upweight`, `downweight`, `holdout`, `collect_more_like_this`)
 - inferential budget decisions
 - live queue-selection entries
+- optional epiplexity-overlay joins keyed by datapack id, so signal yield can use persisted learnability evidence instead of frontier-only fallbacks when overlays are available
 
 ## How to run
 
@@ -152,6 +160,7 @@ Run the inferential budget gate demo:
 python3 scripts/run_inferential_budget_gate_demo.py \
   --output-dir artifacts/inferential_budget_gate_demo \
   --generate-shadow-run \
+  --epiplexity-overlays data/datapacks/epiplexity_overlays.jsonl \
   --episodes 3 \
   --seed 42
 ```
@@ -185,3 +194,4 @@ This validates config presence and environment visibility without requiring a GP
 - Offline RL is a conservative scaffold, not a replacement for the online SAC path.
 - No real deployment receipts exist yet; receipt and label schemas are shadow-ready and future-facing.
 - The live queue-selection shim is additive and advisory. It does not mutate legacy queue logic unless explicitly consumed.
+- Replay-side epiplexity support now exists via datapack overlays, but replay datasets that were built without matching datapack ids or without an overlay sidecar still degrade gracefully to non-epiplexity signals.

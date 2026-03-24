@@ -27,6 +27,7 @@ def main() -> None:
     parser.add_argument("--promotion-policy", default="configs/regality/promotion_default.yaml", type=str)
     parser.add_argument("--receipt-label-dir", default=None, type=str)
     parser.add_argument("--receipt-label-mode", default="synthetic_shadow", type=str)
+    parser.add_argument("--epiplexity-overlays", default=None, type=str)
     args = parser.parse_args()
 
     output_root = Path(args.output_dir)
@@ -52,6 +53,7 @@ def main() -> None:
         promotion_policy_path=args.promotion_policy,
         receipt_label_dir=args.receipt_label_dir,
         receipt_label_mode=args.receipt_label_mode,
+        epiplexity_overlay_path=args.epiplexity_overlays,
     )
     payload = {
         "summary": advisory["adaptation_budget"]["summary"],

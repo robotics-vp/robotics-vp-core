@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 import numpy as np
 
 from src.epiplexity import TokenizerAblationHarness, ComputeBudget, build_default_representation_fns
+from src.epiplexity.metadata import attach_epiplexity_summary, set_epiplexity_default_selector
 from src.epiplexity.slice_selector import SliceSelectorConfig, select_curated_slices
 from src.representation.channel_set_encoder import ChannelSetEncoderConfig
 from src.representation.token_providers import GeometryBEVConfig
@@ -129,6 +130,7 @@ def _load_episodes_from_repo(repo: DataPackRepo, task_name: str) -> tuple[List[D
             stats["missing_inputs"] += 1
             continue
         episode["episode_id"] = dp.episode_id or dp.pack_id
+        episode["pack_id"] = dp.pack_id
         if dp.embodiment_profile is not None:
             episode["embodiment_profile"] = dp.embodiment_profile
         episodes.append(episode)
@@ -145,6 +147,7 @@ def _load_portable_episode(dp: Any) -> Optional[Dict[str, Any]]:
     scene_graphs = _scene_graphs_from_scene_tracks(coerce_scene_tracks_payload(scene_tracks))
     episode = {
         "episode_id": dp.episode_id or dp.pack_id,
+        "pack_id": dp.pack_id,
         "scene_tracks": scene_tracks,
         "scene_graphs": scene_graphs,
         "rgb_features_v1": rgb_features,
@@ -163,6 +166,7 @@ def _load_token_only_episode(dp: Any) -> Optional[Dict[str, Any]]:
         return None
     episode = {
         "episode_id": dp.episode_id or dp.pack_id,
+        "pack_id": dp.pack_id,
         "repr_tokens": repr_tokens,
         "slice_labels_v1": slice_labels,
         "token_only": True,
@@ -199,6 +203,9 @@ def _build_token_only_leaderboard(
     episodes: List[Dict[str, Any]],
     repr_ids: List[str],
     seeds: List[int],
+    *,
+    baseline_repr: str,
+    budget_id: str,
 ) -> Dict[str, Any]:
     """Build leaderboard summaries from stored repr_tokens.
 
@@ -224,12 +231,16 @@ def _build_token_only_leaderboard(
                 repr_features[repr_id].append(np.array(features))
 
     # Compute simple metrics per repr
+    baseline_epi_per_flop = 0.0
+    cached_stats: Dict[str, Dict[str, float]] = {}
     for repr_id in repr_ids:
         features_list = repr_features[repr_id]
         if not features_list:
             summaries[repr_id] = {
                 "status": "no_data",
                 "num_episodes": 0,
+                "repr_id": repr_id,
+                "budget_id": budget_id,
             }
             continue
 
@@ -237,17 +248,67 @@ def _build_token_only_leaderboard(
         # Compute variance as proxy for structure (higher variance = more structure)
         variance = float(np.var(features_array))
         mean_norm = float(np.mean(np.linalg.norm(features_array, axis=-1)))
-
-        summaries[repr_id] = {
-            "status": "ok",
-            "num_episodes": len(features_list),
-            "dim": int(features_array.shape[-1]) if features_array.ndim > 1 else 1,
+        dim = int(features_array.shape[-1]) if features_array.ndim > 1 else 1
+        epi_per_flop = variance / max(1.0, float(dim))
+        cached_stats[repr_id] = {
             "variance": variance,
             "mean_norm": mean_norm,
-            # Token-only mode doesn't run probes, so these are placeholders
-            "S_T_proxy": variance,  # Structure proxy
-            "H_T_proxy": 1.0 - variance,  # Residual entropy proxy (inverted)
+            "dim": float(dim),
+            "epi_per_flop": float(epi_per_flop),
+            "num_episodes": float(len(features_list)),
+        }
+        if repr_id == baseline_repr:
+            baseline_epi_per_flop = float(epi_per_flop)
+
+    if baseline_repr not in cached_stats and cached_stats:
+        first_repr = next(iter(cached_stats))
+        baseline_epi_per_flop = float(cached_stats[first_repr]["epi_per_flop"])
+
+    for repr_id in repr_ids:
+        if repr_id not in cached_stats:
+            continue
+        stats = cached_stats[repr_id]
+        variance = float(stats["variance"])
+        mean_norm = float(stats["mean_norm"])
+        dim = int(stats["dim"])
+        epi_per_flop = float(stats["epi_per_flop"])
+        delta_epi = epi_per_flop - baseline_epi_per_flop
+        confidence = min(1.0, float(stats["num_episodes"]) / max(1.0, float(len(seeds) + 1)))
+        summaries[repr_id] = {
+            "status": "ok",
+            "num_episodes": int(stats["num_episodes"]),
+            "repr_id": repr_id,
+            "budget_id": budget_id,
+            "variance": variance,
+            "mean_norm": mean_norm,
+            "S_T_proxy": variance,
+            "H_T_proxy": max(0.0, 1.0 - variance),
             "mode": "token_only",
+            "baseline_repr": baseline_repr,
+            "mean": {
+                "S_T_proxy": variance,
+                "H_T_proxy": max(0.0, 1.0 - variance),
+                "epi_per_flop": epi_per_flop,
+                "delta_epi_vs_baseline": delta_epi,
+                "flops_estimate": float(max(1, dim)),
+            },
+            "std": {
+                "S_T_proxy": 0.0,
+                "H_T_proxy": 0.0,
+                "epi_per_flop": 0.0,
+                "delta_epi_vs_baseline": 0.0,
+                "flops_estimate": 0.0,
+            },
+            "confidence": confidence,
+            "support": {
+                "num_runs": int(stats["num_episodes"]),
+                "num_seeds": len(seeds),
+            },
+            "estimator": {
+                "estimator_id": "token_only_proxy",
+                "estimator_config_sha": "token_only_proxy",
+            },
+            "compute_normalizer": "feature_dim_proxy",
         }
 
     return summaries
@@ -361,6 +422,12 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", type=str, default="artifacts/epiplexity_leaderboards", help="Output dir")
     parser.add_argument(
+        "--epiplexity-overlays",
+        type=str,
+        default=None,
+        help="Optional JSONL path for additive epiplexity overlays (defaults to <datapack-dir>/epiplexity_overlays.jsonl).",
+    )
+    parser.add_argument(
         "--token-only",
         action="store_true",
         help="Use stored repr_tokens instead of running encoders (requires datapacks with repr_tokens)",
@@ -369,6 +436,9 @@ def main() -> None:
 
     stats = {"with_raw": 0, "portable": 0, "token_only": 0}
     is_token_only = args.token_only
+    repo = None
+    task_name = None
+    datapacks_by_pack_id: Dict[str, Any] = {}
 
     if args.synthetic:
         if is_token_only:
@@ -382,6 +452,7 @@ def main() -> None:
             raise RuntimeError(f"No datapacks found in {args.datapack_dir}")
         task_name = args.task or tasks[0]
         episodes, stats = _load_episodes_token_only(repo, task_name)
+        datapacks_by_pack_id = {str(dp.pack_id): dp for dp in repo.load_all(task_name)}
         stats["token_only"] = stats.get("with_repr_tokens", 0)
         if not episodes:
             raise RuntimeError(
@@ -397,6 +468,7 @@ def main() -> None:
             raise RuntimeError(f"No datapacks found in {args.datapack_dir}")
         task_name = args.task or tasks[0]
         episodes, stats = _load_episodes_from_repo(repo, task_name)
+        datapacks_by_pack_id = {str(dp.pack_id): dp for dp in repo.load_all(task_name)}
         if not episodes:
             if stats["with_raw"] == 0:
                 raise RuntimeError(
@@ -430,10 +502,14 @@ def main() -> None:
 
     budgets = [ComputeBudget(max_steps=int(x.strip()), batch_size=args.batch_size) for x in args.budget_steps.split(",")]
     seeds = [int(x.strip()) for x in args.seeds.split(",")]
+    default_budget_id = budgets[0].budget_id() if budgets else "token_only_proxy"
 
     repr_ids = ["vision_rgb", "geometry_scene_graph", "geometry_bev", "canonical_tokens"]
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    overlay_path = None
+    if repo is not None:
+        overlay_path = args.epiplexity_overlays or str(Path(args.datapack_dir) / "epiplexity_overlays.jsonl")
 
     if is_token_only:
         # Token-only mode: use stored repr_tokens directly
@@ -443,9 +519,48 @@ def main() -> None:
             dataset_slice_id = f"curated_{slice_id}"
 
             # Build leaderboard from stored repr_tokens
-            slice_summaries = _build_token_only_leaderboard(slice_episodes, repr_ids, seeds)
+            slice_summaries = _build_token_only_leaderboard(
+                slice_episodes,
+                repr_ids,
+                seeds,
+                baseline_repr="vision_rgb",
+                budget_id=default_budget_id,
+            )
+            for summary in slice_summaries.values():
+                if isinstance(summary, dict) and summary.get("status") == "ok":
+                    summary["dataset_slice_id"] = dataset_slice_id
+            selector_repr = max(
+                (
+                    repr_id
+                    for repr_id, summary in slice_summaries.items()
+                    if isinstance(summary, dict) and summary.get("status") == "ok"
+                ),
+                key=lambda repr_id: (
+                    float(slice_summaries[repr_id].get("mean", {}).get("delta_epi_vs_baseline", 0.0) or 0.0),
+                    float(slice_summaries[repr_id].get("mean", {}).get("epi_per_flop", 0.0) or 0.0),
+                ),
+                default="vision_rgb",
+            )
+            slice_datapacks = [
+                datapacks_by_pack_id[ep["pack_id"]]
+                for ep in slice_episodes
+                if ep.get("pack_id") in datapacks_by_pack_id
+            ]
+            for dp in slice_datapacks:
+                for repr_id, summary in slice_summaries.items():
+                    if isinstance(summary, dict) and summary.get("status") == "ok":
+                        attach_epiplexity_summary(dp, repr_id, default_budget_id, summary, set_default=False)
+                set_epiplexity_default_selector(dp, selector_repr, default_budget_id, reason=f"token_only_{slice_id}")
             leaderboard_file = output_dir / f"{dataset_slice_id}.json"
-            leaderboard_file.write_text(json.dumps({"summaries": slice_summaries}, indent=2))
+            leaderboard_file.write_text(
+                json.dumps(
+                    {
+                        "summaries": slice_summaries,
+                        "default_selector": {"repr_id": selector_repr, "budget_id": default_budget_id},
+                    },
+                    indent=2,
+                )
+            )
             print(json.dumps({"slice": slice_id, "summaries": slice_summaries, "mode": "token_only"}, indent=2))
     else:
         # Normal mode: run harness with full encoding
@@ -462,6 +577,11 @@ def main() -> None:
             if not slice_episodes:
                 continue
             dataset_slice_id = f"curated_{slice_id}"
+            slice_datapacks = [
+                datapacks_by_pack_id[ep["pack_id"]]
+                for ep in slice_episodes
+                if ep.get("pack_id") in datapacks_by_pack_id
+            ]
             leaderboard = harness.evaluate(
                 episodes=slice_episodes,
                 repr_ids=repr_ids,
@@ -469,8 +589,12 @@ def main() -> None:
                 seeds=seeds,
                 baseline_repr="vision_rgb",
                 dataset_slice_id=dataset_slice_id,
+                datapacks=slice_datapacks or None,
             )
             print(json.dumps({"slice": slice_id, "summaries": leaderboard.summaries}, indent=2))
+
+    if repo is not None and overlay_path is not None and datapacks_by_pack_id:
+        repo.write_epiplexity_overlays(list(datapacks_by_pack_id.values()), overlay_path)
 
 
 if __name__ == "__main__":

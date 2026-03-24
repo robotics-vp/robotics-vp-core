@@ -36,6 +36,7 @@ def main() -> None:
     parser.add_argument("--promotion-policy", type=str, default="configs/regality/promotion_default.yaml")
     parser.add_argument("--receipt-label-dir", type=str, default=None)
     parser.add_argument("--receipt-label-mode", type=str, default="synthetic_shadow")
+    parser.add_argument("--epiplexity-overlays", type=str, default=None)
     args = parser.parse_args()
 
     output_root = Path(args.output_dir)
@@ -65,6 +66,7 @@ def main() -> None:
         promotion_policy_path=args.promotion_policy,
         receipt_label_dir=args.receipt_label_dir,
         receipt_label_mode=args.receipt_label_mode,
+        epiplexity_overlay_path=args.epiplexity_overlays,
     )
 
     json_path = output_root / "shadow_advisory.json"

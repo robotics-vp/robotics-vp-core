@@ -35,6 +35,7 @@ def recommend_sampling(
     constraint_violation_count: int,
     uncertainty: float,
     datapack_value: float,
+    signal_yield_score: float = 0.0,
     regal_support_score: float,
     deploy_recommendation: str,
     pricing_recommendation: str,
@@ -61,6 +62,10 @@ def recommend_sampling(
         score += 0.15
         reasons.append("frontier_candidate")
         tags.append("frontier_candidate")
+    if signal_yield_score > 0.0:
+        score += min(0.15, float(signal_yield_score))
+        reasons.append("signal_yield_positive")
+        tags.append("signal_yield_candidate")
     if regal_support_score > 0.6:
         score += 0.1
         reasons.append("regal_support_risk_high")

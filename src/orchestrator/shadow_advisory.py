@@ -4,7 +4,13 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Any, Dict, Optional
 
+from src.economics.inferential_reward import compile_signal_yield
 from src.economics.inferential_training_gate import InferentialTrainingCandidate, InferentialTrainingGate
+from src.epiplexity.metadata import (
+    extract_epiplexity_summary_confidence,
+    extract_epiplexity_summary_metric,
+    load_epiplexity_overlay_map,
+)
 from src.phase_h.advisory_integration import MAX_MULTIPLIER, MIN_MULTIPLIER
 from src.orchestrator.adaptation_budgeting import evaluate_adaptation_budget
 from src.orchestrator.queue_selection import build_live_queue_selection
@@ -32,6 +38,7 @@ def build_shadow_advisory_output(
     promotion_policy_path: str = "configs/regality/promotion_default.yaml",
     receipt_label_dir: Optional[str] = None,
     receipt_label_mode: str = "synthetic_shadow",
+    epiplexity_overlay_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     dataset = load_replay_dataset(replay_dataset_dir)
     promotion_policy = load_regal_promotion_policy(promotion_policy_path)
@@ -56,6 +63,7 @@ def build_shadow_advisory_output(
         str(row.metadata.get("episode_id", "")): row
         for row in receipt_bundle.datapack_contributions
     }
+    epiplexity_by_pack_id = load_epiplexity_overlay_map(epiplexity_overlay_path) if epiplexity_overlay_path else {}
     steps_by_episode = defaultdict(list)
     for step in dataset.steps:
         steps_by_episode[step.episode_id].append(step)
@@ -78,8 +86,33 @@ def build_shadow_advisory_output(
         datapack_recommendation = str(episode.regal_summary.get("datapack_recommendation", "keep"))
         pricing_recommendation = str(episode.regal_summary.get("pricing_recommendation", "publish"))
         coverage_gap = max(0.0, 1.0 - float(episode.condition_vector.get("safety_margin", 0.0) or 0.0))
+        datapack_id = str(
+            episode.metadata.get("datapack_id")
+            or episode.datapack_summary.get("datapack_id")
+            or episode.episode_id
+        )
+        epiplexity_overlay = epiplexity_by_pack_id.get(datapack_id, {})
         provenance_quality = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
         data_quality = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
+        frontier_gain = float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)
+        epi_delta = float(
+            episode.datapack_summary.get(
+                "delta_epi_per_flop",
+                episode.datapack_summary.get("delta_epi_vs_baseline", 0.0),
+            )
+            or extract_epiplexity_summary_metric(epiplexity_overlay, metric="delta_epi_vs_baseline")
+            or 0.0
+        )
+        epi_conf = float(
+            episode.datapack_summary.get("epi_confidence", 0.0)
+            or extract_epiplexity_summary_confidence(epiplexity_overlay)
+            or 0.0
+        )
+        epi_per_flop = float(
+            episode.datapack_summary.get("epi_per_flop", 0.0)
+            or extract_epiplexity_summary_metric(epiplexity_overlay, metric="epi_per_flop")
+            or 0.0
+        )
         hard_flags = sum(1 for flag in episode.constraint_flags if str(flag.get("severity", "")) == "hard")
         deployment_label = deployment_by_episode.get(episode.episode_id)
         deployment_receipt = receipt_by_episode.get(episode.episode_id)
@@ -90,12 +123,30 @@ def build_shadow_advisory_output(
             "training_run",
             "future_real_deployment",
         }
+        transfer_score = max(
+            0.0,
+            1.0 - max(float(policy_uncertainty or 0.0), float(episode.condition_vector.get("ood_risk_level", 0.0) or 0.0)),
+        )
+        governance_penalty = 0.0
+        if deploy_recommendation != "allow_shadow":
+            governance_penalty += 0.15
+        if pricing_recommendation == "suppress":
+            governance_penalty += 0.25
+        signal_yield = compile_signal_yield(
+            frontier_gain=frontier_gain,
+            epiplexity_delta=epi_delta,
+            epiplexity_confidence=epi_conf,
+            transfer_score=transfer_score,
+            data_quality=data_quality,
+            provenance_quality=provenance_quality,
+        )
 
         sampling = recommend_sampling(
             objective_profile_coverage_gap=coverage_gap,
             constraint_violation_count=hard_flags,
             uncertainty=float(policy_uncertainty or 0.0),
             datapack_value=learned_data_value,
+            signal_yield_score=signal_yield.score,
             regal_support_score=anomaly_support,
             deploy_recommendation=deploy_recommendation,
             pricing_recommendation=pricing_recommendation,
@@ -146,6 +197,12 @@ def build_shadow_advisory_output(
                 if adaptation_label is not None and use_realized_receipts
                 else max(0.0, learned_data_value - float(policy_mae or 0.0))
             ),
+            frontier_gain=frontier_gain,
+            epiplexity_delta=epi_delta,
+            epiplexity_confidence=epi_conf,
+            transfer_score=transfer_score,
+            governance_penalty=governance_penalty,
+            signal_yield_score=signal_yield.score,
             metadata={
                 "pricing_delta": learned_pricing_delta,
                 "realized_gain": (
@@ -163,6 +220,8 @@ def build_shadow_advisory_output(
                     if deployment_label is not None and deployment_label.realized_reward is not None
                     else None
                 ),
+                "signal_yield": signal_yield.to_dict(),
+                "epiplexity_overlay": epiplexity_overlay or None,
             },
         )
         budget_candidates.append(candidate)
@@ -172,6 +231,15 @@ def build_shadow_advisory_output(
                 "episode_id": episode.episode_id,
                 "sampling_priority": sampling.priority_label,
                 "sampling_priority_score": sampling.priority_score,
+                "signal_yield_score": signal_yield.score,
+                "inferential_signal_yield": signal_yield.to_dict(),
+                "epiplexity_evidence": {
+                    "datapack_id": datapack_id,
+                    "delta_epi_vs_baseline": epi_delta,
+                    "epi_per_flop": epi_per_flop,
+                    "confidence": epi_conf,
+                    "overlay_joined": bool(epiplexity_overlay),
+                },
                 "slice_weight_multiplier": slice_weight_multiplier,
                 "replay_queue_tags": sampling.queue_tags,
                 "replay_action": sampling.replay_action,
@@ -250,6 +318,11 @@ def build_shadow_advisory_output(
         "sampling_priorities": dict(Counter(output["sampling_priority"] for output in episode_outputs)),
         "collect_more_data_count": sum(1 for output in episode_outputs if output["collect_more_data"]),
         "retrain_count": sum(1 for output in episode_outputs if output["retrain"]),
+        "epiplexity_overlay_joins": sum(
+            1
+            for output in episode_outputs
+            if bool(output.get("epiplexity_evidence", {}).get("overlay_joined"))
+        ),
         "mean_slice_weight_multiplier": (
             sum(float(output["slice_weight_multiplier"]) for output in episode_outputs) / max(len(episode_outputs), 1)
         ),

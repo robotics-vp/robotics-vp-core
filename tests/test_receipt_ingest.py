@@ -1,3 +1,5 @@
+import json
+
 from src.orchestrator.shadow_advisory import build_shadow_advisory_output
 from src.replay.dataset import ReplayDatasetBuilder, load_replay_dataset
 from src.replay.receipt_ingest import (
@@ -30,9 +32,34 @@ def test_receipt_ingest_roundtrip_and_shadow_advisory_consumption(tmp_path):
     assert restored.coverage_summary()["covered_episode_count"] == dataset.manifest.num_episodes
     assert paths["bundle"]
 
+    overlay_path = tmp_path / "epiplexity_overlays.jsonl"
+    overlay_path.write_text(
+        json.dumps(
+            {
+                "pack_id": dataset.episodes[0].datapack_summary["datapack_id"],
+                "epiplexity_summary": {
+                    "canonical_tokens": {
+                        "steps_5_bs_4": {
+                            "mean": {"delta_epi_vs_baseline": 0.25, "epi_per_flop": 0.4},
+                            "confidence": 0.8,
+                        }
+                    },
+                    "_default": {"repr_id": "canonical_tokens", "budget_id": "steps_5_bs_4"},
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
     advisory = build_shadow_advisory_output(
         replay_dataset_dir=str(dataset_dir),
         receipt_label_dir=str(receipt_dir),
+        epiplexity_overlay_path=str(overlay_path),
     )
     assert advisory["summary"]["receipt_label_coverage"]["total_labels"] > 0
     assert advisory["episodes"][0]["receipt_feedback"]["deployment_outcome"] is not None
+    assert advisory["summary"]["epiplexity_overlay_joins"] >= 1
+    assert advisory["episodes"][0]["epiplexity_evidence"]["overlay_joined"] is True
+    assert "execution_preconditions" in advisory["episodes"][0]
+    assert advisory["adaptation_budget"]["summary"]["work_orders"] >= 1

@@ -8,8 +8,9 @@ Epiplexity is a compute-bounded proxy for learnable structure. Under a fixed com
 These diagnostics are advisory: they inform data valuation, representation selection, and orchestrator scheduling without changing reward math.
 
 ## Key Components
-- `EpiplexityTracker`: runs probe learners, caches results, and returns `S_T_proxy`, `H_T_proxy`, and `epi_per_flop`.
-- `PrequentialAUCLossEstimator`: MVP estimator using area-under-loss-curve proxy.
+- `EpiplexityTracker`: runs probe learners, caches absolute runs, records compute accounting (`flops_estimate`), and derives baseline-relative deltas only at read time.
+- `PrequentialAUCLossEstimator`: area-under-loss-curve proxy with deterministic compute estimation.
+- `RequentialEstimator`: online evaluate-then-update variant for nonzero requential scoring.
 - `TokenizerAblationHarness`: compares representations on the same dataset slice and writes leaderboards.
 
 ## Datapack Metadata
@@ -17,6 +18,7 @@ Epiplexity results are stored in datapack metadata:
 - `epiplexity[repr][budget][seed]`: per-run metrics and version hashes
 - `epiplexity_summary[repr][budget]`: mean/std/confidence summary
 - `epiplexity_summary._default`: default repr/budget selector for downstream use
+- `data/datapacks/epiplexity_overlays.jsonl`: additive overlay sidecar loaded automatically by `DataPackRepo`
 
 By default, only summaries are attached to datapacks; full per-run details live in the cache (`artifacts/epiplexity_cache/`). To store full runs in datapack metadata, pass `--store-full-runs` to the CLI (debug only).
 
@@ -43,6 +45,7 @@ python -m scripts.run_epiplexity_curated_slices --datapack-dir /path/to/datapack
 ```
 
 This compares `vision_rgb`, `geometry_scene_graph`, `geometry_bev`, and `canonical_tokens` under a fixed compute budget.
+When run against a datapack repo, it also emits `epiplexity_overlays.jsonl` beside the datapacks so repo reloads, samplers, and replay-side advisory consumers can see the same canonical summaries.
 
 **Raw vs portable datapacks:** Curated epiplexity slices run in one of two modes. If `raw_data_path` is present and accessible, the runner rehydrates raw streams (RGB, scene tracks) and computes slices directly. If raw data is absent but portable artifacts are embedded (`scene_tracks_v1`, `rgb_features_v1`, `slice_labels_v1`), the runner operates in portable mode, consuming stored artifacts without raw rehydration. If neither raw data nor portable artifacts are available, the runner fails fast with an explicit diagnostic.
 
@@ -63,6 +66,6 @@ When enabled (`config/pipeline.yaml`):
 - `orchestrator.use_epiplexity_term = true`
 - `orchestrator.epi_alpha` scales the advisory term
 - `orchestrator.epi_budget_id` selects which compute budget to read
-- `orchestrator.epi_baseline_repr` selects the baseline representation
+- `orchestrator.epi_repr_id` optionally pins a representation; otherwise the datapack’s `_default` selector is used
 
 The semantic orchestrator surfaces this as an advisory scheduling term.

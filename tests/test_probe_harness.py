@@ -46,6 +46,7 @@ class TestProbeHarness:
         assert report1.after_score == report2.after_score
         assert report1.delta == report2.delta
         assert report1.probe_config_sha == report2.probe_config_sha
+        assert abs((report1.after_score - report1.baseline_score) - report1.delta) < 1e-6
 
     def test_stability_gate_fails_on_sign_flip(self):
         """Test that stability gate with high threshold can fail on noise."""

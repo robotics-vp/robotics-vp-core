@@ -151,6 +151,7 @@ class DatapackEngine:
         self.config = config or {}
         self.use_epiplexity_term = bool(self.config.get("use_epiplexity_term", False))
         self.epi_budget_id = self.config.get("epi_budget_id")
+        self.epi_repr_id = self.config.get("epi_repr_id")
         self.epi_baseline_repr = self.config.get("epi_baseline_repr")
 
     def compute_datapack_stats(self) -> Dict[str, Any]:
@@ -223,7 +224,7 @@ class DatapackEngine:
                 if self.use_epiplexity_term:
                     epi_delta = extract_epiplexity_summary_metric(
                         dp,
-                        repr_id=self.epi_baseline_repr,
+                        repr_id=self.epi_repr_id,
                         budget_id=self.epi_budget_id,
                         metric="delta_epi_vs_baseline",
                     )
@@ -361,13 +362,13 @@ class DatapackEngine:
         for dp in datapacks:
             epi_val = extract_epiplexity_summary_metric(
                 dp,
-                repr_id=self.epi_baseline_repr,
+                repr_id=self.epi_repr_id,
                 budget_id=self.epi_budget_id,
                 metric="epi_per_flop",
             )
             epi_delta = extract_epiplexity_summary_metric(
                 dp,
-                repr_id=self.epi_baseline_repr,
+                repr_id=self.epi_repr_id,
                 budget_id=self.epi_budget_id,
                 metric="delta_epi_vs_baseline",
             )

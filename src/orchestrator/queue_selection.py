@@ -132,12 +132,24 @@ def build_live_queue_selection(
                     "deploy_recommendation": episode.get("deploy_recommendation"),
                     "pricing_recommendation": episode.get("pricing_recommendation"),
                     "datapack_recommendation": episode.get("datapack_recommendation"),
+                    "signal_yield_score": episode.get("signal_yield_score"),
+                    "inferential_signal_yield": episode.get("inferential_signal_yield"),
+                    "inferential_budget_decision": episode.get("inferential_budget_decision"),
                     "promotion_stage": _episode_promotion_stage(episode),
                     "promotion_stages": _episode_promotion_stages(episode),
                     "influence_source": _episode_influence_source(episode),
                     "evidence": {
                         "sampling_recommendation": dict(episode.get("sampling_recommendation", {}) or {}),
                         "receipt_feedback": dict(episode.get("receipt_feedback", {}) or {}),
+                        "inferential_signal_yield": episode.get("inferential_signal_yield"),
+                        "inferential_reward": (
+                            dict(
+                                (episode.get("inferential_budget_decision", {}) or {})
+                                .get("artifact_summary", {})
+                                .get("inferential_reward", {})
+                                or {}
+                            )
+                        ),
                         "advisor_modes": _episode_advisor_modes(episode),
                     },
                 },

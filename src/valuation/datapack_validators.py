@@ -113,6 +113,17 @@ def validate_epiplexity_summary(summary: Dict[str, Any]) -> List[str]:
     warnings: List[str] = []
     if not isinstance(summary, dict):
         return ["epiplexity_summary must be a dict"]
+    default = summary.get("_default")
+    if default is not None:
+        if not isinstance(default, dict):
+            warnings.append("epiplexity_summary._default must be a dict")
+        else:
+            repr_id = default.get("repr_id")
+            budget_id = default.get("budget_id")
+            if not repr_id or not budget_id:
+                warnings.append("epiplexity_summary._default must contain repr_id and budget_id")
+            elif not isinstance(summary.get(repr_id), dict) or budget_id not in summary.get(repr_id, {}):
+                warnings.append("epiplexity_summary._default points to missing repr/budget")
     for repr_id, budgets in summary.items():
         if repr_id == "_default":
             continue
@@ -128,4 +139,14 @@ def validate_epiplexity_summary(summary: Dict[str, Any]) -> List[str]:
                     continue
                 if _is_nan(val):
                     warnings.append(f"epiplexity_summary.{repr_id}.{budget_id}.{key} is NaN")
+            confidence = stats.get("confidence")
+            if confidence is not None and _is_nan(confidence):
+                warnings.append(f"epiplexity_summary.{repr_id}.{budget_id}.confidence is NaN")
+            flops_estimate = mean.get("flops_estimate")
+            if flops_estimate is not None:
+                try:
+                    if float(flops_estimate) < 0.0:
+                        warnings.append(f"epiplexity_summary.{repr_id}.{budget_id}.flops_estimate is negative")
+                except Exception:
+                    warnings.append(f"epiplexity_summary.{repr_id}.{budget_id}.flops_estimate is invalid")
     return warnings

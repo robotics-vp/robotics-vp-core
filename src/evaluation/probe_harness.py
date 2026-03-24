@@ -251,9 +251,13 @@ class ProbeHarness:
     ) -> ProbeEpiReportV1:
         """Run the probe harness with extended stability checks."""
         all_deltas: List[float] = []
+        baseline_scores: List[float] = []
+        after_scores: List[float] = []
         per_variant_deltas: Dict[str, List[float]] = {}
         per_subsample_deltas: Dict[str, List[float]] = {}
         per_seed_ood_delta: List[float] = []
+        per_seed_ood_baseline: List[float] = []
+        per_seed_ood_after: List[float] = []
         total_flops = 0
 
         # Run across variants x seeds x subsamples
@@ -280,6 +284,8 @@ class ProbeHarness:
                     after_score = self._train_and_eval(
                         after_sub, seed, variant
                     )
+                    baseline_scores.append(baseline_score)
+                    after_scores.append(after_score)
 
                     delta = after_score - baseline_score
                     all_deltas.append(delta)
@@ -299,6 +305,8 @@ class ProbeHarness:
                     if ood_data is not None:
                         ood_baseline = self._train_and_eval(baseline_sub, seed, variant, ood_data)
                         ood_after = self._train_and_eval(after_sub, seed, variant, ood_data)
+                        per_seed_ood_baseline.append(ood_baseline)
+                        per_seed_ood_after.append(ood_after)
                         per_seed_ood_delta.append(ood_after - ood_baseline)
 
         # Compute aggregates
@@ -350,14 +358,16 @@ class ProbeHarness:
         report = ProbeEpiReportV1(
             report_id=str(uuid.uuid4())[:8],
             probe_config=self.config.to_probe_config(),
-            baseline_score=float(np.mean([d for d in all_deltas])),  # Approx
-            after_score=float(np.mean([d for d in all_deltas])) + mean_delta,
+            baseline_score=float(np.mean(baseline_scores)) if baseline_scores else 0.0,
+            after_score=float(np.mean(after_scores)) if after_scores else 0.0,
             delta=mean_delta,
             flops_estimate=float(total_flops),
             delta_epi_per_flop=delta_epi_per_flop,
             per_seed_deltas=all_deltas,
             sign_consistency=sign_consistency,
             stability_pass=stability_pass,
+            ood_baseline_score=float(np.mean(per_seed_ood_baseline)) if per_seed_ood_baseline else None,
+            ood_after_score=float(np.mean(per_seed_ood_after)) if per_seed_ood_after else None,
             ood_delta=ood_delta,
             transfer_pass=transfer_pass,
             num_samples_id=len(baseline_data[0]),

@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, Optional
 
+from src.economics.inferential_reward import compile_inferential_reward
 from src.regality.promotion_policy import RegalMaturityStage, RegalPromotionPolicy
 from src.utils.config_digest import sha256_json
 
@@ -29,6 +30,12 @@ class InferentialTrainingCandidate:
     replay_policy_uncertainty: float
     learned_data_value: float
     expected_adaptation_benefit: float
+    frontier_gain: float = 0.0
+    epiplexity_delta: float = 0.0
+    epiplexity_confidence: float = 0.0
+    transfer_score: float = 0.0
+    governance_penalty: float = 0.0
+    signal_yield_score: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -50,6 +57,14 @@ class InferentialTrainingCandidate:
             "replay_policy_uncertainty": float(self.replay_policy_uncertainty),
             "learned_data_value": float(self.learned_data_value),
             "expected_adaptation_benefit": float(self.expected_adaptation_benefit),
+            "frontier_gain": float(self.frontier_gain),
+            "epiplexity_delta": float(self.epiplexity_delta),
+            "epiplexity_confidence": float(self.epiplexity_confidence),
+            "transfer_score": float(self.transfer_score),
+            "governance_penalty": float(self.governance_penalty),
+            "signal_yield_score": (
+                float(self.signal_yield_score) if self.signal_yield_score is not None else None
+            ),
             "metadata": dict(self.metadata),
         }
 
@@ -109,16 +124,41 @@ class InferentialTrainingGate:
 
     def evaluate(self, candidate: InferentialTrainingCandidate) -> InferentialTrainingDecision:
         reasons: list[str] = []
-        expected_gain = float(candidate.expected_value_gain + candidate.expected_adaptation_benefit + 0.25 * candidate.learned_data_value)
-        expected_cost = float(candidate.compute_cost)
-        expected_risk = float(candidate.risk_cost + 0.5 * candidate.uncertainty + 0.5 * candidate.ood_score)
-        net_benefit = expected_gain - expected_cost - expected_risk
+        inferential_reward = compile_inferential_reward(
+            expected_value_gain=candidate.expected_value_gain,
+            expected_adaptation_benefit=candidate.expected_adaptation_benefit,
+            learned_data_value=candidate.learned_data_value,
+            compute_cost=candidate.compute_cost,
+            risk_cost=candidate.risk_cost,
+            uncertainty=candidate.uncertainty,
+            ood_score=candidate.ood_score,
+            data_quality=candidate.data_quality,
+            provenance_quality=candidate.provenance_quality,
+            frontier_gain=candidate.frontier_gain,
+            epiplexity_delta=candidate.epiplexity_delta,
+            epiplexity_confidence=candidate.epiplexity_confidence,
+            transfer_score=candidate.transfer_score,
+            governance_penalty=candidate.governance_penalty,
+            signal_yield_override=candidate.signal_yield_score,
+        )
+        expected_gain = inferential_reward.expected_gain
+        expected_cost = inferential_reward.expected_cost
+        expected_risk = inferential_reward.expected_risk
+        net_benefit = inferential_reward.net_benefit
         allowed_budget = max(0.0, net_benefit)
 
         integrity_failed = candidate.regal_statuses.get("objective_integrity_regal") == "fail"
         pricing_failed = candidate.regal_statuses.get("pricing_truth_regal") == "fail"
         reward_failed = candidate.regal_statuses.get("reward_safety_regal") == "fail"
         hard_gate_enabled = self.promotion_policy.node_stage("pricing_truth_regal") == RegalMaturityStage.NARROW_HARD_GATE
+        artifact_summary = {
+            "promotion_policy": self.promotion_policy.policy_name,
+            "hard_gate_enabled": hard_gate_enabled,
+            "pricing_confidence": float(candidate.pricing_summary.get("confidence", 0.0)),
+            "run_id": candidate.run_id,
+            "episode_id": candidate.episode_id,
+            "inferential_reward": inferential_reward.to_dict(),
+        }
 
         if integrity_failed:
             reasons.append("objective_integrity_failure")
@@ -131,12 +171,7 @@ class InferentialTrainingGate:
                 allowed_budget=0.0,
                 recommended_training_mode="no_training",
                 reasons=reasons,
-                artifact_summary={
-                    "promotion_policy": self.promotion_policy.policy_name,
-                    "hard_gate_enabled": hard_gate_enabled,
-                    "run_id": candidate.run_id,
-                    "episode_id": candidate.episode_id,
-                },
+                artifact_summary=dict(artifact_summary),
             )
 
         if hard_gate_enabled and pricing_failed:
@@ -150,12 +185,7 @@ class InferentialTrainingGate:
                 allowed_budget=0.0,
                 recommended_training_mode="shadow_compare_only",
                 reasons=reasons,
-                artifact_summary={
-                    "promotion_policy": self.promotion_policy.policy_name,
-                    "hard_gate_enabled": hard_gate_enabled,
-                    "run_id": candidate.run_id,
-                    "episode_id": candidate.episode_id,
-                },
+                artifact_summary=dict(artifact_summary),
             )
 
         if candidate.provenance_quality < 0.5 or candidate.data_quality < 0.5:
@@ -169,11 +199,7 @@ class InferentialTrainingGate:
                 allowed_budget=allowed_budget,
                 recommended_training_mode="behavior_cloning_refresh",
                 reasons=reasons,
-                artifact_summary={
-                    "promotion_policy": self.promotion_policy.policy_name,
-                    "run_id": candidate.run_id,
-                    "episode_id": candidate.episode_id,
-                },
+                artifact_summary=dict(artifact_summary),
             )
 
         if reward_failed:
@@ -187,11 +213,7 @@ class InferentialTrainingGate:
                 allowed_budget=allowed_budget,
                 recommended_training_mode="shadow_compare_only",
                 reasons=reasons,
-                artifact_summary={
-                    "promotion_policy": self.promotion_policy.policy_name,
-                    "run_id": candidate.run_id,
-                    "episode_id": candidate.episode_id,
-                },
+                artifact_summary=dict(artifact_summary),
             )
 
         if net_benefit < self.min_net_benefit:
@@ -205,11 +227,7 @@ class InferentialTrainingGate:
                 allowed_budget=allowed_budget,
                 recommended_training_mode="no_training",
                 reasons=reasons,
-                artifact_summary={
-                    "promotion_policy": self.promotion_policy.policy_name,
-                    "run_id": candidate.run_id,
-                    "episode_id": candidate.episode_id,
-                },
+                artifact_summary=dict(artifact_summary),
             )
 
         if candidate.uncertainty > self.max_uncertainty_for_adapt or candidate.ood_score > self.max_ood_for_adapt:
@@ -223,7 +241,7 @@ class InferentialTrainingGate:
                 allowed_budget=allowed_budget,
                 recommended_training_mode="behavior_cloning_refresh",
                 reasons=reasons,
-                artifact_summary={"promotion_policy": self.promotion_policy.policy_name},
+                artifact_summary=dict(artifact_summary),
             )
 
         reasons.append("adaptation_budget_admitted")
@@ -236,10 +254,5 @@ class InferentialTrainingGate:
             allowed_budget=allowed_budget,
             recommended_training_mode="offline_td3_bc_shadow",
             reasons=reasons,
-            artifact_summary={
-                "promotion_policy": self.promotion_policy.policy_name,
-                "pricing_confidence": float(candidate.pricing_summary.get("confidence", 0.0)),
-                "run_id": candidate.run_id,
-                "episode_id": candidate.episode_id,
-            },
+            artifact_summary=dict(artifact_summary),
         )

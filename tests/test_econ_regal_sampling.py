@@ -10,6 +10,7 @@ def test_econ_regal_sampling_and_live_queue_shim():
         constraint_violation_count=2,
         uncertainty=0.5,
         datapack_value=1.2,
+        signal_yield_score=0.2,
         regal_support_score=0.8,
         deploy_recommendation="require_review",
         pricing_recommendation="publish_discounted",
@@ -21,6 +22,7 @@ def test_econ_regal_sampling_and_live_queue_shim():
     assert recommendation.priority_label == "high"
     assert "pricing_review" in recommendation.queue_tags
     assert "pricing_truth_review" in recommendation.queue_tags
+    assert "signal_yield_candidate" in recommendation.queue_tags
 
     queue = build_live_queue_selection(
         {

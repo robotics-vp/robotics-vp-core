@@ -10,7 +10,11 @@ import statistics
 import torch
 
 from src.epiplexity.tracker import EpiplexityTracker, EpiplexityRunKey, EpiplexityResult, ComputeBudget
-from src.epiplexity.metadata import attach_epiplexity_result, attach_epiplexity_summary
+from src.epiplexity.metadata import (
+    attach_epiplexity_result,
+    attach_epiplexity_summary,
+    set_epiplexity_default_selector,
+)
 
 RepresentationFn = Callable[[Union[Sequence[Any], Any]], torch.Tensor]
 
@@ -21,6 +25,7 @@ class EpiplexityLeaderboard:
     baseline_repr: str
     results: Dict[str, Dict[str, Dict[str, Dict[str, float]]]]
     summaries: Dict[str, Dict[str, Dict[str, Any]]]
+    default_selector: Optional[Dict[str, str]] = None
 
 
 class TokenizerAblationHarness:
@@ -107,21 +112,45 @@ class TokenizerAblationHarness:
                         "H_T_proxy": result.H_T_proxy,
                         "epi_per_flop": result.epi_per_flop,
                         "delta_epi_vs_baseline": result.delta_epi_vs_baseline,
+                        "flops_estimate": result.flops_estimate,
                     }
                     if datapacks and store_full_runs:
                         for dp in datapacks:
                             attach_epiplexity_result(dp, result)
 
-                summaries[repr_id][budget_id] = _summarize_results(metrics_per_seed)
-                if datapacks:
-                    for dp in datapacks:
-                        attach_epiplexity_summary(dp, repr_id, budget_id, summaries[repr_id][budget_id])
+                summaries[repr_id][budget_id] = _summarize_results(
+                    metrics_per_seed,
+                    repr_id=repr_id,
+                    budget_id=budget_id,
+                    baseline_repr=baseline_repr,
+                    dataset_slice_id=dataset_slice_id,
+                )
+
+        default_selector = _select_default_selector(summaries)
+        if datapacks:
+            for dp in datapacks:
+                for repr_id, budgets_summary in summaries.items():
+                    for budget_id, summary in budgets_summary.items():
+                        attach_epiplexity_summary(
+                            dp,
+                            repr_id,
+                            budget_id,
+                            summary,
+                            set_default=False,
+                        )
+                if default_selector is not None:
+                    set_epiplexity_default_selector(
+                        dp,
+                        default_selector["repr_id"],
+                        default_selector["budget_id"],
+                    )
 
         leaderboard = EpiplexityLeaderboard(
             dataset_slice_id=dataset_slice_id,
             baseline_repr=baseline_repr,
             results=results,
             summaries=summaries,
+            default_selector=default_selector,
         )
         self._write_leaderboard(leaderboard)
         return leaderboard
@@ -146,6 +175,7 @@ class TokenizerAblationHarness:
                     "baseline_repr": leaderboard.baseline_repr,
                     "results": leaderboard.results,
                     "summaries": leaderboard.summaries,
+                    "default_selector": leaderboard.default_selector,
                 },
                 f,
                 indent=2,
@@ -153,7 +183,14 @@ class TokenizerAblationHarness:
             )
 
 
-def _summarize_results(results: List[EpiplexityResult]) -> Dict[str, Any]:
+def _summarize_results(
+    results: List[EpiplexityResult],
+    *,
+    repr_id: str,
+    budget_id: str,
+    baseline_repr: str,
+    dataset_slice_id: str,
+) -> Dict[str, Any]:
     def _mean(vals: List[float]) -> float:
         return float(sum(vals) / len(vals)) if vals else 0.0
 
@@ -164,24 +201,62 @@ def _summarize_results(results: List[EpiplexityResult]) -> Dict[str, Any]:
     h_vals = [r.H_T_proxy for r in results]
     epi_vals = [r.epi_per_flop for r in results]
     delta_vals = [r.delta_epi_vs_baseline for r in results]
+    flops_vals = [r.flops_estimate for r in results]
 
     confidence = 1.0 / (1.0 + _std(delta_vals)) if delta_vals else 0.0
 
     return {
+        "repr_id": repr_id,
+        "budget_id": budget_id,
+        "baseline_repr": baseline_repr,
+        "dataset_slice_id": dataset_slice_id,
         "mean": {
             "S_T_proxy": _mean(s_vals),
             "H_T_proxy": _mean(h_vals),
             "epi_per_flop": _mean(epi_vals),
             "delta_epi_vs_baseline": _mean(delta_vals),
+            "flops_estimate": _mean(flops_vals),
         },
         "std": {
             "S_T_proxy": _std(s_vals),
             "H_T_proxy": _std(h_vals),
             "epi_per_flop": _std(epi_vals),
             "delta_epi_vs_baseline": _std(delta_vals),
+            "flops_estimate": _std(flops_vals),
         },
         "confidence": confidence,
+        "support": {
+            "num_runs": len(results),
+            "num_seeds": len({r.key.seed for r in results}),
+        },
+        "estimator": {
+            "estimator_id": results[0].estimator_id if results else "",
+            "estimator_config_sha": results[0].estimator_config_sha if results else "",
+        },
+        "compute_normalizer": results[0].compute_normalizer if results else "flops_estimate",
     }
+
+
+def _select_default_selector(
+    summaries: Dict[str, Dict[str, Dict[str, Any]]],
+) -> Optional[Dict[str, str]]:
+    best_selector: Optional[Dict[str, str]] = None
+    best_score: Optional[tuple[float, float]] = None
+    for repr_id, budgets in summaries.items():
+        if not isinstance(budgets, dict):
+            continue
+        for budget_id, summary in budgets.items():
+            if not isinstance(summary, dict):
+                continue
+            mean = summary.get("mean", {}) if isinstance(summary.get("mean"), dict) else {}
+            score = (
+                float(mean.get("delta_epi_vs_baseline", 0.0) or 0.0),
+                float(mean.get("epi_per_flop", 0.0) or 0.0),
+            )
+            if best_score is None or score > best_score:
+                best_score = score
+                best_selector = {"repr_id": str(repr_id), "budget_id": str(budget_id)}
+    return best_selector
 
 
 __all__ = ["TokenizerAblationHarness", "EpiplexityLeaderboard"]

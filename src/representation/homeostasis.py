@@ -403,10 +403,9 @@ def build_signal_bundle_from_leaderboard(
     variances = []
     for repr_id, summary in leaderboard_summaries.items():
         if isinstance(summary, dict):
-            if "variance" in summary:
-                variances.append(summary["variance"])
-            elif "S_T_proxy" in summary:
-                variances.append(summary["S_T_proxy"])
+            value = _leaderboard_summary_value(summary)
+            if value is not None:
+                variances.append(value)
 
     if variances:
         avg_variance = float(np.mean(variances))
@@ -462,6 +461,24 @@ def build_signal_bundle_from_leaderboard(
         episode_ids=episode_ids or [],
         metadata={"slice_id": slice_id, "source": "leaderboard"},
     )
+
+
+def _leaderboard_summary_value(summary: Dict[str, Any]) -> Optional[float]:
+    if "mean" in summary and isinstance(summary.get("mean"), dict):
+        mean = summary["mean"]
+        for key in ("epi_per_flop", "S_T_proxy", "variance"):
+            if mean.get(key) is not None:
+                return float(mean[key])
+    if "variance" in summary:
+        return float(summary["variance"])
+    if "S_T_proxy" in summary:
+        return float(summary["S_T_proxy"])
+    for maybe_budget_summary in summary.values():
+        if isinstance(maybe_budget_summary, dict):
+            value = _leaderboard_summary_value(maybe_budget_summary)
+            if value is not None:
+                return value
+    return None
 
 
 __all__ = [

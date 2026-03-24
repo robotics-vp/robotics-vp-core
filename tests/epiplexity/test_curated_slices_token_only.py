@@ -152,6 +152,11 @@ def test_curated_slices_token_only(tmp_path, monkeypatch):
     assert (output_dir / "curated_occluded.json").exists()
     assert (output_dir / "curated_dynamic.json").exists()
     assert (output_dir / "curated_static.json").exists()
+    assert (tmp_path / "epiplexity_overlays.jsonl").exists()
+
+    reloaded = DataPackRepo(base_dir=str(tmp_path)).load_all("drawer_vase")
+    assert any(dp.epiplexity_summary for dp in reloaded)
+    assert all("_default" in (dp.epiplexity_summary or {}) for dp in reloaded if dp.epiplexity_summary)
 
 
 def test_curated_slices_token_only_requires_repr_tokens(tmp_path, monkeypatch):

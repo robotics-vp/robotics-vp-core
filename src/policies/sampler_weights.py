@@ -9,6 +9,7 @@ Includes process_reward-based sampling strategies:
 - "embodiment_drift_penalty": Penalize high embodiment drift
 - "embodiment_quality_drift": Combine embodiment weight and drift penalty
 - "epiplexity_roi": Weight by epiplexity delta per flop (w_epi)
+- "inferential_yield": Weight by compiled signal yield / inferential replay weight
 """
 from typing import Any, Dict, List, Sequence
 
@@ -120,6 +121,11 @@ def _epiplexity_roi_weight(ep: Dict[str, Any]) -> float:
     return max(w_epi, 0.1)
 
 
+def _inferential_yield_weight(ep: Dict[str, Any]) -> float:
+    inferential_weight = _epiplexity_metric(ep, "inferential_replay_weight", 0.0)
+    return max(inferential_weight, 0.1)
+
+
 class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
     def __init__(self, trust_matrix: Dict[str, Any] = None):
         self.trust_matrix = trust_matrix or {}
@@ -142,6 +148,7 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
             - "embodiment_drift_penalty": Penalize high embodiment drift
             - "embodiment_quality_drift": Combine embodiment and drift
             - "epiplexity_roi": Weight by epiplexity delta per flop (w_epi)
+            - "inferential_yield": Weight by compiled inferential replay weight
 
         Args:
             features: List of episode descriptors/features.
@@ -175,6 +182,8 @@ class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
                 weight = _embodiment_quality_drift_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
             elif strategy == "epiplexity_roi":
                 weight = _epiplexity_roi_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
+            elif strategy == "inferential_yield":
+                weight = _inferential_yield_weight(ep) * float(ep.get("recap_weight_multiplier", 1.0))
             else:
                 weight = sampler_utils._balanced_weight(ep)
             trust_scale = self._trust_scale(ep)

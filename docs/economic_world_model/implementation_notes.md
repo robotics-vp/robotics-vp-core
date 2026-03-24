@@ -74,5 +74,23 @@
 - Added `scripts/economic_world_model/publish_codex_change.sh` to publish automation commits to `origin/main` when the local change is a safe fast-forward, while falling back to a timestamped `codex/ewm-nightly-*` branch when direct main pushes are rejected.
 - Updated `scripts/economic_world_model/run_nightly_codex_task.sh` so the generated Codex task now requires publication via the helper and reports either the published ref or the exact push blocker before the run is considered complete.
 - Updated `docs/economic_world_model/AUTOMATION_SPEC.md`, `codex_skills/economic-world-model-roadmap/SKILL.md`, and the live app automation prompt to treat unpublished local commits as incomplete automation output.
+- Added `src/economics/inferential_reward.py` as a shared successor-layer compiler for `InferentialSignalYield` and `InferentialRewardBreakdown`, keeping signal-yield math additive and outside frozen Phase B reward/dynamics code.
+- Extended `InferentialTrainingCandidate` and `InferentialTrainingGate` to carry frontier gain, epiplexity, transfer, governance, and optional signal-yield overrides, then compile a canonical inferential reward breakdown before making budget decisions.
+- Wired advisory consumers to use the compiled signal-yield path:
+  - `src/orchestrator/shadow_advisory.py` now computes signal yield from replay frontier gain plus any available epiplexity fields.
+  - `src/rl/econ_regal_sampling.py` now admits signal yield as a bounded replay-priority input.
+  - `src/rl/episode_sampling.py` and `src/policies/sampler_weights.py` now emit/consume `signal_yield_score` and `inferential_replay_weight`, including a new `inferential_yield` weighting strategy.
+  - `src/orchestrator/queue_selection.py` now preserves inferential reward evidence in queue metadata.
+- Refactored the epiplexity core so tracker cache entries are baseline-independent absolute runs with estimator provenance and `flops_estimate`, while baseline-relative `delta_epi_vs_baseline` is derived only when consumers compare a candidate against a baseline.
+- Promoted `RequentialEstimator` from a zero-return stub into an online evaluate-then-update estimator, so the second estimator path now produces nontrivial learnability scores instead of placeholder zeros.
+- Added canonical epiplexity overlay helpers and automatic repo merging:
+  - `src/epiplexity/metadata.py` now writes/loads `epiplexity_overlays.jsonl`, manages default selectors, and lets consumers recover the best available repr/budget even when `_default` is absent.
+  - `src/valuation/datapack_repo.py` now auto-merges epiplexity overlays during `load_all(...)` and invalidates cached task loads when the overlay sidecar changes.
+- Wired `scripts/run_epiplexity_curated_slices.py` to persist canonical overlays in both full and token-only modes, so portable fallback runs now emit the same summary shape consumed by samplers and replay/inferential advisory code.
+- Corrected downstream consumers that had been reading the wrong epiplexity slot:
+  - `src/orchestrator/datapack_engine.py` now uses `epi_repr_id` or the datapack default selector rather than incorrectly reading the baseline repr’s delta.
+  - `src/orchestrator/homeostatic_plan_writer.py` and `src/representation/homeostasis.py` now understand canonical nested epiplexity summaries instead of only legacy `mean_variance`/`variance` placeholders.
+  - `src/evaluation/probe_harness.py` now reports real baseline/after means rather than recycling the delta into those fields.
+- Kept the change additive: no edits to the stable Phase B checkpoint, no legacy world-model math rewrite, and no baseline reward-path mutation.
 - Added `docs/economic_world_model/ewm-nightly.automation.toml` as a checked-in mirror of the live Codex app automation config, omitting only local timestamp fields so the active prompt/schedule/environment are versioned with the repo.
 - Updated `docs/economic_world_model/AUTOMATION_SPEC.md` to point at the checked-in automation snapshot as the Git-tracked source of truth for the live app automation state.

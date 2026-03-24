@@ -37,6 +37,7 @@ from src.orchestrator.policy_hooks import (
     KnobAwareEconPolicyProvider,
 )
 from src.contracts.schemas import LedgerRegalV1, KnobPolicyV1
+from src.epiplexity.metadata import select_default_epiplexity_summary
 
 
 def _default_policy_config() -> PlanPolicyConfigV1:
@@ -138,7 +139,7 @@ def build_signal_bundle_for_plan(
 
     # Epiplexity from audit or token-only
     if epiplexity_metrics:
-        epi_value = epiplexity_metrics.get("mean_variance", 0.5)
+        epi_value, epi_metadata = _extract_epiplexity_signal(epiplexity_metrics)
         signals.append(
             ControlSignal(
                 signal_type=SignalType.EPIPLEXITY,
@@ -146,7 +147,7 @@ def build_signal_bundle_for_plan(
                 target=0.5,
                 threshold_low=0.1,
                 threshold_high=0.9,
-                metadata={"source": "epiplexity_metrics"},
+                metadata=epi_metadata,
             )
         )
 
@@ -223,6 +224,54 @@ def build_signal_bundle_for_plan(
         timestamp=datetime.now().isoformat(),
         metadata={"generator": "build_signal_bundle_for_plan"},
     )
+
+
+def _extract_epiplexity_signal(epiplexity_metrics: Dict[str, Any]) -> Tuple[float, Dict[str, Any]]:
+    if not isinstance(epiplexity_metrics, dict):
+        return 0.5, {"source": "epiplexity_metrics", "mode": "fallback"}
+
+    if "mean" in epiplexity_metrics:
+        mean = epiplexity_metrics.get("mean", {}) if isinstance(epiplexity_metrics.get("mean"), dict) else {}
+        return (
+            float(
+                mean.get(
+                    "epi_per_flop",
+                    mean.get("S_T_proxy", epiplexity_metrics.get("variance", epiplexity_metrics.get("mean_variance", 0.5))),
+                )
+                or 0.5
+            ),
+            {
+                "source": "epiplexity_metrics",
+                "mode": epiplexity_metrics.get("mode", "summary"),
+                "confidence": epiplexity_metrics.get("confidence"),
+                "repr_id": epiplexity_metrics.get("repr_id"),
+                "budget_id": epiplexity_metrics.get("budget_id"),
+            },
+        )
+
+    selector = select_default_epiplexity_summary(epiplexity_metrics)
+    if selector is not None:
+        budget_stats = (
+            epiplexity_metrics.get(selector["repr_id"], {}).get(selector["budget_id"], {})
+            if isinstance(epiplexity_metrics.get(selector["repr_id"]), dict)
+            else {}
+        )
+        if isinstance(budget_stats, dict):
+            value, metadata = _extract_epiplexity_signal(budget_stats)
+            metadata.update(selector)
+            return value, metadata
+
+    if "variance" in epiplexity_metrics or "S_T_proxy" in epiplexity_metrics:
+        return (
+            float(epiplexity_metrics.get("epi_per_flop", epiplexity_metrics.get("S_T_proxy", epiplexity_metrics.get("variance", 0.5))) or 0.5),
+            {
+                "source": "epiplexity_metrics",
+                "mode": epiplexity_metrics.get("mode", "token_only"),
+                "num_episodes": epiplexity_metrics.get("num_episodes"),
+            },
+        )
+
+    return 0.5, {"source": "epiplexity_metrics", "mode": "fallback"}
 
 
 def check_gates(

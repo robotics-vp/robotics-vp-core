@@ -48,6 +48,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--promotion-policy", type=str, default="configs/regality/promotion_default.yaml")
     parser.add_argument("--receipt-label-dir", type=str, default=None)
     parser.add_argument("--receipt-label-mode", type=str, default="synthetic_shadow")
+    parser.add_argument("--epiplexity-overlays", type=str, default=None)
     parser.add_argument("--queue-selection-mode", type=str, default="compare_only")
     parser.add_argument("--queue-strategy", type=str, default="balanced")
     parser.add_argument("--max-queue-episodes", type=int, default=None)
@@ -68,6 +69,7 @@ def _select_episode_ids(dataset, args: argparse.Namespace, output_root: Path, se
         promotion_policy_path=args.promotion_policy,
         receipt_label_dir=receipt_label_dir,
         receipt_label_mode=args.receipt_label_mode,
+        epiplexity_overlay_path=args.epiplexity_overlays,
     )
     advisory_path = output_root / "shadow_advisory.json"
     queue_path = output_root / "live_queue_selection.json"

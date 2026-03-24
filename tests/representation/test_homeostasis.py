@@ -261,3 +261,25 @@ class TestBuildSignalBundle:
         coverage = bundle.get_signal(SignalType.COVERAGE)
         assert coverage is not None
         assert coverage.value == 0.1  # 10/100
+
+    def test_build_from_nested_epiplexity_summary(self):
+        leaderboard = {
+            "vision_rgb": {
+                "steps_5_bs_4": {
+                    "mean": {"epi_per_flop": 0.2, "S_T_proxy": 0.5},
+                    "confidence": 0.5,
+                }
+            },
+            "canonical_tokens": {
+                "steps_5_bs_4": {
+                    "mean": {"epi_per_flop": 0.4, "S_T_proxy": 0.6},
+                    "confidence": 0.9,
+                }
+            },
+        }
+
+        bundle = build_signal_bundle_from_leaderboard(leaderboard, "occluded")
+
+        epi = bundle.get_signal(SignalType.EPIPLEXITY)
+        assert epi is not None
+        assert 0.2 <= epi.value <= 0.4

@@ -115,3 +115,7 @@ def test_curated_slices_portable(tmp_path, monkeypatch):
     assert (output_dir / "curated_occluded.json").exists()
     assert (output_dir / "curated_dynamic.json").exists()
     assert (output_dir / "curated_static.json").exists()
+    assert (tmp_path / "epiplexity_overlays.jsonl").exists()
+
+    reloaded = DataPackRepo(base_dir=str(tmp_path)).load_all("drawer_vase")
+    assert any(dp.epiplexity_summary for dp in reloaded)

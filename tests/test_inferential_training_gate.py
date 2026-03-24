@@ -35,9 +35,39 @@ def test_inferential_training_gate_adapt_collect_review():
     adapt = gate.evaluate(_candidate())
     assert adapt.decision == "adapt_now"
     assert adapt.recommended_training_mode == "offline_td3_bc_shadow"
+    assert "inferential_reward" in adapt.artifact_summary
+    assert adapt.artifact_summary["inferential_reward"]["expected_gain"] >= adapt.expected_gain - 1e-9
 
     collect = gate.evaluate(_candidate(uncertainty=0.8, ood_score=0.7))
     assert collect.decision == "collect_more_data"
 
     review = gate.evaluate(_candidate(regal_statuses={"objective_integrity_regal": "fail", "reward_safety_regal": "pass", "pricing_truth_regal": "pass"}))
     assert review.decision == "require_review"
+
+
+def test_inferential_training_gate_promotes_signal_yield_support():
+    gate = InferentialTrainingGate(
+        promotion_policy=load_regal_promotion_policy("configs/regality/promotion_default.yaml"),
+        min_net_benefit=0.05,
+    )
+    candidate = _candidate(
+        expected_value_gain=0.0,
+        expected_adaptation_benefit=0.0,
+        learned_data_value=0.0,
+        compute_cost=0.08,
+        risk_cost=0.0,
+        uncertainty=0.0,
+        ood_score=0.0,
+        data_quality=1.0,
+        provenance_quality=1.0,
+        frontier_gain=0.2,
+        epiplexity_delta=0.5,
+        epiplexity_confidence=0.8,
+        transfer_score=0.4,
+    )
+    decision = gate.evaluate(candidate)
+
+    assert decision.decision == "adapt_now"
+    inferential = decision.artifact_summary["inferential_reward"]
+    assert inferential["signal_yield"]["epiplexity_term"] > 0.0
+    assert inferential["signal_yield"]["score"] > 0.0

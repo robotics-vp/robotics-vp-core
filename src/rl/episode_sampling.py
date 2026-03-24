@@ -30,6 +30,10 @@ from src.rl.episode_descriptor_validator import (
 from src.utils.json_safe import to_json_safe
 from src.rl.skill_mode_resolver import SkillModeResolver
 from src.orchestrator.semantic_orchestrator_v2 import OrchestratorAdvisory
+from src.economics.inferential_reward import (
+    compile_signal_yield,
+    compute_inferential_replay_weight,
+)
 from src.epiplexity.metadata import (
     extract_epiplexity_summary_metric,
     extract_epiplexity_summary_confidence,
@@ -80,6 +84,31 @@ def _embodiment_metric(episode: Dict[str, Any], key: str, default: float) -> flo
         except Exception:
             return float(default)
     return float(default)
+
+
+def _descriptor_signal_yield(
+    *,
+    frontier_gain: float = 0.0,
+    epiplexity_delta: float = 0.0,
+    epiplexity_confidence: float = 0.0,
+    transfer_score: float = 0.0,
+    data_quality: float = 1.0,
+    provenance_quality: float = 1.0,
+    trust_score: float = 0.5,
+) -> tuple[float, float]:
+    signal_yield = compile_signal_yield(
+        frontier_gain=frontier_gain,
+        epiplexity_delta=epiplexity_delta,
+        epiplexity_confidence=epiplexity_confidence,
+        transfer_score=transfer_score,
+        data_quality=data_quality,
+        provenance_quality=provenance_quality,
+    )
+    replay_weight = compute_inferential_replay_weight(
+        signal_yield_score=signal_yield.score,
+        trust_score=trust_score,
+    )
+    return float(signal_yield.score), float(replay_weight)
 
 
 def _summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase: str) -> Dict[str, Any]:
@@ -168,12 +197,26 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
 
     # Compute sampling weight (higher for higher-tier, higher-trust datapacks)
     sampling_weight = trust_score * (1.0 + 0.5 * tier)  # Tier 2 gets 1.5x boost
+    pr_profile = datapack.process_reward_profile
+    data_quality_signal = float(trust_score)
+    if pr_profile is not None and getattr(pr_profile, "has_data", lambda: True)():
+        try:
+            data_quality_signal = float(pr_profile.quality_score())
+        except Exception:
+            data_quality_signal = float(trust_score)
 
     # Epiplexity signals (advisory only)
     delta_epi = extract_epiplexity_summary_metric(datapack, metric="delta_epi_vs_baseline") or 0.0
     epi_per_flop = extract_epiplexity_summary_metric(datapack, metric="epi_per_flop") or 0.0
     epi_conf = extract_epiplexity_summary_confidence(datapack) or 0.0
     w_epi = max(0.0, float(delta_epi)) * float(epi_conf)
+    signal_yield_score, inferential_replay_weight = _descriptor_signal_yield(
+        epiplexity_delta=float(delta_epi),
+        epiplexity_confidence=float(epi_conf),
+        data_quality=data_quality_signal,
+        provenance_quality=float(trust_score),
+        trust_score=float(trust_score),
+    )
 
     # Episode length heuristic (can be overridden by env defaults)
     episode_length = 1000  # Default
@@ -208,6 +251,8 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         "delta_epi_per_flop": float(delta_epi),
         "epi_per_flop": float(epi_per_flop),
         "epi_confidence": float(epi_conf),
+        "signal_yield_score": float(signal_yield_score),
+        "inferential_replay_weight": float(inferential_replay_weight),
         "embodiment_drift_score": embodiment_drift_score if embodiment_drift_score is not None else 0.0,
         "embodiment_physically_impossible_contacts": embodiment_impossible_contacts or 0,
         "embodiment_trust_override_candidate": bool(embodiment_trust_override)
@@ -249,6 +294,27 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
 def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> Dict[str, Any]:
     """Convert a canonical replay episode into an RL sampler descriptor."""
     objective_axes = dict(episode.objective_tensor_summary.get("axes", {}) or {})
+    quality_score = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
+    pricing_confidence = float(episode.pricing_summary.get("confidence", 0.0) or 0.0)
+    frontier_gain = float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)
+    epi_delta = float(
+        episode.datapack_summary.get(
+            "delta_epi_per_flop",
+            episode.datapack_summary.get("delta_epi_vs_baseline", 0.0),
+        )
+        or 0.0
+    )
+    epi_conf = float(episode.datapack_summary.get("epi_confidence", 0.0) or 0.0)
+    transfer_score = max(0.0, 1.0 - float(episode.condition_vector.get("ood_risk_level", 0.0) or 0.0))
+    signal_yield_score, inferential_replay_weight = _descriptor_signal_yield(
+        frontier_gain=frontier_gain,
+        epiplexity_delta=epi_delta,
+        epiplexity_confidence=epi_conf,
+        transfer_score=transfer_score,
+        data_quality=quality_score,
+        provenance_quality=pricing_confidence,
+        trust_score=pricing_confidence,
+    )
     descriptor = {
         "pack_id": episode.episode_id,
         "episode_id": episode.episode_id,
@@ -273,13 +339,17 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
             }
         ),
         "focus_areas": [str(episode.skill_mode)],
-        "priority": "high" if float(episode.pricing_summary.get("confidence", 0.0) or 0.0) >= 0.7 else "medium",
-        "tier": 2 if float(episode.datapack_summary.get("quality_score", 0.0) or 0.0) >= 0.8 else (1 if float(episode.datapack_summary.get("quality_score", 0.0) or 0.0) >= 0.45 else 0),
-        "trust_score": float(episode.pricing_summary.get("confidence", 0.0) or 0.0),
+        "priority": "high" if pricing_confidence >= 0.7 else "medium",
+        "tier": 2 if quality_score >= 0.8 else (1 if quality_score >= 0.45 else 0),
+        "trust_score": pricing_confidence,
         "delta_J": float(episode.econ_tensor_summary.get("axes", {}).get("value_earned", 0.0) or 0.0),
-        "sampling_weight": max(0.1, 1.0 + float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)),
+        "sampling_weight": max(0.1, 1.0 + frontier_gain),
         "w_embodiment": 1.0,
-        "w_epi": max(0.0, float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)),
+        "w_epi": max(0.0, frontier_gain),
+        "delta_epi_per_flop": epi_delta,
+        "epi_confidence": epi_conf,
+        "signal_yield_score": float(signal_yield_score),
+        "inferential_replay_weight": float(inferential_replay_weight),
         "episode_length": int(episode.total_steps),
         "tags": {
             "source": episode.source_domain,
@@ -289,8 +359,9 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
         "replay_summary": {
             "source_domain": episode.source_domain,
             "condition_vector": dict(episode.condition_vector),
-            "quality_score": float(episode.datapack_summary.get("quality_score", 0.0) or 0.0),
-            "pricing_confidence": float(episode.pricing_summary.get("confidence", 0.0) or 0.0),
+            "quality_score": quality_score,
+            "pricing_confidence": pricing_confidence,
+            "signal_yield_score": float(signal_yield_score),
         },
     }
     descriptor = normalize_episode_descriptor(descriptor)
@@ -739,6 +810,12 @@ class DataPackRLSampler:
         elif strategy == "epiplexity_roi":
             weights = [
                 max(float(ep.get("w_epi", ep["descriptor"].get("w_epi", 0.0))), 0.1)
+                * ep.get("recap_weight_multiplier", 1.0)
+                for ep in episodes
+            ]
+        elif strategy == "inferential_yield":
+            weights = [
+                max(float(ep.get("inferential_replay_weight", ep["descriptor"].get("inferential_replay_weight", 0.0))), 0.1)
                 * ep.get("recap_weight_multiplier", 1.0)
                 for ep in episodes
             ]
