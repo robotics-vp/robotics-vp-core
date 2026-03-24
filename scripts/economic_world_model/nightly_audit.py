@@ -138,6 +138,19 @@ def _dataset_bridge_scaffold_pending() -> bool:
     return any(not _exists(path) for path in required_code_paths)
 
 
+def _future_training_evidence_pending() -> bool:
+    if not _exists("scripts/SHELL_ACTIVATION_BACKLOG.json"):
+        return False
+    required_evidence = [
+        ("src/replay/receipt_ingest.py", "training_runtime_manifest"),
+        ("src/replay/receipt_ingest.py", "promotion_ledger_ref"),
+        ("src/replay/receipt_ingest.py", "budget_settlement_live"),
+        ("src/training/regal_training_runner.py", "promotion_ledger_ref"),
+        ("src/training/regal_training_runner.py", "budget_settlement"),
+    ]
+    return any(not _search(rel_path, phrase) for rel_path, phrase in required_evidence)
+
+
 def _run_check(name: str, command: str) -> Dict[str, Any]:
     proc = subprocess.run(
         command,
@@ -233,6 +246,26 @@ def _task_candidates() -> List[Dict[str, Any]]:
             ],
             "execute_now": True,
             "pending": _dataset_bridge_scaffold_pending(),
+        },
+        {
+            "id": "future_training_evidence_wiring",
+            "title": "Wire training manifests, promotion ledgers, and settlement evidence into replay readiness",
+            "classification": "additive_wiring",
+            "rationale": (
+                "Higher-shell future-training backlog items now exist, but they still depend on latent "
+                "assumptions for runtime manifests, promotion accountability, and budget settlement. "
+                "Make those artifacts first-class replay/readiness evidence before granting any training-run authority."
+            ),
+            "targets": [
+                "src/replay/receipt_ingest.py",
+                "src/training/regal_training_runner.py",
+                "src/replay/preconditions.py",
+                "tests/test_training_run_receipt_ingest.py",
+                "tests/test_regal_training_runner.py",
+                "tests/test_economic_world_model_nightly_audit.py",
+            ],
+            "execute_now": True,
+            "pending": _future_training_evidence_pending(),
         },
     ]
 

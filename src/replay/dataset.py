@@ -14,6 +14,10 @@ from src.replay.ingest import (
     ingest_shadow_run,
     ingest_workcell_episode_log,
 )
+from src.replay.importers import (
+    ingest_governed_video_admission_log,
+    ingest_semantic_degraded_artifacts,
+)
 from src.replay.compatibility import (
     build_artifact_schema_fingerprint,
     check_artifact_schema_versions,
@@ -117,6 +121,48 @@ class ReplayDatasetBuilder:
         self._steps.extend(steps)
         self._windows.extend(windows)
         self._source_adapters.append("rollout_capture_bundle_v1")
+        self._metadata_rows.append(dict(metadata))
+        return self
+
+    def add_governed_video_admission_log(
+        self,
+        admission_log_path: str | Path,
+        *,
+        run_id: Optional[str] = None,
+        source_domain: str = "governed_video_admission",
+        objective_profile_id: str = "balanced_contract",
+    ) -> "ReplayDatasetBuilder":
+        episodes, steps, windows, metadata = ingest_governed_video_admission_log(
+            admission_log_path,
+            run_id=run_id,
+            source_domain=source_domain,
+            objective_profile_id=objective_profile_id,
+        )
+        self._episodes.extend(episodes)
+        self._steps.extend(steps)
+        self._windows.extend(windows)
+        self._source_adapters.append("governed_video_admission_log_v1")
+        self._metadata_rows.append(dict(metadata))
+        return self
+
+    def add_semantic_degraded_artifacts(
+        self,
+        root: str | Path,
+        *,
+        run_id: Optional[str] = None,
+        source_domain: str = "semantic_negative_supervision",
+        objective_profile_id: str = "balanced_contract",
+    ) -> "ReplayDatasetBuilder":
+        episodes, steps, windows, metadata = ingest_semantic_degraded_artifacts(
+            root,
+            run_id=run_id,
+            source_domain=source_domain,
+            objective_profile_id=objective_profile_id,
+        )
+        self._episodes.extend(episodes)
+        self._steps.extend(steps)
+        self._windows.extend(windows)
+        self._source_adapters.append("semantic_degraded_import_v1")
         self._metadata_rows.append(dict(metadata))
         return self
 

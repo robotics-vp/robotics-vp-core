@@ -1,5 +1,6 @@
 import json
 
+from scripts.run_stage1_pipeline import run_stage1_pipeline
 from src.dataset_bridges.lerobot_bridge import lerobot_rows_from_replay
 from src.dataset_bridges.rlds_bridge import rlds_episode_from_replay
 from src.motor_backend.rollout_capture import EpisodeMetadata, record_episode_rollout, start_rollout_capture
@@ -45,7 +46,7 @@ def test_replay_dataset_builds_from_workcell_episode_log(tmp_path):
     shadow_dir = tmp_path / "shadow_run"
     episode_log_path = tmp_path / "episode_log.json"
     dataset_dir = tmp_path / "replay_from_episode_log"
-    result = run_shadow_control_plane(
+    run_shadow_control_plane(
         output_dir=shadow_dir,
         seed=42,
         episodes=1,
@@ -126,3 +127,74 @@ def test_replay_dataset_builds_from_rehydrated_bridge_exports(tmp_path):
     assert "lerobot_bridge_rehydration_v1" in bundle.manifest.source_adapters
     loaded = load_replay_dataset(dataset_dir)
     assert loaded.episodes[0].metadata["execution_preconditions"]["ready"] is True
+
+
+def test_replay_dataset_imports_governed_video_admission_log(tmp_path):
+    stage1_dir = tmp_path / "stage1"
+    dataset_dir = tmp_path / "governed_replay_dataset"
+    stats = run_stage1_pipeline(
+        num_videos=1,
+        proposals_per_video=1,
+        output_dir=str(stage1_dir),
+    )
+
+    bundle = ReplayDatasetBuilder().add_governed_video_admission_log(
+        stats["proposal_admission_log"],
+        run_id="governed_import_001",
+    ).write(dataset_dir)
+
+    assert bundle.manifest.num_episodes == 1
+    loaded = load_replay_dataset(dataset_dir)
+    episode = loaded.episodes[0]
+    assert episode.provenance["runtime_packet_ref"].endswith("_runtime_packet_v1.json")
+    assert episode.provenance["event_spine_ref"].endswith("_event_spine_v1.json")
+    assert episode.metadata["source_execution_work_order"]["decision"] == "admit_datapack"
+    assert episode.metadata["execution_preconditions"]["ready"] is True
+    summary = bundle.manifest.metadata["execution_precondition_summary"]
+    assert summary["satisfied_preconditions"]["signal_bool::promotion_trace_complete"] == 1
+    assert summary["satisfied_preconditions"]["signal_bool::replay_roundtrip_complete"] == 1
+
+
+def test_replay_dataset_imports_semantic_degraded_artifacts(tmp_path):
+    artifact_path = tmp_path / "episode_test_semantic_degraded_v1.json"
+    artifact_path.write_text(
+        json.dumps(
+            {
+                "episode_id": "episode_test",
+                "failure_reason": "track_ids_mismatch",
+                "artifact_refs": {
+                    "trajectory_path": str(tmp_path / "trajectory.npz"),
+                    "teacher_trace_path": str(tmp_path / "teacher_trace_v1.json"),
+                },
+                "execution_preconditions": {
+                    "ready": False,
+                    "readiness_score": 0.0,
+                    "blocking_preconditions": ["blocked::track_ids_mismatch"],
+                    "satisfied_preconditions": ["artifact::trajectory_path"],
+                },
+                "execution_work_order": {
+                    "work_order_id": "work_test",
+                    "decision": "capture_negative_supervision",
+                    "ready": False,
+                },
+                "future_training_signals": {
+                    "scene_tracks_non_stub": True,
+                },
+                "version": "semantic_degraded_v1",
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = ReplayDatasetBuilder().add_semantic_degraded_artifacts(tmp_path).build()
+
+    assert bundle.manifest.num_episodes == 1
+    episode = bundle.episodes[0]
+    assert episode.provenance["teacher_trace_ref"].endswith("teacher_trace_v1.json")
+    assert episode.metadata["source_execution_work_order"]["decision"] == "capture_negative_supervision"
+    assert episode.metadata["execution_preconditions"]["ready"] is False
+    summary = bundle.manifest.metadata["execution_precondition_summary"]
+    assert summary["blocked_count"] == 1
+    assert summary["satisfied_preconditions"]["signal_bool::teacher_runtime_live"] == 1
+    assert summary["satisfied_preconditions"]["signal_bool::scene_tracks_non_stub"] == 1

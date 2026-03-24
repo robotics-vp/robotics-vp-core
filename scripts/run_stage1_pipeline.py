@@ -70,6 +70,92 @@ SEMANTIC_KEYWORDS = {
 }
 
 
+def _metadata_dict(video_ref: Dict[str, Any]) -> Dict[str, Any]:
+    metadata = video_ref.get("metadata", {})
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _scene_tracks_non_stub(video_ref: Dict[str, Any]) -> bool:
+    metadata = _metadata_dict(video_ref)
+    explicit = metadata.get("future_training_signals", {})
+    if isinstance(explicit, dict) and "scene_tracks_non_stub" in explicit:
+        return bool(explicit["scene_tracks_non_stub"])
+    if "scene_tracks_non_stub" in metadata:
+        return bool(metadata["scene_tracks_non_stub"])
+    scene_tracks_meta = metadata.get("scene_tracks_metadata", {})
+    if isinstance(scene_tracks_meta, dict):
+        runner = scene_tracks_meta.get("runner", {})
+        run_config = runner.get("run_config", {}) if isinstance(runner, dict) else {}
+        execution = scene_tracks_meta.get("execution_preconditions", {})
+        if isinstance(run_config, dict) and run_config.get("use_stub_adapters") is False:
+            return bool(not isinstance(execution, dict) or execution.get("ready", True))
+    return False
+
+
+def _teacher_runtime_live(video_ref: Dict[str, Any]) -> bool:
+    metadata = _metadata_dict(video_ref)
+    explicit = metadata.get("future_training_signals", {})
+    if isinstance(explicit, dict) and "teacher_runtime_live" in explicit:
+        return bool(explicit["teacher_runtime_live"])
+    return bool(
+        video_ref.get("teacher_trace")
+        or video_ref.get("teacher_trace_path")
+        or metadata.get("teacher_trace")
+        or metadata.get("teacher_trace_path")
+    )
+
+
+def _future_training_signals(
+    video_ref: Dict[str, Any],
+    semantic_world_model: Any,
+    sidecar_paths: Dict[str, Any],
+) -> Dict[str, bool]:
+    metadata = _metadata_dict(video_ref)
+    explicit = metadata.get("future_training_signals", {})
+    if not isinstance(explicit, dict):
+        explicit = {}
+    topology = getattr(semantic_world_model, "topology", {}) or {}
+    grounded_track_count = 0
+    if isinstance(topology, dict):
+        grounded_track_count = int(topology.get("grounded_track_object_count", 0) or 0)
+    derived = {
+        "replay_roundtrip_complete": False,
+        "promotion_trace_complete": all(
+            sidecar_paths.get(key)
+            for key in (
+                "event_spine_path",
+                "decision_ledger_path",
+                "governance_trace_path",
+                "counterfactual_eval_path",
+                "value_target_pack_path",
+            )
+        ),
+        "teacher_runtime_live": _teacher_runtime_live(video_ref),
+        "scene_tracks_non_stub": _scene_tracks_non_stub(video_ref),
+        "semantic_memory_grounded": grounded_track_count > 0,
+        "budget_settlement_live": False,
+    }
+    derived.update({str(key): bool(value) for key, value in explicit.items()})
+    return dict(sorted(derived.items()))
+
+
+def _future_training_artifacts(video_ref: Dict[str, Any]) -> Dict[str, Any]:
+    metadata = _metadata_dict(video_ref)
+    explicit = metadata.get("future_training_artifacts", {})
+    if not isinstance(explicit, dict):
+        explicit = {}
+    artifacts = {
+        str(key): value
+        for key, value in explicit.items()
+        if value not in (None, "", [], {})
+    }
+    if metadata.get("training_runtime_manifest"):
+        artifacts["training_runtime_manifest"] = metadata["training_runtime_manifest"]
+    if metadata.get("promotion_ledger_ref"):
+        artifacts["promotion_ledger_ref"] = metadata["promotion_ledger_ref"]
+    return dict(sorted(artifacts.items()))
+
+
 def simulate_real_video_reference(index: int = 0) -> Dict[str, Any]:
     """
     Deterministic fallback when no real video manifest is supplied.
@@ -799,6 +885,8 @@ def run_stage1_pipeline(
             constraint_set,
         )
         print(f"  Generated {len(proposals)} diffusion proposals")
+        future_training_signals = _future_training_signals(video_ref, semantic_world_model, sidecar_paths)
+        future_training_artifacts = _future_training_artifacts(video_ref)
 
         # Step 5: For each proposal, generate VLA plan and create datapack
         for j, proposal in enumerate(proposals):
@@ -827,6 +915,7 @@ def run_stage1_pipeline(
                 subject_kind="governed_video_proposal",
                 artifact_refs={
                     **sidecar_paths,
+                    **future_training_artifacts,
                     "proposal_id": proposal.proposal_id,
                     "hypothesis_mode": proposal.augmentation_type,
                 },
@@ -844,12 +933,17 @@ def run_stage1_pipeline(
                 signal_values={
                     **plausibility_context,
                     "estimated_novelty": float(proposal.estimated_novelty),
+                    **future_training_signals,
                 },
+                soft_boolean_signals={key: True for key in future_training_signals},
+                soft_required_artifact_refs=list(future_training_artifacts.keys()),
                 blocked_reasons=plausibility_report.reason_codes if plausibility_report.decision == RegalDecision.BLOCK else [],
                 metadata={
                     "video_id": video_ref["episode_id"],
                     "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
                     "value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
+                    "future_training_signals": future_training_signals,
+                    "future_training_artifacts": future_training_artifacts,
                 },
             )
             work_order = build_execution_work_order(
@@ -889,6 +983,8 @@ def run_stage1_pipeline(
                 "video_state_id": snapshot.state_id,
                 "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
                 "value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
+                "future_training_signals": future_training_signals,
+                "future_training_artifacts": future_training_artifacts,
                 **sidecar_paths,
             }
             admission_records.append(admission_record)

@@ -15,6 +15,8 @@ def test_training_run_receipt_ingest_prefers_online_training_artifacts(tmp_path)
     episode_logs_dir = training_run_dir / "online_episode_logs"
     dataset_dir = training_run_dir / "online_replay_dataset"
     receipts_path = training_run_dir / "online_episode_receipts.jsonl"
+    promotion_ledger_path = training_run_dir / "promotion_ledger_v1.json"
+    budget_settlement_path = training_run_dir / "budget_settlement_v1.json"
 
     run_shadow_control_plane(
         output_dir=shadow_dir,
@@ -70,6 +72,29 @@ def test_training_run_receipt_ingest_prefers_online_training_artifacts(tmp_path)
         + "\n",
         encoding="utf-8",
     )
+    promotion_ledger_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "promotion_ledger_v1",
+                "run_id": "training_run_001",
+                "summary": {"eligible_nodes": 1},
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    budget_settlement_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "budget_settlement_v1",
+                "run_id": "training_run_001",
+                "budget_settlement_live": True,
+                "observed_receipts_ref": str(receipts_path),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     manifest = TrainingRuntimeManifest(
         schema_version="training_runtime_manifest_v1",
@@ -94,7 +119,12 @@ def test_training_run_receipt_ingest_prefers_online_training_artifacts(tmp_path)
             "online_episode_logs": str(episode_logs_dir),
             "online_episode_receipts": str(receipts_path),
             "online_replay_dataset_manifest": str(dataset_dir / "manifest.json"),
+            "promotion_ledger_ref": str(promotion_ledger_path),
+            "budget_settlement_report": str(budget_settlement_path),
         },
+        promotion_ledger_path=str(promotion_ledger_path),
+        budget_settlement_path=str(budget_settlement_path),
+        budget_settlement_live=True,
     )
     write_training_runtime_manifest(training_run_dir / "training_runtime_manifest.json", manifest)
 
@@ -103,6 +133,12 @@ def test_training_run_receipt_ingest_prefers_online_training_artifacts(tmp_path)
     assert bundle.coverage_summary()["source_domain_counts"]["training_run"] >= 4
     assert bundle.deployment_receipts[0].task_success is True
     assert bundle.deployment_receipts[0].realized_reward == 2.75
+    assert bundle.metadata["promotion_ledger_ref"].endswith("promotion_ledger_v1.json")
+    assert bundle.metadata["budget_settlement_live"] is True
+    execution_summary = bundle.metadata["execution_precondition_summary"]
+    assert execution_summary["satisfied_preconditions"]["artifact::training_runtime_manifest"] == 1
+    assert execution_summary["satisfied_preconditions"]["artifact::promotion_ledger_ref"] == 1
+    assert execution_summary["satisfied_preconditions"]["signal_bool::budget_settlement_live"] == 1
 
     resolved = resolve_receipt_label_bundle(
         dataset=dataset,
