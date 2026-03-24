@@ -12,11 +12,21 @@ def test_regal_training_runner_emits_training_runtime_manifest(tmp_path):
     output_dir = tmp_path / "training_run"
     artifact_path = output_dir / "artifact.json"
     checkpoint_path = output_dir / "checkpoint.pt"
+    promotion_eval_path = output_dir / "regal_promotion_eval.json"
+    online_receipts_path = output_dir / "online_episode_receipts.jsonl"
 
     def _train(runner):
         output_dir.mkdir(parents=True, exist_ok=True)
         artifact_path.write_text(json.dumps({"artifact": True}), encoding="utf-8")
         checkpoint_path.write_bytes(b"checkpoint")
+        promotion_eval_path.write_text(
+            json.dumps({"summary": {"eligible_nodes": 1}}, indent=2),
+            encoding="utf-8",
+        )
+        online_receipts_path.write_text(
+            json.dumps({"episode_id": "ep_001", "realized_value": 1.0}) + "\n",
+            encoding="utf-8",
+        )
         runner.set_eligible_datapacks(["ep_001"])
         runner.set_sampler_config(seed=42, config_sha="cfg_123")
         runner.record_sample("shadow_task", datapack_id="ep_001", slice_id="ep_001")
@@ -41,6 +51,8 @@ def test_regal_training_runner_emits_training_runtime_manifest(tmp_path):
         )
         runner.set_regal_result({"overall_status": "pass"}, context_sha="ctx_123")
         runner.register_artifact("unit_artifact", artifact_path)
+        runner.register_artifact("regal_promotion_eval", promotion_eval_path)
+        runner.register_artifact("online_episode_receipts", online_receipts_path)
         runner.register_checkpoint(
             build_checkpoint_record(
                 checkpoint_id="unit_checkpoint",
@@ -70,6 +82,14 @@ def test_regal_training_runner_emits_training_runtime_manifest(tmp_path):
     assert (output_dir / "training_runtime_manifest.json").exists()
     assert (output_dir / "checkpoint_registry.json").exists()
     assert (output_dir / "training_runtime_summary.md").exists()
+    assert (output_dir / "promotion_ledger_v1.json").exists()
+    assert (output_dir / "budget_settlement_v1.json").exists()
+    manifest = json.loads((output_dir / "training_runtime_manifest.json").read_text())
+    assert manifest["promotion_ledger_path"].endswith("promotion_ledger_v1.json")
+    assert manifest["budget_settlement_path"].endswith("budget_settlement_v1.json")
+    assert manifest["budget_settlement_live"] is True
+    assert manifest["artifact_paths"]["promotion_ledger_ref"].endswith("promotion_ledger_v1.json")
+    assert manifest["artifact_paths"]["budget_settlement_report"].endswith("budget_settlement_v1.json")
 
 
 def test_regal_training_runner_writes_failed_runtime_manifest_on_exception(tmp_path):

@@ -171,10 +171,14 @@ def build_execution_preconditions(
     subject_kind: str,
     artifact_refs: Optional[Mapping[str, Any]] = None,
     required_artifact_refs: Optional[Sequence[str]] = None,
+    soft_required_artifact_refs: Optional[Sequence[str]] = None,
     signal_values: Optional[Mapping[str, Any]] = None,
     min_signal_thresholds: Optional[Mapping[str, float]] = None,
     max_signal_thresholds: Optional[Mapping[str, float]] = None,
     required_boolean_signals: Optional[Mapping[str, bool]] = None,
+    soft_min_signal_thresholds: Optional[Mapping[str, float]] = None,
+    soft_max_signal_thresholds: Optional[Mapping[str, float]] = None,
+    soft_boolean_signals: Optional[Mapping[str, bool]] = None,
     blocked_reasons: Optional[Sequence[str]] = None,
     metadata: Optional[Mapping[str, Any]] = None,
 ) -> ExecutionPreconditionsReport:
@@ -192,6 +196,19 @@ def build_execution_preconditions(
                 satisfied=_has_value(value),
                 hard=True,
                 detail="required_artifact_present" if _has_value(value) else "required_artifact_missing",
+                observed_value=value,
+                artifact_ref=str(value) if isinstance(value, str) else None,
+            )
+        )
+
+    for key in _strings(soft_required_artifact_refs):
+        value = refs.get(key)
+        checks.append(
+            PreconditionCheck(
+                precondition_id=f"artifact::{key}",
+                satisfied=_has_value(value),
+                hard=False,
+                detail="optional_artifact_present" if _has_value(value) else "optional_artifact_missing",
                 observed_value=value,
                 artifact_ref=str(value) if isinstance(value, str) else None,
             )
@@ -215,6 +232,24 @@ def build_execution_preconditions(
             )
         )
 
+    for key, threshold in sorted(dict(soft_min_signal_thresholds or {}).items()):
+        value = signals.get(str(key))
+        satisfied = False
+        try:
+            satisfied = float(value) >= float(threshold)
+        except Exception:
+            satisfied = False
+        checks.append(
+            PreconditionCheck(
+                precondition_id=f"signal_min::{key}",
+                satisfied=satisfied,
+                hard=False,
+                detail="optional_min_signal_threshold" if satisfied else "optional_signal_below_min",
+                observed_value=value,
+                expected_value=float(threshold),
+            )
+        )
+
     for key, threshold in sorted(dict(max_signal_thresholds or {}).items()):
         value = signals.get(str(key))
         satisfied = False
@@ -233,6 +268,24 @@ def build_execution_preconditions(
             )
         )
 
+    for key, threshold in sorted(dict(soft_max_signal_thresholds or {}).items()):
+        value = signals.get(str(key))
+        satisfied = False
+        try:
+            satisfied = float(value) <= float(threshold)
+        except Exception:
+            satisfied = False
+        checks.append(
+            PreconditionCheck(
+                precondition_id=f"signal_max::{key}",
+                satisfied=satisfied,
+                hard=False,
+                detail="optional_max_signal_threshold" if satisfied else "optional_signal_above_max",
+                observed_value=value,
+                expected_value=float(threshold),
+            )
+        )
+
     for key, expected in sorted(dict(required_boolean_signals or {}).items()):
         value = bool(signals.get(str(key), False))
         expected_bool = bool(expected)
@@ -242,6 +295,20 @@ def build_execution_preconditions(
                 satisfied=value == expected_bool,
                 hard=True,
                 detail="required_boolean_signal" if value == expected_bool else "boolean_signal_mismatch",
+                observed_value=value,
+                expected_value=expected_bool,
+            )
+        )
+
+    for key, expected in sorted(dict(soft_boolean_signals or {}).items()):
+        value = bool(signals.get(str(key), False))
+        expected_bool = bool(expected)
+        checks.append(
+            PreconditionCheck(
+                precondition_id=f"signal_bool::{key}",
+                satisfied=value == expected_bool,
+                hard=False,
+                detail="optional_boolean_signal" if value == expected_bool else "optional_boolean_signal_mismatch",
                 observed_value=value,
                 expected_value=expected_bool,
             )

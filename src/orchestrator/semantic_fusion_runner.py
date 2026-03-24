@@ -175,6 +175,52 @@ def _extract_teacher_trace(payload: Optional[Dict[str, Any]]) -> Optional[Teache
         return None
 
 
+def _normalize_artifact_refs(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    refs: Dict[str, Any] = {}
+    for key, value in dict(payload or {}).items():
+        if value in (None, "", [], {}):
+            continue
+        normalized = str(key)
+        refs[normalized] = value
+        if normalized.endswith("_path"):
+            refs[f"{normalized[:-5]}_ref"] = value
+    return refs
+
+
+def _future_training_signals_for_failure(
+    artifact_refs: Mapping[str, Any],
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, bool]:
+    explicit = dict(metadata or {}).get("future_training_signals", {})
+    if not isinstance(explicit, Mapping):
+        explicit = {}
+    derived = {
+        "replay_roundtrip_complete": False,
+        "promotion_trace_complete": False,
+        "teacher_runtime_live": bool(
+            artifact_refs.get("teacher_trace_ref")
+            or artifact_refs.get("teacher_trace_path")
+        ),
+        "scene_tracks_non_stub": bool(dict(metadata or {}).get("scene_tracks_non_stub", False)),
+        "semantic_memory_grounded": False,
+        "budget_settlement_live": False,
+    }
+    for key, value in explicit.items():
+        derived[str(key)] = bool(value)
+    return dict(sorted(derived.items()))
+
+
+def _future_training_artifacts_for_failure(metadata: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    explicit = dict(metadata or {}).get("future_training_artifacts", {})
+    if not isinstance(explicit, Mapping):
+        return {}
+    return {
+        str(key): value
+        for key, value in dict(explicit).items()
+        if value not in (None, "", [], {})
+    }
+
+
 def _write_degraded_fusion_artifact(
     *,
     trajectory_path: Path,
@@ -184,13 +230,23 @@ def _write_degraded_fusion_artifact(
     metadata: Optional[Mapping[str, Any]] = None,
 ) -> Path:
     failure_path = trajectory_path.with_name(f"{_safe_episode_id(episode_id)}_semantic_degraded_v1.json")
+    normalized_refs = _normalize_artifact_refs(artifact_refs)
+    future_training_signals = _future_training_signals_for_failure(normalized_refs, metadata=metadata)
+    future_training_artifacts = _future_training_artifacts_for_failure(metadata=metadata)
     readiness = build_execution_preconditions(
         subject_id=episode_id,
         subject_kind="semantic_fusion_episode",
-        artifact_refs=artifact_refs,
+        artifact_refs={**normalized_refs, **future_training_artifacts},
         required_artifact_refs=["trajectory_path"],
+        signal_values=future_training_signals,
+        soft_boolean_signals={key: True for key in future_training_signals},
+        soft_required_artifact_refs=list(future_training_artifacts.keys()),
         blocked_reasons=[reason],
-        metadata=metadata,
+        metadata={
+            **dict(metadata or {}),
+            "future_training_signals": future_training_signals,
+            "future_training_artifacts": future_training_artifacts,
+        },
     )
     work_order = build_execution_work_order(
         order_type="semantic_fusion_repair",
@@ -209,9 +265,11 @@ def _write_degraded_fusion_artifact(
         {
             "episode_id": episode_id,
             "failure_reason": reason,
-            "artifact_refs": dict(artifact_refs),
+            "artifact_refs": dict(normalized_refs),
             "execution_preconditions": readiness.to_dict(),
             "execution_work_order": work_order.to_dict(),
+            "future_training_signals": future_training_signals,
+            "future_training_artifacts": future_training_artifacts,
             "metadata": dict(metadata or {}),
             "version": "semantic_degraded_v1",
         },

@@ -19,7 +19,7 @@ def _build_rollout_bundle(tmp_path):
     trajectory_path = episode_dir / "trajectory.npz"
     np.savez_compressed(trajectory_path, trajectory=trajectory_payload)
 
-    T, K, C = 2, 2, 2
+    T, K = 2, 2
     map_semantics = np.array(
         [
             [[0.8, 0.2], [0.3, 0.7]],
@@ -140,3 +140,4 @@ def test_semantic_fusion_writes_degraded_artifact_on_alignment_failure(tmp_path)
     payload = json.loads(failure_path.read_text())
     assert payload["failure_reason"] == "track_ids_mismatch"
     assert payload["execution_work_order"]["decision"] == "capture_negative_supervision"
+    assert payload["future_training_signals"]["replay_roundtrip_complete"] is False

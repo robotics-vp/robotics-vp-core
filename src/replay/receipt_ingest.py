@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional
 
 from src.economics.receipt_schema import DeploymentReceiptRecord, PricingAcceptanceLabel
 from src.ontology.deployment_labels import (
@@ -13,6 +13,10 @@ from src.ontology.deployment_labels import (
     DeploymentOutcomeLabel,
 )
 from src.replay.dataset import ReplayDatasetBuilder, ReplayDatasetBundle, load_replay_dataset
+from src.replay.preconditions import (
+    build_replay_execution_preconditions,
+    summarize_replay_execution_preconditions,
+)
 from src.training.training_manifest import load_training_runtime_manifest
 from src.utils.config_digest import sha256_json
 
@@ -258,6 +262,174 @@ def build_rollout_receipt_label_bundle(
     )
 
 
+def _load_json_object(path: Optional[str | Path]) -> Dict[str, Any]:
+    if not path:
+        return {}
+    candidate = Path(path)
+    if not candidate.exists():
+        return {}
+    try:
+        payload = json.loads(candidate.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return dict(payload) if isinstance(payload, Mapping) else {}
+
+
+def _training_run_future_training_context(
+    root: Path,
+    *,
+    manifest,
+    dataset: Optional[ReplayDatasetBundle],
+) -> Dict[str, Any]:
+    manifest_path = root / "training_runtime_manifest.json"
+    artifact_paths = dict(getattr(manifest, "artifact_paths", {}) or {})
+    promotion_ledger_path = _existing_path(
+        getattr(manifest, "promotion_ledger_path", None) if manifest is not None else None,
+        artifact_paths.get("promotion_ledger_ref"),
+        getattr(manifest, "promotion_evidence_path", None) if manifest is not None else None,
+        artifact_paths.get("regal_promotion_eval"),
+    )
+    budget_settlement_path = _existing_path(
+        getattr(manifest, "budget_settlement_path", None) if manifest is not None else None,
+        artifact_paths.get("budget_settlement_report"),
+    )
+    budget_settlement_payload = _load_json_object(budget_settlement_path)
+    budget_settlement_live = bool(
+        budget_settlement_payload.get(
+            "budget_settlement_live",
+            getattr(manifest, "budget_settlement_live", False) if manifest is not None else False,
+        )
+    )
+    replay_roundtrip_complete = bool(
+        dataset is not None
+        and (
+            getattr(manifest, "replay_dataset_dir", None)
+            or artifact_paths.get("online_replay_dataset_manifest")
+            or artifact_paths.get("replay_dataset_manifest")
+            or dataset.root_dir
+        )
+    )
+    promotion_trace_complete = bool(
+        promotion_ledger_path
+        and (
+            getattr(manifest, "promotion_evidence_path", None)
+            or artifact_paths.get("regal_promotion_eval")
+            or artifact_paths.get("receipt_label_bundle")
+        )
+    )
+    future_training_artifacts: Dict[str, Any] = {}
+    if manifest_path.exists():
+        future_training_artifacts["training_runtime_manifest"] = str(manifest_path)
+    if promotion_ledger_path is not None:
+        future_training_artifacts["promotion_ledger_ref"] = str(promotion_ledger_path)
+    if budget_settlement_path is not None:
+        future_training_artifacts["budget_settlement_report"] = str(budget_settlement_path)
+    future_training_signals = {
+        "replay_roundtrip_complete": replay_roundtrip_complete,
+        "promotion_trace_complete": promotion_trace_complete,
+        "budget_settlement_live": budget_settlement_live,
+    }
+    return {
+        "future_training_artifacts": dict(sorted(future_training_artifacts.items())),
+        "future_training_signals": dict(sorted(future_training_signals.items())),
+        "budget_settlement_payload": budget_settlement_payload,
+    }
+
+
+def _merge_future_training_signals(
+    base: Optional[Mapping[str, Any]],
+    updates: Mapping[str, Any],
+) -> Dict[str, bool]:
+    merged: Dict[str, bool] = {
+        str(key): bool(value)
+        for key, value in dict(base or {}).items()
+    }
+    for key, value in dict(updates).items():
+        normalized_key = str(key)
+        merged[normalized_key] = bool(merged.get(normalized_key, False) or value)
+    return dict(sorted(merged.items()))
+
+
+def _enrich_training_run_dataset(
+    dataset: ReplayDatasetBundle,
+    *,
+    root: Path,
+    manifest,
+) -> ReplayDatasetBundle:
+    context = _training_run_future_training_context(root, manifest=manifest, dataset=dataset)
+    future_training_artifacts = dict(context.get("future_training_artifacts", {}) or {})
+    future_training_signals = dict(context.get("future_training_signals", {}) or {})
+    if not future_training_artifacts and not future_training_signals:
+        return dataset
+
+    steps_by_episode: Dict[str, list[Any]] = {}
+    for step in dataset.steps:
+        steps_by_episode.setdefault(step.episode_id, []).append(step)
+    windows_by_episode: Dict[str, list[Any]] = {}
+    for window in dataset.windows:
+        windows_by_episode.setdefault(window.episode_id, []).append(window)
+
+    enriched_episodes = []
+    reports = []
+    for episode in dataset.episodes:
+        existing_artifacts = episode.metadata.get("future_training_artifacts", {})
+        existing_signals = episode.metadata.get("future_training_signals", {})
+        merged_artifacts = {
+            **dict(existing_artifacts or {}),
+            **future_training_artifacts,
+        }
+        merged_signals = _merge_future_training_signals(existing_signals, future_training_signals)
+        metadata = {
+            **dict(episode.metadata),
+            "future_training_artifacts": merged_artifacts,
+            "future_training_signals": merged_signals,
+            "training_runtime_manifest": future_training_artifacts.get("training_runtime_manifest"),
+            "promotion_ledger_ref": future_training_artifacts.get("promotion_ledger_ref"),
+            "budget_settlement_live": merged_signals.get("budget_settlement_live", False),
+        }
+        provenance = {
+            **dict(episode.provenance),
+            **future_training_artifacts,
+        }
+        enriched_episode = replace(
+            episode,
+            metadata=metadata,
+            provenance=provenance,
+        )
+        report = build_replay_execution_preconditions(
+            enriched_episode,
+            steps=steps_by_episode.get(episode.episode_id, []),
+            windows=windows_by_episode.get(episode.episode_id, []),
+        )
+        enriched_episode = replace(
+            enriched_episode,
+            metadata={
+                **metadata,
+                "execution_preconditions": report.to_dict(),
+            },
+        )
+        enriched_episodes.append(enriched_episode)
+        reports.append(report)
+
+    summary = summarize_replay_execution_preconditions(reports)
+    enriched_manifest = replace(
+        dataset.manifest,
+        metadata={
+            **dict(dataset.manifest.metadata),
+            "execution_precondition_summary": summary,
+            "training_run_future_training_artifacts": future_training_artifacts,
+            "training_run_future_training_signals": future_training_signals,
+        },
+    )
+    return ReplayDatasetBundle(
+        manifest=enriched_manifest,
+        episodes=enriched_episodes,
+        steps=list(dataset.steps),
+        windows=list(dataset.windows),
+        root_dir=dataset.root_dir,
+    )
+
+
 def build_training_run_receipt_label_bundle(
     training_run_root: str | Path,
     *,
@@ -285,7 +457,10 @@ def build_training_run_receipt_label_bundle(
     if dataset_root is not None:
         dataset = load_replay_dataset(dataset_root)
     elif _resolve_episode_logs_dir(root, manifest=manifest) is not None:
-        dataset = _build_dataset_from_episode_logs(_resolve_episode_logs_dir(root, manifest=manifest))
+        dataset = _build_dataset_from_episode_logs(
+            _resolve_episode_logs_dir(root, manifest=manifest),
+            run_id=(manifest.run_id if manifest is not None else None),
+        )
 
     observed_outcomes = _load_observed_outcomes(
         _resolve_observed_episode_receipt_path(root, manifest=manifest),
@@ -303,6 +478,8 @@ def build_training_run_receipt_label_bundle(
                 "training_run_root": str(root),
             },
         )
+    if manifest is not None:
+        dataset = _enrich_training_run_dataset(dataset, root=root, manifest=manifest)
     if not observed_outcomes:
         observed_outcomes = _observed_outcomes_from_dataset(dataset, label_mode=label_mode)
     return _build_receipt_label_bundle(
@@ -312,6 +489,21 @@ def build_training_run_receipt_label_bundle(
         metadata={
             "training_run_root": str(root),
             "training_runtime_manifest": str(manifest_path) if manifest_path.exists() else None,
+            "promotion_ledger_ref": (
+                dataset.manifest.metadata.get("training_run_future_training_artifacts", {})
+                .get("promotion_ledger_ref")
+                if manifest is not None
+                else None
+            ),
+            "budget_settlement_live": (
+                dataset.manifest.metadata.get("training_run_future_training_signals", {})
+                .get("budget_settlement_live")
+                if manifest is not None
+                else False
+            ),
+            "execution_precondition_summary": dict(
+                dataset.manifest.metadata.get("execution_precondition_summary", {}) or {}
+            ),
             "observation_source": (
                 "online_episode_receipts"
                 if _resolve_observed_episode_receipt_path(root, manifest=manifest) is not None
@@ -598,7 +790,11 @@ def _observed_outcomes_from_dataset(
     return observed
 
 
-def _build_dataset_from_episode_logs(episode_logs_dir: Optional[str | Path]) -> Optional[ReplayDatasetBundle]:
+def _build_dataset_from_episode_logs(
+    episode_logs_dir: Optional[str | Path],
+    *,
+    run_id: Optional[str] = None,
+) -> Optional[ReplayDatasetBundle]:
     if episode_logs_dir is None:
         return None
     root = Path(episode_logs_dir)
@@ -606,7 +802,7 @@ def _build_dataset_from_episode_logs(episode_logs_dir: Optional[str | Path]) -> 
         return None
     builder = ReplayDatasetBuilder()
     for path in sorted(root.glob("*.json")):
-        builder.add_workcell_episode_log(path, source_domain="training_run")
+        builder.add_workcell_episode_log(path, run_id=run_id, source_domain="training_run")
     try:
         return builder.build()
     except ValueError:

@@ -333,6 +333,124 @@ class RegalTrainingRunner:
         self._runtime_ended_at = datetime.now().isoformat()
         self._failure_reason = failure_reason
 
+    def _json_object(self, path: Optional[str]) -> Dict[str, Any]:
+        if not path:
+            return {}
+        candidate = Path(path)
+        if not candidate.exists():
+            return {}
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        return dict(payload) if isinstance(payload, Mapping) else {}
+
+    def _write_promotion_ledger_artifact(
+        self,
+        *,
+        effective_status: str,
+    ) -> tuple[Optional[str], Optional[str]]:
+        promotion_evidence_path = str(
+            self._runtime_artifacts.get("promotion_ledger_ref")
+            or self._runtime_artifacts.get("regal_promotion_eval")
+            or ""
+        )
+        if not promotion_evidence_path:
+            return None, None
+        promotion_summary = self._json_object(promotion_evidence_path).get("summary", {})
+        if not isinstance(promotion_summary, Mapping):
+            promotion_summary = {}
+        ledger_payload = {
+            "schema_version": "promotion_ledger_v1",
+            "run_id": self.run_id,
+            "training_kind": self._training_kind or "training_job",
+            "status": effective_status,
+            "promotion_evidence_ref": promotion_evidence_path,
+            "promotion_evidence_digest": (
+                sha256_file(promotion_evidence_path)
+                if Path(promotion_evidence_path).exists()
+                else None
+            ),
+            "promotion_policy_snapshot": dict(self._training_runtime_context.get("promotion_policy_snapshot", {}) or {}),
+            "source_domain_coverage": dict(self._training_runtime_context.get("source_domain_coverage", {}) or {}),
+            "receipt_label_coverage": dict(self._training_runtime_context.get("receipt_label_coverage", {}) or {}),
+            "summary": dict(promotion_summary),
+            "metadata": {
+                "runtime_status": effective_status,
+                "artifact_ids": sorted(self._runtime_artifacts),
+            },
+        }
+        ledger_path = self.output_dir / "promotion_ledger_v1.json"
+        ledger_path.write_text(
+            json.dumps(ledger_payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        ledger_sha = sha256_file(ledger_path)
+        self._runtime_artifacts["promotion_ledger_ref"] = str(ledger_path)
+        self._runtime_artifact_metadata["promotion_ledger_ref"] = {
+            "schema_version": "promotion_ledger_v1",
+            "live": True,
+        }
+        return str(ledger_path), ledger_sha
+
+    def _write_budget_settlement_artifact(
+        self,
+        *,
+        effective_status: str,
+        promotion_ledger_path: Optional[str],
+    ) -> tuple[Optional[str], Optional[str], bool]:
+        metadata = dict(self._training_runtime_context.get("metadata", {}) or {})
+        explicit_live = metadata.get("budget_settlement_live")
+        online_receipts_path = self._runtime_artifacts.get("online_episode_receipts")
+        receipt_bundle_path = self._runtime_artifacts.get("receipt_label_bundle")
+        receipt_summary_path = self._runtime_artifacts.get("receipt_label_summary")
+        live = (
+            bool(explicit_live)
+            if explicit_live is not None
+            else bool(online_receipts_path and Path(online_receipts_path).exists())
+        )
+        payload = {
+            "schema_version": "budget_settlement_v1",
+            "run_id": self.run_id,
+            "training_kind": self._training_kind or "training_job",
+            "status": effective_status,
+            "budget_settlement_live": live,
+            "observed_receipts_ref": (
+                str(online_receipts_path)
+                if online_receipts_path and Path(online_receipts_path).exists()
+                else None
+            ),
+            "receipt_label_bundle_ref": (
+                str(receipt_bundle_path)
+                if receipt_bundle_path and Path(receipt_bundle_path).exists()
+                else None
+            ),
+            "receipt_label_summary_ref": (
+                str(receipt_summary_path)
+                if receipt_summary_path and Path(receipt_summary_path).exists()
+                else None
+            ),
+            "promotion_ledger_ref": promotion_ledger_path,
+            "source_domain_coverage": dict(self._training_runtime_context.get("source_domain_coverage", {}) or {}),
+            "receipt_label_coverage": dict(self._training_runtime_context.get("receipt_label_coverage", {}) or {}),
+            "metadata": {
+                "runtime_status": effective_status,
+                "explicit_override": explicit_live if explicit_live is not None else None,
+            },
+        }
+        settlement_path = self.output_dir / "budget_settlement_v1.json"
+        settlement_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        settlement_sha = sha256_file(settlement_path)
+        self._runtime_artifacts["budget_settlement_report"] = str(settlement_path)
+        self._runtime_artifact_metadata["budget_settlement_report"] = {
+            "schema_version": "budget_settlement_v1",
+            "live": live,
+        }
+        return str(settlement_path), settlement_sha, live
+
     def _write_training_runtime_artifacts(
         self,
         *,
@@ -358,6 +476,13 @@ class RegalTrainingRunner:
                 checkpoint_registry_path,
                 checkpoint_registry,
             )
+        promotion_ledger_path, promotion_ledger_sha = self._write_promotion_ledger_artifact(
+            effective_status=effective_status,
+        )
+        budget_settlement_path, budget_settlement_sha, budget_settlement_live = self._write_budget_settlement_artifact(
+            effective_status=effective_status,
+            promotion_ledger_path=promotion_ledger_path,
+        )
         runtime_manifest = TrainingRuntimeManifest(
             schema_version="training_runtime_manifest_v1",
             run_id=self.run_id,
@@ -387,12 +512,20 @@ class RegalTrainingRunner:
                 and Path(self._runtime_artifacts["regal_promotion_eval"]).exists()
                 else None
             ),
+            promotion_ledger_path=promotion_ledger_path,
+            promotion_ledger_digest=promotion_ledger_sha,
+            budget_settlement_path=budget_settlement_path,
+            budget_settlement_digest=budget_settlement_sha,
+            budget_settlement_live=budget_settlement_live,
             artifact_schema_compatibility=[
                 dict(row)
                 for row in list(self._training_runtime_context.get("artifact_schema_compatibility", []) or [])
             ],
             failure_reason=self._failure_reason,
-            metadata=dict(self._training_runtime_context.get("metadata", {}) or {}),
+            metadata={
+                **dict(self._training_runtime_context.get("metadata", {}) or {}),
+                "budget_settlement_live": budget_settlement_live,
+            },
         )
         manifest_path = self.output_dir / "training_runtime_manifest.json"
         manifest_sha = write_training_runtime_manifest(manifest_path, runtime_manifest)

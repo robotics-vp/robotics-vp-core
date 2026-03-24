@@ -44,6 +44,11 @@ class TrainingRuntimeManifest:
     checkpoint_registry_digest: Optional[str] = None
     promotion_evidence_path: Optional[str] = None
     promotion_evidence_digest: Optional[str] = None
+    promotion_ledger_path: Optional[str] = None
+    promotion_ledger_digest: Optional[str] = None
+    budget_settlement_path: Optional[str] = None
+    budget_settlement_digest: Optional[str] = None
+    budget_settlement_live: bool = False
     artifact_schema_compatibility: list[Dict[str, Any]] = field(default_factory=list)
     failure_reason: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -77,6 +82,11 @@ class TrainingRuntimeManifest:
             "checkpoint_registry_digest": self.checkpoint_registry_digest,
             "promotion_evidence_path": self.promotion_evidence_path,
             "promotion_evidence_digest": self.promotion_evidence_digest,
+            "promotion_ledger_path": self.promotion_ledger_path,
+            "promotion_ledger_digest": self.promotion_ledger_digest,
+            "budget_settlement_path": self.budget_settlement_path,
+            "budget_settlement_digest": self.budget_settlement_digest,
+            "budget_settlement_live": bool(self.budget_settlement_live),
             "artifact_schema_compatibility": [dict(row) for row in self.artifact_schema_compatibility],
             "failure_reason": self.failure_reason,
             "metadata": dict(self.metadata),
@@ -108,6 +118,11 @@ class TrainingRuntimeManifest:
             checkpoint_registry_digest=payload.get("checkpoint_registry_digest"),
             promotion_evidence_path=payload.get("promotion_evidence_path"),
             promotion_evidence_digest=payload.get("promotion_evidence_digest"),
+            promotion_ledger_path=payload.get("promotion_ledger_path"),
+            promotion_ledger_digest=payload.get("promotion_ledger_digest"),
+            budget_settlement_path=payload.get("budget_settlement_path"),
+            budget_settlement_digest=payload.get("budget_settlement_digest"),
+            budget_settlement_live=bool(payload.get("budget_settlement_live", False)),
             artifact_schema_compatibility=[
                 dict(row)
                 for row in list(payload.get("artifact_schema_compatibility", []) or [])
@@ -147,6 +162,8 @@ def check_training_runtime_manifest_compatibility(
         for value in [
             manifest.checkpoint_registry_path,
             manifest.promotion_evidence_path,
+            manifest.promotion_ledger_path,
+            manifest.budget_settlement_path,
             *manifest.artifact_paths.values(),
         ]
         if value
@@ -251,6 +268,7 @@ def build_training_runtime_summary_markdown(
         f"- Config digest: {manifest.config_digest}",
         f"- Replay manifest digest: {manifest.replay_manifest_digest or 'n/a'}",
         f"- Receipt coverage labels: {manifest.receipt_label_coverage.get('total_labels', 0)}",
+        f"- Budget settlement live: {'yes' if manifest.budget_settlement_live else 'no'}",
         "",
         "## Source Coverage",
     ]
@@ -261,6 +279,10 @@ def build_training_runtime_summary_markdown(
     lines.extend(["", "## Artifacts"])
     for artifact_id, path in sorted(manifest.artifact_paths.items()):
         lines.append(f"- {artifact_id}: {path}")
+    if manifest.promotion_ledger_path:
+        lines.append(f"- promotion_ledger_path: {manifest.promotion_ledger_path}")
+    if manifest.budget_settlement_path:
+        lines.append(f"- budget_settlement_path: {manifest.budget_settlement_path}")
     if checkpoint_rows:
         lines.extend(["", "## Checkpoints"])
         for row in checkpoint_rows:

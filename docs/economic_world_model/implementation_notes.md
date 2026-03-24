@@ -1,5 +1,50 @@
 # Economic World Model Implementation Notes
 
+## 2026-03-24
+
+- SceneTracks now has an explicit no-spend backend alongside real/stub SAM3D:
+  - `SceneIRTrackerConfig.zero_inference_passthrough` can be enabled directly or via `run_scene_tracks(...)` / `scripts/run_scene_tracks.py --zero-inference-passthrough`
+  - when enabled, `SceneIRTracker` skips SAM3D adapter loading and inverse-rendering refinement, then reconstructs objects/bodies deterministically from segmentation masks plus depth/camera geometry
+  - when depth is absent, the tracker still emits coarse world-frame entities from mask centroid plus camera rays so the rest of the semantic/orchestrator stack continues to run
+- The zero-inference backend is intentionally honest rather than sovereign:
+  - `adapter_status()` reports `zero_inference_passthrough` / `overall_mode=passthrough`
+  - execution-precondition metadata records `scene_ir_backend_passthrough=True`
+  - training eligibility still requires real SAM3D backends, so passthrough keeps plumbing live without pretending the perception stack is fully grounded
+- The same opt-in backend is now available to ingestion callers:
+  - `src/ingestion/x_humanoid_adapter.py` exposes `scene_tracks_zero_inference_passthrough`
+  - CLI callers can use `scripts/run_scene_tracks.py --zero-inference-passthrough`
+- Upstream SceneTracks production is no longer geometry-only:
+  - `DatapackFramesContract` now carries `class_labels` and `object_refs` alongside instance masks.
+  - `src/vision/scene_ir_tracker/io/datapack_frame_reader.py` derives those labels from datapack `scene_spec` / metadata when available, then publishes a `semantic_context` bundle with object catalog, segmentation-label metadata, semantic tags, and label-source provenance.
+  - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` now passes those labels into `SceneIRTracker.process_episode(...)` instead of reconstructing unlabeled tracks whenever segmentation IDs are present.
+- `SceneTracks_v1` artifacts are now semantically self-describing enough for downstream grounding:
+  - added per-track arrays for label source, category, label confidence, motion score, hint object ID, semantic tags, and affordances
+  - merged those fields into `scene_tracks_v1/summary_json` plus a dedicated `scene_tracks_v1/semantic_summary_json`
+  - mirrored semantic density / grounding readiness / semantic tags back into datapack metadata and execution-precondition signals so replay/admission code can reason about semantic quality without reopening the NPZ
+- The tracking stack now preserves exact upstream identity instead of forcing downstream heuristics:
+  - `SceneEntity3D` now carries `source_instance_id`, `source_object_id`, and `label_source`
+  - `SceneIRTracker` accepts per-frame `object_refs`
+  - `KalmanTrackManager` now preserves those refs onto stable tracks, and `SceneTracks_v1` persists `track_source_instance_id` / `track_source_object_id`
+- Sensor bundles can now carry explicit segmentation/object identity joins:
+  - `SensorBundleData` and `write_sensor_bundle(...)` now support `segmentation_label_map` plus `scene_object_catalog`
+  - `src/motor_backend/workcell_env_backend.py` populates those fields for workcell sensor bundles using explicit object IDs and seg IDs
+  - `datapack_frame_reader.py` can now consume that explicit bundle metadata instead of relying only on scene-spec ordering
+- Teacher-runtime payloads now carry structured semantics instead of only action floats:
+  - `infer_teacher_semantics(...)` in `src/evidence/teacher_trace.py` extracts object refs, affordances, and risk hints from instructions plus teacher action payloads
+  - `TeacherTrace.from_vla_action(...)` stores those hints in both trace metadata and per-step metadata
+  - `TeacherActionEnvelope` in `src/vla/teacher_runtime.py` now persists `semantic_tags`, `object_refs`, `affordance_hints`, and `risk_hints`, and `to_vla_payload()` forwards them into the governed VLA evidence sidecar
+- Stub/fallback dependence is now explicit:
+  - the SAM3D adapter wrappers report backend modes (`real`, `wrapper_fallback`, `import_failure_stub`, `load_failure_stub`, `stub_requested`)
+  - requesting real models with `allow_fallbacks=False` now fails explicitly instead of silently degrading to stubs
+  - `run_scene_tracks(...)` records adapter status and requires stub/fallback-free backends before marking the run training-ready
+- The rollout-labeler path no longer drops the richer teacher semantics:
+  - `src/vla/rollout_labeler.py` now copies `object_refs`, `affordance_hints`, and `risk_hints` from `TeacherActionEnvelope` into the teacher trace and governed VLA semantic-evidence sidecars
+- `SemanticWorldModelBuilder` now reads those richer producer-side fields:
+  - track label confidence now contributes to semantic confidence
+  - track label/source/category metadata and explicit track-source object IDs are preserved in grounded object metadata
+  - producer-side affordance/risk tags and teacher object refs now influence grounded object affordances/risk tags instead of being dropped
+- This pass keeps all changes additive. It raises semantic quality and semantic density upstream, but it does not change frozen Phase B dynamics/reward math and it does not grant planner/controller sovereignty to the semantic layer.
+
 ## 2026-03-07
 
 - Introduced `RuntimePacket` and `ContractPacket` scaffolding in `src/runtime/packets.py` so objective/econ/constraint/evidence contracts can converge without touching default runtime behavior.
@@ -161,3 +206,34 @@
   - `src/phase_h/advisory_integration.py` now exposes `build_phase_h_activation_plan(...)`, letting Phase H routing become a bounded activation artifact while preserving the existing ±20% caps
   - `src/phase_h/controller.py` and `src/phase_h/economic_learner.py` now surface shell activation state, activation work orders, and future-training backlog readiness in their cycle summaries
 - Added `docs/economic_world_model/shell_activation_backlog.md` to explain which shell promotions are auto-activating today versus which ones stay in the future-training backlog until stronger grounding and runtime evidence become explicit readiness checks.
+
+## 2026-03-24
+
+- Added `src/replay/importers.py` as the importer-side bridge for governed-video supervision and degraded semantic-fusion artifacts:
+  - `ingest_governed_video_admission_log(...)` converts `governed_video/proposal_admission_v1.jsonl` rows into canonical `ReplayEpisodeRecord`, `ReplayStepRecord`, and `ReplayWindowRecord` entries while preserving source execution preconditions/work orders.
+  - `ingest_semantic_degraded_artifacts(...)` converts `*_semantic_degraded_v1.json` outputs into canonical negative-supervision replay episodes instead of leaving them as dead-end failure sidecars.
+  - importer normalization now aliases `*_path`/`*_paths` keys into `*_ref`/`*_refs` forms so downstream replay code sees one stable reference vocabulary.
+- Extended replay readiness synthesis so future-training checks become explicit data:
+  - `src/evidence/preconditions.py` now supports soft artifact/signal checks (`soft_required_artifact_refs`, `soft_min_signal_thresholds`, `soft_max_signal_thresholds`, `soft_boolean_signals`) that appear in `satisfied_preconditions` summaries without blocking current execution readiness.
+  - `src/replay/preconditions.py` now derives/imports `future_training_signals` and `future_training_artifacts`, then emits them as soft readiness checks for replay episodes.
+  - `collect_replay_artifact_refs(...)` now harvests `*_path` and `*_paths` keys in addition to `*_ref`/`*_id` families so importer-produced replay rows can roundtrip through the same precondition summarizer.
+- Tightened the future-training signal merge policy on replay import:
+  - replay-owned facts such as `replay_roundtrip_complete` are recomputed by the importer and no longer inherit stale `false` values from Stage 1 source artifacts.
+  - source-computed grounding signals such as `scene_tracks_non_stub`, `semantic_memory_grounded`, and `budget_settlement_live` are merged monotonically so importer paths preserve positive upstream evidence when they cannot re-derive it from filenames alone.
+- Wired the new importer/readiness path back into producers:
+  - `scripts/run_stage1_pipeline.py` now writes explicit `future_training_signals` and `future_training_artifacts` into governed-video admission records and feeds them into `build_execution_preconditions(...)` as soft checks.
+  - `src/orchestrator/semantic_fusion_runner.py` now writes the same explicit future-training fields into degraded semantic-fusion artifacts so importer-side replay can recover them without heuristics.
+  - `src/replay/dataset.py` now exposes `.add_governed_video_admission_log(...)` and `.add_semantic_degraded_artifacts(...)` so these producer outputs become first-class canonical replay inputs.
+- Updated the nightly audit selector to track the new state of the backlog:
+  - `scripts/economic_world_model/nightly_audit.py` now emits `future_training_evidence_wiring` as the next additive task when shell activation backlog entries exist but replay/training paths still lack explicit promotion-ledger or budget-settlement evidence.
+  - `tests/test_economic_world_model_nightly_audit.py` now covers that candidate selection path so automation does not regress back to `audit_only`.
+- Closed that future-training evidence gap with canonical runner + receipt-ingest wiring:
+  - `src/training/regal_training_runner.py` now synthesizes `promotion_ledger_v1.json` from the current promotion evidence artifact and `budget_settlement_v1.json` from observed receipt/coverage evidence, then registers both in the unified runtime artifact map before writing the manifest.
+  - `src/training/training_manifest.py` now has explicit `promotion_ledger_path`, `promotion_ledger_digest`, `budget_settlement_path`, `budget_settlement_digest`, and `budget_settlement_live` fields so downstream code no longer has to infer those from generic `artifact_paths`.
+  - `src/replay/receipt_ingest.py` now enriches training-run replay bundles in memory with those manifest-derived artifacts/signals and recomputes replay execution preconditions, so receipt-label ingestion becomes a real bridge back into shell-activation readiness instead of only a labeling utility.
+- Added focused regression coverage for the new bridge:
+  - `tests/test_regal_training_runner.py` now asserts that canonical training runs emit promotion-ledger and budget-settlement artifacts and that the runtime manifest records them explicitly.
+  - `tests/test_training_run_receipt_ingest.py` now asserts that training-run receipt ingestion surfaces `artifact::training_runtime_manifest`, `artifact::promotion_ledger_ref`, and `signal_bool::budget_settlement_live` in its execution-precondition summary metadata.
+- The nightly audit now returns `audit_only` after these changes, which is the intended result:
+  - the missing additive substrate is gone
+  - future-training shell backlog items are now waiting on real run evidence, not missing code paths

@@ -53,6 +53,7 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     admission_rows = [json.loads(line) for line in open(admission_log_path, "r", encoding="utf-8") if line.strip()]
     assert admission_rows
     assert admission_rows[0]["execution_preconditions"]["ready"] is True
+    assert admission_rows[0]["future_training_signals"]["promotion_trace_complete"] is True
     datapacks = json.loads((tmp_path / "datapacks.json").read_text())
     assert datapacks[0]["episode_metrics"]["execution_preconditions"]["ready"] is True
 
