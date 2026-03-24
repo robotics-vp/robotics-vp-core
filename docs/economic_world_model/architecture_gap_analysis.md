@@ -10,6 +10,8 @@ The repo already has unusually strong typed scaffolding for objective tensors, e
 
 As of 2026-03-09, `src/world_model/` is no longer treated as globally frozen. The stable Phase B checkpoint remains the anchor baseline, but the package is now reopened for additive governed video-state modules that consume packets, evidence, geometry, and governance without rewriting the stable latent dynamics math. The working mental model is now two-layered: preserve the baseline for rollback/comparison, and modernize around it with governed successor scaffolding.
 
+As of 2026-03-22, the repo also has an additive semantic-world-model packet that sits beside the governed video-state layer rather than replacing it. See `docs/economic_world_model/semantic_gap_matrix.md` for the concrete topology, capability matrix, and remaining semantic-wiring gaps.
+
 ## Repo Crosswalk
 
 | Precondition | Current status | Existing ground truth | Additive scaffolding to build now | Defer until later maturity |
