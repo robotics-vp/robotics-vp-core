@@ -2,6 +2,85 @@
 
 ## 2026-03-24
 
+- The semantic runtime scorer layer now exists in both lightweight and heavyweight forms:
+  - `src/orchestrator/semantic_runtime_scorers.py` trains lightweight local models over the runtime corpus for:
+    - meta-route success
+    - orchestration-route success
+    - authority calibration
+    - counterfactual value
+    - route regret
+  - it also scores live semantic-world-model plus transformer packets in shadow mode so the runtime can emit reranking/calibration evidence before any learned controller authority is granted
+- The heavyweight training plumbing is no longer implicit:
+  - `src/orchestrator/semantic_runtime_scorer_training.py` builds an explicit scorer-training dataset over the same semantic runtime row schema
+  - when torch is available, it trains a multitask scorer net and saves a checkpoint instead of forcing the repo to stop at deterministic local models
+  - `scripts/train_semantic_runtime_scorers.py` is now the canonical scorer-training/export entrypoint for this lane
+- The live runtime boundary now exposes both transformer callouts plus shared scorer feedback:
+  - `run_pipeline_step_with_causal_order(...)` can now emit:
+    - `meta_transformer_execution`
+    - `orchestration_transformer_execution`
+    - `semantic_runtime_scoring`
+  - this makes the broader loop concrete:
+    - semantic WM feeds both transformer lanes
+    - both lanes produce bounded execution packets
+    - scorer outputs turn those packets back into shadow route/calibration/regret evidence
+- The training backlog is now aligned with the implementation:
+  - `scripts/TRAINING_MIGRATION_BACKLOG.json` now includes `train_semantic_runtime_scorers.py`
+  - that keeps the heavyweight learned scorer path explicit inside the repo's future-training envelope rather than leaving it as an unwritten follow-up
+
+- The pre-training semantic learning loop now exists as code, not just as a future-training idea:
+  - `src/orchestrator/semantic_runtime_learning.py` builds canonical replay-backed rows that join:
+    - semantic-world-model summaries
+    - OpenVLA / teacher semantic evidence
+    - DINO / SceneTracks / Map-First proxy evidence
+    - fusion summaries
+    - transformer targets
+    - outcome labels
+    - shadow counterfactuals / regret targets
+  - this means the repo can start learning bounded semantic-routing behavior from replay before any full controller-training run is turned on
+- The export path is explicit:
+  - `scripts/export_semantic_runtime_learning_corpus.py` loads a canonical replay dataset and writes:
+    - `semantic_runtime_learning_rows.jsonl`
+    - `semantic_runtime_learning_summary.json`
+    - `meta_transformer_runtime_dataset.json`
+    - `orchestration_runtime_dataset.json`
+- The semantic runtime corpus now makes the broader loop concrete:
+  - OpenVLA/teacher evidence feeds the semantic world model through teacher traces and VLA semantic sidecars
+  - DINO/SceneTracks/Map-First proxy evidence feeds the same world model through grounding summaries and confidence metadata
+  - semantic-world-model state then feeds both transformer shells
+  - replay outcomes and shadow counterfactuals feed back into future training and inferential labels
+- This is the correct intermediate production posture:
+  - keep execution bounded
+  - accumulate runtime data
+  - train scorers/calibrators first
+  - only then promote to learned reranking/control over the same packet shape
+- The broader architecture is documented in `docs/economic_world_model/semantic_runtime_learning_loop.md`, which separates:
+  - the learning pipeline (corpus -> runtime datasets -> future training)
+  - the inferential pipeline (counterfactuals -> regret -> reranking/calibration evidence)
+
+- Transformer promotion is now explicit rather than deferred:
+  - `src/orchestrator/semantic_transformer_bridge.py` is the shared semantic-world-model featurization layer for transformer shells
+  - it normalizes a real `SemanticWorldModelState` into bounded numeric features, top object/meta-node summaries, semantic tokens, tool biases, and deterministic routing heuristics
+- `MetaTransformer` is no longer only a feature-fusion helper:
+  - it now exposes `propose_plan(...)` as a real pipeline interface
+  - that method consumes econ signals, datapack signals, and semantic-world-model state
+  - it emits semantic-aware objective/backend/energy/data-mix choices, bounded orchestration steps, execution preconditions, and a typed execution work order
+  - `MetaTransformerOutputs` now carries `execution_mode`, `bounded_actions`, `execution_preconditions`, `execution_work_order`, and execution metadata so the packet can later be promoted without another schema break
+- The pipeline callout is no longer a silent stub:
+  - `run_pipeline_step_with_causal_order(...)` now passes semantic-world-model inputs into the meta-transformer path
+  - the returned `run_specs` now include a `meta_transformer_execution` packet beside the existing soft suggestions
+- `OrchestratorContext` and `OrchestratorResult` now carry execution-oriented semantic transformer state:
+  - context can carry `semantic_world_model`, `semantic_snapshot`, and `semantic_metadata`
+  - results can carry `execution_mode`, `activation_plan`, `activation_work_order`, and metadata
+- The orchestration transformer now consumes the semantic world model materially:
+  - `_encode_ctx(...)` appends a semantic-WM feature vector to the existing econ/customer/profile context
+  - `propose_orchestrated_plan(...)` now derives objective preset, energy profile, data mix, backend preference, tool biases, execution preconditions, and a bounded activation/work-order packet from semantic/econ/data state
+  - the transformer is still additive and bounded; it does not bypass readiness checks or the frozen Phase B baseline
+- The long-term direction is now documented in `docs/economic_world_model/semantic_authority_promotion.md`:
+  - advisory packet remains the starting point
+  - preconditioned execution is the next layer
+  - bounded meta-node authority is the correct promotion target
+  - learned transformer control should arrive later over the same packet shape, not via a separate rewrite
+
 - SceneTracks backend selection is now precondition-driven instead of defaulting to stubs:
   - `run_scene_tracks(...)` defaults to `backend_policy="auto"`
   - `auto` first attempts a real local SAM3D tracker with `allow_fallbacks=False`, so installed packages + local checkpoints immediately activate on-device inference without extra caller wiring

@@ -32,6 +32,8 @@ The third pass removes more of the remaining heuristics:
 
 The semantic stack still does not govern the frozen Phase B baseline. It now behaves more like an orchestrator for meta-nodes, routing risk, recovery, affordance, fusion, ontology, and task-graph work into a shared advisory backbone.
 
+The transformer boundary is no longer a pure gap. Both transformer callouts now consume semantic-world-model state directly and emit bounded execution packets with readiness/work-order surfaces. The remaining gap is therefore less about missing plumbing and more about replacing the current bounded heuristics with learned routing once execution evidence is dense enough.
+
 ## Runtime Topology
 
 ```text
@@ -56,6 +58,18 @@ Stage 2 symbolic proposals
   -> SemanticSnapshot semantic_world_model field
   -> meta-node routing context
   -> observation / condition / sampler surfaces
+
+Transformer callouts
+  -> shared semantic-WM feature bridge
+  -> MetaTransformer bounded routing packet
+  -> OrchestrationTransformer bounded tool/activation packet
+  -> pipeline / executor-facing work orders
+
+Semantic runtime learning loop
+  -> replay-backed semantic runtime rows
+  -> shadow counterfactuals and regret labels
+  -> meta-transformer runtime dataset
+  -> orchestration runtime dataset
 ```
 
 ## Gap Matrix
@@ -67,6 +81,8 @@ Stage 2 symbolic proposals
 | Stage 2 symbolic semantics | Ontology proposals, task refinements, semantic enrichments | Rich capabilities, mostly advisory/offline | `SemanticSnapshot` now has a first-class `semantic_world_model` field so Stage 2 outputs can join the same packet instead of living beside it | Ontology/task-graph proposals are still not auto-applied, by design |
 | Semantic snapshot spine | Carrier for Stage 2 slices and econ/meta summaries | Thin, not central to runtime | Snapshot now carries `semantic_world_model` and runtime summary metadata | More producers still need to emit it natively |
 | Orchestrator | Sampler/objective advice from enrichments and recap | Partially wired | V2 now reads world-model topology, capability scores, and meta-node scores; emits `meta_node_weights` instead of only shallow priority tags | Meta-node consumers beyond sampler/conditioning are still sparse |
+| Transformer callouts | Packet stubs and context scaffolds | Not materially wired | `MetaTransformer` and `OrchestrationTransformer` now consume semantic-WM state directly, emit bounded routing/activation packets, and surface execution preconditions/work orders | Decision heuristics are still deterministic; learned routing is the next layer |
+| Runtime learning / inferential loop | No canonical corpus tying semantic runtime state to later training | Missing | `src/orchestrator/semantic_runtime_learning.py` now builds canonical rows joining semantic WM, OpenVLA/teacher evidence, DINO/SceneTracks proxy evidence, outcomes, and counterfactuals; export script emits runtime datasets for both transformer lanes; `src/orchestrator/semantic_runtime_scorers.py` and `src/orchestrator/semantic_runtime_scorer_training.py` now add lightweight live-shadow scorers plus a heavier scorer-training/checkpoint path over the same row schema | Still needs denser real executed transformer work-order joins and later regal-style training integration |
 | Observation / condition | Flattened semantic tag bag | Wired, but lossy | Adapter now exposes capability, topology, object, and meta-node signals; condition builder can derive skill mode from active meta nodes | Structured graph information still gets flattened for policy tensors |
 | Sampler / curriculum | Novelty / recap / advisory weights | Wired | Sampler now boosts candidates using meta-node weights for risk, recovery, semantic refresh, and efficiency | No full graph-aware prioritizer yet |
 
@@ -96,4 +112,4 @@ Stage 2 symbolic proposals
 
 ## Remaining Recommendation
 
-The next serious upgrade is now almost entirely at the actual model boundary: extend explicit label exporters beyond workcell-style bundles and replace the remaining stub/fallback SAM3D/OpenVLA paths with real sensor/teacher execution on the ingestion paths that still arrive semantically sparse.
+The next serious upgrade is now mostly about evidence density and promotion quality rather than missing substrate: keep densifying real executed transformer work-order traces in replay, then migrate `train_semantic_runtime_scorers.py` into the full regal/promotion training envelope so learned semantic reranking can be promoted on real execution evidence rather than only shadow labels.

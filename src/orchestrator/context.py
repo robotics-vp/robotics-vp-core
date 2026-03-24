@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import List, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 import numpy as np
 
 from src.valuation.datapack_repo import DataPackRepo
@@ -23,6 +23,9 @@ class OrchestratorContext:
     mean_trust: float
     mean_w_econ: float
     profile_summaries: Dict[str, Dict[str, float]]  # profile -> {mpl, error, energy_Wh, risk}
+    semantic_world_model: Optional[Any] = None
+    semantic_snapshot: Optional[Any] = None
+    semantic_metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -35,6 +38,10 @@ class OrchestratorResult:
     expected_delta_mpl: float
     expected_delta_error: float
     expected_delta_energy_Wh: float
+    execution_mode: str = "advisory"
+    activation_plan: Dict[str, Any] = field(default_factory=dict)
+    activation_work_order: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 def _aggregate_datapacks(dps: List[DataPackMeta]) -> Dict[str, float]:

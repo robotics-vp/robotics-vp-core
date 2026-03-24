@@ -3,7 +3,7 @@
     "description": "Training script migration backlog for @regal_training wrapper",
     "goal": "Reduce pending count to 0",
     "created_at": "2026-01-13",
-    "updated_at": "2026-03-09",
+    "updated_at": "2026-03-24",
     "backlog": [
         {
             "script": "train_orchestration_transformer_v1_curriculum.py",
@@ -153,6 +153,20 @@
             "notes": "High priority but intentionally deferred - action-conditioned latent predictor over fused video, scene tracks, geometry, embodiment, and economic context; successor to the stable Phase B baseline, not a rewrite of it.",
             "created_at": "2026-03-09",
             "updated_at": "2026-03-09"
+        },
+        {
+            "script": "train_semantic_runtime_scorers.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": null,
+            "downstream_dependents": [
+                "learned semantic reranking",
+                "learned authority calibration",
+                "bounded transformer promotion"
+            ],
+            "notes": "High priority - replay-backed route-success/authority/regret scorer training over semantic-world-model runtime rows; lightweight linear shadow scorer is live now, but this script is the heavyweight training path that should later migrate into the full regal/promotion training envelope.",
+            "created_at": "2026-03-24",
+            "updated_at": "2026-03-24"
         }
     ],
     "migrated": [
@@ -223,9 +237,9 @@
         }
     ],
     "summary": {
-        "total": 17,
+        "total": 28,
         "P0": 0,
-        "P1": 8,
+        "P1": 9,
         "P2": 6,
         "migrated": 13
     }

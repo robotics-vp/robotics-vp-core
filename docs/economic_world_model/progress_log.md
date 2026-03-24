@@ -2,6 +2,39 @@
 
 ## 2026-03-24
 
+- Changed: added the scorer tranche on top of the semantic runtime corpus. `src/orchestrator/semantic_runtime_scorers.py` now trains lightweight route-success, authority-calibration, counterfactual-value, and regret models from replay-backed semantic runtime rows, and it can score live semantic-world-model plus transformer packets in shadow mode.
+- Changed: added heavyweight scorer-training plumbing rather than leaving the learned path implicit. `src/orchestrator/semantic_runtime_scorer_training.py` now builds explicit scorer-training datasets from the same runtime rows and exposes an optional torch multitask training/checkpoint path for later learned reranking work.
+- Changed: `scripts/train_semantic_runtime_scorers.py` now materializes the full scorer-training surface:
+  - `semantic_runtime_scorer_training_dataset.json`
+  - `semantic_runtime_scorer_package.json`
+  - `semantic_runtime_shadow_scores.jsonl`
+  - `semantic_runtime_scorer_model.pt` when torch training is enabled and available
+  - `semantic_runtime_scorer_summary.json`
+- Changed: `run_pipeline_step_with_causal_order(...)` now supports both transformer callouts live at the same boundary. It can emit `orchestration_transformer_execution` and a shared `semantic_runtime_scoring` packet, so the semantic world model now feeds both transformer lanes and gets shadow route/calibration/regret feedback back out immediately.
+- Changed: added `train_semantic_runtime_scorers.py` to `scripts/TRAINING_MIGRATION_BACKLOG.json` so the heavyweight learned scorer path is tracked in the repo's explicit training backlog rather than being left as an informal next step.
+- Verification: `python3 -m compileall src/orchestrator scripts/train_semantic_runtime_scorers.py tests/test_semantic_runtime_scorers.py -q`, `python3 -m ruff check src/orchestrator/semantic_runtime_scorers.py src/orchestrator/semantic_runtime_scorer_training.py src/orchestrator/pipeline_manager.py scripts/train_semantic_runtime_scorers.py tests/test_semantic_runtime_scorers.py`, and `python3 -m pytest -q tests/test_semantic_runtime_scorers.py tests/test_semantic_runtime_learning.py tests/test_semantic_transformer_execution.py` passed.
+
+- Changed: added the pre-training semantic runtime learning layer instead of waiting for a learned controller run. `src/orchestrator/semantic_runtime_learning.py` now harvests replay-backed semantic world-model rows, teacher/VLA evidence, DINO/SceneTracks proxy evidence, fusion/outcome summaries, transformer targets, and shadow counterfactuals into one canonical corpus.
+- Changed: added runtime-dataset export for both transformer lanes. `scripts/export_semantic_runtime_learning_corpus.py` now loads a canonical replay dataset and emits:
+  - `semantic_runtime_learning_rows.jsonl`
+  - `semantic_runtime_learning_summary.json`
+  - `meta_transformer_runtime_dataset.json`
+  - `orchestration_runtime_dataset.json`
+- Changed: the corpus now closes the broader semantic feedback loop in code rather than docs only:
+  - OpenVLA / teacher semantic evidence feeds the semantic world model through teacher traces and VLA sidecars
+  - DINO / SceneTracks / Map-First proxy evidence feeds the same world model through grounding summaries
+  - semantic-world-model state feeds both transformer shells
+  - replay/outcome evidence plus shadow counterfactuals feed back into future training and inferential labels
+- Changed: added `docs/economic_world_model/semantic_runtime_learning_loop.md` to spell out the end-to-end production loop and the distinction between the learning pipeline and the inferential pipeline.
+- Verification: `python3 -m compileall src/orchestrator scripts/export_semantic_runtime_learning_corpus.py tests/test_semantic_runtime_learning.py -q`, `python3 -m ruff check src/orchestrator/semantic_runtime_learning.py scripts/export_semantic_runtime_learning_corpus.py tests/test_semantic_runtime_learning.py src/orchestrator/meta_transformer.py src/orchestrator/orchestration_transformer.py src/orchestrator/semantic_transformer_bridge.py`, and `python3 -m pytest -q tests/test_semantic_runtime_learning.py tests/test_semantic_transformer_execution.py` passed.
+
+- Changed: promoted the transformer callouts from semantic-adjacent scaffolds into bounded execution packets. Added `src/orchestrator/semantic_transformer_bridge.py` as the shared semantic-world-model featurization layer, and both `src/orchestrator/meta_transformer.py` and `src/orchestrator/orchestration_transformer.py` now consume semantic-world-model state directly instead of only carrying shallow summary fields.
+- Changed: `MetaTransformer.propose_plan(...)` now exists as a live pipeline surface. It compiles econ/datapack/semantic inputs into semantic-aware objective/backend/energy/data-mix choices, bounded orchestration steps, execution preconditions, and a work order instead of silently no-oping from `pipeline_manager`.
+- Changed: the orchestration transformer is no longer only a generic context encoder over econ fields. `OrchestratorContext` can now carry semantic-world-model context, `_encode_ctx(...)` appends semantic-WM features, and `propose_orchestrated_plan(...)` now emits execution mode, activation plan, execution preconditions, and activation work order in addition to tool steps.
+- Changed: `run_pipeline_step_with_causal_order(...)` now threads semantic-world-model inputs into the meta-transformer call and surfaces the resulting execution packet under `meta_transformer_execution`, so the transformer lane is no longer suggestion-only at the pipeline boundary.
+- Changed: added `docs/economic_world_model/semantic_authority_promotion.md` to make the intended promotion path explicit: advisory packet -> preconditioned execution -> bounded meta-node authority -> learned control plane.
+- Verification: `python3 -m compileall src tests/test_semantic_transformer_execution.py -q`, `python3 -m ruff check src/orchestrator/context.py src/orchestrator/meta_transformer.py src/orchestrator/orchestration_transformer.py src/orchestrator/pipeline_manager.py src/orchestrator/semantic_transformer_bridge.py tests/test_semantic_transformer_execution.py`, and `python3 -m pytest -q tests/test_semantic_transformer_execution.py` passed.
+
 - Changed: made real on-device SAM3D activation automatic at the runner boundary. `run_scene_tracks(...)` now defaults to `backend_policy="auto"`, which tries a real local SAM3D tracker first with `allow_fallbacks=False`, then falls back to the explicit zero-inference passthrough backend when real weights/deps are unavailable but segmentation masks exist. Silent stub selection is no longer the default path.
 - Changed: recorded backend resolution explicitly in run metadata. SceneTracks runner metadata now includes `backend_policy`, `backend_selected`, and any `real_backend_failure`, so downstream consumers can distinguish a truly local SAM3D run from a deterministic passthrough run without inferring it from adapter internals.
 - Changed: exposed the same policy to callers. `scripts/run_scene_tracks.py` now supports `--backend-policy auto|real|passthrough|stub`, and `XHumanoidIngestConfig` now carries `scene_tracks_backend_policy` so higher ingestion paths can opt into the same precondition-based backend resolution.

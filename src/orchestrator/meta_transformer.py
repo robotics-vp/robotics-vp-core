@@ -3,10 +3,23 @@ Meta-Transformer scaffold that arbitrates between semantic (DINO) and affordance
 No training or heavy logic; provides placeholder methods and typed dataclasses.
 """
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 import numpy as np
 from src.config.objective_profile import ObjectiveVector
+from src.evidence.preconditions import build_execution_preconditions, build_execution_work_order
 from src.orchestrator.context import OrchestratorContext
+from src.orchestrator.semantic_transformer_bridge import (
+    build_semantic_orchestration_plan,
+    build_semantic_world_model_summary,
+    coerce_semantic_world_model,
+    derive_backend,
+    derive_data_mix_weights,
+    derive_energy_profile_mix,
+    derive_objective_preset,
+    encode_semantic_world_model_features,
+    estimate_expected_deltas,
+    semantic_tokens,
+)
 from src.valuation.reward_builder import build_reward_terms, combine_reward, default_objective_vector
 from src.config.econ_params import EconParams
 
@@ -33,6 +46,11 @@ class MetaTransformerOutputs:
     ontology_tokens: List[str] = field(default_factory=list)
     affordance_summary: Dict[str, Any] = field(default_factory=dict)
     authority: str = "dino"  # "dino" or "vla"
+    execution_mode: str = "advisory"
+    bounded_actions: List[str] = field(default_factory=list)
+    execution_preconditions: Dict[str, Any] = field(default_factory=dict)
+    execution_work_order: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 # Backward-compatible alias
@@ -43,9 +61,16 @@ class MetaTransformer:
     def __init__(self, d_shared: int = 32):
         self.d_shared = d_shared
 
-    def integrate_embeddings(self, dino_features: np.ndarray, vla_features: np.ndarray) -> np.ndarray:
-        # Simple concat + trim as placeholder
-        combined = np.concatenate([dino_features, vla_features])
+    def integrate_embeddings(
+        self,
+        dino_features: np.ndarray,
+        vla_features: np.ndarray,
+        semantic_features: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
+        streams = [np.asarray(dino_features, dtype=np.float32), np.asarray(vla_features, dtype=np.float32)]
+        if semantic_features is not None:
+            streams.append(np.asarray(semantic_features, dtype=np.float32))
+        combined = np.concatenate(streams)
         if combined.size < self.d_shared:
             combined = np.pad(combined, (0, self.d_shared - combined.size))
         return combined[: self.d_shared]
@@ -71,8 +96,9 @@ class MetaTransformer:
         vla_features: np.ndarray,
         dino_conf: float = 0.5,
         vla_conf: float = 0.5,
+        semantic_features: Optional[np.ndarray] = None,
     ) -> MetaTransformerOutputs:
-        shared = self.integrate_embeddings(dino_features, vla_features)
+        shared = self.integrate_embeddings(dino_features, vla_features, semantic_features=semantic_features)
         authority = self.select_authority(dino_conf, vla_conf)
         return MetaTransformerOutputs(
             shared_policy_state=self.produce_policy_state(shared),
@@ -89,6 +115,222 @@ class MetaTransformer:
             expected_delta_energy_Wh=0.0,
             orchestration_plan=[],
         )
+
+    def _mapping(self, value: Any) -> Dict[str, Any]:
+        if value is None:
+            return {}
+        if isinstance(value, Mapping):
+            return dict(value)
+        to_dict = getattr(value, "to_dict", None)
+        if callable(to_dict):
+            try:
+                payload = to_dict()
+                if isinstance(payload, Mapping):
+                    return dict(payload)
+            except Exception:
+                return {}
+        return {}
+
+    def _build_feature_streams(
+        self,
+        *,
+        econ_signals: Mapping[str, Any],
+        datapack_signals: Mapping[str, Any],
+        semantic_summary: Mapping[str, Any],
+        perception_embeddings: Optional[Any] = None,
+    ) -> tuple[np.ndarray, np.ndarray, float, float]:
+        semantic_features = encode_semantic_world_model_features(semantic_summary)
+        if isinstance(perception_embeddings, Mapping):
+            dino_payload = np.asarray(perception_embeddings.get("dino_features", []), dtype=np.float32)
+            vla_payload = np.asarray(perception_embeddings.get("vla_features", []), dtype=np.float32)
+            dino_conf = float(perception_embeddings.get("dino_confidence", 0.5))
+            vla_conf = float(perception_embeddings.get("vla_confidence", 0.5))
+            if dino_payload.size > 0 and vla_payload.size > 0:
+                return dino_payload, vla_payload, dino_conf, vla_conf
+        dino_features = np.array(
+            [
+                float(econ_signals.get("mpl_urgency", 0.0)),
+                float(econ_signals.get("error_urgency", 0.0)),
+                float(econ_signals.get("energy_urgency", 0.0)),
+                float(datapack_signals.get("data_coverage_score", 0.0)),
+                float(datapack_signals.get("semantic_tag_diversity", 0.0)) / 32.0,
+                float(semantic_summary.get("capability_mean", 0.0)),
+                float(semantic_summary.get("risk_object_fraction", 0.0)),
+                float(semantic_summary.get("recovery_router_score", 0.0)),
+            ],
+            dtype=np.float32,
+        )
+        vla_features = np.array(
+            [
+                float(datapack_signals.get("vla_annotation_fraction", 0.0)),
+                float(datapack_signals.get("guidance_annotation_fraction", 0.0)),
+                float(datapack_signals.get("embedding_diversity", 0.0)),
+                float(semantic_summary.get("affordance_density", 0.0)),
+                float(semantic_summary.get("fusion_bridge", 0.0)),
+                float(semantic_summary.get("stage2_bridge", 0.0)),
+                float(semantic_summary.get("efficiency_router_score", 0.0)),
+                float(semantic_summary.get("object_memory", 0.0)),
+            ],
+            dtype=np.float32,
+        )
+        return dino_features, vla_features, float(max(0.35, semantic_features[10] if semantic_features.size > 10 else 0.5)), float(
+            max(0.35, semantic_features[12] if semantic_features.size > 12 else 0.5)
+        )
+
+    def propose_plan(
+        self,
+        *,
+        econ_signals: Any,
+        datapack_signals: Any,
+        perception_embeddings: Optional[Any] = None,
+        semantic_world_model: Optional[Any] = None,
+        semantic_snapshot: Optional[Any] = None,
+        orchestrator_context: Optional[OrchestratorContext] = None,
+    ) -> MetaTransformerOutputs:
+        econ_payload = self._mapping(econ_signals)
+        datapack_payload = self._mapping(datapack_signals)
+        if isinstance(perception_embeddings, Mapping):
+            semantic_world_model = semantic_world_model or perception_embeddings.get("semantic_world_model")
+            semantic_snapshot = semantic_snapshot or perception_embeddings.get("semantic_snapshot")
+        world_model = coerce_semantic_world_model(
+            semantic_world_model,
+            semantic_snapshot=semantic_snapshot,
+            context=orchestrator_context,
+        )
+        semantic_summary = build_semantic_world_model_summary(
+            world_model,
+            semantic_snapshot=semantic_snapshot,
+            context=orchestrator_context,
+        )
+        semantic_features = encode_semantic_world_model_features(semantic_summary)
+        dino_features, vla_features, dino_conf, vla_conf = self._build_feature_streams(
+            econ_signals=econ_payload,
+            datapack_signals=datapack_payload,
+            semantic_summary=semantic_summary,
+            perception_embeddings=perception_embeddings,
+        )
+        output = self.forward(
+            dino_features=dino_features,
+            vla_features=vla_features,
+            dino_conf=dino_conf,
+            vla_conf=vla_conf,
+            semantic_features=semantic_features,
+        )
+        objective_preset = derive_objective_preset(
+            semantic_summary,
+            econ_signals=econ_payload,
+            datapack_signals=datapack_payload,
+        )
+        energy_profile_weights = derive_energy_profile_mix(
+            semantic_summary,
+            econ_signals=econ_payload,
+            objective_preset=objective_preset,
+        )
+        data_mix_weights = derive_data_mix_weights(
+            semantic_summary,
+            datapack_signals=datapack_payload,
+        )
+        chosen_backend = derive_backend(
+            semantic_summary,
+            econ_signals=econ_payload,
+            current_backend=str(getattr(orchestrator_context, "engine_type", "pybullet")),
+        )
+        deltas = estimate_expected_deltas(
+            semantic_summary,
+            econ_signals=econ_payload,
+            datapack_signals=datapack_payload,
+        )
+        plan = build_semantic_orchestration_plan(
+            semantic_summary,
+            objective_preset=objective_preset,
+            data_mix_weights=data_mix_weights,
+            energy_profile_weights=energy_profile_weights,
+            datapack_signals=datapack_payload,
+        )
+        readiness = build_execution_preconditions(
+            subject_id=str(
+                semantic_summary.get("task_id")
+                or getattr(orchestrator_context, "task_type", "")
+                or "meta_transformer"
+            ),
+            subject_kind="meta_transformer",
+            artifact_refs={
+                "semantic_world_model_id": semantic_summary.get("world_model_id"),
+            },
+            required_artifact_refs=["semantic_world_model_id"],
+            signal_values={
+                "semantic_present": 1.0 if semantic_summary.get("present") else 0.0,
+                "object_count": semantic_summary.get("object_count", 0.0),
+                "grounded_track_object_count": semantic_summary.get("grounded_track_object_count", 0.0),
+                "capability_mean": semantic_summary.get("capability_mean", 0.0),
+                "meta_node_orchestration": semantic_summary.get("meta_node_orchestration", 0.0),
+                "data_coverage_score": datapack_payload.get("data_coverage_score", 0.0),
+            },
+            min_signal_thresholds={
+                "object_count": 1.0,
+                "capability_mean": 0.15,
+            },
+            required_boolean_signals={"semantic_present": True},
+            soft_min_signal_thresholds={
+                "grounded_track_object_count": 1.0,
+                "data_coverage_score": 0.1,
+                "meta_node_orchestration": 0.2,
+            },
+            metadata={
+                "semantic_world_model_summary": semantic_summary,
+                "objective_preset": objective_preset,
+            },
+        )
+        bounded_actions = [
+            "set_objective_preset",
+            "set_energy_profile",
+            "set_data_mix",
+            "set_backend",
+            "route_meta_nodes",
+        ]
+        execution_mode = "bounded_execution" if readiness.ready else "advisory"
+        work_order = build_execution_work_order(
+            order_type="transformer_routing",
+            subject_id=str(
+                semantic_summary.get("task_id")
+                or getattr(orchestrator_context, "task_type", "")
+                or "meta_transformer"
+            ),
+            subject_kind="meta_transformer",
+            decision="activate_meta_transformer_routing",
+            priority=float(max(semantic_summary.get("capability_mean", 0.0), 0.1)),
+            recommended_mode=execution_mode,
+            readiness=readiness,
+            reasons=bounded_actions,
+            artifact_refs={"semantic_world_model_id": semantic_summary.get("world_model_id")},
+            metadata={"semantic_world_model_summary": semantic_summary},
+        ).to_dict()
+        output.objective_preset = objective_preset
+        output.energy_profile_weights = energy_profile_weights
+        output.data_mix_weights = data_mix_weights
+        output.chosen_backend = chosen_backend
+        output.expected_delta_mpl = deltas["expected_delta_mpl"]
+        output.expected_delta_error = deltas["expected_delta_error"]
+        output.expected_delta_energy_Wh = deltas["expected_delta_energy_Wh"]
+        output.orchestration_plan = plan
+        output.ontology_tokens = semantic_tokens(semantic_summary) or output.ontology_tokens
+        output.affordance_summary = {
+            **dict(output.affordance_summary or {}),
+            "semantic_top_objects": list(semantic_summary.get("top_object_labels", []) or []),
+            "semantic_top_meta_nodes": list(semantic_summary.get("top_meta_nodes", []) or []),
+            "semantic_affordance_density": float(semantic_summary.get("affordance_density", 0.0)),
+        }
+        output.execution_mode = execution_mode
+        output.bounded_actions = bounded_actions
+        output.execution_preconditions = readiness.to_dict()
+        output.execution_work_order = work_order
+        output.metadata = {
+            "semantic_world_model_summary": semantic_summary,
+            "semantic_world_model_id": semantic_summary.get("world_model_id"),
+            "active_capabilities": list(semantic_summary.get("active_capabilities", []) or []),
+            "top_meta_nodes": list(semantic_summary.get("top_meta_nodes", []) or []),
+        }
+        return output
 
     # ---- Helper utilities for downstream components ----
     def derive_expected_objectives(self, meta_out: MetaTransformerOutputs, ctx: OrchestratorContext) -> List[float]:

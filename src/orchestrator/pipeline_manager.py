@@ -19,6 +19,11 @@ This is additive infrastructure - no changes to Phase B math or RL training loop
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from src.evidence.preconditions import build_execution_work_order
+from src.orchestrator.orchestration_transformer import propose_orchestrated_plan
+from src.orchestrator.semantic_runtime_scorers import (
+    coerce_semantic_runtime_scorer_package,
+    score_live_semantic_runtime_stack,
+)
 from src.orchestrator.shell_activation import (
     evaluate_shell_activation_backlog,
     get_shell_activation_assessment,
@@ -751,8 +756,14 @@ def run_pipeline_step_with_causal_order(
     datapack_engine,
     semantic_orchestrator,
     meta_transformer=None,
+    orchestration_transformer=None,
     datapacks=None,
     perception_embeddings=None,
+    semantic_world_model=None,
+    semantic_snapshot=None,
+    orchestrator_context=None,
+    orchestration_instruction: str = "",
+    semantic_runtime_scorers=None,
 ):
     """
     Execute a single pipeline step with CORRECT CAUSAL ORDER.
@@ -791,6 +802,9 @@ def run_pipeline_step_with_causal_order(
                 econ_signals=econ_signals,
                 datapack_signals=datapack_signals,
                 perception_embeddings=perception_embeddings,
+                semantic_world_model=semantic_world_model,
+                semantic_snapshot=semantic_snapshot,
+                orchestrator_context=orchestrator_context,
             )
         except AttributeError:
             # MetaTransformer may not have propose_plan yet
@@ -811,6 +825,14 @@ def run_pipeline_step_with_causal_order(
     # This is what VLA/DINO/SIMA/diffusion/RL will see
     semantic_state = semantic_orchestrator.snapshot()
 
+    orchestration_result = None
+    if orchestration_transformer is not None and orchestrator_context is not None:
+        orchestration_result = propose_orchestrated_plan(
+            model=orchestration_transformer,
+            ctx=orchestrator_context,
+            instruction=orchestration_instruction or str(getattr(orchestrator_context, "task_type", "semantic_routing")),
+        )
+
     run_specs = {
         "econ_signals": econ_signals.to_dict(),
         "datapack_signals": datapack_signals.to_dict(),
@@ -824,8 +846,45 @@ def run_pipeline_step_with_causal_order(
         run_specs["meta_transformer_suggestions"] = {
             "objective_preset": meta_out.objective_preset,
             "energy_profile_weights": meta_out.energy_profile_weights,
+            "data_mix_weights": meta_out.data_mix_weights,
+            "chosen_backend": meta_out.chosen_backend,
             "expected_delta_mpl": meta_out.expected_delta_mpl,
         }
+        run_specs["meta_transformer_execution"] = {
+            "execution_mode": getattr(meta_out, "execution_mode", "advisory"),
+            "bounded_actions": list(getattr(meta_out, "bounded_actions", []) or []),
+            "execution_preconditions": dict(getattr(meta_out, "execution_preconditions", {}) or {}),
+            "execution_work_order": getattr(meta_out, "execution_work_order", None),
+            "metadata": dict(getattr(meta_out, "metadata", {}) or {}),
+        }
+    if orchestration_result is not None:
+        run_specs["orchestration_transformer_execution"] = {
+            "execution_mode": getattr(orchestration_result, "execution_mode", "advisory"),
+            "activation_plan": dict(getattr(orchestration_result, "activation_plan", {}) or {}),
+            "activation_work_order": getattr(orchestration_result, "activation_work_order", None),
+            "chosen_backend": getattr(orchestration_result, "chosen_backend", "pybullet"),
+            "objective_preset": getattr(orchestration_result, "objective_preset", "balanced"),
+            "energy_profile_weights": dict(getattr(orchestration_result, "energy_profile_weights", {}) or {}),
+            "data_mix_weights": dict(getattr(orchestration_result, "data_mix_weights", {}) or {}),
+            "tool_sequence": [
+                str(step.tool_call.name)
+                for step in list(getattr(orchestration_result, "steps", []) or [])
+                if getattr(step, "tool_call", None) is not None
+            ],
+            "metadata": dict(getattr(orchestration_result, "metadata", {}) or {}),
+        }
+
+    scorer_package = coerce_semantic_runtime_scorer_package(semantic_runtime_scorers)
+    if scorer_package is not None and meta_out is not None:
+        runtime_score = score_live_semantic_runtime_stack(
+            scorer_package,
+            semantic_world_model=semantic_world_model,
+            semantic_snapshot=semantic_snapshot,
+            orchestrator_context=orchestrator_context,
+            meta_output=meta_out,
+            orchestration_result=orchestration_result,
+        )
+        run_specs["semantic_runtime_scoring"] = runtime_score.to_dict()
 
     return run_specs
 
