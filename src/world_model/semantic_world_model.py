@@ -334,6 +334,30 @@ class SemanticWorldModelState:
             version=str(payload.get("version", "semantic_world_model_v1")),
         )
 
+    def embed(self, encoder: Optional[Any] = None) -> np.ndarray:
+        """Return fixed-dim embedding of this WM state.
+
+        Parameters
+        ----------
+        encoder : SemanticStateEncoder, optional
+            When provided, uses the learned set-transformer encoder.
+            Falls back to deterministic mean-pool embedding.
+
+        Returns
+        -------
+        np.ndarray of shape (embed_dim,)
+        """
+        if encoder is not None:
+            try:
+                import torch
+                with torch.no_grad():
+                    return encoder.encode_state(self).detach().numpy()
+            except Exception:
+                pass
+        # Fallback to flat deterministic encoding
+        from src.world_model.semantic_state_encoder import encode_wm_state_flat
+        return encode_wm_state_flat(self)
+
 
 @dataclass(frozen=True)
 class SemanticWorldModelConfig:

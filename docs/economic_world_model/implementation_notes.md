@@ -327,3 +327,29 @@
 - The nightly audit now returns `audit_only` after these changes, which is the intended result:
   - the missing additive substrate is gone
   - future-training shell backlog items are now waiting on real run evidence, not missing code paths
+
+- Added a first-class semantic coverage substrate beside the semantic WM:
+  - `src/hrl/skill_graph.py` defines the repo-level skill graph spanning HRL, SIMA, VLA, and Stage 2 hints.
+  - `src/envs/primitive_inventory.py` defines typed env primitive inventories for `drawer_vase`, `dishwashing`, and `workcell`.
+  - `src/world_model/semantic_coverage_graph.py` compiles those plus runtime evidence into a typed task × skill × env-primitive graph.
+  - `src/world_model/coverage_evidence_harvester.py` harvests real evidence counts and priority scalars from replay/runtime rows instead of relying only on hand-authored coverage priors.
+- Added the first cybernetic learning surfaces for the coverage loop:
+  - `src/world_model/fill_outcome_store.py` persists append-only fill outcomes as supervised training data.
+  - `src/world_model/gap_ranker.py` trains a learned marginal-value model for missing-edge ranking.
+  - `src/world_model/fill_path_policy.py` trains a learned fill-method policy over `real_sim | diffusion | synthetic_branch | blocked`.
+  - `src/world_model/semantic_state_encoder.py` provides both a deterministic flat encoder and a torch-backed set encoder so semantic WM state can condition learned downstream modules without collapsing the packet schema again.
+- Wired the coverage graph into the broader synth loop:
+  - `src/orchestrator/coverage_loop.py` now runs the evidence-harvest → graph-build → gap-rank → sim-agenda → diffusion-prompt → fill-decision cycle.
+  - `src/orchestrator/diffusion_requests.py` now supports gap-driven prompt compilation.
+  - `src/orchestrator/semantic_simulation.py` now supports ranked simulation agendas compiled from coverage deficits.
+  - `src/orchestrator/pipeline_manager.py` can now emit `semantic_coverage` artifacts when explicitly configured.
+  - `scripts/collect_local_synthetic_branches.py` and `scripts/train_latent_diffusion.py` can now consume gap labels / semantic conditioning so synthetic branch collection and latent diffusion training stop being purely trust/econ driven.
+- Added additive routing guards around the new loop:
+  - `src/process_reward/evidence_adapter.py` turns process-reward outputs into evidence/precondition packets.
+  - `src/evidence/backend_health.py` turns perception/runtime backend degradation into explicit readiness metadata.
+  - `src/governance/assessment.py` turns governance traces into coverage and veto summaries that can later be routed back into graph weights and meta-node decisions.
+- Important limitation: this pass builds the substrate and the first learned models, but it does not yet make the loop fully self-correcting.
+  - Fill outcomes are stored, but process-reward quality is not yet routed back into graph edge weights.
+  - Governance traces influence readiness only indirectly; they do not yet mark specific coverage edges as blocked or rerouted.
+  - Ontology proposals remain observable but do not yet mutate the skill graph or env primitive graph online.
+  - Trust/econ feedback still needs to be made topologically downstream of the tensor/meta-node layers rather than mostly scalar side inputs.
