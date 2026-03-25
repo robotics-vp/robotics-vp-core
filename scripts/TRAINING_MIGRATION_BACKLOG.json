@@ -248,13 +248,18 @@
             "script": "train_shadow_offline_rl.py",
             "migrated_at": "2026-03-07",
             "notes": "P1 complete - wrapped with RegalTrainingRunner while preserving SAC as main online backbone"
+        },
+        {
+            "script": "train_semantic_feedback_adapters.py",
+            "migrated_at": "2026-03-24",
+            "notes": "P1 complete - heavyweight trainer for learned trust/econ/readiness/correction overlays over coverage-loop edges"
         }
     ],
     "summary": {
-        "total": 28,
+        "total": 29,
         "P0": 0,
         "P1": 9,
         "P2": 6,
-        "migrated": 13
+        "migrated": 14
     }
 }

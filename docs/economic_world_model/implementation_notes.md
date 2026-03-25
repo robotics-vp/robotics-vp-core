@@ -359,5 +359,8 @@
   - `scripts/train_world_model_from_datapacks.py` now appends semantic-gap/process-reward/coverage features and additive semantic-gap weighting when building datapack world-model datasets, so latent/synthetic branching paths stop being purely trust × `w_econ` weighted.
   - `scripts/sample_zv_rollouts.py`, `scripts/eval_world_model_rollouts.py`, and `scripts/train_horizon_agnostic_world_model.py` now reopen semantic-conditioned latent checkpoints compatibly.
 - Important remaining limitation:
-  - The overlays are now explicit and transformer-visible, but they are still summary overlays rather than learned topological adapters over econ tensors / trust tensors / meta-node geometry.
-  - Graph mutation remains a bounded proposal surface; it still does not directly mutate canonical ontology or skill graphs online.
+  - That limitation is now closed additively for the semantic runtime loop itself:
+    - `src/world_model/semantic_wm_correction.py` compiles WM-validation packets into an explicit correction overlay and applies it to a copy of the semantic WM for downstream routing.
+    - `src/world_model/graph_mutation_executor.py` applies bounded runtime graph mutations under governance/confidence thresholds before coverage-graph construction, so topology is no longer fixed for the duration of the loop.
+    - `src/world_model/feedback_topology_adapters.py` provides the learned trust/econ/readiness/correction overlay package plus shadow-fit training from real coverage edges, and `scripts/train_semantic_feedback_adapters.py` provides the heavyweight persisted training path.
+  - The remaining limitation is no longer missing code-paths. It is whether enough real coverage-loop artifacts exist to promote those learned overlay adapters and governed graph mutations from shadow/provisional use into stronger production authority.
