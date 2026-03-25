@@ -429,6 +429,7 @@ def main(runner=None):
             latent_dim=dataset.latent_dim,
             action_dim=dataset.action_dim,
             hidden_dim=wm_ckpt['hidden_dim'],
+            semantic_cond_dim=wm_ckpt.get('semantic_cond_dim', 0),
         )
         world_model.load_state_dict(wm_ckpt['model_state_dict'])
     else:
@@ -437,6 +438,7 @@ def main(runner=None):
             latent_dim=dataset.latent_dim,
             action_dim=dataset.action_dim,
             hidden_dim=256,
+            semantic_cond_dim=0,
         )
 
     # Create trainer

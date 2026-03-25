@@ -139,6 +139,7 @@ def main():
             latent_dim=latent_dim,
             action_dim=action_dim,
             hidden_dim=wm_ckpt.get('hidden_dim', 256),
+            semantic_cond_dim=wm_ckpt.get('semantic_cond_dim', 0),
         )
         world_model.load_state_dict(wm_ckpt['model_state_dict'])
 

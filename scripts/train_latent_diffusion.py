@@ -209,7 +209,13 @@ class LatentDynamicsModel(nn.Module):
             uncertainty: (B, latent_dim) prediction uncertainty (log variance)
         """
         # Concatenate state, action, and optional semantic conditioning
-        if semantic_cond is not None and self.semantic_cond_dim > 0:
+        if self.semantic_cond_dim > 0:
+            if semantic_cond is None:
+                semantic_cond = torch.zeros(
+                    (z_t.shape[0], self.semantic_cond_dim),
+                    dtype=z_t.dtype,
+                    device=z_t.device,
+                )
             x = torch.cat([z_t, a_t, semantic_cond], dim=-1)
         else:
             x = torch.cat([z_t, a_t], dim=-1)
@@ -228,9 +234,9 @@ class LatentDynamicsModel(nn.Module):
 
         return z_next_pred, log_var
 
-    def sample_next(self, z_t, a_t):
+    def sample_next(self, z_t, a_t, semantic_cond=None):
         """Sample next state with uncertainty."""
-        z_next_mean, log_var = self.forward(z_t, a_t)
+        z_next_mean, log_var = self.forward(z_t, a_t, semantic_cond=semantic_cond)
         std = torch.exp(0.5 * log_var)
         z_next = z_next_mean + std * torch.randn_like(std)
         return z_next
@@ -242,15 +248,25 @@ class TemporalTransformer(nn.Module):
 
     Predicts multi-step rollouts in latent space.
     """
-    def __init__(self, latent_dim=128, action_dim=2, hidden_dim=256, num_heads=4, num_layers=3):
+    def __init__(
+        self,
+        latent_dim=128,
+        action_dim=2,
+        hidden_dim=256,
+        num_heads=4,
+        num_layers=3,
+        semantic_cond_dim=0,
+    ):
         super().__init__()
 
         self.latent_dim = latent_dim
         self.action_dim = action_dim
+        self.semantic_cond_dim = semantic_cond_dim
 
         # Embeddings
         self.state_embed = nn.Linear(latent_dim, hidden_dim)
         self.action_embed = nn.Linear(action_dim, hidden_dim)
+        self.semantic_proj = nn.Linear(semantic_cond_dim, hidden_dim) if semantic_cond_dim > 0 else None
 
         # Positional encoding (learnable)
         self.pos_embed = nn.Parameter(torch.randn(1, 64, hidden_dim) * 0.02)
@@ -269,7 +285,7 @@ class TemporalTransformer(nn.Module):
         # Output projection
         self.output_proj = nn.Linear(hidden_dim, latent_dim)
 
-    def forward(self, z_sequence, action_sequence):
+    def forward(self, z_sequence, action_sequence, semantic_cond=None):
         """
         Predict next z_V given sequence of (z, a) pairs.
 
@@ -288,6 +304,14 @@ class TemporalTransformer(nn.Module):
 
         # Combine (interleave or add)
         x = z_emb + a_emb  # (B, T, hidden_dim)
+        if self.semantic_proj is not None:
+            if semantic_cond is None:
+                semantic_cond = torch.zeros(
+                    (z_sequence.shape[0], self.semantic_cond_dim),
+                    dtype=z_sequence.dtype,
+                    device=z_sequence.device,
+                )
+            x = x + self.semantic_proj(semantic_cond).unsqueeze(1)
 
         # Add positional encoding
         x = x + self.pos_embed[:, :T, :]
@@ -333,6 +357,8 @@ def train_latent_dynamics(
     save_dir='checkpoints',
     device=None,
     use_scene_tracks=False,
+    use_semantic_conditioning=False,
+    semantic_sidecar_path=None,
 ):
     """
     Train latent dynamics model on z_V transitions.
@@ -359,7 +385,12 @@ def train_latent_dynamics(
     # Load dataset
     print(f"Loading dataset from {dataset_path}...")
     # use_scene_tracks defaults to False unless specified
-    dataset = ZVTransitionDataset(dataset_path, use_scene_tracks=use_scene_tracks)
+    dataset = ZVTransitionDataset(
+        dataset_path,
+        use_scene_tracks=use_scene_tracks,
+        use_semantic_conditioning=use_semantic_conditioning,
+        semantic_sidecar_path=semantic_sidecar_path,
+    )
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # Create model
@@ -371,6 +402,7 @@ def train_latent_dynamics(
             latent_dim=latent_dim,
             action_dim=action_dim,
             hidden_dim=hidden_dim,
+            semantic_cond_dim=dataset.semantic_cond_dim,
         ).to(device)
         print("Model: LatentDynamicsModel (MLP)")
     elif model_type == 'transformer':
@@ -378,6 +410,7 @@ def train_latent_dynamics(
             latent_dim=latent_dim,
             action_dim=action_dim,
             hidden_dim=hidden_dim,
+            semantic_cond_dim=dataset.semantic_cond_dim,
         ).to(device)
         print("Model: TemporalTransformer")
     else:
@@ -402,19 +435,25 @@ def train_latent_dynamics(
         epoch_losses = []
         epoch_mse = []
 
-        for batch_idx, (z_t, a_t, z_next) in enumerate(dataloader):
+        for batch_idx, batch in enumerate(dataloader):
+            z_t = batch[0]
+            a_t = batch[1]
+            z_next = batch[2]
+            semantic_cond = batch[-1] if dataset.semantic_cond is not None else None
             z_t = z_t.to(device)
             a_t = a_t.to(device)
             z_next = z_next.to(device)
+            if semantic_cond is not None:
+                semantic_cond = semantic_cond.to(device)
 
             # Forward pass
             if model_type == 'mlp':
-                z_next_pred, log_var = model(z_t, a_t)
+                z_next_pred, log_var = model(z_t, a_t, semantic_cond=semantic_cond)
                 loss = gaussian_nll_loss(z_next_pred, log_var, z_next)
                 mse = ((z_next_pred - z_next) ** 2).mean()
             else:
                 # For transformer, use single step for now
-                z_next_pred = model(z_t.unsqueeze(1), a_t.unsqueeze(1))
+                z_next_pred = model(z_t.unsqueeze(1), a_t.unsqueeze(1), semantic_cond=semantic_cond)
                 loss = nn.MSELoss()(z_next_pred, z_next)
                 mse = loss
 
@@ -450,6 +489,8 @@ def train_latent_dynamics(
         'latent_dim': latent_dim,
         'action_dim': action_dim,
         'hidden_dim': hidden_dim,
+        'semantic_cond_dim': dataset.semantic_cond_dim,
+        'use_semantic_conditioning': bool(dataset.semantic_cond is not None),
         'n_epochs': n_epochs,
         'train_log': train_log,
         'final_mse': avg_mse,
@@ -553,6 +594,8 @@ def main(runner=None):
         hidden_dim=args.hidden_dim,
         save_dir=args.save_dir,
         use_scene_tracks=args.use_scene_tracks,
+        use_semantic_conditioning=args.use_semantic_conditioning,
+        semantic_sidecar_path=args.semantic_sidecar,
     )
 
     if runner:

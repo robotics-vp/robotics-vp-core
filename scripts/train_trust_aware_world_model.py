@@ -138,7 +138,7 @@ class TrustAwareWorldModelTrainer:
 
         return features
 
-    def rollout_synthetic(self, z_init, actions):
+    def rollout_synthetic(self, z_init, actions, semantic_cond=None):
         """
         Roll out world model to generate synthetic z_V sequence.
 
@@ -156,7 +156,7 @@ class TrustAwareWorldModelTrainer:
 
         for t in range(T):
             a_t = actions[:, t, :]
-            z_next, _ = self.world_model(z_current, a_t)
+            z_next, _ = self.world_model(z_current, a_t, semantic_cond=semantic_cond)
             z_sequence.append(z_next)
             z_current = z_next
 
@@ -218,13 +218,20 @@ class TrustAwareWorldModelTrainer:
         Returns:
             losses: Dict of loss components
         """
-        z_current, actions, z_next = batch
+        z_current = batch[0]
+        actions = batch[1]
+        z_next = batch[2]
+        semantic_cond = None
+        if len(batch) >= 4 and getattr(batch[-1], "dim", lambda: 0)() == 2:
+            semantic_cond = batch[-1]
         z_current = z_current.to(self.device)
         actions = actions.to(self.device)
         z_next = z_next.to(self.device)
+        if semantic_cond is not None:
+            semantic_cond = semantic_cond.to(self.device)
 
         # ===== 1. Reconstruction loss (standard MSE) =====
-        z_next_pred, log_var = self.world_model(z_current, actions)
+        z_next_pred, log_var = self.world_model(z_current, actions, semantic_cond=semantic_cond)
         recon_loss = nn.MSELoss()(z_next_pred, z_next)
 
         # ===== 2. Trust loss (needs full episode rollout) =====
@@ -242,7 +249,8 @@ class TrustAwareWorldModelTrainer:
             syn_actions.append(actions[a_idx])
         syn_actions = torch.stack(syn_actions, dim=1)  # (batch_size, T, action_dim)
 
-        z_syn_sequence = self.rollout_synthetic(z_init, syn_actions)
+        syn_semantic_cond = semantic_cond[init_idx] if semantic_cond is not None else None
+        z_syn_sequence = self.rollout_synthetic(z_init, syn_actions, semantic_cond=syn_semantic_cond)
 
         # Extract features from synthetic episodes
         syn_features = self.extract_episode_features_torch(z_syn_sequence)
@@ -356,6 +364,10 @@ def main(runner=None):
                         help='Learning rate')
     parser.add_argument('--batch-size', type=int, default=64,
                         help='Batch size')
+    parser.add_argument('--use-semantic-conditioning', action='store_true',
+                        help='Use semantic WM conditioning sidecar during training')
+    parser.add_argument('--semantic-sidecar', type=str, default=None,
+                        help='Optional semantic conditioning sidecar JSON path')
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -370,7 +382,11 @@ def main(runner=None):
 
     # Load dataset
     print("\nLoading dataset...")
-    dataset = ZVTransitionDataset(args.dataset)
+    dataset = ZVTransitionDataset(
+        args.dataset,
+        use_semantic_conditioning=args.use_semantic_conditioning,
+        semantic_sidecar_path=args.semantic_sidecar,
+    )
 
     # Load trust_net (frozen critic)
     print(f"\nLoading frozen trust_net from {args.trust_net}...")
@@ -397,6 +413,7 @@ def main(runner=None):
             latent_dim=latent_dim,
             action_dim=action_dim,
             hidden_dim=wm_ckpt['hidden_dim'],
+            semantic_cond_dim=int(wm_ckpt.get('semantic_cond_dim', dataset.semantic_cond_dim)),
         )
         world_model.load_state_dict(wm_ckpt['model_state_dict'])
         print(f"  Original MSE: {wm_ckpt['final_mse']:.6f}")
@@ -406,6 +423,7 @@ def main(runner=None):
             latent_dim=latent_dim,
             action_dim=action_dim,
             hidden_dim=256,
+            semantic_cond_dim=dataset.semantic_cond_dim,
         )
 
     # Create trainer
@@ -462,6 +480,8 @@ def main(runner=None):
         'latent_dim': latent_dim,
         'action_dim': action_dim,
         'hidden_dim': 256,
+        'semantic_cond_dim': dataset.semantic_cond_dim,
+        'use_semantic_conditioning': bool(dataset.semantic_cond is not None),
         'final_mse': history['recon_loss'][-1],
         'final_trust': final_trust,
         'final_syn_std': final_std,

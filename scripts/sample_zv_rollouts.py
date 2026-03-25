@@ -25,6 +25,7 @@ def load_latent_dynamics_model(model_path, device='cpu'):
     latent_dim = checkpoint['latent_dim']
     action_dim = checkpoint['action_dim']
     hidden_dim = checkpoint['hidden_dim']
+    semantic_cond_dim = checkpoint.get('semantic_cond_dim', 0)
 
     if model_type == 'mlp':
         from scripts.train_latent_diffusion import LatentDynamicsModel
@@ -32,6 +33,7 @@ def load_latent_dynamics_model(model_path, device='cpu'):
             latent_dim=latent_dim,
             action_dim=action_dim,
             hidden_dim=hidden_dim,
+            semantic_cond_dim=semantic_cond_dim,
         ).to(device)
     elif model_type == 'transformer':
         from scripts.train_latent_diffusion import TemporalTransformer
@@ -39,6 +41,7 @@ def load_latent_dynamics_model(model_path, device='cpu'):
             latent_dim=latent_dim,
             action_dim=action_dim,
             hidden_dim=hidden_dim,
+            semantic_cond_dim=semantic_cond_dim,
         ).to(device)
     else:
         raise ValueError(f"Unknown model type: {model_type}")

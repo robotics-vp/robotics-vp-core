@@ -29,10 +29,84 @@ from src.valuation.episode_features import make_full_datapack_features
 from src.training.wrap_training_entrypoint import regal_training
 
 
+def _safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _semantic_gap_training_features(datapack) -> np.ndarray:
+    """Additive semantic gap features for downstream synth/world-model use."""
+    tags = [str(tag).lower() for tag in list(datapack.semantic_tags or []) + list(datapack.econ_semantic_tags or [])]
+    risk_flag = 1.0 if any(tag.startswith("risk:") or "fragile" in tag or "collision" in tag for tag in tags) else 0.0
+    workcell_flag = 1.0 if "workcell" in str(datapack.env_type).lower() else 0.0
+    semantic_quality = _safe_float(datapack.semantic_quality, 0.0)
+    tag_density = min(len(tags) / 16.0, 1.0)
+    process_reward_signal = 0.0
+    if datapack.process_reward_profile is not None:
+        process_reward_signal = _safe_float(getattr(datapack.process_reward_profile, "phi_star_mean", 0.0)) * _safe_float(
+            getattr(datapack.process_reward_profile, "conf_mean", 0.0), 0.0
+        )
+    episode_metrics = dict(datapack.episode_metrics or {})
+    regal_annotations = dict(datapack.regal_annotations or {})
+    semantic_coverage = dict(regal_annotations.get("semantic_coverage", {}) or {})
+    feedback_summary = dict(semantic_coverage.get("feedback_summary", {}) or regal_annotations.get("coverage_feedback_summary", {}) or {})
+    coverage_summary = dict(semantic_coverage.get("coverage_summary", {}) or {})
+    total_edges = max(int(coverage_summary.get("total_edges", 0) or 0), 1)
+    missing_edge_fraction = (
+        _safe_float(coverage_summary.get("missing_edges", 0.0)) / float(total_edges)
+        if coverage_summary
+        else 0.0
+    )
+    gap_priority = max(
+        _safe_float(episode_metrics.get("coverage_gap_contribution", 0.0)),
+        _safe_float(episode_metrics.get("semantic_gap_priority", 0.0)),
+        _safe_float(feedback_summary.get("gap_return_mean", 0.0)),
+    )
+    graph_pressure = max(
+        _safe_float(feedback_summary.get("graph_mutation_pressure", 0.0)),
+        _safe_float(episode_metrics.get("graph_mutation_pressure", 0.0)),
+    )
+    econ_tensor_signal = 0.0
+    econ_tensor = dict(datapack.econ_tensor_v1 or {})
+    if isinstance(econ_tensor.get("x"), (list, tuple)) and econ_tensor.get("x"):
+        econ_tensor_signal = float(np.tanh(np.mean(np.asarray(econ_tensor["x"], dtype=np.float32))))
+    return np.array(
+        [
+            semantic_quality,
+            tag_density,
+            risk_flag,
+            workcell_flag,
+            process_reward_signal,
+            gap_priority,
+            missing_edge_fraction,
+            max(graph_pressure, econ_tensor_signal),
+        ],
+        dtype=np.float32,
+    )
+
+
+def _semantic_gap_training_weight(datapack) -> float:
+    features = _semantic_gap_training_features(datapack)
+    return float(
+        max(
+            0.5,
+            1.0 + 0.35 * features[5] + 0.25 * features[6] + 0.2 * features[7] + 0.2 * features[4],
+        )
+    )
+
+
 class DataPackWorldModelDataset(Dataset):
     """PyTorch dataset from DataPacks."""
 
-    def __init__(self, datapacks, use_trust_weighting=True):
+    def __init__(
+        self,
+        datapacks,
+        use_trust_weighting=True,
+        use_semantic_gap_features=True,
+        use_semantic_gap_weighting=True,
+    ):
         """
         Args:
             datapacks: List of DataPackMeta objects
@@ -40,6 +114,8 @@ class DataPackWorldModelDataset(Dataset):
         """
         self.datapacks = datapacks
         self.use_trust_weighting = use_trust_weighting
+        self.use_semantic_gap_features = use_semantic_gap_features
+        self.use_semantic_gap_weighting = use_semantic_gap_weighting
 
         # Extract features and targets
         self.features = []
@@ -49,6 +125,8 @@ class DataPackWorldModelDataset(Dataset):
         for dp in datapacks:
             # Feature: condition + current metrics
             feat = make_full_datapack_features(dp)
+            if self.use_semantic_gap_features:
+                feat = np.concatenate([feat, _semantic_gap_training_features(dp)], axis=0)
             self.features.append(feat)
 
             # Target: next step metrics (delta_J, delta_mpl, delta_error, delta_ep)
@@ -65,6 +143,8 @@ class DataPackWorldModelDataset(Dataset):
                 weight = dp.attribution.trust_score * dp.attribution.w_econ
             else:
                 weight = 1.0
+            if self.use_semantic_gap_weighting:
+                weight *= _semantic_gap_training_weight(dp)
             self.weights.append(weight)
 
         self.features = np.array(self.features, dtype=np.float32)
@@ -162,6 +242,8 @@ def train_world_model_from_datapacks(
     min_trust: float = 0.5,
     source_type: str = None,  # "real", "synthetic", or None for all
     use_trust_weighting: bool = True,
+    use_semantic_gap_features: bool = True,
+    use_semantic_gap_weighting: bool = True,
     output_dir: str = "results/wm_datapack_training",
     run_id: str = None
 ):
@@ -224,7 +306,12 @@ def train_world_model_from_datapacks(
 
     # Create dataset
     print("\n3. Creating PyTorch dataset...")
-    dataset = DataPackWorldModelDataset(datapacks, use_trust_weighting=use_trust_weighting)
+    dataset = DataPackWorldModelDataset(
+        datapacks,
+        use_trust_weighting=use_trust_weighting,
+        use_semantic_gap_features=use_semantic_gap_features,
+        use_semantic_gap_weighting=use_semantic_gap_weighting,
+    )
     print(f"   Feature dim: {dataset.features.shape[1]}")
     print(f"   Target dim: {dataset.targets.shape[1]}")
 
@@ -364,6 +451,8 @@ def train_world_model_from_datapacks(
         'min_trust': min_trust,
         'source_type': source_type,
         'use_trust_weighting': use_trust_weighting,
+        'use_semantic_gap_features': use_semantic_gap_features,
+        'use_semantic_gap_weighting': use_semantic_gap_weighting,
         'train_losses': train_losses,
         'val_losses': val_losses,
         'best_val_loss': best_val_loss,
@@ -458,6 +547,7 @@ def generate_synthetic_datapacks(model, source_datapacks, run_id, horizon=10):
             wm_trust_over_horizon=[source_dp.attribution.trust_score * (0.9 ** i) for i in range(horizon)],
             wm_role="wm_synth_target",
         )
+        semantic_gap_priority = float(_semantic_gap_training_weight(source_dp) - 1.0)
 
         # Create datapack based on delta_j
         if new_delta_j >= 0:
@@ -486,6 +576,15 @@ def generate_synthetic_datapacks(model, source_datapacks, run_id, horizon=10):
                 episode_id=f"synth_{source_dp.episode_id}"
             )
 
+        synth_dp.episode_metrics = {
+            **dict(source_dp.episode_metrics or {}),
+            "coverage_gap_contribution": semantic_gap_priority,
+            "semantic_gap_priority": semantic_gap_priority,
+        }
+        synth_dp.regal_annotations = {
+            **dict(source_dp.regal_annotations or {}),
+            "semantic_gap_priority": semantic_gap_priority,
+        }
         synthetic.append(synth_dp)
 
     return synthetic
@@ -515,6 +614,10 @@ def main(runner=None):
                         help='Filter by source type')
     parser.add_argument('--no-trust-weighting', action='store_true',
                         help='Disable trust-based sample weighting')
+    parser.add_argument('--no-semantic-gap-features', action='store_true',
+                        help='Disable additive semantic gap features')
+    parser.add_argument('--no-semantic-gap-weighting', action='store_true',
+                        help='Disable semantic gap weighting overlay')
     parser.add_argument('--output-dir', type=str, default='results/wm_datapack_training',
                         help='Output directory')
     parser.add_argument('--run-id', type=str, default=None,
@@ -557,6 +660,8 @@ def main(runner=None):
         min_trust=args.min_trust,
         source_type=args.source_type,
         use_trust_weighting=not args.no_trust_weighting,
+        use_semantic_gap_features=not args.no_semantic_gap_features,
+        use_semantic_gap_weighting=not args.no_semantic_gap_weighting,
         output_dir=args.output_dir,
         run_id=args.run_id
     )
