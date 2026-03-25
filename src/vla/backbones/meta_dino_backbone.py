@@ -1,159 +1,184 @@
-"""
-Meta DINO Vision Backbone.
+"""Meta DINO vision backbone with explicit backend policy."""
 
-Wraps Meta's DINO (self-DIstillation with NO labels) vision transformer.
-Soft-fails to DummyBackbone if dependencies are unavailable.
-"""
+from __future__ import annotations
 
 import warnings
-from typing import Any, Sequence, Optional
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 
-from src.vla.vision_backbone import VisionBackbone, normalize_embedding
 from src.vla.backbones.dummy_backbone import DummyBackbone
+from src.vla.vision_backbone import VisionBackbone, normalize_embedding
+
+
+def _normalize_backend_policy(value: Optional[str]) -> str:
+    policy = str(value or "auto").strip().lower()
+    if policy not in {"auto", "real", "disabled", "stub"}:
+        return "auto"
+    return policy
 
 
 class MetaDINOBackbone(VisionBackbone):
-    """
-    Meta DINO Vision Backbone.
-
-    Wraps DINO (or DINOv2) from Meta/Facebook for visual embeddings.
-    Uses HuggingFace transformers or timm for model loading.
-
-    If dependencies are unavailable, falls back to DummyBackbone internally.
-    """
+    """Meta DINO backbone that is real-or-unavailable unless stub is explicit."""
 
     def __init__(
         self,
         model_name: str = "facebook/dino-vitb16",
         device: str = "cuda",
         enabled: bool = True,
+        backend_policy: str = "auto",
     ):
-        """
-        Initialize Meta DINO backbone.
-
-        Args:
-            model_name: HuggingFace model name or timm model name
-                Options: "facebook/dino-vitb16", "facebook/dinov2-base", etc.
-            device: Device to run model on ("cuda", "cpu")
-            enabled: If False, skip loading and use dummy backend
-        """
         self._model_name = model_name
         self._device = device
         self._enabled = enabled
+        self._backend_policy = _normalize_backend_policy(backend_policy)
         self._available = False
         self._model = None
         self._processor = None
-        self._fallback = DummyBackbone(embedding_dim=768)  # Match ViT-B/16 dim
+        self._fallback: Optional[DummyBackbone] = None
+        self._backend_type = ""
+        self._backend_selected = "unavailable"
+        self._failure_reason: Optional[str] = None
+        self._embedding_dim_actual = 768
 
-        if not enabled:
-            warnings.warn("MetaDINOBackbone disabled, using DummyBackbone fallback")
+        if not enabled or self._backend_policy == "disabled":
+            self._backend_selected = "disabled"
+            self._failure_reason = "backend_disabled"
             return
 
-        # Try to load the model
+        if self._backend_policy == "stub":
+            self._fallback = DummyBackbone(embedding_dim=768)
+            self._backend_selected = "stub"
+            self._failure_reason = "explicit_stub_requested"
+            return
+
         self._try_load_model()
 
-    def _try_load_model(self):
-        """Attempt to load DINO model with soft failure."""
-        # Try HuggingFace transformers first
+    def _try_load_model(self) -> None:
+        last_error: Optional[str] = None
+
         try:
             import torch
-            from transformers import AutoModel, AutoFeatureExtractor  # type: ignore[import-not-found]
+            from transformers import AutoFeatureExtractor, AutoModel  # type: ignore[import-not-found]
 
             self._model = AutoModel.from_pretrained(self._model_name)
             self._processor = AutoFeatureExtractor.from_pretrained(self._model_name)
             self._model.to(self._device)
             self._model.eval()
 
-            # Get actual embedding dimension
             with torch.no_grad():
-                # Create dummy input to get output shape
                 dummy = torch.randn(1, 3, 224, 224).to(self._device)
                 output = self._model(dummy)
                 if hasattr(output, "last_hidden_state"):
-                    # Take CLS token
-                    self._embedding_dim_actual = output.last_hidden_state.shape[-1]
+                    self._embedding_dim_actual = int(output.last_hidden_state.shape[-1])
                 else:
-                    self._embedding_dim_actual = output.shape[-1]
+                    self._embedding_dim_actual = int(output.shape[-1])
 
             self._available = True
             self._backend_type = "transformers"
-            print(f"MetaDINOBackbone: Loaded {self._model_name} via transformers")
+            self._backend_selected = "real"
+            self._failure_reason = None
             return
+        except ImportError as exc:
+            last_error = f"transformers_import_error:{exc}"
+            warnings.warn(f"transformers not available: {exc}")
+        except Exception as exc:
+            last_error = f"transformers_load_error:{exc}"
+            warnings.warn(f"Failed to load {self._model_name} via transformers: {exc}")
 
-        except ImportError as e:
-            warnings.warn(f"transformers not available: {e}")
-        except Exception as e:
-            warnings.warn(f"Failed to load {self._model_name} via transformers: {e}")
-
-        # Try timm as fallback
         try:
             import torch
             import timm  # type: ignore[import-not-found]
 
-            # Map model names
             timm_name = self._model_name.replace("facebook/", "").replace("-", "_")
             if "dino" in timm_name.lower():
-                timm_name = f"vit_base_patch16_224.dino"  # Common DINO model
+                timm_name = "vit_base_patch16_224.dino"
 
             self._model = timm.create_model(timm_name, pretrained=True, num_classes=0)
             self._model.to(self._device)
             self._model.eval()
 
-            # Get embedding dim
             with torch.no_grad():
                 dummy = torch.randn(1, 3, 224, 224).to(self._device)
                 output = self._model(dummy)
-                self._embedding_dim_actual = output.shape[-1]
+                self._embedding_dim_actual = int(output.shape[-1])
 
             self._available = True
             self._backend_type = "timm"
-            print(f"MetaDINOBackbone: Loaded {timm_name} via timm")
+            self._backend_selected = "real"
+            self._failure_reason = None
             return
+        except ImportError as exc:
+            last_error = f"timm_import_error:{exc}"
+            warnings.warn(f"timm not available: {exc}")
+        except Exception as exc:
+            last_error = f"timm_load_error:{exc}"
+            warnings.warn(f"Failed to load via timm: {exc}")
 
-        except ImportError as e:
-            warnings.warn(f"timm not available: {e}")
-        except Exception as e:
-            warnings.warn(f"Failed to load via timm: {e}")
-
-        # All attempts failed
+        self._available = False
+        self._backend_selected = "unavailable"
+        self._failure_reason = last_error or "model_unavailable"
         warnings.warn(
             f"MetaDINOBackbone: Could not load {self._model_name}. "
-            f"Falling back to DummyBackbone. "
-            f"Install transformers/timm and ensure model is available."
+            "Backend remains unavailable."
         )
-        self._available = False
+        if self._backend_policy == "real":
+            raise RuntimeError(self._failure_reason)
 
     @property
     def embedding_dim(self) -> int:
-        """Return embedding dimension."""
         if self._available:
             return self._embedding_dim_actual
-        return self._fallback.embedding_dim
+        if self._fallback is not None:
+            return self._fallback.embedding_dim
+        return self._embedding_dim_actual
 
     @property
     def available(self) -> bool:
-        """Check if real DINO model is available."""
         return self._available
 
     @property
+    def backend_selected(self) -> str:
+        return self._backend_selected
+
+    @property
+    def failure_reason(self) -> Optional[str]:
+        return self._failure_reason
+
+    @property
     def name(self) -> str:
-        """Return backbone name."""
         if self._available:
             return f"MetaDINO({self._model_name})"
-        return f"MetaDINO(fallback=DummyBackbone)"
+        if self._backend_selected == "stub":
+            return "MetaDINO(stub=DummyBackbone)"
+        return f"MetaDINO({self._backend_selected})"
 
-    def _preprocess_for_dino(self, image: Any) -> "torch.Tensor":
-        """Preprocess image for DINO model."""
+    def status(self) -> Dict[str, Any]:
+        return {
+            "model_name": self._model_name,
+            "device": self._device,
+            "backend_policy": self._backend_policy,
+            "backend_selected": self._backend_selected,
+            "available": bool(self._available),
+            "backend_type": self._backend_type,
+            "failure_reason": self._failure_reason,
+            "embedding_dim": int(self.embedding_dim),
+        }
+
+    def _raise_unavailable(self) -> None:
+        raise RuntimeError(
+            "MetaDINOBackbone unavailable "
+            f"(policy={self._backend_policy}, selected={self._backend_selected}, "
+            f"reason={self._failure_reason or 'unknown'})"
+        )
+
+    def _preprocess_for_dino(self, image: Any) -> Any:
         import torch
 
-        # Handle PIL Image
         try:
             from PIL import Image as PILImage
 
             if isinstance(image, np.ndarray):
-                # Convert numpy to PIL
                 if image.dtype != np.uint8:
                     if image.max() <= 1.0:
                         image = (image * 255).astype(np.uint8)
@@ -163,12 +188,10 @@ class MetaDINOBackbone(VisionBackbone):
         except ImportError:
             pass
 
-        # Use processor if available (transformers)
         if self._processor is not None:
             inputs = self._processor(images=image, return_tensors="pt")
             return inputs["pixel_values"].to(self._device)
 
-        # Manual preprocessing for timm
         from PIL import Image as PILImage
 
         if isinstance(image, np.ndarray):
@@ -176,66 +199,42 @@ class MetaDINOBackbone(VisionBackbone):
                 image = (image * 255).astype(np.uint8)
             image = PILImage.fromarray(image)
 
-        # Resize to 224x224
         image = image.convert("RGB").resize((224, 224))
         arr = np.array(image).astype(np.float32) / 255.0
-
-        # Normalize with ImageNet stats
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
         arr = (arr - mean) / std
-
-        # To tensor: (H, W, C) -> (C, H, W)
         tensor = torch.from_numpy(arr.transpose(2, 0, 1)).float().unsqueeze(0)
         return tensor.to(self._device)
 
     def encode_frame(self, image: Any) -> np.ndarray:
-        """
-        Encode a single frame into embedding.
-
-        Args:
-            image: Input image (np.ndarray or PIL.Image)
-
-        Returns:
-            np.ndarray of shape (embedding_dim,)
-        """
         if not self._available:
-            return self._fallback.encode_frame(image)
+            if self._fallback is not None:
+                return self._fallback.encode_frame(image)
+            self._raise_unavailable()
 
         import torch
 
         with torch.no_grad():
             inputs = self._preprocess_for_dino(image)
             output = self._model(inputs)
-
-            # Extract embedding
             if hasattr(output, "last_hidden_state"):
-                # Transformers: take CLS token (first token)
                 embedding = output.last_hidden_state[:, 0, :].cpu().numpy()[0]
             elif hasattr(output, "pooler_output"):
                 embedding = output.pooler_output.cpu().numpy()[0]
             else:
-                # timm: already pooled
                 embedding = output.cpu().numpy()[0]
-
         return normalize_embedding(embedding.astype(np.float32))
 
     def encode_sequence(self, frames: Sequence[Any]) -> np.ndarray:
-        """
-        Encode sequence of frames via mean pooling.
-
-        Args:
-            frames: List of images
-
-        Returns:
-            Mean of per-frame embeddings (normalized)
-        """
         if not self._available:
-            return self._fallback.encode_sequence(frames)
+            if self._fallback is not None:
+                return self._fallback.encode_sequence(frames)
+            self._raise_unavailable()
 
         if len(frames) == 0:
             return np.zeros(self.embedding_dim, dtype=np.float32)
 
-        embeddings = np.stack([self.encode_frame(f) for f in frames])
+        embeddings = np.stack([self.encode_frame(frame) for frame in frames])
         mean_embedding = embeddings.mean(axis=0)
         return normalize_embedding(mean_embedding)

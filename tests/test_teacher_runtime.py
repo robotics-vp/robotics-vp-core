@@ -84,6 +84,7 @@ def test_openvla_teacher_runtime_reports_unavailable_predictions() -> None:
     assert envelope.failure_mode == "teacher_missing"
     assert envelope.provenance["contract_id"] == contract.contract_id
     assert contract.metadata["execution_preconditions"]["ready"] is False
+    assert contract.metadata["backend_status"]["backend_selected"] == "unavailable"
     assert envelope.metadata["execution_preconditions"]["ready"] is False
     assert "object:drawer" in TeacherActionEnvelope.unavailable(
         teacher_id="openvla",
@@ -107,3 +108,4 @@ def test_openvla_teacher_runtime_enriches_semantic_hints() -> None:
     assert "fragility" in envelope.risk_hints
     assert "drawer" in vla_payload["object_refs"]
     assert "open" in vla_payload["affordance_hints"]
+    assert envelope.metadata["backend_selected"] == "real"

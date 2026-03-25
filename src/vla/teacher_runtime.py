@@ -168,18 +168,31 @@ class OpenVLATeacherRuntime:
         cfg = getattr(self.controller, "cfg", None)
         model_name = str(getattr(cfg, "model_name", "openvla"))
         available = bool(getattr(self.controller, "available", False))
+        backend_status = (
+            self.controller.backend_status()
+            if hasattr(self.controller, "backend_status")
+            else {
+                "backend_selected": "real" if available else "unavailable",
+                "backend_policy": str(getattr(cfg, "backend_policy", "auto")),
+                "failure_reason": "",
+                "vision_backbone_selected": "",
+                "vision_backbone_policy": str(getattr(cfg, "vision_backbone_policy", "auto")),
+            }
+        )
         preconditions = build_execution_preconditions(
             subject_id="openvla",
             subject_kind="teacher_runtime",
             artifact_refs={"model_name": model_name},
             signal_values={
                 "teacher_available": available,
+                "teacher_real_backend": str(backend_status.get("backend_selected", "")) == "real",
                 "advisory_only": True,
             },
             required_boolean_signals={"teacher_available": True},
             metadata={
                 "device": str(getattr(cfg, "device", "unknown")),
                 "dtype": str(getattr(cfg, "dtype", "unknown")),
+                "backend_status": backend_status,
             },
         )
         return TeacherAdapterContract(
@@ -191,6 +204,7 @@ class OpenVLATeacherRuntime:
             metadata={
                 "device": str(getattr(cfg, "device", "unknown")),
                 "dtype": str(getattr(cfg, "dtype", "unknown")),
+                "backend_status": backend_status,
                 "execution_preconditions": preconditions.to_dict(),
             },
         )
@@ -243,6 +257,7 @@ class OpenVLATeacherRuntime:
             artifact_refs={"contract_id": contract.contract_id},
             signal_values={
                 "teacher_available": available,
+                "teacher_real_backend": str(payload.get("backend_selected", "")) == "real",
                 "confidence": float(payload.get("confidence", 0.0)),
             },
             required_boolean_signals={"teacher_available": True},
@@ -272,6 +287,13 @@ class OpenVLATeacherRuntime:
             },
             metadata={
                 "available": available,
+                "backend_selected": str(
+                    payload.get("backend_selected", "real" if available else "unavailable")
+                ),
+                "backend_policy": str(payload.get("backend_policy", "")),
+                "vision_backbone_selected": str(payload.get("vision_backbone_selected", "")),
+                "vision_backbone_policy": str(payload.get("vision_backbone_policy", "")),
+                "failure_reason": str(payload.get("failure_reason", "")),
                 "semantic_summary": semantic_bundle,
                 "execution_preconditions": execution_preconditions.to_dict(),
             },

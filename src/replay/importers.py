@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
+from src.evidence.benchmark_gating import collect_benchmark_gating_signals
 from src.replay.ingest import REPLAY_SCHEMA_VERSION
 from src.replay.schema import ReplayEpisodeRecord, ReplayStepRecord, ReplayWindowRecord
 from src.utils.config_digest import sha256_json
@@ -69,6 +70,7 @@ def _future_signals_from_admission(
                 grounded_track_count = int(topology.get("grounded_track_object_count", 0) or 0)
         except Exception:
             grounded_track_count = 0
+    benchmark_signals = collect_benchmark_gating_signals(row)
     derived = {
         "replay_roundtrip_complete": True,
         "promotion_trace_complete": bool(
@@ -85,6 +87,12 @@ def _future_signals_from_admission(
         "scene_tracks_non_stub": bool(row.get("scene_tracks_non_stub", False)),
         "semantic_memory_grounded": grounded_track_count > 0,
         "budget_settlement_live": False,
+        "teacher_runtime_real": bool(benchmark_signals.get("teacher_runtime_real", False)),
+        "vision_backbone_real": bool(benchmark_signals.get("vision_backbone_real", False)),
+        "semantic_grounding_non_heuristic": bool(
+            benchmark_signals.get("semantic_grounding_non_heuristic", False)
+        ),
+        "benchmark_eligible": bool(benchmark_signals.get("benchmark_eligible", False)),
     }
     monotonic_explicit_keys = {
         "scene_tracks_non_stub",
@@ -108,6 +116,7 @@ def _future_signals_from_degraded(
     explicit = payload.get("future_training_signals", {})
     if not isinstance(explicit, Mapping):
         explicit = {}
+    benchmark_signals = collect_benchmark_gating_signals(payload)
     derived = {
         "replay_roundtrip_complete": True,
         "promotion_trace_complete": False,
@@ -118,6 +127,12 @@ def _future_signals_from_degraded(
         "scene_tracks_non_stub": bool(payload.get("scene_tracks_non_stub", False)),
         "semantic_memory_grounded": False,
         "budget_settlement_live": False,
+        "teacher_runtime_real": bool(benchmark_signals.get("teacher_runtime_real", False)),
+        "vision_backbone_real": bool(benchmark_signals.get("vision_backbone_real", False)),
+        "semantic_grounding_non_heuristic": bool(
+            benchmark_signals.get("semantic_grounding_non_heuristic", False)
+        ),
+        "benchmark_eligible": bool(benchmark_signals.get("benchmark_eligible", False)),
     }
     monotonic_explicit_keys = {
         "scene_tracks_non_stub",

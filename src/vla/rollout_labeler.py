@@ -44,11 +44,13 @@ def label_rollouts_with_vla(
     risk_levels: set[str] = set()
     vla_tags: set[str] = set()
 
-    openvla_enabled = _openvla_enabled()
+    openvla_policy = _openvla_backend_policy()
+    openvla_enabled = openvla_policy != "disabled"
     teacher_runtime = None
     teacher_contract = _fallback_teacher_contract(
         enabled=openvla_enabled,
         availability_reason="openvla_disabled" if not openvla_enabled else "",
+        backend_policy=openvla_policy,
     )
     vla_error_reason = "openvla_disabled" if not openvla_enabled else None
     if openvla_enabled:
@@ -60,14 +62,16 @@ def label_rollouts_with_vla(
                 teacher_contract = _fallback_teacher_contract(
                     enabled=True,
                     availability_reason=vla_error_reason,
+                    backend_policy=openvla_policy,
                 )
         except Exception as exc:
             vla_error_reason = str(exc)
             teacher_contract = _fallback_teacher_contract(
                 enabled=True,
                 availability_reason=vla_error_reason,
+                backend_policy=openvla_policy,
             )
-            logger.warning("OpenVLA initialization failed; falling back to stub labels: %s", exc)
+            logger.warning("OpenVLA initialization failed; teacher remains unavailable: %s", exc)
 
     for episode in rollouts.episodes:
         derived_motion_clips.append(MotionClipSpec(path=str(episode.trajectory_path), weight=1.0))
@@ -343,18 +347,22 @@ def _tags_from_vla_action(action: Mapping[str, Any]) -> set[str]:
     return tags
 
 
-def _openvla_enabled() -> bool:
+def _openvla_backend_policy() -> str:
+    explicit = os.getenv("OPENVLA_BACKEND_POLICY", "").strip().lower()
+    if explicit in {"auto", "real", "disabled", "stub"}:
+        return explicit
     for key in ("OPENVLA_ENABLE", "VLA_ENABLE"):
         raw = os.getenv(key, "")
         if raw.strip().lower() in {"1", "true", "yes"}:
-            return True
-    return False
+            return "auto"
+    return "disabled"
 
 
 def _fallback_teacher_contract(
     *,
     enabled: bool,
     availability_reason: str,
+    backend_policy: str,
 ) -> TeacherAdapterContract:
     return TeacherAdapterContract(
         teacher_id="openvla",
@@ -365,6 +373,8 @@ def _fallback_teacher_contract(
         metadata={
             "enabled": bool(enabled),
             "availability_reason": str(availability_reason),
+            "backend_policy": str(backend_policy),
+            "backend_selected": "disabled" if not enabled else "unavailable",
         },
     )
 
@@ -382,22 +392,32 @@ def _get_openvla_teacher_runtime() -> Tuple[OpenVLATeacherRuntime | None, str | 
     try:
         from src.vla.openvla_controller import OpenVLAConfig, OpenVLAController
     except Exception as exc:
-        logger.warning("OpenVLA import failed; falling back to stub labels: %s", exc)
+        logger.warning("OpenVLA import failed; teacher remains unavailable: %s", exc)
         _OPENVLA_ERROR = str(exc)
         return None, _OPENVLA_ERROR
     model_name = os.getenv("OPENVLA_MODEL_NAME") or os.getenv("OPENVLA_MODEL") or "openvla/openvla-7b"
+    backend_policy = _openvla_backend_policy()
     cfg = OpenVLAConfig(
         model_name=model_name,
         device=os.getenv("OPENVLA_DEVICE", "cuda:0"),
         dtype=os.getenv("OPENVLA_DTYPE", "bfloat16"),
+        backend_policy=backend_policy,
+        use_vision_backbone=os.getenv("OPENVLA_USE_VISION_BACKBONE", "").strip().lower() in {"1", "true", "yes"},
+        vision_backbone_type=os.getenv("OPENVLA_VISION_BACKBONE_TYPE", "dino"),
+        vision_backbone_model=os.getenv("OPENVLA_VISION_BACKBONE_MODEL", "facebook/dinov2-small"),
+        vision_backbone_policy=os.getenv("OPENVLA_VISION_BACKBONE_POLICY", "auto"),
     )
     controller = OpenVLAController(cfg)
     controller.load_model()
     runtime = OpenVLATeacherRuntime(controller)
     _OPENVLA_RUNTIME = runtime
     if not controller.available:
-        logger.warning("OpenVLA unavailable; falling back to stub labels.")
-        _OPENVLA_ERROR = "OpenVLA unavailable"
+        logger.warning(
+            "OpenVLA unavailable; backend_selected=%s reason=%s",
+            controller.backend_selected,
+            controller.failure_reason,
+        )
+        _OPENVLA_ERROR = controller.failure_reason or "OpenVLA unavailable"
         return runtime, _OPENVLA_ERROR
     _OPENVLA_ERROR = None
     return runtime, None
@@ -434,7 +454,7 @@ def _try_openvla_action(
         error = envelope.failure_mode if not envelope.available and envelope.failure_mode else None
         return envelope, error
     except Exception as exc:
-        logger.warning("OpenVLA inference failed; falling back to stub labels: %s", exc)
+        logger.warning("OpenVLA inference failed; teacher remains unavailable: %s", exc)
         unavailable = TeacherActionEnvelope.unavailable(
             teacher_id=teacher_contract.teacher_id,
             model_name=teacher_contract.model_name,

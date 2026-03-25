@@ -4,8 +4,8 @@ Smoke tests for VisionBackbone abstraction and embedding utilities.
 
 Tests:
 1. DummyBackbone construction and encoding
-2. MetaDINOBackbone soft-fail to DummyBackbone
-3. Episode embedding integration with OpenVLAController
+2. MetaDINOBackbone real-or-unavailable policy and explicit stub path
+3. Episode embedding integration with OpenVLAController under explicit stub policy
 4. Embedding utilities (novelty, regime clustering, statistics)
 5. DataPackMeta embedding serialization
 """
@@ -64,30 +64,49 @@ def test_dummy_backbone():
     print()
 
 
-def test_meta_dino_soft_fail():
-    """Test MetaDINOBackbone soft-fails to DummyBackbone when dependencies unavailable."""
+def test_meta_dino_backend_policy():
+    """Test MetaDINOBackbone explicit unavailable and explicit stub behavior."""
     print("=" * 60)
-    print("Test 2: MetaDINOBackbone soft-fail to DummyBackbone")
+    print("Test 2: MetaDINOBackbone backend policy")
     print("=" * 60)
 
     from src.vla.backbones.meta_dino_backbone import MetaDINOBackbone
 
-    # This should soft-fail to DummyBackbone if transformers/timm not available
     backbone = MetaDINOBackbone(
         model_name="facebook/dinov2-small",
         device="cpu",  # Use CPU to avoid CUDA issues
+        backend_policy="auto",
     )
     print(f"  Created backbone: {backbone.name}")
     print(f"  Embedding dimension: {backbone.embedding_dim}")
     print(f"  Real DINO available: {backbone.available}")
+    print(f"  Backend selected: {backbone.backend_selected}")
 
-    # Should still work regardless of fallback
     img = Image.new("RGB", (224, 224), color="gray")
-    embedding = backbone.encode_frame(img)
-    print(f"  Frame embedding shape: {embedding.shape}")
-    assert embedding.shape == (backbone.embedding_dim,)
+    if backbone.available:
+        embedding = backbone.encode_frame(img)
+        print(f"  Frame embedding shape: {embedding.shape}")
+        assert embedding.shape == (backbone.embedding_dim,)
+    else:
+        try:
+            backbone.encode_frame(img)
+        except RuntimeError as exc:
+            print(f"  Unavailable path raised as expected: {exc}")
+        else:
+            raise AssertionError("Unavailable MetaDINO backbone should not silently emit embeddings")
 
-    print("  TEST 2 PASSED: MetaDINOBackbone soft-fail works")
+    stub_backbone = MetaDINOBackbone(
+        model_name="facebook/dinov2-small",
+        device="cpu",
+        backend_policy="stub",
+    )
+    stub_embedding = stub_backbone.encode_frame(img)
+    print(f"  Stub backbone selected: {stub_backbone.backend_selected}")
+    print(f"  Stub embedding shape: {stub_embedding.shape}")
+    assert stub_backbone.backend_selected == "stub"
+    assert stub_embedding.shape == (stub_backbone.embedding_dim,)
+
+    print("  TEST 2 PASSED: MetaDINOBackbone policy works")
     print()
 
 
@@ -99,20 +118,23 @@ def test_openvla_controller_with_backbone():
 
     from src.vla.openvla_controller import OpenVLAController, OpenVLAConfig
 
-    # Configure with vision backbone enabled
+    # Configure with explicit stub vision backbone so the smoke does not fake a real DINO path
     cfg = OpenVLAConfig(
+        backend_policy="auto",
         use_vision_backbone=True,
         vision_backbone_type="dummy",
+        vision_backbone_policy="stub",
     )
     controller = OpenVLAController(cfg)
     print("  Created OpenVLAController with config:")
     print(f"    use_vision_backbone={cfg.use_vision_backbone}")
     print(f"    vision_backbone_type={cfg.vision_backbone_type}")
 
-    # Load model (VLA model may not be available, but backbone should load)
+    # Load model (VLA model may not be available, but explicit stub backbone should load)
     controller.load_model()
     print(f"  VLA model available: {controller.available}")
     print(f"  Vision backbone available: {controller.has_vision_backbone()}")
+    print(f"  Backend status: {controller.backend_status()}")
     assert controller.has_vision_backbone(), "Vision backbone should be loaded"
 
     # Start episode
@@ -319,7 +341,12 @@ def test_end_to_end_pipeline():
     from src.valuation.embedding_utils import compute_embedding_novelty
 
     # Create controller with backbone
-    cfg = OpenVLAConfig(use_vision_backbone=True, vision_backbone_type="dummy")
+    cfg = OpenVLAConfig(
+        backend_policy="auto",
+        use_vision_backbone=True,
+        vision_backbone_type="dummy",
+        vision_backbone_policy="stub",
+    )
     controller = OpenVLAController(cfg)
     controller.load_model()
 
@@ -384,7 +411,7 @@ def main():
     print("=" * 60 + "\n")
 
     test_dummy_backbone()
-    test_meta_dino_soft_fail()
+    test_meta_dino_backend_policy()
     test_openvla_controller_with_backbone()
     test_embedding_novelty()
     test_regime_clustering()
@@ -397,8 +424,8 @@ def main():
     print("=" * 60)
     print("\nSummary:")
     print("  - DummyBackbone: deterministic embeddings work")
-    print("  - MetaDINOBackbone: soft-fail to dummy works")
-    print("  - OpenVLAController: backbone integration (additive, logging only)")
+    print("  - MetaDINOBackbone: real-or-unavailable plus explicit stub policy works")
+    print("  - OpenVLAController: explicit stub backbone integration works")
     print("  - Embedding novelty: distance-based novelty scores work")
     print("  - Regime clustering: K-means and centroid-based assignment work")
     print("  - Embedding statistics: summary stats computed correctly")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, Mapping, Optional
 
+from src.evidence.benchmark_gating import collect_benchmark_gating_signals
 from src.evidence.preconditions import (
     ExecutionPreconditionsReport,
     build_execution_preconditions,
@@ -70,6 +71,7 @@ def _future_training_signals(
         and (refs.get("counterfactual_eval_ref") or refs.get("counterfactual_eval_path"))
         and (refs.get("value_target_pack_ref") or refs.get("value_target_pack_path"))
     )
+    benchmark_signals = collect_benchmark_gating_signals(metadata)
     derived = {
         "replay_roundtrip_complete": source_adapter in {
             "rlds_bridge_rehydration_v1",
@@ -85,6 +87,12 @@ def _future_training_signals(
             or metadata.get("semantic_memory_grounded", False)
         ),
         "budget_settlement_live": bool(metadata.get("budget_settlement_live", False)),
+        "teacher_runtime_real": bool(benchmark_signals.get("teacher_runtime_real", False)),
+        "vision_backbone_real": bool(benchmark_signals.get("vision_backbone_real", False)),
+        "semantic_grounding_non_heuristic": bool(
+            benchmark_signals.get("semantic_grounding_non_heuristic", False)
+        ),
+        "benchmark_eligible": bool(benchmark_signals.get("benchmark_eligible", False)),
     }
     for key, value in explicit.items():
         derived[str(key)] = bool(value)

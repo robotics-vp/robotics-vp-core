@@ -875,7 +875,13 @@ def ingest_rollout_bundle(
                     semantic_world_model_summary.get("topology", {}).get("grounded_track_object_count", 0)
                     or scene_tracks_metadata.get("semantic_grounding_ready", False)
                 ),
+                "semantic_grounding_non_heuristic": bool(
+                    raw_rollout_metadata.get("semantic_grounding_non_heuristic", False)
+                    or scene_tracks_metadata.get("scene_tracks_backend", "") in {"real", "passthrough"}
+                ),
                 "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+                "openvla_backend_selected": str(raw_rollout_metadata.get("openvla_backend_selected", "")),
+                "openvla_vision_backbone_selected": str(raw_rollout_metadata.get("openvla_vision_backbone_selected", "")),
                 "semantic_world_model_summary": semantic_world_model_summary,
             }
             episode_payload["provenance"] = {

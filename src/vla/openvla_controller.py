@@ -1,9 +1,26 @@
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from typing import Dict, Optional, List, Any
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from PIL import Image
+
+
+def _normalize_backend_policy(value: Optional[str]) -> str:
+    policy = str(value or "auto").strip().lower()
+    if policy not in {"auto", "real", "disabled", "stub"}:
+        return "auto"
+    return policy
+
+
+def _parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 @dataclass
@@ -13,10 +30,11 @@ class OpenVLAConfig:
     dtype: str = "bfloat16"
     unnorm_key: str = "bridge_orig"
     max_action_norm: float = 1.0
-    # Vision backbone configuration (optional)
+    backend_policy: str = "auto"
     use_vision_backbone: bool = False
     vision_backbone_type: str = "dummy"  # "dummy", "dino", "clip"
     vision_backbone_model: str = "facebook/dinov2-small"
+    vision_backbone_policy: str = "auto"
 
 
 class OpenVLAController:
@@ -25,11 +43,13 @@ class OpenVLAController:
         self.available = False
         self.model = None
         self.processor = None
-
-        # Vision backbone for embedding generation (optional, additive)
+        self.backend_selected = "unavailable"
+        self.failure_reason: Optional[str] = None
         self.vision_backbone = None
-        self._frame_buffer: List[Any] = []  # Buffer for episode frames
-        self._embedding_log: List[Dict[str, Any]] = []  # Log of embeddings
+        self.vision_backbone_selected = "disabled"
+        self.vision_backbone_failure_reason: Optional[str] = None
+        self._frame_buffer: List[Any] = []
+        self._embedding_log: List[Dict[str, Any]] = []
 
     @classmethod
     def from_config(cls, cfg_dict: Dict[str, str]):
@@ -39,56 +59,132 @@ class OpenVLAController:
             dtype=cfg_dict.get("dtype", "bfloat16"),
             unnorm_key=cfg_dict.get("unnorm_key", "bridge_orig"),
             max_action_norm=float(cfg_dict.get("max_action_norm", 1.0)),
+            backend_policy=cfg_dict.get("backend_policy", "auto"),
+            use_vision_backbone=_parse_bool(cfg_dict.get("use_vision_backbone", False)),
+            vision_backbone_type=cfg_dict.get("vision_backbone_type", "dummy"),
+            vision_backbone_model=cfg_dict.get("vision_backbone_model", "facebook/dinov2-small"),
+            vision_backbone_policy=cfg_dict.get("vision_backbone_policy", "auto"),
         )
         return cls(cfg)
 
+    def backend_status(self) -> Dict[str, Any]:
+        return {
+            "model_name": self.cfg.model_name,
+            "device": self.cfg.device,
+            "dtype": self.cfg.dtype,
+            "backend_policy": _normalize_backend_policy(self.cfg.backend_policy),
+            "backend_selected": self.backend_selected,
+            "available": bool(self.available),
+            "failure_reason": self.failure_reason,
+            "vision_backbone_enabled": bool(self.cfg.use_vision_backbone),
+            "vision_backbone_type": self.cfg.vision_backbone_type,
+            "vision_backbone_model": self.cfg.vision_backbone_model,
+            "vision_backbone_policy": _normalize_backend_policy(self.cfg.vision_backbone_policy),
+            "vision_backbone_selected": self.vision_backbone_selected,
+            "vision_backbone_failure_reason": self.vision_backbone_failure_reason,
+            "vision_backbone_available": bool(self.vision_backbone is not None),
+        }
+
     def load_model(self):
-        try:
-            from transformers import AutoModelForVision2Seq, AutoProcessor  # type: ignore
+        policy = _normalize_backend_policy(self.cfg.backend_policy)
+        self.backend_selected = "unavailable"
+        self.failure_reason = None
+        self.available = False
+        self.model = None
+        self.processor = None
 
-            self.processor = AutoProcessor.from_pretrained(self.cfg.model_name, trust_remote_code=True)
-            self.model = AutoModelForVision2Seq.from_pretrained(
-                self.cfg.model_name,
-                attn_implementation="flash_attention_2",
-                torch_dtype=getattr(__import__("torch"), self.cfg.dtype, None),
-                low_cpu_mem_usage=True,
-                trust_remote_code=True,
-            ).to(self.cfg.device)
-            self.available = True
-        except Exception as e:
-            logging.warning(f"OpenVLA not available ({e}); falling back to dummy actions.")
-            self.available = False
+        if policy == "disabled":
+            self.backend_selected = "disabled"
+            self.failure_reason = "backend_disabled"
+        elif policy == "stub":
+            self.backend_selected = "stub"
+            self.failure_reason = "explicit_stub_requested"
+        else:
+            try:
+                from transformers import AutoModelForVision2Seq, AutoProcessor  # type: ignore[import-not-found]
 
-        # Load vision backbone if configured (optional, soft-fail)
+                self.processor = AutoProcessor.from_pretrained(self.cfg.model_name, trust_remote_code=True)
+                self.model = AutoModelForVision2Seq.from_pretrained(
+                    self.cfg.model_name,
+                    attn_implementation="flash_attention_2",
+                    torch_dtype=getattr(__import__("torch"), self.cfg.dtype, None),
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                ).to(self.cfg.device)
+                self.available = True
+                self.backend_selected = "real"
+            except Exception as exc:
+                self.backend_selected = "unavailable"
+                self.failure_reason = str(exc)
+                logging.warning("OpenVLA unavailable (%s); backend stays unavailable.", exc)
+                if policy == "real":
+                    raise RuntimeError(f"OpenVLA real backend required but unavailable: {exc}") from exc
+
         if self.cfg.use_vision_backbone:
             self._load_vision_backbone()
+        else:
+            self.vision_backbone = None
+            self.vision_backbone_selected = "disabled"
+            self.vision_backbone_failure_reason = None
 
     def _load_vision_backbone(self):
-        """
-        Load vision backbone for embedding generation.
+        self.vision_backbone = None
+        self.vision_backbone_selected = "unavailable"
+        self.vision_backbone_failure_reason = None
+        policy = _normalize_backend_policy(self.cfg.vision_backbone_policy)
 
-        This is additive infrastructure - soft-fails to DummyBackbone if dependencies unavailable.
-        Does not affect VLA action prediction or training behavior.
-        """
+        if policy == "disabled":
+            self.vision_backbone_selected = "disabled"
+            self.vision_backbone_failure_reason = "backend_disabled"
+            return
+
         try:
             if self.cfg.vision_backbone_type == "dino":
                 from src.vla.backbones.meta_dino_backbone import MetaDINOBackbone
-                self.vision_backbone = MetaDINOBackbone(
-                    model_name=self.cfg.vision_backbone_model,
-                    embedding_dim=384,
-                )
-                logging.info(f"Loaded MetaDINOBackbone: {self.vision_backbone.name}")
-            else:
-                # Default to DummyBackbone
-                from src.vla.backbones.dummy_backbone import DummyBackbone
-                self.vision_backbone = DummyBackbone(embedding_dim=384)
-                logging.info(f"Loaded DummyBackbone: {self.vision_backbone.name}")
-        except Exception as e:
-            logging.warning(f"Vision backbone load failed ({e}); embedding generation disabled.")
-            self.vision_backbone = None
 
-    def predict_action(self, image: Image.Image, instruction: str) -> Dict[str, float]:
-        if not self.available or self.model is None or self.processor is None:
+                backbone = MetaDINOBackbone(
+                    model_name=self.cfg.vision_backbone_model,
+                    device=self.cfg.device,
+                    backend_policy=policy,
+                )
+                if backbone.available or backbone.backend_selected == "stub":
+                    self.vision_backbone = backbone
+                self.vision_backbone_selected = backbone.backend_selected
+                self.vision_backbone_failure_reason = backbone.failure_reason
+                if self.vision_backbone is not None:
+                    logging.info("Loaded %s", backbone.name)
+                return
+
+            if self.cfg.vision_backbone_type == "dummy":
+                if policy != "stub":
+                    self.vision_backbone_selected = "unavailable"
+                    self.vision_backbone_failure_reason = "dummy_backbone_requires_stub_policy"
+                    if policy == "real":
+                        raise RuntimeError(self.vision_backbone_failure_reason)
+                    return
+                from src.vla.backbones.dummy_backbone import DummyBackbone
+
+                self.vision_backbone = DummyBackbone(embedding_dim=384)
+                self.vision_backbone_selected = "stub"
+                self.vision_backbone_failure_reason = "explicit_stub_requested"
+                logging.info("Loaded DummyBackbone stub")
+                return
+
+            self.vision_backbone_selected = "unavailable"
+            self.vision_backbone_failure_reason = f"unsupported_backbone_type:{self.cfg.vision_backbone_type}"
+            if policy == "real":
+                raise RuntimeError(self.vision_backbone_failure_reason)
+        except Exception as exc:
+            self.vision_backbone = None
+            self.vision_backbone_selected = "unavailable"
+            self.vision_backbone_failure_reason = str(exc)
+            logging.warning("Vision backbone unavailable (%s); embedding generation disabled.", exc)
+            if policy == "real":
+                raise
+
+    def predict_action(self, image: Image.Image, instruction: str) -> Dict[str, Any]:
+        result: Dict[str, Any]
+        if self.backend_selected == "stub":
             result = {
                 "dx": 0.0,
                 "dy": 0.0,
@@ -100,7 +196,22 @@ class OpenVLAController:
                 "vla_available": False,
                 "confidence": 0.0,
                 "source": "openvla_stub",
-                "fallback_mode": "zero_action",
+                "fallback_mode": "explicit_stub",
+                "raw_action": [0.0] * 7,
+            }
+        elif not self.available or self.model is None or self.processor is None:
+            result = {
+                "dx": 0.0,
+                "dy": 0.0,
+                "dz": 0.0,
+                "droll": 0.0,
+                "dpitch": 0.0,
+                "dyaw": 0.0,
+                "gripper": 0.0,
+                "vla_available": False,
+                "confidence": 0.0,
+                "source": self.cfg.model_name,
+                "fallback_mode": self.failure_reason or self.backend_selected or "teacher_unavailable",
                 "raw_action": [0.0] * 7,
             }
         else:
@@ -109,7 +220,10 @@ class OpenVLAController:
             prompt = f"In: {instruction}\nOut:"
             inputs = self.processor(prompt, image).to(self.cfg.device)
             if self.cfg.dtype == "bfloat16":
-                inputs = {k: v.to(torch.bfloat16) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+                inputs = {
+                    key: value.to(torch.bfloat16) if isinstance(value, torch.Tensor) else value
+                    for key, value in inputs.items()
+                }
             with torch.no_grad():
                 action = self.model.predict_action(**inputs, unnorm_key=self.cfg.unnorm_key, do_sample=False)
             raw = np.array(action).astype(float).tolist()
@@ -129,72 +243,66 @@ class OpenVLAController:
                 "raw_action": raw,
             }
 
-        # Optionally buffer frame for episode embedding (additive, logging only)
+        result.update(
+            {
+                "backend_policy": _normalize_backend_policy(self.cfg.backend_policy),
+                "backend_selected": self.backend_selected,
+                "failure_reason": self.failure_reason or "",
+                "vision_backbone_policy": _normalize_backend_policy(self.cfg.vision_backbone_policy),
+                "vision_backbone_selected": self.vision_backbone_selected,
+                "vision_backbone_failure_reason": self.vision_backbone_failure_reason or "",
+            }
+        )
+
         if self.vision_backbone is not None:
             self._frame_buffer.append(image)
-            # Log per-frame embedding if desired (for debugging/analysis)
-            if len(self._frame_buffer) % 10 == 0:  # Sample every 10th frame
+            if len(self._frame_buffer) % 10 == 0:
                 try:
                     frame_emb = self.vision_backbone.encode_frame(image)
-                    self._embedding_log.append({
-                        "frame_idx": len(self._frame_buffer) - 1,
-                        "embedding_norm": float(np.linalg.norm(frame_emb)),
-                    })
-                except Exception as e:
-                    logging.debug(f"Frame embedding failed: {e}")
+                    self._embedding_log.append(
+                        {
+                            "frame_idx": len(self._frame_buffer) - 1,
+                            "embedding_norm": float(np.linalg.norm(frame_emb)),
+                            "vision_backbone_selected": self.vision_backbone_selected,
+                        }
+                    )
+                except Exception as exc:
+                    logging.debug("Frame embedding failed: %s", exc)
 
         return result
 
     def start_episode(self):
-        """
-        Reset frame buffer for new episode.
-
-        Call this at the start of each episode to begin collecting frames
-        for episode embedding computation.
-        """
         self._frame_buffer = []
         self._embedding_log = []
 
     def end_episode(self) -> Optional[np.ndarray]:
-        """
-        Compute episode embedding from buffered frames.
-
-        Call this at the end of each episode to get the pooled embedding.
-        Returns None if vision backbone is not available or no frames were collected.
-
-        This is purely for logging/analysis - does not affect training behavior.
-        """
         if self.vision_backbone is None:
             return None
-
         if len(self._frame_buffer) == 0:
             logging.debug("No frames buffered for episode embedding.")
             return None
 
         try:
-            # Use vision backbone to encode full sequence
             episode_embedding = self.vision_backbone.encode_sequence(self._frame_buffer)
             logging.info(
-                f"Episode embedding computed: dim={len(episode_embedding)}, "
-                f"frames={len(self._frame_buffer)}, norm={np.linalg.norm(episode_embedding):.4f}"
+                "Episode embedding computed: dim=%s, frames=%s, norm=%.4f",
+                len(episode_embedding),
+                len(self._frame_buffer),
+                np.linalg.norm(episode_embedding),
             )
             return episode_embedding
-        except Exception as e:
-            logging.warning(f"Episode embedding computation failed: {e}")
+        except Exception as exc:
+            logging.warning("Episode embedding computation failed: %s", exc)
             return None
 
     def get_embedding_log(self) -> List[Dict[str, Any]]:
-        """Get per-frame embedding statistics for debugging."""
         return self._embedding_log
 
     def has_vision_backbone(self) -> bool:
-        """Check if vision backbone is available."""
         return self.vision_backbone is not None
 
 
 if __name__ == "__main__":
-    from PIL import Image
-
     controller = OpenVLAController()
     controller.load_model()
     img = Image.new("RGB", (256, 256), color="gray")

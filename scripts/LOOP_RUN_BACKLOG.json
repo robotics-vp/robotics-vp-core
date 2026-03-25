@@ -1,0 +1,186 @@
+{
+  "schema_version": "v1",
+  "description": "Loop-run backlog for semantic grounding, control-loop validation, and external-data bring-up.",
+  "goal": "Trigger only when explicit host/data/model preconditions are satisfied.",
+  "created_at": "2026-03-24",
+  "updated_at": "2026-03-24",
+  "backlog": [
+    {
+      "loop_run_id": "workcell_bootstrap_semantic_loop",
+      "title": "Bootstrap the local workcell semantic loop with repo-local data",
+      "command": "python3 scripts/bootstrap_semantic_workcell_loop.py --output-root artifacts/semantic_grounding/workcell_loop_auto --episodes 2 --steps 5 --max-frames 5 --seed 24 --backend-policy auto",
+      "cwd": ".",
+      "priority": "P0",
+      "owner": "codex",
+      "auto_trigger": true,
+      "required_capabilities": {
+        "workcell_bootstrap_script_present": true,
+        "mujoco_available": true
+      },
+      "required_python_modules": [
+        "mujoco",
+        "torch"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_paths": [
+        "scripts/bootstrap_semantic_workcell_loop.py"
+      ],
+      "required_internal_data": [
+        "Repo-local procedural workcell rollout generation",
+        "Local MuJoCo workcell assets and sensor-bundle capture"
+      ],
+      "required_external_data": [],
+      "notes": "Fast inner-loop semantic bootstrap. This is allowed to use SceneTracks auto/passthrough and does not claim benchmark eligibility."
+    },
+    {
+      "loop_run_id": "openvla_teacher_backend_bringup",
+      "title": "Bring up the real OpenVLA teacher backend on-device",
+      "command": "python3 scripts/smoke_test_openvla_controller.py",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "transformers_available": true,
+        "openvla_model_ref_present": true,
+        "openvla_model_path_ready": true
+      },
+      "required_python_modules": [
+        "torch",
+        "transformers"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_env_vars": [
+        "OPENVLA_MODEL_NAME"
+      ],
+      "required_internal_data": [
+        "Local workcell or episode captures to feed the teacher lane after smoke passes"
+      ],
+      "required_external_data": [
+        "Downloaded OpenVLA model snapshot or local path mounted via OPENVLA_MODEL_NAME"
+      ],
+      "benchmark_gate": {
+        "require_real_scene_tracks": false,
+        "require_teacher_runtime": true,
+        "require_vision_backbone": false
+      },
+      "notes": "Strict real-or-unavailable bring-up. The smoke itself can run earlier, but auto-trigger stays off until the local model path exists."
+    },
+    {
+      "loop_run_id": "metadino_backend_bringup",
+      "title": "Bring up the real MetaDINO visual grounding backend",
+      "command": "python3 scripts/smoke_test_vision_backbone.py",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "transformers_available": true
+      },
+      "required_python_modules": [
+        "torch",
+        "transformers"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_internal_data": [
+        "Local workcell frames or replay captures for downstream visual grounding"
+      ],
+      "required_external_data": [
+        "MetaDINO / DINOv2 weights, typically auto-downloaded through transformers or timm"
+      ],
+      "benchmark_gate": {
+        "require_real_scene_tracks": false,
+        "require_teacher_runtime": false,
+        "require_vision_backbone": true
+      },
+      "notes": "This is the preconditioned vision-lane bring-up. Dummy embeddings are not benchmark-eligible."
+    },
+    {
+      "loop_run_id": "workcell_real_sam3d_grounding_loop",
+      "title": "Run the full workcell semantic loop with real SAM3D grounding",
+      "command": "python3 scripts/bootstrap_semantic_workcell_loop.py --output-root artifacts/semantic_grounding/workcell_loop_real_sam3d --episodes 2 --steps 5 --max-frames 5 --seed 24 --backend-policy real",
+      "cwd": ".",
+      "priority": "P0",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "opencv_available": true,
+        "sam3d_objects_repo_available": true,
+        "sam3d_body_repo_available": true,
+        "sam3d_objects_checkpoint_available": true,
+        "sam3d_body_checkpoint_available": true,
+        "mujoco_available": true
+      },
+      "required_python_modules": [
+        "torch",
+        "mujoco",
+        "cv2"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_paths": [
+        "scripts/bootstrap_semantic_workcell_loop.py",
+        "third_party/sam3d_objects",
+        "third_party/sam3d_body",
+        "checkpoints/sam3d_objects/checkpoint.pth",
+        "checkpoints/sam3d_body/checkpoint.pth"
+      ],
+      "required_internal_data": [
+        "Repo-local workcell rollout generation",
+        "MuJoCo RGB/depth/seg sensor bundles"
+      ],
+      "required_external_data": [],
+      "benchmark_gate": {
+        "require_real_scene_tracks": true,
+        "require_teacher_runtime": false,
+        "require_vision_backbone": false
+      },
+      "notes": "This is the first benchmark-eligible semantic grounding loop. Passthrough is not acceptable here."
+    },
+    {
+      "loop_run_id": "droid_semantic_replay_loop",
+      "title": "Run semantic coverage and corpus export over a DROID replay dataset",
+      "command": "python3 scripts/run_coverage_loop.py --replay-dir data/external/droid/replay_dataset --artifact-dir artifacts/semantic_grounding/droid_coverage --env workcell --sim-limit 8 --diffusion-limit 8 --write-artifacts",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "droid_dataset_present": true
+      },
+      "required_python_modules": [
+        "torch"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_paths": [
+        "scripts/run_coverage_loop.py"
+      ],
+      "required_env_path_vars": [
+        "DROID_DATASET_ROOT"
+      ],
+      "required_internal_data": [
+        "Replay bridge or converted replay dataset rooted at data/external/droid/replay_dataset"
+      ],
+      "required_external_data": [
+        "DROID trajectories and scene calibration assets"
+      ],
+      "benchmark_gate": {
+        "require_real_scene_tracks": true,
+        "require_teacher_runtime": true,
+        "require_vision_backbone": true
+      },
+      "notes": "Delayed until external data exists and the real grounding/teacher lanes are live."
+    }
+  ]
+}

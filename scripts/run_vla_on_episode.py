@@ -18,9 +18,11 @@ def main():
     parser.add_argument("--model-name", type=str, default="openvla/openvla-7b")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--dtype", type=str, default="bfloat16")
+    parser.add_argument("--backend-policy", type=str, default="auto", choices=["auto", "real", "disabled", "stub"])
     parser.add_argument("--max-episodes", type=int, default=None)
     parser.add_argument("--use-vision-backbone", action="store_true", help="Enable vision backbone for embeddings")
-    parser.add_argument("--backbone-type", type=str, default="dummy", choices=["dummy", "dino"])
+    parser.add_argument("--backbone-type", type=str, default="dino", choices=["dummy", "dino"])
+    parser.add_argument("--backbone-policy", type=str, default="auto", choices=["auto", "real", "disabled", "stub"])
     args = parser.parse_args()
 
     with open(args.episode_json, "r") as f:
@@ -58,8 +60,10 @@ def main():
         model_name=args.model_name,
         device=args.device,
         dtype=args.dtype,
+        backend_policy=args.backend_policy,
         use_vision_backbone=args.use_vision_backbone,
         vision_backbone_type=args.backbone_type,
+        vision_backbone_policy=args.backbone_policy,
     )
     controller = OpenVLAController(cfg)
     controller.load_model()
@@ -170,6 +174,7 @@ def main():
         out["episode_embedding"] = episode_embedding.tolist()
         out["backbone_type"] = args.backbone_type
         out["embedding_dim"] = len(episode_embedding)
+    out["backend_status"] = controller.backend_status()
 
     with open(os.path.join(args.out_dir, f"{episode_id}.json"), "w") as f:
         json.dump(out, f, indent=2)

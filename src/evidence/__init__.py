@@ -1,5 +1,9 @@
 """Evidence-layer scaffolding for economic-world-model readiness."""
 
+from src.evidence.benchmark_gating import (
+    build_benchmark_gate_report,
+    collect_benchmark_gating_signals,
+)
 from src.evidence.belief_state import BeliefState, belief_state_from_evidence_bus
 from src.evidence.bus import EvidenceBus, EvidenceRecord
 from src.evidence.preconditions import (
@@ -27,8 +31,10 @@ __all__ = [
     "TeacherStep",
     "TeacherTrace",
     "belief_state_from_evidence_bus",
+    "build_benchmark_gate_report",
     "build_execution_preconditions",
     "build_execution_work_order",
+    "collect_benchmark_gating_signals",
     "load_teacher_trace_json",
     "save_teacher_trace_json",
     "summarize_execution_preconditions",
