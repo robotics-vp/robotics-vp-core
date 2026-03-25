@@ -32,13 +32,22 @@ class ZVTransitionDataset(Dataset):
     """
     Dataset of (z_t, a_t, z_{t+1}) transitions from z_V rollouts.
     """
-    def __init__(self, npz_path, use_scene_tracks=False):
-        """Load transitions from npz file."""
+    def __init__(self, npz_path, use_scene_tracks=False, use_semantic_conditioning=False, semantic_sidecar_path=None):
+        """Load transitions from npz file.
+
+        Args:
+            npz_path: Path to transitions .npz
+            use_scene_tracks: Include scene tracks if available
+            use_semantic_conditioning: Load semantic conditioning from sidecar
+            semantic_sidecar_path: Path to JSON file with semantic conditioning vectors.
+                Defaults to npz_path with .json extension.
+        """
         data = np.load(npz_path, allow_pickle=True)
 
         self.n_episodes = int(data['n_episodes'])
         self.latent_dim = int(data['latent_dim'])
         self.use_scene_tracks = use_scene_tracks
+        self.use_semantic_conditioning = use_semantic_conditioning
 
         # Extract transitions
         self.z_current = []
@@ -75,9 +84,62 @@ class ZVTransitionDataset(Dataset):
         self.scene_tracks = np.array(self.scene_tracks) if (self.use_scene_tracks and has_tracks) else None
         self.episode_ids = np.array(self.episode_ids)
 
+        # Load semantic conditioning (Section H)
+        self.semantic_cond = None
+        self.semantic_cond_dim = 0
+        if self.use_semantic_conditioning:
+            self._load_semantic_conditioning(
+                semantic_sidecar_path or str(npz_path).replace('.npz', '_semantic_cond.json')
+            )
+
         print(f"Loaded {len(self)} transitions from {self.n_episodes} episodes")
         if self.scene_tracks is not None:
             print(f"  Includes scene tracks: {self.scene_tracks.shape}")
+        if self.semantic_cond is not None:
+            print(f"  Includes semantic conditioning: dim={self.semantic_cond_dim}")
+
+    def _load_semantic_conditioning(self, path):
+        """Load semantic conditioning vectors from JSON sidecar.
+
+        Expected format: list of dicts with 'episode_id' and 'cond_vector'
+        (float list), or a dict mapping episode_id -> cond_vector.
+        """
+        import json
+        try:
+            with open(path) as f:
+                raw = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"WARNING: Could not load semantic conditioning from {path}: {e}")
+            self.use_semantic_conditioning = False
+            return
+
+        # Build per-episode conditioning vectors
+        ep_cond = {}
+        if isinstance(raw, list):
+            for item in raw:
+                ep_id = int(item.get('episode_id', -1))
+                vec = item.get('cond_vector', [])
+                if ep_id >= 0 and vec:
+                    ep_cond[ep_id] = np.array(vec, dtype=np.float32)
+        elif isinstance(raw, dict):
+            for k, v in raw.items():
+                ep_cond[int(k)] = np.array(v, dtype=np.float32)
+
+        if not ep_cond:
+            print(f"WARNING: No semantic conditioning found in {path}")
+            self.use_semantic_conditioning = False
+            return
+
+        # Determine dim from first vector
+        sample_vec = next(iter(ep_cond.values()))
+        self.semantic_cond_dim = len(sample_vec)
+
+        # Expand episode-level conditioning to per-transition
+        per_transition = []
+        default_cond = np.zeros(self.semantic_cond_dim, dtype=np.float32)
+        for ep_id in self.episode_ids:
+            per_transition.append(ep_cond.get(int(ep_id), default_cond))
+        self.semantic_cond = np.array(per_transition)
 
     def __len__(self):
         return len(self.z_current)
@@ -91,7 +153,10 @@ class ZVTransitionDataset(Dataset):
         
         if self.scene_tracks is not None:
              item.append(torch.FloatTensor(self.scene_tracks[idx]))
-             
+
+        if self.semantic_cond is not None:
+            item.append(torch.FloatTensor(self.semantic_cond[idx]))
+
         return tuple(item)
 
 
@@ -101,15 +166,19 @@ class LatentDynamicsModel(nn.Module):
 
     Predicts: z_{t+1} = f(z_t, a_t)
     """
-    def __init__(self, latent_dim=128, action_dim=2, hidden_dim=256):
+    def __init__(self, latent_dim=128, action_dim=2, hidden_dim=256, semantic_cond_dim=0):
         super().__init__()
 
         self.latent_dim = latent_dim
         self.action_dim = action_dim
+        self.semantic_cond_dim = semantic_cond_dim
 
-        # Encoder for (z_t, a_t)
+        # Input dim: z_t + a_t + (optional) semantic conditioning
+        input_dim = latent_dim + action_dim + semantic_cond_dim
+
+        # Encoder for (z_t, a_t, [semantic_cond])
         self.encoder = nn.Sequential(
-            nn.Linear(latent_dim + action_dim, hidden_dim),
+            nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
@@ -123,29 +192,36 @@ class LatentDynamicsModel(nn.Module):
         # Also predict uncertainty (optional)
         self.uncertainty_head = nn.Linear(hidden_dim, latent_dim)
 
-    def forward(self, z_t, a_t):
+    def forward(self, z_t, a_t, semantic_cond=None):
         """
-        Predict z_{t+1} given z_t and a_t.
+        Predict z_{t+1} given z_t and a_t, optionally conditioned on
+        semantic WM topology.
 
         Args:
             z_t: (B, latent_dim) current state
             a_t: (B, action_dim) action
+            semantic_cond: (B, semantic_cond_dim) optional semantic conditioning
+                           from WM topology (skill-edge targets, env-primitive
+                           targets, risk/affordance families, etc.)
 
         Returns:
             z_next_pred: (B, latent_dim) predicted next state
             uncertainty: (B, latent_dim) prediction uncertainty (log variance)
         """
-        # Concatenate state and action
-        x = torch.cat([z_t, a_t], dim=-1)  # (B, latent_dim + action_dim)
+        # Concatenate state, action, and optional semantic conditioning
+        if semantic_cond is not None and self.semantic_cond_dim > 0:
+            x = torch.cat([z_t, a_t, semantic_cond], dim=-1)
+        else:
+            x = torch.cat([z_t, a_t], dim=-1)
 
         # Encode
-        h = self.encoder(x)  # (B, hidden_dim)
+        h = self.encoder(x)
 
         # Predict residual
-        delta = self.residual_head(h)  # (B, latent_dim)
+        delta = self.residual_head(h)
 
         # Predict uncertainty
-        log_var = self.uncertainty_head(h)  # (B, latent_dim)
+        log_var = self.uncertainty_head(h)
 
         # Next state = current + residual
         z_next_pred = z_t + delta
@@ -449,6 +525,17 @@ def main(runner=None):
         '--use-scene-tracks',
         action='store_true',
         help='Use scene_tracks_v1 if available in dataset'
+    )
+    parser.add_argument(
+        '--use-semantic-conditioning',
+        action='store_true',
+        help='Condition on semantic WM topology (requires sidecar JSON)'
+    )
+    parser.add_argument(
+        '--semantic-sidecar',
+        type=str,
+        default=None,
+        help='Path to semantic conditioning sidecar JSON'
     )
 
     args = parser.parse_args()

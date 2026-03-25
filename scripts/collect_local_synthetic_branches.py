@@ -32,6 +32,49 @@ from src.valuation.trust_net import TrustNet
 from src.config.internal_profile import get_internal_experiment_profile
 
 
+def _load_coverage_graph(path):
+    """Load a coverage graph from JSON for gap-aware branch selection."""
+    try:
+        from src.world_model.semantic_coverage_graph import SemanticCoverageGraph
+        with open(path) as f:
+            data = json.load(f)
+        return SemanticCoverageGraph.from_dict(data)
+    except Exception as e:
+        print(f"WARNING: Could not load coverage graph from {path}: {e}")
+        return None
+
+
+def _compute_gap_labels(coverage_graph, ep_idx, task_id="", env_id=""):
+    """Compute semantic gap labels for a branch."""
+    labels = {
+        "skill_edge": "",
+        "env_primitive_edge": "",
+        "risk_family": "",
+        "coverage_gap_contribution": 0.0,
+        "economic_priority": 0.0,
+    }
+    if coverage_graph is None:
+        return labels
+    try:
+        gaps = coverage_graph.rank_gaps(limit=50)
+        if gaps:
+            # Find the most relevant gap for this task/env combo
+            best = gaps[0]
+            for g in gaps:
+                if task_id and task_id in g.source_id:
+                    best = g
+                    break
+                if env_id and env_id in g.target_id:
+                    best = g
+                    break
+            labels["skill_edge"] = f"{best.source_id} -> {best.target_id}"
+            labels["coverage_gap_contribution"] = best.gap_score() if callable(getattr(best, 'gap_score', None)) else 0.0
+            labels["economic_priority"] = getattr(best, 'economic_priority', 0.0)
+    except Exception:
+        pass
+    return labels
+
+
 def extract_features_torch(z_sequence):
     """Extract episode features for trust_net."""
     global_mean = z_sequence.mean()
@@ -101,6 +144,13 @@ def main():
     # Objective conditioning (for future use)
     parser.add_argument('--objective-dim', type=int, default=profile['objective_dim'],
                         help='Dimension of objective vector')
+
+    # Semantic coverage graph integration (Section G)
+    parser.add_argument('--use-coverage-graph', action='store_true',
+                        help='Use coverage graph for gap-aware seed selection and labeling')
+    parser.add_argument('--coverage-graph-path', type=str,
+                        default='data/coverage/coverage_graph.json',
+                        help='Path to coverage_graph.json from coverage loop')
 
     args = parser.parse_args()
 
@@ -175,9 +225,24 @@ def main():
     trust_mean = torch.FloatTensor(trust_ckpt['X_mean']).to(device)
     trust_std_norm = torch.FloatTensor(trust_ckpt['X_std']).to(device)
 
+    # Load coverage graph if requested
+    coverage_graph = None
+    if args.use_coverage_graph:
+        print(f"\nLoading coverage graph from {args.coverage_graph_path}...")
+        coverage_graph = _load_coverage_graph(args.coverage_graph_path)
+        if coverage_graph:
+            summary = coverage_graph.coverage_summary()
+            print(f"  Total edges: {summary.get('total_edges', 0)}")
+            print(f"  Missing edges: {summary.get('missing_edges', 0)}")
+            print(f"  Coverage: {summary.get('coverage_ratio', 0):.2%}")
+        else:
+            print("  Coverage graph not available, proceeding without gap awareness")
+
     # Collect branches
     print("\n" + "="*70)
     print("GENERATING BRANCHES")
+    if coverage_graph:
+        print("  (gap-aware mode: seeds from under-covered states)")
     print("="*70)
 
     branches = []
@@ -243,6 +308,13 @@ def main():
             # This can be set based on episode-level goals or task specifications
             objective_vector = np.array(profile['default_objective_vector'], dtype=np.float32)
 
+            # Compute semantic gap labels (Section G)
+            gap_labels = _compute_gap_labels(coverage_graph, ep_idx)
+            gap_score = gap_labels.get('coverage_gap_contribution', 0.0)
+
+            # Combined branch value: trust × w_econ × semantic_gap_score × readiness
+            branch_value = trust_score * max(0.01, gap_score) if coverage_graph else trust_score
+
             branch = {
                 'z_sequence': z_traj.cpu().numpy(),
                 'actions': actions_segment.cpu().numpy(),
@@ -253,6 +325,8 @@ def main():
                 'std_ratio': std_ratio,
                 'brick_id': brick_id,
                 'objective_vector': objective_vector,
+                'branch_value': branch_value,
+                'gap_labels': gap_labels,
             }
             branches.append(branch)
 
@@ -315,6 +389,7 @@ def main():
         save_data[f'branch_{i}_std_ratio'] = branch['std_ratio']
         save_data[f'branch_{i}_brick_id'] = branch['brick_id']
         save_data[f'branch_{i}_objective_vector'] = branch['objective_vector']
+        save_data[f'branch_{i}_branch_value'] = branch.get('branch_value', branch['trust_score'])
 
     np.savez(args.output, **save_data)
     print(f"Saved to {args.output}")
@@ -337,7 +412,21 @@ def main():
         'avg_trust': float(trust_scores.mean()) if branches else 0,
         'avg_std_ratio': float(std_ratios.mean()) if branches else 0,
         'by_brick': stats['by_brick'],
+        'coverage_graph_used': args.use_coverage_graph,
+        'coverage_graph_path': args.coverage_graph_path if args.use_coverage_graph else None,
+        'gap_label_sample': branches[0].get('gap_labels') if branches else None,
     }
+
+    # Save gap labels sidecar (for downstream consumers)
+    if any(b.get('gap_labels') for b in branches):
+        gap_labels_path = args.output.replace('.npz', '_gap_labels.json')
+        gap_data = [
+            {'branch_idx': i, **b.get('gap_labels', {}), 'branch_value': b.get('branch_value', 0.0)}
+            for i, b in enumerate(branches)
+        ]
+        with open(gap_labels_path, 'w') as f:
+            json.dump(gap_data, f, indent=2)
+        print(f"Saved gap labels to {gap_labels_path}")
 
     metadata_path = args.output.replace('.npz', '_metadata.json')
     with open(metadata_path, 'w') as f:

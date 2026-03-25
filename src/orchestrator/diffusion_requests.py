@@ -28,6 +28,17 @@ class DiffusionPromptSpec:
     vla_hint: Optional[Dict[str, Any]] = None
     constraint_set_ref: Optional[Dict[str, Any]] = None
 
+    # ── Coverage-gap fields (populated by gap-driven builder) ──────────
+    topology_slice: Optional[Dict[str, Any]] = None
+    meta_node_targets: Optional[List[str]] = None
+    missing_skill_edges: Optional[List[Dict[str, str]]] = None
+    missing_env_primitives: Optional[List[str]] = None
+    risk_family_targets: Optional[List[str]] = None
+    affordance_family_targets: Optional[List[str]] = None
+    coverage_gap_score: float = 0.0
+    economic_priority_score: float = 0.0
+    trust_priority_score: float = 0.0
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -161,7 +172,6 @@ def build_diffusion_requests_from_guidance(pairs):
         prompts.append(build_diffusion_prompt_from_guidance(dp, gp))
     return prompts
 
-
 # ==============================================================================
 # Integration with VideoDiffusionStub (Stage 1/4)
 # ==============================================================================
@@ -264,3 +274,112 @@ def generate_proposals_from_prompts(
             all_proposals.append(proposal_dict)
 
     return all_proposals
+
+
+# ==============================================================================
+# Coverage-gap-driven prompt generation (Phase C)
+# ==============================================================================
+
+def build_diffusion_prompt_from_coverage_gaps(
+    coverage_graph: Any,
+    *,
+    env_name: str = "unknown",
+    engine_type: str = "pybullet",
+    task_type: str = "unknown",
+    objective_vector: Optional[List[float]] = None,
+    customer_segment: str = "balanced",
+    economic_weight: float = 1.0,
+    trust_weight: float = 1.0,
+    readiness_weight: float = 1.0,
+    limit: int = 5,
+) -> List[DiffusionPromptSpec]:
+    """Build diffusion prompts from ranked coverage gaps.
+
+    Instead of generating prompts from datapack-level guidance and flat
+    tag mixtures, this function compiles prompts from the semantic
+    coverage graph's ranked missing edges.  Each prompt targets a specific
+    missing skill–env-primitive combination.
+
+    Parameters
+    ----------
+    coverage_graph : SemanticCoverageGraph
+        From ``src.world_model.semantic_coverage_graph``.
+    env_name, engine_type, task_type, objective_vector, customer_segment
+        Defaults for the generated prompts.
+    economic_weight, trust_weight, readiness_weight
+        Weights for gap ranking.
+    limit : int
+        Maximum number of prompts to generate.
+
+    Returns
+    -------
+    list of DiffusionPromptSpec
+    """
+    ranked_gaps = coverage_graph.rank_gaps(
+        economic_weight=economic_weight,
+        trust_weight=trust_weight,
+        readiness_weight=readiness_weight,
+        limit=limit,
+    )
+
+    prompts: List[DiffusionPromptSpec] = []
+    for gap in ranked_gaps:
+        # Collect missing-edge information
+        missing_skill_edges: List[Dict[str, str]] = []
+        missing_env_prims: List[str] = []
+        risk_targets: List[str] = []
+        affordance_targets: List[str] = []
+
+        src_node = coverage_graph.node_by_id(gap.source_id)
+        tgt_node = coverage_graph.node_by_id(gap.target_id)
+
+        if tgt_node:
+            if tgt_node.node_type == "env_primitive":
+                missing_env_prims.append(tgt_node.label)
+            elif tgt_node.node_type == "risk_family":
+                risk_targets.append(tgt_node.label)
+            elif tgt_node.node_type == "affordance_family":
+                affordance_targets.append(tgt_node.label)
+
+        if src_node and tgt_node:
+            missing_skill_edges.append({
+                "from": src_node.label,
+                "to": tgt_node.label,
+                "edge_type": gap.edge_type,
+            })
+
+        rationale = (
+            f"Gap-driven: missing {gap.edge_type} edge from "
+            f"{gap.source_id} → {gap.target_id} "
+            f"(economic_priority={gap.economic_priority:.2f}, "
+            f"trust_priority={gap.trust_priority:.2f})"
+        )
+
+        prompts.append(DiffusionPromptSpec(
+            request_id=str(uuid.uuid4()),
+            env_name=env_name,
+            engine_type=engine_type,
+            task_type=task_type,
+            objective_vector=objective_vector or [1.0, 1.0, 1.0, 1.0, 0.0],
+            customer_segment=customer_segment,
+            skill_ids=[],
+            semantic_tags=[gap.source_id, gap.target_id],
+            camera_pose_hint={},
+            difficulty_hint="gap_driven",
+            rationale=rationale,
+            target_economic_effect={},
+            source_datapack_ids=[],
+            missing_skill_edges=missing_skill_edges,
+            missing_env_primitives=missing_env_prims,
+            risk_family_targets=risk_targets,
+            affordance_family_targets=affordance_targets,
+            coverage_gap_score=gap.gap_score(
+                economic_weight=economic_weight,
+                trust_weight=trust_weight,
+                readiness_weight=readiness_weight,
+            ),
+            economic_priority_score=gap.economic_priority,
+            trust_priority_score=gap.trust_priority,
+        ))
+
+    return prompts

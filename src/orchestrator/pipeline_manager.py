@@ -764,6 +764,7 @@ def run_pipeline_step_with_causal_order(
     orchestrator_context=None,
     orchestration_instruction: str = "",
     semantic_runtime_scorers=None,
+    semantic_coverage_config: Optional[Dict[str, Any]] = None,
 ):
     """
     Execute a single pipeline step with CORRECT CAUSAL ORDER.
@@ -885,6 +886,44 @@ def run_pipeline_step_with_causal_order(
             orchestration_result=orchestration_result,
         )
         run_specs["semantic_runtime_scoring"] = runtime_score.to_dict()
+
+    # STEP 7: Coverage loop — evidence harvest + gap-driven agendas (OPTIONAL)
+    # Gated by semantic_coverage_config; None = no change to existing behavior.
+    if semantic_coverage_config is not None:
+        try:
+            from src.orchestrator.coverage_loop import run_coverage_loop
+
+            cov_rows = list(semantic_coverage_config.get("runtime_rows", []))
+            cov_result = run_coverage_loop(
+                cov_rows,
+                econ_signals=run_specs.get("econ_signals"),
+                trust_state=semantic_coverage_config.get("trust_state"),
+                governance_traces=semantic_coverage_config.get("governance_traces"),
+                env_names=semantic_coverage_config.get("env_names"),
+                hrl_skills=semantic_coverage_config.get("hrl_skills", True),
+                sima_sequences=semantic_coverage_config.get("sima_sequences"),
+                vla_hints=semantic_coverage_config.get("vla_hints"),
+                economic_weight=float(semantic_coverage_config.get("economic_weight", 1.0)),
+                trust_weight=float(semantic_coverage_config.get("trust_weight", 1.0)),
+                readiness_weight=float(semantic_coverage_config.get("readiness_weight", 1.0)),
+                sim_agenda_limit=int(semantic_coverage_config.get("sim_agenda_limit", 10)),
+                diffusion_limit=int(semantic_coverage_config.get("diffusion_limit", 10)),
+                write_artifacts=bool(semantic_coverage_config.get("write_artifacts", False)),
+                artifact_dir=str(semantic_coverage_config.get("artifact_dir", "data/coverage")),
+            )
+            run_specs["semantic_coverage"] = {
+                "coverage_summary": cov_result.coverage_summary,
+                "simulation_agenda": cov_result.simulation_agenda,
+                "diffusion_prompts": cov_result.diffusion_prompts,
+                "fill_decisions": cov_result.fill_decisions,
+                "evidence_harvest_summary": {
+                    "episodes_processed": cov_result.evidence_harvest.episodes_processed,
+                    "edges_discovered": cov_result.evidence_harvest.edges_discovered,
+                },
+            }
+        except Exception:
+            # Coverage loop is optional — never break the pipeline step
+            run_specs["semantic_coverage"] = {"error": "coverage_loop_unavailable"}
 
     return run_specs
 
