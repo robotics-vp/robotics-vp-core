@@ -123,12 +123,13 @@ def _teacher_trace() -> TeacherTrace:
     )
 
 
-def _bundle(tmp_path: Path) -> ReplayDatasetBundle:
+def _bundle(tmp_path: Path, *, include_teacher_trace: bool = True) -> ReplayDatasetBundle:
     world_model_path = tmp_path / "episode_runtime_semantic_world_model_v1.json"
     world_model_path.write_text(json.dumps(_semantic_world_model().to_dict(), indent=2), encoding="utf-8")
 
     teacher_trace_path = tmp_path / "episode_runtime_teacher_trace_v1.json"
-    teacher_trace_path.write_text(json.dumps(_teacher_trace().to_dict(), indent=2), encoding="utf-8")
+    if include_teacher_trace:
+        teacher_trace_path.write_text(json.dumps(_teacher_trace().to_dict(), indent=2), encoding="utf-8")
 
     scene_tracks_path = tmp_path / "episode_runtime_scene_tracks_v1.npz"
     np.savez_compressed(
@@ -155,10 +156,18 @@ def _bundle(tmp_path: Path) -> ReplayDatasetBundle:
             "affordance_hints": ["open"],
             "risk_hints": ["fragility"],
         },
-        teacher_trace_ref=str(teacher_trace_path),
+        teacher_trace_ref=str(teacher_trace_path) if include_teacher_trace else None,
         instruction="open the drawer carefully without touching the vase",
     )
     save_vla_semantic_evidence_npz(vla_path, vla_payload)
+
+    episode_provenance = {
+        "semantic_world_model_ref": str(world_model_path),
+        "scene_tracks_ref": str(scene_tracks_path),
+        "vla_semantic_evidence_ref": str(vla_path),
+    }
+    if include_teacher_trace:
+        episode_provenance["teacher_trace_ref"] = str(teacher_trace_path)
 
     episode = ReplayEpisodeRecord(
         run_id="run_runtime",
@@ -196,12 +205,7 @@ def _bundle(tmp_path: Path) -> ReplayDatasetBundle:
             },
             "semantic_fusion_confidence_mean": 0.74,
         },
-        provenance={
-            "semantic_world_model_ref": str(world_model_path),
-            "teacher_trace_ref": str(teacher_trace_path),
-            "scene_tracks_ref": str(scene_tracks_path),
-            "vla_semantic_evidence_ref": str(vla_path),
-        },
+        provenance=episode_provenance,
     )
     step = ReplayStepRecord(
         run_id="run_runtime",
@@ -317,3 +321,13 @@ def test_semantic_runtime_learning_datasets_and_write_paths(tmp_path: Path) -> N
     written = write_semantic_runtime_learning_corpus(tmp_path / "exported", corpus)
     assert Path(written["rows_path"]).exists()
     assert Path(written["summary_path"]).exists()
+
+
+def test_semantic_runtime_learning_corpus_handles_missing_teacher_trace(tmp_path: Path) -> None:
+    corpus = build_semantic_runtime_learning_corpus(_bundle(tmp_path, include_teacher_trace=False))
+
+    assert corpus.summary["row_count"] == 1
+    row = corpus.rows[0]
+    assert row.vla_summary["teacher_trace_available"] is False
+    assert row.vla_summary["teacher_confidence_mean"] == 0.0
+    assert row.vla_summary["instruction"] == "open the drawer carefully without touching the vase"

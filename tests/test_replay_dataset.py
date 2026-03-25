@@ -1,5 +1,7 @@
 import json
 
+import numpy as np
+
 from scripts.run_stage1_pipeline import run_stage1_pipeline
 from src.dataset_bridges.lerobot_bridge import lerobot_rows_from_replay
 from src.dataset_bridges.rlds_bridge import rlds_episode_from_replay
@@ -87,6 +89,39 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
         metrics={"reward": 1.1, "quality_score": 0.7},
         base_dir=base_dir,
     )
+    episode_dir = base_dir / scenario_id / "episode_000"
+    scene_tracks_path = episode_dir / "ep_rollout_001_front_scene_tracks_v1.npz"
+    np.savez_compressed(
+        scene_tracks_path,
+        **{
+            "scene_tracks_v1/track_ids": np.array(["track_1"], dtype="U16"),
+            "scene_tracks_v1/summary_json": np.array(
+                [json.dumps({"backend_selected": "passthrough", "training_eligible": False})],
+                dtype="U256",
+            ),
+            "scene_tracks_v1/semantic_summary_json": np.array(
+                [json.dumps({"grounding_ready": True, "semantic_density_score": 0.62})],
+                dtype="U256",
+            ),
+        },
+    )
+    semantic_world_model_path = episode_dir / "ep_rollout_001_semantic_world_model_v1.json"
+    semantic_world_model_path.write_text(
+        json.dumps(
+            {
+                "world_model_id": "wm_rollout",
+                "topology": {"grounded_track_object_count": 1},
+                "capability_scores": {"object_memory": 0.71},
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    metadata_path = episode_dir / "metadata.json"
+    metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata_payload["scene_tracks_path"] = str(scene_tracks_path.relative_to(tmp_path))
+    metadata_payload["semantic_world_model_path"] = str(semantic_world_model_path.relative_to(tmp_path))
+    metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
 
     dataset_dir = tmp_path / "replay_rollout_dataset"
     bundle = ReplayDatasetBuilder().add_rollout_bundle(base_dir, scenario_id=scenario_id).write(dataset_dir)
@@ -94,7 +129,50 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.manifest.num_episodes == 1
     assert "rollout_capture_bundle_v1" in bundle.manifest.source_adapters
     assert bundle.episodes[0].provenance["source_adapter"] == "rollout_capture_bundle_v1"
+    assert bundle.episodes[0].provenance["scene_tracks_ref"] == str(scene_tracks_path.resolve())
+    assert bundle.episodes[0].provenance["semantic_world_model_ref"] == str(semantic_world_model_path.resolve())
+    assert bundle.episodes[0].metadata["scene_tracks_non_stub"] is True
+    assert bundle.episodes[0].metadata["semantic_memory_grounded"] is True
     assert bundle.manifest.metadata["schema_compatibility"][0]["compatible"] is True
+
+
+def test_replay_dataset_builds_from_rollout_bundle_with_state_action_trajectory(tmp_path):
+    base_dir = tmp_path / "rollouts_state_action"
+    scenario_id = "scenario_state_action"
+    start_rollout_capture(scenario_id, base_dir)
+    record_episode_rollout(
+        scenario_id=scenario_id,
+        episode_idx=0,
+        metadata=EpisodeMetadata(
+            episode_id="ep_rollout_state_action",
+            task_id="peg_in_hole",
+            robot_family="workcell",
+            seed=11,
+            env_params={"config": {"topology_type": "workcell_rollout"}},
+        ),
+        trajectory_data={
+            "scene_spec": {"workcell_id": "test"},
+            "states": [
+                {"step": 0, "joint_positions": [0.0, 0.1], "constraint_error": 0.05},
+                {"step": 1, "joint_positions": [0.1, 0.2], "constraint_error": 0.02, "done": True},
+            ],
+            "actions": [
+                {"object_id": "end_effector", "delta_position": [0.01, 0.0, -0.01]},
+                {"object_id": "end_effector", "delta_position": [0.0, 0.0, -0.01]},
+            ],
+        },
+        rgb_frames=None,
+        depth_frames=None,
+        metrics={"reward": 0.8},
+        base_dir=base_dir,
+    )
+
+    bundle = ReplayDatasetBuilder().add_rollout_bundle(base_dir, scenario_id=scenario_id).build()
+
+    assert bundle.manifest.num_episodes == 1
+    assert bundle.manifest.num_steps == 2
+    assert bundle.steps[0].step_idx == 0
+    assert bundle.steps[1].done is True
 
 
 def test_replay_dataset_builds_from_rehydrated_bridge_exports(tmp_path):

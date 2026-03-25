@@ -250,17 +250,19 @@ def _summarize_vla_lane(artifact_refs: Mapping[str, Any], root_dir: Optional[str
     provenance = dict(getattr(vla_evidence, "provenance", {}) or {})
     confidence_mean = _safe_mean(getattr(vla_evidence, "confidence", None), 0.0)
     track_ids = getattr(vla_evidence, "track_ids", None) if vla_evidence is not None else None
+    teacher_summary = dict(getattr(teacher_trace, "summary", {}) or {}) if teacher_trace is not None else {}
+    teacher_metadata = dict(getattr(teacher_trace, "metadata", {}) or {}) if teacher_trace is not None else {}
     teacher_confidence_mean = _safe_float(
-        (teacher_trace.summary or {}).get("teacher_confidence_mean", 0.0),
+        teacher_summary.get("teacher_confidence_mean", 0.0),
         _safe_mean([step.confidence for step in teacher_trace.steps], 0.0) if teacher_trace is not None else 0.0,
     )
     return {
         "teacher_trace_available": teacher_trace is not None,
         "teacher_confidence_mean": float(teacher_confidence_mean),
-        "teacher_semantic_tags": list((teacher_trace.metadata or {}).get("semantic_tags", []) or []) if teacher_trace is not None else [],
-        "teacher_object_refs": list((teacher_trace.metadata or {}).get("object_refs", []) or []) if teacher_trace is not None else [],
-        "teacher_affordance_hints": list((teacher_trace.metadata or {}).get("affordance_hints", []) or []) if teacher_trace is not None else [],
-        "teacher_risk_hints": list((teacher_trace.metadata or {}).get("risk_hints", []) or []) if teacher_trace is not None else [],
+        "teacher_semantic_tags": list(teacher_metadata.get("semantic_tags", []) or []),
+        "teacher_object_refs": list(teacher_metadata.get("object_refs", []) or []),
+        "teacher_affordance_hints": list(teacher_metadata.get("affordance_hints", []) or []),
+        "teacher_risk_hints": list(teacher_metadata.get("risk_hints", []) or []),
         "vla_available": bool(provenance.get("vla_available", False) or confidence_mean > 0.1),
         "vla_confidence_mean": float(confidence_mean),
         "vla_source": str(provenance.get("source", "")),
@@ -380,9 +382,11 @@ def _summarize_outcome(
     reward_signal = 1.0 / (1.0 + np.exp(-total_reward / 10.0))
     success = episode.status.lower() in {"success", "completed", "done"}
     readiness_score = _safe_float(execution_preconditions.get("readiness_score", 0.0))
+    topology = dict(semantic_summary.get("topology", {}) or {})
     semantic_grounded = bool(
         future_signals.get("semantic_memory_grounded", False)
         or _safe_float(semantic_summary.get("grounded_track_object_count", 0.0)) > 0.0
+        or _safe_float(topology.get("grounded_track_object_count", 0.0)) > 0.0
     )
     work_order_ready = bool(source_work_order.get("ready", execution_preconditions.get("ready", False)))
     fusion_quality = _safe_float(fusion_summary.get("semantic_fusion_confidence_mean", 0.0))

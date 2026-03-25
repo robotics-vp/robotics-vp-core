@@ -13,7 +13,7 @@ import numpy as np
 from src.constraints.constraint_set import ConstraintSet
 from src.economics.functor import ObjectiveEconFunctor
 from src.economics.pricing_sentinel import PricingSentinel, PricingTickInput
-from src.economics.value_ledger import ValueLedger, summarize_econ_tensor
+from src.economics.value_ledger import summarize_econ_tensor
 from src.envs.workcell_env.base import EpisodeLog
 from src.motor_backend.rollout_capture import finalize_rollout_bundle
 from src.objectives.runtime_builder import (
@@ -31,7 +31,6 @@ from src.replay.schema import (
     ReplayStepRecord,
     ReplayWindowRecord,
 )
-from src.regality.meta_regal import MetaRegalDecision
 from src.runtime.event_spine import DecisionLedgerEntry, RuntimeEvent
 from src.runtime.packets import RuntimePacket
 from src.utils.config_digest import sha256_json
@@ -612,6 +611,182 @@ def ingest_workcell_episode_log(
     return episode_records, _sort_step_records(step_records), _sort_window_records(window_records), metadata_payload
 
 
+def _resolve_rollout_artifact_path(episode_dir: Path, value: Any) -> Optional[str]:
+    if value in (None, "", [], {}):
+        return None
+    path = Path(str(value))
+    if path.is_absolute():
+        return str(path.resolve())
+    if path.exists():
+        return str(path.resolve())
+    for anchor in (episode_dir, *episode_dir.parents):
+        candidate = anchor / path
+        if candidate.exists():
+            return str(candidate.resolve())
+    return str((episode_dir / path).resolve())
+
+
+def _register_rollout_artifact_ref(refs: Dict[str, Any], key: str, value: Optional[str]) -> None:
+    if value in (None, "", [], {}):
+        return
+    normalized_key = str(key)
+    refs[normalized_key] = value
+    if normalized_key.endswith("_path"):
+        refs[f"{normalized_key[:-5]}_ref"] = value
+    elif normalized_key.endswith("_paths"):
+        refs[f"{normalized_key[:-6]}_refs"] = value
+
+
+def _load_rollout_metadata_payload(episode_dir: Path) -> Dict[str, Any]:
+    metadata_path = episode_dir / "metadata.json"
+    if not metadata_path.exists():
+        return {}
+    return _load_json(metadata_path)
+
+
+def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[str, Any]:
+    metadata_payload = _load_rollout_metadata_payload(episode_dir)
+    refs: Dict[str, Any] = {}
+
+    explicit_path_keys = (
+        "trajectory_path",
+        "rgb_video_path",
+        "depth_video_path",
+        "scene_tracks_path",
+        "semantic_world_model_path",
+        "semantic_snapshot_path",
+        "orchestrator_advisory_path",
+        "teacher_trace_path",
+        "vla_semantic_evidence_path",
+        "semantic_fusion_path",
+        "belief_state_path",
+        "evidence_bus_path",
+    )
+    for key in explicit_path_keys:
+        resolved = _resolve_rollout_artifact_path(episode_dir, metadata_payload.get(key))
+        _register_rollout_artifact_ref(refs, key, resolved)
+
+    if isinstance(metadata_payload.get("sensor_bundle"), Mapping):
+        _register_rollout_artifact_ref(refs, "sensor_bundle_metadata_path", str((episode_dir / "metadata.json").resolve()))
+
+    sidecar_patterns = {
+        "scene_tracks_path": [
+            f"{episode_id}_*_scene_tracks_v1.npz",
+            "*_scene_tracks_v1.npz",
+        ],
+        "semantic_world_model_path": [
+            f"{episode_id}_semantic_world_model_v1.json",
+            "*_semantic_world_model_v1.json",
+        ],
+        "semantic_snapshot_path": [
+            f"{episode_id}_semantic_snapshot_v1.json",
+            "*_semantic_snapshot_v1.json",
+        ],
+        "orchestrator_advisory_path": [
+            f"{episode_id}_orchestrator_advisory_v1.json",
+            "*_orchestrator_advisory_v1.json",
+        ],
+        "teacher_trace_path": [
+            f"{episode_id}_teacher_trace_v1.json",
+            "*_teacher_trace_v1.json",
+        ],
+        "vla_semantic_evidence_path": [
+            f"{episode_id}_vla_semantic_evidence_v1.npz",
+            "*_vla_semantic_evidence_v1.npz",
+        ],
+        "semantic_fusion_path": [
+            f"{episode_id}_semantic_fusion_v1.npz",
+            "*_semantic_fusion_v1.npz",
+        ],
+        "belief_state_path": [
+            f"{episode_id}_belief_state_v1.json",
+            "*_belief_state_v1.json",
+        ],
+        "evidence_bus_path": [
+            f"{episode_id}_evidence_bus_v1.json",
+            "*_evidence_bus_v1.json",
+        ],
+    }
+    for key, patterns in sidecar_patterns.items():
+        if key in refs:
+            continue
+        for pattern in patterns:
+            candidates = sorted(episode_dir.glob(pattern))
+            if candidates:
+                _register_rollout_artifact_ref(refs, key, str(candidates[0].resolve()))
+                break
+    return refs
+
+
+def _scene_tracks_rollout_metadata(
+    scene_tracks_path: Optional[str],
+    *,
+    metadata_payload: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload = dict(metadata_payload or {})
+    semantic_summary = payload.get("scene_tracks_semantic_summary", {})
+    if not isinstance(semantic_summary, Mapping):
+        semantic_summary = {}
+    backend = ""
+    training_eligible = bool(payload.get("scene_tracks_training_eligible", False))
+    if scene_tracks_path:
+        try:
+            scene_tracks = dict(np.load(scene_tracks_path, allow_pickle=False))
+            summary_json_raw = scene_tracks.get("scene_tracks_v1/summary_json")
+            if isinstance(summary_json_raw, np.ndarray) and summary_json_raw.size > 0:
+                summary_payload = json.loads(str(summary_json_raw.flat[0]))
+                if isinstance(summary_payload, Mapping):
+                    backend = str(
+                        summary_payload.get("backend_selected")
+                        or dict(summary_payload.get("adapter_status", {}) or {}).get("overall_mode", "")
+                    )
+                    training_eligible = bool(summary_payload.get("training_eligible", False))
+            semantic_summary_raw = scene_tracks.get("scene_tracks_v1/semantic_summary_json")
+            if isinstance(semantic_summary_raw, np.ndarray) and semantic_summary_raw.size > 0 and not semantic_summary:
+                decoded_summary = json.loads(str(semantic_summary_raw.flat[0]))
+                if isinstance(decoded_summary, Mapping):
+                    semantic_summary = decoded_summary
+        except Exception:
+            backend = ""
+    if not backend:
+        backend = str(payload.get("scene_tracks_backend", ""))
+    return {
+        "scene_tracks_backend": backend,
+        "scene_tracks_non_stub": bool(payload.get("scene_tracks_non_stub", False) or backend in {"real", "passthrough", "auto"}),
+        "scene_tracks_training_eligible": bool(training_eligible),
+        "semantic_grounding_ready": bool(semantic_summary.get("grounding_ready", False)),
+        "semantic_density_score": float(semantic_summary.get("semantic_density_score", 0.0) or 0.0),
+    }
+
+
+def _semantic_world_model_rollout_summary(semantic_world_model_path: Optional[str]) -> Dict[str, Any]:
+    if not semantic_world_model_path:
+        return {}
+    try:
+        payload = _load_json(Path(semantic_world_model_path))
+    except Exception:
+        return {}
+    topology = dict(payload.get("topology", {}) or {}) if isinstance(payload, Mapping) else {}
+    capability_scores = dict(payload.get("capability_scores", {}) or {}) if isinstance(payload, Mapping) else {}
+    active_capabilities: List[str] = []
+    for key, value in capability_scores.items():
+        try:
+            score = float(value)
+        except Exception:
+            continue
+        if score >= 0.5:
+            active_capabilities.append(str(key))
+    active_capabilities.sort()
+    return {
+        "present": True,
+        "world_model_id": str(payload.get("world_model_id", "")),
+        "topology": topology,
+        "capability_scores": capability_scores,
+        "grounded_track_object_count": int(topology.get("grounded_track_object_count", 0) or 0),
+        "active_capabilities": active_capabilities,
+    }
+
+
 def ingest_rollout_bundle(
     rollout_root: str | Path,
     *,
@@ -645,6 +820,16 @@ def ingest_rollout_bundle(
     windows: List[ReplayWindowRecord] = []
 
     for rollout in bundle.episodes:
+        episode_dir = rollout.trajectory_path.parent
+        raw_rollout_metadata = _load_rollout_metadata_payload(episode_dir)
+        artifact_refs = _discover_rollout_artifact_refs(episode_dir, rollout.metadata.episode_id)
+        scene_tracks_metadata = _scene_tracks_rollout_metadata(
+            artifact_refs.get("scene_tracks_path"),
+            metadata_payload=raw_rollout_metadata,
+        )
+        semantic_world_model_summary = _semantic_world_model_rollout_summary(
+            artifact_refs.get("semantic_world_model_path")
+        )
         trajectory_rows = _load_rollout_trajectory(rollout.trajectory_path, metrics=rollout.metrics)
         episode_log = EpisodeLog(
             metadata=rollout.metadata,
@@ -677,33 +862,62 @@ def ingest_rollout_bundle(
                 temp_path.unlink()
         for episode in e_rows:
             episode_payload = episode.to_dict()
+            episode_payload["metadata"] = {
+                **dict(episode_payload.get("metadata", {}) or {}),
+                "rollout_episode_dir": str(episode_dir.resolve()),
+                "sensor_bundle": dict(raw_rollout_metadata.get("sensor_bundle", {}) or {})
+                if isinstance(raw_rollout_metadata.get("sensor_bundle"), Mapping)
+                else {},
+                "scene_tracks_non_stub": bool(scene_tracks_metadata.get("scene_tracks_non_stub", False)),
+                "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
+                "scene_tracks_training_eligible": bool(scene_tracks_metadata.get("scene_tracks_training_eligible", False)),
+                "semantic_memory_grounded": bool(
+                    semantic_world_model_summary.get("topology", {}).get("grounded_track_object_count", 0)
+                    or scene_tracks_metadata.get("semantic_grounding_ready", False)
+                ),
+                "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+                "semantic_world_model_summary": semantic_world_model_summary,
+            }
             episode_payload["provenance"] = {
                 **dict(episode_payload.get("provenance", {}) or {}),
                 "source_adapter": "rollout_capture_bundle_v1",
                 "scenario_id": resolved_scenario_id,
                 "trajectory_path": str(rollout.trajectory_path),
+                **dict(artifact_refs),
             }
             episodes.append(
                 ReplayEpisodeRecord.from_dict(episode_payload)
             )
         for step in s_rows:
             step_payload = step.to_dict()
+            step_payload["metadata"] = {
+                **dict(step_payload.get("metadata", {}) or {}),
+                "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
+                "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+            }
             step_payload["provenance"] = {
                 **dict(step_payload.get("provenance", {}) or {}),
                 "source_adapter": "rollout_capture_bundle_v1",
                 "scenario_id": resolved_scenario_id,
                 "trajectory_path": str(rollout.trajectory_path),
+                **dict(artifact_refs),
             }
             steps.append(
                 ReplayStepRecord.from_dict(step_payload)
             )
         for window in w_rows:
             window_payload = window.to_dict()
+            window_payload["metadata"] = {
+                **dict(window_payload.get("metadata", {}) or {}),
+                "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
+                "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+            }
             window_payload["provenance"] = {
                 **dict(window_payload.get("provenance", {}) or {}),
                 "source_adapter": "rollout_capture_bundle_v1",
                 "scenario_id": resolved_scenario_id,
                 "trajectory_path": str(rollout.trajectory_path),
+                **dict(artifact_refs),
             }
             windows.append(
                 ReplayWindowRecord.from_dict(window_payload)
@@ -1149,7 +1363,31 @@ def _load_rollout_trajectory(path: Path, *, metrics: Mapping[str, Any]) -> List[
     if isinstance(trajectory, np.ndarray):
         trajectory = trajectory.tolist()
     if isinstance(trajectory, Mapping):
-        trajectory = list(trajectory.get("trajectory", []) or [])
+        if isinstance(trajectory.get("trajectory"), list):
+            trajectory = list(trajectory.get("trajectory", []) or [])
+        else:
+            states = list(trajectory.get("states", []) or [])
+            actions = list(trajectory.get("actions", []) or [])
+            count = max(len(states), len(actions))
+            trajectory = []
+            for index in range(count):
+                raw_state = states[index] if index < len(states) else {}
+                raw_action = actions[index] if index < len(actions) else {}
+                state = dict(raw_state) if isinstance(raw_state, Mapping) else {}
+                action = dict(raw_action) if isinstance(raw_action, Mapping) else {}
+                obs = dict(state.get("obs", {}) or {})
+                if not obs:
+                    obs = {"state_vector": _flatten_numeric_payload(state) or [float(index)]}
+                info = dict(state.get("info", {}) or {})
+                trajectory.append(
+                    {
+                        "step": int(state.get("step", index)),
+                        "obs": obs,
+                        "action": action or {"action_vector": [0.0]},
+                        "done": bool(state.get("done", index == count - 1)),
+                        "info": info,
+                    }
+                )
     if not isinstance(trajectory, list):
         trajectory = [trajectory]
 
