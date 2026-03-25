@@ -348,8 +348,16 @@
   - `src/process_reward/evidence_adapter.py` turns process-reward outputs into evidence/precondition packets.
   - `src/evidence/backend_health.py` turns perception/runtime backend degradation into explicit readiness metadata.
   - `src/governance/assessment.py` turns governance traces into coverage and veto summaries that can later be routed back into graph weights and meta-node decisions.
-- Important limitation: this pass builds the substrate and the first learned models, but it does not yet make the loop fully self-correcting.
-  - Fill outcomes are stored, but process-reward quality is not yet routed back into graph edge weights.
-  - Governance traces influence readiness only indirectly; they do not yet mark specific coverage edges as blocked or rerouted.
-  - Ontology proposals remain observable but do not yet mutate the skill graph or env primitive graph online.
-  - Trust/econ feedback still needs to be made topologically downstream of the tensor/meta-node layers rather than mostly scalar side inputs.
+- Closed the first packetized return path for that loop:
+  - `src/world_model/semantic_feedback_packets.py` now defines typed `CoverageOutcomePacket`, `WMValidationPacket`, and `GraphMutationProposal` surfaces plus compiled trust/econ/readiness overlays.
+  - `src/orchestrator/coverage_loop.py` now consumes those packets, merges them with harvested edge priorities, marks governance-blocked edges directly on the graph, and emits `feedback_summary`, `wm_validation_summary`, `trust_calibration_overlay`, `econ_calibration_overlay`, and `graph_mutation_proposals`.
+  - `src/orchestrator/pipeline_manager.py` now runs coverage compilation before transformer routing when configured and injects the resulting summaries into `OrchestratorContext.semantic_metadata`, so both transformer shells can react to coverage outcomes, WM validation pressure, and graph-expansion pressure in the same pass.
+  - `src/orchestrator/semantic_transformer_bridge.py`, `src/orchestrator/meta_transformer.py`, and `src/orchestrator/orchestration_transformer.py` now encode feedback fields such as `missing_edge_fraction`, `wm_validation_error_rate`, `trust_overlay_mean`, `econ_overlay_mean`, and `graph_mutation_pressure` into the semantic feature vector and bounded action/work-order plans.
+- Upgraded the synth-facing training consumers to actually use semantic conditioning:
+  - `scripts/train_latent_diffusion.py` now threads semantic conditioning into the latent MLP and transformer models during real training rather than only loading the sidecar.
+  - `scripts/train_trust_aware_world_model.py` now carries the same conditioning through trust-aware reconstruction and rollout losses.
+  - `scripts/train_world_model_from_datapacks.py` now appends semantic-gap/process-reward/coverage features and additive semantic-gap weighting when building datapack world-model datasets, so latent/synthetic branching paths stop being purely trust × `w_econ` weighted.
+  - `scripts/sample_zv_rollouts.py`, `scripts/eval_world_model_rollouts.py`, and `scripts/train_horizon_agnostic_world_model.py` now reopen semantic-conditioned latent checkpoints compatibly.
+- Important remaining limitation:
+  - The overlays are now explicit and transformer-visible, but they are still summary overlays rather than learned topological adapters over econ tensors / trust tensors / meta-node geometry.
+  - Graph mutation remains a bounded proposal surface; it still does not directly mutate canonical ontology or skill graphs online.
