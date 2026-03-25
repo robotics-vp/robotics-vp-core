@@ -779,6 +779,16 @@ def build_semantic_runtime_learning_row(
     if correction_overlay:
         semantic_summary["semantic_wm_correction_overlay"] = correction_overlay
         semantic_summary.setdefault("wm_correction_pressure", float(correction_overlay.get("meta_node_pressure", 0.0)))
+    refiner_summary = dict(
+        episode.metadata.get("semantic_wm_refiner_summary")
+        or episode.metadata.get("semantic_coverage", {}).get("semantic_wm_refiner_summary")
+        or {}
+    )
+    if refiner_summary:
+        semantic_summary["semantic_wm_refiner_summary"] = refiner_summary
+        semantic_summary.setdefault("learned_refinement_active", bool(refiner_summary.get("active", False)))
+        semantic_summary.setdefault("learned_overlay_pressure", float(refiner_summary.get("learned_overlay_pressure", 0.0)))
+        semantic_summary.setdefault("learned_graph_mutation_count", float(refiner_summary.get("learned_graph_mutation_count", 0.0)))
     vla_summary = _summarize_vla_lane(artifact_refs, root_dir)
     dino_summary = _summarize_dino_lane(artifact_refs, root_dir, semantic_summary)
     fusion_summary = _summarize_fusion_lane(episode, vla_summary, dino_summary)

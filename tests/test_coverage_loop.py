@@ -185,6 +185,7 @@ class TestCoverageLoop:
         assert "metadata" in result.graph_mutation_execution
         assert result.semantic_wm_correction_overlay["meta_node_pressure"] > 0.0
         assert result.corrected_semantic_world_model is not None
+        assert result.semantic_wm_refiner_summary.get("active") is True
 
 
 class TestFillPathDecision:

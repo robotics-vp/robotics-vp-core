@@ -50,6 +50,12 @@ from src.world_model.feedback_topology_adapters import (
     SemanticFeedbackAdapterPackage,
     shadow_fit_feedback_adapter_package,
 )
+from src.world_model.semantic_wm_refiner import (
+    SemanticWMRefinerPackage,
+    merge_graph_mutation_proposals,
+    merge_semantic_wm_correction_overlays,
+    shadow_fit_semantic_wm_refiner_package,
+)
 from src.hrl.skill_graph import SkillGraph
 from src.envs.primitive_inventory import for_env, list_registered_env_ids
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
@@ -163,7 +169,9 @@ class CoverageLoopResult:
     graph_mutation_proposals: List[Dict[str, Any]] = field(default_factory=list)
     graph_mutation_execution: Dict[str, Any] = field(default_factory=dict)
     semantic_wm_correction_overlay: Dict[str, Any] = field(default_factory=dict)
+    input_semantic_world_model: Optional[Dict[str, Any]] = None
     corrected_semantic_world_model: Optional[Dict[str, Any]] = None
+    semantic_wm_refiner_summary: Dict[str, Any] = field(default_factory=dict)
     pre_evidence_snapshot: Dict[str, int] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -182,7 +190,9 @@ class CoverageLoopResult:
             "graph_mutation_proposals": list(self.graph_mutation_proposals),
             "graph_mutation_execution": dict(self.graph_mutation_execution),
             "semantic_wm_correction_overlay": dict(self.semantic_wm_correction_overlay),
+            "input_semantic_world_model": dict(self.input_semantic_world_model or {}),
             "corrected_semantic_world_model": dict(self.corrected_semantic_world_model or {}),
+            "semantic_wm_refiner_summary": dict(self.semantic_wm_refiner_summary),
             "metadata": dict(self.metadata),
         }
 
@@ -241,9 +251,17 @@ class CoverageLoopResult:
         correction_path.write_text(json.dumps(self.semantic_wm_correction_overlay, indent=2))
         paths["semantic_wm_correction_overlay"] = str(correction_path)
 
+        input_wm_path = out / "input_semantic_world_model.json"
+        input_wm_path.write_text(json.dumps(self.input_semantic_world_model or {}, indent=2))
+        paths["input_semantic_world_model"] = str(input_wm_path)
+
         corrected_wm_path = out / "corrected_semantic_world_model.json"
         corrected_wm_path.write_text(json.dumps(self.corrected_semantic_world_model or {}, indent=2))
         paths["corrected_semantic_world_model"] = str(corrected_wm_path)
+
+        refiner_path = out / "semantic_wm_refiner_summary.json"
+        refiner_path.write_text(json.dumps(self.semantic_wm_refiner_summary, indent=2))
+        paths["semantic_wm_refiner_summary"] = str(refiner_path)
 
         evidence_path = out / "evidence_harvest.json"
         evidence_path.write_text(json.dumps(self.evidence_harvest.to_dict(), indent=2))
@@ -340,6 +358,8 @@ def run_coverage_loop(
     semantic_world_model: Optional[Any] = None,
     feedback_adapter_package: Optional[Any] = None,
     shadow_fit_feedback_adapter: bool = True,
+    semantic_wm_refiner_package: Optional[Any] = None,
+    shadow_fit_semantic_wm_refiner: bool = True,
     economic_weight: float = 1.0,
     trust_weight: float = 1.0,
     readiness_weight: float = 1.0,
@@ -406,6 +426,60 @@ def run_coverage_loop(
         semantic_world_model,
         wm_validation_packets,
     )
+    refiner: Optional[SemanticWMRefinerPackage]
+    refiner = semantic_wm_refiner_package if isinstance(semantic_wm_refiner_package, SemanticWMRefinerPackage) else None
+    if refiner is None and isinstance(semantic_wm_refiner_package, Mapping) and "object_state_dict" in semantic_wm_refiner_package:
+        try:
+            refiner = SemanticWMRefinerPackage.from_checkpoint(semantic_wm_refiner_package)
+        except Exception:
+            refiner = None
+    if refiner is None and shadow_fit_semantic_wm_refiner:
+        refiner = shadow_fit_semantic_wm_refiner_package(
+            semantic_world_model,
+            correction_overlay=correction_overlay,
+            feedback_summary=feedback.feedback_summary,
+            wm_validation_packets=wm_validation_packets,
+            graph_mutation_proposals=feedback.graph_mutation_proposals,
+        )
+    refiner_summary: Dict[str, Any] = {}
+    learned_graph_mutation_proposals: List[Dict[str, Any]] = []
+    if refiner is not None:
+        learned_overlay = refiner.predict_correction_overlay(
+            semantic_world_model,
+            wm_validation_packets=wm_validation_packets,
+            feedback_summary=feedback.feedback_summary,
+        )
+        learned_scored_proposals = refiner.score_graph_mutation_proposals(
+            semantic_world_model,
+            feedback.graph_mutation_proposals,
+            wm_validation_packets=wm_validation_packets,
+            feedback_summary=feedback.feedback_summary,
+        )
+        feedback = SemanticCoverageFeedback(
+            feedback_summary=dict(feedback.feedback_summary),
+            edge_metadata=dict(feedback.edge_metadata),
+            edge_economic_overlay=dict(feedback.edge_economic_overlay),
+            edge_trust_overlay=dict(feedback.edge_trust_overlay),
+            edge_readiness_overlay=dict(feedback.edge_readiness_overlay),
+            trust_calibration_overlay=dict(feedback.trust_calibration_overlay),
+            econ_calibration_overlay=dict(feedback.econ_calibration_overlay),
+            wm_validation_summary=dict(feedback.wm_validation_summary),
+            graph_mutation_proposals=merge_graph_mutation_proposals(
+                feedback.graph_mutation_proposals,
+                learned_scored_proposals,
+            ),
+        )
+        correction_overlay = merge_semantic_wm_correction_overlays(correction_overlay, learned_overlay)
+        learned_graph_mutation_proposals = [
+            item.to_dict()
+            for item in learned_scored_proposals
+        ]
+        refiner_summary = {
+            "active": True,
+            "package_metadata": dict(getattr(refiner, "metadata", {}) or {}),
+            "learned_overlay_pressure": float(getattr(learned_overlay, "meta_node_pressure", 0.0)),
+            "learned_graph_mutation_count": len(learned_graph_mutation_proposals),
+        }
     corrected_semantic_world_model = apply_semantic_wm_correction_overlay(
         semantic_world_model,
         correction_overlay,
@@ -493,6 +567,10 @@ def run_coverage_loop(
     summary["feedback_loop"]["graph_mutation_applied_count"] = int(mutation_result.metadata.get("applied_count", 0))
     summary["feedback_loop"]["graph_mutation_blocked_count"] = int(mutation_result.metadata.get("blocked_count", 0))
     summary["feedback_loop"]["wm_correction_pressure"] = float(correction_overlay.meta_node_pressure)
+    if refiner_summary:
+        summary["feedback_loop"]["learned_refinement_active"] = True
+        summary["feedback_loop"]["learned_graph_mutation_count"] = int(refiner_summary.get("learned_graph_mutation_count", 0))
+        summary["feedback_loop"]["learned_overlay_pressure"] = float(refiner_summary.get("learned_overlay_pressure", 0.0))
 
     # Step 6: Compile simulation agenda
     sim_agenda = compile_simulation_agenda(
@@ -550,6 +628,32 @@ def run_coverage_loop(
     else:
         fill_decisions = [_decide_fill_path(gap).to_dict() for gap in ranked_gaps]
 
+    blocked_edge_keys = {item["edge_key"] for item in fill_decisions}
+    for edge in coverage_graph.edges:
+        if not bool(edge.metadata.get("governance_blocked", False)):
+            continue
+        edge_key = f"{edge.source_id} -> {edge.target_id}"
+        if edge_key in blocked_edge_keys:
+            continue
+        fill_decisions.insert(
+            0,
+            FillPathDecision(
+                edge_key=edge_key,
+                fill_method="blocked",
+                confidence=0.95,
+                rationale="Governance trace blocked this edge; keep as meta-node review target",
+                coverage_gap_score=edge.gap_score(
+                    economic_weight=economic_weight,
+                    trust_weight=trust_weight,
+                    readiness_weight=readiness_weight,
+                ),
+                economic_priority=float(getattr(edge, "economic_priority", 0.0)),
+                trust_priority=float(getattr(edge, "trust_priority", 0.0)),
+                readiness=float(getattr(edge, "promotion_readiness", 0.0)),
+            ).to_dict(),
+        )
+        blocked_edge_keys.add(edge_key)
+
     # Snapshot pre-evidence for outcome tracking
     pre_evidence = {
         f"{g.source_id} -> {g.target_id}": g.evidence_count
@@ -570,11 +674,19 @@ def run_coverage_loop(
         graph_mutation_proposals=[item.to_dict() for item in feedback.graph_mutation_proposals],
         graph_mutation_execution=mutation_result.to_dict(),
         semantic_wm_correction_overlay=correction_overlay.to_dict(),
+        input_semantic_world_model=(
+            semantic_world_model.to_dict()
+            if getattr(semantic_world_model, "to_dict", None) is not None
+            else dict(semantic_world_model)
+            if isinstance(semantic_world_model, Mapping)
+            else None
+        ),
         corrected_semantic_world_model=(
             corrected_semantic_world_model.to_dict()
             if getattr(corrected_semantic_world_model, "to_dict", None) is not None
             else None
         ),
+        semantic_wm_refiner_summary=refiner_summary,
         pre_evidence_snapshot=pre_evidence,
         metadata={
             "env_names": resolved_envs,
@@ -584,6 +696,8 @@ def run_coverage_loop(
             "readiness_weight": readiness_weight,
             "semantic_world_model_present": semantic_world_model is not None,
             "feedback_adapter_applied": adapter is not None,
+            "semantic_wm_refiner_applied": bool(refiner_summary),
+            "learned_graph_mutation_proposals": learned_graph_mutation_proposals,
         },
     )
 

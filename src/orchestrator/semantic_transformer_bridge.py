@@ -150,6 +150,7 @@ def build_semantic_world_model_summary(
     coverage_summary: Dict[str, Any] = {}
     graph_mutation_execution: Dict[str, Any] = {}
     correction_overlay: Dict[str, Any] = {}
+    refiner_summary: Dict[str, Any] = {}
     if isinstance(metadata, Mapping):
         feedback_summary = _mapping(
             metadata.get("coverage_feedback_summary")
@@ -179,6 +180,10 @@ def build_semantic_world_model_summary(
         correction_overlay = _mapping(
             metadata.get("semantic_wm_correction_overlay")
             or metadata.get("semantic_coverage", {}).get("semantic_wm_correction_overlay")
+        )
+        refiner_summary = _mapping(
+            metadata.get("semantic_wm_refiner_summary")
+            or metadata.get("semantic_coverage", {}).get("semantic_wm_refiner_summary")
         )
         coverage_summary = _mapping(
             metadata.get("semantic_coverage", {}).get("coverage_summary")
@@ -249,6 +254,10 @@ def build_semantic_world_model_summary(
         "graph_mutation_applied_count": int(graph_mutation_execution.get("metadata", {}).get("applied_count", 0)),
         "graph_mutation_blocked_count": int(graph_mutation_execution.get("metadata", {}).get("blocked_count", 0)),
         "wm_correction_pressure": float(correction_overlay.get("meta_node_pressure", 0.0)),
+        "semantic_wm_refiner_summary": refiner_summary,
+        "learned_refinement_active": bool(refiner_summary.get("active", False)),
+        "learned_overlay_pressure": float(refiner_summary.get("learned_overlay_pressure", 0.0)),
+        "learned_graph_mutation_count": float(refiner_summary.get("learned_graph_mutation_count", 0.0)),
         "semantic_wm_correction_overlay": correction_overlay,
     }
 
@@ -313,6 +322,8 @@ def semantic_tokens(summary: Mapping[str, Any]) -> List[str]:
         tokens.append("feedback:wm_validation")
     if _safe_float(payload.get("graph_mutation_pressure", 0.0)) > 0.0:
         tokens.append("feedback:graph_mutation")
+    if bool(payload.get("learned_refinement_active", False)):
+        tokens.append("feedback:learned_refiner")
     for proposal in list(payload.get("graph_mutation_proposals", []) or [])[:4]:
         if isinstance(proposal, Mapping):
             target_ref = str(proposal.get("target_ref", ""))
