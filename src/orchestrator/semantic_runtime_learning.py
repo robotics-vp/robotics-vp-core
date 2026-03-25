@@ -420,6 +420,7 @@ def _feedback_summary(
 ) -> Dict[str, Any]:
     coverage_feedback = dict(semantic_summary.get("coverage_feedback_summary", {}) or {})
     wm_validation = dict(semantic_summary.get("wm_validation_summary", {}) or {})
+    correction_overlay = dict(semantic_summary.get("semantic_wm_correction_overlay", {}) or {})
     return {
         "annotation_to_world_model": {
             "openvla_available": bool(vla_summary.get("vla_available", False)),
@@ -448,6 +449,7 @@ def _feedback_summary(
             "coverage_gap_return": float(coverage_feedback.get("gap_return_mean", 0.0)),
             "process_reward_mean": float(coverage_feedback.get("process_reward_mean", 0.0)),
             "wm_validation_error_rate": float(wm_validation.get("error_rate", coverage_feedback.get("wm_validation_error_rate", 0.0))),
+            "wm_correction_pressure": float(correction_overlay.get("meta_node_pressure", 0.0)),
         },
     }
 
@@ -769,6 +771,14 @@ def build_semantic_runtime_learning_row(
     if wm_validation_summary:
         semantic_summary["wm_validation_summary"] = wm_validation_summary
         semantic_summary.setdefault("wm_validation_error_rate", float(wm_validation_summary.get("error_rate", 0.0)))
+    correction_overlay = dict(
+        episode.metadata.get("semantic_wm_correction_overlay")
+        or episode.metadata.get("semantic_coverage", {}).get("semantic_wm_correction_overlay")
+        or {}
+    )
+    if correction_overlay:
+        semantic_summary["semantic_wm_correction_overlay"] = correction_overlay
+        semantic_summary.setdefault("wm_correction_pressure", float(correction_overlay.get("meta_node_pressure", 0.0)))
     vla_summary = _summarize_vla_lane(artifact_refs, root_dir)
     dino_summary = _summarize_dino_lane(artifact_refs, root_dir, semantic_summary)
     fusion_summary = _summarize_fusion_lane(episode, vla_summary, dino_summary)

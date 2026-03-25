@@ -800,6 +800,19 @@ def run_pipeline_step_with_causal_order(
             from src.orchestrator.coverage_loop import run_coverage_loop
 
             cov_rows = list(semantic_coverage_config.get("runtime_rows", []))
+            feedback_adapter_package = semantic_coverage_config.get("feedback_adapter_package")
+            feedback_adapter_checkpoint = semantic_coverage_config.get("feedback_adapter_checkpoint")
+            if feedback_adapter_package is None and feedback_adapter_checkpoint:
+                try:
+                    import torch
+
+                    feedback_adapter_package = torch.load(
+                        str(feedback_adapter_checkpoint),
+                        map_location="cpu",
+                        weights_only=False,
+                    )
+                except Exception:
+                    feedback_adapter_package = None
             cov_result = run_coverage_loop(
                 cov_rows,
                 econ_signals=econ_signals.to_dict(),
@@ -816,6 +829,8 @@ def run_pipeline_step_with_causal_order(
                 sima_sequences=semantic_coverage_config.get("sima_sequences"),
                 vla_hints=semantic_coverage_config.get("vla_hints"),
                 semantic_world_model=semantic_world_model,
+                feedback_adapter_package=feedback_adapter_package,
+                shadow_fit_feedback_adapter=bool(semantic_coverage_config.get("shadow_fit_feedback_adapter", True)),
                 economic_weight=float(semantic_coverage_config.get("economic_weight", 1.0)),
                 trust_weight=float(semantic_coverage_config.get("trust_weight", 1.0)),
                 readiness_weight=float(semantic_coverage_config.get("readiness_weight", 1.0)),
@@ -833,6 +848,8 @@ def run_pipeline_step_with_causal_order(
                     "trust_calibration_overlay": dict(cov_result.trust_calibration_overlay),
                     "econ_calibration_overlay": dict(cov_result.econ_calibration_overlay),
                     "graph_mutation_proposals": list(cov_result.graph_mutation_proposals),
+                    "graph_mutation_execution": dict(cov_result.graph_mutation_execution),
+                    "semantic_wm_correction_overlay": dict(cov_result.semantic_wm_correction_overlay),
                     "fill_decisions": list(cov_result.fill_decisions[:6]),
                 }
                 semantic_metadata["coverage_feedback_summary"] = dict(cov_result.feedback_summary)
@@ -840,6 +857,8 @@ def run_pipeline_step_with_causal_order(
                 semantic_metadata["trust_calibration_overlay"] = dict(cov_result.trust_calibration_overlay)
                 semantic_metadata["econ_calibration_overlay"] = dict(cov_result.econ_calibration_overlay)
                 semantic_metadata["graph_mutation_proposals"] = list(cov_result.graph_mutation_proposals)
+                semantic_metadata["graph_mutation_execution"] = dict(cov_result.graph_mutation_execution)
+                semantic_metadata["semantic_wm_correction_overlay"] = dict(cov_result.semantic_wm_correction_overlay)
                 semantic_metadata["data_gaps"] = list(
                     dict.fromkeys(
                         list(semantic_metadata.get("data_gaps", []) or [])
@@ -847,6 +866,15 @@ def run_pipeline_step_with_causal_order(
                     )
                 )[:12]
                 orchestrator_context.semantic_metadata = semantic_metadata
+                if cov_result.corrected_semantic_world_model:
+                    try:
+                        from src.world_model.semantic_world_model import SemanticWorldModelState
+
+                        orchestrator_context.semantic_world_model = SemanticWorldModelState.from_dict(
+                            cov_result.corrected_semantic_world_model
+                        )
+                    except Exception:
+                        pass
         except Exception:
             cov_result = {"error": "coverage_loop_unavailable"}
 
@@ -959,6 +987,9 @@ def run_pipeline_step_with_causal_order(
                 "trust_calibration_overlay": cov_result.trust_calibration_overlay,
                 "econ_calibration_overlay": cov_result.econ_calibration_overlay,
                 "graph_mutation_proposals": cov_result.graph_mutation_proposals,
+                "graph_mutation_execution": cov_result.graph_mutation_execution,
+                "semantic_wm_correction_overlay": cov_result.semantic_wm_correction_overlay,
+                "corrected_semantic_world_model": cov_result.corrected_semantic_world_model,
                 "evidence_harvest_summary": {
                     "episodes_processed": cov_result.evidence_harvest.episodes_processed,
                     "edges_discovered": cov_result.evidence_harvest.edges_discovered,

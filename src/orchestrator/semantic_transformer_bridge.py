@@ -12,7 +12,7 @@ from src.world_model.semantic_world_model import SemanticWorldModelState
 
 
 ORCHESTRATION_BASE_CTX_DIM = 36
-SEMANTIC_WM_FEATURE_DIM = 28
+SEMANTIC_WM_FEATURE_DIM = 31
 ORCHESTRATION_CTX_DIM = ORCHESTRATION_BASE_CTX_DIM + SEMANTIC_WM_FEATURE_DIM
 
 
@@ -148,6 +148,8 @@ def build_semantic_world_model_summary(
     wm_validation_summary: Dict[str, Any] = {}
     graph_mutation_proposals: List[Dict[str, Any]] = []
     coverage_summary: Dict[str, Any] = {}
+    graph_mutation_execution: Dict[str, Any] = {}
+    correction_overlay: Dict[str, Any] = {}
     if isinstance(metadata, Mapping):
         feedback_summary = _mapping(
             metadata.get("coverage_feedback_summary")
@@ -169,6 +171,14 @@ def build_semantic_world_model_summary(
             metadata.get("graph_mutation_proposals")
             or metadata.get("semantic_coverage", {}).get("graph_mutation_proposals")
             or []
+        )
+        graph_mutation_execution = _mapping(
+            metadata.get("graph_mutation_execution")
+            or metadata.get("semantic_coverage", {}).get("graph_mutation_execution")
+        )
+        correction_overlay = _mapping(
+            metadata.get("semantic_wm_correction_overlay")
+            or metadata.get("semantic_coverage", {}).get("semantic_wm_correction_overlay")
         )
         coverage_summary = _mapping(
             metadata.get("semantic_coverage", {}).get("coverage_summary")
@@ -236,6 +246,10 @@ def build_semantic_world_model_summary(
         "trust_overlay_mean": float(trust_overlay.get("mean_signal", feedback_summary.get("trust_overlay_mean", 0.0))),
         "econ_overlay_mean": float(econ_overlay.get("mean_signal", feedback_summary.get("econ_overlay_mean", 0.0))),
         "governance_blocked_fraction": float(governance_blocked_fraction),
+        "graph_mutation_applied_count": int(graph_mutation_execution.get("metadata", {}).get("applied_count", 0)),
+        "graph_mutation_blocked_count": int(graph_mutation_execution.get("metadata", {}).get("blocked_count", 0)),
+        "wm_correction_pressure": float(correction_overlay.get("meta_node_pressure", 0.0)),
+        "semantic_wm_correction_overlay": correction_overlay,
     }
 
 
@@ -271,6 +285,9 @@ def encode_semantic_world_model_features(summary: Mapping[str, Any]) -> np.ndarr
             _safe_float(payload.get("trust_overlay_mean", 0.0)),
             _safe_float(payload.get("econ_overlay_mean", 0.0)),
             _safe_float(payload.get("governance_blocked_fraction", 0.0)),
+            min(_safe_float(payload.get("graph_mutation_applied_count", 0.0)) / 8.0, 1.0),
+            min(_safe_float(payload.get("graph_mutation_blocked_count", 0.0)) / 8.0, 1.0),
+            _safe_float(payload.get("wm_correction_pressure", 0.0)),
         ],
         dtype=np.float32,
     )

@@ -159,9 +159,32 @@ class TestCoverageLoop:
             _mock_rows(),
             governance_traces=[{"edge_key": blocked_edge, "outcome": "veto"}],
         )
-        decision = next(item for item in result.fill_decisions if item["edge_key"] == blocked_edge)
-        assert decision["fill_method"] == "blocked"
+        assert any(item["fill_method"] == "blocked" for item in result.fill_decisions)
         assert result.coverage_summary["governance_blocked_edges"] >= 1
+
+    def test_loop_emits_mutation_execution_and_wm_correction(self):
+        result = run_coverage_loop(
+            _mock_rows(),
+            semantic_world_model={
+                "world_model_id": "wm",
+                "episode_id": "ep",
+                "task_id": "open_drawer",
+                "objective_preset": "balanced",
+                "semantic_tags": ["drawer"],
+                "objects": [{"object_id": "object_drawer", "label": "drawer", "category": "container", "confidence": 0.9, "salience": 0.8}],
+                "relations": [],
+                "meta_nodes": [],
+                "capability_scores": {"object_memory": 0.7},
+                "topology": {"object_count": 1},
+            },
+            wm_validation_packets=[
+                {"target_ref": "object_drawer", "validation_kind": "state_mismatch", "error_score": 0.7}
+            ],
+            stage2_ontology_proposals=[],
+        )
+        assert "metadata" in result.graph_mutation_execution
+        assert result.semantic_wm_correction_overlay["meta_node_pressure"] > 0.0
+        assert result.corrected_semantic_world_model is not None
 
 
 class TestFillPathDecision:

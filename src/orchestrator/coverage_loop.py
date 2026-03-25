@@ -38,6 +38,18 @@ from src.world_model.semantic_feedback_packets import (
     SemanticCoverageFeedback,
     compile_semantic_coverage_feedback,
 )
+from src.world_model.semantic_wm_correction import (
+    apply_semantic_wm_correction_overlay,
+    compile_semantic_wm_correction_overlay,
+)
+from src.world_model.graph_mutation_executor import (
+    GovernedGraphMutationExecutor,
+    GraphMutationExecutionResult,
+)
+from src.world_model.feedback_topology_adapters import (
+    SemanticFeedbackAdapterPackage,
+    shadow_fit_feedback_adapter_package,
+)
 from src.hrl.skill_graph import SkillGraph
 from src.envs.primitive_inventory import for_env, list_registered_env_ids
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
@@ -149,6 +161,9 @@ class CoverageLoopResult:
     trust_calibration_overlay: Dict[str, float] = field(default_factory=dict)
     econ_calibration_overlay: Dict[str, float] = field(default_factory=dict)
     graph_mutation_proposals: List[Dict[str, Any]] = field(default_factory=list)
+    graph_mutation_execution: Dict[str, Any] = field(default_factory=dict)
+    semantic_wm_correction_overlay: Dict[str, Any] = field(default_factory=dict)
+    corrected_semantic_world_model: Optional[Dict[str, Any]] = None
     pre_evidence_snapshot: Dict[str, int] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -165,6 +180,9 @@ class CoverageLoopResult:
             "trust_calibration_overlay": dict(self.trust_calibration_overlay),
             "econ_calibration_overlay": dict(self.econ_calibration_overlay),
             "graph_mutation_proposals": list(self.graph_mutation_proposals),
+            "graph_mutation_execution": dict(self.graph_mutation_execution),
+            "semantic_wm_correction_overlay": dict(self.semantic_wm_correction_overlay),
+            "corrected_semantic_world_model": dict(self.corrected_semantic_world_model or {}),
             "metadata": dict(self.metadata),
         }
 
@@ -214,6 +232,18 @@ class CoverageLoopResult:
         mutation_path = out / "graph_mutation_proposals.json"
         mutation_path.write_text(json.dumps(self.graph_mutation_proposals, indent=2))
         paths["graph_mutation_proposals"] = str(mutation_path)
+
+        mutation_exec_path = out / "graph_mutation_execution.json"
+        mutation_exec_path.write_text(json.dumps(self.graph_mutation_execution, indent=2))
+        paths["graph_mutation_execution"] = str(mutation_exec_path)
+
+        correction_path = out / "semantic_wm_correction_overlay.json"
+        correction_path.write_text(json.dumps(self.semantic_wm_correction_overlay, indent=2))
+        paths["semantic_wm_correction_overlay"] = str(correction_path)
+
+        corrected_wm_path = out / "corrected_semantic_world_model.json"
+        corrected_wm_path.write_text(json.dumps(self.corrected_semantic_world_model or {}, indent=2))
+        paths["corrected_semantic_world_model"] = str(corrected_wm_path)
 
         evidence_path = out / "evidence_harvest.json"
         evidence_path.write_text(json.dumps(self.evidence_harvest.to_dict(), indent=2))
@@ -308,6 +338,8 @@ def run_coverage_loop(
     sima_sequences: Optional[Sequence[Mapping[str, Any]]] = None,
     vla_hints: Optional[Sequence[Mapping[str, Any]]] = None,
     semantic_world_model: Optional[Any] = None,
+    feedback_adapter_package: Optional[Any] = None,
+    shadow_fit_feedback_adapter: bool = True,
     economic_weight: float = 1.0,
     trust_weight: float = 1.0,
     readiness_weight: float = 1.0,
@@ -370,6 +402,24 @@ def run_coverage_loop(
         trust_state=trust_state,
         backend_health_reports=backend_health_reports,
     )
+    correction_overlay = compile_semantic_wm_correction_overlay(
+        semantic_world_model,
+        wm_validation_packets,
+    )
+    corrected_semantic_world_model = apply_semantic_wm_correction_overlay(
+        semantic_world_model,
+        correction_overlay,
+    )
+
+    mutation_executor = GovernedGraphMutationExecutor()
+    mutation_result: GraphMutationExecutionResult = mutation_executor.execute(
+        skill_graph,
+        env_inventories,
+        feedback.graph_mutation_proposals,
+        governance_traces=governance_traces,
+    )
+    skill_graph = mutation_result.skill_graph
+    env_inventories = mutation_result.env_inventories
 
     def _merge_edge_signals(
         base: Mapping[Tuple[str, str], float],
@@ -390,7 +440,7 @@ def run_coverage_loop(
     coverage_graph = SemanticCoverageGraph.build(
         skill_graph=skill_graph,
         env_inventories=env_inventories,
-        semantic_wm=semantic_world_model,
+        semantic_wm=corrected_semantic_world_model or semantic_world_model,
         economic_priorities=_merge_edge_signals(
             harvest.economic_priorities,
             feedback.edge_economic_overlay,
@@ -407,6 +457,29 @@ def run_coverage_loop(
         edge_metadata=feedback.edge_metadata,
     )
 
+    adapter: Optional[SemanticFeedbackAdapterPackage]
+    adapter = feedback_adapter_package if isinstance(feedback_adapter_package, SemanticFeedbackAdapterPackage) else None
+    if adapter is None and isinstance(feedback_adapter_package, Mapping) and "state_dict" in feedback_adapter_package:
+        try:
+            adapter = SemanticFeedbackAdapterPackage.from_checkpoint(feedback_adapter_package)
+        except Exception:
+            adapter = None
+    if adapter is None and shadow_fit_feedback_adapter:
+        adapter = shadow_fit_feedback_adapter_package(coverage_graph)
+    if adapter is not None:
+        predictions = adapter.predict_edges(coverage_graph.edges)
+        for edge, prediction in zip(coverage_graph.edges, predictions):
+            edge.economic_priority = float(max(edge.economic_priority, prediction.get("economic_priority", edge.economic_priority)))
+            edge.trust_priority = float(max(edge.trust_priority, prediction.get("trust_priority", edge.trust_priority)))
+            if not bool(edge.metadata.get("governance_blocked", False)):
+                edge.promotion_readiness = float(max(edge.promotion_readiness, prediction.get("promotion_readiness", edge.promotion_readiness)))
+            edge.metadata["wm_validation_pressure"] = float(
+                max(
+                    float(edge.metadata.get("wm_validation_pressure", 0.0)),
+                    prediction.get("wm_correction_pressure", 0.0),
+                )
+            )
+
     # Step 5: Rank missing edges (implicit in rank_gaps)
     summary = coverage_graph.coverage_summary()
     summary["feedback_loop"] = dict(feedback.feedback_summary)
@@ -417,6 +490,9 @@ def run_coverage_loop(
     summary["feedback_loop"]["missing_edge_fraction"] = summary.get("missing_edges", 0) / float(total_edges)
     summary["feedback_loop"]["governance_blocked_fraction"] = summary.get("governance_blocked_edges", 0) / float(total_edges)
     summary["feedback_loop"]["graph_mutation_pressure"] = float(len(feedback.graph_mutation_proposals)) / float(total_edges)
+    summary["feedback_loop"]["graph_mutation_applied_count"] = int(mutation_result.metadata.get("applied_count", 0))
+    summary["feedback_loop"]["graph_mutation_blocked_count"] = int(mutation_result.metadata.get("blocked_count", 0))
+    summary["feedback_loop"]["wm_correction_pressure"] = float(correction_overlay.meta_node_pressure)
 
     # Step 6: Compile simulation agenda
     sim_agenda = compile_simulation_agenda(
@@ -492,6 +568,13 @@ def run_coverage_loop(
         trust_calibration_overlay=feedback.trust_calibration_overlay,
         econ_calibration_overlay=feedback.econ_calibration_overlay,
         graph_mutation_proposals=[item.to_dict() for item in feedback.graph_mutation_proposals],
+        graph_mutation_execution=mutation_result.to_dict(),
+        semantic_wm_correction_overlay=correction_overlay.to_dict(),
+        corrected_semantic_world_model=(
+            corrected_semantic_world_model.to_dict()
+            if getattr(corrected_semantic_world_model, "to_dict", None) is not None
+            else None
+        ),
         pre_evidence_snapshot=pre_evidence,
         metadata={
             "env_names": resolved_envs,
@@ -500,6 +583,7 @@ def run_coverage_loop(
             "trust_weight": trust_weight,
             "readiness_weight": readiness_weight,
             "semantic_world_model_present": semantic_world_model is not None,
+            "feedback_adapter_applied": adapter is not None,
         },
     )
 
