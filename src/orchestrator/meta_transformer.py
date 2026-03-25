@@ -288,6 +288,14 @@ class MetaTransformer:
             "set_backend",
             "route_meta_nodes",
         ]
+        if float(semantic_summary.get("wm_validation_error_rate", 0.0)) >= 0.2:
+            bounded_actions.append("request_wm_state_validation")
+        if float(semantic_summary.get("graph_mutation_pressure", 0.0)) >= 1.0:
+            bounded_actions.append("queue_graph_mutation_review")
+        if float(semantic_summary.get("trust_overlay_mean", 0.0)) < 0.45:
+            bounded_actions.append("route_trust_recalibration")
+        if float(semantic_summary.get("econ_overlay_mean", 0.0)) >= 0.5:
+            bounded_actions.append("prioritize_gap_fill")
         execution_mode = "bounded_execution" if readiness.ready else "advisory"
         work_order = build_execution_work_order(
             order_type="transformer_routing",
@@ -329,6 +337,8 @@ class MetaTransformer:
             "semantic_world_model_id": semantic_summary.get("world_model_id"),
             "active_capabilities": list(semantic_summary.get("active_capabilities", []) or []),
             "top_meta_nodes": list(semantic_summary.get("top_meta_nodes", []) or []),
+            "coverage_feedback_summary": dict(semantic_summary.get("coverage_feedback_summary", {}) or {}),
+            "wm_validation_summary": dict(semantic_summary.get("wm_validation_summary", {}) or {}),
         }
         return output
 

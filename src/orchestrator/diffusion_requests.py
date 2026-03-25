@@ -324,6 +324,8 @@ def build_diffusion_prompt_from_coverage_gaps(
 
     prompts: List[DiffusionPromptSpec] = []
     for gap in ranked_gaps:
+        if bool(getattr(gap, "metadata", {}).get("governance_blocked", False)):
+            continue
         # Collect missing-edge information
         missing_skill_edges: List[Dict[str, str]] = []
         missing_env_prims: List[str] = []
@@ -352,7 +354,8 @@ def build_diffusion_prompt_from_coverage_gaps(
             f"Gap-driven: missing {gap.edge_type} edge from "
             f"{gap.source_id} → {gap.target_id} "
             f"(economic_priority={gap.economic_priority:.2f}, "
-            f"trust_priority={gap.trust_priority:.2f})"
+            f"trust_priority={gap.trust_priority:.2f}, "
+            f"wm_validation={float(getattr(gap, 'metadata', {}).get('wm_validation_pressure', 0.0)):.2f})"
         )
 
         prompts.append(DiffusionPromptSpec(

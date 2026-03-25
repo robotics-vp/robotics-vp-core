@@ -122,6 +122,47 @@ class TestCoverageLoop:
         )
         assert "drawer_vase" in result.metadata.get("env_names", [])
 
+    def test_feedback_signals_flow_into_summary(self):
+        result = run_coverage_loop(
+            _mock_rows(),
+            coverage_outcomes=[
+                {
+                    "edge_key": "task:open_drawer -> skill:grasp_handle",
+                    "fill_method": "diffusion",
+                    "coverage_delta": 0.2,
+                    "process_reward_delta": 0.15,
+                    "policy_eval_delta": 0.1,
+                    "quality_score": 0.8,
+                    "backend_health_score": 0.7,
+                }
+            ],
+            wm_validation_packets=[
+                {
+                    "target_ref": "skill:grasp_handle",
+                    "validation_kind": "relation_state",
+                    "error_score": 0.4,
+                }
+            ],
+            process_reward_summaries=[{"phi_star": 0.8, "confidence": 0.9}],
+        )
+        assert result.feedback_summary["coverage_outcome_count"] == 1
+        assert result.coverage_summary["feedback_loop"]["process_reward_mean"] > 0.0
+        assert result.wm_validation_summary["packet_count"] == 1
+        assert "trust_calibration_overlay" in result.to_dict()
+
+    def test_governance_blocked_gap_yields_blocked_fill_decision(self):
+        baseline = run_coverage_loop(_mock_rows())
+        assert baseline.fill_decisions
+        blocked_edge = baseline.fill_decisions[0]["edge_key"]
+
+        result = run_coverage_loop(
+            _mock_rows(),
+            governance_traces=[{"edge_key": blocked_edge, "outcome": "veto"}],
+        )
+        decision = next(item for item in result.fill_decisions if item["edge_key"] == blocked_edge)
+        assert decision["fill_method"] == "blocked"
+        assert result.coverage_summary["governance_blocked_edges"] >= 1
+
 
 class TestFillPathDecision:
     def test_fill_path_serialization(self):

@@ -418,6 +418,8 @@ def _feedback_summary(
     fusion_summary: Mapping[str, Any],
     outcome_summary: Mapping[str, Any],
 ) -> Dict[str, Any]:
+    coverage_feedback = dict(semantic_summary.get("coverage_feedback_summary", {}) or {})
+    wm_validation = dict(semantic_summary.get("wm_validation_summary", {}) or {})
     return {
         "annotation_to_world_model": {
             "openvla_available": bool(vla_summary.get("vla_available", False)),
@@ -431,6 +433,8 @@ def _feedback_summary(
             "active_capabilities": list(semantic_summary.get("active_capabilities", []) or []),
             "object_count": int(semantic_summary.get("object_count", 0) or 0),
             "affordance_density": float(semantic_summary.get("affordance_density", 0.0)),
+            "missing_edge_fraction": float(semantic_summary.get("missing_edge_fraction", 0.0)),
+            "graph_mutation_pressure": float(semantic_summary.get("graph_mutation_pressure", 0.0)),
         },
         "transformers_to_runtime": {
             "can_execute": bool(outcome_summary.get("work_order_ready", False)),
@@ -441,6 +445,9 @@ def _feedback_summary(
             "reward_signal": float(outcome_summary.get("reward_signal", 0.0)),
             "fusion_quality": float(outcome_summary.get("semantic_fusion_confidence_mean", 0.0)),
             "promotion_trace_complete": bool(outcome_summary.get("promotion_trace_complete", False)),
+            "coverage_gap_return": float(coverage_feedback.get("gap_return_mean", 0.0)),
+            "process_reward_mean": float(coverage_feedback.get("process_reward_mean", 0.0)),
+            "wm_validation_error_rate": float(wm_validation.get("error_rate", coverage_feedback.get("wm_validation_error_rate", 0.0))),
         },
     }
 
@@ -732,6 +739,36 @@ def build_semantic_runtime_learning_row(
         )
         semantic_summary = build_semantic_world_model_summary(_load_json(semantic_world_model_path))
     semantic_summary.setdefault("task_id", episode.task_id)
+    coverage_feedback_summary = dict(
+        episode.metadata.get("coverage_feedback_summary")
+        or episode.metadata.get("semantic_coverage", {}).get("feedback_summary")
+        or {}
+    )
+    if coverage_feedback_summary:
+        semantic_summary["coverage_feedback_summary"] = coverage_feedback_summary
+        semantic_summary.setdefault(
+            "missing_edge_fraction",
+            float(
+                episode.metadata.get("semantic_coverage", {}).get("coverage_summary", {}).get("missing_edges", 0)
+            )
+            / float(
+                max(
+                    episode.metadata.get("semantic_coverage", {}).get("coverage_summary", {}).get("total_edges", 0),
+                    1,
+                )
+            ),
+        )
+        semantic_summary.setdefault("gap_return_mean", float(coverage_feedback_summary.get("gap_return_mean", 0.0)))
+        semantic_summary.setdefault("process_reward_mean", float(coverage_feedback_summary.get("process_reward_mean", 0.0)))
+        semantic_summary.setdefault("graph_mutation_pressure", float(coverage_feedback_summary.get("graph_mutation_pressure", 0.0)))
+    wm_validation_summary = dict(
+        episode.metadata.get("wm_validation_summary")
+        or episode.metadata.get("semantic_coverage", {}).get("wm_validation_summary")
+        or {}
+    )
+    if wm_validation_summary:
+        semantic_summary["wm_validation_summary"] = wm_validation_summary
+        semantic_summary.setdefault("wm_validation_error_rate", float(wm_validation_summary.get("error_rate", 0.0)))
     vla_summary = _summarize_vla_lane(artifact_refs, root_dir)
     dino_summary = _summarize_dino_lane(artifact_refs, root_dir, semantic_summary)
     fusion_summary = _summarize_fusion_lane(episode, vla_summary, dino_summary)

@@ -95,3 +95,36 @@ def test_build_from_skill_graph_and_env_inventories():
     assert summary["missing_edges"] == summary["total_edges"]
     assert "skill" in summary["node_type_counts"]
     assert "env_primitive" in summary["node_type_counts"]
+
+
+def test_build_uses_edge_keyed_priority_maps() -> None:
+    from types import SimpleNamespace
+
+    skill_graph = SimpleNamespace(
+        nodes=[
+            SimpleNamespace(
+                skill_id="skill:b",
+                label="skill b",
+                env_primitive_requirements=[],
+                object_family_requirements=[],
+                risk_families=[],
+            )
+        ],
+        transitions=[
+            SimpleNamespace(task_id="a", from_skill="skill:b"),
+        ],
+    )
+    graph = SemanticCoverageGraph.build(
+        skill_graph=skill_graph,
+        env_inventories=None,
+        evidence_counts={("task:a", "skill:b"): 0},
+        economic_priorities={("task:a", "skill:b"): 0.9},
+        trust_priorities={("task:a", "skill:b"): 0.7},
+        readiness_signals={("task:a", "skill:b"): 0.4},
+        edge_metadata={("task:a", "skill:b"): {"governance_blocked": True}},
+    )
+    edge = graph.edges[0]
+    assert edge.economic_priority == 0.9
+    assert edge.trust_priority == 0.7
+    assert edge.promotion_readiness == 0.4
+    assert edge.metadata["governance_blocked"] is True

@@ -34,6 +34,10 @@ from src.world_model.fill_outcome_store import (
     FillOutcomeRecord,
     FillOutcomeStore,
 )
+from src.world_model.semantic_feedback_packets import (
+    SemanticCoverageFeedback,
+    compile_semantic_coverage_feedback,
+)
 from src.hrl.skill_graph import SkillGraph
 from src.envs.primitive_inventory import for_env, list_registered_env_ids
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
@@ -82,9 +86,14 @@ def _decide_fill_path(
     trust = getattr(gap, "trust_priority", 0.0)
     readiness = getattr(gap, "promotion_readiness", 0.0)
     gap_score = gap.gap_score() if callable(getattr(gap, "gap_score", None)) else 0.0
+    metadata = dict(getattr(gap, "metadata", {}) or {})
 
     # Decision logic
-    if readiness < readiness_threshold:
+    if bool(metadata.get("governance_blocked", False)):
+        method = "blocked"
+        rationale = "Governance trace blocked this edge; keep as meta-node review target"
+        confidence = 0.95
+    elif readiness < readiness_threshold:
         method = "blocked"
         rationale = f"Readiness {readiness:.2f} < {readiness_threshold}: prerequisites not met"
         confidence = 0.3
@@ -135,6 +144,11 @@ class CoverageLoopResult:
     simulation_agenda: List[Dict[str, Any]]
     diffusion_prompts: List[Dict[str, Any]]
     fill_decisions: List[Dict[str, Any]]
+    feedback_summary: Dict[str, Any] = field(default_factory=dict)
+    wm_validation_summary: Dict[str, Any] = field(default_factory=dict)
+    trust_calibration_overlay: Dict[str, float] = field(default_factory=dict)
+    econ_calibration_overlay: Dict[str, float] = field(default_factory=dict)
+    graph_mutation_proposals: List[Dict[str, Any]] = field(default_factory=list)
     pre_evidence_snapshot: Dict[str, int] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -146,6 +160,11 @@ class CoverageLoopResult:
             "simulation_agenda": list(self.simulation_agenda),
             "diffusion_prompts": list(self.diffusion_prompts),
             "fill_decisions": list(self.fill_decisions),
+            "feedback_summary": dict(self.feedback_summary),
+            "wm_validation_summary": dict(self.wm_validation_summary),
+            "trust_calibration_overlay": dict(self.trust_calibration_overlay),
+            "econ_calibration_overlay": dict(self.econ_calibration_overlay),
+            "graph_mutation_proposals": list(self.graph_mutation_proposals),
             "metadata": dict(self.metadata),
         }
 
@@ -175,6 +194,26 @@ class CoverageLoopResult:
         fill_path = out / "fill_decisions.json"
         fill_path.write_text(json.dumps(self.fill_decisions, indent=2))
         paths["fill_decisions"] = str(fill_path)
+
+        feedback_path = out / "coverage_feedback_summary.json"
+        feedback_path.write_text(json.dumps(self.feedback_summary, indent=2))
+        paths["coverage_feedback_summary"] = str(feedback_path)
+
+        wm_validation_path = out / "wm_validation_summary.json"
+        wm_validation_path.write_text(json.dumps(self.wm_validation_summary, indent=2))
+        paths["wm_validation_summary"] = str(wm_validation_path)
+
+        trust_path = out / "trust_calibration_overlay.json"
+        trust_path.write_text(json.dumps(self.trust_calibration_overlay, indent=2))
+        paths["trust_calibration_overlay"] = str(trust_path)
+
+        econ_path = out / "econ_calibration_overlay.json"
+        econ_path.write_text(json.dumps(self.econ_calibration_overlay, indent=2))
+        paths["econ_calibration_overlay"] = str(econ_path)
+
+        mutation_path = out / "graph_mutation_proposals.json"
+        mutation_path.write_text(json.dumps(self.graph_mutation_proposals, indent=2))
+        paths["graph_mutation_proposals"] = str(mutation_path)
 
         evidence_path = out / "evidence_harvest.json"
         evidence_path.write_text(json.dumps(self.evidence_harvest.to_dict(), indent=2))
@@ -258,10 +297,17 @@ def run_coverage_loop(
     econ_signals: Optional[Mapping[str, Any]] = None,
     trust_state: Optional[Mapping[str, Any]] = None,
     governance_traces: Optional[Sequence[Mapping[str, Any]]] = None,
+    process_reward_summaries: Optional[Sequence[Mapping[str, Any]]] = None,
+    fill_outcome_records: Optional[Sequence[Any]] = None,
+    coverage_outcomes: Optional[Sequence[Mapping[str, Any]]] = None,
+    wm_validation_packets: Optional[Sequence[Mapping[str, Any]]] = None,
+    stage2_ontology_proposals: Optional[Sequence[Any]] = None,
+    backend_health_reports: Optional[Sequence[Mapping[str, Any]]] = None,
     env_names: Optional[Sequence[str]] = None,
     hrl_skills: bool = True,
     sima_sequences: Optional[Sequence[Mapping[str, Any]]] = None,
     vla_hints: Optional[Sequence[Mapping[str, Any]]] = None,
+    semantic_world_model: Optional[Any] = None,
     economic_weight: float = 1.0,
     trust_weight: float = 1.0,
     readiness_weight: float = 1.0,
@@ -312,15 +358,65 @@ def run_coverage_loop(
         except KeyError:
             pass
 
+    # Step 3.5: Compile return-path feedback before graph construction
+    feedback: SemanticCoverageFeedback = compile_semantic_coverage_feedback(
+        coverage_outcomes=coverage_outcomes,
+        wm_validation_packets=wm_validation_packets,
+        fill_outcome_records=fill_outcome_records,
+        process_reward_summaries=process_reward_summaries,
+        governance_traces=governance_traces,
+        stage2_ontology_proposals=stage2_ontology_proposals,
+        econ_signals=econ_signals,
+        trust_state=trust_state,
+        backend_health_reports=backend_health_reports,
+    )
+
+    def _merge_edge_signals(
+        base: Mapping[Tuple[str, str], float],
+        overlay: Mapping[Tuple[str, str], float],
+    ) -> Dict[Tuple[str, str], float]:
+        merged: Dict[Tuple[str, str], float] = {}
+        keys = set(dict(base).keys()) | set(dict(overlay).keys())
+        for key in keys:
+            base_value = float(dict(base).get(key, 0.0))
+            overlay_value = float(dict(overlay).get(key, base_value))
+            if key in overlay:
+                merged[key] = max(0.0, min(1.0, 0.55 * base_value + 0.45 * overlay_value))
+            else:
+                merged[key] = base_value
+        return merged
+
     # Step 4: Build coverage graph with real evidence counts
     coverage_graph = SemanticCoverageGraph.build(
         skill_graph=skill_graph,
         env_inventories=env_inventories,
+        semantic_wm=semantic_world_model,
+        economic_priorities=_merge_edge_signals(
+            harvest.economic_priorities,
+            feedback.edge_economic_overlay,
+        ),
+        trust_priorities=_merge_edge_signals(
+            harvest.trust_priorities,
+            feedback.edge_trust_overlay,
+        ),
+        readiness_signals=_merge_edge_signals(
+            harvest.promotion_readiness,
+            feedback.edge_readiness_overlay,
+        ),
         evidence_counts=harvest.evidence_counts,
+        edge_metadata=feedback.edge_metadata,
     )
 
     # Step 5: Rank missing edges (implicit in rank_gaps)
     summary = coverage_graph.coverage_summary()
+    summary["feedback_loop"] = dict(feedback.feedback_summary)
+    summary["wm_validation_summary"] = dict(feedback.wm_validation_summary)
+    summary["trust_calibration_overlay"] = dict(feedback.trust_calibration_overlay)
+    summary["econ_calibration_overlay"] = dict(feedback.econ_calibration_overlay)
+    total_edges = max(summary.get("total_edges", 0), 1)
+    summary["feedback_loop"]["missing_edge_fraction"] = summary.get("missing_edges", 0) / float(total_edges)
+    summary["feedback_loop"]["governance_blocked_fraction"] = summary.get("governance_blocked_edges", 0) / float(total_edges)
+    summary["feedback_loop"]["graph_mutation_pressure"] = float(len(feedback.graph_mutation_proposals)) / float(total_edges)
 
     # Step 6: Compile simulation agenda
     sim_agenda = compile_simulation_agenda(
@@ -345,6 +441,10 @@ def run_coverage_loop(
         readiness_weight=readiness_weight,
         limit=sim_agenda_limit + diffusion_limit,
         gap_ranker=gap_ranker,
+    )
+    summary.setdefault(
+        "top_missing_edges",
+        [f"{gap.source_id} -> {gap.target_id}" for gap in ranked_gaps[:6]],
     )
 
     if fill_path_policy is not None:
@@ -387,6 +487,11 @@ def run_coverage_loop(
         simulation_agenda=sim_agenda,
         diffusion_prompts=diffusion_dicts,
         fill_decisions=fill_decisions,
+        feedback_summary=feedback.feedback_summary,
+        wm_validation_summary=feedback.wm_validation_summary,
+        trust_calibration_overlay=feedback.trust_calibration_overlay,
+        econ_calibration_overlay=feedback.econ_calibration_overlay,
+        graph_mutation_proposals=[item.to_dict() for item in feedback.graph_mutation_proposals],
         pre_evidence_snapshot=pre_evidence,
         metadata={
             "env_names": resolved_envs,
@@ -394,6 +499,7 @@ def run_coverage_loop(
             "economic_weight": economic_weight,
             "trust_weight": trust_weight,
             "readiness_weight": readiness_weight,
+            "semantic_world_model_present": semantic_world_model is not None,
         },
     )
 

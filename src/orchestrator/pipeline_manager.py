@@ -793,6 +793,63 @@ def run_pipeline_step_with_causal_order(
     # STEP 2: Compute datapack signals (UPSTREAM - defines data value)
     datapack_signals = datapack_engine.compute_signals(datapacks or [], econ_signals)
 
+    # STEP 2.5: Coverage loop feedback (OPTIONAL)
+    cov_result = None
+    if semantic_coverage_config is not None:
+        try:
+            from src.orchestrator.coverage_loop import run_coverage_loop
+
+            cov_rows = list(semantic_coverage_config.get("runtime_rows", []))
+            cov_result = run_coverage_loop(
+                cov_rows,
+                econ_signals=econ_signals.to_dict(),
+                trust_state=semantic_coverage_config.get("trust_state"),
+                governance_traces=semantic_coverage_config.get("governance_traces"),
+                process_reward_summaries=semantic_coverage_config.get("process_reward_summaries"),
+                fill_outcome_records=semantic_coverage_config.get("fill_outcome_records"),
+                coverage_outcomes=semantic_coverage_config.get("coverage_outcomes"),
+                wm_validation_packets=semantic_coverage_config.get("wm_validation_packets"),
+                stage2_ontology_proposals=semantic_coverage_config.get("stage2_ontology_proposals"),
+                backend_health_reports=semantic_coverage_config.get("backend_health_reports"),
+                env_names=semantic_coverage_config.get("env_names"),
+                hrl_skills=semantic_coverage_config.get("hrl_skills", True),
+                sima_sequences=semantic_coverage_config.get("sima_sequences"),
+                vla_hints=semantic_coverage_config.get("vla_hints"),
+                semantic_world_model=semantic_world_model,
+                economic_weight=float(semantic_coverage_config.get("economic_weight", 1.0)),
+                trust_weight=float(semantic_coverage_config.get("trust_weight", 1.0)),
+                readiness_weight=float(semantic_coverage_config.get("readiness_weight", 1.0)),
+                sim_agenda_limit=int(semantic_coverage_config.get("sim_agenda_limit", 10)),
+                diffusion_limit=int(semantic_coverage_config.get("diffusion_limit", 10)),
+                write_artifacts=bool(semantic_coverage_config.get("write_artifacts", False)),
+                artifact_dir=str(semantic_coverage_config.get("artifact_dir", "data/coverage")),
+            )
+            if orchestrator_context is not None:
+                semantic_metadata = dict(getattr(orchestrator_context, "semantic_metadata", {}) or {})
+                semantic_metadata["semantic_coverage"] = {
+                    "coverage_summary": dict(cov_result.coverage_summary),
+                    "feedback_summary": dict(cov_result.feedback_summary),
+                    "wm_validation_summary": dict(cov_result.wm_validation_summary),
+                    "trust_calibration_overlay": dict(cov_result.trust_calibration_overlay),
+                    "econ_calibration_overlay": dict(cov_result.econ_calibration_overlay),
+                    "graph_mutation_proposals": list(cov_result.graph_mutation_proposals),
+                    "fill_decisions": list(cov_result.fill_decisions[:6]),
+                }
+                semantic_metadata["coverage_feedback_summary"] = dict(cov_result.feedback_summary)
+                semantic_metadata["wm_validation_summary"] = dict(cov_result.wm_validation_summary)
+                semantic_metadata["trust_calibration_overlay"] = dict(cov_result.trust_calibration_overlay)
+                semantic_metadata["econ_calibration_overlay"] = dict(cov_result.econ_calibration_overlay)
+                semantic_metadata["graph_mutation_proposals"] = list(cov_result.graph_mutation_proposals)
+                semantic_metadata["data_gaps"] = list(
+                    dict.fromkeys(
+                        list(semantic_metadata.get("data_gaps", []) or [])
+                        + list(cov_result.coverage_summary.get("top_missing_edges", []) or [])
+                    )
+                )[:12]
+                orchestrator_context.semantic_metadata = semantic_metadata
+        except Exception:
+            cov_result = {"error": "coverage_loop_unavailable"}
+
     # STEP 3: Meta-transformer proposes plan (OPTIONAL - suggestions only)
     meta_out = None
     if meta_transformer is not None:
@@ -887,35 +944,21 @@ def run_pipeline_step_with_causal_order(
         )
         run_specs["semantic_runtime_scoring"] = runtime_score.to_dict()
 
-    # STEP 7: Coverage loop — evidence harvest + gap-driven agendas (OPTIONAL)
-    # Gated by semantic_coverage_config; None = no change to existing behavior.
+    # STEP 7: Coverage loop outputs (OPTIONAL)
     if semantic_coverage_config is not None:
         try:
-            from src.orchestrator.coverage_loop import run_coverage_loop
-
-            cov_rows = list(semantic_coverage_config.get("runtime_rows", []))
-            cov_result = run_coverage_loop(
-                cov_rows,
-                econ_signals=run_specs.get("econ_signals"),
-                trust_state=semantic_coverage_config.get("trust_state"),
-                governance_traces=semantic_coverage_config.get("governance_traces"),
-                env_names=semantic_coverage_config.get("env_names"),
-                hrl_skills=semantic_coverage_config.get("hrl_skills", True),
-                sima_sequences=semantic_coverage_config.get("sima_sequences"),
-                vla_hints=semantic_coverage_config.get("vla_hints"),
-                economic_weight=float(semantic_coverage_config.get("economic_weight", 1.0)),
-                trust_weight=float(semantic_coverage_config.get("trust_weight", 1.0)),
-                readiness_weight=float(semantic_coverage_config.get("readiness_weight", 1.0)),
-                sim_agenda_limit=int(semantic_coverage_config.get("sim_agenda_limit", 10)),
-                diffusion_limit=int(semantic_coverage_config.get("diffusion_limit", 10)),
-                write_artifacts=bool(semantic_coverage_config.get("write_artifacts", False)),
-                artifact_dir=str(semantic_coverage_config.get("artifact_dir", "data/coverage")),
-            )
+            if isinstance(cov_result, dict):
+                raise RuntimeError(cov_result.get("error", "coverage_loop_unavailable"))
             run_specs["semantic_coverage"] = {
                 "coverage_summary": cov_result.coverage_summary,
                 "simulation_agenda": cov_result.simulation_agenda,
                 "diffusion_prompts": cov_result.diffusion_prompts,
                 "fill_decisions": cov_result.fill_decisions,
+                "feedback_summary": cov_result.feedback_summary,
+                "wm_validation_summary": cov_result.wm_validation_summary,
+                "trust_calibration_overlay": cov_result.trust_calibration_overlay,
+                "econ_calibration_overlay": cov_result.econ_calibration_overlay,
+                "graph_mutation_proposals": cov_result.graph_mutation_proposals,
                 "evidence_harvest_summary": {
                     "episodes_processed": cov_result.evidence_harvest.episodes_processed,
                     "edges_discovered": cov_result.evidence_harvest.edges_discovered,

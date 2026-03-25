@@ -542,6 +542,8 @@ def compile_simulation_agenda(
 
     agenda: list[dict[str, Any]] = []
     for rank_idx, gap in enumerate(ranked_gaps):
+        if bool(getattr(gap, "metadata", {}).get("governance_blocked", False)):
+            continue
         src_node = coverage_graph.node_by_id(gap.source_id)
         tgt_node = coverage_graph.node_by_id(gap.target_id)
         src_label = src_node.label if src_node else gap.source_id
@@ -593,6 +595,11 @@ def compile_simulation_agenda(
             readiness=gap.promotion_readiness,
             rationale=(
                 f"Missing {gap.edge_type}: {gap.source_id} → {gap.target_id}"
+                + (
+                    f" | wm_validation_pressure={float(getattr(gap, 'metadata', {}).get('wm_validation_pressure', 0.0)):.2f}"
+                    if float(getattr(gap, "metadata", {}).get("wm_validation_pressure", 0.0)) > 0.0
+                    else ""
+                )
             ),
         )
         agenda.append(item.to_dict())

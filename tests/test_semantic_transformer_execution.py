@@ -118,6 +118,36 @@ def _datapack_signals() -> DatapackSignals:
     )
 
 
+def _coverage_feedback_metadata() -> dict:
+    return {
+        "coverage_feedback_summary": {
+            "gap_return_mean": 0.72,
+            "process_reward_mean": 0.58,
+            "graph_mutation_pressure": 2.0,
+            "wm_validation_error_rate": 0.31,
+        },
+        "wm_validation_summary": {
+            "error_rate": 0.31,
+            "packet_count": 2,
+            "top_targets": ["object_vase", "skill:novel_recovery"],
+        },
+        "trust_calibration_overlay": {"mean_signal": 0.32},
+        "econ_calibration_overlay": {"mean_signal": 0.71},
+        "graph_mutation_proposals": [
+            {"action": "add_provisional_skill", "target_ref": "skill:novel_recovery"}
+        ],
+        "semantic_coverage": {
+            "coverage_summary": {"total_edges": 10, "missing_edges": 4, "governance_blocked_edges": 1},
+            "feedback_summary": {
+                "gap_return_mean": 0.72,
+                "process_reward_mean": 0.58,
+                "graph_mutation_pressure": 2.0,
+                "wm_validation_error_rate": 0.31,
+            },
+        },
+    }
+
+
 def test_meta_transformer_propose_plan_emits_bounded_semantic_execution() -> None:
     transformer = MetaTransformer(d_shared=24)
     output = transformer.propose_plan(
@@ -195,11 +225,11 @@ def test_orchestration_transformer_uses_semantic_world_model_for_bounded_plan() 
             "SAFE": {"mpl": 50.0, "error": 0.01, "energy_Wh": 16.0, "risk": 0.1},
         },
         semantic_world_model=_semantic_world_model(),
-        semantic_metadata={"data_gaps": ["frontier_cases"]},
+        semantic_metadata={"data_gaps": ["frontier_cases"], **_coverage_feedback_metadata()},
     )
     encoded = _encode_ctx(ctx)
     assert encoded.shape[0] == ORCHESTRATION_CTX_DIM
-    assert float(encoded[-20:].sum()) > 0.0
+    assert float(encoded[-8:].sum()) > 0.0
 
     result = propose_orchestrated_plan(
         model=OrchestrationTransformer(hidden=32),
@@ -214,3 +244,34 @@ def test_orchestration_transformer_uses_semantic_world_model_for_bounded_plan() 
     assert result.activation_work_order["ready"] is True
     assert "SET_OBJECTIVE_PRESET" in [step.tool_call.name for step in result.steps]
     assert result.metadata["semantic_world_model_summary"]["world_model_id"] == "wm_test"
+    assert "request_wm_state_validation" in result.activation_plan["bounded_actions"]
+    assert "queue_graph_mutation_review" in result.activation_plan["bounded_actions"]
+
+
+def test_meta_transformer_uses_coverage_feedback_metadata() -> None:
+    ctx = OrchestratorContext(
+        env_name="drawer_vase",
+        engine_type="pybullet",
+        task_type="drawer_open",
+        customer_segment="premium_safety",
+        market_region="US",
+        objective_vector=[0.6, 0.2, 0.15, 0.8, 0.0],
+        wage_human=20.0,
+        energy_price_kWh=0.14,
+        mean_delta_mpl=4.0,
+        mean_delta_error=0.08,
+        mean_delta_j=0.1,
+        mean_trust=0.72,
+        mean_w_econ=0.61,
+        profile_summaries={},
+        semantic_world_model=_semantic_world_model(),
+        semantic_metadata=_coverage_feedback_metadata(),
+    )
+    output = MetaTransformer(d_shared=24).propose_plan(
+        econ_signals=_econ_signals(),
+        datapack_signals=_datapack_signals(),
+        orchestrator_context=ctx,
+    )
+    assert "request_wm_state_validation" in output.bounded_actions
+    assert "queue_graph_mutation_review" in output.bounded_actions
+    assert output.metadata["coverage_feedback_summary"]["graph_mutation_pressure"] == 2.0

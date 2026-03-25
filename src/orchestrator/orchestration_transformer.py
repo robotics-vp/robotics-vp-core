@@ -271,6 +271,14 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         "tool_sequence": [step.tool_call.name for step in steps_out],
         "semantic_plan": orchestration_plan,
     }
+    if float(semantic_summary.get("wm_validation_error_rate", 0.0)) >= 0.2:
+        activation_plan["bounded_actions"].append("request_wm_state_validation")
+    if float(semantic_summary.get("graph_mutation_pressure", 0.0)) >= 1.0:
+        activation_plan["bounded_actions"].append("queue_graph_mutation_review")
+    if float(semantic_summary.get("trust_overlay_mean", 0.0)) < 0.45:
+        activation_plan["bounded_actions"].append("route_trust_recalibration")
+    if float(semantic_summary.get("econ_overlay_mean", 0.0)) >= 0.5:
+        activation_plan["bounded_actions"].append("prioritize_gap_fill")
     activation_work_order = build_execution_work_order(
         order_type="transformer_routing",
         subject_id=str(semantic_summary.get("task_id") or ctx.task_type or ctx.env_name),
@@ -301,6 +309,7 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
             "tool_biases": tool_biases,
             "semantic_plan": orchestration_plan,
             "execution_preconditions": readiness.to_dict(),
+            "coverage_feedback_summary": dict(semantic_summary.get("coverage_feedback_summary", {}) or {}),
         },
     )
 

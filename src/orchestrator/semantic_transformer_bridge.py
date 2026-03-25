@@ -12,7 +12,7 @@ from src.world_model.semantic_world_model import SemanticWorldModelState
 
 
 ORCHESTRATION_BASE_CTX_DIM = 36
-SEMANTIC_WM_FEATURE_DIM = 20
+SEMANTIC_WM_FEATURE_DIM = 28
 ORCHESTRATION_CTX_DIM = ORCHESTRATION_BASE_CTX_DIM + SEMANTIC_WM_FEATURE_DIM
 
 
@@ -141,6 +141,49 @@ def build_semantic_world_model_summary(
         for key, value in sorted(capabilities.items(), key=lambda item: item[0])
         if float(value) >= 0.5
     ]
+    metadata = getattr(context, "semantic_metadata", None)
+    feedback_summary: Dict[str, Any] = {}
+    trust_overlay: Dict[str, Any] = {}
+    econ_overlay: Dict[str, Any] = {}
+    wm_validation_summary: Dict[str, Any] = {}
+    graph_mutation_proposals: List[Dict[str, Any]] = []
+    coverage_summary: Dict[str, Any] = {}
+    if isinstance(metadata, Mapping):
+        feedback_summary = _mapping(
+            metadata.get("coverage_feedback_summary")
+            or metadata.get("semantic_coverage", {}).get("feedback_summary")
+        )
+        trust_overlay = _mapping(
+            metadata.get("trust_calibration_overlay")
+            or metadata.get("semantic_coverage", {}).get("trust_calibration_overlay")
+        )
+        econ_overlay = _mapping(
+            metadata.get("econ_calibration_overlay")
+            or metadata.get("semantic_coverage", {}).get("econ_calibration_overlay")
+        )
+        wm_validation_summary = _mapping(
+            metadata.get("wm_validation_summary")
+            or metadata.get("semantic_coverage", {}).get("wm_validation_summary")
+        )
+        graph_mutation_proposals = list(
+            metadata.get("graph_mutation_proposals")
+            or metadata.get("semantic_coverage", {}).get("graph_mutation_proposals")
+            or []
+        )
+        coverage_summary = _mapping(
+            metadata.get("semantic_coverage", {}).get("coverage_summary")
+        )
+    total_edges = max(int(coverage_summary.get("total_edges", 0) or 0), 1)
+    missing_edge_fraction = (
+        float(coverage_summary.get("missing_edges", 0) or 0) / float(total_edges)
+        if coverage_summary
+        else 0.0
+    )
+    governance_blocked_fraction = (
+        float(coverage_summary.get("governance_blocked_edges", 0) or 0) / float(total_edges)
+        if coverage_summary
+        else 0.0
+    )
     return {
         "present": True,
         "world_model_id": world_model.world_model_id,
@@ -177,6 +220,22 @@ def build_semantic_world_model_summary(
         "topology": dict(topology),
         "capability_scores": dict(capabilities),
         "meta_node_scores": dict(sorted(meta_node_scores.items(), key=lambda item: item[0])),
+        "coverage_feedback_summary": feedback_summary,
+        "coverage_summary": coverage_summary,
+        "trust_calibration_overlay": trust_overlay,
+        "econ_calibration_overlay": econ_overlay,
+        "wm_validation_summary": wm_validation_summary,
+        "graph_mutation_proposals": list(graph_mutation_proposals),
+        "missing_edge_fraction": float(missing_edge_fraction),
+        "gap_return_mean": float(feedback_summary.get("gap_return_mean", 0.0)),
+        "process_reward_mean": float(feedback_summary.get("process_reward_mean", 0.0)),
+        "wm_validation_error_rate": float(wm_validation_summary.get("error_rate", feedback_summary.get("wm_validation_error_rate", 0.0))),
+        "graph_mutation_pressure": float(
+            feedback_summary.get("graph_mutation_pressure", len(graph_mutation_proposals))
+        ),
+        "trust_overlay_mean": float(trust_overlay.get("mean_signal", feedback_summary.get("trust_overlay_mean", 0.0))),
+        "econ_overlay_mean": float(econ_overlay.get("mean_signal", feedback_summary.get("econ_overlay_mean", 0.0))),
+        "governance_blocked_fraction": float(governance_blocked_fraction),
     }
 
 
@@ -204,6 +263,14 @@ def encode_semantic_world_model_features(summary: Mapping[str, Any]) -> np.ndarr
             _safe_float(payload.get("recovery_router_score", 0.0)),
             _safe_float(payload.get("efficiency_router_score", 0.0)),
             _safe_float(payload.get("semantic_memory_refresh_score", 0.0)),
+            _safe_float(payload.get("missing_edge_fraction", 0.0)),
+            _safe_float(payload.get("gap_return_mean", 0.0)),
+            _safe_float(payload.get("process_reward_mean", 0.0)),
+            _safe_float(payload.get("wm_validation_error_rate", 0.0)),
+            min(_safe_float(payload.get("graph_mutation_pressure", 0.0)) / 8.0, 1.0),
+            _safe_float(payload.get("trust_overlay_mean", 0.0)),
+            _safe_float(payload.get("econ_overlay_mean", 0.0)),
+            _safe_float(payload.get("governance_blocked_fraction", 0.0)),
         ],
         dtype=np.float32,
     )
@@ -223,6 +290,20 @@ def semantic_tokens(summary: Mapping[str, Any]) -> List[str]:
         tokens.append(f"capability:{capability}")
     for tag in list(payload.get("semantic_tags", []) or []):
         tokens.append(str(tag))
+    if _safe_float(payload.get("missing_edge_fraction", 0.0)) > 0.0:
+        tokens.append(f"coverage:missing={_safe_float(payload.get('missing_edge_fraction', 0.0)):.2f}")
+    if _safe_float(payload.get("wm_validation_error_rate", 0.0)) >= 0.2:
+        tokens.append("feedback:wm_validation")
+    if _safe_float(payload.get("graph_mutation_pressure", 0.0)) > 0.0:
+        tokens.append("feedback:graph_mutation")
+    for proposal in list(payload.get("graph_mutation_proposals", []) or [])[:4]:
+        if isinstance(proposal, Mapping):
+            target_ref = str(proposal.get("target_ref", ""))
+            action = str(proposal.get("action", ""))
+            if action:
+                tokens.append(f"graph_mutation:{action}")
+            if target_ref:
+                tokens.append(f"mutation_target:{target_ref}")
     ordered: List[str] = []
     seen = set()
     for token in tokens:
@@ -415,6 +496,38 @@ def build_semantic_orchestration_plan(
                 "reason": "risk_triage_meta_node",
             }
         )
+    if _safe_float(summary.get("wm_validation_error_rate", 0.0)) >= 0.2:
+        steps.append(
+            {
+                "action": "request_wm_state_validation",
+                "targets": list((summary.get("wm_validation_summary", {}) or {}).get("top_targets", []) or summary.get("top_object_labels", []) or []),
+                "reason": "semantic_world_model_validation_gap",
+            }
+        )
+    if _safe_float(summary.get("graph_mutation_pressure", 0.0)) >= 1.0:
+        steps.append(
+            {
+                "action": "queue_graph_mutation_review",
+                "targets": [str(item.get("target_ref", "")) for item in list(summary.get("graph_mutation_proposals", []) or [])[:4] if isinstance(item, Mapping)],
+                "reason": "coverage_graph_expansion_pressure",
+            }
+        )
+    if _safe_float(summary.get("trust_overlay_mean", 0.0)) < 0.45:
+        steps.append(
+            {
+                "action": "route_trust_recalibration",
+                "targets": list(summary.get("top_meta_nodes", []) or []),
+                "reason": "trust_calibration_overlay",
+            }
+        )
+    if _safe_float(summary.get("econ_overlay_mean", 0.0)) >= 0.5 and _safe_float(summary.get("missing_edge_fraction", 0.0)) >= 0.1:
+        steps.append(
+            {
+                "action": "prioritize_gap_fill",
+                "targets": list((summary.get("coverage_summary", {}) or {}).get("top_missing_edges", []) or []),
+                "reason": "econ_overlay_gap_pressure",
+            }
+        )
     return steps[:6]
 
 
@@ -445,6 +558,10 @@ def build_tool_biases(
     biases["QUERY_ENERGY_SURFACE"] += 0.8 * _safe_float(econ.get("energy_urgency", 0.0))
     biases["CALL_VLA_FOR_DATAPACK_CLASS"] += 0.9 * max(0.0, 0.5 - _safe_float(summary.get("fusion_bridge", 0.0)))
     biases["CALL_VLA_SINGLE_STEP"] += 0.8 * _safe_float(summary.get("recovery_router_score", 0.0))
+    biases["QUERY_DATAPACKS"] += 0.7 * _safe_float(summary.get("missing_edge_fraction", 0.0))
+    biases["CALL_VLA_FOR_DATAPACK_CLASS"] += 0.6 * _safe_float(summary.get("wm_validation_error_rate", 0.0))
+    biases["SET_DATA_MIX"] += 0.6 * _safe_float(summary.get("econ_overlay_mean", 0.0))
+    biases["SET_OBJECTIVE_PRESET"] += 0.4 * _safe_float(summary.get("trust_overlay_mean", 0.0))
     if "energy" in text:
         biases["QUERY_ENERGY_SURFACE"] += 0.5
         biases["SET_ENERGY_PROFILE"] += 0.4

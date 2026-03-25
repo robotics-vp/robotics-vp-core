@@ -196,11 +196,13 @@ class SemanticCoverageGraph:
         total = len(self.edges)
         covered = len(self.covered_edges)
         missing = len(self.missing_edges)
+        governance_blocked = sum(1 for edge in self.edges if bool(edge.metadata.get("governance_blocked", False)))
         return {
             "total_edges": total,
             "covered_edges": covered,
             "missing_edges": missing,
             "coverage_ratio": covered / max(total, 1),
+            "governance_blocked_edges": governance_blocked,
             "node_count": len(self.nodes),
             "node_type_counts": {
                 nt: len(self.nodes_by_type(nt))
@@ -252,6 +254,7 @@ class SemanticCoverageGraph:
         trust_priorities: Optional[Mapping[str, float]] = None,
         readiness_signals: Optional[Mapping[str, float]] = None,
         evidence_counts: Optional[Mapping[Tuple[str, str], int]] = None,
+        edge_metadata: Optional[Mapping[Tuple[str, str], Mapping[str, Any]]] = None,
     ) -> "SemanticCoverageGraph":
         """Assemble a coverage graph from available sources.
 
@@ -274,6 +277,30 @@ class SemanticCoverageGraph:
         trust = dict(trust_priorities or {})
         readiness = dict(readiness_signals or {})
         ev_counts = dict(evidence_counts or {})
+        edge_meta = {
+            tuple(key): dict(value)
+            for key, value in dict(edge_metadata or {}).items()
+            if isinstance(key, tuple) and len(key) == 2
+        }
+
+        def _resolve_edge_signal(values: Mapping[Any, float], src: str, tgt: str) -> float:
+            edge_key = (src, tgt)
+            if edge_key in values:
+                try:
+                    return float(values[edge_key])
+                except Exception:
+                    return 0.0
+            if src in values:
+                try:
+                    return float(values[src])
+                except Exception:
+                    return 0.0
+            if tgt in values:
+                try:
+                    return float(values[tgt])
+                except Exception:
+                    return 0.0
+            return 0.0
 
         # -- helper to add a node if not present ------
         def _add(node_id: str, node_type: str, label: str, **kw: Any) -> None:
@@ -288,14 +315,17 @@ class SemanticCoverageGraph:
         # -- helper to add an edge ---------------------
         def _edge(src: str, tgt: str, etype: str, **kw: Any) -> None:
             count = ev_counts.get((src, tgt), 0)
+            metadata = dict(kw.pop("metadata", {}) or {})
+            metadata.update(edge_meta.get((src, tgt), {}))
             edges.append(CoverageEdge(
                 source_id=src,
                 target_id=tgt,
                 edge_type=etype,
                 evidence_count=count,
-                economic_priority=econ.get(src, econ.get(tgt, 0.0)),
-                trust_priority=trust.get(src, trust.get(tgt, 0.0)),
-                promotion_readiness=readiness.get(src, readiness.get(tgt, 0.0)),
+                economic_priority=_resolve_edge_signal(econ, src, tgt),
+                trust_priority=_resolve_edge_signal(trust, src, tgt),
+                promotion_readiness=_resolve_edge_signal(readiness, src, tgt),
+                metadata=metadata,
                 **kw,
             ))
 
