@@ -2,6 +2,44 @@
 
 ## 2026-03-24
 
+- OpenVLA and MetaDINO are now explicit backend-policy surfaces rather than soft-fail scaffolds:
+  - `src/vla/openvla_controller.py` now accepts `backend_policy` and `vision_backbone_policy` with `auto|real|disabled|stub`
+  - `auto` means “try real local model, otherwise unavailable”; it no longer silently degrades to a fake action/embedding path
+  - `stub` is still allowed, but only by explicit caller choice
+  - this is the correct long-term shape because benchmark/promotion code can now reject fake capability without special-casing individual scripts
+- The teacher lane now preserves backend truth rather than flattening it away:
+  - `src/vla/teacher_runtime.py` now records controller backend status in the contract and action-envelope metadata
+  - `src/vla/rollout_labeler.py` now defaults to `disabled` unless OpenVLA is explicitly enabled or a policy override is provided, and it treats import/load/inference failure as `unavailable`, not “good enough stub labels”
+  - that makes later replay/import/benchmark logic materially more trustworthy
+- Benchmark gating now exists as a first-class evidence primitive:
+  - `src/evidence/benchmark_gating.py` compiles metadata into explicit signals for:
+    - real SceneTracks grounding
+    - real teacher runtime
+    - real vision backbone
+    - non-heuristic semantic grounding
+  - the gate blocks passthrough/stub/heuristic cases, so “ready for smoke/dev” is no longer confused with “ready for benchmark/promotion”
+- Replay/readiness now carries those stronger signals:
+  - `src/replay/preconditions.py`, `src/replay/importers.py`, and `src/replay/ingest.py` now surface:
+    - `teacher_runtime_real`
+    - `vision_backbone_real`
+    - `semantic_grounding_non_heuristic`
+    - `benchmark_eligible`
+  - that keeps benchmark/promotion gating aligned with the same precondition summary machinery already used for shell activation
+- There is now a loop-run backlog separate from the training backlog:
+  - `scripts/LOOP_RUN_BACKLOG.json` is the operational queue for semantic/control loop runs
+  - each entry records:
+    - the exact command
+    - host/model/data preconditions
+    - internal vs external data requirements
+    - whether it is safe for auto-trigger
+    - optional benchmark-gate requirements
+  - `src/orchestrator/loop_run_backlog.py` evaluates those preconditions against the host
+  - `scripts/scan_loop_run_backlog.py` turns that into a JSON summary and can execute ready `auto_trigger=true` runs
+- Current intended division of labor:
+  - training backlog = heavyweight learning jobs and migration tracking
+  - loop-run backlog = concrete runtime/self-improvement exercises and data-collection/coverage-validation runs
+  - benchmark gate = strict promotion barrier that rejects stub/passthrough/heuristic success masquerading as real semantic capability
+
 - The semantic runtime scorer layer now exists in both lightweight and heavyweight forms:
   - `src/orchestrator/semantic_runtime_scorers.py` trains lightweight local models over the runtime corpus for:
     - meta-route success
