@@ -17,6 +17,7 @@ Ranking dimensions:
 | 2 | Stage-1 semantic seed tags + diffusion proposal routing | `heuristic` / `fallback` | Very high | High | Yes | **Wired now** |
 | 2a | Gap-ranker trainer/package + sim/gen2sim agenda ranking | `heuristic` / `lightweight_trainer_gap` | Very high | High | Yes | **Wired now, benchmark-gated** |
 | 2b | Fill-path policy trainer/package + coverage-loop fill routing | `heuristic` / `lightweight_trainer_gap` | Very high | High | Yes | **Wired now, benchmark-gated** |
+| 2c | Gen2sim validity trainer/package + synth-value admission | `heuristic` / `lightweight_trainer_gap` | Very high | High | Yes | **Wired now, benchmark-gated** |
 | 3 | SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest | `fallback` | High | High | Yes | **Wired now** |
 | 3a | Bootstrap workcell runtime trace completeness + grounded-data lane classification | `sidecar` / `fallback` | High | High | Yes | **Wired now** |
 | 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
@@ -167,6 +168,45 @@ Ranking dimensions:
   - `wired now`
   - `upgraded to heavyweight parity`
   - `benchmark-gated`
+
+### 2c. Gen2sim validity trainer/package + synth-value admission
+
+- surface: explicit gen2sim validity assessment, learned helper packaging, and runtime datapack-value admission
+- file/path: `scripts/collect_local_synthetic_branches.py`, `src/training/synthetic_branch_corpus.py`, `scripts/train_offline_with_local_synth.py`, `src/evidence/gen2sim_validity.py`, `src/evidence/gen2sim_validity_training.py`, `src/evidence/gen2sim_validity_runtime.py`, `scripts/train_gen2sim_validity.py`, `src/regal/data_value.py`
+- category: `heuristic` / `lightweight_trainer_gap`
+- current behavior:
+  - synthetic-branch collection now emits `*_gen2sim_validity.json` sidecars, so each branch carries an explicit admission assessment instead of only a loose trust/gap proxy
+  - `src/training/synthetic_branch_corpus.py` now loads those assessments, summarizes admission/promotion state, and materially changes synth-share caps plus branch-priority scaling when gen2sim validity is missing or weak
+  - `scripts/train_offline_with_local_synth.py` now persists gen2sim admission artifacts into the canonical runtime outputs and threads that signal into synthetic branch metrics instead of hiding it inside branch metadata
+  - `src/regal/data_value.py` no longer consumes a bare `gen2sim_validity_score` scalar; it now resolves the explicit assessment, records helper traces, and uses the gen2sim admission score as the generated-data reliability path
+  - `scripts/train_gen2sim_validity.py` plus `src/evidence/gen2sim_validity_training.py` / `src/evidence/gen2sim_validity_runtime.py` now provide a real learned helper lane:
+    - dataset summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `gen2sim_validity_package.json`
+    - runtime manifest / checkpoint registry under `RegalTrainingRunner`
+  - learned helper influence is bounded and sequential:
+    - the explicit assessment remains the source-of-truth prior
+    - `shadow_candidate` helpers can only apply a small bounded delta
+    - promotion still requires empirical receipt density, so distilled local corpora remain honest `shadow_candidate` packages for now
+- current consumers:
+  - `scripts/train_offline_with_local_synth.py`
+  - `src/regal/data_value.py`
+  - any later datapack-admission or synth-value caller using `resolve_gen2sim_validity_assessment(...)`
+  - `scripts/train_gen2sim_validity.py`
+- why it is a production problem:
+  - before this pass, gen2sim validity lived as an unstructured scalar seam that could materially change datapack value while carrying no explicit benchmark/precondition truth and no shared runtime contract
+  - the synthetic branch path also had no single source of admission truth, so collection, training, and valuation could disagree silently about how “real” a branch was
+  - that made synth-value admission look more mature than it actually was and blocked later neuralization from learning on the lane’s own meta-choice traces
+- recommended disposition:
+  - keep the explicit assessment as the bounded source-of-truth prior
+  - keep the learned helper real but benchmark-gated on empirical receipt density
+  - preserve conditioning features and helper traces so later economic-WM/meta-node-WM layers can learn on “why this synthetic branch was admitted”
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
+  - `neuralized later`
 
 ### 3. SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest
 
@@ -506,4 +546,4 @@ Ranking dimensions:
 
 1. Deepen orchestration supervision beyond `first_tool_only_v1` so the runtime-backed trainer learns fuller action sequences instead of only the first routing decision.
 2. Continue meta-layer neuralization above the current helper path so future economic-WM and later meta-node-WM conditioning can supervise more than authority/conditioning outputs alone.
-3. Extend the same helper-package and promotion discipline into later gen2sim validity/value admission so the full synth agenda shares one honest promotion story end to end, not just through agenda ranking and fill-path routing.
+3. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.

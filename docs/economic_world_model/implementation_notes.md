@@ -2,6 +2,34 @@
 
 ## 2026-03-26
 
+- Gen2sim validity/value admission now shares the same honest helper contract as agenda ranking and fill routing:
+  - `scripts/collect_local_synthetic_branches.py` now emits `*_gen2sim_validity.json`, so each local synthetic branch carries an explicit admission assessment instead of only trust/gap proxy metadata
+  - `src/training/synthetic_branch_corpus.py` now loads those assessments, summarizes admission/promotion state, and changes synth-share caps plus branch-priority scaling when gen2sim validity is missing or weak
+  - `scripts/train_offline_with_local_synth.py` now records gen2sim admission artifacts in the canonical runtime output instead of treating synth validity as an internal weighting detail
+- The learned substrate for gen2sim admission is now real:
+  - `src/evidence/gen2sim_validity.py` now exposes:
+    - an explicit feature contract
+    - bounded helper-trace blending
+    - conditioning-feature recording for later meta-choice learning
+  - `src/evidence/gen2sim_validity_training.py` now provides the actual helper model/training path
+  - `src/evidence/gen2sim_validity_runtime.py` now loads helper packages with `disabled|auto|required` semantics
+  - `scripts/train_gen2sim_validity.py` now emits:
+    - gen2sim dataset summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `gen2sim_validity_package.json`
+    - runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+- `src/regal/data_value.py` now consumes that contract correctly:
+  - generated/synthetic datapack admission no longer depends on a loose `gen2sim_validity_score` scalar
+  - the explicit assessment remains the source-of-truth prior
+  - the learned helper can only apply bounded deltas unless it is benchmark-gated promoted
+  - helper status and conditioning traces are preserved in the returned report so later economic-WM/meta-node-WM trainers can learn on “why this branch/datapack was admitted”
+- This is the right current posture for gen2sim neuralization:
+  - the learned substrate exists and affects runtime honestly
+  - benchmark-unready packages remain bounded `shadow_candidate` helpers
+  - promotion still requires empirical receipt density, so local distillation does not get mistaken for production-grade gen2sim truth
+
 - Fill-path routing now shares the same bounded helper contract as the rest of the coverage loop:
   - `scripts/train_fill_path_policy.py` now emits:
     - fill-path dataset summary

@@ -52,6 +52,11 @@
       "id": "semantic_conditioning_truth_bridge",
       "completed_at": "2026-03-26",
       "notes": "P2 complete - semantic runtime backbone now emits compact runtime-truth / benchmark / execution-precondition summaries, and observation/condition-vector builders now preserve and react to those signals so benchmark-unready grounding or blocked fusion changes conditioning instead of remaining metadata-only."
+    },
+    {
+      "id": "gen2sim_validity_value_admission",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - local synthetic branches now emit explicit gen2sim validity sidecars, corpus/trainer policy now reacts materially to admission truth, Regal datapack valuation now resolves the explicit assessment plus a bounded learned helper package, and the learned helper remains honestly benchmark-gated on empirical receipt density."
     }
   ],
   "backlog": []
