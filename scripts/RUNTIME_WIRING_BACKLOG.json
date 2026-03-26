@@ -32,20 +32,25 @@
       "id": "scene_tracks_truth_consumer_sweep",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - Stage 1 routing, local synthetic branch metadata, synthetic corpus benchmark gating, live semantic runtime scoring, and degraded-fusion artifacts now all share the same SceneTracks truth normalization, and the SceneTracks runner now emits explicit GPU + SAM3D host preconditions for real grounded-data readiness."
+    },
+    {
+      "id": "semantic_policy_datapack_selection",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - semantic policy selection now ranks datapacks using ARH-adjusted historical outcomes, candidate quality/novelty, benchmark/readiness support, and explicit gap-fill pressure; semantic simulation now records the resulting selection summary into live results and run logs."
     }
   ],
   "backlog": [
     {
-      "id": "semantic_policy_datapack_selection",
+      "id": "shadow_advisory_scorer_preconditions",
       "priority": "P2",
       "owner": "codex",
       "category": "runtime_wiring",
       "files": [
-        "src/orchestrator/semantic_policy.py",
-        "src/orchestrator/semantic_simulation.py"
+        "src/orchestrator/shadow_advisory.py",
+        "scripts/run_shadow_advisory_pass.py"
       ],
-      "blocked_by": "packet-native datapack selection features and more real runtime outcomes",
-      "notes": "Semantic scenario/datapack selection still uses tag matching and ARH penalties. Replace this with learned bounded routing over the same packet/evidence shape after the runtime corpus contains enough grounded selection outcomes."
+      "blocked_by": "replay-backed scorer package density and auto-export policy",
+      "notes": "Shadow advisory already consumes semantic runtime scorer packages when present, but the no-package fallback still needs an explicit precondition/work-order artifact so scored vs unscored advisory runs are distinguishable in runtime outputs and backlog scans."
     }
   ]
 }

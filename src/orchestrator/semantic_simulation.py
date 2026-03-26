@@ -24,10 +24,13 @@ from src.ontology.query import find_datapacks, find_scenarios
 from src.ontology.store import OntologyStore
 from src.orchestrator.schedule import BudgetExceeded, acquire_run_budget, release_run_budget
 from src.orchestrator.semantic_policy import (
+    DatapackSelectionDecision,
     MissingScenarioSpec,
     apply_arh_penalty,
     detect_semantic_gaps,
+    rank_datapacks_for_intent,
     select_datapacks_for_intent,
+    summarize_datapack_selection,
 )
 from src.orchestrator.semantic_fusion_runner import run_semantic_fusion_for_rollouts
 from src.scenarios.metadata import ScenarioMetadata, build_scenario_metadata
@@ -45,6 +48,7 @@ class SemanticSimulationResult:
     rollout_bundle: RolloutBundle | None
     labeled_datapacks: Sequence[DatapackConfig]
     missing_specs: Sequence[MissingScenarioSpec]
+    selection_summary: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -117,6 +121,7 @@ def run_semantic_simulation(
             limit=datapack_limit,
         )
         candidates = datapack_configs_from_ontology(datapack_records)
+        candidate_metadata_by_id = _candidate_metadata_by_id(datapack_records)
 
         scenario_records = find_scenarios(
             store,
@@ -126,28 +131,74 @@ def run_semantic_simulation(
             motor_backend=motor_backend,
         )
 
-        selected = select_datapacks_for_intent(
+        ranked_selected = rank_datapacks_for_intent(
             tags or [],
             robot_family,
             objective_hint,
             candidates,
             scenario_records,
+            candidate_metadata_by_id=candidate_metadata_by_id,
+            source="ontology",
         )
+        selected = [row.datapack for row in ranked_selected]
 
         missing_specs = detect_semantic_gaps(tags or [], robot_family, scenario_records)
 
+        fallback_ranked: list[DatapackSelectionDecision] = []
         if missing_specs:
-            exploratory = _resolve_local_datapacks(tags=tags, robot_family=robot_family, objective_hint=objective_hint)
+            exploratory = _resolve_local_datapacks(
+                tags=tags,
+                robot_family=robot_family,
+                objective_hint=objective_hint,
+            )
             if exploratory:
-                selected = exploratory
+                fallback_ranked = rank_datapacks_for_intent(
+                    tags or [],
+                    robot_family,
+                    objective_hint,
+                    exploratory,
+                    scenario_records,
+                    source="local_yaml",
+                )
+        ranked_combined = _merge_ranked_datapacks(ranked_selected, fallback_ranked)
+        if ranked_combined:
+            selected = [row.datapack for row in ranked_combined]
         if not selected:
-            selected = _resolve_local_datapacks(tags=tags, robot_family=robot_family, objective_hint=objective_hint)
+            fallback_only = _resolve_local_datapacks(
+                tags=tags,
+                robot_family=robot_family,
+                objective_hint=objective_hint,
+            )
+            selected = select_datapacks_for_intent(
+                tags or [],
+                robot_family,
+                objective_hint,
+                fallback_only,
+                scenario_records,
+                source="local_yaml",
+            )
+            ranked_combined = rank_datapacks_for_intent(
+                tags or [],
+                robot_family,
+                objective_hint,
+                fallback_only,
+                scenario_records,
+                source="local_yaml",
+            )
 
         if not selected:
             raise ValueError("No datapacks matched the requested semantic filters.")
 
         if datapack_limit:
             selected = list(selected)[: datapack_limit]
+            ranked_combined = list(ranked_combined)[: datapack_limit]
+        selection_summary = summarize_datapack_selection(
+            ranked_combined,
+            selected=ranked_combined[: len(selected)],
+            tags=tags or [],
+            robot_family=robot_family,
+            objective_hint=objective_hint,
+        )
 
         resolved_task_id = task_id or (datapack_records[0].task_id if datapack_records else None)
         if not resolved_task_id:
@@ -263,6 +314,7 @@ def run_semantic_simulation(
             rollout_bundle=rollout_bundle,
             labeled_datapacks=labeled_datapacks,
             missing_specs=missing_specs,
+            selection_summary=selection_summary,
         )
         status = "completed"
     except Exception as exc:
@@ -403,7 +455,37 @@ def _build_run_log_payload(
         payload["train_metrics"] = _select_core_metrics(simulation.train_result.econ_metrics)
         if simulation.eval_result:
             payload["eval_metrics"] = _select_core_metrics(simulation.eval_result.econ_metrics)
+        payload["selection_summary"] = dict(simulation.selection_summary or {})
     return payload
+
+
+def _candidate_metadata_by_id(datapacks: Sequence[Any]) -> dict[str, dict[str, Any]]:
+    metadata_by_id: dict[str, dict[str, Any]] = {}
+    for datapack in datapacks:
+        metadata_by_id[str(datapack.datapack_id)] = {
+            "source_type": getattr(datapack, "source_type", ""),
+            "storage_uri": getattr(datapack, "storage_uri", ""),
+            "quality_score": float(getattr(datapack, "quality_score", 0.0) or 0.0),
+            "novelty_score": float(getattr(datapack, "novelty_score", 0.0) or 0.0),
+            "metadata": dict(getattr(datapack, "metadata", {}) or {}),
+        }
+    return metadata_by_id
+
+
+def _merge_ranked_datapacks(
+    primary: Sequence[DatapackSelectionDecision],
+    secondary: Sequence[DatapackSelectionDecision],
+) -> list[DatapackSelectionDecision]:
+    merged: dict[str, DatapackSelectionDecision] = {}
+    for row in list(primary) + list(secondary):
+        existing = merged.get(row.datapack.id)
+        if existing is None or row.score > existing.score:
+            merged[row.datapack.id] = row
+    return sorted(
+        merged.values(),
+        key=lambda row: (row.score, row.source == "ontology", row.datapack.id),
+        reverse=True,
+    )
 
 
 def _select_core_metrics(metrics: Mapping[str, float]) -> dict[str, float]:

@@ -2,6 +2,27 @@
 
 ## 2026-03-26
 
+- Semantic datapack/scenario selection is no longer just a tag-overlap sort:
+  - `src/orchestrator/semantic_policy.py` now exposes:
+    - `DatapackSelectionDecision`
+    - `rank_datapacks_for_intent(...)`
+    - `summarize_datapack_selection(...)`
+  - the ranking stays bounded and deterministic for now, but it now uses materially more real loop state:
+    - ARH-adjusted historical scenario outcomes per datapack
+    - candidate quality and novelty
+    - benchmark/readiness support from datapack metadata when present
+    - explicit gap-fill pressure for tags that the current scenario history has not covered
+  - this means datapack choice in `semantic_simulation` is now affected by actual historical and readiness evidence, not just set overlap and an ARH subtraction term.
+- `src/orchestrator/semantic_simulation.py` now wires that ranking into the live selection path instead of throwing it away:
+  - ontology datapacks and local-YAML fallback datapacks are both ranked on the same contract and merged by score
+  - missing-gap fallback no longer means “replace the ontology choice wholesale”; it now means “surface additional gap-fill candidates in the same ranked pool”
+  - the chosen subset is emitted as `selection_summary` on `SemanticSimulationResult`
+  - the same summary is persisted into the semantic run log so later replay/training analysis can see what the runtime actually chose and why
+- This is the correct current production posture for semantic policy selection:
+  - deterministic and auditable now
+  - materially shaped by runtime/economic/readiness evidence now
+  - explicitly left on the later neuralization path once the replay corpus is dense enough to support learned routing honestly
+
 - SceneTracks truth semantics now have one shared consumer-facing normalization layer instead of a replay/bootstrap-only fix:
   - `src/evidence/scene_tracks_truth.py` now does two separate jobs:
     - `resolve_scene_tracks_backend(...)` reads nested runner metadata like `runner.run_config.backend_selected`, passthrough flags, stub flags, and adapter status before falling back to any looser artifact hints

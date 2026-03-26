@@ -1,4 +1,6 @@
 """End-to-end test for semantic simulation loop."""
+import json
+
 from pathlib import Path
 
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
@@ -95,6 +97,8 @@ def test_semantic_simulation_e2e(monkeypatch, tmp_path: Path):
     assert result.status == "completed"
     assert result.scenario is not None
     assert result.simulation is not None
+    assert result.simulation.selection_summary is not None
+    assert result.simulation.selection_summary["selected_ids"][0] == "dp_logging"
     assert store.list_scenarios()
 
     scenario_record = store.list_scenarios()[0]
@@ -109,5 +113,10 @@ def test_semantic_simulation_e2e(monkeypatch, tmp_path: Path):
     assert "dp_logging_vla" in new_datapack_ids
     labeled_dp = next(dp for dp in store.list_datapacks() if dp.datapack_id == "dp_logging_vla")
     assert "auto_labeled" in labeled_dp.metadata.get("tags", [])
+
+    run_log = (tmp_path / "runs.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert run_log
+    logged_payload = json.loads(run_log[-1])
+    assert logged_payload["selection_summary"]["selected_ids"][0] == "dp_logging"
     reset_budget_state()
     set_budget_config(BudgetConfig())

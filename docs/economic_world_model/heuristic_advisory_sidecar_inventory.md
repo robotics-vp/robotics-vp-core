@@ -21,7 +21,7 @@ Ranking dimensions:
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | Yes | **Wired now** |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | No | Remains in training backlog |
 | 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
-| 7 | Semantic datapack/scenario selection in `semantic_policy.py` | `heuristic` | Medium-high | Medium-high | No | Backlogged in `scripts/RUNTIME_WIRING_BACKLOG.json` |
+| 7 | Semantic datapack/scenario selection in `semantic_policy.py` | `heuristic` | Medium-high | Medium-high | No | **Wired now** |
 | 8 | `train_meta_transformer_synthetic.py` random-data trainer | `stub` / `lightweight_trainer_gap` | Medium | High | No | Remains explicit placeholder |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
@@ -242,18 +242,25 @@ Ranking dimensions:
 - file/path: `src/orchestrator/semantic_policy.py`
 - category: `heuristic`
 - current behavior:
-  - `select_datapacks_for_intent(...)` scores candidates by tag overlap, objective hints, and ARH penalties
-  - `detect_semantic_gaps(...)` infers missing scenarios from set differences over tags
+  - `rank_datapacks_for_intent(...)` now combines:
+    - tag coverage and exact-match pressure
+    - ARH-adjusted historical scenario outcomes per datapack
+    - datapack quality / novelty metadata
+    - benchmark/readiness support when datapack metadata carries it
+    - explicit gap-fill pressure for tags not yet represented in scenario history
+  - `src/orchestrator/semantic_simulation.py` now merges ontology and local fallback datapacks through the same ranked pool and records a `selection_summary` into the live simulation result plus run log
+  - `detect_semantic_gaps(...)` still infers missing scenario tags deterministically
 - current consumers:
   - `src/orchestrator/semantic_simulation.py`
 - why it is a production problem:
-  - this determines which datapacks and scenarios enter the simulation/training loop
-  - selection remains rule-based even as other runtime surfaces are becoming packet/evidence-native
+  - before this pass, this determined which datapacks entered the simulation/training loop using little more than tag overlap plus ARH subtraction
+  - that was too weak for a runtime surface that directly shapes synthetic agenda generation and future corpus construction
 - recommended disposition:
-  - replace tag-match selection with bounded learned routing over the same packet/evidence shape
+  - keep the current bounded scored-selection layer live now
+  - later replace the deterministic score with learned routing over the same evidence/runtime shape
 - disposition tag:
+  - `wired now`
   - `neuralized later`
-  - `runtime backlog`
 
 ### 8. `train_meta_transformer_synthetic.py`
 
@@ -327,6 +334,6 @@ Ranking dimensions:
 ## Remaining Top Follow-Ons
 
 1. Migrate `train_vla_recap_offline.py` to the canonical training runtime.
-2. Replace the remaining bounded heuristic routing inside semantic policy selection with learned runtime scorers once replay coverage is broader.
-3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up, SceneTracks passthrough consumers outside replay/bootstrap, and sidecar-only grounding semantics.
+2. Make the shadow-advisory scorer fallback explicit in artifacts/work orders so “no scorer package available” is visible as a runtime precondition, not just a behavior branch.
+3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up and sidecar-only grounding semantics outside the consumers already fixed.
 4. Either replace or quarantine `train_meta_transformer_synthetic.py` so it cannot be mistaken for a real trainer.

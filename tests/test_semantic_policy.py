@@ -1,10 +1,13 @@
 """Tests for semantic policy helpers."""
 from src.motor_backend.datapacks import DatapackConfig
 from src.orchestrator.semantic_policy import (
+    DatapackSelectionDecision,
     MissingScenarioSpec,
     apply_arh_penalty,
     detect_semantic_gaps,
+    rank_datapacks_for_intent,
     select_datapacks_for_intent,
+    summarize_datapack_selection,
 )
 from src.scenarios.metadata import ScenarioMetadata
 
@@ -55,3 +58,87 @@ def test_select_datapacks_prefers_non_arh():
     )
     assert selected
     assert selected[0].id == "dp2"
+
+
+def test_rank_datapacks_prefers_grounded_high_quality_history() -> None:
+    candidates = [
+        DatapackConfig(id="dp1", description="", tags=["humanoid", "warehouse"], objective_hint="baseline"),
+        DatapackConfig(id="dp2", description="", tags=["humanoid", "warehouse"], objective_hint="baseline"),
+    ]
+    scenarios = [
+        {
+            "datapack_ids": ["dp1"],
+            "datapack_tags": ["humanoid", "warehouse"],
+            "robot_families": ["G1"],
+            "train_metrics": {"mpl_units_per_hour": 55.0, "anti_reward_hacking_suspicious": 0.0},
+            "eval_metrics": {"mpl_units_per_hour": 57.0},
+        },
+        {
+            "datapack_ids": ["dp2"],
+            "datapack_tags": ["humanoid", "warehouse"],
+            "robot_families": ["G1"],
+            "train_metrics": {"mpl_units_per_hour": 80.0, "anti_reward_hacking_suspicious": 0.0},
+            "eval_metrics": {"mpl_units_per_hour": 82.0},
+        },
+    ]
+    ranked = rank_datapacks_for_intent(
+        tags=["humanoid", "warehouse"],
+        robot_family="G1",
+        objective_hint="baseline",
+        candidates=candidates,
+        scenarios=scenarios,
+        candidate_metadata_by_id={
+            "dp1": {
+                "quality_score": 0.4,
+                "metadata": {
+                    "scene_tracks_backend": "passthrough",
+                    "vision_backbone_selected": "real",
+                    "semantic_grounding_mode": "heuristic_fallback",
+                    "semantic_memory_grounded": True,
+                },
+            },
+            "dp2": {
+                "quality_score": 0.9,
+                "metadata": {
+                    "scene_tracks_backend": "real",
+                    "vision_backbone_selected": "real",
+                    "semantic_grounding_mode": "non_heuristic",
+                    "semantic_memory_grounded": True,
+                },
+            },
+        },
+    )
+
+    assert ranked
+    assert ranked[0].datapack.id == "dp2"
+    assert ranked[0].benchmark_support["semantic_grounding_non_heuristic"] is True
+    assert ranked[0].historical_support["scenario_count"] == 1
+
+
+def test_summarize_datapack_selection_keeps_top_candidate_reasons() -> None:
+    ranked = [
+        DatapackSelectionDecision(
+            datapack=DatapackConfig(id="dp_summary", description="", tags=["warehouse"]),
+            score=3.2,
+            source="ontology",
+            matched_tags=["warehouse"],
+            missing_tags=[],
+            gap_fill_tags=["warehouse"],
+            exact_tag_match=True,
+            objective_match=True,
+            historical_support={"scenario_count": 2, "support_score": 0.8},
+            benchmark_support={"benchmark_eligible": True},
+            reasons=["exact_tag_match", "benchmark_eligible"],
+        )
+    ]
+
+    summary = summarize_datapack_selection(
+        ranked,
+        selected=ranked,
+        tags=["warehouse"],
+        robot_family="G1",
+        objective_hint="baseline",
+    )
+
+    assert summary["selected_ids"] == ["dp_summary"]
+    assert summary["top_candidates"][0]["reasons"] == ["exact_tag_match", "benchmark_eligible"]

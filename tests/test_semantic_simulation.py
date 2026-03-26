@@ -94,6 +94,8 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
     assert result.status == "completed"
     assert result.scenario.task_id == "task_a"
     assert result.simulation is not None
+    assert result.simulation.selection_summary is not None
+    assert result.simulation.selection_summary["selected_ids"][0] == "dp1"
     assert store.list_scenarios()
     assert any(dp.datapack_id == "dp1_vla" for dp in store.list_datapacks())
     assert (tmp_path / "datapacks" / "dp1_vla.yaml").exists()
