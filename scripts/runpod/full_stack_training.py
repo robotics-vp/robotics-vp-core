@@ -81,6 +81,49 @@ def _discover_replay_datasets() -> List[Dict[str, Any]]:
     )
 
 
+def _discover_bootstrap_summaries() -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for summary_path in _iter_named_files("bootstrap_summary.json", SEARCH_ROOTS):
+        payload = _json_load(summary_path)
+        if not payload:
+            continue
+        replay = payload.get("replay_summary") or {}
+        episodes = list(payload.get("episodes") or [])
+        backend_counts: Dict[str, int] = {}
+        for episode in episodes:
+            if not isinstance(episode, dict):
+                continue
+            backend = str(episode.get("backend_selected", "unknown") or "unknown")
+            backend_counts[backend] = backend_counts.get(backend, 0) + 1
+        num_episodes = int(replay.get("num_episodes", len(episodes)) or len(episodes))
+        num_steps = int(replay.get("num_steps", 0) or 0)
+        num_windows = int(replay.get("num_windows", 0) or 0)
+        real_episodes = int(backend_counts.get("real", 0))
+        real_steps = int(round(num_steps * (real_episodes / max(num_episodes, 1)))) if num_episodes else 0
+        records.append(
+            {
+                "path": str(summary_path.relative_to(REPO_ROOT)),
+                "scenario_id": str(payload.get("scenario_id", "")),
+                "num_episodes": num_episodes,
+                "num_steps": num_steps,
+                "num_windows": num_windows,
+                "backend_counts": backend_counts,
+                "real_grounded_episodes": real_episodes,
+                "real_grounded_steps": real_steps,
+            }
+        )
+    return sorted(
+        records,
+        key=lambda row: (
+            row["real_grounded_episodes"],
+            row["real_grounded_steps"],
+            row["num_episodes"],
+            row["path"],
+        ),
+        reverse=True,
+    )
+
+
 def _discover_semantic_runtime_summaries() -> List[Dict[str, Any]]:
     records: List[Dict[str, Any]] = []
     for summary_path in _iter_named_files("semantic_runtime_learning_summary.json", SEARCH_ROOTS):
@@ -181,6 +224,7 @@ def _count_files(path: Path) -> int:
 def discover_workspace_state(repo_root: Optional[Path] = None) -> Dict[str, Any]:
     root = Path(repo_root or REPO_ROOT)
     replay_datasets = _discover_replay_datasets()
+    bootstrap_summaries = _discover_bootstrap_summaries()
     semantic_runtime = _discover_semantic_runtime_summaries()
     coverage_graphs = _discover_coverage_graphs()
     recap_datasets = _discover_recap_datasets()
@@ -191,6 +235,7 @@ def discover_workspace_state(repo_root: Optional[Path] = None) -> Dict[str, Any]
     ontology_file_count = _count_files(root / "data" / "ontology")
 
     best_replay = replay_datasets[0] if replay_datasets else {}
+    best_real_bootstrap = bootstrap_summaries[0] if bootstrap_summaries else {}
     best_runtime = semantic_runtime[0] if semantic_runtime else {}
     best_recap = recap_datasets[0] if recap_datasets else {}
     best_fill = fill_outcomes[0] if fill_outcomes else {}
@@ -199,6 +244,7 @@ def discover_workspace_state(repo_root: Optional[Path] = None) -> Dict[str, Any]
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "repo_root": str(root),
         "replay_datasets": replay_datasets,
+        "workcell_bootstrap_summaries": bootstrap_summaries,
         "semantic_runtime_summaries": semantic_runtime,
         "coverage_graphs": coverage_graphs,
         "recap_datasets": recap_datasets,
@@ -211,6 +257,9 @@ def discover_workspace_state(repo_root: Optional[Path] = None) -> Dict[str, Any]
         "max_replay_steps": int(best_replay.get("num_steps", 0) or 0),
         "max_replay_windows": int(best_replay.get("num_windows", 0) or 0),
         "best_replay_dataset_path": str(best_replay.get("path", "")),
+        "max_real_grounded_replay_episodes": int(best_real_bootstrap.get("real_grounded_episodes", 0) or 0),
+        "max_real_grounded_replay_steps": int(best_real_bootstrap.get("real_grounded_steps", 0) or 0),
+        "best_real_grounded_bootstrap_path": str(best_real_bootstrap.get("path", "")),
         "max_semantic_runtime_rows": int(best_runtime.get("row_count", 0) or 0),
         "best_semantic_runtime_path": str(best_runtime.get("path", "")),
         "coverage_graph_count": len(coverage_graphs),
@@ -252,6 +301,22 @@ def evaluate_bundles(config: Dict[str, Any], state: Dict[str, Any]) -> List[Dict
         if state["max_replay_steps"] < min_replay_steps:
             blockers.append(
                 f"needs >= {min_replay_steps} replay steps, current {state['max_replay_steps']}"
+            )
+
+        min_real_grounded_replay_episodes = int(readiness.get("min_real_grounded_replay_episodes", 0) or 0)
+        if state["max_real_grounded_replay_episodes"] < min_real_grounded_replay_episodes:
+            blockers.append(
+                "needs >= "
+                f"{min_real_grounded_replay_episodes} real-grounded replay episodes, "
+                f"current {state['max_real_grounded_replay_episodes']}"
+            )
+
+        min_real_grounded_replay_steps = int(readiness.get("min_real_grounded_replay_steps", 0) or 0)
+        if state["max_real_grounded_replay_steps"] < min_real_grounded_replay_steps:
+            blockers.append(
+                "needs >= "
+                f"{min_real_grounded_replay_steps} real-grounded replay steps, "
+                f"current {state['max_real_grounded_replay_steps']}"
             )
 
         min_semantic_runtime_rows = int(readiness.get("min_semantic_runtime_rows", 0) or 0)
@@ -362,4 +427,3 @@ def render_bundle_commands(
         "sima2_root": state.get("stage_roots", {}).get("sima2", {}).get("path", ""),
     }
     return [str(command).format(**context).strip() for command in bundle.get("commands", [])]
-

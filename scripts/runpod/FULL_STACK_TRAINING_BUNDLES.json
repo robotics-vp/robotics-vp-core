@@ -7,7 +7,7 @@
       "bundle_id": "workcell_data_refresh",
       "priority_rank": 1,
       "manual_only": false,
-      "title": "Workcell semantic data refresh",
+      "title": "Workcell semantic data refresh (real SAM3D)",
       "production_importance": "highest",
       "recommended_runpod": {
         "gpu_label": "A100 80GB",
@@ -22,18 +22,25 @@
       },
       "readiness": {
         "require_paths": [
-          "scripts/bootstrap_semantic_workcell_loop.py"
+          "scripts/bootstrap_semantic_workcell_loop.py",
+          "third_party/sam3d_objects",
+          "third_party/sam3d_body",
+          "checkpoints/sam3d_objects/checkpoint.pth",
+          "checkpoints/sam3d_body/checkpoint.pth"
         ]
       },
       "preferred_internal_data": [
         "Repo-local workcell rollout generation",
         "Existing ontology and replay artifacts under artifacts/ and data/"
       ],
-      "preferred_external_data": [],
-      "commands": [
-        "python3 scripts/bootstrap_semantic_workcell_loop.py --output-root {bundle_output_root}/workcell_bootstrap --episodes 24 --steps 8 --max-frames 8 --seed 24 --backend-policy auto"
+      "preferred_external_data": [
+        "Gated SAM 3D Objects checkpoints from Hugging Face",
+        "Gated SAM 3D Body checkpoints from Hugging Face"
       ],
-      "notes": "Best recurring first step because current internal replay, coverage, and semantic-runtime corpora are still too small for the heavier learned lanes."
+      "commands": [
+        "python3 scripts/bootstrap_semantic_workcell_loop.py --output-root {bundle_output_root}/workcell_bootstrap --episodes 24 --steps 8 --max-frames 8 --seed 24 --backend-policy real"
+      ],
+      "notes": "Canonical refresh/replay now assumes real SAM3D grounding rather than passthrough. Treat this as a Linux/NVIDIA A100 lane; local passthrough refreshes remain useful for plumbing only and do not satisfy the benchmark-grade replay requirement."
     },
     {
       "bundle_id": "semantic_runtime_training",
@@ -53,6 +60,8 @@
         "high": 2.0
       },
       "readiness": {
+        "min_real_grounded_replay_episodes": 100,
+        "min_real_grounded_replay_steps": 5000,
         "min_replay_episodes": 100,
         "min_replay_steps": 5000,
         "require_paths": [
@@ -71,7 +80,7 @@
         "python3 scripts/export_semantic_runtime_learning_corpus.py --replay-dataset {replay_dataset} --output-dir {bundle_output_root}/semantic_runtime_export",
         "python3 scripts/train_semantic_runtime_scorers.py --replay-dataset {replay_dataset} --output-dir {bundle_output_root}/semantic_runtime_scorers --trainer both"
       ],
-      "notes": "This is the lowest-dependency learned control-plane lane once replay density is high enough."
+      "notes": "This is the lowest-dependency learned control-plane lane once replay density is high enough, but benchmark-grade promotion should key off real-grounded replay rather than passthrough-only corpus growth."
     },
     {
       "bundle_id": "semantic_feedback_training",
