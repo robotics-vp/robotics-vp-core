@@ -64,6 +64,22 @@
 - The remaining Stage-1 limitation is honest and bounded:
   - seed-tag extraction is still deterministic bootstrap logic
   - the governed hypotheses, routing scores, and benchmark gate now dominate admission and proposal shaping, so the heuristic seed no longer silently controls the whole diffusion lane
+- Replay/bootstrap SceneTracks truth now has a shared normalization helper:
+  - `src/evidence/scene_tracks_truth.py` defines the canonical rule:
+    - `real` can count as non-stub / non-heuristic / training-eligible
+    - `passthrough`, `stub`, and `auto` remain explicit fallback lanes
+  - explicit old flags can still rescue unknown older bundles when backend identity is missing, but they can no longer override known passthrough/stub/auto backends into looking real.
+- `src/replay/ingest.py` now uses that normalization before writing replay episode metadata:
+  - passthrough rollouts can still carry semantic density and grounded-world-model summaries
+  - but replay metadata no longer sets:
+    - `scene_tracks_non_stub=true`
+    - `semantic_grounding_ready=true`
+    - `semantic_grounding_non_heuristic=true`
+    solely because passthrough or auto was present
+- `scripts/bootstrap_semantic_workcell_loop.py` now writes the same truth semantics into the workcell bootstrap lane:
+  - `metadata.json` preserves the selected backend and training-eligibility status
+  - only real SceneTracks remain eligible to set `scene_tracks_non_stub` / `semantic_grounding_non_heuristic`
+  - passthrough bootstrap runs remain useful for corpus/debugging, but they stop overstating readiness in downstream replay/runtime consumers
 
 - Added a canonical full-stack training backlog document at `docs/economic_world_model/full_stack_training_backlog.md`:
   - it records the current workspace truth that replay, coverage, and semantic-runtime corpora are still tiny

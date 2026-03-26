@@ -7,21 +7,14 @@
       "id": "stage1_semantic_seed_and_diffusion_routing",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - diffusion requests now carry governed hypotheses plus routing context, the diffusion stub reranks governed hypotheses before any fallback lane, and Stage-1 datapack admission now degrades heuristic/unbenchmarked video manifests into explicit shadow-only work orders instead of pretending benchmark readiness."
+    },
+    {
+      "id": "scene_tracks_passthrough_truthiness",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - replay ingest and bootstrap semantic workcell metadata now clamp passthrough/auto SceneTracks to explicit fallback semantics instead of marking them non-stub or non-heuristic; only real SceneTracks stay eligible for grounded/non-stub truth."
     }
   ],
   "backlog": [
-    {
-      "id": "scene_tracks_passthrough_truthiness",
-      "priority": "P1",
-      "owner": "codex",
-      "category": "runtime_wiring",
-      "files": [
-        "src/replay/ingest.py",
-        "scripts/bootstrap_semantic_workcell_loop.py"
-      ],
-      "blocked_by": null,
-      "notes": "Passthrough SceneTracks currently marks some metadata as non-stub before later benchmark gating rejects it. Tighten these early summaries so replay/import/readiness surfaces never overstate grounding quality."
-    },
     {
       "id": "shadow_advisory_sampling_learning",
       "priority": "P1",

@@ -15,7 +15,7 @@ Ranking dimensions:
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Local synthetic branch corpus + offline local synth trainer | `lightweight_trainer_gap` | Very high | Very high | Yes | **Wired now** |
 | 2 | Stage-1 semantic seed tags + diffusion proposal routing | `heuristic` / `fallback` | Very high | High | Yes | **Wired now** |
-| 3 | SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest | `fallback` | High | High | No | Backlogged in `scripts/RUNTIME_WIRING_BACKLOG.json` |
+| 3 | SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest | `fallback` | High | High | Yes | **Wired now** |
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | No | Explicitly bounded, still heuristic |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | No | Remains in training backlog |
 | 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
@@ -85,9 +85,10 @@ Ranking dimensions:
 - file/path: `src/replay/ingest.py`, `scripts/bootstrap_semantic_workcell_loop.py`
 - category: `fallback`
 - current behavior:
-  - `_scene_tracks_rollout_metadata(...)` in `src/replay/ingest.py` treats `backend in {"real", "passthrough", "auto"}` as `scene_tracks_non_stub`
-  - `scripts/bootstrap_semantic_workcell_loop.py` writes `scene_tracks_non_stub=true` for `overall_mode in {"real", "passthrough"}`
-  - later benchmark gating is stricter, but early metadata/readiness summaries can still overstate grounding quality
+  - replay ingest and bootstrap now share explicit truth semantics:
+    - `passthrough`, `stub`, and `auto` no longer count as `scene_tracks_non_stub`
+    - only `real` SceneTracks keep `scene_tracks_non_stub`, `semantic_grounding_ready`, and `semantic_grounding_non_heuristic`
+  - fallback lanes still preserve backend identity and semantic density, but they no longer masquerade as grounded/non-heuristic inputs in upstream metadata
 - current consumers:
   - replay import/readiness code
   - bootstrap semantic workcell loop metadata
@@ -96,9 +97,10 @@ Ranking dimensions:
   - training/readiness summaries can look more production-ready than the benchmark gate would actually allow
   - this distorts corpus admission and operational dashboards
 - recommended disposition:
-  - tighten early truth semantics so passthrough never appears equivalent to real grounded SceneTracks
   - keep passthrough as an explicit fallback only
+  - continue preserving backend identity and density signals without promoting them to non-stub truth
 - disposition tag:
+  - `wired now`
   - `remain explicit fallback`
   - `benchmark-gated`
 
@@ -257,7 +259,7 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Remove permissive passthrough-as-non-stub truthiness from bootstrap/replay metadata.
-2. Migrate `train_vla_recap_offline.py` to the canonical training runtime.
-3. Replace bounded heuristic routing inside shadow advisory and semantic policy selection with learned runtime scorers once replay coverage is broader.
+1. Migrate `train_vla_recap_offline.py` to the canonical training runtime.
+2. Replace bounded heuristic routing inside shadow advisory and semantic policy selection with learned runtime scorers once replay coverage is broader.
+3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around SceneTracks passthrough consumers outside replay/bootstrap.
 4. Either replace or quarantine `train_meta_transformer_synthetic.py` so it cannot be mistaken for a real trainer.

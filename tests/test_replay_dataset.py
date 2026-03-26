@@ -131,8 +131,9 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.episodes[0].provenance["source_adapter"] == "rollout_capture_bundle_v1"
     assert bundle.episodes[0].provenance["scene_tracks_ref"] == str(scene_tracks_path.resolve())
     assert bundle.episodes[0].provenance["semantic_world_model_ref"] == str(semantic_world_model_path.resolve())
-    assert bundle.episodes[0].metadata["scene_tracks_non_stub"] is True
+    assert bundle.episodes[0].metadata["scene_tracks_non_stub"] is False
     assert bundle.episodes[0].metadata["semantic_memory_grounded"] is True
+    assert bundle.episodes[0].metadata["semantic_grounding_non_heuristic"] is False
     assert bundle.manifest.metadata["schema_compatibility"][0]["compatible"] is True
 
 
@@ -226,7 +227,7 @@ def test_replay_dataset_imports_governed_video_admission_log(tmp_path):
     episode = loaded.episodes[0]
     assert episode.provenance["runtime_packet_ref"].endswith("_runtime_packet_v1.json")
     assert episode.provenance["event_spine_ref"].endswith("_event_spine_v1.json")
-    assert episode.metadata["source_execution_work_order"]["decision"] == "admit_datapack"
+    assert episode.metadata["source_execution_work_order"]["decision"] == "admit_shadow_datapack"
     assert episode.metadata["execution_preconditions"]["ready"] is True
     summary = bundle.manifest.metadata["execution_precondition_summary"]
     assert summary["satisfied_preconditions"]["signal_bool::promotion_trace_complete"] == 1

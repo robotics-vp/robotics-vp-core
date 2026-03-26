@@ -14,6 +14,7 @@ from src.evidence.preconditions import (
     build_execution_work_order,
     summarize_execution_preconditions,
 )
+from src.evidence.scene_tracks_truth import normalize_scene_tracks_truth
 from src.evidence.teacher_trace import (
     TeacherStep,
     TeacherTrace,
@@ -36,6 +37,7 @@ __all__ = [
     "build_execution_work_order",
     "collect_benchmark_gating_signals",
     "load_teacher_trace_json",
+    "normalize_scene_tracks_truth",
     "save_teacher_trace_json",
     "summarize_execution_preconditions",
 ]

@@ -14,6 +14,7 @@ from src.constraints.constraint_set import ConstraintSet
 from src.economics.functor import ObjectiveEconFunctor
 from src.economics.pricing_sentinel import PricingSentinel, PricingTickInput
 from src.economics.value_ledger import summarize_econ_tensor
+from src.evidence.scene_tracks_truth import normalize_scene_tracks_truth
 from src.envs.workcell_env.base import EpisodeLog
 from src.motor_backend.rollout_capture import finalize_rollout_bundle
 from src.objectives.runtime_builder import (
@@ -750,11 +751,21 @@ def _scene_tracks_rollout_metadata(
             backend = ""
     if not backend:
         backend = str(payload.get("scene_tracks_backend", ""))
+    truth = normalize_scene_tracks_truth(
+        backend=backend,
+        explicit_non_stub=bool(payload.get("scene_tracks_non_stub", False)),
+        semantic_grounding_ready=bool(semantic_summary.get("grounding_ready", False)),
+        training_eligible=bool(training_eligible),
+        explicit_non_heuristic=bool(payload.get("semantic_grounding_non_heuristic", False)),
+    )
     return {
-        "scene_tracks_backend": backend,
-        "scene_tracks_non_stub": bool(payload.get("scene_tracks_non_stub", False) or backend in {"real", "passthrough", "auto"}),
-        "scene_tracks_training_eligible": bool(training_eligible),
-        "semantic_grounding_ready": bool(semantic_summary.get("grounding_ready", False)),
+        "scene_tracks_backend": str(truth.get("scene_tracks_backend", "")),
+        "scene_tracks_non_stub": bool(truth.get("scene_tracks_non_stub", False)),
+        "scene_tracks_training_eligible": bool(truth.get("scene_tracks_training_eligible", False)),
+        "semantic_grounding_ready": bool(truth.get("semantic_grounding_ready", False)),
+        "semantic_grounding_non_heuristic": bool(
+            truth.get("semantic_grounding_non_heuristic", False)
+        ),
         "semantic_density_score": float(semantic_summary.get("semantic_density_score", 0.0) or 0.0),
     }
 
@@ -876,8 +887,11 @@ def ingest_rollout_bundle(
                     or scene_tracks_metadata.get("semantic_grounding_ready", False)
                 ),
                 "semantic_grounding_non_heuristic": bool(
-                    raw_rollout_metadata.get("semantic_grounding_non_heuristic", False)
-                    or scene_tracks_metadata.get("scene_tracks_backend", "") in {"real", "passthrough"}
+                    scene_tracks_metadata.get("semantic_grounding_non_heuristic", False)
+                    or (
+                        raw_rollout_metadata.get("semantic_grounding_non_heuristic", False)
+                        and scene_tracks_metadata.get("scene_tracks_backend", "") not in {"passthrough", "stub", "auto"}
+                    )
                 ),
                 "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
                 "openvla_backend_selected": str(raw_rollout_metadata.get("openvla_backend_selected", "")),

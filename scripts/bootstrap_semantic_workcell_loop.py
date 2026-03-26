@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.evidence.belief_state import BeliefState
+from src.evidence.scene_tracks_truth import normalize_scene_tracks_truth
 from src.envs.workcell_env import WorkcellEnv
 from src.envs.workcell_env.config import WorkcellEnvConfig
 from src.envs.workcell_env.observations.mujoco_render import (
@@ -308,6 +309,15 @@ def _run_single_workcell_episode(
         },
     )
     backbone = SemanticRuntimeBackbone()
+    scene_tracks_truth = normalize_scene_tracks_truth(
+        backend=scene_tracks_result.adapter_status.get("overall_mode", ""),
+        explicit_non_stub=bool(scene_tracks_result.adapter_status.get("overall_mode") == "real"),
+        semantic_grounding_ready=bool(scene_tracks_summary.get("grounding_ready", False)),
+        training_eligible=bool(
+            scene_tracks_result.frame_metadata.get("execution_preconditions", {}).get("ready", False)
+        ),
+        explicit_non_heuristic=bool(scene_tracks_result.adapter_status.get("overall_mode") == "real"),
+    )
     backbone_result = backbone.build(
         task_id="peg_in_hole",
         objective_preset="balanced_contract",
@@ -323,7 +333,7 @@ def _run_single_workcell_episode(
             "scene_tracks_backend": scene_tracks_result.frame_metadata.get("runner", {})
             .get("run_config", {})
             .get("backend_selected", ""),
-            "scene_tracks_non_stub": scene_tracks_result.adapter_status.get("overall_mode") in {"real", "passthrough"},
+            "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
         },
         backends=[str(scene_tracks_result.adapter_status.get("overall_mode", ""))],
     )
@@ -335,9 +345,12 @@ def _run_single_workcell_episode(
 
     metadata_path = episode_dir / "metadata.json"
     metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    metadata_payload["scene_tracks_non_stub"] = bool(scene_tracks_result.adapter_status.get("overall_mode") in {"real", "passthrough"})
+    metadata_payload["scene_tracks_non_stub"] = bool(scene_tracks_truth.get("scene_tracks_non_stub", False))
     metadata_payload["semantic_memory_grounded"] = bool(
         world_model.topology.get("grounded_track_object_count", 0) > 0
+    )
+    metadata_payload["semantic_grounding_non_heuristic"] = bool(
+        scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
     )
     metadata_payload["semantic_world_model_path"] = sidecar_paths["semantic_world_model_path"]
     metadata_payload["semantic_snapshot_path"] = sidecar_paths["semantic_snapshot_path"]
@@ -345,6 +358,9 @@ def _run_single_workcell_episode(
     metadata_payload["scene_tracks_backend"] = scene_tracks_result.frame_metadata.get("runner", {}).get("run_config", {}).get(
         "backend_selected",
         "",
+    )
+    metadata_payload["scene_tracks_training_eligible"] = bool(
+        scene_tracks_truth.get("scene_tracks_training_eligible", False)
     )
     metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
 
