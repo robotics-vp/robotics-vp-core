@@ -28,16 +28,6 @@
             "updated_at": "2026-01-13"
         },
         {
-            "script": "train_meta_transformer_synthetic.py",
-            "priority": "P1",
-            "owner": "claude",
-            "blocked_by": null,
-            "downstream_dependents": [],
-            "notes": "LOW - Meta transformer for synthetic data",
-            "created_at": "2026-01-13",
-            "updated_at": "2026-01-13"
-        },
-        {
             "script": "train_motion_hierarchy_node.py",
             "priority": "P1",
             "owner": "claude",
@@ -261,13 +251,18 @@
             "script": "train_vla_recap_offline.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - wrapped with RegalTrainingRunner while preserving the direct train_offline() API, explicit recap dataset/precondition/benchmark artifacts, recap-row trajectory-audit projection, and canonical checkpoint/runtime outputs"
+        },
+        {
+            "script": "train_meta_transformer_synthetic.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - replaced the random-noise placeholder with the real meta-transformer dataset/model/loss path, explicit runtime-dataset provenance, benchmark/precondition artifacts, and canonical checkpoint/runtime outputs while keeping synthetic generation only as an explicit fallback source"
         }
     ],
     "summary": {
         "total": 31,
         "P0": 0,
-        "P1": 8,
+        "P1": 7,
         "P2": 6,
-        "migrated": 17
+        "migrated": 18
     }
 }

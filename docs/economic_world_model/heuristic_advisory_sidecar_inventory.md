@@ -22,7 +22,7 @@ Ranking dimensions:
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now** |
 | 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` | `heuristic` | Medium-high | Medium-high | No | **Wired now** |
-| 8 | `train_meta_transformer_synthetic.py` random-data trainer | `stub` / `lightweight_trainer_gap` | Medium | High | No | Remains explicit placeholder |
+| 8 | `train_meta_transformer_synthetic.py` meta-transformer trainer entrypoint | `lightweight_trainer_gap` | Medium | High | Yes | **Wired now** |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 
@@ -278,23 +278,31 @@ Ranking dimensions:
 
 ### 8. `train_meta_transformer_synthetic.py`
 
-- surface: synthetic MetaTransformer pretraining stub
+- surface: meta-transformer trainer entrypoint
 - file/path: `scripts/train_meta_transformer_synthetic.py`
-- category: `stub`
+- category: `lightweight_trainer_gap`
 - current behavior:
-  - trains a tiny MLP on random features and random labels
-  - writes a checkpoint under `results/` with no runtime manifest or real dataset provenance
+  - now consumes the real meta-transformer substrate in `src/orchestrator/meta_transformer_training.py`:
+    - exported `meta_transformer_runtime_dataset.json`
+    - saved dataset JSON inputs
+    - the real `MetaTransformerNet`
+    - the existing batching/loss/eval helpers
+  - synthetic generation remains available only as an explicit fallback input source when requested
+  - the script now emits canonical runtime manifests/checkpoint registry/training summaries and honest corpus benchmark/precondition artifacts instead of writing an opaque random checkpoint under `results/`
 - current consumers:
-  - no production consumer path found in code search
+  - `scripts/export_semantic_runtime_learning_corpus.py`
+  - future meta-transformer promotion / runtime-helper consumers
 - why it is a production problem:
-  - it creates a checkpoint-shaped artifact with almost no relationship to the real semantic/runtime corpus
-  - because it is a script-shaped trainer, it can be mistaken for a real pretraining path
+  - before this pass, the script looked like a trainer but bypassed the actual runtime dataset/model substrate already present in the repo
+  - that created a high-distortion fake boundary because a checkpoint-shaped artifact could be produced with almost no relationship to the runtime corpus or production transformer contract
 - recommended disposition:
-  - keep it quarantined as an explicit placeholder or remove it from serious training bundles
-  - if retained, migrate only once it consumes the real semantic/runtime corpus
+  - keep the runtime/export dataset as the preferred source
+  - keep synthetic generation explicit and benchmark-gated as a dev fallback only
+  - later add a dedicated runtime-corpus density gate before promotion runs
 - disposition tag:
-  - `remain explicit fallback`
-  - `training backlog`
+  - `wired now`
+  - `upgraded to heavyweight parity`
+  - `benchmark-gated`
 
 ### 9. Teacher-runtime / rollout-labeler semantic sidecars
 
@@ -347,7 +355,7 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Replace `train_meta_transformer_synthetic.py` with the real meta-transformer runtime dataset/training substrate already present in `src/orchestrator/meta_transformer_training.py` and `src/orchestrator/semantic_runtime_learning.py`.
-2. Make the shadow-advisory scorer fallback explicit in artifacts/work orders so “no scorer package available” is visible as a runtime precondition, not just a behavior branch.
-3. Add a real training/export path for the new semantic datapack-selection helper so the `auto -> required` promotion path is backed by an actual corpus and scorer package, not just runtime plumbing.
-4. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up and sidecar-only grounding semantics outside the consumers already fixed.
+1. Make the shadow-advisory scorer fallback explicit in artifacts/work orders so “no scorer package available” is visible as a runtime precondition, not just a behavior branch.
+2. Add a real training/export path for the new semantic datapack-selection helper so the `auto -> required` promotion path is backed by an actual corpus and scorer package, not just runtime plumbing.
+3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up and sidecar-only grounding semantics outside the consumers already fixed.
+4. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.

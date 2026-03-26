@@ -2,6 +2,24 @@
 
 ## 2026-03-26
 
+- `scripts/train_meta_transformer_synthetic.py` now uses the actual meta-transformer training substrate instead of random placeholder tensors:
+  - it accepts:
+    - `meta_transformer_runtime_dataset.json` exports
+    - saved dataset JSON inputs
+    - explicit synthetic generation only when requested
+  - it now instantiates the real `MetaTransformerNet`, uses the existing batching/loss/eval helpers from `src/orchestrator/meta_transformer_training.py`, and emits:
+    - dataset summary
+    - model config
+    - execution preconditions
+    - training history
+    - training summary
+    - training job result
+    - canonical runtime manifest and checkpoint registry when run under `RegalTrainingRunner`
+- This is the correct posture for the meta-transformer lane:
+  - the script is no longer fake
+  - synthetic data is no longer the implicit truth source
+  - benchmark readiness still depends on runtime-corpus density, not on the mere existence of a migrated script
+
 - Semantic datapack/scenario selection now has an explicit promotion path instead of a forever-hardcoded score:
   - `src/orchestrator/semantic_policy.py` now defines:
     - `DatapackSelectionFeatures`
