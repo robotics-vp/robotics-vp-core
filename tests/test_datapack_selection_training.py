@@ -1,6 +1,7 @@
 import json
 
 from src.orchestrator.datapack_selection_training import (
+    TORCH_AVAILABLE,
     build_datapack_selection_training_dataset,
     train_datapack_selection_scorer_package,
 )
@@ -116,5 +117,14 @@ def test_datapack_selection_training_learns_context_conditioning() -> None:
     assert payload["context_weights"]
     assert payload["max_adjustment"] >= payload["min_adjustment"] >= 0.0
     assert payload["metadata"]["conditioning_contract"] == "datapack_selection_context_v1"
+    expected_model_kind = (
+        "neural_feature_mlp_with_context_conditioned_adjustment_v2"
+        if TORCH_AVAILABLE
+        else "linear_feature_weights_plus_context_conditioned_adjustment_v1"
+    )
+    assert payload["model_kind"] == expected_model_kind
+    if TORCH_AVAILABLE:
+        assert payload["neural_hidden_weights"]
+        assert payload["metadata"]["neural_training_summary"]["mode"] == "neural_feature_mlp"
     assert "future_conditioning_path" in payload["metadata"]
     json.dumps(payload)

@@ -150,6 +150,7 @@ def test_rank_datapacks_accepts_learned_helper_adjustment() -> None:
     assert ranked[0].learned_score > 0.0
     assert ranked[0].scorer_trace["top_contributors"][0]["feature"] == "novelty_score"
     assert ranked[0].scorer_trace["context_trace"]["policy"] == "context_conditioned_max_adjustment"
+    assert ranked[0].scorer_trace["model_kind"] == "linear_feature_weights_plus_context_conditioned_adjustment_v1"
     assert ranked[0].scorer_trace["effective_max_adjustment"] >= 0.1
     assert ranked[0].selection_features["novelty_score"] >= ranked[-1].selection_features["novelty_score"]
 
@@ -188,4 +189,6 @@ def test_summarize_datapack_selection_keeps_top_candidate_reasons() -> None:
     assert summary["selection_policy"] == "heuristic_only"
     assert summary["selection_helper_status"]["status"] == "disabled"
     assert summary["selection_context"]["gap_pressure"] == 1.0
+    assert summary["selection_meta_choice"]["selected_datapack_id"] == "dp_summary"
+    assert summary["selection_meta_choice"]["top_reasons"] == ["exact_tag_match", "benchmark_eligible"]
     assert summary["top_candidates"][0]["reasons"] == ["exact_tag_match", "benchmark_eligible"]

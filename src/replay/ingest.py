@@ -654,6 +654,7 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "rgb_video_path",
         "depth_video_path",
         "scene_tracks_path",
+        "selection_summary_path",
         "runtime_packet_path",
         "event_spine_path",
         "decision_ledger_path",
@@ -684,6 +685,10 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "runtime_packet_path": [
             f"{episode_id}_runtime_packet_v1.json",
             "*_runtime_packet_v1.json",
+        ],
+        "selection_summary_path": [
+            f"{episode_id}_selection_summary_v1.json",
+            "*_selection_summary_v1.json",
         ],
         "event_spine_path": [
             f"{episode_id}_event_spine_v1.json",
@@ -828,6 +833,27 @@ def _semantic_world_model_rollout_summary(semantic_world_model_path: Optional[st
     }
 
 
+def _selection_summary_rollout_metadata(
+    selection_summary_path: Optional[str],
+    *,
+    metadata_payload: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload = dict(metadata_payload or {})
+    inline_summary = payload.get("selection_summary")
+    if isinstance(inline_summary, Mapping):
+        return dict(inline_summary)
+    if not selection_summary_path:
+        return {}
+    try:
+        sidecar_payload = _load_json(Path(selection_summary_path))
+    except Exception:
+        return {}
+    nested_summary = sidecar_payload.get("selection_summary")
+    if isinstance(nested_summary, Mapping):
+        return dict(nested_summary)
+    return dict(sidecar_payload or {})
+
+
 def ingest_rollout_bundle(
     rollout_root: str | Path,
     *,
@@ -866,6 +892,10 @@ def ingest_rollout_bundle(
         artifact_refs = _discover_rollout_artifact_refs(episode_dir, rollout.metadata.episode_id)
         scene_tracks_metadata = _scene_tracks_rollout_metadata(
             artifact_refs.get("scene_tracks_path"),
+            metadata_payload=raw_rollout_metadata,
+        )
+        selection_summary = _selection_summary_rollout_metadata(
+            artifact_refs.get("selection_summary_path"),
             metadata_payload=raw_rollout_metadata,
         )
         semantic_world_model_summary = _semantic_world_model_rollout_summary(
@@ -934,6 +964,7 @@ def ingest_rollout_bundle(
                 "grounded_data_requirements": dict(raw_rollout_metadata.get("grounded_data_requirements", {}) or {}),
                 "future_training_signals": dict(raw_rollout_metadata.get("future_training_signals", {}) or {}),
                 "semantic_world_model_summary": semantic_world_model_summary,
+                "selection_summary": dict(selection_summary or {}),
             }
             episode_payload["provenance"] = {
                 **dict(episode_payload.get("provenance", {}) or {}),

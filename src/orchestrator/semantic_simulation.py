@@ -308,6 +308,11 @@ def run_semantic_simulation(
             rollout_bundle = eval_result.rollout_bundle
         elif rollout_base_dir:
             rollout_bundle = finalize_rollout_bundle(scenario.scenario_id, Path(rollout_base_dir))
+        if rollout_bundle and selection_summary:
+            _persist_selection_summary_to_rollouts(
+                rollout_bundle=rollout_bundle,
+                selection_summary=selection_summary,
+            )
 
         labeled_datapacks: list[DatapackConfig] = []
         if rollout_base_dir and rollout_bundle and selected:
@@ -788,6 +793,36 @@ def _build_run_log_payload(
             payload["eval_metrics"] = _select_core_metrics(simulation.eval_result.econ_metrics)
         payload["selection_summary"] = dict(simulation.selection_summary or {})
     return payload
+
+
+def _persist_selection_summary_to_rollouts(
+    *,
+    rollout_bundle: RolloutBundle,
+    selection_summary: Mapping[str, Any],
+) -> None:
+    payload = {
+        "schema_version": "selection_summary_sidecar_v1",
+        "scenario_id": rollout_bundle.scenario_id,
+        "selection_summary": dict(selection_summary),
+    }
+    for episode in list(rollout_bundle.episodes or []):
+        episode_dir = episode.trajectory_path.parent
+        episode_dir.mkdir(parents=True, exist_ok=True)
+        sidecar_path = episode_dir / f"{episode.metadata.episode_id}_selection_summary_v1.json"
+        sidecar_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        metadata_path = episode_dir / "metadata.json"
+        if not metadata_path.exists():
+            continue
+        try:
+            metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except Exception:
+            metadata_payload = {}
+        metadata_payload["selection_summary_path"] = str(sidecar_path.resolve())
+        metadata_payload["selection_summary"] = dict(selection_summary)
+        metadata_path.write_text(
+            json.dumps(metadata_payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
 
 
 def _candidate_metadata_by_id(datapacks: Sequence[Any]) -> dict[str, dict[str, Any]]:

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import numpy as np
+
 from src.evidence.benchmark_gating import collect_benchmark_gating_signals
 
 from src.economics.arh_config import current_arh_config
@@ -136,6 +138,12 @@ class DatapackSelectionScorerPackage:
     context_bias: float = 0.0
     min_adjustment: float = 0.0
     max_adjustment: float = 0.75
+    model_kind: str = "linear_feature_weights_plus_context_conditioned_adjustment_v1"
+    neural_feature_order: Sequence[str] = field(default_factory=tuple)
+    neural_hidden_weights: Sequence[Sequence[float]] = field(default_factory=tuple)
+    neural_hidden_bias: Sequence[float] = field(default_factory=tuple)
+    neural_output_weights: Sequence[float] = field(default_factory=tuple)
+    neural_output_bias: float = 0.0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -152,6 +160,15 @@ class DatapackSelectionScorerPackage:
             "context_bias": float(self.context_bias),
             "min_adjustment": float(self.min_adjustment),
             "max_adjustment": float(self.max_adjustment),
+            "model_kind": self.model_kind,
+            "neural_feature_order": [str(name) for name in self.neural_feature_order],
+            "neural_hidden_weights": [
+                [_safe_float(value) for value in row]
+                for row in self.neural_hidden_weights
+            ],
+            "neural_hidden_bias": [_safe_float(value) for value in self.neural_hidden_bias],
+            "neural_output_weights": [_safe_float(value) for value in self.neural_output_weights],
+            "neural_output_bias": float(self.neural_output_bias),
             "metadata": dict(self.metadata),
         }
 
@@ -244,6 +261,23 @@ def coerce_datapack_selection_scorer_package(
         context_bias=_safe_float(payload.get("context_bias", 0.0)),
         min_adjustment=max(0.0, _safe_float(payload.get("min_adjustment", 0.0))),
         max_adjustment=max(0.0, _safe_float(payload.get("max_adjustment", 0.75))),
+        model_kind=str(
+            payload.get("model_kind", "linear_feature_weights_plus_context_conditioned_adjustment_v1")
+        ),
+        neural_feature_order=[
+            str(name) for name in list(payload.get("neural_feature_order", []) or [])
+        ],
+        neural_hidden_weights=[
+            [_safe_float(value) for value in list(row or [])]
+            for row in list(payload.get("neural_hidden_weights", []) or [])
+        ],
+        neural_hidden_bias=[
+            _safe_float(value) for value in list(payload.get("neural_hidden_bias", []) or [])
+        ],
+        neural_output_weights=[
+            _safe_float(value) for value in list(payload.get("neural_output_weights", []) or [])
+        ],
+        neural_output_bias=_safe_float(payload.get("neural_output_bias", 0.0)),
         metadata=dict(payload.get("metadata", {}) or {}),
     )
 
@@ -479,6 +513,12 @@ def summarize_datapack_selection(
         ),
         "selection_helper_status": dict(selection_helper_status or {}),
         "selection_context": dict(selection_context or {}),
+        "selection_meta_choice": _selection_meta_choice_summary(
+            ranked,
+            selected_rows=selected_rows,
+            required_tags=tags,
+            selection_helper_status=selection_helper_status,
+        ),
         "top_candidates": [row.to_dict() for row in list(ranked)[:5]],
     }
 
@@ -702,25 +742,9 @@ def _score_datapack_selection_helper(
             },
             "top_contributors": [],
         }
-    contributions: list[dict[str, Any]] = []
-    raw_score = _safe_float(scorer_package.bias)
-    for feature_name, feature_value in sorted(feature_map.items()):
-        weight = _safe_float(scorer_package.feature_weights.get(feature_name, 0.0))
-        contribution = weight * _safe_float(feature_value)
-        raw_score += contribution
-        if abs(contribution) > 0.0:
-            contributions.append(
-                {
-                    "feature": feature_name,
-                    "feature_value": _safe_float(feature_value),
-                    "weight": weight,
-                    "contribution": contribution,
-                }
-            )
-    contributions.sort(
-        key=lambda row: abs(_safe_float(row.get("contribution", 0.0))),
-        reverse=True,
-    )
+    neural_trace = _score_datapack_selection_neural_helper(feature_map, scorer_package)
+    contributions = list(neural_trace.get("top_contributors", []) or [])
+    raw_score = _safe_float(neural_trace.get("raw_score", 0.0))
     context_trace = _score_datapack_selection_context(
         selection_context,
         scorer_package=scorer_package,
@@ -738,12 +762,14 @@ def _score_datapack_selection_helper(
         "policy": "heuristic_plus_learned_helper",
         "package_id": scorer_package.package_id,
         "schema_version": scorer_package.schema_version,
+        "model_kind": scorer_package.model_kind,
         "raw_score": float(raw_score),
         "bounded_adjustment": float(bounded_adjustment),
         "max_adjustment": float(max(0.0, _safe_float(scorer_package.max_adjustment))),
         "effective_max_adjustment": float(effective_max_adjustment),
         "context_trace": context_trace,
         "top_contributors": contributions[:5],
+        "network_trace": neural_trace.get("network_trace", {}),
         "metadata": dict(scorer_package.metadata),
     }
 
@@ -853,6 +879,148 @@ def _score_datapack_selection_context(
         "effective_max_adjustment": float(effective_max_adjustment),
         "top_contributors": contributions[:5],
         "context": context_map,
+    }
+
+
+def _score_datapack_selection_neural_helper(
+    feature_map: Mapping[str, float],
+    scorer_package: DatapackSelectionScorerPackage,
+) -> dict[str, Any]:
+    feature_names = list(scorer_package.neural_feature_order or sorted(feature_map.keys()))
+    if (
+        scorer_package.model_kind.startswith("neural_")
+        and scorer_package.neural_hidden_weights
+        and scorer_package.neural_output_weights
+        and len(scorer_package.neural_hidden_weights[0]) == len(feature_names)
+        and len(scorer_package.neural_hidden_weights) == len(scorer_package.neural_output_weights)
+    ):
+        feature_vector = np.asarray(
+            [_safe_float(feature_map.get(name, 0.0)) for name in feature_names],
+            dtype=np.float32,
+        )
+        hidden_weights = np.asarray(scorer_package.neural_hidden_weights, dtype=np.float32)
+        hidden_bias = np.asarray(scorer_package.neural_hidden_bias, dtype=np.float32)
+        if hidden_bias.size != hidden_weights.shape[0]:
+            hidden_bias = np.zeros(hidden_weights.shape[0], dtype=np.float32)
+        output_weights = np.asarray(scorer_package.neural_output_weights, dtype=np.float32)
+        hidden_pre = hidden_weights @ feature_vector + hidden_bias
+        hidden_act = np.maximum(hidden_pre, 0.0)
+        raw_score = float(np.dot(output_weights, hidden_act) + _safe_float(scorer_package.neural_output_bias))
+
+        active_mask = (hidden_pre > 0.0).astype(np.float32)
+        local_linear = (output_weights * active_mask) @ hidden_weights
+        contributions = [
+            {
+                "feature": name,
+                "feature_value": _safe_float(feature_map.get(name, 0.0)),
+                "weight": float(local_linear[index]),
+                "contribution": float(local_linear[index] * feature_vector[index]),
+            }
+            for index, name in enumerate(feature_names)
+            if abs(float(local_linear[index] * feature_vector[index])) > 0.0
+        ]
+        contributions.sort(
+            key=lambda row: abs(_safe_float(row.get("contribution", 0.0))),
+            reverse=True,
+        )
+        active_units = [
+            {
+                "unit": int(index),
+                "pre_activation": float(hidden_pre[index]),
+                "activation": float(hidden_act[index]),
+                "output_weight": float(output_weights[index]),
+            }
+            for index in np.argsort(-np.abs(hidden_act * output_weights))[:5]
+            if index < hidden_act.shape[0] and abs(float(hidden_act[index])) > 0.0
+        ]
+        return {
+            "policy": "neural_feature_mlp",
+            "raw_score": raw_score,
+            "top_contributors": contributions[:5],
+            "network_trace": {
+                "active_hidden_units": active_units,
+                "feature_order": feature_names,
+            },
+        }
+
+    contributions: list[dict[str, Any]] = []
+    raw_score = _safe_float(scorer_package.bias)
+    for feature_name, feature_value in sorted(feature_map.items()):
+        weight = _safe_float(scorer_package.feature_weights.get(feature_name, 0.0))
+        contribution = weight * _safe_float(feature_value)
+        raw_score += contribution
+        if abs(contribution) > 0.0:
+            contributions.append(
+                {
+                    "feature": feature_name,
+                    "feature_value": _safe_float(feature_value),
+                    "weight": weight,
+                    "contribution": contribution,
+                }
+            )
+    contributions.sort(
+        key=lambda row: abs(_safe_float(row.get("contribution", 0.0))),
+        reverse=True,
+    )
+    return {
+        "policy": "linear_feature_weights",
+        "raw_score": float(raw_score),
+        "top_contributors": contributions[:5],
+        "network_trace": {},
+    }
+
+
+def _selection_meta_choice_summary(
+    ranked: Sequence[DatapackSelectionDecision],
+    *,
+    selected_rows: Sequence[DatapackSelectionDecision],
+    required_tags: Sequence[str],
+    selection_helper_status: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if not selected_rows:
+        return {
+            "selection_policy": "heuristic_only",
+            "candidate_count": len(ranked),
+            "required_tag_count": len(list(required_tags or [])),
+        }
+    top_row = selected_rows[0]
+    runner_up = ranked[1] if len(ranked) > 1 else None
+    required_tag_count = len([tag for tag in required_tags if str(tag).strip()])
+    gap_fill_ratio = (
+        len(list(top_row.gap_fill_tags or [])) / float(max(required_tag_count, 1))
+        if required_tag_count
+        else 0.0
+    )
+    selected_execution_ready = bool(
+        top_row.benchmark_support.get("execution_ready", False)
+        or _safe_float(top_row.selection_features.get("execution_ready", 0.0)) >= 0.5
+    )
+    selected_non_heuristic_grounding = bool(
+        top_row.benchmark_support.get("semantic_grounding_non_heuristic", False)
+        or _safe_float(top_row.selection_features.get("semantic_grounding_non_heuristic", 0.0)) >= 0.5
+    )
+    return {
+        "selected_datapack_id": top_row.datapack.id,
+        "selection_policy": top_row.selection_policy,
+        "scorer_package_id": top_row.scorer_package_id,
+        "candidate_count": len(ranked),
+        "required_tag_count": required_tag_count,
+        "selected_gap_fill_ratio": float(gap_fill_ratio),
+        "top_score": float(top_row.score),
+        "margin_to_runner_up": float(top_row.score - runner_up.score) if runner_up is not None else float(top_row.score),
+        "heuristic_score": float(top_row.heuristic_score),
+        "learned_score": float(top_row.learned_score),
+        "selected_execution_ready": selected_execution_ready,
+        "selected_non_heuristic_grounding": selected_non_heuristic_grounding,
+        "selected_benchmark_eligible": bool(top_row.benchmark_support.get("benchmark_eligible", False)),
+        "selected_quality_score": float(top_row.candidate_metadata.get("quality_score", 0.0) or 0.0),
+        "selected_history_support": float(top_row.historical_support.get("support_score", 0.0) or 0.0),
+        "helper_status": dict(selection_helper_status or {}),
+        "top_reasons": list(top_row.reasons)[:5],
+        "top_contributors": list(top_row.scorer_trace.get("top_contributors", []) or [])[:3],
+        "top_context_contributors": list(
+            (top_row.scorer_trace.get("context_trace", {}) or {}).get("top_contributors", []) or []
+        )[:3],
     }
 
 

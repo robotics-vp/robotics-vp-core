@@ -129,11 +129,30 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
         json.dumps({"decisions": [{"decision_id": "decision_rollout_001"}]}),
         encoding="utf-8",
     )
+    selection_summary_path = episode_dir / "ep_rollout_001_selection_summary_v1.json"
+    selection_summary_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "selection_summary_sidecar_v1",
+                "selection_summary": {
+                    "selection_policy": "heuristic_plus_learned_helper",
+                    "selected_ids": ["dp_rollout"],
+                    "selection_meta_choice": {
+                        "selected_datapack_id": "dp_rollout",
+                        "top_score": 2.1,
+                    },
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     metadata_path = episode_dir / "metadata.json"
     metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata_payload["scene_tracks_path"] = str(scene_tracks_path.relative_to(tmp_path))
     metadata_payload["semantic_world_model_path"] = str(semantic_world_model_path.relative_to(tmp_path))
     metadata_payload["runtime_packet_path"] = str(runtime_packet_path.relative_to(tmp_path))
+    metadata_payload["selection_summary_path"] = str(selection_summary_path.relative_to(tmp_path))
     metadata_payload["event_spine_path"] = str(event_spine_path.relative_to(tmp_path))
     metadata_payload["decision_ledger_path"] = str(decision_ledger_path.relative_to(tmp_path))
     metadata_payload["runtime_packet_id"] = "runtime_ep_rollout_001"
@@ -150,12 +169,14 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.episodes[0].provenance["scene_tracks_ref"] == str(scene_tracks_path.resolve())
     assert bundle.episodes[0].provenance["semantic_world_model_ref"] == str(semantic_world_model_path.resolve())
     assert bundle.episodes[0].provenance["runtime_packet_ref"] == str(runtime_packet_path.resolve())
+    assert bundle.episodes[0].provenance["selection_summary_ref"] == str(selection_summary_path.resolve())
     assert bundle.episodes[0].provenance["event_spine_ref"] == str(event_spine_path.resolve())
     assert bundle.episodes[0].provenance["decision_ledger_ref"] == str(decision_ledger_path.resolve())
     assert bundle.episodes[0].metadata["execution_preconditions"]["ready"] is True
     assert bundle.episodes[0].metadata["scene_tracks_non_stub"] is False
     assert bundle.episodes[0].metadata["semantic_memory_grounded"] is True
     assert bundle.episodes[0].metadata["semantic_grounding_non_heuristic"] is False
+    assert bundle.episodes[0].metadata["selection_summary"]["selected_ids"] == ["dp_rollout"]
     assert bundle.manifest.metadata["schema_compatibility"][0]["compatible"] is True
 
 

@@ -13,7 +13,8 @@ from src.world_model.semantic_world_model import SemanticWorldModelState
 
 ORCHESTRATION_BASE_CTX_DIM = 36
 SEMANTIC_WM_FEATURE_DIM = 31
-ORCHESTRATION_CTX_DIM = ORCHESTRATION_BASE_CTX_DIM + SEMANTIC_WM_FEATURE_DIM
+SELECTION_META_FEATURE_DIM = 14
+ORCHESTRATION_CTX_DIM = ORCHESTRATION_BASE_CTX_DIM + SEMANTIC_WM_FEATURE_DIM + SELECTION_META_FEATURE_DIM
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -303,6 +304,74 @@ def encode_semantic_world_model_features(summary: Mapping[str, Any]) -> np.ndarr
     if vector.size < SEMANTIC_WM_FEATURE_DIM:
         vector = np.pad(vector, (0, SEMANTIC_WM_FEATURE_DIM - vector.size))
     return vector[:SEMANTIC_WM_FEATURE_DIM]
+
+
+def encode_selection_feedback_features(summary: Mapping[str, Any] | None) -> np.ndarray:
+    payload = dict(summary or {})
+    meta_choice = payload.get("selection_meta_choice")
+    if isinstance(meta_choice, Mapping):
+        payload = {**payload, **dict(meta_choice)}
+    helper_status = payload.get("helper_status")
+    if not isinstance(helper_status, Mapping):
+        helper_status = payload.get("selection_helper_status")
+    if not isinstance(helper_status, Mapping):
+        helper_status = {}
+    top_candidates = list(payload.get("top_candidates", []) or [])
+    top_candidate = top_candidates[0] if top_candidates and isinstance(top_candidates[0], Mapping) else {}
+    runner_up = top_candidates[1] if len(top_candidates) > 1 and isinstance(top_candidates[1], Mapping) else {}
+    top_score = _safe_float(payload.get("top_score", top_candidate.get("score", 0.0)))
+    runner_up_score = _safe_float(runner_up.get("score", 0.0))
+    selected_gap_fill_tags = list(payload.get("selected_gap_fill_tags", []) or [])
+    required_tags = list(payload.get("required_tags", []) or [])
+    promotion_stage = str(helper_status.get("promotion_stage", "") or "")
+    helper_status_name = str(helper_status.get("status", "") or "")
+    selection_policy = str(payload.get("selection_policy", "heuristic_only") or "heuristic_only")
+    selected_execution_ready = bool(
+        payload.get("selected_execution_ready", False)
+        or top_candidate.get("benchmark_support", {}).get("execution_ready", False)
+        or _safe_float(top_candidate.get("selection_features", {}).get("execution_ready", 0.0)) >= 0.5
+    )
+    selected_non_heuristic = bool(
+        payload.get("selected_non_heuristic_grounding", False)
+        or top_candidate.get("benchmark_support", {}).get("semantic_grounding_non_heuristic", False)
+        or _safe_float(top_candidate.get("selection_features", {}).get("semantic_grounding_non_heuristic", 0.0))
+        >= 0.5
+    )
+    selected_benchmark_eligible = bool(
+        payload.get("selected_benchmark_eligible", False)
+        or top_candidate.get("benchmark_support", {}).get("benchmark_eligible", False)
+        or _safe_float(top_candidate.get("selection_features", {}).get("benchmark_eligible", 0.0)) >= 0.5
+    )
+    vector = np.array(
+        [
+            min(_safe_float(payload.get("candidate_count", 0.0)) / 8.0, 1.0),
+            min(len(selected_gap_fill_tags) / float(max(len(required_tags), 1)), 1.0) if required_tags else 0.0,
+            1.0 if selection_policy == "heuristic_only" else 0.0,
+            1.0 if selection_policy == "heuristic_plus_learned_helper" else 0.0,
+            1.0 if helper_status_name in {"available", "promoted"} else 0.0,
+            1.0 if promotion_stage == "shadow_candidate" else 0.0,
+            1.0 if promotion_stage == "promoted" else 0.0,
+            1.0 if bool(helper_status.get("benchmark_gate_ready", False)) else 0.0,
+            1.0 if selected_non_heuristic else 0.0,
+            1.0 if selected_benchmark_eligible else 0.0,
+            1.0 if selected_execution_ready else 0.0,
+            np.tanh(top_score / 4.0),
+            np.tanh((top_score - runner_up_score) / 2.0),
+            _safe_float(
+                payload.get(
+                    "selected_quality_score",
+                    top_candidate.get("candidate_metadata", {}).get(
+                        "quality_score",
+                        top_candidate.get("selection_features", {}).get("quality_score", 0.0),
+                    ),
+                )
+            ),
+        ],
+        dtype=np.float32,
+    )
+    if vector.size < SELECTION_META_FEATURE_DIM:
+        vector = np.pad(vector, (0, SELECTION_META_FEATURE_DIM - vector.size))
+    return vector[:SELECTION_META_FEATURE_DIM]
 
 
 def semantic_tokens(summary: Mapping[str, Any]) -> List[str]:
@@ -607,6 +676,7 @@ def build_tool_biases(
 __all__ = [
     "ORCHESTRATION_BASE_CTX_DIM",
     "ORCHESTRATION_CTX_DIM",
+    "SELECTION_META_FEATURE_DIM",
     "SEMANTIC_WM_FEATURE_DIM",
     "build_semantic_orchestration_plan",
     "build_semantic_world_model_summary",
@@ -616,6 +686,7 @@ __all__ = [
     "derive_data_mix_weights",
     "derive_energy_profile_mix",
     "derive_objective_preset",
+    "encode_selection_feedback_features",
     "encode_semantic_world_model_features",
     "estimate_expected_deltas",
     "semantic_tokens",

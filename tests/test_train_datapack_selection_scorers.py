@@ -3,6 +3,7 @@ from argparse import Namespace
 from pathlib import Path
 
 from scripts.train_datapack_selection_scorers import _run_training
+from src.orchestrator.datapack_selection_training import TORCH_AVAILABLE
 from src.training.regal_training_runner import TrainingRunConfig, run_training_with_regality
 
 
@@ -118,9 +119,18 @@ def test_train_datapack_selection_scorers_emits_artifacts(tmp_path: Path) -> Non
     assert result["benchmark_gate_ready"] is False
 
     summary = json.loads(Path(result["dataset_summary"]).read_text(encoding="utf-8"))
+    model_config = json.loads(Path(result["model_config"]).read_text(encoding="utf-8"))
+    training_summary = json.loads(Path(result["training_summary"]).read_text(encoding="utf-8"))
     assert summary["num_logs"] == 1
     assert summary["num_examples"] >= 2
-    assert summary["feature_contract"]["scoring_contract"] == "linear_selection_helper_with_context_conditioned_adjustment_v1"
+    assert summary["feature_contract"]["scoring_contract"] == "neural_feature_mlp_with_context_conditioned_adjustment_v2"
+    assert model_config["scoring_contract"] == "neural_feature_mlp_with_context_conditioned_adjustment_v2"
+    expected_model_kind = (
+        "neural_feature_mlp_with_context_conditioned_adjustment_v2"
+        if TORCH_AVAILABLE
+        else "linear_feature_weights_plus_context_conditioned_adjustment_v1"
+    )
+    assert training_summary["package_summary"]["model_kind"] == expected_model_kind
 
 
 def test_train_datapack_selection_scorers_runner_emits_runtime_manifest(tmp_path: Path) -> None:

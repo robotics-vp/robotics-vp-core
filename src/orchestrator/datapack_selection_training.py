@@ -5,12 +5,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import numpy as np
+
 from src.orchestrator.semantic_policy import (
     DatapackSelectionContext,
     DatapackSelectionFeatures,
     DatapackSelectionScorerPackage,
 )
 from src.utils.config_digest import sha256_json
+
+try:
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
 
 
 DATAPACK_SELECTION_BENCHMARK_MIN_RUNS = 100
@@ -209,8 +220,8 @@ def train_datapack_selection_scorer_package(
 ) -> DatapackSelectionScorerPackage:
     if not dataset.examples:
         raise ValueError("datapack selection training dataset is empty")
-    feature_names = DatapackSelectionFeatures().to_dict().keys()
-    context_feature_names = DatapackSelectionContext().to_dict().keys()
+    feature_names = sorted(DatapackSelectionFeatures().to_dict().keys())
+    context_feature_names = sorted(DatapackSelectionContext().to_dict().keys())
     regression_examples = [
         example for example in dataset.examples if example.supervision_kind == "selected_outcome_regression"
     ]
@@ -270,6 +281,43 @@ def train_datapack_selection_scorer_package(
     )
     max_adjustment = 0.2 + (0.55 * support_factor)
     min_adjustment = min(max_adjustment, 0.05 + 0.1 * support_factor)
+    model_kind = "linear_feature_weights_plus_context_conditioned_adjustment_v1"
+    neural_feature_order: list[str] = []
+    neural_hidden_weights: list[list[float]] = []
+    neural_hidden_bias: list[float] = []
+    neural_output_weights: list[float] = []
+    neural_output_bias = 0.0
+    neural_training_summary: dict[str, Any] = {
+        "mode": "linear_fallback",
+        "train_loss": 0.0,
+        "pairwise_margin_accuracy": 0.0,
+        "epochs": 0,
+        "hidden_dim": 0,
+    }
+
+    if TORCH_AVAILABLE and regression_examples:
+        (
+            neural_feature_order,
+            neural_hidden_weights,
+            neural_hidden_bias,
+            neural_output_weights,
+            neural_output_bias,
+            neural_training_summary,
+        ) = _train_neural_feature_model(
+            dataset.examples,
+            feature_names=feature_names,
+        )
+        if neural_hidden_weights and neural_output_weights:
+            model_kind = "neural_feature_mlp_with_context_conditioned_adjustment_v2"
+            saliency = _derive_feature_saliency_from_network(
+                feature_names=neural_feature_order,
+                hidden_weights=neural_hidden_weights,
+                output_weights=neural_output_weights,
+            )
+            for feature_name in feature_names:
+                if feature_name in saliency:
+                    normalized_weights[feature_name] = float(saliency[feature_name])
+
     return DatapackSelectionScorerPackage(
         package_id="datapack_selection_helper_v1",
         schema_version="datapack_selection_scorer_v1",
@@ -279,6 +327,12 @@ def train_datapack_selection_scorer_package(
         context_bias=normalized_context_bias,
         min_adjustment=min_adjustment,
         max_adjustment=max_adjustment,
+        model_kind=model_kind,
+        neural_feature_order=neural_feature_order,
+        neural_hidden_weights=neural_hidden_weights,
+        neural_hidden_bias=neural_hidden_bias,
+        neural_output_weights=neural_output_weights,
+        neural_output_bias=neural_output_bias,
         metadata={
             "supervision_mode": dataset.summary.get("supervision_mode"),
             "dataset_digest": dataset.summary.get("dataset_digest"),
@@ -288,6 +342,8 @@ def train_datapack_selection_scorer_package(
             "num_regression_examples": len(regression_examples),
             "conditioning_contract": "datapack_selection_context_v1",
             "context_feature_names": sorted(context_feature_names),
+            "model_kind": model_kind,
+            "neural_training_summary": neural_training_summary,
             "future_conditioning_path": "economic_wm_then_meta_node_wm",
         },
     )
@@ -339,6 +395,180 @@ def _selection_context_from_summary(payload: Mapping[str, Any]) -> dict[str, flo
         objective_present=1.0 if payload.get("objective_hint") else 0.0,
         robot_specificity=1.0 if payload.get("robot_family") else 0.0,
     ).to_dict()
+
+
+def _train_neural_feature_model(
+    examples: Sequence[DatapackSelectionTrainingExample],
+    *,
+    feature_names: Sequence[str],
+) -> tuple[list[str], list[list[float]], list[float], list[float], float, dict[str, Any]]:
+    if not TORCH_AVAILABLE:
+        return [], [], [], [], 0.0, {
+            "mode": "torch_unavailable",
+            "train_loss": 0.0,
+            "pairwise_margin_accuracy": 0.0,
+            "epochs": 0,
+            "hidden_dim": 0,
+        }
+
+    feature_names = list(feature_names)
+    rows = np.asarray(
+        [
+            [_safe_float(example.features.get(name, 0.0)) for name in feature_names]
+            for example in examples
+        ],
+        dtype=np.float32,
+    )
+    if rows.size == 0:
+        return [], [], [], [], 0.0, {
+            "mode": "empty_feature_rows",
+            "train_loss": 0.0,
+            "pairwise_margin_accuracy": 0.0,
+            "epochs": 0,
+            "hidden_dim": 0,
+        }
+
+    targets = np.asarray(
+        [
+            _clamp01(example.target_score) if example.selected else 0.0
+            for example in examples
+        ],
+        dtype=np.float32,
+    )
+    weights = np.asarray(
+        [
+            1.0 if example.selected else 0.65 + (0.35 * _clamp01(example.outcome_score))
+            for example in examples
+        ],
+        dtype=np.float32,
+    )
+    pair_indices = _pairwise_training_indices(examples)
+    hidden_dim = min(24, max(8, len(feature_names) * 2))
+
+    model = _DatapackSelectionFeatureMLP(input_dim=len(feature_names), hidden_dim=hidden_dim)
+    optimizer = optim.Adam(model.parameters(), lr=5e-3)
+    x_tensor = torch.from_numpy(rows)
+    y_tensor = torch.from_numpy(targets)
+    w_tensor = torch.from_numpy(weights)
+
+    train_loss = 0.0
+    for _epoch in range(120):
+        optimizer.zero_grad()
+        logits = model(x_tensor).squeeze(-1)
+        regression_loss = (
+            nn.functional.binary_cross_entropy_with_logits(logits, y_tensor, reduction="none") * w_tensor
+        ).mean()
+        pairwise_loss = _pairwise_margin_loss(logits, pair_indices, examples)
+        loss = regression_loss + (0.35 * pairwise_loss)
+        loss.backward()
+        optimizer.step()
+        train_loss = float(loss.item())
+
+    with torch.no_grad():
+        logits = model(x_tensor).squeeze(-1)
+        pairwise_margin_accuracy = _pairwise_margin_accuracy(logits, pair_indices)
+        hidden_weights = model.hidden.weight.detach().cpu().numpy().astype(np.float32)
+        hidden_bias = model.hidden.bias.detach().cpu().numpy().astype(np.float32)
+        output_weights = model.output.weight.detach().cpu().numpy().astype(np.float32)[0]
+        output_bias = float(model.output.bias.detach().cpu().numpy().astype(np.float32)[0])
+
+    return (
+        list(feature_names),
+        hidden_weights.tolist(),
+        hidden_bias.tolist(),
+        output_weights.tolist(),
+        output_bias,
+        {
+            "mode": "neural_feature_mlp",
+            "train_loss": train_loss,
+            "pairwise_margin_accuracy": pairwise_margin_accuracy,
+            "epochs": 120,
+            "hidden_dim": hidden_dim,
+        },
+    )
+
+
+def _derive_feature_saliency_from_network(
+    *,
+    feature_names: Sequence[str],
+    hidden_weights: Sequence[Sequence[float]],
+    output_weights: Sequence[float],
+) -> dict[str, float]:
+    if not hidden_weights or not output_weights:
+        return {str(name): 0.0 for name in feature_names}
+    hidden = np.asarray(hidden_weights, dtype=np.float32)
+    output = np.asarray(output_weights, dtype=np.float32)
+    local_linear = output @ hidden
+    normalizer = float(max(np.max(np.abs(local_linear)), 1.0))
+    return {
+        str(name): float(local_linear[index] / normalizer)
+        for index, name in enumerate(feature_names)
+    }
+
+
+def _pairwise_training_indices(
+    examples: Sequence[DatapackSelectionTrainingExample],
+) -> list[tuple[int, int, float]]:
+    selected_by_run: dict[str, list[int]] = {}
+    alternatives_by_run: dict[str, list[int]] = {}
+    for index, example in enumerate(examples):
+        if example.selected:
+            selected_by_run.setdefault(str(example.run_id), []).append(index)
+        elif example.supervision_kind == "selected_vs_alternative_pairwise":
+            alternatives_by_run.setdefault(str(example.run_id), []).append(index)
+    pairs: list[tuple[int, int, float]] = []
+    for run_id, selected_indices in sorted(selected_by_run.items()):
+        alternative_indices = alternatives_by_run.get(run_id, [])
+        if not alternative_indices:
+            continue
+        outcome = max(_clamp01(examples[index].outcome_score) for index in selected_indices)
+        margin = 0.15 + (0.35 * outcome)
+        for selected_index in selected_indices:
+            for alternative_index in alternative_indices:
+                pairs.append((selected_index, alternative_index, margin))
+    return pairs
+
+
+def _pairwise_margin_loss(
+    logits: Any,
+    pair_indices: Sequence[tuple[int, int, float]],
+    examples: Sequence[DatapackSelectionTrainingExample],
+) -> Any:
+    if not pair_indices:
+        return logits.new_tensor(0.0)
+    losses = []
+    for selected_index, alternative_index, margin in pair_indices:
+        losses.append(
+            torch.relu(
+                logits[alternative_index] - logits[selected_index] + float(margin)
+            )
+        )
+    if not losses:
+        return logits.new_tensor(0.0)
+    return torch.stack(losses).mean()
+
+
+def _pairwise_margin_accuracy(
+    logits: Any,
+    pair_indices: Sequence[tuple[int, int, float]],
+) -> float:
+    if not pair_indices:
+        return 0.0
+    correct = 0
+    for selected_index, alternative_index, margin in pair_indices:
+        if float(logits[selected_index] - logits[alternative_index]) >= float(margin):
+            correct += 1
+    return float(correct) / float(len(pair_indices))
+
+
+class _DatapackSelectionFeatureMLP(nn.Module if TORCH_AVAILABLE else object):
+    def __init__(self, input_dim: int, hidden_dim: int):
+        super().__init__()
+        self.hidden = nn.Linear(input_dim, hidden_dim)
+        self.output = nn.Linear(hidden_dim, 1)
+
+    def forward(self, x: Any) -> Any:
+        return self.output(torch.relu(self.hidden(x)))
 
 
 def _metrics_map(row: Mapping[str, Any]) -> dict[str, float]:

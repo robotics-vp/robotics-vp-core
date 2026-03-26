@@ -134,7 +134,7 @@ def _build_dataset_summary(
         "feature_contract": {
             "feature_names": feature_names,
             "context_feature_names": context_feature_names,
-            "scoring_contract": "linear_selection_helper_with_context_conditioned_adjustment_v1",
+            "scoring_contract": "neural_feature_mlp_with_context_conditioned_adjustment_v2",
         },
         "selection_policy_counts": dict(dataset.summary.get("selection_policy_counts", {}) or {}),
         "promotion_stage_counts": dict(dataset.summary.get("promotion_stage_counts", {}) or {}),
@@ -154,7 +154,7 @@ def _build_model_config(dataset: DatapackSelectionTrainingDataset) -> dict[str, 
         "context_feature_names": sorted(DatapackSelectionContext().to_dict().keys()),
         "supervision_mode": dataset.summary.get("supervision_mode"),
         "selection_context_contract": dict(dataset.summary.get("selection_context_contract", {}) or {}),
-        "scoring_contract": "linear_feature_weights_plus_context_conditioned_adjustment_v1",
+        "scoring_contract": "neural_feature_mlp_with_context_conditioned_adjustment_v2",
     }
 
 
@@ -211,10 +211,12 @@ def _build_training_summary(
         "package_summary": {
             "package_id": scorer_package.get("package_id"),
             "schema_version": scorer_package.get("schema_version"),
+            "model_kind": scorer_package.get("model_kind"),
             "max_adjustment": float(scorer_package.get("max_adjustment", 0.0) or 0.0),
             "min_adjustment": float(scorer_package.get("min_adjustment", 0.0) or 0.0),
             "conditioning_contract": metadata.get("conditioning_contract"),
             "future_conditioning_path": metadata.get("future_conditioning_path"),
+            "neural_training_summary": dict(metadata.get("neural_training_summary", {}) or {}),
         },
         "artifacts": dict(artifacts),
     }

@@ -204,6 +204,49 @@ def _bundle(tmp_path: Path, *, include_teacher_trace: bool = True) -> ReplayData
                 "promotion_trace_complete": True,
             },
             "semantic_fusion_confidence_mean": 0.74,
+            "selection_summary": {
+                "selection_policy": "heuristic_plus_learned_helper",
+                "selected_ids": ["dp_runtime"],
+                "selected_gap_fill_tags": ["drawer"],
+                "selection_helper_status": {
+                    "status": "available",
+                    "promotion_stage": "shadow_candidate",
+                    "benchmark_gate_ready": False,
+                },
+                "selection_meta_choice": {
+                    "selected_datapack_id": "dp_runtime",
+                    "selection_policy": "heuristic_plus_learned_helper",
+                    "candidate_count": 2,
+                    "selected_gap_fill_ratio": 0.5,
+                    "selected_execution_ready": True,
+                    "selected_non_heuristic_grounding": True,
+                    "selected_benchmark_eligible": True,
+                    "top_score": 2.4,
+                    "margin_to_runner_up": 0.7,
+                    "selected_quality_score": 0.85,
+                },
+                "top_candidates": [
+                    {
+                        "datapack_id": "dp_runtime",
+                        "score": 2.4,
+                        "selection_features": {
+                            "quality_score": 0.85,
+                            "execution_ready": 1.0,
+                            "semantic_grounding_non_heuristic": 1.0,
+                            "benchmark_eligible": 1.0,
+                        },
+                        "benchmark_support": {
+                            "execution_ready": True,
+                            "semantic_grounding_non_heuristic": True,
+                            "benchmark_eligible": True,
+                        },
+                    },
+                    {
+                        "datapack_id": "dp_alt",
+                        "score": 1.7,
+                    },
+                ],
+            },
         },
         provenance=episode_provenance,
     )
@@ -317,6 +360,8 @@ def test_semantic_runtime_learning_datasets_and_write_paths(tmp_path: Path) -> N
     assert len(orchestration_samples) == 1
     assert orchestration_samples[0].target_tool_sequence
     assert orchestration_samples[0].context.semantic_metadata["semantic_world_model_summary"]["world_model_id"] == "wm_runtime"
+    assert orchestration_samples[0].context.semantic_metadata["selection_summary"]["selected_ids"] == ["dp_runtime"]
+    assert orchestration_samples[0].metadata["selection_summary"]["selection_meta_choice"]["selected_datapack_id"] == "dp_runtime"
 
     written = write_semantic_runtime_learning_corpus(tmp_path / "exported", corpus)
     assert Path(written["rows_path"]).exists()

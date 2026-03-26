@@ -22,6 +22,7 @@ from src.orchestrator.semantic_transformer_bridge import (
     derive_data_mix_weights,
     derive_energy_profile_mix,
     derive_objective_preset,
+    encode_selection_feedback_features,
     encode_semantic_world_model_features,
     estimate_expected_deltas,
 )
@@ -111,7 +112,11 @@ def _encode_ctx(ctx: OrchestratorContext) -> np.ndarray:
     ])
     semantic_summary = build_semantic_world_model_summary(context=ctx)
     semantic_vec = encode_semantic_world_model_features(semantic_summary)
-    vec = np.concatenate([base_vec, semantic_vec])
+    selection_summary = {}
+    if isinstance(getattr(ctx, "semantic_metadata", None), dict):
+        selection_summary = dict(ctx.semantic_metadata.get("selection_summary", {}) or {})
+    selection_vec = encode_selection_feedback_features(selection_summary)
+    vec = np.concatenate([base_vec, semantic_vec, selection_vec])
     return vec.astype(np.float32)
 
 
@@ -257,9 +262,20 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
             "semantic_world_model_summary": semantic_summary,
             "tool_biases": tool_biases,
             "semantic_plan": orchestration_plan,
+            "selection_summary": (
+                dict(ctx.semantic_metadata.get("selection_summary", {}) or {})
+                if isinstance(ctx.semantic_metadata, dict)
+                else {}
+            ),
         },
     )
     execution_mode = "bounded_execution" if readiness.ready else "advisory"
+    selection_summary = (
+        dict(ctx.semantic_metadata.get("selection_summary", {}) or {})
+        if isinstance(ctx.semantic_metadata, dict)
+        else {}
+    )
+    selection_feedback_features = encode_selection_feedback_features(selection_summary).tolist()
     activation_plan = {
         "mode": execution_mode,
         "bounded_actions": [
@@ -271,6 +287,16 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         "tool_sequence": [step.tool_call.name for step in steps_out],
         "semantic_plan": orchestration_plan,
     }
+    if selection_summary:
+        activation_plan["selection_policy"] = str(
+            selection_summary.get("selection_policy", "heuristic_only")
+        )
+        activation_plan["selected_datapack_ids"] = list(
+            selection_summary.get("selected_ids", []) or []
+        )
+        activation_plan["selection_meta_choice"] = dict(
+            selection_summary.get("selection_meta_choice", {}) or {}
+        )
     if float(semantic_summary.get("wm_validation_error_rate", 0.0)) >= 0.2:
         activation_plan["bounded_actions"].append("request_wm_state_validation")
     if float(semantic_summary.get("graph_mutation_pressure", 0.0)) >= 1.0:
@@ -289,7 +315,10 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         readiness=readiness,
         reasons=list(activation_plan["bounded_actions"]),
         artifact_refs={"semantic_world_model_id": semantic_summary.get("world_model_id")},
-        metadata={"semantic_world_model_summary": semantic_summary},
+        metadata={
+            "semantic_world_model_summary": semantic_summary,
+            "selection_summary": selection_summary,
+        },
     ).to_dict()
 
     return OrchestratorResult(
@@ -306,6 +335,8 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         activation_work_order=activation_work_order,
         metadata={
             "semantic_world_model_summary": semantic_summary,
+            "selection_summary": selection_summary,
+            "selection_feedback_features": selection_feedback_features,
             "tool_biases": tool_biases,
             "semantic_plan": orchestration_plan,
             "execution_preconditions": readiness.to_dict(),

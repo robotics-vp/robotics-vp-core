@@ -129,6 +129,28 @@ def _load_json(path: Optional[Path]) -> Dict[str, Any]:
     return dict(payload) if isinstance(payload, Mapping) else {}
 
 
+def _load_selection_summary(
+    episode: ReplayEpisodeRecord,
+    artifact_refs: Mapping[str, Any],
+    root_dir: Optional[str],
+) -> Dict[str, Any]:
+    payload = episode.metadata.get("selection_summary")
+    if isinstance(payload, Mapping):
+        return dict(payload)
+    selection_path = _resolve_artifact_path(
+        root_dir,
+        artifact_refs.get("selection_summary_ref")
+        or artifact_refs.get("selection_summary_path"),
+    )
+    loaded = _load_json(selection_path)
+    if not loaded:
+        return {}
+    summary = loaded.get("selection_summary")
+    if isinstance(summary, Mapping):
+        return dict(summary)
+    return loaded
+
+
 def _load_npz(path: Optional[Path]) -> Dict[str, np.ndarray]:
     if path is None or not path.exists():
         return {}
@@ -612,6 +634,7 @@ def _build_orchestration_target(
     meta_target: Mapping[str, Any],
     outcome_summary: Mapping[str, Any],
     instruction: str,
+    selection_summary: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     tool_sequence = _tool_sequence_from_plan(semantic_summary, meta_target, instruction)
     activation_plan = {
@@ -626,6 +649,16 @@ def _build_orchestration_target(
         "semantic_plan": list(meta_target.get("plan", []) or []),
         "tool_sequence": [row["name"] for row in tool_sequence],
     }
+    if selection_summary:
+        activation_plan["selection_policy"] = str(
+            selection_summary.get("selection_policy", "heuristic_only")
+        )
+        activation_plan["selected_datapack_ids"] = list(
+            selection_summary.get("selected_ids", []) or []
+        )
+        activation_plan["selection_meta_choice"] = dict(
+            selection_summary.get("selection_meta_choice", {}) or {}
+        )
     return {
         "tool_sequence": tool_sequence,
         "chosen_backend": str(meta_target.get("chosen_backend", "pybullet")),
@@ -634,6 +667,7 @@ def _build_orchestration_target(
         "data_mix_weights": dict(meta_target.get("data_mix_weights", {})),
         "execution_mode": activation_plan["mode"],
         "activation_plan": activation_plan,
+        "selection_summary": dict(selection_summary or {}),
     }
 
 
@@ -803,6 +837,7 @@ def build_semantic_runtime_learning_row(
         semantic_summary,
         fusion_summary,
     )
+    selection_summary = _load_selection_summary(episode, artifact_refs, root_dir)
     instruction = str(vla_summary.get("instruction", ""))
     meta_target = _build_meta_transformer_target(
         semantic_summary,
@@ -817,6 +852,7 @@ def build_semantic_runtime_learning_row(
         meta_target,
         outcome_summary,
         instruction,
+        selection_summary=selection_summary,
     )
     counterfactuals = _build_counterfactuals(
         f"{episode.run_id}:{episode.episode_id}",
@@ -888,6 +924,7 @@ def build_semantic_runtime_learning_row(
             "objective_tensor_summary": dict(episode.objective_tensor_summary),
             "econ_tensor_summary": dict(episode.econ_tensor_summary),
             "skill_mode": episode.skill_mode,
+            "selection_summary": dict(selection_summary or {}),
         },
     )
 
@@ -1037,6 +1074,11 @@ def build_orchestration_runtime_dataset(
             semantic_metadata={
                 "semantic_world_model_summary": row.semantic_world_model_summary,
                 "data_gaps": list(row.metadata.get("data_gaps", []) or []),
+                "selection_summary": dict(
+                    row.metadata.get("selection_summary")
+                    or row.orchestration_transformer_target.get("selection_summary")
+                    or {}
+                ),
             },
         )
         context_features = np.asarray(_encode_ctx(context), dtype=np.float32)
@@ -1059,6 +1101,11 @@ def build_orchestration_runtime_dataset(
                     "objective_preset": objective_preset,
                     "quality_score": row.outcome_summary.get("quality_score", 0.0),
                     "feedback_summary": row.feedback_summary,
+                    "selection_summary": dict(
+                        row.metadata.get("selection_summary")
+                        or row.orchestration_transformer_target.get("selection_summary")
+                        or {}
+                    ),
                     "instruction_text": row.vla_summary.get("instruction", ""),
                     "runtime_instruction": row.vla_summary.get("instruction", ""),
                     "execution_mode": row.orchestration_transformer_target.get("execution_mode", "advisory"),

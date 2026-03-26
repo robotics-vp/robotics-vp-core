@@ -1,4 +1,5 @@
 """Tests for semantic simulation runner."""
+import json
 from pathlib import Path
 
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
@@ -107,6 +108,9 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
     assert result.simulation.selection_summary["selection_helper_status"]["promotion_stage"] == "shadow_candidate"
     assert result.simulation.selection_summary["selection_helper_status"]["benchmark_gate_ready"] is False
     assert result.simulation.selection_summary["selection_context"]["candidate_pool_size_norm"] > 0.0
+    selection_sidecar_path = trajectory_path.parent / "ep1_selection_summary_v1.json"
+    sidecar_payload = json.loads(selection_sidecar_path.read_text(encoding="utf-8"))
+    assert sidecar_payload["selection_summary"]["selected_ids"] == ["dp1"]
     assert store.list_scenarios()
     assert any(dp.datapack_id == "dp1_vla" for dp in store.list_datapacks())
     labeled_dp = next(dp for dp in store.list_datapacks() if dp.datapack_id == "dp1_vla")

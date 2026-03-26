@@ -9,6 +9,7 @@ from src.orchestrator.orchestration_transformer import (
 )
 from src.orchestrator.pipeline_manager import run_pipeline_step_with_causal_order
 from src.orchestrator.semantic_transformer_bridge import ORCHESTRATION_CTX_DIM
+from src.orchestrator.semantic_transformer_bridge import SELECTION_META_FEATURE_DIM
 from src.world_model.semantic_world_model import (
     SemanticMetaNode,
     SemanticObjectState,
@@ -229,7 +230,8 @@ def test_orchestration_transformer_uses_semantic_world_model_for_bounded_plan() 
     )
     encoded = _encode_ctx(ctx)
     assert encoded.shape[0] == ORCHESTRATION_CTX_DIM
-    assert float(encoded[-8:].sum()) > 0.0
+    semantic_tail = encoded[-(SELECTION_META_FEATURE_DIM + 8) : -SELECTION_META_FEATURE_DIM]
+    assert float(semantic_tail.sum()) > 0.0
 
     result = propose_orchestrated_plan(
         model=OrchestrationTransformer(hidden=32),
