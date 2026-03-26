@@ -7,6 +7,33 @@ from src.valuation.datapack_schema import DataPackMeta
 from src.valuation.guidance_profile import GuidanceProfile
 
 
+def _clip01(value: float) -> float:
+    return float(max(0.0, min(1.0, value)))
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _tag_mode_priority(mode: str, semantic_tags: List[str]) -> float:
+    tag_set = {str(tag) for tag in semantic_tags}
+    lower_mode = str(mode).lower()
+    if any(tag in tag_set for tag in ("fragile", "safety", "avoid_collision")) and "fragile" in lower_mode:
+        return 0.2
+    if any(tag in tag_set for tag in ("energy", "energy_efficient")) and "energy" in lower_mode:
+        return 0.2
+    if any(tag in tag_set for tag in ("error_recovery", "recover")) and "recovery" in lower_mode:
+        return 0.2
+    if any(tag in tag_set for tag in ("high_speed", "objective:throughput")) and "throughput" in lower_mode:
+        return 0.15
+    if any(tag in tag_set for tag in ("semantic_gap", "semantic_conflict")) and "disambiguation" in lower_mode:
+        return 0.15
+    return 0.0
+
+
 @dataclass
 class DiffusionPromptSpec:
     request_id: str
@@ -38,6 +65,10 @@ class DiffusionPromptSpec:
     coverage_gap_score: float = 0.0
     economic_priority_score: float = 0.0
     trust_priority_score: float = 0.0
+    routing_source: str = "semantic_prompt"
+    routing_context: Optional[Dict[str, Any]] = None
+    governed_hypotheses: Optional[List[Dict[str, Any]]] = None
+    benchmark_signals: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -69,6 +100,163 @@ def _build_constraint_set_from_datapack(dp: DataPackMeta) -> ConstraintSet:
     )
 
 
+def _objective_preset_from_vector(objective_vector: List[float]) -> str:
+    if len(objective_vector) >= 4:
+        if _safe_float(objective_vector[0], 0.0) > 1.5:
+            return "throughput"
+        if _safe_float(objective_vector[3], 0.0) > 1.5:
+            return "safety"
+        if _safe_float(objective_vector[2], 0.0) > 1.5:
+            return "energy_saver"
+    return "balanced"
+
+
+def _routing_context_from_guidance(
+    dp: DataPackMeta,
+    guidance: GuidanceProfile,
+    constraint_set: ConstraintSet,
+    semantic_tags: List[str],
+) -> Dict[str, Any]:
+    metrics = dp.episode_metrics or {}
+    execution_preconditions = (
+        dict(metrics.get("execution_preconditions", {}) or {})
+        if isinstance(metrics, dict)
+        else {}
+    )
+    benchmark_gate = (
+        dict(metrics.get("benchmark_gate", {}) or {})
+        if isinstance(metrics, dict)
+        else {}
+    )
+    objective_preset = _objective_preset_from_vector(guidance.objective_vector)
+    scene_tracks_backend = str(metrics.get("scene_tracks_backend", "") or "")
+    semantic_grounding_mode = "non_heuristic" if scene_tracks_backend == "real" else "heuristic_fallback"
+    semantic_disagreement = _safe_float(metrics.get("semantic_disagreement_vla_vs_map", 0.0), 0.0)
+    confidence_mean = _safe_float(metrics.get("semantic_fusion_confidence_mean", 0.0), 0.0)
+    coverage = max(
+        _safe_float(execution_preconditions.get("readiness_score", 0.0), 0.0),
+        _safe_float(metrics.get("map_first_quality_score", 0.0), 0.0),
+    )
+    return {
+        "routing_source": "guidance_contract",
+        "objective_preset": objective_preset,
+        "benchmark_gate_ready": bool(benchmark_gate.get("ready", False)),
+        "semantic_grounding_mode": semantic_grounding_mode,
+        "scene_tracks_backend": scene_tracks_backend,
+        "vision_backbone_selected": str(metrics.get("vision_backbone_selected", "") or ""),
+        "teacher_runtime_backend_selected": str(
+            metrics.get("teacher_runtime_backend_selected")
+            or metrics.get("openvla_backend_selected")
+            or ""
+        ),
+        "evidence_coverage": _clip01(coverage),
+        "semantic_disagreement": _clip01(semantic_disagreement),
+        "semantic_confidence": _clip01(confidence_mean),
+        "coverage_gap_score": _clip01(1.0 - coverage),
+        "economic_priority_score": _clip01(max(0.0, _safe_float(guidance.delta_mpl, 0.0)) / 5.0),
+        "trust_priority_score": _clip01(1.0 - semantic_disagreement),
+        "constraint_pressure": _clip01(
+            float(len((constraint_set.to_structured_fields().get("hard_bounds") or {}))) / 6.0
+        ),
+        "benchmark_signals": benchmark_gate.get("signal_values", {}),
+    }
+
+
+def _guidance_hypotheses(
+    guidance: GuidanceProfile,
+    semantic_tags: List[str],
+    routing_context: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    hypotheses: List[Dict[str, Any]] = []
+    objective_preset = str(routing_context.get("objective_preset", "balanced"))
+    benchmark_ready = bool(routing_context.get("benchmark_gate_ready", False))
+    semantic_confidence = _safe_float(routing_context.get("semantic_confidence", 0.0), 0.0)
+    semantic_disagreement = _safe_float(routing_context.get("semantic_disagreement", 0.0), 0.0)
+    coverage_gap = _safe_float(routing_context.get("coverage_gap_score", 0.0), 0.0)
+    driver = str(guidance.main_driver or "").lower()
+    base_mode = "geometry_guarded_continuation"
+    if "safety" in driver or {"fragile", "safety", "avoid_collision"} & set(semantic_tags):
+        base_mode = "fragile_object_preservation"
+    elif "energy" in driver or objective_preset == "energy_saver":
+        base_mode = "energy_saver_retiming"
+    elif "throughput" in driver or objective_preset == "throughput":
+        base_mode = "throughput_push"
+    elif "recovery" in driver or "error" in driver:
+        base_mode = "recovery_branch"
+    elif semantic_disagreement >= 0.25:
+        base_mode = "semantic_disambiguation"
+
+    base_priority = _clip01(
+        0.35
+        + 0.25 * _safe_float(routing_context.get("economic_priority_score", 0.0), 0.0)
+        + 0.15 * _safe_float(routing_context.get("trust_priority_score", 0.0), 0.0)
+        + 0.15 * coverage_gap
+        + _tag_mode_priority(base_mode, semantic_tags)
+    )
+    base_plausibility = _clip01(
+        0.35 + 0.35 * semantic_confidence + 0.15 * float(guidance.is_good) + 0.15 * float(benchmark_ready)
+    )
+    hypotheses.append(
+        {
+            "hypothesis_id": f"guidance_hyp_{uuid.uuid4().hex[:12]}",
+            "mode": base_mode,
+            "semantic_tags": list(semantic_tags),
+            "scores": {
+                "render_priority": base_priority,
+                "plausibility": base_plausibility,
+                "novelty": _clip01(
+                    0.25
+                    + 0.4 * abs(_safe_float(guidance.delta_mpl, 0.0)) / 5.0
+                    + 0.2 * abs(_safe_float(guidance.delta_J, 0.0)) / 2.0
+                ),
+                "economic_priority": _clip01(_safe_float(routing_context.get("economic_priority_score", 0.0), 0.0)),
+                "trust_priority": _clip01(_safe_float(routing_context.get("trust_priority_score", 0.0), 0.0)),
+            },
+            "rationale": (
+                "Guidance-backed diffusion request compiled from datapack metrics, objective driver, "
+                f"and semantic constraints for {base_mode}."
+            ),
+            "render_intent": {
+                "should_render": True,
+                "geometry_first": True,
+                "routing_source": "guidance_contract",
+            },
+            "action_conditioning": {
+                "speed_scale": 0.35 if base_mode == "fragile_object_preservation" else 0.55,
+                "clearance_bias": 1.0 if base_mode == "fragile_object_preservation" else 0.65,
+            },
+            "metadata": {
+                "difficulty_hint": guidance.quality_label,
+                "benchmark_gate_ready": benchmark_ready,
+            },
+        }
+    )
+    if semantic_disagreement >= 0.2:
+        hypotheses.append(
+            {
+                "hypothesis_id": f"guidance_hyp_{uuid.uuid4().hex[:12]}",
+                "mode": "semantic_disambiguation",
+                "semantic_tags": list(semantic_tags),
+                "scores": {
+                    "render_priority": _clip01(0.3 + 0.4 * semantic_disagreement + 0.2 * coverage_gap),
+                    "plausibility": _clip01(0.4 + 0.3 * semantic_confidence),
+                    "novelty": _clip01(0.25 + 0.35 * semantic_disagreement),
+                    "economic_priority": _clip01(_safe_float(routing_context.get("economic_priority_score", 0.0), 0.0)),
+                    "trust_priority": _clip01(0.55 + 0.25 * semantic_disagreement),
+                },
+                "rationale": "Semantic disagreement or low-confidence VLA hints require re-observation before broader variation.",
+                "render_intent": {
+                    "should_render": True,
+                    "geometry_first": True,
+                    "routing_source": "guidance_contract",
+                },
+                "action_conditioning": {"camera_reframe": 1.0, "speed_scale": 0.2},
+                "metadata": {"difficulty_hint": guidance.quality_label},
+            }
+        )
+    return hypotheses
+
+
 def build_diffusion_prompt_from_guidance(
     dp: DataPackMeta,
     guidance: GuidanceProfile,
@@ -86,6 +274,8 @@ def build_diffusion_prompt_from_guidance(
         (dp.semantic_tags or []) +
         constraint_set.to_prompt_tags()
     ))
+    routing_context = _routing_context_from_guidance(dp, guidance, constraint_set, semantic_tags)
+    governed_hypotheses = _guidance_hypotheses(guidance, semantic_tags, routing_context)
 
     difficulty_hint = "typical"
     if not guidance.is_good:
@@ -160,6 +350,10 @@ def build_diffusion_prompt_from_guidance(
         source_datapack_ids=[dp.pack_id],
         vla_hint=vla_hint,
         constraint_set_ref=constraint_set.to_structured_fields(),
+        routing_source=str(routing_context.get("routing_source", "guidance_contract")),
+        routing_context=routing_context,
+        governed_hypotheses=governed_hypotheses,
+        benchmark_signals=dict(routing_context.get("benchmark_signals", {}) or {}),
     )
 
 
@@ -223,6 +417,20 @@ def prompt_to_diffusion_stub_input(prompt: DiffusionPromptSpec) -> Dict[str, Any
         "energy_profile": energy_profile,
         "econ_context": econ_context,
         "constraint_set": prompt.constraint_set_ref or {},
+        "routing_context": {
+            **dict(prompt.routing_context or {}),
+            "routing_source": prompt.routing_source,
+            "coverage_gap_score": float(prompt.coverage_gap_score),
+            "economic_priority_score": float(prompt.economic_priority_score),
+            "trust_priority_score": float(prompt.trust_priority_score),
+            "meta_node_targets": list(prompt.meta_node_targets or []),
+            "missing_skill_edges": list(prompt.missing_skill_edges or []),
+            "missing_env_primitives": list(prompt.missing_env_primitives or []),
+            "risk_family_targets": list(prompt.risk_family_targets or []),
+            "affordance_family_targets": list(prompt.affordance_family_targets or []),
+            "benchmark_signals": dict(prompt.benchmark_signals or {}),
+        },
+        "governed_hypotheses": list(prompt.governed_hypotheses or []),
     }
 
 
@@ -257,6 +465,8 @@ def generate_proposals_from_prompts(
             energy_profile=stub_input["energy_profile"],
             econ_context=stub_input["econ_context"],
             constraint_set=stub_input.get("constraint_set"),
+            routing_context=stub_input.get("routing_context"),
+            hypotheses=stub_input.get("governed_hypotheses"),
             num_proposals=2,
         )
 
@@ -357,6 +567,72 @@ def build_diffusion_prompt_from_coverage_gaps(
             f"trust_priority={gap.trust_priority:.2f}, "
             f"wm_validation={float(getattr(gap, 'metadata', {}).get('wm_validation_pressure', 0.0)):.2f})"
         )
+        primary_mode = "semantic_disambiguation"
+        if risk_targets:
+            primary_mode = "fragile_object_preservation"
+        elif objective_vector and len(objective_vector) >= 4 and _safe_float(objective_vector[2], 0.0) > 1.5:
+            primary_mode = "energy_saver_retiming"
+        elif objective_vector and len(objective_vector) >= 4 and _safe_float(objective_vector[0], 0.0) > 1.5:
+            primary_mode = "throughput_push"
+        routing_context = {
+            "routing_source": "coverage_gap_graph",
+            "coverage_gap_score": float(
+                gap.gap_score(
+                    economic_weight=economic_weight,
+                    trust_weight=trust_weight,
+                    readiness_weight=readiness_weight,
+                )
+            ),
+            "economic_priority_score": float(gap.economic_priority),
+            "trust_priority_score": float(gap.trust_priority),
+            "benchmark_gate_ready": False,
+            "semantic_grounding_mode": "coverage_gap_pending",
+            "missing_skill_edges": list(missing_skill_edges),
+            "missing_env_primitives": list(missing_env_prims),
+            "risk_family_targets": list(risk_targets),
+            "affordance_family_targets": list(affordance_targets),
+            "meta_node_targets": list(
+                sorted(
+                    set(
+                        [src_node.label] if src_node is not None else []
+                    )
+                )
+            ),
+        }
+        governed_hypotheses = [
+            {
+                "hypothesis_id": f"gap_hyp_{uuid.uuid4().hex[:12]}",
+                "mode": primary_mode,
+                "semantic_tags": [gap.source_id, gap.target_id],
+                "scores": {
+                    "render_priority": _clip01(
+                        0.35
+                        + 0.25 * float(gap.economic_priority)
+                        + 0.2 * float(gap.trust_priority)
+                        + 0.2 * float(routing_context["coverage_gap_score"])
+                        + _tag_mode_priority(primary_mode, [gap.source_id, gap.target_id])
+                    ),
+                    "plausibility": _clip01(0.45 + 0.25 * float(gap.trust_priority) + 0.15 * float(getattr(gap, "promotion_readiness", 0.0))),
+                    "novelty": _clip01(0.25 + 0.35 * float(routing_context["coverage_gap_score"])),
+                    "economic_priority": _clip01(float(gap.economic_priority)),
+                    "trust_priority": _clip01(float(gap.trust_priority)),
+                },
+                "rationale": rationale,
+                "render_intent": {
+                    "should_render": True,
+                    "geometry_first": True,
+                    "routing_source": "coverage_gap_graph",
+                },
+                "action_conditioning": {
+                    "speed_scale": 0.25 if primary_mode == "fragile_object_preservation" else 0.5,
+                    "clearance_bias": 1.0 if risk_targets else 0.75,
+                },
+                "metadata": {
+                    "gap_edge_type": gap.edge_type,
+                    "promotion_readiness": float(getattr(gap, "promotion_readiness", 0.0)),
+                },
+            }
+        ]
 
         prompts.append(DiffusionPromptSpec(
             request_id=str(uuid.uuid4()),
@@ -383,6 +659,10 @@ def build_diffusion_prompt_from_coverage_gaps(
             ),
             economic_priority_score=gap.economic_priority,
             trust_priority_score=gap.trust_priority,
+            routing_source="coverage_gap_graph",
+            routing_context=routing_context,
+            governed_hypotheses=governed_hypotheses,
+            benchmark_signals={},
         ))
 
     return prompts

@@ -4,6 +4,59 @@ from scripts.run_stage1_pipeline import run_stage1_pipeline
 from src.regal.gen_plausibility import PlausibilityThresholds, RegalGenPlausibilityNode
 
 
+def _stage1_manifest_with_real_scene_tracks(tmp_path):
+    manifest_path = tmp_path / "stage1_manifest.json"
+    payload = {
+        "videos": [
+            {
+                "episode_id": "real_scene_tracks_demo",
+                "video_path": "/tmp/demo.mp4",
+                "timestamp": 1_700_000_001.0,
+                "task_type": "drawer_vase",
+                "instruction": "Open the drawer without hitting the vase.",
+                "metadata": {
+                    "duration_s": 10.0,
+                    "success": True,
+                    "num_frames": 4,
+                    "scene_tracks_backend": "real",
+                    "vision_backbone_selected": "real",
+                    "teacher_runtime_backend_selected": "unavailable",
+                    "scene_tracks_v1": {
+                        "track_ids": ["drawer_track", "vase_track"],
+                        "entity_types": [0, 0],
+                        "class_ids": [0, 1],
+                        "class_names": ["drawer", "vase"],
+                        "poses_R": [
+                            [
+                                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                            ],
+                            [
+                                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                            ],
+                        ],
+                        "poses_t": [
+                            [[0.0, 0.0, 0.0], [0.2, 0.1, 0.0]],
+                            [[0.05, 0.0, 0.0], [0.2, 0.1, 0.0]],
+                        ],
+                        "scales": [
+                            [[1.0, 1.0, 1.0], [0.8, 0.8, 0.8]],
+                            [[1.0, 1.0, 1.0], [0.8, 0.8, 0.8]],
+                        ],
+                        "visibility": [[1.0, 1.0], [1.0, 1.0]],
+                        "occlusion": [[0.0, 0.0], [0.0, 0.0]],
+                        "ir_loss": [[0.0, 0.0], [0.0, 0.0]],
+                        "converged": [[1.0, 1.0], [1.0, 1.0]],
+                    },
+                },
+            }
+        ]
+    }
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+    return manifest_path
+
+
 def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     stats = run_stage1_pipeline(
         num_videos=1,
@@ -54,8 +107,13 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     assert admission_rows
     assert admission_rows[0]["execution_preconditions"]["ready"] is True
     assert admission_rows[0]["future_training_signals"]["promotion_trace_complete"] is True
+    assert admission_rows[0]["benchmark_gate"]["ready"] is False
+    assert admission_rows[0]["execution_work_order"]["recommended_mode"] == "shadow_stage1_datapack"
+    assert admission_rows[0]["routing_source"] == "governed_video_world_model"
     datapacks = json.loads((tmp_path / "datapacks.json").read_text())
     assert datapacks[0]["episode_metrics"]["execution_preconditions"]["ready"] is True
+    assert datapacks[0]["episode_metrics"]["benchmark_gate"]["ready"] is False
+    assert datapacks[0]["attribution"]["tier"] == 0
 
 
 def test_stage1_pipeline_captures_blocked_proposals_as_negative_supervision(tmp_path) -> None:
@@ -76,3 +134,25 @@ def test_stage1_pipeline_captures_blocked_proposals_as_negative_supervision(tmp_
     ]
     assert admission_rows[0]["blocked"] is True
     assert admission_rows[0]["execution_work_order"]["decision"] == "capture_negative_supervision"
+
+
+def test_stage1_pipeline_marks_real_grounded_manifest_as_benchmark_ready(tmp_path) -> None:
+    manifest_path = _stage1_manifest_with_real_scene_tracks(tmp_path)
+    stats = run_stage1_pipeline(
+        num_videos=1,
+        proposals_per_video=1,
+        output_dir=str(tmp_path),
+        video_manifest=str(manifest_path),
+    )
+
+    assert stats["benchmark_ready_proposals"] == 1
+    admission_rows = [
+        json.loads(line)
+        for line in open(stats["proposal_admission_log"], "r", encoding="utf-8")
+        if line.strip()
+    ]
+    assert admission_rows[0]["benchmark_gate"]["ready"] is True
+    assert admission_rows[0]["execution_work_order"]["recommended_mode"] == "stage1_datapack"
+    datapacks = json.loads((tmp_path / "datapacks.json").read_text())
+    assert datapacks[0]["episode_metrics"]["benchmark_gate"]["ready"] is True
+    assert datapacks[0]["attribution"]["tier"] >= 1

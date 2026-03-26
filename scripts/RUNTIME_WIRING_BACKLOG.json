@@ -2,20 +2,14 @@
   "schema_version": "v1",
   "description": "Runtime wiring backlog for heuristic/advisory/sidecar surfaces that still affect production-readiness",
   "updated_at": "2026-03-26",
-  "backlog": [
+  "completed": [
     {
       "id": "stage1_semantic_seed_and_diffusion_routing",
-      "priority": "P1",
-      "owner": "codex",
-      "category": "runtime_wiring",
-      "files": [
-        "scripts/run_stage1_pipeline.py",
-        "src/orchestrator/diffusion_requests.py",
-        "src/diffusion/real_video_diffusion_stub.py"
-      ],
-      "blocked_by": null,
-      "notes": "Semantic seed-tag extraction and diffusion augmentation selection still rely on keyword/rule paths when governed hypotheses are thin. Replace keyword-first routing with evidence/branch-value-conditioned proposal selection and keep stub rendering strictly behind explicit gating."
-    },
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - diffusion requests now carry governed hypotheses plus routing context, the diffusion stub reranks governed hypotheses before any fallback lane, and Stage-1 datapack admission now degrades heuristic/unbenchmarked video manifests into explicit shadow-only work orders instead of pretending benchmark readiness."
+    }
+  ],
+  "backlog": [
     {
       "id": "scene_tracks_passthrough_truthiness",
       "priority": "P1",

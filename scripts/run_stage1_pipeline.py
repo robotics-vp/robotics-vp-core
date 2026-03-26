@@ -34,8 +34,10 @@ from src.evidence import (
     EvidenceBus,
     EvidenceRecord,
     belief_state_from_evidence_bus,
+    build_benchmark_gate_report,
     build_execution_preconditions,
     build_execution_work_order,
+    collect_benchmark_gating_signals,
 )
 from src.governance import governance_trace_sidecar_payload
 from src.runtime import decision_ledger_sidecar_payload, event_spine_sidecar_payload
@@ -75,7 +77,71 @@ def _metadata_dict(video_ref: Dict[str, Any]) -> Dict[str, Any]:
     return metadata if isinstance(metadata, dict) else {}
 
 
+def _runtime_field(video_ref: Dict[str, Any], *keys: str, default: str = "") -> str:
+    metadata = _metadata_dict(video_ref)
+    for key in keys:
+        if video_ref.get(key):
+            return str(video_ref.get(key))
+        if metadata.get(key):
+            return str(metadata.get(key))
+    return str(default)
+
+
+def _scene_tracks_backend(video_ref: Dict[str, Any]) -> str:
+    explicit = _runtime_field(video_ref, "scene_tracks_backend")
+    if explicit:
+        return explicit
+    metadata = _metadata_dict(video_ref)
+    scene_tracks_meta = metadata.get("scene_tracks_metadata", {})
+    if isinstance(scene_tracks_meta, dict):
+        runner = scene_tracks_meta.get("runner", {})
+        run_config = runner.get("run_config", {}) if isinstance(runner, dict) else {}
+        if run_config.get("use_stub_adapters") is False:
+            return "real"
+        if run_config.get("use_stub_adapters") is True:
+            return "stub"
+    if video_ref.get("scene_tracks_v1") or video_ref.get("scene_tracks_path") or video_ref.get("scene_tracks_npz"):
+        return "real"
+    if metadata.get("scene_tracks_v1") or metadata.get("scene_tracks_path") or metadata.get("scene_tracks_npz"):
+        return "real"
+    return "unavailable"
+
+
+def _vision_backbone_selected(video_ref: Dict[str, Any]) -> str:
+    return _runtime_field(
+        video_ref,
+        "vision_backbone_selected",
+        "openvla_vision_backbone_selected",
+        "teacher_runtime_vision_backbone_selected",
+        default="unavailable",
+    )
+
+
+def _teacher_runtime_backend_selected(video_ref: Dict[str, Any]) -> str:
+    return _runtime_field(
+        video_ref,
+        "teacher_runtime_backend_selected",
+        "openvla_backend_selected",
+        "teacher_backend_selected",
+        default="real" if _teacher_runtime_live(video_ref) else "unavailable",
+    )
+
+
+def _semantic_grounding_mode(video_ref: Dict[str, Any], semantic_world_model: Optional[Any] = None) -> str:
+    explicit = _runtime_field(video_ref, "semantic_grounding_mode", "grounding_mode")
+    if explicit:
+        return explicit
+    if semantic_world_model is not None:
+        grounded_scene = getattr(semantic_world_model, "metadata", {}).get("grounded_scene", {})
+        if isinstance(grounded_scene, dict) and grounded_scene.get("grounding_mode"):
+            return str(grounded_scene["grounding_mode"])
+    return "non_heuristic" if _scene_tracks_backend(video_ref) == "real" else "heuristic_fallback"
+
+
 def _scene_tracks_non_stub(video_ref: Dict[str, Any]) -> bool:
+    backend = _scene_tracks_backend(video_ref)
+    if backend:
+        return backend in {"real", "passthrough"}
     metadata = _metadata_dict(video_ref)
     explicit = metadata.get("future_training_signals", {})
     if isinstance(explicit, dict) and "scene_tracks_non_stub" in explicit:
@@ -109,6 +175,7 @@ def _future_training_signals(
     video_ref: Dict[str, Any],
     semantic_world_model: Any,
     sidecar_paths: Dict[str, Any],
+    benchmark_gate: Optional[Any] = None,
 ) -> Dict[str, bool]:
     metadata = _metadata_dict(video_ref)
     explicit = metadata.get("future_training_signals", {})
@@ -118,6 +185,9 @@ def _future_training_signals(
     grounded_track_count = 0
     if isinstance(topology, dict):
         grounded_track_count = int(topology.get("grounded_track_object_count", 0) or 0)
+    benchmark_signals = collect_benchmark_gating_signals(
+        _stage1_benchmark_metadata(video_ref, semantic_world_model)
+    )
     derived = {
         "replay_roundtrip_complete": False,
         "promotion_trace_complete": all(
@@ -133,8 +203,16 @@ def _future_training_signals(
         "teacher_runtime_live": _teacher_runtime_live(video_ref),
         "scene_tracks_non_stub": _scene_tracks_non_stub(video_ref),
         "semantic_memory_grounded": grounded_track_count > 0,
+        "benchmark_gate_ready": bool(getattr(benchmark_gate, "ready", False)) if benchmark_gate is not None else False,
         "budget_settlement_live": False,
     }
+    derived.update(
+        {
+            str(key): bool(value)
+            for key, value in benchmark_signals.items()
+            if isinstance(value, bool)
+        }
+    )
     derived.update({str(key): bool(value) for key, value in explicit.items()})
     return dict(sorted(derived.items()))
 
@@ -154,6 +232,42 @@ def _future_training_artifacts(video_ref: Dict[str, Any]) -> Dict[str, Any]:
     if metadata.get("promotion_ledger_ref"):
         artifacts["promotion_ledger_ref"] = metadata["promotion_ledger_ref"]
     return dict(sorted(artifacts.items()))
+
+
+def _stage1_benchmark_metadata(video_ref: Dict[str, Any], semantic_world_model: Any) -> Dict[str, Any]:
+    grounded_scene = {}
+    if semantic_world_model is not None:
+        grounded_scene = dict(getattr(semantic_world_model, "metadata", {}).get("grounded_scene", {}) or {})
+    return {
+        "scene_tracks_backend": _scene_tracks_backend(video_ref),
+        "teacher_runtime_backend_selected": _teacher_runtime_backend_selected(video_ref),
+        "vision_backbone_selected": _vision_backbone_selected(video_ref),
+        "semantic_grounding_mode": _semantic_grounding_mode(video_ref, semantic_world_model),
+        "semantic_memory_grounded": bool(
+            grounded_scene.get("grounding_ready", False)
+            or int(getattr(semantic_world_model, "topology", {}).get("grounded_track_object_count", 0) or 0) > 0
+        ),
+        "grounded_track_object_count": int(
+            getattr(semantic_world_model, "topology", {}).get("grounded_track_object_count", 0) or 0
+        ),
+        "semantic_world_model_summary": {
+            "topology": dict(getattr(semantic_world_model, "topology", {}) or {}),
+            "grounded_track_object_count": int(
+                getattr(semantic_world_model, "topology", {}).get("grounded_track_object_count", 0) or 0
+            ),
+        },
+    }
+
+
+def build_stage1_benchmark_gate(video_ref: Dict[str, Any], semantic_world_model: Any) -> Any:
+    return build_benchmark_gate_report(
+        subject_id=str(video_ref.get("episode_id", "")),
+        subject_kind="stage1_video_diffusion_benchmark_gate",
+        metadata=_stage1_benchmark_metadata(video_ref, semantic_world_model),
+        require_real_scene_tracks=True,
+        require_teacher_runtime=False,
+        require_vision_backbone=True,
+    )
 
 
 def simulate_real_video_reference(index: int = 0) -> Dict[str, Any]:
@@ -184,6 +298,14 @@ def simulate_real_video_reference(index: int = 0) -> Dict[str, Any]:
             "duration_s": duration_s,
             "success": success,
             "num_frames": int(duration_s * 30.0),
+            "scene_tracks_backend": "unavailable",
+            "vision_backbone_selected": "unavailable",
+            "teacher_runtime_backend_selected": "unavailable",
+            "semantic_grounding_mode": "heuristic_fallback",
+            "future_training_signals": {
+                "scene_tracks_non_stub": False,
+                "teacher_runtime_live": False,
+            },
         },
     }
 
@@ -382,6 +504,7 @@ def write_stage1_sidecars(
     semantic_tags: List[str],
     objective_preset: str,
     constraint_set: Dict[str, Any],
+    benchmark_gate: Optional[Any] = None,
 ) -> tuple[Dict[str, str], Any]:
     sidecar_dir = Path(output_dir) / "governed_video"
     sidecar_dir.mkdir(parents=True, exist_ok=True)
@@ -477,6 +600,7 @@ def write_stage1_sidecars(
     counterfactual_eval_path = sidecar_dir / f"{episode_id}_counterfactual_eval_v1.json"
     value_target_pack_path = sidecar_dir / f"{episode_id}_value_target_pack_v1.json"
     value_ledger_receipt_path = sidecar_dir / f"{episode_id}_value_ledger_receipt_v1.json"
+    benchmark_gate_path = sidecar_dir / f"{episode_id}_benchmark_gate_v1.json"
 
     runtime_packet_path.write_text(json.dumps(supervision_bundle.runtime_packet.to_dict(), indent=2))
     pricing_tick_path.write_text(json.dumps(supervision_bundle.pricing_tick.to_dict(), indent=2))
@@ -519,6 +643,8 @@ def write_stage1_sidecars(
     counterfactual_eval_path.write_text(json.dumps(supervision_bundle.counterfactual_eval.to_dict(), indent=2))
     value_target_pack_path.write_text(json.dumps(supervision_bundle.value_target_pack.to_dict(), indent=2))
     value_ledger_receipt_path.write_text(json.dumps(supervision_bundle.value_ledger_receipt.to_dict(), indent=2))
+    if benchmark_gate is not None:
+        benchmark_gate_path.write_text(json.dumps(benchmark_gate.to_dict(), indent=2))
     sidecar_paths.update(
         {
             "runtime_packet_path": str(runtime_packet_path),
@@ -530,6 +656,7 @@ def write_stage1_sidecars(
             "counterfactual_eval_path": str(counterfactual_eval_path),
             "value_target_pack_path": str(value_target_pack_path),
             "value_ledger_receipt_path": str(value_ledger_receipt_path),
+            "benchmark_gate_path": str(benchmark_gate_path) if benchmark_gate is not None else "",
         }
     )
     return sidecar_paths, supervision_bundle
@@ -550,7 +677,7 @@ def generate_diffusion_proposals(
     belief_state: Any,
     objective_preset: str = "balanced",
     num_proposals: int = 3,
-) -> tuple[List[DiffusionProposal], Any, List[Any], Dict[str, Any]]:
+) -> tuple[List[DiffusionProposal], Any, List[Any], Dict[str, Any], Dict[str, Any]]:
     """
     Generate governed video hypotheses and render them into proposals.
     """
@@ -569,6 +696,20 @@ def generate_diffusion_proposals(
         snapshot=snapshot,
         constraint_set=constraint_set,
     )
+    routing_context = {
+        "routing_source": "governed_video_world_model",
+        "objective_preset": objective_preset,
+        "benchmark_gate_ready": _scene_tracks_backend(video_ref) == "real"
+        and _vision_backbone_selected(video_ref) == "real",
+        "scene_tracks_backend": _scene_tracks_backend(video_ref),
+        "teacher_runtime_backend_selected": _teacher_runtime_backend_selected(video_ref),
+        "vision_backbone_selected": _vision_backbone_selected(video_ref),
+        "semantic_grounding_mode": _semantic_grounding_mode(video_ref),
+        "evidence_coverage": float(snapshot.state_features.get("evidence_coverage", 0.0)),
+        "semantic_disagreement": float(snapshot.state_features.get("evidence_disagreement_mean", 0.0)),
+        "constraint_pressure": float(len(dict(constraint_set.get("hard_bounds", {}) or {}))) / 6.0,
+        "governed_hypotheses": [hypothesis.to_dict() for hypothesis in hypotheses],
+    }
     proposals = diffusion_stub.propose_augmented_clips(
         episode_id=video_ref["episode_id"],
         media_refs=[video_ref["video_path"]],
@@ -576,9 +717,10 @@ def generate_diffusion_proposals(
         objective_preset=objective_preset,
         constraint_set=constraint_set,
         hypotheses=[hypothesis.to_dict() for hypothesis in hypotheses],
+        routing_context=routing_context,
         num_proposals=num_proposals,
     )
-    return proposals, snapshot, hypotheses, constraint_set
+    return proposals, snapshot, hypotheses, constraint_set, routing_context
 
 
 def extract_vla_plan_from_proposal(
@@ -612,6 +754,8 @@ def create_datapack_from_pipeline(
     semantic_world_model: Any,
     orchestrator_advisory: Any,
     objective_preset: str = "balanced",
+    benchmark_gate: Optional[Dict[str, Any]] = None,
+    execution_work_order: Optional[Dict[str, Any]] = None,
 ) -> DataPackMeta:
     """
     Create DataPackMeta from Stage 1 pipeline outputs.
@@ -661,8 +805,12 @@ def create_datapack_from_pipeline(
     )
 
     # Determine quality and main driver from semantic tags and objective
-    is_good = diffusion_proposal.estimated_novelty > 0.4
-    quality_label = "high_value" if diffusion_proposal.estimated_novelty > 0.6 else "medium"
+    benchmark_ready = bool(dict(benchmark_gate or {}).get("ready", False))
+    is_good = diffusion_proposal.estimated_novelty > 0.4 and benchmark_ready
+    if not benchmark_ready:
+        quality_label = "shadow_only"
+    else:
+        quality_label = "high_value" if diffusion_proposal.estimated_novelty > 0.6 else "medium"
 
     # Determine main driver from semantic tags
     if "safety" in semantic_tags:
@@ -700,11 +848,16 @@ def create_datapack_from_pipeline(
     else:
         mean_conf = 0.5  # Default
 
-    tier = 2 if diffusion_proposal.estimated_novelty > 0.6 else 1
+    tier = 0 if not benchmark_ready else 2 if diffusion_proposal.estimated_novelty > 0.6 else 1
 
     econ_semantic_tags = list(semantic_tags)
     econ_semantic_tags.append(f"objective:{objective_preset}")
     econ_semantic_tags.append(f"aug:{diffusion_proposal.augmentation_type}")
+    econ_semantic_tags.append(f"routing:{diffusion_proposal.routing_source}")
+    if benchmark_ready:
+        econ_semantic_tags.append("benchmark:ready")
+    else:
+        econ_semantic_tags.append("benchmark:shadow_only")
     for capability, score in sorted(
         getattr(semantic_world_model, "capability_scores", {}).items(),
         key=lambda item: item[0],
@@ -718,6 +871,12 @@ def create_datapack_from_pipeline(
         if float(score) >= 0.4:
             econ_semantic_tags.append(f"meta_node:{node_type}")
     semantic_quality = float(max(0.0, min(1.0, diffusion_proposal.estimated_novelty)))
+    if not benchmark_ready:
+        semantic_quality = float(min(semantic_quality, 0.35))
+
+    effective_trust = mean_conf
+    if not benchmark_ready:
+        effective_trust = min(effective_trust, 0.45)
 
     attribution_profile = AttributionProfile(
         env_name=video_ref.get("task_type", "drawer_vase"),
@@ -725,7 +884,7 @@ def create_datapack_from_pipeline(
         delta_mpl=diffusion_proposal.estimated_novelty * 5.0,  # Novelty correlates with learning
         delta_error=-0.01 if "safety" in semantic_tags else 0.0,
         delta_J=diffusion_proposal.estimated_novelty * 2.0,
-        trust_score=mean_conf,
+        trust_score=effective_trust,
         w_econ=0.8,
         tier=tier,
     )
@@ -747,6 +906,11 @@ def create_datapack_from_pipeline(
             "source_type": "stage1_diffusion_vla",
             "semantic_world_model_id": getattr(semantic_world_model, "world_model_id", ""),
             "meta_node_weights": getattr(orchestrator_advisory, "meta_node_weights", {}),
+            "diffusion_routing_source": diffusion_proposal.routing_source,
+            "diffusion_routing_score": diffusion_proposal.routing_score,
+            "benchmark_admission_mode": (
+                dict(execution_work_order or {}).get("recommended_mode", "shadow_stage1_datapack")
+            ),
         },
         signal_bundle={
             "semantic_world_model": {
@@ -755,6 +919,13 @@ def create_datapack_from_pipeline(
                 "capability_scores": getattr(semantic_world_model, "capability_scores", {}),
             },
             "meta_nodes": getattr(orchestrator_advisory, "meta_node_weights", {}),
+            "benchmark_gate": dict(benchmark_gate or {}),
+            "diffusion_routing": {
+                "routing_source": diffusion_proposal.routing_source,
+                "routing_score": diffusion_proposal.routing_score,
+                "source_hypothesis_id": diffusion_proposal.source_hypothesis_id,
+                "benchmark_gate_ready": diffusion_proposal.benchmark_gate_ready,
+            },
         },
     )
 
@@ -809,7 +980,7 @@ def run_stage1_pipeline(
         evidence_bus, belief_state = build_video_evidence(video_ref, semantic_tags, objective_preset)
 
         # Step 4: Generate governed hypotheses, then render proposals
-        proposals, snapshot, hypotheses, constraint_set = generate_diffusion_proposals(
+        proposals, snapshot, hypotheses, constraint_set, routing_context = generate_diffusion_proposals(
             video_ref,
             semantic_tags,
             diffusion_stub,
@@ -870,6 +1041,7 @@ def run_stage1_pipeline(
             backends=["governed_video"],
         )
         generated_proposal_count += len(proposals)
+        benchmark_gate = build_stage1_benchmark_gate(video_ref, semantic_world_model)
         sidecar_paths, supervision_bundle = write_stage1_sidecars(
             output_dir,
             video_ref,
@@ -883,10 +1055,18 @@ def run_stage1_pipeline(
             semantic_tags,
             objective_preset,
             constraint_set,
+            benchmark_gate=benchmark_gate,
         )
         print(f"  Generated {len(proposals)} diffusion proposals")
-        future_training_signals = _future_training_signals(video_ref, semantic_world_model, sidecar_paths)
+        future_training_signals = _future_training_signals(
+            video_ref,
+            semantic_world_model,
+            sidecar_paths,
+            benchmark_gate=benchmark_gate,
+        )
         future_training_artifacts = _future_training_artifacts(video_ref)
+        if sidecar_paths.get("benchmark_gate_path"):
+            future_training_artifacts["benchmark_gate_path"] = sidecar_paths["benchmark_gate_path"]
 
         # Step 5: For each proposal, generate VLA plan and create datapack
         for j, proposal in enumerate(proposals):
@@ -933,6 +1113,7 @@ def run_stage1_pipeline(
                 signal_values={
                     **plausibility_context,
                     "estimated_novelty": float(proposal.estimated_novelty),
+                    "diffusion_routing_score": float(proposal.routing_score),
                     **future_training_signals,
                 },
                 soft_boolean_signals={key: True for key in future_training_signals},
@@ -951,15 +1132,19 @@ def run_stage1_pipeline(
                 subject_id=proposal.proposal_id,
                 subject_kind="governed_video_proposal",
                 decision=(
-                    "admit_datapack"
-                    if plausibility_report.decision != RegalDecision.BLOCK
-                    else "capture_negative_supervision"
+                    "capture_negative_supervision"
+                    if plausibility_report.decision == RegalDecision.BLOCK
+                    else "admit_datapack"
+                    if benchmark_gate.ready
+                    else "admit_shadow_datapack"
                 ),
                 priority=float(max(0.0, proposal.estimated_novelty)),
                 recommended_mode=(
-                    "stage1_datapack"
-                    if plausibility_report.decision != RegalDecision.BLOCK
-                    else "negative_counterexample"
+                    "negative_counterexample"
+                    if plausibility_report.decision == RegalDecision.BLOCK
+                    else "stage1_datapack"
+                    if benchmark_gate.ready
+                    else "shadow_stage1_datapack"
                 ),
                 readiness=execution_preconditions,
                 reasons=plausibility_report.reason_codes or ["plausibility_ok"],
@@ -980,6 +1165,11 @@ def run_stage1_pipeline(
                 "plausibility_gate": plausibility_report.to_dict(),
                 "execution_preconditions": execution_preconditions.to_dict(),
                 "execution_work_order": work_order.to_dict(),
+                "benchmark_gate": benchmark_gate.to_dict(),
+                "routing_source": proposal.routing_source,
+                "routing_score": float(proposal.routing_score),
+                "source_hypothesis_id": proposal.source_hypothesis_id,
+                "diffusion_routing_context": dict(routing_context),
                 "video_state_id": snapshot.state_id,
                 "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
                 "value_target_pack_id": supervision_bundle.value_target_pack.pack_id,
@@ -998,6 +1188,10 @@ def run_stage1_pipeline(
 
             # Generate VLA plan
             vla_plan = extract_vla_plan_from_proposal(proposal, vla_planner)
+            if isinstance(vla_plan.confidence, (list, np.ndarray)) and len(vla_plan.confidence) > 0:
+                vla_mean_confidence = float(np.mean(vla_plan.confidence))
+            else:
+                vla_mean_confidence = 0.5
             print(f"      VLA skills: {vla_plan.skill_sequence[:3]}...")
 
             # Create datapack
@@ -1009,6 +1203,8 @@ def run_stage1_pipeline(
                 semantic_world_model,
                 semantic_backbone_result.orchestrator_advisory,
                 objective_preset,
+                benchmark_gate=benchmark_gate.to_dict(),
+                execution_work_order=work_order.to_dict(),
             )
             datapack.regal_annotations = {
                 "gen_plausibility": plausibility_report.to_dict(),
@@ -1022,9 +1218,18 @@ def run_stage1_pipeline(
                 "orchestrator_meta_nodes": semantic_backbone_result.orchestrator_advisory.meta_node_weights,
                 "execution_preconditions": execution_preconditions.to_dict(),
                 "execution_work_order_id": work_order.work_order_id,
+                "benchmark_gate": benchmark_gate.to_dict(),
+                "diffusion_routing_source": proposal.routing_source,
+                "diffusion_routing_score": float(proposal.routing_score),
+                "source_hypothesis_id": proposal.source_hypothesis_id,
             }
             datapack.episode_metrics["execution_preconditions"] = execution_preconditions.to_dict()
             datapack.episode_metrics["execution_work_order"] = work_order.to_dict()
+            datapack.episode_metrics["benchmark_gate"] = benchmark_gate.to_dict()
+            datapack.episode_metrics["scene_tracks_backend"] = _scene_tracks_backend(video_ref)
+            datapack.episode_metrics["vision_backbone_selected"] = _vision_backbone_selected(video_ref)
+            datapack.episode_metrics["teacher_runtime_backend_selected"] = _teacher_runtime_backend_selected(video_ref)
+            datapack.episode_metrics["diffusion_routing_score"] = float(proposal.routing_score)
             print(f"      DataPack: {datapack.pack_id}")
             print(f"      Tier: {datapack.attribution.tier}, Trust: {datapack.attribution.trust_score:.3f}")
 
@@ -1037,7 +1242,7 @@ def run_stage1_pipeline(
                 **dict(admission_record),
                 "semantic_tags": semantic_tags,
                 "vla_skills": vla_plan.skill_sequence[:5],
-                "vla_confidence": float(np.mean(vla_plan.confidence)),
+                "vla_confidence": vla_mean_confidence,
                 "datapack_id": datapack.pack_id,
                 "tier": datapack.attribution.tier,
                 "trust_score": datapack.attribution.trust_score,
@@ -1046,6 +1251,9 @@ def run_stage1_pipeline(
                 "semantic_capabilities": semantic_world_model.capability_scores,
                 "meta_node_weights": semantic_backbone_result.orchestrator_advisory.meta_node_weights,
                 "constraint_set": constraint_set,
+                "benchmark_gate": benchmark_gate.to_dict(),
+                "routing_source": proposal.routing_source,
+                "routing_score": float(proposal.routing_score),
                 "blocked": False,
             })
 
@@ -1082,18 +1290,21 @@ def run_stage1_pipeline(
     print(f"Saved governed video admission log to {admission_log_path}")
 
     # Compute statistics
-    tier_counts = {1: 0, 2: 0}
+    tier_counts = {0: 0, 1: 0, 2: 0}
     avg_trust = 0.0
     avg_novelty = 0.0
     augmentation_types = {}
+    routing_sources = {}
 
     completed_entries = [entry for entry in pipeline_log if not entry.get("blocked")]
     for entry in completed_entries:
-        tier_counts[entry["tier"]] += 1
+        tier_counts[entry["tier"]] = tier_counts.get(entry["tier"], 0) + 1
         avg_trust += entry["trust_score"]
         avg_novelty += entry["estimated_novelty"]
         aug_type = entry["augmentation_type"]
         augmentation_types[aug_type] = augmentation_types.get(aug_type, 0) + 1
+        routing_source = str(entry.get("routing_source", "unknown"))
+        routing_sources[routing_source] = routing_sources.get(routing_source, 0) + 1
 
     if completed_entries:
         avg_trust /= len(completed_entries)
@@ -1105,6 +1316,16 @@ def run_stage1_pipeline(
         "total_datapacks": len(all_datapacks),
         "blocked_proposals": sum(1 for row in admission_records if row.get("blocked")),
         "admitted_proposals": sum(1 for row in admission_records if not row.get("blocked")),
+        "benchmark_ready_proposals": sum(
+            1
+            for row in admission_records
+            if dict(row.get("benchmark_gate", {}) or {}).get("ready")
+        ),
+        "shadow_only_proposals": sum(
+            1
+            for row in admission_records
+            if not row.get("blocked") and not dict(row.get("benchmark_gate", {}) or {}).get("ready")
+        ),
         "executable_work_orders": sum(
             1 for row in admission_records
             if dict(row.get("execution_work_order", {}) or {}).get("ready")
@@ -1113,6 +1334,7 @@ def run_stage1_pipeline(
         "avg_trust_score": avg_trust,
         "avg_novelty": avg_novelty,
         "augmentation_type_distribution": augmentation_types,
+        "routing_source_distribution": routing_sources,
         "objective_preset": objective_preset,
         "proposal_admission_log": str(admission_log_path),
     }

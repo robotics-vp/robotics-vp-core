@@ -34,7 +34,12 @@ def test_diffusion_prompt_includes_constraint_set():
     prompt = build_diffusion_prompt_from_guidance(dp, guidance)
     assert prompt.constraint_set_ref is not None
     assert "hard_bounds" in prompt.constraint_set_ref
+    assert prompt.governed_hypotheses
+    assert prompt.routing_context is not None
+    assert prompt.routing_source == "guidance_contract"
 
     stub_input = prompt_to_diffusion_stub_input(prompt)
     assert "constraint_set" in stub_input
     assert stub_input["constraint_set"]
+    assert stub_input["governed_hypotheses"]
+    assert stub_input["routing_context"]["routing_source"] == "guidance_contract"

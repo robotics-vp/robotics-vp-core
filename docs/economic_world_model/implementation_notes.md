@@ -36,24 +36,49 @@
   - it documents the remaining top runtime gaps honestly
 - Added `scripts/RUNTIME_WIRING_BACKLOG.json`:
   - separates non-training runtime gaps from `scripts/TRAINING_MIGRATION_BACKLOG.json`
-  - currently tracks:
-    - Stage-1 semantic seed + diffusion routing
+  - now keeps a `completed` section for runtime modules already wired
+  - currently keeps the remaining active backlog focused on:
     - SceneTracks passthrough truthiness
     - shadow advisory sampling learning
     - semantic policy datapack selection
 - Updated `scripts/TRAINING_MIGRATION_BACKLOG.json`:
   - moved `train_offline_with_local_synth.py` from pending to migrated
   - left `train_vla_recap_offline.py` and `train_meta_transformer_synthetic.py` pending because they still lack the same runtime/receipt/parity treatment
+- Stage-1 semantic/diffusion routing now carries structured runtime truth instead of collapsing back to flat prompt heuristics:
+  - `src/orchestrator/diffusion_requests.py` now attaches:
+    - governed hypotheses
+    - routing context
+    - benchmark signals
+    - coverage-gap / trust / economic priority fields
+  - this applies to both datapack-guidance prompts and coverage-gap prompts, so the diffusion contract now preserves actual routing intent from the orchestrator instead of reducing everything to `semantic_tags + objective_preset`.
+- `src/diffusion/real_video_diffusion_stub.py` is still a stub renderer, but it is no longer a keyword-first selector:
+  - when governed hypotheses are present, it reranks them with routing context before rendering proposals
+  - when no governed hypotheses are present, fallback proposals are explicit and bounded
+  - heuristic or benchmark-unready routing now clamps proposal confidence/novelty instead of letting fallback proposals look equally trustworthy
+- `scripts/run_stage1_pipeline.py` now treats benchmark readiness as a real admission boundary:
+  - emits a per-video `benchmark_gate_v1.json` sidecar
+  - propagates benchmark and routing fields into admission rows, datapack metrics, and regal annotations
+  - downgrades non-benchmark-ready proposals into `shadow_stage1_datapack` work orders
+  - caps shadow datapacks to tier 0 with lower effective trust so downstream replay/training sampling sees the difference
+  - keeps a benchmark-ready path for manifests that carry real SceneTracks and real vision-backbone declarations
+- The remaining Stage-1 limitation is honest and bounded:
+  - seed-tag extraction is still deterministic bootstrap logic
+  - the governed hypotheses, routing scores, and benchmark gate now dominate admission and proposal shaping, so the heuristic seed no longer silently controls the whole diffusion lane
 
 - Added a canonical full-stack training backlog document at `docs/economic_world_model/full_stack_training_backlog.md`:
   - it records the current workspace truth that replay, coverage, and semantic-runtime corpora are still tiny
   - it ranks the real learned lanes by production importance and dependency instead of by script existence
   - it explicitly recommends `workcell_data_refresh` as the first recurring remote bundle before heavier scorer/refiner/shadow jobs
+  - it now also distinguishes local passthrough refreshes from the canonical recurring lane: benchmark-grade workcell refresh/replay assumes real SAM3D on a Linux/NVIDIA A100-class host
 - Added Runpod training-bundle scaffolding under `scripts/runpod/`:
   - `FULL_STACK_TRAINING_BUNDLES.json` is the checked-in bundle source of truth
   - `assess_full_stack_training.py` scans the workspace and emits honest readiness/blocker state
   - `execute_training_bundle.py` runs the selected bundle locally or inside a pod and writes receipts
   - `launch_training_bundle.py` wraps `runpodctl create pod` so recurring runs can be launched from one checked-in entrypoint
+- The recurring workcell bundle is now stricter:
+  - `workcell_data_refresh` assumes `--backend-policy real` rather than `auto`
+  - readiness for that bundle now expects local SAM3D repos plus checkpoints instead of treating passthrough as enough
+  - semantic runtime training now tracks real-grounded replay counts separately from raw replay counts so passthrough corpus growth does not masquerade as canonical promotion-ready data
 - The Runpod path is deliberately conservative:
   - it refuses to auto-run bundles whose data thresholds are not met unless `--force` is passed
   - it keeps frozen-baseline lanes out of the recurring automation path

@@ -14,7 +14,7 @@ Ranking dimensions:
 | Rank | Surface | Category | Production importance | Loop distortion if left unwired | Top tranche | Status after this pass |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Local synthetic branch corpus + offline local synth trainer | `lightweight_trainer_gap` | Very high | Very high | Yes | **Wired now** |
-| 2 | Stage-1 semantic seed tags + diffusion proposal routing | `heuristic` / `fallback` | Very high | High | No | Backlogged in `scripts/RUNTIME_WIRING_BACKLOG.json` |
+| 2 | Stage-1 semantic seed tags + diffusion proposal routing | `heuristic` / `fallback` | Very high | High | Yes | **Wired now** |
 | 3 | SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest | `fallback` | High | High | No | Backlogged in `scripts/RUNTIME_WIRING_BACKLOG.json` |
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | No | Explicitly bounded, still heuristic |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | No | Remains in training backlog |
@@ -59,9 +59,10 @@ Ranking dimensions:
 - file/path: `scripts/run_stage1_pipeline.py`, `src/orchestrator/diffusion_requests.py`, `src/diffusion/real_video_diffusion_stub.py`
 - category: `heuristic`
 - current behavior:
-  - `extract_semantic_tags_from_video(...)` in `scripts/run_stage1_pipeline.py` still seeds semantics from task/instruction keywords and a small deterministic vocabulary
-  - `build_diffusion_prompt_from_guidance(...)` and `prompt_to_diffusion_stub_input(...)` convert guidance into prompts via hand-written objective/customer rules
-  - `VideoDiffusionStub.propose_augmented_clips(...)` still selects augmentation modes via semantic-tag rules when governed hypotheses are thin or absent
+  - `extract_semantic_tags_from_video(...)` in `scripts/run_stage1_pipeline.py` still begins with deterministic seed tags, but downstream routing no longer stops there
+  - `build_diffusion_prompt_from_guidance(...)`, `build_diffusion_prompt_from_coverage_gaps(...)`, and `prompt_to_diffusion_stub_input(...)` now carry structured governed hypotheses plus routing context instead of collapsing prompts to flat tag/objective rules
+  - `VideoDiffusionStub.propose_augmented_clips(...)` now reranks governed hypotheses before any fallback lane and clamps confidence/novelty when routing is still heuristic or benchmark-unready
+  - `run_stage1_pipeline(...)` now emits explicit benchmark-gate sidecars and downgrades unbenchmarked proposals into `shadow_stage1_datapack` work orders with tier-0 datapacks rather than treating them like normal benchmark-eligible datapacks
 - current consumers:
   - `scripts/run_stage1_pipeline.py`
   - `scripts/run_orchestrated_guidance_loop.py`
@@ -71,9 +72,10 @@ Ranking dimensions:
   - this risks generating “semantic-looking” branches that are not grounded strongly enough to drive serious training runs
 - recommended disposition:
   - keep stub rendering downstream of governed hypotheses
-  - replace keyword-first routing with evidence/branch-value-conditioned proposal selection
-  - keep remaining heuristic paths explicit and benchmark-gated until a learned selector exists
+  - keep heuristic seed-tag extraction only as a bounded bootstrap source
+  - let benchmark-unready manifests stay explicit shadow/fallback lanes until learned routing and richer real video grounding are available
 - disposition tag:
+  - `wired now`
   - `neuralized later`
   - `benchmark-gated`
 
@@ -255,7 +257,7 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Tighten Stage-1 semantic/diffusion routing so branch generation is selected by evidence and branch value, not keyword tags.
-2. Remove permissive passthrough-as-non-stub truthiness from bootstrap/replay metadata.
-3. Migrate `train_vla_recap_offline.py` to the canonical training runtime.
+1. Remove permissive passthrough-as-non-stub truthiness from bootstrap/replay metadata.
+2. Migrate `train_vla_recap_offline.py` to the canonical training runtime.
+3. Replace bounded heuristic routing inside shadow advisory and semantic policy selection with learned runtime scorers once replay coverage is broader.
 4. Either replace or quarantine `train_meta_transformer_synthetic.py` so it cannot be mistaken for a real trainer.
