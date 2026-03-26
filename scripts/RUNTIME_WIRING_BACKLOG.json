@@ -1,0 +1,57 @@
+{
+  "schema_version": "v1",
+  "description": "Runtime wiring backlog for heuristic/advisory/sidecar surfaces that still affect production-readiness",
+  "updated_at": "2026-03-26",
+  "backlog": [
+    {
+      "id": "stage1_semantic_seed_and_diffusion_routing",
+      "priority": "P1",
+      "owner": "codex",
+      "category": "runtime_wiring",
+      "files": [
+        "scripts/run_stage1_pipeline.py",
+        "src/orchestrator/diffusion_requests.py",
+        "src/diffusion/real_video_diffusion_stub.py"
+      ],
+      "blocked_by": null,
+      "notes": "Semantic seed-tag extraction and diffusion augmentation selection still rely on keyword/rule paths when governed hypotheses are thin. Replace keyword-first routing with evidence/branch-value-conditioned proposal selection and keep stub rendering strictly behind explicit gating."
+    },
+    {
+      "id": "scene_tracks_passthrough_truthiness",
+      "priority": "P1",
+      "owner": "codex",
+      "category": "runtime_wiring",
+      "files": [
+        "src/replay/ingest.py",
+        "scripts/bootstrap_semantic_workcell_loop.py"
+      ],
+      "blocked_by": null,
+      "notes": "Passthrough SceneTracks currently marks some metadata as non-stub before later benchmark gating rejects it. Tighten these early summaries so replay/import/readiness surfaces never overstate grounding quality."
+    },
+    {
+      "id": "shadow_advisory_sampling_learning",
+      "priority": "P1",
+      "owner": "codex",
+      "category": "runtime_wiring",
+      "files": [
+        "src/orchestrator/shadow_advisory.py",
+        "src/rl/econ_regal_sampling.py",
+        "src/orchestrator/queue_selection.py"
+      ],
+      "blocked_by": "enough replay-backed runtime scorer coverage",
+      "notes": "Replay queue selection is wired into live training and online SAC, but the core scoring remains rule-based. Promote the learned semantic/runtime scorer package into this bounded queue lane once replay coverage is broad enough."
+    },
+    {
+      "id": "semantic_policy_datapack_selection",
+      "priority": "P2",
+      "owner": "codex",
+      "category": "runtime_wiring",
+      "files": [
+        "src/orchestrator/semantic_policy.py",
+        "src/orchestrator/semantic_simulation.py"
+      ],
+      "blocked_by": "packet-native datapack selection features and more real runtime outcomes",
+      "notes": "Semantic scenario/datapack selection still uses tag matching and ARH penalties. Replace this with learned bounded routing over the same packet/evidence shape after the runtime corpus contains enough grounded selection outcomes."
+    }
+  ]
+}

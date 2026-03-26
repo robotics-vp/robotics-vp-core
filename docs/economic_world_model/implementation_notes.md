@@ -2,6 +2,49 @@
 
 ## 2026-03-26
 
+- Local synthetic branch corpora now have an explicit runtime/training contract instead of a loose NPZ-only shape:
+  - `src/training/synthetic_branch_corpus.py` loads the branch corpus plus optional metadata/gap-label sidecars, summarizes source provenance and gap labels, emits an execution-precondition artifact, emits a benchmark-gate artifact, and compiles a bounded training policy from that truth.
+  - this policy is intentionally conservative:
+    - missing corpus metadata clamps synthetic share harder
+    - missing semantic-gap labels clamps synthetic share harder
+    - heuristic or benchmark-ineligible grounding clamps synthetic share harder
+  - the goal is not to ban synthetic training, but to stop under-described corpora from exerting full-weight influence on offline training.
+- `scripts/collect_local_synthetic_branches.py` now writes the missing provenance fields the trainer needs:
+  - `scene_tracks_backend`
+  - `teacher_runtime_backend_selected`
+  - `vision_backbone_selected`
+  - `semantic_grounding_mode`
+  - `semantic_memory_grounded`
+  - plus `future_training_signals` / `future_training_artifacts`
+  - this makes the branch corpus explicit about whether it came from real grounded seeds or a more heuristic/fallback lane.
+- `scripts/train_offline_with_local_synth.py` is no longer an isolated lightweight script:
+  - it now loads the explicit branch corpus contract
+  - it rescales branch influence by branch value / coverage-gap metadata / corpus readiness
+  - it caps effective synth share with the policy compiled from corpus truth
+  - it emits:
+    - `synthetic_branch_summary.json`
+    - `synthetic_branch_metrics.json`
+    - `synthetic_branch_execution_preconditions.json`
+    - `synthetic_branch_benchmark_gate.json`
+    - canonical actor checkpoints under the run output dir
+    - `training_job_result.json`
+    - full `RegalTrainingRunner` runtime artifacts when not run with `--skip-regal-runner`
+  - the script still uses proxy delta metrics for `w_econ` inputs because the corpus does not yet carry true realized branch outcome deltas; this is now explicit and bounded instead of implicit.
+- Added `docs/economic_world_model/heuristic_advisory_sidecar_inventory.md`:
+  - it ranks the remaining heuristic/advisory/sidecar surfaces by loop impact and distortion
+  - it marks the local-synth lane as the tranche landed in this pass
+  - it documents the remaining top runtime gaps honestly
+- Added `scripts/RUNTIME_WIRING_BACKLOG.json`:
+  - separates non-training runtime gaps from `scripts/TRAINING_MIGRATION_BACKLOG.json`
+  - currently tracks:
+    - Stage-1 semantic seed + diffusion routing
+    - SceneTracks passthrough truthiness
+    - shadow advisory sampling learning
+    - semantic policy datapack selection
+- Updated `scripts/TRAINING_MIGRATION_BACKLOG.json`:
+  - moved `train_offline_with_local_synth.py` from pending to migrated
+  - left `train_vla_recap_offline.py` and `train_meta_transformer_synthetic.py` pending because they still lack the same runtime/receipt/parity treatment
+
 - Added a canonical full-stack training backlog document at `docs/economic_world_model/full_stack_training_backlog.md`:
   - it records the current workspace truth that replay, coverage, and semantic-runtime corpora are still tiny
   - it ranks the real learned lanes by production importance and dependency instead of by script existence
