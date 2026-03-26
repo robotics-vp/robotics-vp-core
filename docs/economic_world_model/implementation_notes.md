@@ -2,6 +2,26 @@
 
 ## 2026-03-26
 
+- `scripts/train_vla_recap_offline.py` is no longer a lightweight side lane outside the runtime contract:
+  - the direct `train_offline(...)` entrypoint is preserved for existing smoke/inference consumers
+  - but the trainer now always emits:
+    - recap dataset summary
+    - recap feature-config artifact
+    - recap training preconditions / benchmark gate
+    - recap training summary
+    - training-job result
+    - latest and best checkpoints under the same schema that `src/vla/recap_inference.py` expects
+  - the CLI path now wraps the same logic under `RegalTrainingRunner`, so RECAP head training produces:
+    - `training_runtime_manifest.json`
+    - `checkpoint_registry.json`
+    - canonical runtime artifact registration
+    - recap-row trajectory audits labeled honestly as `recap_row_projection`
+- This is the right production posture for the RECAP lane:
+  - keep tiny local recap corpora runnable for regression tests
+  - keep the recap checkpoint contract stable for inference
+  - do not let small local recap corpora silently masquerade as promotion-ready training
+  - keep the benchmark gate explicit until a materially real recap corpus exists
+
 - Semantic datapack/scenario selection is no longer just a tag-overlap sort:
   - `src/orchestrator/semantic_policy.py` now exposes:
     - `DatapackSelectionDecision`

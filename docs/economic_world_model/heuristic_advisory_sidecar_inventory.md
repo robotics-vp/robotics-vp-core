@@ -19,7 +19,7 @@ Ranking dimensions:
 | 3a | Bootstrap workcell runtime trace completeness + grounded-data lane classification | `sidecar` / `fallback` | High | High | Yes | **Wired now** |
 | 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | Yes | **Wired now** |
-| 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | No | Remains in training backlog |
+| 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now** |
 | 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` | `heuristic` | Medium-high | Medium-high | No | **Wired now** |
 | 8 | `train_meta_transformer_synthetic.py` random-data trainer | `stub` / `lightweight_trainer_gap` | Medium | High | No | Remains explicit placeholder |
@@ -197,21 +197,29 @@ Ranking dimensions:
 - file/path: `scripts/train_vla_recap_offline.py`
 - category: `lightweight_trainer_gap`
 - current behavior:
-  - trains CPU heads over JSONL datasets and writes local metrics/checkpoints
-  - does not use `RegalTrainingRunner` or emit canonical runtime manifests/checkpoint registry/receipt artifacts
+  - the direct `train_offline(...)` API still works for existing smoke and inference consumers, but it now emits:
+    - recap dataset summary
+    - recap feature-config artifact
+    - training preconditions / benchmark-gate artifact
+    - training summary
+    - training job result
+    - latest and best checkpoints under the original checkpoint contract expected by `src/vla/recap_inference.py`
+  - the CLI path now wraps the same trainer under `RegalTrainingRunner`, registers recap artifacts/checkpoints, emits canonical runtime manifests/checkpoint registry, and projects per-episode recap rows into explicit trajectory-audit receipts instead of leaving the lane outside the runtime envelope
 - current consumers:
   - `scripts/smoke_test_vla_recap_training.py`
   - `scripts/smoke_test_recap_inference.py`
   - `scripts/runpod/FULL_STACK_TRAINING_BUNDLES.json`
 - why it is a production problem:
-  - this is a real training entrypoint, but its outputs are not contract-parity with heavier trainers
-  - later promotion/readiness tooling cannot reason about it in the same way
+  - before this pass, RECAP head training looked like a valid trainer but emitted only local checkpoints and optional CSV metrics, so promotion/readiness tooling could not reason about it the same way it reasons about the shadow/offline/synth lanes
+  - the direct path also had no honest benchmark gate, which encouraged tiny smoke corpora to look too similar to a serious recap corpus
 - recommended disposition:
-  - migrate to `RegalTrainingRunner`
-  - carry recap dataset summary, receipt coverage, and checkpoint registry into the canonical runtime envelope
+  - keep the direct function as a library boundary for smoke/inference code, but preserve the same artifact contract there
+  - keep recap-row trajectory audits explicit as `recap_row_projection` rather than pretending the recap corpus already contains full embodied action traces
+  - keep the benchmark gate conservative so small recap corpora remain runnable for dev but not promotion-ready
 - disposition tag:
+  - `wired now`
   - `upgraded to heavyweight parity`
-  - `training backlog`
+  - `benchmark-gated`
 
 ### 6. `train_orchestration_transformer.py`
 

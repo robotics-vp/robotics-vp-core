@@ -60,16 +60,6 @@
             "updated_at": "2026-01-13"
         },
         {
-            "script": "train_vla_recap_offline.py",
-            "priority": "P1",
-            "owner": "claude",
-            "blocked_by": null,
-            "downstream_dependents": [],
-            "notes": "LOW - VLA offline training",
-            "created_at": "2026-01-13",
-            "updated_at": "2026-01-13"
-        },
-        {
             "script": "train_energy_profile_policy.py",
             "priority": "P2",
             "owner": "claude",
@@ -253,13 +243,18 @@
             "script": "train_offline_with_local_synth.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - wrapped with RegalTrainingRunner, explicit synthetic-branch corpus/precondition artifacts, bounded benchmark-aware synth-share caps, and canonical checkpoint/runtime outputs"
+        },
+        {
+            "script": "train_vla_recap_offline.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - wrapped with RegalTrainingRunner while preserving the direct train_offline() API, explicit recap dataset/precondition/benchmark artifacts, recap-row trajectory-audit projection, and canonical checkpoint/runtime outputs"
         }
     ],
     "summary": {
         "total": 30,
         "P0": 0,
-        "P1": 8,
+        "P1": 7,
         "P2": 6,
-        "migrated": 16
+        "migrated": 17
     }
 }
