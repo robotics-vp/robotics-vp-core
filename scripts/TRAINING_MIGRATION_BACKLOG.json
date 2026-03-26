@@ -242,7 +242,7 @@
         {
             "script": "train_meta_transformer_synthetic.py",
             "migrated_at": "2026-03-26",
-            "notes": "P1 complete - replaced the random-noise placeholder with the real meta-transformer dataset/model/loss path, explicit runtime-dataset provenance, benchmark/precondition artifacts, and canonical checkpoint/runtime outputs while keeping synthetic generation only as an explicit fallback source"
+            "notes": "P1 complete - real meta-transformer dataset/model/loss path plus explicit runtime package artifact, stricter runtime-density/grounding benchmark gate, and bounded disabled|auto|required runtime helper loading while keeping synthetic generation only as an explicit fallback source"
         },
         {
             "script": "train_datapack_selection_scorers.py",

@@ -11,8 +11,11 @@ from src.utils.json_safe import to_json_safe
 
 
 class HeuristicMetaAdvisorPolicy(MetaAdvisorPolicy):
-    def __init__(self):
-        self._impl = MetaTransformer()
+    def __init__(self, *, helper_package_path: str | None = None, helper_mode: str = "auto"):
+        self._impl = MetaTransformer(
+            helper_package_path=helper_package_path,
+            helper_mode=helper_mode,
+        )
 
     def build_features(self, meta_slice: Any) -> Dict[str, Any]:
         return {"meta_slice": meta_slice}

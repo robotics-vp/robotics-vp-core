@@ -62,12 +62,16 @@ def test_meta_transformer_training_emits_artifacts(tmp_path: Path) -> None:
     assert Path(result["best_checkpoint"]).exists()
     assert Path(result["dataset_summary"]).exists()
     assert Path(result["training_summary"]).exists()
+    assert Path(result["runtime_package"]).exists()
     assert (output_dir / "training_job_result.json").exists()
     assert result["benchmark_gate_ready"] is False
 
     summary = json.loads(Path(result["dataset_summary"]).read_text(encoding="utf-8"))
+    runtime_package = json.loads(Path(result["runtime_package"]).read_text(encoding="utf-8"))
     assert summary["dataset_source"] == "semantic_runtime_export"
     assert summary["runtime_summary"]["total_rows"] == 6
+    assert runtime_package["promotion_stage"] == "shadow_candidate"
+    assert runtime_package["inference_contract"]["helper_blend_policy"] == "bounded_meta_transformer_helper_v1"
 
 
 def test_meta_transformer_training_runner_emits_runtime_manifest(tmp_path: Path) -> None:
@@ -117,6 +121,7 @@ def test_meta_transformer_training_runner_emits_runtime_manifest(tmp_path: Path)
 
     assert manifest["training_kind"] == "meta_transformer_runtime"
     assert manifest["artifact_paths"]["meta_transformer_training_summary"].endswith("meta_transformer_training_summary.json")
+    assert manifest["artifact_paths"]["meta_transformer_runtime_package"].endswith("meta_transformer_package.json")
     assert manifest["metadata"]["trajectory_audit_kind"] == "meta_transformer_sample_projection"
     assert checkpoint_registry["checkpoints"][0]["model_family"] == "meta_transformer"
     assert holder["payload"]["benchmark_gate_ready"] is False

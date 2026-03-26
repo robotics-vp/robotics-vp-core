@@ -2,6 +2,30 @@
 
 ## 2026-03-26
 
+- Meta-transformer runtime/training are now actually connected:
+  - `scripts/train_meta_transformer_synthetic.py` now emits `meta_transformer_package.json` beside the checkpoint/model-config/precondition artifacts
+  - `src/orchestrator/meta_transformer_runtime.py` loads that package and reconstructs `MetaTransformerNet` for CPU inference
+  - `src/orchestrator/meta_transformer.py` now accepts `helper_package_path` plus `helper_mode=disabled|auto|required`
+  - `src/policies/meta_advisor.py` now threads the same package path/mode into the live policy facade
+- Promotion/readiness for the meta-transformer is now materially stricter and sequential:
+  - sample count alone no longer promotes the lane
+  - benchmark readiness now also requires enough:
+    - `bounded_ready_count`
+    - `semantic_grounded_count`
+    - `route_success_count`
+    - `authority_success_count`
+  - `auto` uses benchmark-unready packages only as `shadow_candidate` helpers
+  - `required` refuses those packages outright
+- This is the right current posture for meta neuralization:
+  - the trained architecture, dataset substrate, and runtime helper are now real
+  - the heuristic `MetaTransformer` outputs remain the explicit prior for objective preset / backend / data mix / orchestration-plan derivation
+  - the learned package now materially influences:
+    - authority selection
+    - shared policy state
+    - diffusion conditioning
+    - ontology-token predictions
+  - the next layer above this is not another fake package; it is later economic-WM and meta-node-WM conditioning over the same helper contract
+
 - Orchestration transformer training/eval now use one honest instruction/runtime contract:
   - `src/orchestrator/training_dataset.py` now persists `instruction_text` in saved samples, reconstructs typed samples from JSON, and derives deterministic instruction tokens from runtime/context metadata
   - `src/orchestrator/semantic_runtime_learning.py` now preserves runtime instruction / execution-mode metadata when exporting orchestration samples from the semantic runtime corpus

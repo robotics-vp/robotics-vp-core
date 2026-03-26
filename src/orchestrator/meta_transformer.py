@@ -1,13 +1,16 @@
-"""
-Meta-Transformer scaffold that arbitrates between semantic (DINO) and affordance (OpenVLA) features.
-No training or heavy logic; provides placeholder methods and typed dataclasses.
-"""
+"""Meta-transformer runtime with bounded learned-helper support."""
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Mapping, Optional
 import numpy as np
 from src.config.objective_profile import ObjectiveVector
 from src.evidence.preconditions import build_execution_preconditions, build_execution_work_order
 from src.orchestrator.context import OrchestratorContext
+from src.orchestrator.meta_transformer_runtime import (
+    LoadedMetaTransformerRuntime,
+    MetaTransformerRuntimeInference,
+    load_meta_transformer_runtime_package,
+)
 from src.orchestrator.semantic_transformer_bridge import (
     build_semantic_orchestration_plan,
     build_semantic_world_model_summary,
@@ -58,8 +61,184 @@ MetaTransformerOutput = MetaTransformerOutputs
 
 
 class MetaTransformer:
-    def __init__(self, d_shared: int = 32):
+    def __init__(
+        self,
+        d_shared: int = 32,
+        *,
+        helper_package_path: Optional[str] = None,
+        helper_mode: Literal["disabled", "auto", "required"] = "auto",
+    ):
+        if helper_mode not in {"disabled", "auto", "required"}:
+            raise ValueError(f"Unsupported meta-transformer helper mode: {helper_mode}")
         self.d_shared = d_shared
+        self.helper_package_path = helper_package_path
+        self.helper_mode = helper_mode
+        self._loaded_helper: Optional[LoadedMetaTransformerRuntime] = None
+        self._helper_load_error: Optional[str] = None
+
+    def _coerce_vector(self, value: np.ndarray, dim: int) -> np.ndarray:
+        vector = np.asarray(value, dtype=np.float32).reshape(-1)
+        if vector.size < dim:
+            vector = np.pad(vector, (0, dim - vector.size))
+        return vector[:dim]
+
+    def _blend_vectors(self, base: np.ndarray, learned: np.ndarray, *, weight: float) -> np.ndarray:
+        base_vec = self._coerce_vector(base, max(len(base), len(learned)))
+        learned_vec = self._coerce_vector(learned, max(len(base), len(learned)))
+        return ((1.0 - weight) * base_vec) + (weight * learned_vec)
+
+    def _normalized_helper_path(self) -> Optional[Path]:
+        if not self.helper_package_path:
+            return None
+        candidate = Path(self.helper_package_path)
+        if candidate.is_dir():
+            candidate = candidate / "meta_transformer_package.json"
+        return candidate
+
+    def _resolve_helper_runtime(self) -> tuple[Optional[LoadedMetaTransformerRuntime], Dict[str, Any]]:
+        if self.helper_mode == "disabled":
+            return None, {
+                "mode": self.helper_mode,
+                "status": "disabled",
+                "promotion_stage": "disabled",
+                "benchmark_gate_ready": False,
+            }
+        if self._loaded_helper is not None:
+            package = self._loaded_helper.package
+            benchmark_gate_ready = bool(package.benchmark_gate.get("ready", False))
+            if self.helper_mode == "required" and not benchmark_gate_ready:
+                raise ValueError(
+                    "meta-transformer helper mode 'required' requires a benchmark-gated package"
+                )
+            return self._loaded_helper, {
+                "mode": self.helper_mode,
+                "status": "loaded",
+                "package_id": package.package_id,
+                "package_path": package.package_path,
+                "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
+                "benchmark_gate_ready": benchmark_gate_ready,
+                "unsatisfied_preconditions": list(
+                    package.execution_preconditions.get("unsatisfied_preconditions", []) or []
+                ),
+            }
+        if self._helper_load_error is not None:
+            if self.helper_mode == "required":
+                raise ValueError(self._helper_load_error)
+            return None, {
+                "mode": self.helper_mode,
+                "status": "load_failed",
+                "promotion_stage": "heuristic_fallback",
+                "benchmark_gate_ready": False,
+                "error": self._helper_load_error,
+            }
+
+        package_path = self._normalized_helper_path()
+        if package_path is None:
+            message = "meta-transformer helper package path was not provided"
+            if self.helper_mode == "required":
+                raise ValueError(message)
+            return None, {
+                "mode": self.helper_mode,
+                "status": "package_missing",
+                "promotion_stage": "heuristic_fallback",
+                "benchmark_gate_ready": False,
+            }
+        if not package_path.exists():
+            message = f"meta-transformer helper package not found: {package_path}"
+            self._helper_load_error = message
+            if self.helper_mode == "required":
+                raise ValueError(message)
+            return None, {
+                "mode": self.helper_mode,
+                "status": "package_missing",
+                "promotion_stage": "heuristic_fallback",
+                "benchmark_gate_ready": False,
+                "package_path": str(package_path),
+            }
+
+        try:
+            package = load_meta_transformer_runtime_package(package_path)
+            self._loaded_helper = LoadedMetaTransformerRuntime(package)
+        except Exception as exc:
+            self._helper_load_error = str(exc)
+            if self.helper_mode == "required":
+                raise ValueError(str(exc)) from exc
+            return None, {
+                "mode": self.helper_mode,
+                "status": "load_failed",
+                "promotion_stage": "heuristic_fallback",
+                "benchmark_gate_ready": False,
+                "package_path": str(package_path),
+                "error": str(exc),
+            }
+
+        benchmark_gate_ready = bool(self._loaded_helper.package.benchmark_gate.get("ready", False))
+        if self.helper_mode == "required" and not benchmark_gate_ready:
+            raise ValueError(
+                "meta-transformer helper mode 'required' requires a benchmark-gated package"
+            )
+        return self._loaded_helper, {
+            "mode": self.helper_mode,
+            "status": "loaded",
+            "package_id": self._loaded_helper.package.package_id,
+            "package_path": self._loaded_helper.package.package_path,
+            "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
+            "benchmark_gate_ready": benchmark_gate_ready,
+            "unsatisfied_preconditions": list(
+                self._loaded_helper.package.execution_preconditions.get(
+                    "unsatisfied_preconditions", []
+                )
+                or []
+            ),
+        }
+
+    def _apply_learned_helper(
+        self,
+        output: MetaTransformerOutputs,
+        *,
+        inference: MetaTransformerRuntimeInference,
+        helper_status: Mapping[str, Any],
+    ) -> MetaTransformerOutputs:
+        helper_weight = 0.55 if inference.benchmark_gate_ready else 0.2
+        authority_margin = float(
+            inference.authority_confidence - inference.alternate_authority_confidence
+        )
+        authority = output.authority
+        authority_source = "heuristic"
+        if inference.benchmark_gate_ready or authority_margin >= 0.2:
+            authority = inference.authority
+            authority_source = "learned_helper"
+
+        output.shared_policy_state = self._blend_vectors(
+            np.asarray(output.shared_policy_state, dtype=np.float32),
+            inference.policy_state,
+            weight=helper_weight,
+        )
+        output.diffusion_conditioning = self._blend_vectors(
+            np.asarray(output.diffusion_conditioning, dtype=np.float32),
+            inference.diffusion_conditioning,
+            weight=helper_weight,
+        )
+        output.ontology_tokens = list(
+            dict.fromkeys(list(output.ontology_tokens or []) + list(inference.ontology_tokens or []))
+        )[:16]
+        output.authority = authority
+        output.metadata = {
+            **dict(output.metadata or {}),
+            "learned_helper": {
+                **dict(helper_status),
+                "helper_weight": helper_weight,
+                "authority": inference.authority,
+                "authority_confidence": float(inference.authority_confidence),
+                "alternate_authority_confidence": float(
+                    inference.alternate_authority_confidence
+                ),
+                "authority_margin": authority_margin,
+                "authority_source": authority_source,
+                "predicted_ontology_tokens": list(inference.ontology_tokens),
+            },
+        }
+        return output
 
     def integrate_embeddings(
         self,
@@ -100,7 +279,7 @@ class MetaTransformer:
     ) -> MetaTransformerOutputs:
         shared = self.integrate_embeddings(dino_features, vla_features, semantic_features=semantic_features)
         authority = self.select_authority(dino_conf, vla_conf)
-        return MetaTransformerOutputs(
+        output = MetaTransformerOutputs(
             shared_policy_state=self.produce_policy_state(shared),
             diffusion_conditioning=self.produce_diffusion_conditioning(shared),
             ontology_tokens=self.produce_ontology_tokens(shared),
@@ -114,6 +293,19 @@ class MetaTransformer:
             expected_delta_error=0.0,
             expected_delta_energy_Wh=0.0,
             orchestration_plan=[],
+        )
+        helper_runtime, helper_status = self._resolve_helper_runtime()
+        if helper_runtime is None:
+            output.metadata = {**dict(output.metadata or {}), "learned_helper": dict(helper_status)}
+            return output
+        inference = helper_runtime.infer(
+            dino_features=np.asarray(dino_features, dtype=np.float32),
+            vla_features=np.asarray(vla_features, dtype=np.float32),
+        )
+        return self._apply_learned_helper(
+            output,
+            inference=inference,
+            helper_status=helper_status,
         )
 
     def _mapping(self, value: Any) -> Dict[str, Any]:
@@ -321,7 +513,12 @@ class MetaTransformer:
         output.expected_delta_error = deltas["expected_delta_error"]
         output.expected_delta_energy_Wh = deltas["expected_delta_energy_Wh"]
         output.orchestration_plan = plan
-        output.ontology_tokens = semantic_tokens(semantic_summary) or output.ontology_tokens
+        output.ontology_tokens = list(
+            dict.fromkeys(
+                list(semantic_tokens(semantic_summary) or [])
+                + list(output.ontology_tokens or [])
+            )
+        )[:16]
         output.affordance_summary = {
             **dict(output.affordance_summary or {}),
             "semantic_top_objects": list(semantic_summary.get("top_object_labels", []) or []),
@@ -333,6 +530,7 @@ class MetaTransformer:
         output.execution_preconditions = readiness.to_dict()
         output.execution_work_order = work_order
         output.metadata = {
+            **dict(output.metadata or {}),
             "semantic_world_model_summary": semantic_summary,
             "semantic_world_model_id": semantic_summary.get("world_model_id"),
             "active_capabilities": list(semantic_summary.get("active_capabilities", []) or []),

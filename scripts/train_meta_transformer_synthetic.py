@@ -47,6 +47,10 @@ else:  # pragma: no cover - handled by explicit error below
 
 
 META_TRANSFORMER_BENCHMARK_MIN_SAMPLES = 1000
+META_TRANSFORMER_MIN_BOUNDED_READY_RATIO = 0.4
+META_TRANSFORMER_MIN_SEMANTIC_GROUNDED_RATIO = 0.4
+META_TRANSFORMER_MIN_ROUTE_SUCCESS_RATIO = 0.2
+META_TRANSFORMER_MIN_AUTHORITY_SUCCESS_RATIO = 0.2
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -179,9 +183,27 @@ def _build_dataset_summary(
     semantic_token_lengths = [len(sample.semantic_tokens) for sample in samples] or [0]
     vla_dims = {int(np.asarray(sample.vla_embedding).shape[-1]) for sample in samples}
     dino_dims = {int(np.asarray(sample.dino_embedding).shape[-1]) for sample in samples}
+    runtime_summary = dict(dataset_info.get("runtime_summary", {}) or {})
+    required_bounded_ready_count = max(
+        50, int(META_TRANSFORMER_BENCHMARK_MIN_SAMPLES * META_TRANSFORMER_MIN_BOUNDED_READY_RATIO)
+    )
+    required_semantic_grounded_count = max(
+        50,
+        int(META_TRANSFORMER_BENCHMARK_MIN_SAMPLES * META_TRANSFORMER_MIN_SEMANTIC_GROUNDED_RATIO),
+    )
+    required_route_success_count = max(
+        25, int(META_TRANSFORMER_BENCHMARK_MIN_SAMPLES * META_TRANSFORMER_MIN_ROUTE_SUCCESS_RATIO)
+    )
+    required_authority_success_count = max(
+        25, int(META_TRANSFORMER_BENCHMARK_MIN_SAMPLES * META_TRANSFORMER_MIN_AUTHORITY_SUCCESS_RATIO)
+    )
     benchmark_gate_ready = (
         dataset_info.get("dataset_source") != "synthetic_generator"
         and len(samples) >= META_TRANSFORMER_BENCHMARK_MIN_SAMPLES
+        and int(runtime_summary.get("bounded_ready_count", 0)) >= required_bounded_ready_count
+        and int(runtime_summary.get("semantic_grounded_count", 0)) >= required_semantic_grounded_count
+        and int(runtime_summary.get("route_success_count", 0)) >= required_route_success_count
+        and int(runtime_summary.get("authority_success_count", 0)) >= required_authority_success_count
     )
     return {
         "schema_version": "meta_transformer_dataset_summary_v1",
@@ -208,12 +230,20 @@ def _build_dataset_summary(
             "semantic_vocab_size": len(SEMANTIC_VOCAB),
         },
         "source_domain_coverage": _build_source_domain_coverage(samples),
-        "runtime_summary": dict(dataset_info.get("runtime_summary", {}) or {}),
+        "runtime_summary": runtime_summary,
         "benchmark_gate": {
             "name": "meta_transformer_min_runtime_samples",
             "ready": benchmark_gate_ready,
             "required_samples": META_TRANSFORMER_BENCHMARK_MIN_SAMPLES,
+            "required_bounded_ready_count": required_bounded_ready_count,
+            "required_semantic_grounded_count": required_semantic_grounded_count,
+            "required_route_success_count": required_route_success_count,
+            "required_authority_success_count": required_authority_success_count,
             "observed_samples": len(samples),
+            "observed_bounded_ready_count": int(runtime_summary.get("bounded_ready_count", 0)),
+            "observed_semantic_grounded_count": int(runtime_summary.get("semantic_grounded_count", 0)),
+            "observed_route_success_count": int(runtime_summary.get("route_success_count", 0)),
+            "observed_authority_success_count": int(runtime_summary.get("authority_success_count", 0)),
             "synthetic_source": dataset_info.get("dataset_source") == "synthetic_generator",
         },
     }
@@ -334,6 +364,59 @@ def _build_training_summary(
     }
 
 
+def _build_runtime_package(
+    *,
+    config_digest: str,
+    checkpoint_path: Path,
+    best_checkpoint_path: Path,
+    dataset_summary: Mapping[str, Any],
+    model_config: Mapping[str, Any],
+    execution_preconditions: Mapping[str, Any],
+    dataset_summary_path: Path,
+    model_config_path: Path,
+    preconditions_path: Path,
+    training_summary_path: Path,
+) -> dict[str, Any]:
+    benchmark_gate = dict(dataset_summary.get("benchmark_gate", {}) or {})
+    benchmark_gate_ready = bool(benchmark_gate.get("ready", False))
+    return {
+        "schema_version": "meta_transformer_runtime_package_v1",
+        "package_id": f"meta_transformer_runtime_{config_digest[:12]}",
+        "checkpoint_path": str(checkpoint_path),
+        "best_checkpoint_path": str(best_checkpoint_path),
+        "dataset_summary_path": str(dataset_summary_path),
+        "model_config_path": str(model_config_path),
+        "preconditions_path": str(preconditions_path),
+        "training_summary_path": str(training_summary_path),
+        "model_config": dict(model_config),
+        "benchmark_gate": benchmark_gate,
+        "execution_preconditions": dict(execution_preconditions),
+        "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
+        "inference_contract": {
+            "learned_fields": [
+                "authority",
+                "shared_policy_state",
+                "diffusion_conditioning",
+                "ontology_tokens",
+            ],
+            "heuristic_prior_fields": [
+                "objective_preset",
+                "energy_profile_weights",
+                "data_mix_weights",
+                "chosen_backend",
+                "orchestration_plan",
+            ],
+            "helper_blend_policy": "bounded_meta_transformer_helper_v1",
+            "conditioning_contract": "semantic_runtime_then_economic_wm_then_meta_node_wm",
+        },
+        "metadata": {
+            "config_digest": config_digest,
+            "dataset_digest": dataset_summary.get("dataset_digest"),
+            "dataset_source": dataset_summary.get("dataset_source"),
+        },
+    }
+
+
 def _train(
     *,
     args: argparse.Namespace,
@@ -420,6 +503,7 @@ def _train(
     history_path = output_root / "meta_transformer_training_history.json"
     preconditions_path = output_root / "meta_transformer_execution_preconditions.json"
     training_summary_path = output_root / "meta_transformer_training_summary.json"
+    package_path = output_root / "meta_transformer_package.json"
     training_job_result_path = output_root / "training_job_result.json"
 
     history: list[dict[str, Any]] = []
@@ -485,6 +569,7 @@ def _train(
         "preconditions": str(preconditions_path),
         "checkpoint_latest": str(latest_checkpoint_path),
         "checkpoint_best": str(best_checkpoint_path),
+        "runtime_package": str(package_path),
         "runtime_dataset_ref": dataset_info.get("dataset_path"),
         "runtime_summary_ref": dataset_info.get("runtime_summary_path"),
     }
@@ -505,6 +590,19 @@ def _train(
     _write_json(history_path, {"history": history})
     _write_json(preconditions_path, execution_preconditions)
     _write_json(training_summary_path, training_summary)
+    runtime_package = _build_runtime_package(
+        config_digest=config_digest,
+        checkpoint_path=latest_checkpoint_path,
+        best_checkpoint_path=best_checkpoint_path,
+        dataset_summary=dataset_summary,
+        model_config=model_config,
+        execution_preconditions=execution_preconditions,
+        dataset_summary_path=dataset_summary_path,
+        model_config_path=model_config_path,
+        preconditions_path=preconditions_path,
+        training_summary_path=training_summary_path,
+    )
+    _write_json(package_path, runtime_package)
 
     result = {
         "checkpoint": str(latest_checkpoint_path),
@@ -514,6 +612,7 @@ def _train(
         "history": str(history_path),
         "training_summary": str(training_summary_path),
         "preconditions": str(preconditions_path),
+        "runtime_package": str(package_path),
         "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
     }
     _write_json(
@@ -569,6 +668,7 @@ def _train(
         runner.register_artifact("meta_transformer_history", history_path)
         runner.register_artifact("meta_transformer_preconditions", preconditions_path)
         runner.register_artifact("meta_transformer_training_summary", training_summary_path)
+        runner.register_artifact("meta_transformer_runtime_package", package_path)
         runner.register_artifact("training_job_result", training_job_result_path)
         runner.register_checkpoint(
             build_checkpoint_record(

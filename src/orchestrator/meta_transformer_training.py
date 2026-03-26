@@ -1,16 +1,17 @@
 """
-Meta-Transformer Training Infrastructure.
+Meta-transformer training infrastructure.
 
-Implements cross-attention between VLA (affordance) and DINO (semantic) embeddings,
-with semantic token supervision and authority prediction.
+Implements cross-attention between VLA (affordance) and DINO (semantic)
+embeddings, with semantic-token supervision and authority prediction.
 
-No actual training yet - provides dataloader, batching, forward pass, and eval.
+This module now backs the real runtime-training lane; synthetic generation
+remains only as an explicit fallback corpus source.
 """
 
 import json
 import os
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
+from typing import List, Dict, Any, Tuple
 
 import numpy as np
 
@@ -19,7 +20,6 @@ from src.utils.json_safe import to_json_safe
 try:
     import torch
     import torch.nn as nn
-    import torch.optim as optim
     from torch.utils.data import Dataset, DataLoader
     TORCH_AVAILABLE = True
 except ImportError:

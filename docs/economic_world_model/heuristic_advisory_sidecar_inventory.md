@@ -22,7 +22,7 @@ Ranking dimensions:
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now** |
 | 6 | `train_orchestration_transformer.py` runtime-backed trainer parity | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now, benchmark-gated** |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` plus helper trainer/export lane | `heuristic` / `lightweight_trainer_gap` | Medium-high | Medium-high | No | **Wired now, benchmark-gated** |
-| 8 | `train_meta_transformer_synthetic.py` meta-transformer trainer entrypoint | `lightweight_trainer_gap` | Medium | High | Yes | **Wired now** |
+| 8 | `train_meta_transformer_synthetic.py` + meta-transformer runtime package/promotion path | `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `sidecar` / `fallback` | Medium-high | Medium-high | No | **Wired now** |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 
@@ -317,7 +317,7 @@ Ranking dimensions:
 
 ### 8. `train_meta_transformer_synthetic.py`
 
-- surface: meta-transformer trainer entrypoint
+- surface: meta-transformer trainer entrypoint plus runtime helper package consumption
 - file/path: `scripts/train_meta_transformer_synthetic.py`
 - category: `lightweight_trainer_gap`
 - current behavior:
@@ -327,17 +327,29 @@ Ranking dimensions:
     - the real `MetaTransformerNet`
     - the existing batching/loss/eval helpers
   - synthetic generation remains available only as an explicit fallback input source when requested
-  - the script now emits canonical runtime manifests/checkpoint registry/training summaries and honest corpus benchmark/precondition artifacts instead of writing an opaque random checkpoint under `results/`
+  - the script now emits canonical runtime manifests/checkpoint registry/training summaries plus an explicit `meta_transformer_package.json` runtime artifact instead of writing an opaque random checkpoint under `results/`
+  - benchmark readiness is now materially stricter:
+    - runtime sample count alone is no longer enough
+    - promotion now also requires bounded-ready density, semantic-grounded density, route-success density, and authority-success density from the runtime summary
+  - `src/orchestrator/meta_transformer.py` now supports:
+    - `helper_mode=disabled|auto|required`
+    - bounded runtime loading of the trained package through `src/orchestrator/meta_transformer_runtime.py`
+    - learned authority / policy-state / diffusion-conditioning / ontology-token influence with explicit `shadow_candidate` vs `promoted` stages
+    - hard failure for `required` mode when the package is not benchmark-gated ready
 - current consumers:
   - `scripts/export_semantic_runtime_learning_corpus.py`
-  - future meta-transformer promotion / runtime-helper consumers
+  - `src/orchestrator/meta_transformer.py`
+  - `src/policies/meta_advisor.py`
 - why it is a production problem:
-  - before this pass, the script looked like a trainer but bypassed the actual runtime dataset/model substrate already present in the repo
-  - that created a high-distortion fake boundary because a checkpoint-shaped artifact could be produced with almost no relationship to the runtime corpus or production transformer contract
+  - before this pass, the trainer existed and the runtime callout existed, but they were not connected:
+    - training produced checkpoints
+    - runtime kept using only the heuristic `MetaTransformer`
+  - that created a high-distortion fake boundary because the lane could look architecturally complete while the trained model still had no bounded runtime effect
 - recommended disposition:
   - keep the runtime/export dataset as the preferred source
   - keep synthetic generation explicit and benchmark-gated as a dev fallback only
-  - later add a dedicated runtime-corpus density gate before promotion runs
+  - keep the heuristic planner as the explicit prior
+  - let the trained package influence runtime only through the bounded helper path until benchmark-gated promotion evidence is materially dense
 - disposition tag:
   - `wired now`
   - `upgraded to heavyweight parity`
@@ -405,6 +417,6 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.
-2. Push the same learned/helper promotion discipline into the next sim/gen2sim agenda lane so diffusion and synth branching stop relying on bounded heuristics once replay receipts are dense enough.
-3. Deepen orchestration supervision beyond `first_tool_only_v1` so the runtime-backed trainer learns fuller action sequences instead of only the first routing decision.
+1. Push the same learned/helper promotion discipline into the next sim/gen2sim agenda lane so diffusion and synth branching stop relying on bounded heuristics once replay receipts are dense enough.
+2. Deepen orchestration supervision beyond `first_tool_only_v1` so the runtime-backed trainer learns fuller action sequences instead of only the first routing decision.
+3. Continue meta-layer neuralization above the current helper path so future economic-WM and later meta-node-WM conditioning can supervise more than authority/conditioning outputs alone.
