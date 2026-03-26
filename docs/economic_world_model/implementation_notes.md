@@ -2,6 +2,17 @@
 
 ## 2026-03-26
 
+- Training-run receipt ingestion now carries real backend-truth fields into replay precondition evaluation:
+  - `src/replay/receipt_ingest.py` now extracts per-episode signal overrides from observed online receipt rows (`scene_tracks_non_stub`, `scene_tracks_backend`, teacher backend selectors, and grounding flags) and merges them into enriched replay episode metadata before `build_replay_execution_preconditions(...)`.
+  - this directly fixes the prior gap where `scene_tracks_non_stub` and `teacher_runtime_real` stayed false in training-run readiness summaries despite receipt-side evidence.
+- The readiness probe now validates the intended state:
+  - `scripts/economic_world_model/run_receipt_readiness_probe.py` emits explicit real backend metadata in the observed receipt row and writes refreshed summary artifacts.
+  - latest probe output shows target predicates all true:
+    - `signal_bool::budget_settlement_live`: 1
+    - `signal_bool::scene_tracks_non_stub`: 1
+    - `signal_bool::teacher_runtime_real`: 1
+- Regression coverage tightened:
+  - `tests/test_training_run_receipt_ingest.py` now asserts both backend-truth predicates are satisfied in the execution-precondition summary when real backend fields are present in receipt rows.
 - Nightly audit freshness logic is now robust to newest-first progress-log ordering:
   - `_progress_latest_date()` in `scripts/economic_world_model/nightly_audit.py` now selects `max(...)` over all `## YYYY-MM-DD` headings instead of taking the final heading in file order.
   - `tests/test_economic_world_model_nightly_audit.py::test_progress_latest_date_uses_most_recent_heading` now uses reverse-chronological headings and verifies the newest date is selected.

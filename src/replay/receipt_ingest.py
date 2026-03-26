@@ -336,6 +336,35 @@ def _training_run_future_training_context(
     }
 
 
+def _episode_signal_overrides_from_observed(observed: Mapping[str, Any]) -> Dict[str, Any]:
+    """Extract per-episode backend-truth fields from observed receipt rows."""
+    payload = dict(observed or {})
+    overrides: Dict[str, Any] = {}
+    if "scene_tracks_non_stub" in payload:
+        overrides["scene_tracks_non_stub"] = bool(payload.get("scene_tracks_non_stub"))
+    for key in (
+        "scene_tracks_backend",
+        "openvla_backend_selected",
+        "teacher_runtime_backend_selected",
+        "teacher_backend_selected",
+        "vision_backbone_selected",
+        "openvla_vision_backbone_selected",
+        "teacher_runtime_vision_backbone_selected",
+        "semantic_grounding_mode",
+        "grounding_mode",
+    ):
+        value = payload.get(key)
+        if value not in (None, ""):
+            overrides[key] = value
+    for key in (
+        "semantic_memory_grounded",
+        "semantic_grounding_heuristic",
+    ):
+        if key in payload:
+            overrides[key] = bool(payload.get(key))
+    return overrides
+
+
 def _merge_future_training_signals(
     base: Optional[Mapping[str, Any]],
     updates: Mapping[str, Any],
@@ -355,6 +384,7 @@ def _enrich_training_run_dataset(
     *,
     root: Path,
     manifest,
+    observed_outcomes: Optional[Mapping[str, Mapping[str, Any]]] = None,
 ) -> ReplayDatasetBundle:
     context = _training_run_future_training_context(root, manifest=manifest, dataset=dataset)
     future_training_artifacts = dict(context.get("future_training_artifacts", {}) or {})
@@ -372,6 +402,8 @@ def _enrich_training_run_dataset(
     enriched_episodes = []
     reports = []
     for episode in dataset.episodes:
+        observed_row = dict((observed_outcomes or {}).get(episode.episode_id, {}) or {})
+        observed_overrides = _episode_signal_overrides_from_observed(observed_row)
         existing_artifacts = episode.metadata.get("future_training_artifacts", {})
         existing_signals = episode.metadata.get("future_training_signals", {})
         merged_artifacts = {
@@ -381,6 +413,7 @@ def _enrich_training_run_dataset(
         merged_signals = _merge_future_training_signals(existing_signals, future_training_signals)
         metadata = {
             **dict(episode.metadata),
+            **observed_overrides,
             "future_training_artifacts": merged_artifacts,
             "future_training_signals": merged_signals,
             "training_runtime_manifest": future_training_artifacts.get("training_runtime_manifest"),
@@ -478,10 +511,15 @@ def build_training_run_receipt_label_bundle(
                 "training_run_root": str(root),
             },
         )
-    if manifest is not None:
-        dataset = _enrich_training_run_dataset(dataset, root=root, manifest=manifest)
     if not observed_outcomes:
         observed_outcomes = _observed_outcomes_from_dataset(dataset, label_mode=label_mode)
+    if manifest is not None:
+        dataset = _enrich_training_run_dataset(
+            dataset,
+            root=root,
+            manifest=manifest,
+            observed_outcomes=observed_outcomes,
+        )
     return _build_receipt_label_bundle(
         dataset=dataset,
         observed_outcomes=observed_outcomes,

@@ -67,6 +67,10 @@ def test_training_run_receipt_ingest_prefers_online_training_artifacts(tmp_path)
                 "downweight_recommended": False,
                 "human_review_label": "pass",
                 "override_label": None,
+                "scene_tracks_non_stub": True,
+                "scene_tracks_backend": "real",
+                "teacher_runtime_backend_selected": "real",
+                "semantic_memory_grounded": True,
             }
         )
         + "\n",
@@ -139,6 +143,8 @@ def test_training_run_receipt_ingest_prefers_online_training_artifacts(tmp_path)
     assert execution_summary["satisfied_preconditions"]["artifact::training_runtime_manifest"] == 1
     assert execution_summary["satisfied_preconditions"]["artifact::promotion_ledger_ref"] == 1
     assert execution_summary["satisfied_preconditions"]["signal_bool::budget_settlement_live"] == 1
+    assert execution_summary["satisfied_preconditions"]["signal_bool::scene_tracks_non_stub"] == 1
+    assert execution_summary["satisfied_preconditions"]["signal_bool::teacher_runtime_real"] == 1
 
     resolved = resolve_receipt_label_bundle(
         dataset=dataset,

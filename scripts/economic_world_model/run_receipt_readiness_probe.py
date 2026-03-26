@@ -93,6 +93,10 @@ def _run_probe(output_root: Path, *, seed: int) -> Dict[str, Any]:
                     "downweight_recommended": False,
                     "human_review_label": "pass",
                     "override_label": None,
+                    "scene_tracks_non_stub": True,
+                    "scene_tracks_backend": "real",
+                    "teacher_runtime_backend_selected": "real",
+                    "semantic_memory_grounded": True,
                 }
             )
             + "\n",
