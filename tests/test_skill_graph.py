@@ -64,3 +64,12 @@ def test_edges_for_task():
     sg = SkillGraph.build_from_registry(hrl_skills=True)
     edges = sg.edges_for_task("drawer_vase")
     assert len(edges) == 5
+
+
+def test_build_with_workcell_skills():
+    sg = SkillGraph.build_from_registry(hrl_skills=False, include_workcell_skills=True)
+
+    assert sg.node_by_id("workcell:pick_part") is not None
+    assert sg.node_by_id("workcell:insert_peg") is not None
+    edges = sg.edges_for_task("peg_in_hole")
+    assert len(edges) == 3

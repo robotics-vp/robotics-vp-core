@@ -12,6 +12,16 @@
       "id": "scene_tracks_passthrough_truthiness",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - replay ingest and bootstrap semantic workcell metadata now clamp passthrough/auto SceneTracks to explicit fallback semantics instead of marking them non-stub or non-heuristic; only real SceneTracks stay eligible for grounded/non-stub truth."
+    },
+    {
+      "id": "bootstrap_workcell_trace_completeness",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - bootstrap workcell episodes now emit canonical per-episode runtime packet / event spine / decision ledger artifacts, replay import now discovers those refs directly, and bootstrap summaries now distinguish trace-complete rows from real-SAM3D grounded-data readiness."
+    },
+    {
+      "id": "workcell_coverage_graph_mapping",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - the coverage harvester now canonicalizes workcell env/task/skill ids and the skill graph now includes a built-in peg_in_hole workcell chain, so workcell bootstrap rows land in the canonical coverage graph instead of collapsing to task-only evidence."
     }
   ],
   "backlog": [

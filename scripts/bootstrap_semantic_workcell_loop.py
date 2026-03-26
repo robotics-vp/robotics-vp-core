@@ -7,7 +7,7 @@ import argparse
 import importlib.util
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
@@ -19,6 +19,8 @@ if str(ROOT) not in sys.path:
 
 from src.evidence.belief_state import BeliefState
 from src.evidence.scene_tracks_truth import normalize_scene_tracks_truth
+from src.constraints.constraint_set import ConstraintSet
+from src.economics.functor import ObjectiveEconFunctor
 from src.envs.workcell_env import WorkcellEnv
 from src.envs.workcell_env.config import WorkcellEnvConfig
 from src.envs.workcell_env.observations.mujoco_render import (
@@ -29,12 +31,21 @@ from src.envs.workcell_env.scene.scene_spec import FixtureSpec, PartSpec, ToolSp
 from src.envs.workcell_env.tasks.peg_in_hole import PegInHoleTask
 from src.motor_backend.rollout_capture import EpisodeMetadata, record_episode_rollout, start_rollout_capture
 from src.motor_backend.sensor_bundle import SensorBundleData
+from src.objectives.profile_loader import load_contract_profile
+from src.objectives.runtime_builder import ObjectiveRuntimeBuilder, ObjectiveRuntimeRecord, SourceDomain
 from src.orchestrator.coverage_loop import run_coverage_loop
 from src.orchestrator.semantic_runtime_learning import (
     build_semantic_runtime_learning_corpus,
     write_semantic_runtime_learning_corpus,
 )
 from src.replay.dataset import ReplayDatasetBuilder, load_replay_dataset
+from src.runtime import (
+    DecisionLedgerEntry,
+    RuntimeEvent,
+    decision_ledger_sidecar_payload,
+    event_spine_sidecar_payload,
+)
+from src.runtime.packets import SchemaRef, runtime_packet_from_record
 from src.semantic.runtime_backbone import SemanticRuntimeBackbone
 from src.vision.scene_ir_tracker.io.scene_tracks_runner import run_scene_tracks
 from src.world_model.semantic_world_model import SemanticWorldModelBuilder
@@ -128,6 +139,283 @@ def _episode_actions(episode_idx: int, steps: int) -> List[Dict[str, Any]]:
         delta = base_profile[min(step_idx, len(base_profile) - 1)]
         actions.append({"object_id": "end_effector", "delta_position": tuple(float(v) for v in delta)})
     return actions
+
+
+def _episode_timestamp(seed: int, episode_idx: int, *, step_idx: int = 0) -> str:
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    offset_s = int(seed) * 97 + int(episode_idx) * 11 + int(step_idx)
+    return (base + timedelta(seconds=offset_s)).isoformat()
+
+
+def _grounded_data_ready(scene_tracks_truth: Dict[str, Any]) -> bool:
+    return bool(
+        scene_tracks_truth.get("scene_tracks_non_stub", False)
+        and scene_tracks_truth.get("scene_tracks_training_eligible", False)
+    )
+
+
+def _build_bootstrap_schema_refs(
+    *,
+    states: Sequence[Dict[str, Any]],
+    actions: Sequence[Dict[str, Any]],
+    camera: str,
+    time_step_s: float,
+) -> tuple[SchemaRef, SchemaRef]:
+    first_state = dict(states[0] or {}) if states else {}
+    first_action = dict(actions[0] or {}) if actions else {}
+    sample_hz = (1.0 / float(time_step_s)) if float(time_step_s) > 0.0 else 0.0
+    observation_schema = SchemaRef(
+        schema_id="workcell_bootstrap_observation_v1",
+        version="v1",
+        shape={
+            "state_keys": sorted(first_state.keys()),
+            "joint_position_dim": len(list(first_state.get("joint_positions", []) or [])),
+            "cameras": [str(camera)],
+        },
+        timing={"sample_hz": sample_hz, "time_step_s": float(time_step_s)},
+        provenance={"source_adapter": "bootstrap_semantic_workcell_loop"},
+        metadata={"env_id": "workcell"},
+    )
+    action_schema = SchemaRef(
+        schema_id="workcell_bootstrap_action_v1",
+        version="v1",
+        shape={
+            "action_keys": sorted(first_action.keys()),
+            "delta_position_dim": len(list(first_action.get("delta_position", []) or [])),
+        },
+        timing={"apply_hz": sample_hz, "time_step_s": float(time_step_s)},
+        provenance={"source_adapter": "bootstrap_semantic_workcell_loop"},
+        metadata={"robot_id": "workcell"},
+    )
+    return observation_schema, action_schema
+
+
+def _write_bootstrap_trace_sidecars(
+    *,
+    episode_dir: Path,
+    scenario_id: str,
+    episode_id: str,
+    seed: int,
+    episode_idx: int,
+    scene_spec: WorkcellSceneSpec,
+    states: Sequence[Dict[str, Any]],
+    actions: Sequence[Dict[str, Any]],
+    camera: str,
+    time_step_s: float,
+    metrics: Dict[str, Any],
+    grounding_mode: str,
+    backend_policy: str,
+    backend_selected: str,
+    scene_tracks_truth: Dict[str, Any],
+    scene_tracks_summary: Dict[str, Any],
+    belief_state: BeliefState,
+    world_model: Any,
+) -> Dict[str, Any]:
+    observation_schema, action_schema = _build_bootstrap_schema_refs(
+        states=states,
+        actions=actions,
+        camera=camera,
+        time_step_s=time_step_s,
+    )
+    runtime_timestamp = _episode_timestamp(seed, episode_idx)
+    grounded_ready = _grounded_data_ready(scene_tracks_truth)
+    runtime_metrics = {
+        "reward_total": float(metrics.get("reward", 0.0)),
+        "steps": int(len(actions)),
+        "time_step_s": float(time_step_s),
+        "throughput_units_per_hour": float(max(len(actions), 1) * 12.0),
+        "error_rate": float(max(0.0, 1.0 - float(metrics.get("quality_score", 0.0)))),
+        "safety_score": float(metrics.get("safety_score", 0.0)),
+        "energy_wh_per_unit": float(metrics.get("energy_wh_per_unit", 0.0)),
+    }
+    runtime_record = ObjectiveRuntimeRecord(
+        task_id="peg_in_hole",
+        episode_id=episode_id,
+        env_id="workcell",
+        world_id=str(scene_spec.workcell_id),
+        robot_id="workcell",
+        source_domain=SourceDomain.SIM_ROLLOUT,
+        seed=int(seed + episode_idx),
+        run_id=str(scenario_id),
+        timestamp=runtime_timestamp,
+        episode_metrics=runtime_metrics,
+        reward_components={"scalar_reward": float(metrics.get("reward", 0.0))},
+        telemetry={
+            "trust_score": float(metrics.get("quality_score", 0.0)),
+            "uncertainty": float(max(0.0, 1.0 - float(metrics.get("quality_score", 0.0)))),
+            "scene_tracks_backend": str(scene_tracks_truth.get("scene_tracks_backend", "")),
+            "semantic_density_score": float(scene_tracks_summary.get("semantic_density_score", 0.0) or 0.0),
+            "grounded_track_object_count": int(world_model.topology.get("grounded_track_object_count", 0) or 0),
+            "semantic_tags": list(belief_state.semantic_tags),
+        },
+        context={
+            "grounding_mode": grounding_mode,
+            "backend_policy": backend_policy,
+            "backend_selected": backend_selected,
+            "sam3d_grounded_data_requires_gpu": True,
+            "sam3d_grounded_data_requires_real_backend": True,
+        },
+    )
+    contract_profile = load_contract_profile("balanced_contract")
+    runtime_builder = ObjectiveRuntimeBuilder()
+    objective_tensor = runtime_builder.build(runtime_record)
+    constraint_set = ConstraintSet.from_runtime(
+        hard_constraints={"throughput": {"min": 0.0}},
+        soft_constraints={"energy": {"max": float(runtime_metrics.get("energy_wh_per_unit", 8.0) or 8.0)}},
+        geometry_hints={"source": "bootstrap_semantic_workcell_loop", "camera": camera},
+        trust_metadata={"trust_score": float(metrics.get("quality_score", 0.0))},
+    )
+    constraint_flags = constraint_set.flag_observations(runtime_metrics)
+    econ_tensor = ObjectiveEconFunctor(base_price_per_unit=3.0).map(
+        objective_tensor,
+        constraint_flags=constraint_flags,
+        uncertainty=float(max(0.0, 1.0 - float(metrics.get("quality_score", 0.0)))),
+        context={"run_id": scenario_id, "episode_id": episode_id, "source_domain": SourceDomain.SIM_ROLLOUT.value},
+    )
+    runtime_packet = runtime_packet_from_record(
+        record=runtime_record,
+        contract_id=f"contract.balanced_contract.workcell_bootstrap.{scene_spec.workcell_id}",
+        objective_profile_id=contract_profile.profile_id,
+        objective_tensor=objective_tensor,
+        econ_tensor=econ_tensor,
+        constraint_set=constraint_set,
+        observation_schema=observation_schema,
+        action_schema=action_schema,
+        semantic_evidence={
+            "semantic_tags": list(belief_state.semantic_tags),
+            "belief_state_id": belief_state.belief_id,
+            "scene_tracks_backend": str(scene_tracks_truth.get("scene_tracks_backend", "")),
+            "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
+            "scene_tracks_training_eligible": bool(scene_tracks_truth.get("scene_tracks_training_eligible", False)),
+            "semantic_grounding_non_heuristic": bool(
+                scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
+            ),
+            "grounded_track_object_count": int(world_model.topology.get("grounded_track_object_count", 0) or 0),
+            "sam3d_grounded_data_required": True,
+            "grounded_data_ready": grounded_ready,
+        },
+        uncertainty={
+            "runtime": float(max(0.0, 1.0 - float(metrics.get("quality_score", 0.0)))),
+            "coverage_gap": float(max(0.0, 1.0 - float(scene_tracks_summary.get("class_label_coverage", 0.0) or 0.0))),
+        },
+        provenance={
+            "source_adapter": "bootstrap_semantic_workcell_loop",
+            "grounding_mode": grounding_mode,
+            "backend_policy": backend_policy,
+            "backend_selected": backend_selected,
+        },
+        metadata={
+            "grounded_data_ready": grounded_ready,
+            "sam3d_gpu_required": True,
+        },
+        semantic_schema_id="bootstrap_workcell_semantic_evidence_v1",
+    )
+    trace_event = RuntimeEvent.from_components(
+        run_id=scenario_id,
+        episode_id=episode_id,
+        timestamp=runtime_timestamp,
+        event_kind="bootstrap_rollout_trace_recorded",
+        sequence_idx=0,
+        scope={"scope_kind": "episode"},
+        runtime_packet_id=runtime_packet.packet_id,
+        contract_id=runtime_packet.contract.contract_id,
+        artifact_refs={"runtime_packet": f"{episode_id}_runtime_packet_v1.json"},
+        provenance={"component": "bootstrap_semantic_workcell_loop"},
+        metadata={
+            "step_count": int(len(actions)),
+            "reward_total": float(metrics.get("reward", 0.0)),
+            "scene_tracks_backend": backend_selected,
+        },
+    )
+    grounded_reasons = [f"scene_tracks_backend:{backend_selected}"]
+    if not grounded_ready:
+        grounded_reasons.append("sam3d_gpu_required_for_grounded_data")
+        if backend_selected != "real":
+            grounded_reasons.append("real_sam3d_backend_missing")
+        if not bool(scene_tracks_truth.get("scene_tracks_training_eligible", False)):
+            grounded_reasons.append("scene_tracks_training_ineligible")
+    grounding_event = RuntimeEvent.from_components(
+        run_id=scenario_id,
+        episode_id=episode_id,
+        timestamp=_episode_timestamp(seed, episode_idx, step_idx=1),
+        event_kind="grounded_data_lane_classified",
+        sequence_idx=1,
+        scope={"scope_kind": "episode"},
+        runtime_packet_id=runtime_packet.packet_id,
+        contract_id=runtime_packet.contract.contract_id,
+        artifact_refs={"event_spine": f"{episode_id}_event_spine_v1.json"},
+        provenance={"component": "bootstrap_semantic_workcell_loop"},
+        metadata={
+            "grounded_data_ready": grounded_ready,
+            "scene_tracks_backend": backend_selected,
+            "requires_real_sam3d": True,
+            "requires_gpu": True,
+        },
+    )
+    trace_decision = DecisionLedgerEntry.from_components(
+        run_id=scenario_id,
+        episode_id=episode_id,
+        timestamp=runtime_timestamp,
+        decision_kind="bootstrap_trace_recorded",
+        outcome="trace_complete",
+        sequence_idx=0,
+        scope={"scope_kind": "episode"},
+        reasons=["runtime_packet_event_spine_decision_ledger_emitted"],
+        source_event_ids=[trace_event.event_id],
+        runtime_packet_id=runtime_packet.packet_id,
+        contract_id=runtime_packet.contract.contract_id,
+        artifact_refs={"decision_ledger": f"{episode_id}_decision_ledger_v1.json"},
+        provenance={"component": "bootstrap_semantic_workcell_loop"},
+        metadata={"grounded_data_ready": grounded_ready},
+    )
+    grounding_decision = DecisionLedgerEntry.from_components(
+        run_id=scenario_id,
+        episode_id=episode_id,
+        timestamp=_episode_timestamp(seed, episode_idx, step_idx=1),
+        decision_kind="grounded_data_eligibility",
+        outcome="benchmark_candidate" if grounded_ready else "dev_only_passthrough",
+        sequence_idx=1,
+        scope={"scope_kind": "episode"},
+        reasons=grounded_reasons,
+        source_event_ids=[grounding_event.event_id],
+        runtime_packet_id=runtime_packet.packet_id,
+        contract_id=runtime_packet.contract.contract_id,
+        artifact_refs={"decision_ledger": f"{episode_id}_decision_ledger_v1.json"},
+        provenance={"component": "bootstrap_semantic_workcell_loop"},
+        metadata={
+            "requires_real_sam3d": True,
+            "requires_gpu": True,
+            "grounded_data_ready": grounded_ready,
+        },
+    )
+    runtime_packet_path = episode_dir / f"{episode_id}_runtime_packet_v1.json"
+    event_spine_path = episode_dir / f"{episode_id}_event_spine_v1.json"
+    decision_ledger_path = episode_dir / f"{episode_id}_decision_ledger_v1.json"
+    runtime_packet_path.write_text(json.dumps(runtime_packet.to_dict(), indent=2), encoding="utf-8")
+    event_spine_path.write_text(
+        json.dumps(event_spine_sidecar_payload(run_id=scenario_id, events=[trace_event, grounding_event]), indent=2),
+        encoding="utf-8",
+    )
+    decision_ledger_path.write_text(
+        json.dumps(
+            decision_ledger_sidecar_payload(
+                run_id=scenario_id,
+                decisions=[trace_decision, grounding_decision],
+            ),
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "runtime_packet_path": str(runtime_packet_path),
+        "event_spine_path": str(event_spine_path),
+        "decision_ledger_path": str(decision_ledger_path),
+        "runtime_packet_id": runtime_packet.packet_id,
+        "event_refs": [trace_event.event_id, grounding_event.event_id],
+        "decision_refs": [trace_decision.decision_id, grounding_decision.decision_id],
+        "grounded_data_ready": grounded_ready,
+        "grounded_data_mode": "real_sam3d" if grounded_ready else "dev_only_passthrough",
+    }
 
 
 def _run_single_workcell_episode(
@@ -288,6 +576,10 @@ def _run_single_workcell_episode(
             "grounding_mode": "scene_tracks_real_rgb" if capture_rgb else "scene_tracks_vector_proxy",
         },
     )
+    backend_selected = scene_tracks_result.frame_metadata.get("runner", {}).get("run_config", {}).get(
+        "backend_selected",
+        "",
+    )
     world_model_builder = SemanticWorldModelBuilder()
     world_model = world_model_builder.build_from_runtime_fusion(
         episode_id=episode_id,
@@ -303,9 +595,7 @@ def _run_single_workcell_episode(
         metadata={
             "camera": camera,
             "backend_policy": backend_policy,
-            "backend_selected": scene_tracks_result.frame_metadata.get("runner", {})
-            .get("run_config", {})
-            .get("backend_selected", ""),
+            "backend_selected": backend_selected,
         },
     )
     backbone = SemanticRuntimeBackbone()
@@ -330,9 +620,7 @@ def _run_single_workcell_episode(
             "expected_delta_energy_Wh": -0.02,
         },
         metadata={
-            "scene_tracks_backend": scene_tracks_result.frame_metadata.get("runner", {})
-            .get("run_config", {})
-            .get("backend_selected", ""),
+            "scene_tracks_backend": backend_selected,
             "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
         },
         backends=[str(scene_tracks_result.adapter_status.get("overall_mode", ""))],
@@ -341,6 +629,26 @@ def _run_single_workcell_episode(
         output_dir=episode_dir,
         file_stem=episode_id,
         result=backbone_result,
+    )
+    trace_sidecars = _write_bootstrap_trace_sidecars(
+        episode_dir=episode_dir,
+        scenario_id=scenario_id,
+        episode_id=episode_id,
+        seed=seed,
+        episode_idx=episode_idx,
+        scene_spec=scene_spec,
+        states=states,
+        actions=actions,
+        camera=camera,
+        time_step_s=float(config.time_step_s),
+        metrics=metrics,
+        grounding_mode=grounding_mode,
+        backend_policy=backend_policy,
+        backend_selected=backend_selected,
+        scene_tracks_truth=scene_tracks_truth,
+        scene_tracks_summary=scene_tracks_summary,
+        belief_state=belief_state,
+        world_model=world_model,
     )
 
     metadata_path = episode_dir / "metadata.json"
@@ -355,13 +663,31 @@ def _run_single_workcell_episode(
     metadata_payload["semantic_world_model_path"] = sidecar_paths["semantic_world_model_path"]
     metadata_payload["semantic_snapshot_path"] = sidecar_paths["semantic_snapshot_path"]
     metadata_payload["orchestrator_advisory_path"] = sidecar_paths["orchestrator_advisory_path"]
-    metadata_payload["scene_tracks_backend"] = scene_tracks_result.frame_metadata.get("runner", {}).get("run_config", {}).get(
-        "backend_selected",
-        "",
-    )
+    metadata_payload["scene_tracks_backend"] = backend_selected
     metadata_payload["scene_tracks_training_eligible"] = bool(
         scene_tracks_truth.get("scene_tracks_training_eligible", False)
     )
+    metadata_payload["runtime_packet_path"] = trace_sidecars["runtime_packet_path"]
+    metadata_payload["event_spine_path"] = trace_sidecars["event_spine_path"]
+    metadata_payload["decision_ledger_path"] = trace_sidecars["decision_ledger_path"]
+    metadata_payload["runtime_packet_id"] = trace_sidecars["runtime_packet_id"]
+    metadata_payload["event_refs"] = list(trace_sidecars["event_refs"])
+    metadata_payload["decision_refs"] = list(trace_sidecars["decision_refs"])
+    metadata_payload["grounded_data_ready"] = bool(trace_sidecars["grounded_data_ready"])
+    metadata_payload["grounded_data_mode"] = str(trace_sidecars["grounded_data_mode"])
+    metadata_payload["grounded_data_requirements"] = {
+        "requires_real_sam3d": True,
+        "requires_gpu": True,
+        "passthrough_dev_only": True,
+    }
+    metadata_payload["future_training_signals"] = {
+        "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
+        "semantic_memory_grounded": bool(world_model.topology.get("grounded_track_object_count", 0) > 0),
+        "semantic_grounding_non_heuristic": bool(
+            scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
+        ),
+        "benchmark_eligible": False,
+    }
     metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
 
     return {
@@ -371,12 +697,14 @@ def _run_single_workcell_episode(
         "scene_tracks_quality": float(scene_tracks_result.quality.quality_score),
         "scene_ir_quality": float(scene_tracks_result.scene_ir_quality),
         "semantic_world_model_path": sidecar_paths["semantic_world_model_path"],
-        "backend_selected": scene_tracks_result.frame_metadata.get("runner", {}).get("run_config", {}).get(
-            "backend_selected",
-            "",
-        ),
+        "backend_selected": backend_selected,
         "grounded_track_object_count": int(world_model.topology.get("grounded_track_object_count", 0)),
         "semantic_density_score": float(scene_tracks_summary.get("semantic_density_score", 0.0) or 0.0),
+        "runtime_packet_ref": trace_sidecars["runtime_packet_path"],
+        "event_spine_ref": trace_sidecars["event_spine_path"],
+        "decision_ledger_ref": trace_sidecars["decision_ledger_path"],
+        "trace_ready": True,
+        "grounded_data_ready": bool(trace_sidecars["grounded_data_ready"]),
     }
 
 
@@ -431,10 +759,14 @@ def run_semantic_workcell_bootstrap(
     )
 
     coverage_paths = coverage_result.write_artifacts(output_root / "coverage_artifacts")
+    execution_summary = dict(replay_bundle.manifest.metadata.get("execution_precondition_summary", {}) or {})
+    grounded_episode_count = sum(1 for row in episode_summaries if row.get("grounded_data_ready", False))
+    passthrough_episode_count = sum(1 for row in episode_summaries if row.get("backend_selected") == "passthrough")
     summary = {
         "scenario_id": scenario_id,
         "episodes": episode_summaries,
         "replay_summary": replay_bundle.to_summary(),
+        "replay_execution_preconditions": execution_summary,
         "runtime_corpus_summary": corpus.summary,
         "runtime_corpus_paths": corpus_paths,
         "coverage_summary": coverage_result.coverage_summary,
@@ -442,6 +774,19 @@ def run_semantic_workcell_bootstrap(
         "mujoco_available": _mujoco_available(),
         "backend_policy": backend_policy,
         "grounding_mode": grounding_mode,
+        "trace_artifact_summary": {
+            "runtime_packet_count": len(episode_summaries),
+            "event_spine_count": len(episode_summaries),
+            "decision_ledger_count": len(episode_summaries),
+            "ready_episode_count": int(execution_summary.get("ready_count", 0)),
+        },
+        "grounded_data_summary": {
+            "grounded_episode_count": grounded_episode_count,
+            "passthrough_episode_count": passthrough_episode_count,
+            "requires_real_sam3d": True,
+            "requires_gpu": True,
+            "local_passthrough_dev_only": True,
+        },
     }
     summary_path = output_root / "bootstrap_summary.json"
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")

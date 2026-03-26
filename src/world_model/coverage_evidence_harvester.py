@@ -55,11 +55,11 @@ def _get_nested(d: Mapping[str, Any], *keys: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 
 def _task_to_skill_key(task_id: str, skill_id: str) -> Tuple[str, str]:
-    return (f"task:{task_id}", f"skill:{skill_id}")
+    return (f"task:{task_id}", _canonical_skill_id(skill_id))
 
 
 def _skill_to_primitive_key(skill_id: str, prim_id: str) -> Tuple[str, str]:
-    return (f"skill:{skill_id}", f"prim:{prim_id}")
+    return (_canonical_skill_id(skill_id), f"prim:{prim_id}")
 
 
 def _task_to_risk_key(task_id: str, risk_id: str) -> Tuple[str, str]:
@@ -129,6 +129,30 @@ _SKILL_MODE_MAP: Dict[str, List[str]] = {
     "hrl_full": ["locate_drawer", "locate_vase", "plan_safe_approach", "grasp_handle", "open_with_clearance", "retract_safe"],
 }
 
+_KNOWN_HRL_SKILLS = {
+    skill_id
+    for values in _SKILL_MODE_MAP.values()
+    for skill_id in values
+}
+
+_WORKCELL_TASK_SKILL_MAP: Dict[str, List[str]] = {
+    "peg_in_hole": [
+        "workcell:pick_part",
+        "workcell:align_peg",
+        "workcell:insert_peg",
+    ]
+}
+
+_WORKCELL_TOKEN_SKILL_MAP: Dict[str, str] = {
+    "affordance:pick": "workcell:pick_part",
+    "affordance:align": "workcell:align_peg",
+    "affordance:insert": "workcell:insert_peg",
+    "object:peg": "workcell:align_peg",
+    "object:hole": "workcell:insert_peg",
+    "peg": "workcell:align_peg",
+    "hole": "workcell:insert_peg",
+}
+
 # Mapping from env_id prefixes to approximate risk families present
 _ENV_RISK_MAP: Dict[str, List[str]] = {
     "drawer_vase": ["collision", "fragile_contact"],
@@ -137,22 +161,77 @@ _ENV_RISK_MAP: Dict[str, List[str]] = {
 }
 
 
+def _canonical_task_id(task_id: str) -> str:
+    return _safe_str(task_id).strip().lower().replace(" ", "_")
+
+
+def _normalize_env_id(env_id: str) -> str:
+    canonical = _safe_str(env_id).strip().lower()
+    if not canonical:
+        return ""
+    if "drawer_vase" in canonical or ("drawer" in canonical and "vase" in canonical):
+        return "drawer_vase"
+    if "dishwashing" in canonical or "dishwash" in canonical:
+        return "dishwashing"
+    if "workcell" in canonical:
+        return "workcell"
+    return canonical
+
+
+def _canonical_skill_id(skill_id: str) -> str:
+    normalized = _safe_str(skill_id).strip()
+    if not normalized:
+        return ""
+    if normalized.startswith("skill:"):
+        normalized = normalized.split("skill:", 1)[1]
+    if normalized.startswith(("hrl:", "sima:", "vla:", "stage2:", "workcell:")):
+        return normalized
+    if normalized in _KNOWN_HRL_SKILLS:
+        return f"hrl:{normalized}"
+    return f"skill:{normalized}"
+
+
+def _ordered_unique(values: Sequence[str]) -> List[str]:
+    ordered: List[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = str(value)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            ordered.append(normalized)
+    return ordered
+
+
 def _infer_skills_from_row(
     row: Mapping[str, Any],
 ) -> List[str]:
     """Infer which skill IDs are exercised by a runtime learning row."""
+    task_id = _canonical_task_id(_safe_str(row.get("task_id")))
+    env_id = _normalize_env_id(_safe_str(row.get("env_id")))
     skill_mode = _safe_str(row.get("skill_mode") or row.get("metadata", {}).get("skill_mode"))
-    if skill_mode in _SKILL_MODE_MAP:
+    tokens: List[str] = list(row.get("semantic_tokens") or [])
+    if env_id == "workcell":
+        inferred = [
+            _WORKCELL_TOKEN_SKILL_MAP[str(token)]
+            for token in tokens
+            if str(token) in _WORKCELL_TOKEN_SKILL_MAP
+        ]
+        if inferred:
+            return _ordered_unique(inferred)
+        if task_id in _WORKCELL_TASK_SKILL_MAP:
+            return list(_WORKCELL_TASK_SKILL_MAP[task_id])
+
+    if skill_mode in _SKILL_MODE_MAP and env_id != "workcell":
         return _SKILL_MODE_MAP[skill_mode]
 
     # Fall back to semantic tokens that look like skill references
-    tokens: List[str] = list(row.get("semantic_tokens") or [])
     skills = [t.replace("skill:", "") for t in tokens if t.startswith("skill:")]
     if skills:
-        return skills
+        return _ordered_unique(skills)
 
     # Default: assume all skills for the task
-    task_id = _safe_str(row.get("task_id"))
+    if task_id in _WORKCELL_TASK_SKILL_MAP:
+        return list(_WORKCELL_TASK_SKILL_MAP[task_id])
     if "drawer" in task_id or "vase" in task_id:
         return _SKILL_MODE_MAP.get("hrl_full", [])
     return []
@@ -227,8 +306,8 @@ def harvest_evidence_counts(
     rows_processed = 0
     for row in runtime_rows:
         rows_processed += 1
-        task_id = _safe_str(row.get("task_id"))
-        env_id = _safe_str(row.get("env_id"))
+        task_id = _canonical_task_id(_safe_str(row.get("task_id")))
+        env_id = _normalize_env_id(_safe_str(row.get("env_id")))
         if not task_id:
             continue
 

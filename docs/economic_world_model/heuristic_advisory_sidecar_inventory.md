@@ -16,6 +16,8 @@ Ranking dimensions:
 | 1 | Local synthetic branch corpus + offline local synth trainer | `lightweight_trainer_gap` | Very high | Very high | Yes | **Wired now** |
 | 2 | Stage-1 semantic seed tags + diffusion proposal routing | `heuristic` / `fallback` | Very high | High | Yes | **Wired now** |
 | 3 | SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest | `fallback` | High | High | Yes | **Wired now** |
+| 3a | Bootstrap workcell runtime trace completeness + grounded-data lane classification | `sidecar` / `fallback` | High | High | Yes | **Wired now** |
+| 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | No | Explicitly bounded, still heuristic |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | No | Remains in training backlog |
 | 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
@@ -103,6 +105,65 @@ Ranking dimensions:
   - `wired now`
   - `remain explicit fallback`
   - `benchmark-gated`
+
+### 3a. Bootstrap workcell runtime trace completeness + grounded-data lane classification
+
+- surface: bootstrap workcell episodes looked replay-shaped but lacked canonical runtime packet / event spine / decision ledger refs
+- file/path: `scripts/bootstrap_semantic_workcell_loop.py`, `src/replay/ingest.py`
+- category: `sidecar`
+- current behavior:
+  - the bootstrap loop now writes per-episode:
+    - `*_runtime_packet_v1.json`
+    - `*_event_spine_v1.json`
+    - `*_decision_ledger_v1.json`
+  - `metadata.json` now carries:
+    - `runtime_packet_id`
+    - `event_refs`
+    - `decision_refs`
+    - grounded-data lane facts such as `grounded_data_ready`, `grounded_data_mode`, and explicit SAM3D/GPU requirements
+  - replay rollout import now discovers those refs directly instead of leaving bootstrap rows permanently trace-incomplete
+- current consumers:
+  - `ReplayDatasetBuilder.add_rollout_bundle(...)`
+  - semantic runtime learning corpus build
+  - Runpod/bootstrap readiness summaries
+- why it is a production problem:
+  - the bootstrap loop could generate stable replay/runtime corpora but still force `bounded_ready_count=0` because the canonical packet/event/decision substrate never existed
+  - grounded-data truth about real SAM3D plus GPU dependence remained implicit even when the episodes were otherwise operationally stable
+- recommended disposition:
+  - keep bootstrap as a dev/regression lane
+  - preserve the explicit distinction between:
+    - trace-complete replay rows
+    - grounded-data-ready rows
+    - benchmark-eligible rows
+  - keep passthrough/dev-only lanes explicit instead of letting trace completeness masquerade as benchmark readiness
+- disposition tag:
+  - `wired now`
+  - `remain explicit fallback`
+  - `benchmark-gated`
+
+### 3b. Workcell `peg_in_hole` coverage-graph mapping
+
+- surface: workcell rows were barely landing in the canonical task × skill × env-primitive graph
+- file/path: `src/world_model/coverage_evidence_harvester.py`, `src/hrl/skill_graph.py`, `src/orchestrator/coverage_loop.py`
+- category: `heuristic`
+- current behavior:
+  - the coverage harvester now canonicalizes env ids such as `workcell_env` into the registered `workcell` inventory
+  - harvested skill ids are now canonicalized to the same ids the graph uses (`hrl:*`, `workcell:*`, etc.) instead of the old mismatched `skill:*` shape
+  - the skill graph now has a built-in workcell chain for `peg_in_hole`
+  - the harvester now maps workcell affordance/task evidence into that chain instead of defaulting to drawer-era skill assumptions
+- current consumers:
+  - `run_coverage_loop(...)`
+  - workcell bootstrap coverage artifacts
+  - gap-driven sim/diffusion agenda compilation
+- why it is a production problem:
+  - a workcell pass could execute many episodes and still report near-zero covered edges because the graph contract and harvested keys disagreed
+  - this distorts coverage-based agenda generation and makes the semantic loop understate how much usable workcell evidence it actually has
+- recommended disposition:
+  - keep deterministic workcell skill extraction for now
+  - later replace it with learned/runtime-backed skill extraction once the corpus contains richer teacher/runtime traces
+- disposition tag:
+  - `wired now`
+  - `neuralized later`
 
 ### 4. Shadow advisory replay sampling and queue reweighting
 
@@ -261,5 +322,5 @@ Ranking dimensions:
 
 1. Migrate `train_vla_recap_offline.py` to the canonical training runtime.
 2. Replace bounded heuristic routing inside shadow advisory and semantic policy selection with learned runtime scorers once replay coverage is broader.
-3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around SceneTracks passthrough consumers outside replay/bootstrap.
+3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up, SceneTracks passthrough consumers outside replay/bootstrap, and sidecar-only grounding semantics.
 4. Either replace or quarantine `train_meta_transformer_synthetic.py` so it cannot be mistaken for a real trainer.

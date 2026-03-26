@@ -80,6 +80,28 @@
   - `metadata.json` preserves the selected backend and training-eligibility status
   - only real SceneTracks remain eligible to set `scene_tracks_non_stub` / `semantic_grounding_non_heuristic`
   - passthrough bootstrap runs remain useful for corpus/debugging, but they stop overstating readiness in downstream replay/runtime consumers
+- The bootstrap workcell lane now emits canonical runtime traces instead of stopping at semantic sidecars:
+  - each episode now writes:
+    - `*_runtime_packet_v1.json`
+    - `*_event_spine_v1.json`
+    - `*_decision_ledger_v1.json`
+  - `metadata.json` now carries:
+    - `runtime_packet_id`
+    - `event_refs`
+    - `decision_refs`
+    - `grounded_data_ready`
+    - `grounded_data_mode`
+    - explicit SAM3D/GPU requirements
+  - this fixes the prior gap where bootstrap replay/runtime corpora could be operationally stable yet still guarantee `bounded_ready_count=0` because the canonical trace substrate never existed.
+- The bootstrap lane now separates grounded-data truth from benchmark readiness:
+  - real SAM3D plus a GPU-backed non-fallback backend is now the explicit requirement for `grounded_data_ready`
+  - that truth is recorded in trace-sidecar decisions and summary metadata instead of remaining doc-only
+  - benchmark eligibility still remains false in this lane by default because trace completeness and real grounding are not the same as full teacher/vision/runtime promotion readiness
+- Workcell coverage mapping is now aligned to the actual graph contract:
+  - `src/world_model/coverage_evidence_harvester.py` now canonicalizes env ids such as `workcell_env` into the registered `workcell` inventory
+  - harvested task→skill and skill→primitive evidence now uses the same canonical skill ids as the graph (`hrl:*`, `workcell:*`, etc.) instead of the old mismatched `skill:*` envelope
+  - `src/hrl/skill_graph.py` now includes a built-in `peg_in_hole` workcell skill chain, and `src/orchestrator/coverage_loop.py` enables it automatically for workcell envs
+  - this fixes the earlier failure mode where many workcell rows could still leave the coverage loop effectively blind because the evidence keys did not line up with the graph topology
 
 - Added a canonical full-stack training backlog document at `docs/economic_world_model/full_stack_training_backlog.md`:
   - it records the current workspace truth that replay, coverage, and semantic-runtime corpora are still tiny

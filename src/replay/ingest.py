@@ -654,6 +654,12 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "rgb_video_path",
         "depth_video_path",
         "scene_tracks_path",
+        "runtime_packet_path",
+        "event_spine_path",
+        "decision_ledger_path",
+        "governance_trace_path",
+        "counterfactual_eval_path",
+        "value_target_pack_path",
         "semantic_world_model_path",
         "semantic_snapshot_path",
         "orchestrator_advisory_path",
@@ -674,6 +680,30 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "scene_tracks_path": [
             f"{episode_id}_*_scene_tracks_v1.npz",
             "*_scene_tracks_v1.npz",
+        ],
+        "runtime_packet_path": [
+            f"{episode_id}_runtime_packet_v1.json",
+            "*_runtime_packet_v1.json",
+        ],
+        "event_spine_path": [
+            f"{episode_id}_event_spine_v1.json",
+            "*_event_spine_v1.json",
+        ],
+        "decision_ledger_path": [
+            f"{episode_id}_decision_ledger_v1.json",
+            "*_decision_ledger_v1.json",
+        ],
+        "governance_trace_path": [
+            f"{episode_id}_governance_trace_v1.json",
+            "*_governance_trace_v1.json",
+        ],
+        "counterfactual_eval_path": [
+            f"{episode_id}_counterfactual_eval_v1.json",
+            "*_counterfactual_eval_v1.json",
+        ],
+        "value_target_pack_path": [
+            f"{episode_id}_value_target_pack_v1.json",
+            "*_value_target_pack_v1.json",
         ],
         "semantic_world_model_path": [
             f"{episode_id}_semantic_world_model_v1.json",
@@ -896,6 +926,13 @@ def ingest_rollout_bundle(
                 "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
                 "openvla_backend_selected": str(raw_rollout_metadata.get("openvla_backend_selected", "")),
                 "openvla_vision_backbone_selected": str(raw_rollout_metadata.get("openvla_vision_backbone_selected", "")),
+                "runtime_packet_id": str(raw_rollout_metadata.get("runtime_packet_id", "")),
+                "event_refs": [str(value) for value in list(raw_rollout_metadata.get("event_refs", []) or [])],
+                "decision_refs": [str(value) for value in list(raw_rollout_metadata.get("decision_refs", []) or [])],
+                "grounded_data_ready": bool(raw_rollout_metadata.get("grounded_data_ready", False)),
+                "grounded_data_mode": str(raw_rollout_metadata.get("grounded_data_mode", "")),
+                "grounded_data_requirements": dict(raw_rollout_metadata.get("grounded_data_requirements", {}) or {}),
+                "future_training_signals": dict(raw_rollout_metadata.get("future_training_signals", {}) or {}),
                 "semantic_world_model_summary": semantic_world_model_summary,
             }
             episode_payload["provenance"] = {
@@ -914,6 +951,7 @@ def ingest_rollout_bundle(
                 **dict(step_payload.get("metadata", {}) or {}),
                 "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
                 "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+                "runtime_packet_id": str(raw_rollout_metadata.get("runtime_packet_id", "")),
             }
             step_payload["provenance"] = {
                 **dict(step_payload.get("provenance", {}) or {}),
@@ -931,6 +969,7 @@ def ingest_rollout_bundle(
                 **dict(window_payload.get("metadata", {}) or {}),
                 "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
                 "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+                "runtime_packet_id": str(raw_rollout_metadata.get("runtime_packet_id", "")),
             }
             window_payload["provenance"] = {
                 **dict(window_payload.get("provenance", {}) or {}),

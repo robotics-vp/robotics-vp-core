@@ -23,6 +23,54 @@ from src.hrl.skills import SkillID
 # Core types
 # ---------------------------------------------------------------------------
 
+_WORKCELL_SKILL_SPECS = (
+    {
+        "skill_id": "workcell:pick_part",
+        "label": "Pick Part",
+        "description": "Acquire the peg/workpiece and lift it into the assembly lane.",
+        "env_primitive_requirements": ["pick"],
+        "object_family_requirements": ["part", "tool"],
+        "risk_families": ["collision"],
+        "metadata": {"task_ids": ["peg_in_hole"]},
+    },
+    {
+        "skill_id": "workcell:align_peg",
+        "label": "Align Peg",
+        "description": "Align the peg relative to the target hole before insertion.",
+        "env_primitive_requirements": ["align"],
+        "object_family_requirements": ["part", "fixture"],
+        "risk_families": ["misalignment", "occlusion"],
+        "metadata": {"task_ids": ["peg_in_hole"]},
+    },
+    {
+        "skill_id": "workcell:insert_peg",
+        "label": "Insert Peg",
+        "description": "Perform the bounded insertion into the target fixture.",
+        "env_primitive_requirements": ["insert", "align"],
+        "object_family_requirements": ["part", "fixture"],
+        "risk_families": ["collision", "misalignment"],
+        "metadata": {"task_ids": ["peg_in_hole"]},
+    },
+    {
+        "skill_id": "workcell:verify_insertion",
+        "label": "Verify Insertion",
+        "description": "Check that the peg seated correctly and remained stable.",
+        "env_primitive_requirements": [],
+        "object_family_requirements": ["part", "fixture"],
+        "risk_families": ["misalignment"],
+        "metadata": {"task_ids": ["peg_in_hole"]},
+    },
+)
+
+_WORKCELL_TASK_SEQUENCES = {
+    "peg_in_hole": [
+        "workcell:pick_part",
+        "workcell:align_peg",
+        "workcell:insert_peg",
+        "workcell:verify_insertion",
+    ]
+}
+
 @dataclass(frozen=True)
 class SkillNode:
     """Single skill in the global graph."""
@@ -143,6 +191,7 @@ class SkillGraph:
         cls,
         *,
         hrl_skills: bool = True,
+        include_workcell_skills: bool = False,
         sima_sequences: Optional[Sequence[Mapping[str, Any]]] = None,
         vla_hints: Optional[Sequence[Mapping[str, Any]]] = None,
         stage2_refinements: Optional[Sequence[Mapping[str, Any]]] = None,
@@ -196,6 +245,29 @@ class SkillGraph:
                 transitions.append(SkillTransitionEdge(
                     from_skill=a, to_skill=b, task_id="drawer_vase",
                 ))
+
+        # ── Workcell skills ─────────────────────────────────────────────
+        if include_workcell_skills:
+            for spec in _WORKCELL_SKILL_SPECS:
+                nodes[spec["skill_id"]] = SkillNode(
+                    skill_id=str(spec["skill_id"]),
+                    skill_family="workcell",
+                    label=str(spec["label"]),
+                    description=str(spec.get("description", "")),
+                    env_primitive_requirements=list(spec.get("env_primitive_requirements", [])),
+                    object_family_requirements=list(spec.get("object_family_requirements", [])),
+                    risk_families=list(spec.get("risk_families", [])),
+                    metadata=dict(spec.get("metadata", {})),
+                )
+            for task_id, ordered in _WORKCELL_TASK_SEQUENCES.items():
+                for a, b in zip(ordered, ordered[1:]):
+                    transitions.append(
+                        SkillTransitionEdge(
+                            from_skill=a,
+                            to_skill=b,
+                            task_id=task_id,
+                        )
+                    )
 
         # ── SIMA sequences ──────────────────────────────────────────────
         for seq in (sima_sequences or []):

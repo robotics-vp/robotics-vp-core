@@ -117,10 +117,28 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
         ),
         encoding="utf-8",
     )
+    runtime_packet_path = episode_dir / "ep_rollout_001_runtime_packet_v1.json"
+    runtime_packet_path.write_text(json.dumps({"packet_id": "runtime_ep_rollout_001"}), encoding="utf-8")
+    event_spine_path = episode_dir / "ep_rollout_001_event_spine_v1.json"
+    event_spine_path.write_text(
+        json.dumps({"events": [{"event_id": "event_rollout_001"}]}),
+        encoding="utf-8",
+    )
+    decision_ledger_path = episode_dir / "ep_rollout_001_decision_ledger_v1.json"
+    decision_ledger_path.write_text(
+        json.dumps({"decisions": [{"decision_id": "decision_rollout_001"}]}),
+        encoding="utf-8",
+    )
     metadata_path = episode_dir / "metadata.json"
     metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata_payload["scene_tracks_path"] = str(scene_tracks_path.relative_to(tmp_path))
     metadata_payload["semantic_world_model_path"] = str(semantic_world_model_path.relative_to(tmp_path))
+    metadata_payload["runtime_packet_path"] = str(runtime_packet_path.relative_to(tmp_path))
+    metadata_payload["event_spine_path"] = str(event_spine_path.relative_to(tmp_path))
+    metadata_payload["decision_ledger_path"] = str(decision_ledger_path.relative_to(tmp_path))
+    metadata_payload["runtime_packet_id"] = "runtime_ep_rollout_001"
+    metadata_payload["event_refs"] = ["event_rollout_001"]
+    metadata_payload["decision_refs"] = ["decision_rollout_001"]
     metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
 
     dataset_dir = tmp_path / "replay_rollout_dataset"
@@ -131,6 +149,10 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.episodes[0].provenance["source_adapter"] == "rollout_capture_bundle_v1"
     assert bundle.episodes[0].provenance["scene_tracks_ref"] == str(scene_tracks_path.resolve())
     assert bundle.episodes[0].provenance["semantic_world_model_ref"] == str(semantic_world_model_path.resolve())
+    assert bundle.episodes[0].provenance["runtime_packet_ref"] == str(runtime_packet_path.resolve())
+    assert bundle.episodes[0].provenance["event_spine_ref"] == str(event_spine_path.resolve())
+    assert bundle.episodes[0].provenance["decision_ledger_ref"] == str(decision_ledger_path.resolve())
+    assert bundle.episodes[0].metadata["execution_preconditions"]["ready"] is True
     assert bundle.episodes[0].metadata["scene_tracks_non_stub"] is False
     assert bundle.episodes[0].metadata["semantic_memory_grounded"] is True
     assert bundle.episodes[0].metadata["semantic_grounding_non_heuristic"] is False

@@ -392,17 +392,18 @@ def run_coverage_loop(
         governance_traces=governance_traces,
     )
 
-    # Step 2: Build skill graph
+    # Step 2: Resolve envs and build the matching skill graph
+    resolved_envs = list(env_names or [])
+    if not resolved_envs:
+        resolved_envs = list(list_registered_env_ids())
     skill_graph = SkillGraph.build_from_registry(
         hrl_skills=hrl_skills,
+        include_workcell_skills=any("workcell" in str(env_id) for env_id in resolved_envs),
         sima_sequences=list(sima_sequences or []),
         vla_hints=list(vla_hints or []),
     )
 
     # Step 3: Load env inventories
-    resolved_envs = list(env_names or [])
-    if not resolved_envs:
-        resolved_envs = list(list_registered_env_ids())
     env_inventories = []
     for env_id in resolved_envs:
         try:

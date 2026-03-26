@@ -68,7 +68,7 @@ class TestHarvestEvidenceCounts:
         rows = [{"task_id": "open_drawer", "env_id": "drawer_vase", "skill_mode": "efficiency_throughput"}]
         result = harvest_evidence_counts(rows)
         # efficiency_throughput maps to known skills
-        found_skill_edges = [k for k in result.evidence_counts if k[0] == "task:open_drawer" and k[1].startswith("skill:")]
+        found_skill_edges = [k for k in result.evidence_counts if k[0] == "task:open_drawer" and k[1].startswith("hrl:")]
         assert len(found_skill_edges) > 0
 
     def test_task_to_risk_edges(self):
@@ -113,6 +113,20 @@ class TestHarvestEvidenceCounts:
         assert result.rows_processed == 2
         # empty task_id rows should produce no edges
         assert all(k[0] != "task:" for k in result.evidence_counts)
+
+    def test_workcell_rows_map_into_canonical_skill_graph(self):
+        rows = [
+            {
+                "task_id": "peg_in_hole",
+                "env_id": "workcell_env",
+                "semantic_tokens": ["object:peg", "affordance:align", "affordance:insert"],
+            }
+        ]
+        result = harvest_evidence_counts(rows)
+
+        assert ("task:peg_in_hole", "env:workcell") in result.evidence_counts
+        assert ("task:peg_in_hole", "workcell:align_peg") in result.evidence_counts
+        assert ("workcell:insert_peg", "prim:insert") in result.evidence_counts
 
     def test_serialization_round_trip(self):
         rows = _mock_runtime_rows()
