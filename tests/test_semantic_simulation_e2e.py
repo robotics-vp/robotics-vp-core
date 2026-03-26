@@ -115,6 +115,9 @@ def test_semantic_simulation_e2e(monkeypatch, tmp_path: Path):
     assert "dp_logging_vla" in new_datapack_ids
     labeled_dp = next(dp for dp in store.list_datapacks() if dp.datapack_id == "dp_logging_vla")
     assert "auto_labeled" in labeled_dp.metadata.get("tags", [])
+    assert "execution_preconditions" in labeled_dp.metadata
+    assert "semantic_fusion" in labeled_dp.metadata
+    assert "future_training_artifacts" in labeled_dp.metadata
 
     run_log = (tmp_path / "runs.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert run_log

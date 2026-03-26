@@ -106,6 +106,10 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
     assert result.simulation.selection_summary["selection_helper_status"]["status"] == "available"
     assert store.list_scenarios()
     assert any(dp.datapack_id == "dp1_vla" for dp in store.list_datapacks())
+    labeled_dp = next(dp for dp in store.list_datapacks() if dp.datapack_id == "dp1_vla")
+    assert "execution_preconditions" in labeled_dp.metadata
+    assert "future_training_artifacts" in labeled_dp.metadata
+    assert labeled_dp.metadata["semantic_fusion"]["status"] in {"ready", "blocked", "mixed"}
     assert (tmp_path / "datapacks" / "dp1_vla.yaml").exists()
     reset_budget_state()
     set_budget_config(BudgetConfig())

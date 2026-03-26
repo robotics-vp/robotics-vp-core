@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from typing import Sequence
 
 from src.motor_backend.datapacks import DatapackConfig
@@ -17,32 +19,41 @@ def register_datapack_configs(
     if not datapack_configs:
         return
     existing = {dp.datapack_id: dp for dp in store.list_datapacks()}
-    stubs: list[Datapack] = []
+    upserts: list[Datapack] = []
     for cfg in datapack_configs:
-        if cfg.id in existing:
-            continue
+        current = existing.get(cfg.id)
         storage_uri = cfg.motion_clips[0].path if cfg.motion_clips else ""
-        stubs.append(
-            Datapack(
-                datapack_id=cfg.id,
-                source_type=source_type,
-                task_id=task_id,
-                modality=modality,
-                storage_uri=storage_uri,
-                metadata={
-                    "description": cfg.description,
-                    "randomization": dict(cfg.domain_randomization),
-                    "curriculum": dict(cfg.curriculum),
-                    "tags": list(cfg.tags),
-                    "task_tags": list(cfg.task_tags),
-                    "robot_families": list(cfg.robot_families),
-                    "objective_hint": cfg.objective_hint,
-                    "source_path": cfg.source_path,
-                },
-            )
-        )
-    if stubs:
-        store.append_datapacks(stubs)
+        metadata = _merge_datapack_metadata(current.metadata if current is not None else {}, cfg)
+        datapack_kwargs: dict[str, Any] = {
+            "datapack_id": cfg.id,
+            "source_type": current.source_type if current is not None else source_type,
+            "task_id": current.task_id if current is not None else task_id,
+            "modality": current.modality if current is not None else modality,
+            "storage_uri": storage_uri or (current.storage_uri if current is not None else ""),
+            "novelty_score": float(cfg.novelty_score),
+            "quality_score": float(cfg.quality_score),
+            "tags": {
+                "semantic_tags": list(cfg.tags),
+                "task_tags": list(cfg.task_tags),
+                "robot_families": list(cfg.robot_families),
+            },
+            "metadata": metadata,
+            "sima2_backend_id": current.sima2_backend_id if current is not None else None,
+            "sima2_model_version": current.sima2_model_version if current is not None else None,
+            "sima2_task_spec": dict(current.sima2_task_spec) if current is not None else {},
+            "auditor_rating": current.auditor_rating if current is not None else None,
+            "auditor_score": current.auditor_score if current is not None else None,
+            "auditor_predicted_econ": (
+                dict(current.auditor_predicted_econ)
+                if current is not None and current.auditor_predicted_econ is not None
+                else None
+            ),
+        }
+        if current is not None:
+            datapack_kwargs["created_at"] = current.created_at
+        upserts.append(Datapack(**datapack_kwargs))
+    if upserts:
+        store.append_datapacks(upserts)
 
 
 def register_scene_tracks_artifact(
@@ -106,3 +117,20 @@ def get_latest_scene_tracks_artifact(
     if not datapack or not isinstance(datapack.metadata, dict):
         return None
     return datapack.metadata.get("scene_tracks_latest")
+
+
+def _merge_datapack_metadata(
+    base_metadata: dict[str, Any] | None,
+    config: DatapackConfig,
+) -> dict[str, Any]:
+    metadata = dict(base_metadata or {})
+    metadata.update(dict(config.metadata or {}))
+    metadata["description"] = config.description
+    metadata["randomization"] = dict(config.domain_randomization)
+    metadata["curriculum"] = dict(config.curriculum)
+    metadata["tags"] = list(config.tags)
+    metadata["task_tags"] = list(config.task_tags)
+    metadata["robot_families"] = list(config.robot_families)
+    metadata["objective_hint"] = config.objective_hint
+    metadata["source_path"] = config.source_path
+    return metadata

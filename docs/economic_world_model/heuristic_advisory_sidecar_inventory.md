@@ -23,7 +23,7 @@ Ranking dimensions:
 | 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` | `heuristic` | Medium-high | Medium-high | No | **Wired now** |
 | 8 | `train_meta_transformer_synthetic.py` meta-transformer trainer entrypoint | `lightweight_trainer_gap` | Medium | High | Yes | **Wired now** |
-| 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
+| 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `sidecar` / `fallback` | Medium-high | Medium-high | No | **Wired now** |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 
 ## Top Tranche Landed
@@ -311,24 +311,35 @@ Ranking dimensions:
 ### 9. Teacher-runtime / rollout-labeler semantic sidecars
 
 - surface: external teacher contracts/envelopes and rollout labeler sidecars
-- file/path: `src/vla/rollout_labeler.py`, `src/vla/teacher_runtime.py`
-- category: `advisory`
+- file/path: `src/vla/rollout_labeler.py`, `src/vla/teacher_runtime.py`, `src/orchestrator/semantic_simulation.py`, `src/motor_backend/datapacks.py`, `src/ontology/datapack_registry.py`
+- category: `advisory` / `sidecar` / `fallback`
 - current behavior:
   - teacher contracts/action envelopes are explicit and persisted
   - VLA semantic evidence remains an external teacher sidecar rather than native truth
-  - unavailable/disabled teacher states are explicit, but common
+  - derived VLA-labeled datapacks now preserve:
+    - teacher-runtime backend truth
+    - vision-backbone truth
+    - SceneTracks grounding truth
+    - aggregated artifact refs
+    - explicit execution preconditions
+    - benchmark and future-training signals
+    - bounded quality/novelty proxy scores
+  - semantic simulation now enriches those labeled datapacks with semantic-fusion artifact refs and readiness instead of dropping the fusion outputs after labeling
+  - datapack YAML save/load and ontology registration now preserve that metadata contract instead of collapsing back to description/tags only
 - current consumers:
   - `src/orchestrator/semantic_simulation.py`
-  - rollout-labeler tests
+  - `src/orchestrator/semantic_policy.py`
+  - datapack YAML / ontology resolution
 - why it is a production problem:
-  - labels and teacher semantics may still be sparse or fallback-heavy
-  - downstream consumers must not mistake teacher presence for production grounding
+  - before this pass, most teacher/runtime/grounding truth stopped at sidecars, so later selection and readiness logic saw a thin datapack object even though the labeler had already produced richer evidence
+  - that made the vision lane look more disconnected and more heuristic than the selector/runtime contract actually needed it to be
 - recommended disposition:
   - keep teacher outputs external/advisory
-  - continue benchmark-gating real teacher availability
+  - preserve teacher/vision/SceneTracks/fusion truth inside the datapack contract so downstream routing can use it materially
+  - require explicit readiness and benchmark gating for promotion-ready labeled datapacks
   - do not collapse teacher truth into native runtime truth
 - disposition tag:
-  - `remain explicit fallback`
+  - `wired now`
   - `benchmark-gated`
 
 ### 10. SceneTracks runner stub/passthrough backend lane
@@ -360,5 +371,5 @@ Ranking dimensions:
 ## Remaining Top Follow-Ons
 
 1. Add a real training/export path for the new semantic datapack-selection helper so the `auto -> required` promotion path is backed by an actual corpus and scorer package, not just runtime plumbing.
-2. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up and sidecar-only grounding semantics outside the consumers already fixed.
+2. Audit the remaining observation-adapter and runtime-backbone vision bridges so sidecar-carried grounding/quality state there either affects runtime routing/preconditions materially or stays explicitly quarantined.
 3. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.

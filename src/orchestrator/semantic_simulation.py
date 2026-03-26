@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence, Literal
 
 from src.config.objective_profile import ObjectiveVector
+from src.evidence.benchmark_gating import collect_benchmark_gating_signals
+from src.evidence.preconditions import build_execution_preconditions
 from src.economics.econ_meter import EconomicMeter
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
 from src.motor_backend.datapacks import (
@@ -310,10 +312,11 @@ def run_semantic_simulation(
         labeled_datapacks: list[DatapackConfig] = []
         if rollout_base_dir and rollout_bundle and selected:
             labeled = label_rollouts_with_vla(rollout_bundle, base_datapack=selected[0])
-            run_semantic_fusion_for_rollouts(
+            fusion_summaries = run_semantic_fusion_for_rollouts(
                 rollout_bundle,
                 summary_path=Path(rollout_base_dir) / rollout_bundle.scenario_id / "semantic_fusion_summary.jsonl",
             )
+            labeled = _enrich_labeled_datapacks_with_fusion(labeled, fusion_summaries)
             for cfg in labeled:
                 save_datapack_config(cfg, datapack_output_dir)
             register_datapack_configs(store, resolved_task_id, labeled)
@@ -365,6 +368,154 @@ def run_semantic_simulation(
         )
 
     return OrchestratedRunResult(status=status, scenario=scenario, simulation=simulation, reason=reason)
+
+
+def _enrich_labeled_datapacks_with_fusion(
+    datapacks: Sequence[DatapackConfig],
+    fusion_summaries: Sequence[Mapping[str, Any]],
+) -> list[DatapackConfig]:
+    if not datapacks:
+        return []
+    fusion_summary = _aggregate_semantic_fusion_summary(fusion_summaries)
+    future_training_artifacts = dict(fusion_summary["artifact_refs"])
+    future_training_signals = {
+        "semantic_fusion_ready": bool(fusion_summary["ready_count"] > 0),
+        "semantic_fusion_blocked": bool(fusion_summary["blocked_count"] > 0),
+    }
+    enriched: list[DatapackConfig] = []
+    for cfg in datapacks:
+        metadata = dict(cfg.metadata or {})
+        metadata_artifacts = dict(metadata.get("future_training_artifacts", {}) or {})
+        metadata_artifacts.update(future_training_artifacts)
+        benchmark_payload = {
+            "scene_tracks_backend": metadata.get("scene_tracks_backend", ""),
+            "teacher_runtime_backend_selected": metadata.get("teacher_runtime_backend_selected", ""),
+            "vision_backbone_selected": metadata.get("vision_backbone_selected", ""),
+            "semantic_grounding_mode": metadata.get("semantic_grounding_mode", ""),
+            "semantic_memory_grounded": metadata.get("semantic_memory_grounded", False),
+            "grounded_track_object_count": metadata.get("grounded_track_object_count", 0),
+        }
+        benchmark_signals = collect_benchmark_gating_signals(benchmark_payload)
+        execution_preconditions = build_execution_preconditions(
+            subject_id=cfg.id,
+            subject_kind="vla_labeled_datapack",
+            artifact_refs=metadata_artifacts,
+            required_artifact_refs=["teacher_trace_ref", "vla_semantic_evidence_ref"],
+            soft_required_artifact_refs=[
+                "semantic_fusion_path",
+                "semantic_world_model_path",
+                "semantic_snapshot_path",
+                "orchestrator_advisory_path",
+            ],
+            signal_values={
+                **benchmark_signals,
+                "semantic_fusion_ready": future_training_signals["semantic_fusion_ready"],
+                "semantic_fusion_quality_mean": float(fusion_summary["quality_mean"]),
+                "semantic_fusion_ready_fraction": float(fusion_summary["ready_fraction"]),
+            },
+            required_boolean_signals={
+                "semantic_grounding_non_heuristic": True,
+                "teacher_runtime_real": True,
+                "vision_backbone_real": True,
+                "semantic_fusion_ready": True,
+            },
+            metadata={
+                "selection_contract": "vla_rollout_labeler_v2",
+                "semantic_fusion_summary": fusion_summary["summary"],
+            },
+        )
+        metadata["benchmark_signals"] = benchmark_signals
+        metadata["execution_preconditions"] = execution_preconditions.to_dict()
+        metadata["future_training_artifacts"] = metadata_artifacts
+        metadata["future_training_signals"] = {
+            **dict(metadata.get("future_training_signals", {}) or {}),
+            **future_training_signals,
+            "benchmark_eligible": bool(benchmark_signals.get("benchmark_eligible", False)),
+        }
+        metadata["semantic_fusion"] = fusion_summary["summary"]
+        artifacts = dict(metadata.get("artifacts", {}) or {})
+        artifacts.update(fusion_summary["catalog"])
+        metadata["artifacts"] = artifacts
+        quality_score = max(float(cfg.quality_score), float(fusion_summary["quality_mean"]))
+        metadata["quality_score"] = quality_score
+        enriched.append(replace(cfg, quality_score=quality_score, metadata=metadata))
+    return enriched
+
+
+def _aggregate_semantic_fusion_summary(
+    summaries: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    rows = [dict(row) for row in summaries]
+    ready_rows = [row for row in rows if row.get("semantic_fusion_status") == "ready"]
+    blocked_rows = [row for row in rows if row.get("semantic_fusion_status") == "blocked"]
+    artifact_keys = (
+        "semantic_fusion_path",
+        "semantic_fusion_failure_path",
+        "evidence_bus_path",
+        "belief_state_path",
+        "semantic_world_model_path",
+        "semantic_snapshot_path",
+        "orchestrator_advisory_path",
+    )
+    artifact_refs: dict[str, list[str]] = {}
+    for row in rows:
+        for key in artifact_keys:
+            value = row.get(key)
+            if value in (None, "", [], {}):
+                continue
+            artifact_refs.setdefault(key, [])
+            if str(value) not in artifact_refs[key]:
+                artifact_refs[key].append(str(value))
+    quality_mean = (
+        sum(float(row.get("semantic_fusion_quality_score", 0.0) or 0.0) for row in ready_rows)
+        / float(max(len(ready_rows), 1))
+    )
+    ready_fraction = float(len(ready_rows)) / float(max(len(rows), 1))
+    if ready_rows and blocked_rows:
+        status = "mixed"
+    elif ready_rows:
+        status = "ready"
+    elif blocked_rows:
+        status = "blocked"
+    else:
+        status = "missing"
+    failure_reasons = sorted(
+        {
+            str(row.get("semantic_fusion_failure_reason"))
+            for row in blocked_rows
+            if row.get("semantic_fusion_failure_reason")
+        }
+    )
+    return {
+        "artifact_refs": artifact_refs,
+        "catalog": {
+            "semantic_fusion": list(artifact_refs.get("semantic_fusion_path", []) or []),
+            "semantic_fusion_failures": list(
+                artifact_refs.get("semantic_fusion_failure_path", []) or []
+            ),
+            "semantic_world_models": list(
+                artifact_refs.get("semantic_world_model_path", []) or []
+            ),
+            "semantic_snapshots": list(
+                artifact_refs.get("semantic_snapshot_path", []) or []
+            ),
+            "orchestrator_advisories": list(
+                artifact_refs.get("orchestrator_advisory_path", []) or []
+            ),
+        },
+        "ready_count": len(ready_rows),
+        "blocked_count": len(blocked_rows),
+        "quality_mean": quality_mean,
+        "ready_fraction": ready_fraction,
+        "summary": {
+            "status": status,
+            "ready_count": len(ready_rows),
+            "blocked_count": len(blocked_rows),
+            "quality_mean": quality_mean,
+            "ready_fraction": ready_fraction,
+            "failure_reasons": failure_reasons,
+        },
+    }
 
 
 def _resolve_objective_spec(

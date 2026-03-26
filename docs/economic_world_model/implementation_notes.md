@@ -2,6 +2,26 @@
 
 ## 2026-03-26
 
+- Rollout-labeler semantics now survive into the real datapack contract instead of dying as local sidecars:
+  - `src/motor_backend/datapacks.py` now treats `quality_score`, `novelty_score`, and arbitrary `metadata` as first-class datapack-config fields
+  - `src/ontology/datapack_registry.py` now upserts those richer configs into ontology records instead of skipping existing datapacks and preserving stale truth
+  - this matters because reruns of labeled datapacks now refresh readiness/provenance instead of pinning old fallback states forever
+- `src/vla/rollout_labeler.py` now aggregates a bounded but materially useful labeled-datapack truth contract:
+  - teacher-runtime backend truth
+  - vision-backbone truth
+  - SceneTracks grounding truth
+  - artifact refs for teacher contract / action / trace / VLA semantic evidence
+  - explicit execution preconditions for promotion-ready labeled datapacks
+  - bounded quality / novelty proxy scores with the proxy kind recorded in metadata
+  - the teacher outputs remain external/advisory; what changed is that downstream routing can now see the truth about them instead of only seeing tags
+- `src/orchestrator/semantic_simulation.py` now performs a second enrichment pass after semantic fusion:
+  - labeled datapacks pick up fusion/world-model/snapshot/advisory artifact refs
+  - execution preconditions are recomputed with semantic-fusion readiness included
+  - this closes the prior gap where the vision lane was truthful at sidecar emission time but thin again by the time selection/replay/readiness looked at the datapack object
+- The remaining vision-side runtime audit is now narrower:
+  - rollout-labeler and labeled-datapack truth are wired
+  - the next sweep should focus on observation-adapter/runtime-backbone bridges and on the training/export lane that eventually learns from these richer labeled-datapack receipts
+
 - Shadow-advisory scorer fallback is now externally visible instead of only behaviorally visible:
   - `src/orchestrator/shadow_advisory.py` now emits:
     - `semantic_runtime_scorer_preconditions`

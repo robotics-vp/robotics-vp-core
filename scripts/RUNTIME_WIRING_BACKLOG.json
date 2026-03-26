@@ -42,6 +42,11 @@
       "id": "shadow_advisory_scorer_preconditions",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - shadow advisory now emits explicit semantic-runtime scorer precondition artifacts and blocking work orders when no scorer package is available, and the main advisory/training consumers persist those artifacts into runtime outputs instead of hiding the fallback inside branch logic."
+    },
+    {
+      "id": "vla_labeled_datapack_truth_contract",
+      "completed_at": "2026-03-26",
+      "notes": "P2 complete - DatapackConfig/registry now preserve metadata plus quality/novelty across YAML and ontology, rollout labeling aggregates teacher-runtime/SceneTracks/provenance/precondition truth into labeled datapacks, and semantic simulation enriches those datapacks with semantic-fusion artifact refs and readiness instead of dropping vision semantics as sidecars."
     }
   ],
   "backlog": [
@@ -56,8 +61,8 @@
         "src/semantic/runtime_backbone.py",
         "src/vision/scene_ir_tracker/io/scene_tracks_runner.py"
       ],
-      "blocked_by": "remaining end-to-end audit of sidecar-only grounding/vision semantics outside the consumers already tightened",
-      "notes": "Vision/grounding sidecars are much more honest than before, but a remaining audit is still needed across observation adapters, rollout labeling, and runtime-backbone bridges to ensure sidecar quality/density signals either affect routing/preconditions materially or stay explicitly quarantined."
+      "blocked_by": "remaining end-to-end audit of observation-adapter/runtime-backbone sidecar semantics outside the rollout-labeler/datapack contract already tightened",
+      "notes": "Rollout-labeler and labeled-datapack truth propagation are now wired, but a remaining audit is still needed across observation adapters and runtime-backbone bridges to ensure sidecar-carried grounding/quality signals either affect routing/preconditions materially or stay explicitly quarantined."
     }
   ]
 }

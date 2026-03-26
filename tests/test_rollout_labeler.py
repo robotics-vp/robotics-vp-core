@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
@@ -78,6 +79,9 @@ def test_rollout_labeler_stub_without_openvla(monkeypatch, tmp_path: Path):
     assert teacher_action["failure_mode"] == "openvla_disabled"
     teacher_trace = json.loads(teacher_trace_path.read_text())
     assert teacher_trace["advisory_only"] is True
+    assert labeled[0].metadata["execution_preconditions"]["ready"] is False
+    assert labeled[0].metadata["future_training_signals"]["semantic_grounding_non_heuristic"] is False
+    assert labeled[0].metadata["teacher_runtime_backend_selected"] == "disabled"
 
 
 def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):
@@ -168,6 +172,19 @@ def test_rollout_labeler_preserves_structured_teacher_semantics(monkeypatch, tmp
         trajectory_path=tmp_path / "trajectory.npz",
         rgb_video_path=rgb_path,
     )
+    np.savez_compressed(
+        rollout.trajectory_path,
+        trajectory={
+            "scene_tracks_backend": "real",
+            "semantic_memory_grounded": True,
+            "scene_tracks_v1": {
+                "scene_tracks_v1/summary_json": np.array(
+                    ['{"topology":{"grounded_track_object_count":2}}'],
+                    dtype="U96",
+                ),
+            },
+        },
+    )
     bundle = RolloutBundle(scenario_id="scenario_structured", episodes=[rollout])
 
     labeled = labeler.label_rollouts_with_vla(bundle, base_datapack=base)
@@ -178,3 +195,8 @@ def test_rollout_labeler_preserves_structured_teacher_semantics(monkeypatch, tmp
     assert teacher_trace["metadata"]["affordance_hints"] == ["open"]
     assert teacher_trace["metadata"]["risk_hints"] == ["fragility"]
     assert "object:drawer" in teacher_trace["metadata"]["semantic_tags"]
+    assert labeled[0].metadata["scene_tracks_backend"] == "real"
+    assert labeled[0].metadata["semantic_grounding_mode"] == "non_heuristic"
+    assert labeled[0].metadata["grounded_track_object_count"] == 2
+    assert labeled[0].metadata["future_training_signals"]["teacher_runtime_live"] is True
+    assert labeled[0].metadata["execution_preconditions"]["ready"] is True

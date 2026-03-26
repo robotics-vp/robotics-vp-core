@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Datapack YAML loader and resolver for motor backends.
 
 Schema (YAML):
@@ -8,13 +6,18 @@ Schema (YAML):
   motion_clips:
     - path: <path>
       weight: <float>
+  quality_score: <float>
+  novelty_score: <float>
   domain_randomization: <mapping>
   curriculum: <mapping>
   tags: [<string>]
   task_tags: [<string>]
   robot_families: [<string>]
   objective_hint: <string>
+  metadata: <mapping>
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,12 +40,15 @@ class DatapackConfig:
     id: str
     description: str = ""
     motion_clips: Sequence[MotionClipSpec] = field(default_factory=list)
+    quality_score: float = 0.0
+    novelty_score: float = 0.0
     domain_randomization: Mapping[str, Any] = field(default_factory=dict)
     curriculum: Mapping[str, Any] = field(default_factory=dict)
     tags: Sequence[str] = field(default_factory=list)
     task_tags: Sequence[str] = field(default_factory=list)
     robot_families: Sequence[str] = field(default_factory=list)
     objective_hint: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
     source_path: str | None = None
 
 
@@ -76,12 +82,15 @@ def load_datapack_configs(paths: Sequence[str | Path]) -> list[DatapackConfig]:
                 id=dp_id,
                 description=str(payload.get("description") or ""),
                 motion_clips=_parse_motion_clips(payload.get("motion_clips") or []),
+                quality_score=_parse_float(payload.get("quality_score"), default=0.0),
+                novelty_score=_parse_float(payload.get("novelty_score"), default=0.0),
                 domain_randomization=payload.get("domain_randomization", {}) or {},
                 curriculum=payload.get("curriculum", {}) or {},
                 tags=_parse_string_list(payload.get("tags") or []),
                 task_tags=_parse_string_list(payload.get("task_tags") or []),
                 robot_families=_parse_string_list(payload.get("robot_families") or []),
                 objective_hint=_parse_optional_str(payload.get("objective_hint")),
+                metadata=_parse_mapping(payload.get("metadata")),
                 source_path=str(p),
             )
         )
@@ -125,6 +134,17 @@ def _parse_optional_str(value: Any) -> str | None:
     return text if text else None
 
 
+def _parse_float(value: Any, *, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_mapping(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
 def datapack_config_from_ontology(datapack: Datapack) -> DatapackConfig:
     metadata = datapack.metadata or {}
     tags = metadata.get("tags") or []
@@ -139,12 +159,15 @@ def datapack_config_from_ontology(datapack: Datapack) -> DatapackConfig:
         id=datapack.datapack_id,
         description=str(metadata.get("description") or ""),
         motion_clips=[MotionClipSpec(path=datapack.storage_uri, weight=1.0)] if datapack.storage_uri else [],
+        quality_score=_parse_float(datapack.quality_score, default=0.0),
+        novelty_score=_parse_float(datapack.novelty_score, default=0.0),
         domain_randomization=metadata.get("randomization", {}) or {},
         curriculum=metadata.get("curriculum", {}) or {},
         tags=_parse_string_list(tags),
         task_tags=_parse_string_list(task_tags),
         robot_families=_parse_string_list(robot_families),
         objective_hint=_parse_optional_str(objective_hint),
+        metadata=_parse_mapping(metadata),
         source_path=None,
     )
 
@@ -166,12 +189,15 @@ def save_datapack_config(
         "id": config.id,
         "description": config.description,
         "motion_clips": [{"path": clip.path, "weight": clip.weight} for clip in config.motion_clips],
+        "quality_score": float(config.quality_score),
+        "novelty_score": float(config.novelty_score),
         "domain_randomization": dict(config.domain_randomization),
         "curriculum": dict(config.curriculum),
         "tags": list(config.tags),
         "task_tags": list(config.task_tags),
         "robot_families": list(config.robot_families),
         "objective_hint": config.objective_hint,
+        "metadata": dict(config.metadata),
     }
     path.write_text(yaml.safe_dump(payload, sort_keys=False))
     return path

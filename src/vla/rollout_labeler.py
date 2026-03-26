@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
+from src.evidence.benchmark_gating import collect_benchmark_gating_signals
+from src.evidence.preconditions import build_execution_preconditions
+from src.evidence.scene_tracks_truth import scene_tracks_truth_from_metadata
 from src.evidence.teacher_trace import TeacherStep, TeacherTrace, save_teacher_trace_json
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
 from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
@@ -43,6 +47,7 @@ def label_rollouts_with_vla(
     primitive_tags: set[str] = set()
     risk_levels: set[str] = set()
     vla_tags: set[str] = set()
+    episode_labeling_rows: list[dict[str, Any]] = []
 
     openvla_policy = _openvla_backend_policy()
     openvla_enabled = openvla_policy != "disabled"
@@ -78,7 +83,8 @@ def label_rollouts_with_vla(
         if episode.metadata.robot_family:
             derived_robot_families.add(episode.metadata.robot_family)
 
-        rollout_dict = _build_rollout_dict(episode, base_datapack)
+        trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
+        rollout_dict = _build_rollout_dict(episode, base_datapack, trajectory_payload=trajectory_payload)
         primitives = extract_primitives_from_rollout(rollout_dict)
         episode_tags: set[str] = set()
         for prim in primitives:
@@ -104,7 +110,7 @@ def label_rollouts_with_vla(
             if vla_action_error:
                 vla_error_reason = vla_action_error
 
-        _write_vla_semantic_evidence_sidecar(
+        artifact_refs = _write_vla_semantic_evidence_sidecar(
             episode=episode,
             semantic_tags=sorted(episode_tags),
             vla_action=vla_action,
@@ -112,6 +118,18 @@ def label_rollouts_with_vla(
             teacher_envelope=teacher_envelope,
             instruction=base_datapack.objective_hint or base_datapack.description or "",
             vla_error_reason=vla_error_reason,
+        )
+        episode_labeling_rows.append(
+            _build_episode_labeling_row(
+                episode=episode,
+                base_datapack=base_datapack,
+                trajectory_payload=trajectory_payload,
+                semantic_tags=sorted(episode_tags),
+                teacher_contract=teacher_contract,
+                teacher_envelope=teacher_envelope,
+                vla_error_reason=vla_error_reason,
+                artifact_refs=artifact_refs,
+            )
         )
 
         if derived_objective_hint is None:
@@ -129,22 +147,40 @@ def label_rollouts_with_vla(
     elif not description:
         description = "Auto-labeled rollout datapack"
 
+    derived_metadata, quality_score, novelty_score = _aggregate_labeling_metadata(
+        rollouts=rollouts,
+        base_datapack=base_datapack,
+        semantic_tags=sorted(derived_tags),
+        primitive_tags=sorted(primitive_tags),
+        vla_tags=sorted(vla_tags),
+        risk_levels=sorted(risk_levels),
+        episode_rows=episode_labeling_rows,
+        openvla_policy=openvla_policy,
+    )
     derived = DatapackConfig(
         id=f"{base_datapack.id}_vla",
         description=description,
         motion_clips=derived_motion_clips or list(base_datapack.motion_clips),
+        quality_score=quality_score,
+        novelty_score=novelty_score,
         domain_randomization=dict(base_datapack.domain_randomization),
         curriculum=dict(base_datapack.curriculum),
         tags=sorted(derived_tags),
         task_tags=sorted(derived_task_tags),
         robot_families=sorted(derived_robot_families),
         objective_hint=derived_objective_hint or "auto-labeled",
+        metadata=derived_metadata,
     )
 
     return [derived]
 
 
-def _build_rollout_dict(episode: EpisodeRollout, base_datapack: DatapackConfig) -> dict[str, Any]:
+def _build_rollout_dict(
+    episode: EpisodeRollout,
+    base_datapack: DatapackConfig,
+    *,
+    trajectory_payload: Any | None = None,
+) -> dict[str, Any]:
     rollout: dict[str, Any] = {
         "episode_id": episode.metadata.episode_id,
         "task": episode.metadata.task_id,
@@ -153,7 +189,8 @@ def _build_rollout_dict(episode: EpisodeRollout, base_datapack: DatapackConfig) 
         "metrics": dict(episode.metrics),
         "metadata": {"robot_family": episode.metadata.robot_family, "seed": episode.metadata.seed},
     }
-    trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
+    if trajectory_payload is None:
+        trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
     if isinstance(trajectory_payload, dict):
         for key in ("events", "segments", "primitive_events", "semantic_primitives", "primitives"):
             if key in trajectory_payload:
@@ -205,7 +242,7 @@ def _write_vla_semantic_evidence_sidecar(
     teacher_envelope: Optional[TeacherActionEnvelope],
     instruction: str,
     vla_error_reason: Optional[str],
-) -> None:
+) -> dict[str, Any]:
     try:
         trajectory_payload = _load_trajectory_payload(episode.trajectory_path)
         scene_tracks = _extract_scene_tracks_payload(trajectory_payload)
@@ -298,8 +335,383 @@ def _write_vla_semantic_evidence_sidecar(
             f"{episode.trajectory_path.stem}_vla_semantic_evidence_v1.npz"
         )
         save_vla_semantic_evidence_npz(evidence_path, evidence)
+        return {
+            "teacher_contract_ref": teacher_contract_ref,
+            "teacher_action_ref": teacher_action_ref,
+            "teacher_trace_ref": str(teacher_trace_path),
+            "vla_semantic_evidence_ref": str(evidence_path),
+            "scene_tracks_ref": str(episode.trajectory_path),
+        }
     except Exception as exc:
         logger.warning("Failed to write VLA semantic evidence sidecar: %s", exc)
+    return {}
+
+
+def _build_episode_labeling_row(
+    *,
+    episode: EpisodeRollout,
+    base_datapack: DatapackConfig,
+    trajectory_payload: Any,
+    semantic_tags: Sequence[str],
+    teacher_contract: Optional[TeacherAdapterContract],
+    teacher_envelope: Optional[TeacherActionEnvelope],
+    vla_error_reason: Optional[str],
+    artifact_refs: Mapping[str, Any],
+) -> dict[str, Any]:
+    episode_metadata_payload = _load_episode_metadata_payload(episode)
+    scene_tracks_payload = _extract_scene_tracks_payload(trajectory_payload)
+    scene_tracks_metadata = _scene_tracks_metadata(trajectory_payload, episode_metadata_payload)
+    scene_tracks_truth = scene_tracks_truth_from_metadata(scene_tracks_metadata)
+    teacher_backend = _teacher_backend_selected(teacher_contract)
+    vision_backend = _teacher_vision_backend_selected(teacher_contract)
+    grounded_track_object_count = _grounded_track_object_count(
+        trajectory_payload=trajectory_payload,
+        scene_tracks_payload=scene_tracks_payload,
+        episode_metadata_payload=episode_metadata_payload,
+    )
+    semantic_memory_grounded = bool(
+        grounded_track_object_count > 0
+        or scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
+        or _bool_from_payload(
+            trajectory_payload,
+            episode_metadata_payload,
+            key="semantic_memory_grounded",
+        )
+    )
+    semantic_grounding_mode = (
+        "non_heuristic"
+        if scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
+        else "heuristic_fallback"
+    )
+    teacher_available = bool(teacher_envelope is not None and teacher_envelope.available)
+    teacher_confidence = float(getattr(teacher_envelope, "confidence", 0.0) or 0.0)
+    artifact_map = {
+        key: value
+        for key, value in dict(artifact_refs or {}).items()
+        if value not in (None, "", [], {})
+    }
+    artifact_map["trajectory_path"] = str(episode.trajectory_path)
+    if scene_tracks_payload is not None and not artifact_map.get("scene_tracks_ref"):
+        artifact_map["scene_tracks_ref"] = str(episode.trajectory_path)
+    return {
+        "episode_id": episode.metadata.episode_id,
+        "task_id": episode.metadata.task_id,
+        "robot_family": episode.metadata.robot_family,
+        "instruction": base_datapack.objective_hint or base_datapack.description or "",
+        "semantic_tags": [str(tag) for tag in semantic_tags if str(tag).strip()],
+        "semantic_tag_count": len([tag for tag in semantic_tags if str(tag).strip()]),
+        "teacher_runtime_backend_selected": teacher_backend,
+        "teacher_runtime_live": teacher_available,
+        "teacher_confidence": teacher_confidence,
+        "vision_backbone_selected": vision_backend,
+        "scene_tracks_backend": str(scene_tracks_truth.get("scene_tracks_backend", "") or ""),
+        "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
+        "semantic_grounding_non_heuristic": bool(
+            scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
+        ),
+        "semantic_grounding_mode": semantic_grounding_mode,
+        "semantic_memory_grounded": semantic_memory_grounded,
+        "grounded_track_object_count": grounded_track_object_count,
+        "vla_error_reason": str(vla_error_reason or ""),
+        "artifact_refs": artifact_map,
+    }
+
+
+def _aggregate_labeling_metadata(
+    *,
+    rollouts: RolloutBundle,
+    base_datapack: DatapackConfig,
+    semantic_tags: Sequence[str],
+    primitive_tags: Sequence[str],
+    vla_tags: Sequence[str],
+    risk_levels: Sequence[str],
+    episode_rows: Sequence[Mapping[str, Any]],
+    openvla_policy: str,
+) -> tuple[dict[str, Any], float, float]:
+    rows = [dict(row) for row in episode_rows]
+    scene_tracks_backend = _prefer_backend(rows, "scene_tracks_backend")
+    teacher_backend = _prefer_backend(rows, "teacher_runtime_backend_selected")
+    vision_backend = _prefer_backend(rows, "vision_backbone_selected")
+    grounded_track_object_count = sum(
+        int(_safe_float(row.get("grounded_track_object_count", 0.0), 0.0)) for row in rows
+    )
+    teacher_confidence_mean = _mean([row.get("teacher_confidence", 0.0) for row in rows])
+    teacher_live_fraction = _fraction_true(rows, "teacher_runtime_live")
+    scene_tracks_real_fraction = _fraction_true(rows, "scene_tracks_non_stub")
+    semantic_grounding_fraction = _fraction_true(rows, "semantic_grounding_non_heuristic")
+    semantic_tag_count_mean = _mean([row.get("semantic_tag_count", 0.0) for row in rows])
+    artifact_refs = _aggregate_artifact_refs(rows)
+    benchmark_payload = {
+        "scene_tracks_backend": scene_tracks_backend,
+        "teacher_runtime_backend_selected": teacher_backend,
+        "vision_backbone_selected": vision_backend,
+        "semantic_grounding_mode": (
+            "non_heuristic" if semantic_grounding_fraction > 0.0 else "heuristic_fallback"
+        ),
+        "semantic_memory_grounded": grounded_track_object_count > 0 or semantic_grounding_fraction > 0.0,
+        "grounded_track_object_count": grounded_track_object_count,
+    }
+    benchmark_signals = collect_benchmark_gating_signals(benchmark_payload)
+    readiness = build_execution_preconditions(
+        subject_id=f"{base_datapack.id}_vla",
+        subject_kind="vla_labeled_datapack",
+        artifact_refs=artifact_refs,
+        required_artifact_refs=["teacher_trace_ref", "vla_semantic_evidence_ref"],
+        soft_required_artifact_refs=["teacher_contract_ref", "teacher_action_ref", "scene_tracks_ref"],
+        signal_values={
+            **benchmark_signals,
+            "teacher_runtime_live": teacher_live_fraction > 0.0,
+            "teacher_confidence_mean": teacher_confidence_mean,
+            "scene_tracks_non_stub_fraction": scene_tracks_real_fraction,
+            "semantic_grounding_non_heuristic_fraction": semantic_grounding_fraction,
+        },
+        required_boolean_signals={
+            "semantic_grounding_non_heuristic": True,
+            "teacher_runtime_real": True,
+            "vision_backbone_real": True,
+        },
+        soft_boolean_signals={"teacher_runtime_live": True},
+        metadata={
+            "openvla_backend_policy": openvla_policy,
+            "episode_count": len(rows),
+            "selection_contract": "vla_rollout_labeler_v2",
+        },
+    )
+    prior_tags = {str(tag).strip().lower() for tag in base_datapack.tags if str(tag).strip()}
+    new_tags = {str(tag).strip().lower() for tag in semantic_tags if str(tag).strip()} - prior_tags
+    novelty_score = min(1.0, float(len(new_tags)) / float(max(len(prior_tags) + len(new_tags), 1)))
+    artifact_completeness = _artifact_completeness(artifact_refs)
+    semantic_tag_density = min(1.0, semantic_tag_count_mean / 8.0)
+    quality_score = min(
+        1.0,
+        (0.4 * artifact_completeness)
+        + (0.35 * teacher_confidence_mean)
+        + (0.25 * semantic_tag_density),
+    )
+    metadata = {
+        "labeler": {
+            "source": "vla_rollout_labeler",
+            "version": "v2",
+            "openvla_backend_policy": openvla_policy,
+        },
+        "derived_from_datapack_id": base_datapack.id,
+        "rollout_scenario_id": rollouts.scenario_id,
+        "episode_count": len(rows),
+        "quality_score_kind": "labeling_contract_proxy_v1",
+        "novelty_score_kind": "semantic_tag_delta_v1",
+        "quality_score_components": {
+            "artifact_completeness": artifact_completeness,
+            "teacher_confidence_mean": teacher_confidence_mean,
+            "semantic_tag_density": semantic_tag_density,
+        },
+        "quality_score": quality_score,
+        "novelty_score": novelty_score,
+        "semantic_tags": list(semantic_tags),
+        "primitive_tags": list(primitive_tags),
+        "vla_tags": list(vla_tags),
+        "risk_levels": list(risk_levels),
+        "teacher_runtime_backend_selected": teacher_backend,
+        "vision_backbone_selected": vision_backend,
+        "scene_tracks_backend": scene_tracks_backend,
+        "semantic_grounding_mode": (
+            "non_heuristic" if semantic_grounding_fraction > 0.0 else "heuristic_fallback"
+        ),
+        "semantic_memory_grounded": bool(
+            grounded_track_object_count > 0 or semantic_grounding_fraction > 0.0
+        ),
+        "grounded_track_object_count": grounded_track_object_count,
+        "benchmark_signals": benchmark_signals,
+        "execution_preconditions": readiness.to_dict(),
+        "future_training_signals": {
+            "teacher_runtime_live": teacher_live_fraction > 0.0,
+            "scene_tracks_non_stub": scene_tracks_real_fraction > 0.0,
+            "semantic_grounding_non_heuristic": semantic_grounding_fraction > 0.0,
+            "benchmark_eligible": bool(benchmark_signals.get("benchmark_eligible", False)),
+        },
+        "future_training_artifacts": artifact_refs,
+        "artifacts": _artifact_catalog(artifact_refs),
+        "episodes": rows,
+    }
+    return metadata, quality_score, novelty_score
+
+
+def _load_episode_metadata_payload(episode: EpisodeRollout) -> dict[str, Any]:
+    metadata_path = episode.trajectory_path.parent / "metadata.json"
+    if not metadata_path.exists():
+        return {}
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _scene_tracks_metadata(trajectory_payload: Any, episode_metadata_payload: Mapping[str, Any]) -> dict[str, Any]:
+    metadata = {}
+    if isinstance(trajectory_payload, Mapping):
+        metadata.update(dict(trajectory_payload))
+    episode_metadata = episode_metadata_payload.get("metadata")
+    if isinstance(episode_metadata, Mapping):
+        metadata.update(dict(episode_metadata))
+    for key in ("scene_tracks_backend", "scene_tracks_path", "scene_tracks_npz", "scene_tracks_v1", "scene_tracks"):
+        if key in episode_metadata_payload and key not in metadata:
+            metadata[key] = episode_metadata_payload.get(key)
+    return metadata
+
+
+def _grounded_track_object_count(
+    *,
+    trajectory_payload: Any,
+    scene_tracks_payload: Optional[Dict[str, Any]],
+    episode_metadata_payload: Mapping[str, Any],
+) -> int:
+    for payload in (trajectory_payload, episode_metadata_payload):
+        if isinstance(payload, Mapping):
+            direct = payload.get("grounded_track_object_count")
+            if direct is not None:
+                return int(_safe_float(direct, 0.0))
+            summary = payload.get("semantic_world_model_summary")
+            if isinstance(summary, Mapping):
+                topology = summary.get("topology")
+                if isinstance(topology, Mapping) and topology.get("grounded_track_object_count") is not None:
+                    return int(_safe_float(topology.get("grounded_track_object_count"), 0.0))
+    summary_payload = _scene_tracks_summary_payload(scene_tracks_payload)
+    if isinstance(summary_payload, Mapping):
+        direct = summary_payload.get("grounded_track_object_count")
+        if direct is not None:
+            return int(_safe_float(direct, 0.0))
+        topology = summary_payload.get("topology")
+        if isinstance(topology, Mapping) and topology.get("grounded_track_object_count") is not None:
+            return int(_safe_float(topology.get("grounded_track_object_count"), 0.0))
+    return 0
+
+
+def _scene_tracks_summary_payload(scene_tracks_payload: Optional[Dict[str, Any]]) -> dict[str, Any]:
+    if not isinstance(scene_tracks_payload, Mapping):
+        return {}
+    for key in (
+        "summary_json",
+        "scene_tracks_v1/summary_json",
+        "semantic_summary_json",
+        "scene_tracks_v1/semantic_summary_json",
+    ):
+        if key not in scene_tracks_payload:
+            continue
+        value = scene_tracks_payload.get(key)
+        if isinstance(value, (list, tuple)) and value:
+            value = value[0]
+        if hasattr(value, "item"):
+            try:
+                value = value.item()
+            except Exception:
+                pass
+        if isinstance(value, bytes):
+            value = value.decode("utf-8", errors="ignore")
+        if isinstance(value, str):
+            try:
+                payload = json.loads(value)
+            except Exception:
+                continue
+            if isinstance(payload, Mapping):
+                return dict(payload)
+    return {}
+
+
+def _teacher_backend_selected(teacher_contract: Optional[TeacherAdapterContract]) -> str:
+    if teacher_contract is None:
+        return ""
+    metadata = dict(getattr(teacher_contract, "metadata", {}) or {})
+    backend_status = metadata.get("backend_status")
+    if isinstance(backend_status, Mapping):
+        backend = str(backend_status.get("backend_selected", "") or "").strip()
+        if backend:
+            return backend
+    backend = str(metadata.get("backend_selected", "") or "").strip()
+    if backend:
+        return backend
+    return "real" if teacher_contract.available else "unavailable"
+
+
+def _teacher_vision_backend_selected(teacher_contract: Optional[TeacherAdapterContract]) -> str:
+    if teacher_contract is None:
+        return ""
+    metadata = dict(getattr(teacher_contract, "metadata", {}) or {})
+    backend_status = metadata.get("backend_status")
+    if isinstance(backend_status, Mapping):
+        backend = str(backend_status.get("vision_backbone_selected", "") or "").strip()
+        if backend:
+            return backend
+    for key in (
+        "vision_backbone_selected",
+        "openvla_vision_backbone_selected",
+        "teacher_runtime_vision_backbone_selected",
+    ):
+        backend = str(metadata.get(key, "") or "").strip()
+        if backend:
+            return backend
+    return "real" if teacher_contract.available else "unavailable"
+
+
+def _bool_from_payload(*payloads: Any, key: str) -> bool:
+    for payload in payloads:
+        if isinstance(payload, Mapping) and key in payload:
+            return bool(payload.get(key))
+    return False
+
+
+def _aggregate_artifact_refs(rows: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]:
+    refs: dict[str, list[str]] = {}
+    for row in rows:
+        artifact_refs = row.get("artifact_refs")
+        if not isinstance(artifact_refs, Mapping):
+            continue
+        for key, value in artifact_refs.items():
+            if value in (None, "", [], {}):
+                continue
+            refs.setdefault(str(key), [])
+            if str(value) not in refs[str(key)]:
+                refs[str(key)].append(str(value))
+    return refs
+
+
+def _artifact_catalog(artifact_refs: Mapping[str, Sequence[str]]) -> dict[str, Any]:
+    return {
+        "teacher_contracts": list(artifact_refs.get("teacher_contract_ref", []) or []),
+        "teacher_actions": list(artifact_refs.get("teacher_action_ref", []) or []),
+        "teacher_traces": list(artifact_refs.get("teacher_trace_ref", []) or []),
+        "vla_semantic_evidence": list(artifact_refs.get("vla_semantic_evidence_ref", []) or []),
+        "scene_tracks": list(artifact_refs.get("scene_tracks_ref", []) or []),
+    }
+
+
+def _artifact_completeness(artifact_refs: Mapping[str, Sequence[str]]) -> float:
+    required = ("teacher_contract_ref", "teacher_trace_ref", "vla_semantic_evidence_ref")
+    satisfied = sum(1 for key in required if artifact_refs.get(key))
+    return float(satisfied) / float(len(required))
+
+
+def _fraction_true(rows: Sequence[Mapping[str, Any]], key: str) -> float:
+    if not rows:
+        return 0.0
+    true_count = sum(1 for row in rows if bool(row.get(key, False)))
+    return float(true_count) / float(len(rows))
+
+
+def _mean(values: Sequence[Any]) -> float:
+    if not values:
+        return 0.0
+    total = sum(_safe_float(value, 0.0) for value in values)
+    return total / float(len(values))
+
+
+def _prefer_backend(rows: Sequence[Mapping[str, Any]], key: str) -> str:
+    values = [str(row.get(key, "") or "").strip() for row in rows if str(row.get(key, "") or "").strip()]
+    if not values:
+        return ""
+    for preferred in ("real", "passthrough", "artifact_present_unknown", "unavailable", "disabled", "stub"):
+        if preferred in values:
+            return preferred
+    return values[0]
 
 
 def _select_task_tags(tags: list[str]) -> set[str]:
