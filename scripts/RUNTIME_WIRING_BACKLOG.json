@@ -57,6 +57,11 @@
       "id": "gen2sim_validity_value_admission",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - local synthetic branches now emit explicit gen2sim validity sidecars, corpus/trainer policy now reacts materially to admission truth, Regal datapack valuation now resolves the explicit assessment plus a bounded learned helper package, and the learned helper remains honestly benchmark-gated on empirical receipt density."
+    },
+    {
+      "id": "semantic_selection_meta_choice_receipts",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - semantic selection now exports a real bounded neural helper package, persists per-episode selection_summary sidecars into rollout artifacts, replay ingest preserves those summaries into runtime rows, and orchestration context encoding now reacts to selection-policy/helper-status/meta-choice features instead of dropping them after the sim run log."
     }
   ],
   "backlog": []

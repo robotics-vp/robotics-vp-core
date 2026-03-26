@@ -132,6 +132,11 @@
     - `DatapackSelectionContext`
     - context-conditioned helper adjustment caps
     - richer `scorer_trace.context_trace` receipts
+    - a bounded neural helper package contract with:
+      - `model_kind`
+      - ordered feature inputs
+      - one-hidden-layer MLP weights/biases
+      - interpretable local contributor traces from the active network path
   - the old literal feature coefficients remain only as the bootstrap prior
   - the new learned/helper part is still bounded, but it is no longer a flat bump on top of the prior
 - `src/orchestrator/semantic_simulation.py` now enforces an honest sequential promotion path for selector helpers:
@@ -143,8 +148,8 @@
   - the trainer consumes `selection_summary` run-log receipts
   - builds selected-outcome and positive-pairwise supervision examples
   - learns both:
-    - feature weights over `DatapackSelectionFeatures`
-    - context weights over `DatapackSelectionContext`
+    - a bounded feature-MLP reranker over `DatapackSelectionFeatures`
+    - context weights over `DatapackSelectionContext` for adjustment-cap conditioning
   - emits:
     - `datapack_selection_training_dataset.json`
     - `datapack_selection_dataset_summary.json`
@@ -154,9 +159,20 @@
     - `datapack_selection_training_summary.json`
     - `training_job_result.json`
     - canonical runtime manifest/checkpoint-registry outputs under `RegalTrainingRunner`
+- Selector receipts now persist across the real runtime bridge:
+  - `src/orchestrator/semantic_simulation.py` writes per-episode `*_selection_summary_v1.json`
+  - `src/replay/ingest.py` carries `selection_summary` into replay episodes and provenance refs
+  - `src/orchestrator/semantic_runtime_learning.py` preserves those receipts into runtime rows and orchestration samples
+- The observation/conditioning path now reacts to selector meta-choice:
+  - `src/orchestrator/semantic_transformer_bridge.py` encodes selection-feedback features
+  - `src/orchestrator/orchestration_transformer.py` appends those features into `_encode_ctx(...)`
+  - orchestration activation plans and metadata now keep:
+    - `selection_policy`
+    - selected datapack ids
+    - the distilled `selection_meta_choice` summary
 - This is the right current posture for selector neuralization:
   - bootstrap prior stays explicit and auditable
-  - helper weights and helper strength are now learnable from receipts
+  - helper reranking and helper strength are now learnable from receipts
   - benchmark-unready packages still influence runtime only through a bounded shadow-stage clamp
   - future conditioning can move upward into the economic WM and then the later meta-node WM without changing the current runtime contract again
   - full counterfactual datapack-choice supervision is still a later density problem, not something this pass should fake

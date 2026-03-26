@@ -247,7 +247,7 @@
         {
             "script": "train_datapack_selection_scorers.py",
             "migrated_at": "2026-03-26",
-            "notes": "P1 complete - added the semantic run-log trainer/export lane for datapack-selection helpers with context-conditioned scorer packages, benchmark-gated auto->required promotion semantics, and canonical runtime manifest/checkpoint outputs under RegalTrainingRunner"
+            "notes": "P1 complete - semantic run-log trainer/export lane now emits a bounded neural datapack-selection helper package plus context-conditioned adjustment caps, benchmark-gated auto->required promotion semantics, and canonical runtime manifest/checkpoint outputs under RegalTrainingRunner"
         },
         {
             "script": "train_gap_ranker.py",

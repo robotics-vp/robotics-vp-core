@@ -406,6 +406,10 @@ Ranking dimensions:
     - benchmark/readiness support when datapack metadata carries it
     - explicit gap-fill pressure for tags not yet represented in scenario history
   - the same feature contract is now first-class in `DatapackSelectionFeatures`, and a bounded learned helper package can apply a capped reranking adjustment on top of the explicit prior instead of replacing it wholesale
+  - the learned helper is no longer just a linear reranker:
+    - `DatapackSelectionScorerPackage` now carries an explicit neural package shape
+    - `src/orchestrator/datapack_selection_training.py` now trains a bounded one-hidden-layer feature MLP plus context-conditioned adjustment caps
+    - `src/orchestrator/semantic_policy.py` now emits local contributor traces from the active neural path instead of only static weight dumps
   - the helper now also carries `DatapackSelectionContext` conditioning, so helper strength is no longer a flat scalar:
     - candidate-pool density
     - gap pressure
@@ -424,6 +428,11 @@ Ranking dimensions:
     - scorer package JSON
     - training summary
     - canonical runtime manifest/checkpoint registry when run under `RegalTrainingRunner`
+  - selector meta-choice receipts now persist into the real runtime path:
+    - `src/orchestrator/semantic_simulation.py` writes per-episode `*_selection_summary_v1.json` sidecars
+    - `src/replay/ingest.py` preserves those refs and summaries into replay episodes
+    - `src/orchestrator/semantic_runtime_learning.py` carries them into runtime rows and orchestration samples
+    - `src/orchestrator/semantic_transformer_bridge.py` / `src/orchestrator/orchestration_transformer.py` now encode and react to those selection-feedback features in the orchestration context
   - `detect_semantic_gaps(...)` still infers missing scenario tags deterministically
 - current consumers:
   - `src/orchestrator/semantic_simulation.py`
@@ -436,7 +445,8 @@ Ranking dimensions:
   - preserve the explicit prior feature contract as the bootstrap fallback and training target
   - promote the learned helper sequentially: `disabled` -> `auto` -> `required`
   - keep `auto` shadow-safe by clamping benchmark-unready packages
-  - train the helper over `selection_summary` plus downstream outcome/counterfactual receipts before broadening the promoted/default path
+  - keep training the helper over `selection_summary` plus downstream outcome/counterfactual receipts before broadening the promoted/default path
+  - use the now-persisted selector receipts as orchestration/economic-WM conditioning inputs rather than rebuilding selector state from tags alone downstream
 - disposition tag:
   - `wired now`
   - `benchmark-gated`
