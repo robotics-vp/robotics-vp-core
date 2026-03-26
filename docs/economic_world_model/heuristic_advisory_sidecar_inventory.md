@@ -256,7 +256,11 @@ Ranking dimensions:
     - datapack quality / novelty metadata
     - benchmark/readiness support when datapack metadata carries it
     - explicit gap-fill pressure for tags not yet represented in scenario history
-  - `src/orchestrator/semantic_simulation.py` now merges ontology and local fallback datapacks through the same ranked pool and records a `selection_summary` into the live simulation result plus run log
+  - the same feature contract is now first-class in `DatapackSelectionFeatures`, and an optional bounded learned helper package can apply a capped reranking adjustment on top of the explicit prior instead of replacing it wholesale
+  - `src/orchestrator/semantic_simulation.py` now merges ontology and local fallback datapacks through the same ranked pool, records a `selection_summary` into the live simulation result plus run log, and carries explicit helper-promotion state:
+    - `disabled` for bootstrap
+    - `auto` for shadow/helper-when-present
+    - `required` when the learned helper is a runtime precondition
   - `detect_semantic_gaps(...)` still infers missing scenario tags deterministically
 - current consumers:
   - `src/orchestrator/semantic_simulation.py`
@@ -265,7 +269,9 @@ Ranking dimensions:
   - that was too weak for a runtime surface that directly shapes synthetic agenda generation and future corpus construction
 - recommended disposition:
   - keep the current bounded scored-selection layer live now
-  - later replace the deterministic score with learned routing over the same evidence/runtime shape
+  - preserve the explicit prior feature contract as the bootstrap fallback and training target
+  - promote the learned helper sequentially: `disabled` -> `auto` -> `required`
+  - train the helper over `selection_summary` plus downstream outcome/counterfactual receipts before handing it required status
 - disposition tag:
   - `wired now`
   - `neuralized later`
@@ -341,7 +347,7 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Migrate `train_vla_recap_offline.py` to the canonical training runtime.
+1. Replace `train_meta_transformer_synthetic.py` with the real meta-transformer runtime dataset/training substrate already present in `src/orchestrator/meta_transformer_training.py` and `src/orchestrator/semantic_runtime_learning.py`.
 2. Make the shadow-advisory scorer fallback explicit in artifacts/work orders so “no scorer package available” is visible as a runtime precondition, not just a behavior branch.
-3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up and sidecar-only grounding semantics outside the consumers already fixed.
-4. Either replace or quarantine `train_meta_transformer_synthetic.py` so it cannot be mistaken for a real trainer.
+3. Add a real training/export path for the new semantic datapack-selection helper so the `auto -> required` promotion path is backed by an actual corpus and scorer package, not just runtime plumbing.
+4. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up and sidecar-only grounding semantics outside the consumers already fixed.

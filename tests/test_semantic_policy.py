@@ -113,6 +113,40 @@ def test_rank_datapacks_prefers_grounded_high_quality_history() -> None:
     assert ranked[0].datapack.id == "dp2"
     assert ranked[0].benchmark_support["semantic_grounding_non_heuristic"] is True
     assert ranked[0].historical_support["scenario_count"] == 1
+    assert ranked[0].selection_policy == "heuristic_only"
+    assert ranked[0].heuristic_score >= ranked[0].score - 1e-9
+    assert ranked[0].selection_features["semantic_grounding_non_heuristic"] == 1.0
+
+
+def test_rank_datapacks_accepts_learned_helper_adjustment() -> None:
+    candidates = [
+        DatapackConfig(id="dp1", description="", tags=["humanoid", "warehouse"]),
+        DatapackConfig(id="dp2", description="", tags=["humanoid", "warehouse"]),
+    ]
+    ranked = rank_datapacks_for_intent(
+        tags=["humanoid", "warehouse"],
+        robot_family="G1",
+        objective_hint=None,
+        candidates=candidates,
+        scenarios=[],
+        candidate_metadata_by_id={
+            "dp1": {"quality_score": 0.2, "novelty_score": 0.1},
+            "dp2": {"quality_score": 0.2, "novelty_score": 0.9},
+        },
+        selection_scorer_package={
+            "package_id": "selection_helper_v1",
+            "feature_weights": {"novelty_score": 2.5},
+            "bias": 0.0,
+            "max_adjustment": 0.5,
+        },
+    )
+
+    assert ranked
+    assert ranked[0].selection_policy == "heuristic_plus_learned_helper"
+    assert ranked[0].scorer_package_id == "selection_helper_v1"
+    assert ranked[0].learned_score > 0.0
+    assert ranked[0].scorer_trace["top_contributors"][0]["feature"] == "novelty_score"
+    assert ranked[0].selection_features["novelty_score"] >= ranked[-1].selection_features["novelty_score"]
 
 
 def test_summarize_datapack_selection_keeps_top_candidate_reasons() -> None:
@@ -121,6 +155,9 @@ def test_summarize_datapack_selection_keeps_top_candidate_reasons() -> None:
             datapack=DatapackConfig(id="dp_summary", description="", tags=["warehouse"]),
             score=3.2,
             source="ontology",
+            heuristic_score=3.2,
+            learned_score=0.0,
+            selection_policy="heuristic_only",
             matched_tags=["warehouse"],
             missing_tags=[],
             gap_fill_tags=["warehouse"],
@@ -138,7 +175,10 @@ def test_summarize_datapack_selection_keeps_top_candidate_reasons() -> None:
         tags=["warehouse"],
         robot_family="G1",
         objective_hint="baseline",
+        selection_helper_status={"mode": "disabled", "status": "disabled"},
     )
 
     assert summary["selected_ids"] == ["dp_summary"]
+    assert summary["selection_policy"] == "heuristic_only"
+    assert summary["selection_helper_status"]["status"] == "disabled"
     assert summary["top_candidates"][0]["reasons"] == ["exact_tag_match", "benchmark_eligible"]

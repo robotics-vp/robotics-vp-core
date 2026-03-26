@@ -99,6 +99,8 @@ def test_semantic_simulation_e2e(monkeypatch, tmp_path: Path):
     assert result.simulation is not None
     assert result.simulation.selection_summary is not None
     assert result.simulation.selection_summary["selected_ids"][0] == "dp_logging"
+    assert result.simulation.selection_summary["selection_policy"] == "heuristic_only"
+    assert result.simulation.selection_summary["selection_helper_status"]["status"] == "heuristic_fallback"
     assert store.list_scenarios()
 
     scenario_record = store.list_scenarios()[0]
@@ -118,5 +120,7 @@ def test_semantic_simulation_e2e(monkeypatch, tmp_path: Path):
     assert run_log
     logged_payload = json.loads(run_log[-1])
     assert logged_payload["selection_summary"]["selected_ids"][0] == "dp_logging"
+    assert logged_payload["selection_summary"]["selection_policy"] == "heuristic_only"
+    assert logged_payload["selection_summary"]["selection_helper_status"]["status"] == "heuristic_fallback"
     reset_budget_state()
     set_budget_config(BudgetConfig())

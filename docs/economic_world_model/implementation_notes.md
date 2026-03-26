@@ -2,6 +2,28 @@
 
 ## 2026-03-26
 
+- Semantic datapack/scenario selection now has an explicit promotion path instead of a forever-hardcoded score:
+  - `src/orchestrator/semantic_policy.py` now defines:
+    - `DatapackSelectionFeatures`
+    - `DatapackSelectionScorerPackage`
+    - a bounded learned-helper adjustment on top of the explicit prior score
+  - the old hand-written coefficients are still present, but only as the bootstrap prior over a first-class feature contract
+  - this is important because those terms are now:
+    - auditable as runtime features
+    - reusable as training targets/features
+    - replaceable later by a learned helper without changing the rest of the runtime contract
+- `src/orchestrator/semantic_simulation.py` now makes helper promotion state explicit:
+  - `selection_scorer_mode="disabled"` for bootstrap bring-up
+  - `selection_scorer_mode="auto"` for shadow/helper-if-present rollout
+  - `selection_scorer_mode="required"` when the learned helper must exist or the run should fail honestly
+  - the resulting helper state is written into `selection_summary`, so downstream replay/runtime analysis can distinguish:
+    - learned-helper-backed selection
+    - heuristic fallback
+    - explicitly disabled helper use
+- The remaining honest gap in this lane is no longer runtime wiring; it is training:
+  - we still need the corpus/export/training job that produces the datapack-selection scorer package
+  - until that exists, `required` is a supported promotion target, not the default operating mode
+
 - `scripts/train_vla_recap_offline.py` is no longer a lightweight side lane outside the runtime contract:
   - the direct `train_offline(...)` entrypoint is preserved for existing smoke/inference consumers
   - but the trainer now always emits:

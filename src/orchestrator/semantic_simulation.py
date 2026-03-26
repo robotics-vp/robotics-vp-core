@@ -27,7 +27,9 @@ from src.orchestrator.semantic_policy import (
     DatapackSelectionDecision,
     MissingScenarioSpec,
     apply_arh_penalty,
+    coerce_datapack_selection_scorer_package,
     detect_semantic_gaps,
+    load_datapack_selection_scorer_package,
     rank_datapacks_for_intent,
     select_datapacks_for_intent,
     summarize_datapack_selection,
@@ -79,6 +81,9 @@ def run_semantic_simulation(
     datapack_output_dir: str | Path = "configs/datapacks",
     robot_id: str = "robot_default",
     run_log_path: str | Path = "data/logs/semantic_runs.jsonl",
+    selection_scorer_package: Mapping[str, Any] | None = None,
+    selection_scorer_package_path: str | None = None,
+    selection_scorer_mode: Literal["disabled", "auto", "required"] = "auto",
 ) -> OrchestratedRunResult:
     run_id = str(uuid.uuid4())
     estimated_steps = max(0, int(num_envs) * int(max_steps))
@@ -130,6 +135,11 @@ def run_semantic_simulation(
             objective_name=objective_hint,
             motor_backend=motor_backend,
         )
+        resolved_selection_scorer_package, selection_scorer_package_ref = _resolve_datapack_selection_scorer_package(
+            selection_scorer_package=selection_scorer_package,
+            selection_scorer_package_path=selection_scorer_package_path,
+            selection_scorer_mode=selection_scorer_mode,
+        )
 
         ranked_selected = rank_datapacks_for_intent(
             tags or [],
@@ -138,6 +148,7 @@ def run_semantic_simulation(
             candidates,
             scenario_records,
             candidate_metadata_by_id=candidate_metadata_by_id,
+            selection_scorer_package=resolved_selection_scorer_package,
             source="ontology",
         )
         selected = [row.datapack for row in ranked_selected]
@@ -158,6 +169,7 @@ def run_semantic_simulation(
                     objective_hint,
                     exploratory,
                     scenario_records,
+                    selection_scorer_package=resolved_selection_scorer_package,
                     source="local_yaml",
                 )
         ranked_combined = _merge_ranked_datapacks(ranked_selected, fallback_ranked)
@@ -175,6 +187,7 @@ def run_semantic_simulation(
                 objective_hint,
                 fallback_only,
                 scenario_records,
+                selection_scorer_package=resolved_selection_scorer_package,
                 source="local_yaml",
             )
             ranked_combined = rank_datapacks_for_intent(
@@ -183,6 +196,7 @@ def run_semantic_simulation(
                 objective_hint,
                 fallback_only,
                 scenario_records,
+                selection_scorer_package=resolved_selection_scorer_package,
                 source="local_yaml",
             )
 
@@ -198,7 +212,20 @@ def run_semantic_simulation(
             tags=tags or [],
             robot_family=robot_family,
             objective_hint=objective_hint,
+            selection_helper_status={
+                "mode": selection_scorer_mode,
+                "status": (
+                    "available"
+                    if resolved_selection_scorer_package is not None
+                    else ("disabled" if selection_scorer_mode == "disabled" else "heuristic_fallback")
+                ),
+            },
         )
+        if selection_scorer_package_ref:
+            selection_summary = {
+                **selection_summary,
+                "scorer_package_ref": selection_scorer_package_ref,
+            }
 
         resolved_task_id = task_id or (datapack_records[0].task_id if datapack_records else None)
         if not resolved_task_id:
@@ -395,6 +422,38 @@ def _resolve_local_datapacks(
             continue
         filtered.append(cfg)
     return filtered
+
+
+def _resolve_datapack_selection_scorer_package(
+    *,
+    selection_scorer_package: Mapping[str, Any] | None,
+    selection_scorer_package_path: str | None,
+    selection_scorer_mode: Literal["disabled", "auto", "required"],
+) -> tuple[Mapping[str, Any] | None, str | None]:
+    if selection_scorer_mode not in {"disabled", "auto", "required"}:
+        raise ValueError(f"Unsupported selection_scorer_mode: {selection_scorer_mode}")
+    if selection_scorer_mode == "disabled":
+        return None, None
+    if selection_scorer_package is not None:
+        package = coerce_datapack_selection_scorer_package(selection_scorer_package)
+        return (package.to_dict() if package is not None else None), None
+    if selection_scorer_package_path:
+        package = load_datapack_selection_scorer_package(selection_scorer_package_path)
+        return package.to_dict(), str(Path(selection_scorer_package_path).resolve())
+    candidate_paths = [
+        Path("artifacts/semantic_selection/datapack_selection_scorer_package.json"),
+        Path("artifacts/semantic_runtime/datapack_selection_scorer_package.json"),
+        Path("artifacts/semantic_runtime_scorers/datapack_selection_scorer_package.json"),
+    ]
+    for candidate in candidate_paths:
+        if candidate.exists():
+            package = load_datapack_selection_scorer_package(candidate)
+            return package.to_dict(), str(candidate.resolve())
+    if selection_scorer_mode == "required":
+        raise FileNotFoundError(
+            "selection_scorer_mode='required' but no datapack selection scorer package was found"
+        )
+    return None, None
 
 
 def _merge_notes(notes: str | None, missing_specs: Sequence[MissingScenarioSpec]) -> str | None:
