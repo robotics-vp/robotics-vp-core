@@ -75,10 +75,20 @@ def main() -> None:
     md_path = output_root / "shadow_advisory.md"
     queue_json_path = output_root / "live_queue_selection.json"
     budget_json_path = output_root / "adaptation_budget.json"
+    scorer_preconditions_path = output_root / "semantic_runtime_scorer_preconditions.json"
+    scorer_work_orders_path = output_root / "semantic_runtime_scorer_work_orders.json"
     json_path.write_text(json.dumps(advisory, indent=2, sort_keys=True), encoding="utf-8")
     md_path.write_text(_advisory_markdown(advisory), encoding="utf-8")
     queue_json_path.write_text(json.dumps(advisory["live_queue_selection"], indent=2, sort_keys=True), encoding="utf-8")
     budget_json_path.write_text(json.dumps(advisory["adaptation_budget"], indent=2, sort_keys=True), encoding="utf-8")
+    scorer_preconditions_path.write_text(
+        json.dumps(advisory["semantic_runtime_scorer_preconditions"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    scorer_work_orders_path.write_text(
+        json.dumps(advisory["semantic_runtime_scorer_work_orders"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     print(json.dumps(advisory["summary"], indent=2, sort_keys=True))
 
 
@@ -90,6 +100,8 @@ def _advisory_markdown(advisory: dict) -> str:
         f"- Collect more data: {advisory['summary']['collect_more_data_count']}",
         f"- Retrain: {advisory['summary']['retrain_count']}",
         f"- Receipt labels: {advisory['summary']['receipt_label_coverage']['total_labels']}",
+        f"- Semantic runtime scorer ready: {advisory['summary']['semantic_runtime_scorer_ready']}",
+        f"- Semantic runtime fallback active: {advisory['summary']['semantic_runtime_scorer_fallback_active']}",
         "",
         "## Episode Decisions",
     ]

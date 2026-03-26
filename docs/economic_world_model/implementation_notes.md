@@ -2,6 +2,20 @@
 
 ## 2026-03-26
 
+- Shadow-advisory scorer fallback is now externally visible instead of only behaviorally visible:
+  - `src/orchestrator/shadow_advisory.py` now emits:
+    - `semantic_runtime_scorer_preconditions`
+    - `semantic_runtime_scorer_work_orders`
+  - when a scorer package is missing, the advisory payload now carries a blocking work order pointing at `scripts/train_semantic_runtime_scorers.py` rather than quietly degrading to heuristic scoring with no artifact-level trace
+- The main consumers now preserve that state into runtime artifacts:
+  - `scripts/run_shadow_advisory_pass.py`
+  - `scripts/train_shadow_replay_policy.py`
+  - `scripts/train_shadow_offline_rl.py`
+  - `scripts/train_shadow_pricing_models.py`
+  - `scripts/train_sac_with_ontology_logging.py`
+  now all write/register scorer-precondition and scorer-work-order artifacts
+- This matters because “scored shadow advisory” vs “heuristic fallback advisory” is now a real observable distinction in manifests and backlog scans, not a detail hidden inside `build_shadow_advisory_output(...)`.
+
 - `scripts/train_meta_transformer_synthetic.py` now uses the actual meta-transformer training substrate instead of random placeholder tensors:
   - it accepts:
     - `meta_transformer_runtime_dataset.json` exports

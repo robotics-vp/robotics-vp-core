@@ -175,6 +175,10 @@ Ranking dimensions:
   - when a semantic runtime scorer package is present, the advisory path now scores replay-native semantic runtime rows and threads bounded learned route/regret/counterfactual/authority signals into `recommend_sampling(...)`
   - `recommend_sampling(...)` still keeps the heuristic path as fallback, but learned runtime support now influences priority, queue tags, and slice weighting in a bounded way
   - `build_live_queue_selection(...)` and `apply_live_queue_selection(...)` now preserve the semantic-runtime score evidence in queue metadata instead of dropping it before the live queue lane
+  - the main advisory/training consumers now also emit:
+    - `semantic_runtime_scorer_preconditions.json`
+    - `semantic_runtime_scorer_work_orders.json`
+    so the no-package fallback is visible as a real runtime artifact and blocking work order instead of only a hidden behavior branch
 - current consumers:
   - `scripts/train_shadow_replay_policy.py`
   - `scripts/train_shadow_offline_rl.py`
@@ -355,7 +359,6 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Make the shadow-advisory scorer fallback explicit in artifacts/work orders so “no scorer package available” is visible as a runtime precondition, not just a behavior branch.
-2. Add a real training/export path for the new semantic datapack-selection helper so the `auto -> required` promotion path is backed by an actual corpus and scorer package, not just runtime plumbing.
-3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up and sidecar-only grounding semantics outside the consumers already fixed.
-4. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.
+1. Add a real training/export path for the new semantic datapack-selection helper so the `auto -> required` promotion path is backed by an actual corpus and scorer package, not just runtime plumbing.
+2. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up and sidecar-only grounding semantics outside the consumers already fixed.
+3. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.

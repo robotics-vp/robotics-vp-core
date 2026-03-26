@@ -67,6 +67,8 @@ def test_receipt_ingest_roundtrip_and_shadow_advisory_consumption(tmp_path):
     assert advisory["episodes"][0]["epiplexity_evidence"]["overlay_joined"] is True
     assert "execution_preconditions" in advisory["episodes"][0]
     assert advisory["adaptation_budget"]["summary"]["work_orders"] >= 1
+    assert advisory["semantic_runtime_scorer_preconditions"]["fallback_active"] is True
+    assert advisory["semantic_runtime_scorer_work_orders"][0]["reason"] == "semantic_runtime_scorer_package_missing"
 
 
 def test_shadow_advisory_threads_semantic_runtime_scores_into_queue_metadata(tmp_path, monkeypatch):
@@ -121,6 +123,7 @@ def test_shadow_advisory_threads_semantic_runtime_scores_into_queue_metadata(tmp
     advisory = build_shadow_advisory_output(replay_dataset_dir=str(dataset_dir))
 
     assert advisory["summary"]["semantic_runtime_scorer_episodes"] == advisory["summary"]["episodes"]
+    assert advisory["summary"]["semantic_runtime_scorer_ready"] is True
     assert advisory["summary"]["semantic_runtime_scorer_package_ref"] == "memory://semantic_runtime_scorer"
     episode = advisory["episodes"][0]
     assert episode["semantic_runtime_score"]["meta_route_success_probability"] == 0.82
@@ -128,3 +131,5 @@ def test_shadow_advisory_threads_semantic_runtime_scores_into_queue_metadata(tmp
     assert "authority_switch_review" in episode["replay_queue_tags"]
     queue_entry = advisory["live_queue_selection"]["entries"][0]
     assert queue_entry["metadata"]["semantic_runtime_score"]["meta_route_success_probability"] == 0.82
+    assert advisory["semantic_runtime_scorer_preconditions"]["ready"] is True
+    assert advisory["semantic_runtime_scorer_work_orders"] == []

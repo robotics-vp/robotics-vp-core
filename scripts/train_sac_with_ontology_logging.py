@@ -578,7 +578,11 @@ def main(runner=None, _wrapped_args=None):
         receipt_label_mode=args.receipt_label_mode,
     )
     advisory_path = output_root / "online_shadow_advisory.json"
+    scorer_preconditions_path = output_root / "semantic_runtime_scorer_preconditions.json"
+    scorer_work_orders_path = output_root / "semantic_runtime_scorer_work_orders.json"
     _write_json(advisory_path, advisory)
+    _write_json(scorer_preconditions_path, advisory["semantic_runtime_scorer_preconditions"])
+    _write_json(scorer_work_orders_path, {"work_orders": advisory["semantic_runtime_scorer_work_orders"]})
     report = build_promotion_evidence_report(
         dataset=dataset,
         promotion_policy=promotion_policy,
@@ -653,6 +657,8 @@ def main(runner=None, _wrapped_args=None):
         runner.register_artifact("live_queue_selection", live_queue_latest_path)
         runner.register_artifact("queue_dispatch_comparison", queue_latest_path)
         runner.register_artifact("online_shadow_advisory", advisory_path)
+        runner.register_artifact("semantic_runtime_scorer_preconditions", scorer_preconditions_path)
+        runner.register_artifact("semantic_runtime_scorer_work_orders", scorer_work_orders_path)
         runner.register_artifact("receipt_label_bundle", receipt_paths["bundle"])
         runner.register_artifact("receipt_label_summary", receipt_paths["summary"])
         runner.register_artifact("regal_promotion_eval", promotion_paths["json"])

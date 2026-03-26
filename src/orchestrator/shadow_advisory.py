@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 from src.economics.inferential_reward import compile_signal_yield
 from src.economics.inferential_training_gate import InferentialTrainingCandidate, InferentialTrainingGate
@@ -34,6 +34,31 @@ from src.shadow_runtime.advisors import (
 )
 
 
+def _semantic_runtime_scorer_candidate_paths(
+    *,
+    replay_dataset_dir: str,
+    semantic_runtime_scorer_package_path: Optional[str] = None,
+) -> list[str]:
+    candidate_paths: list[Path] = []
+    if semantic_runtime_scorer_package_path:
+        candidate_paths.append(Path(semantic_runtime_scorer_package_path))
+    replay_root = Path(replay_dataset_dir)
+    candidate_paths.extend(
+        [
+            replay_root / "semantic_runtime_scorer_package.json",
+            replay_root.parent / "semantic_runtime_scorers" / "semantic_runtime_scorer_package.json",
+        ]
+    )
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for candidate in candidate_paths:
+        resolved = str(candidate.resolve()) if candidate.is_absolute() else str(candidate)
+        if resolved not in seen:
+            seen.add(resolved)
+            ordered.append(resolved)
+    return ordered
+
+
 def _resolve_semantic_runtime_scorer_package(
     *,
     replay_dataset_dir: str,
@@ -43,24 +68,67 @@ def _resolve_semantic_runtime_scorer_package(
     if semantic_runtime_scorer_package is not None:
         return coerce_semantic_runtime_scorer_package(semantic_runtime_scorer_package), None
 
-    candidate_paths: list[Path] = []
-    if semantic_runtime_scorer_package_path:
-        explicit_path = Path(semantic_runtime_scorer_package_path)
-        if not explicit_path.exists():
-            raise FileNotFoundError(f"semantic runtime scorer package not found: {explicit_path}")
-        candidate_paths.append(explicit_path)
-
-    replay_root = Path(replay_dataset_dir)
-    candidate_paths.extend(
-        [
-            replay_root / "semantic_runtime_scorer_package.json",
-            replay_root.parent / "semantic_runtime_scorers" / "semantic_runtime_scorer_package.json",
-        ]
+    candidate_paths = _semantic_runtime_scorer_candidate_paths(
+        replay_dataset_dir=replay_dataset_dir,
+        semantic_runtime_scorer_package_path=semantic_runtime_scorer_package_path,
     )
-    for candidate in candidate_paths:
+    if semantic_runtime_scorer_package_path and not Path(semantic_runtime_scorer_package_path).exists():
+        raise FileNotFoundError(
+            f"semantic runtime scorer package not found: {semantic_runtime_scorer_package_path}"
+        )
+    for candidate_ref in candidate_paths:
+        candidate = Path(candidate_ref)
         if candidate.exists():
             return load_semantic_runtime_scorer_package(candidate), str(candidate)
     return None, None
+
+
+def _build_semantic_runtime_scorer_preconditions(
+    *,
+    replay_dataset_dir: str,
+    manifest_compatibility,
+    semantic_runtime_package: Optional[Any],
+    semantic_runtime_package_ref: Optional[str],
+    candidate_paths: Sequence[str],
+) -> tuple[Dict[str, Any], list[Dict[str, Any]]]:
+    package_ready = semantic_runtime_package is not None
+    satisfied_preconditions = {
+        "artifact::semantic_runtime_scorer_package": int(package_ready),
+        "replay_manifest::compatible": int(bool(getattr(manifest_compatibility, "compatible", False))),
+    }
+    unsatisfied = [
+        key for key, value in sorted(satisfied_preconditions.items()) if not value
+    ]
+    preconditions = {
+        "schema_version": "semantic_runtime_scorer_preconditions_v1",
+        "replay_dataset_dir": replay_dataset_dir,
+        "semantic_runtime_scorer_package_ref": semantic_runtime_package_ref,
+        "candidate_paths": list(candidate_paths),
+        "ready": package_ready,
+        "fallback_active": not package_ready,
+        "satisfied_preconditions": satisfied_preconditions,
+        "unsatisfied_preconditions": unsatisfied,
+        "manifest_compatibility": manifest_compatibility.to_dict(),
+    }
+    work_orders: list[Dict[str, Any]] = []
+    if not package_ready:
+        work_orders.append(
+            {
+                "order_type": "runtime_precondition",
+                "subject_kind": "semantic_runtime_scorer_package",
+                "subject_id": replay_dataset_dir,
+                "ready": False,
+                "blocking": True,
+                "reason": "semantic_runtime_scorer_package_missing",
+                "recommended_entrypoint": "scripts/train_semantic_runtime_scorers.py",
+                "candidate_paths": list(candidate_paths),
+                "required_preconditions": [
+                    "artifact::semantic_runtime_scorer_package",
+                    "replay_manifest::compatible",
+                ],
+            }
+        )
+    return preconditions, work_orders
 
 
 def build_shadow_advisory_output(
@@ -107,10 +175,21 @@ def build_shadow_advisory_output(
     windows_by_episode = defaultdict(list)
     for window in dataset.windows:
         windows_by_episode[window.episode_id].append(window)
+    scorer_candidate_paths = _semantic_runtime_scorer_candidate_paths(
+        replay_dataset_dir=replay_dataset_dir,
+        semantic_runtime_scorer_package_path=semantic_runtime_scorer_package_path,
+    )
     semantic_runtime_package, semantic_runtime_package_ref = _resolve_semantic_runtime_scorer_package(
         replay_dataset_dir=replay_dataset_dir,
         semantic_runtime_scorer_package=semantic_runtime_scorer_package,
         semantic_runtime_scorer_package_path=semantic_runtime_scorer_package_path,
+    )
+    scorer_preconditions, scorer_work_orders = _build_semantic_runtime_scorer_preconditions(
+        replay_dataset_dir=replay_dataset_dir,
+        manifest_compatibility=manifest_compatibility,
+        semantic_runtime_package=semantic_runtime_package,
+        semantic_runtime_package_ref=semantic_runtime_package_ref,
+        candidate_paths=scorer_candidate_paths,
     )
 
     episode_outputs: list[Dict[str, Any]] = []
@@ -426,6 +505,8 @@ def build_shadow_advisory_output(
         "semantic_runtime_scorer_episodes": sum(
             1 for output in episode_outputs if output.get("semantic_runtime_score") is not None
         ),
+        "semantic_runtime_scorer_ready": bool(scorer_preconditions.get("ready", False)),
+        "semantic_runtime_scorer_fallback_active": bool(scorer_preconditions.get("fallback_active", False)),
         "semantic_runtime_scorer_package_ref": semantic_runtime_package_ref,
         "mean_semantic_runtime_route_score": (
             sum(
@@ -456,6 +537,8 @@ def build_shadow_advisory_output(
             "policy_name": promotion_policy.policy_name,
             "config_digest": promotion_policy.config_digest,
         },
+        "semantic_runtime_scorer_preconditions": scorer_preconditions,
+        "semantic_runtime_scorer_work_orders": scorer_work_orders,
         "adaptation_budget": budget_artifact.to_dict(),
         "adaptation_work_orders": [
             row for row in budget_artifact.work_orders

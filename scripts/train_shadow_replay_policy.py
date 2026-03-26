@@ -77,8 +77,12 @@ def _select_episode_ids(
     )
     advisory_path = output_root / "shadow_advisory.json"
     queue_path = output_root / "live_queue_selection.json"
+    scorer_preconditions_path = output_root / "semantic_runtime_scorer_preconditions.json"
+    scorer_work_orders_path = output_root / "semantic_runtime_scorer_work_orders.json"
     _write_json(advisory_path, advisory)
     _write_json(queue_path, advisory["live_queue_selection"])
+    _write_json(scorer_preconditions_path, advisory["semantic_runtime_scorer_preconditions"])
+    _write_json(scorer_work_orders_path, {"work_orders": advisory["semantic_runtime_scorer_work_orders"]})
 
     descriptors = [replay_episode_to_rl_episode_descriptor(episode) for episode in dataset.episodes]
     sampler = DataPackRLSampler(
@@ -104,6 +108,8 @@ def _select_episode_ids(
     return selected_episode_ids, {
         "shadow_advisory": str(advisory_path),
         "live_queue_selection": str(queue_path),
+        "semantic_runtime_scorer_preconditions": str(scorer_preconditions_path),
+        "semantic_runtime_scorer_work_orders": str(scorer_work_orders_path),
         "queue_dispatch_comparison": str(dispatch_path),
     }, advisory, dispatch
 
@@ -193,6 +199,8 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
         runner.register_artifact("receipt_label_summary", receipt_paths["summary"])
         runner.register_artifact("shadow_advisory", queue_paths["shadow_advisory"])
         runner.register_artifact("live_queue_selection", queue_paths["live_queue_selection"])
+        runner.register_artifact("semantic_runtime_scorer_preconditions", queue_paths["semantic_runtime_scorer_preconditions"])
+        runner.register_artifact("semantic_runtime_scorer_work_orders", queue_paths["semantic_runtime_scorer_work_orders"])
         runner.register_artifact("queue_dispatch_comparison", queue_paths["queue_dispatch_comparison"])
         runner.register_artifact("regal_promotion_eval", promotion_paths["json"])
         runner.register_artifact("regal_promotion_eval_markdown", promotion_paths["markdown"])

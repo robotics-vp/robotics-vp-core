@@ -26,6 +26,8 @@ def test_shadow_advisory_pass_cli_smoke(tmp_path):
     assert (output_dir / "shadow_advisory.md").exists()
     assert (output_dir / "live_queue_selection.json").exists()
     assert (output_dir / "adaptation_budget.json").exists()
+    assert (output_dir / "semantic_runtime_scorer_preconditions.json").exists()
+    assert (output_dir / "semantic_runtime_scorer_work_orders.json").exists()
 
 
 def test_shadow_learning_ablation_cli_smoke(tmp_path):

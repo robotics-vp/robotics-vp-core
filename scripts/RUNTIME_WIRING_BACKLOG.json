@@ -37,20 +37,27 @@
       "id": "semantic_policy_datapack_selection",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - semantic policy selection now ranks datapacks using ARH-adjusted historical outcomes, candidate quality/novelty, benchmark/readiness support, and explicit gap-fill pressure; semantic simulation now records the resulting selection summary into live results and run logs."
+    },
+    {
+      "id": "shadow_advisory_scorer_preconditions",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - shadow advisory now emits explicit semantic-runtime scorer precondition artifacts and blocking work orders when no scorer package is available, and the main advisory/training consumers persist those artifacts into runtime outputs instead of hiding the fallback inside branch logic."
     }
   ],
   "backlog": [
     {
-      "id": "shadow_advisory_scorer_preconditions",
+      "id": "vision_sidecar_runtime_semantics",
       "priority": "P2",
       "owner": "codex",
       "category": "runtime_wiring",
       "files": [
-        "src/orchestrator/shadow_advisory.py",
-        "scripts/run_shadow_advisory_pass.py"
+        "src/vla/rollout_labeler.py",
+        "src/observation/adapter.py",
+        "src/semantic/runtime_backbone.py",
+        "src/vision/scene_ir_tracker/io/scene_tracks_runner.py"
       ],
-      "blocked_by": "replay-backed scorer package density and auto-export policy",
-      "notes": "Shadow advisory already consumes semantic runtime scorer packages when present, but the no-package fallback still needs an explicit precondition/work-order artifact so scored vs unscored advisory runs are distinguishable in runtime outputs and backlog scans."
+      "blocked_by": "remaining end-to-end audit of sidecar-only grounding/vision semantics outside the consumers already tightened",
+      "notes": "Vision/grounding sidecars are much more honest than before, but a remaining audit is still needed across observation adapters, rollout labeling, and runtime-backbone bridges to ensure sidecar quality/density signals either affect routing/preconditions materially or stay explicitly quarantined."
     }
   ]
 }
