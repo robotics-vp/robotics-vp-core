@@ -9,7 +9,7 @@ This document turns the current full-stack training situation into one honest ba
 - define the recurring Runpod bundles that make sense every few weeks
 - keep adjacent implementation questions visible so the stack does not jump to the next canonical world model too early
 
-The central constraint is still the same: the repo is more data-limited than GPU-limited right now.
+The central constraint is still the same for most learned lanes: the repo is more data-limited than GPU-limited right now. The important exception is the canonical workcell refresh/replay lane, which now assumes real SAM3D grounding rather than passthrough-only refreshes.
 
 ## Current State Snapshot
 
@@ -44,21 +44,23 @@ Observed in the workspace on 2026-03-26:
 
 Consequence:
 
-- A100 spend is not the main blocker yet.
-- The first recurring remote job should be data refresh and corpus accumulation, not heavyweight model training.
+- A100 spend is still not the main blocker for most trainers.
+- But the canonical workcell refresh/replay lane now assumes real SAM3D, so that first recurring corpus-refresh job should be treated as a Linux/NVIDIA A100 run rather than a CPU-only local bootstrap.
+- Local passthrough refreshes still help plumbing and replay-shape validation, but they do not count as benchmark-grade replay accumulation.
 
 ## Ranked Backlog
 
 ### 1. Workcell semantic data refresh
 
 Status:
-- ready now
+- ready now on a real SAM3D host
+- local passthrough refreshes remain dev-only
 
 Primary entrypoint:
 - `scripts/bootstrap_semantic_workcell_loop.py`
 
 Why first:
-- it increases replay density, semantic runtime rows, and coverage-loop artifacts together
+- when run with real grounding, it increases replay density, semantic runtime rows, and coverage-loop artifacts together
 - it directly feeds the higher-value learned lanes instead of training another tiny model on a smoke corpus
 
 Internal data sources:
@@ -66,11 +68,14 @@ Internal data sources:
 - ontology and replay artifacts already under `artifacts/` and `data/`
 
 External data sources:
-- none required for the first pass
+- gated SAM 3D Objects checkpoints from Hugging Face
+- gated SAM 3D Body checkpoints from Hugging Face
+- a Linux/NVIDIA host or prebuilt image that can actually run the real SAM3D stack
 
 Runpod posture:
 - safe to automate first
-- A100 is optional but acceptable if uniformity matters
+- treat 1x A100 80GB as required for the canonical recurring refresh/replay lane because real SAM3D grounding is part of the useful-data definition here
+- local `backend-policy=auto|passthrough` refreshes remain useful for plumbing and corpus-shape checks only
 
 ### 2. Semantic runtime scorer training
 
@@ -286,6 +291,7 @@ The intended autonomous model is:
 Important honesty rules:
 
 - if the image does not contain the desired code, the launcher does not fix that for you
+- if the image does not contain real SAM3D repos plus authenticated checkpoints, `workcell_data_refresh` is not actually ready even if the bootstrap script itself exists
 - if `runpodctl` is missing locally, launch will fail
 - if a network volume is attached, the pod should be removed rather than merely stopped
 - if readiness gates fail and `--force` is not passed, launch must stop before spend begins
@@ -390,7 +396,7 @@ python3 scripts/runpod/launch_training_bundle.py \
 
 Today, the right recurring autonomous Runpod job is:
 
-- refresh workcell semantic data
+- run an A100-backed real-SAM3D workcell refresh/replay pass
 - regenerate replay and coverage artifacts
 - wait until those corpora are honestly larger
 - only then spend A100 time on scorer, refiner, and shadow-model checkpoints
