@@ -42,6 +42,7 @@ from src.controllers.synth_lambda_controller import (
     build_feature_vector
 )
 from src.controllers.synthetic_weight_controller import SyntheticWeightController
+from src.evidence.gen2sim_validity import coerce_gen2sim_validity_assessment
 from src.training.checkpoint_registry import build_checkpoint_record
 from src.training.regal_training_runner import (
     RegalTrainingRunner,
@@ -143,6 +144,7 @@ def load_synthetic_branches(
     *,
     metadata_path=None,
     gap_labels_path=None,
+    gen2sim_validity_path=None,
     training_policy: Optional[Dict[str, Any]] = None,
 ):
     """
@@ -160,6 +162,7 @@ def load_synthetic_branches(
         branch_path,
         metadata_path=metadata_path,
         gap_labels_path=gap_labels_path,
+        gen2sim_validity_path=gen2sim_validity_path,
     )
     data = np.load(branch_path, allow_pickle=True)
     n_branches = int(data['n_branches'])
@@ -171,6 +174,7 @@ def load_synthetic_branches(
     branch_metrics = []
     for i in range(n_branches):
         branch_record = corpus.branches[i]
+        gen2sim_assessment = coerce_gen2sim_validity_assessment(branch_record.gen2sim_validity)
         trust = float(data[f'branch_{i}_trust_score'])
         brick_id = int(data[f'branch_{i}_brick_id'])
         std_ratio = float(data[f'branch_{i}_std_ratio'])
@@ -202,6 +206,21 @@ def load_synthetic_branches(
             'objective_vector': objective_vector,
             'branch_value': float(branch_record.branch_value),
             'gap_labels': dict(branch_record.gap_labels),
+            'gen2sim_validity_score': (
+                float(gen2sim_assessment.validity_score)
+                if gen2sim_assessment is not None
+                else 0.0
+            ),
+            'gen2sim_admission_score': (
+                float(gen2sim_assessment.admission_score)
+                if gen2sim_assessment is not None
+                else 0.0
+            ),
+            'gen2sim_promotion_stage': (
+                str(gen2sim_assessment.promotion_stage)
+                if gen2sim_assessment is not None
+                else "heuristic_fallback"
+            ),
         })
 
     # Compute economic weights using lattice model
@@ -268,6 +287,8 @@ def load_synthetic_branches(
                 'econ_weight': econ_weight,
                 'brick_id': brick_id,
                 'reward': -float(np.linalg.norm(z_seq[t + 1] - z_seq[t])),
+                'gen2sim_admission_score': branch_metrics[i]['gen2sim_admission_score'],
+                'gen2sim_promotion_stage': branch_metrics[i]['gen2sim_promotion_stage'],
             })
 
     return transitions, branch_metrics, corpus
@@ -590,6 +611,14 @@ def _build_synthetic_trajectory_audits(branch_path: str, corpus) -> list[Any]:
                 "branch_value": [float(branch.branch_value) for _ in rewards],
                 "branch_trust": [float(branch.trust_score) for _ in rewards],
             }
+            assessment = coerce_gen2sim_validity_assessment(branch.gen2sim_validity)
+            if assessment is not None:
+                reward_components["gen2sim_admission_score"] = [
+                    float(assessment.admission_score) for _ in rewards
+                ]
+                reward_components["gen2sim_validity_score"] = [
+                    float(assessment.validity_score) for _ in rewards
+                ]
             events = ["synthetic_branch"]
             skill_edge = str(branch.gap_labels.get("skill_edge", "") or "")
             if skill_edge:
@@ -634,6 +663,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                         help='Optional explicit metadata sidecar for synthetic branches')
     parser.add_argument('--synth-gap-labels', type=str, default=None,
                         help='Optional explicit gap-label sidecar for synthetic branches')
+    parser.add_argument('--synth-gen2sim-validity', type=str, default=None,
+                        help='Optional explicit gen2sim-validity sidecar for synthetic branches')
     parser.add_argument('--w-econ-lattice', type=str, default=profile['w_econ_lattice_path'],
                         help='Path to trained w_econ_lattice model')
     parser.add_argument('--output-dir', type=str, default='results')
@@ -741,11 +772,13 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
     branch_summary_path = None
     branch_preconditions_path = None
     branch_benchmark_path = None
+    branch_gen2sim_validity_path = None
     training_policy: Dict[str, Any] = {
         'requested_synth_share': float(args.synth_weight),
         'requested_econ_weight_scale': float(args.econ_weight_scale),
         'effective_synth_share_cap': float(args.synth_weight),
         'semantic_weight_scale': 1.0,
+        'gen2sim_weight_scale': 1.0,
         'gap_value_scale': 1.0,
         'branch_priority_floor': 0.25,
         'branch_priority_ceiling': 2.0,
@@ -758,6 +791,7 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
             args.synth_data,
             metadata_path=args.synth_metadata,
             gap_labels_path=args.synth_gap_labels,
+            gen2sim_validity_path=args.synth_gen2sim_validity,
         )
         training_policy = build_synthetic_branch_training_policy(
             corpus,
@@ -771,6 +805,7 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
             w_econ_model,
             metadata_path=args.synth_metadata,
             gap_labels_path=args.synth_gap_labels,
+            gen2sim_validity_path=args.synth_gen2sim_validity,
             training_policy=training_policy,
         )
         print(f"Loaded {len(synth_transitions)} synthetic transitions")
@@ -778,6 +813,7 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
             "Synthetic training policy: "
             f"cap={training_policy['effective_synth_share_cap']:.2f}, "
             f"semantic_scale={training_policy['semantic_weight_scale']:.2f}, "
+            f"gen2sim_scale={training_policy['gen2sim_weight_scale']:.2f}, "
             f"benchmark_ready={training_policy['benchmark_gate_ready']}"
         )
 
@@ -790,6 +826,9 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
         branch_summary_path = output_root / 'synthetic_branch_summary.json'
         branch_preconditions_path = output_root / 'synthetic_branch_execution_preconditions.json'
         branch_benchmark_path = output_root / 'synthetic_branch_benchmark_gate.json'
+        branch_gen2sim_validity_path = (
+            output_root / 'synthetic_branch_gen2sim_validity.json'
+        )
         _write_json(
             branch_summary_path,
             {
@@ -799,6 +838,28 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
         )
         _write_json(branch_preconditions_path, corpus.execution_preconditions.to_dict())
         _write_json(branch_benchmark_path, corpus.benchmark_gate.to_dict())
+        _write_json(
+            branch_gen2sim_validity_path,
+            {
+                'records': [
+                    {
+                        'branch_idx': int(branch.branch_idx),
+                        **dict(branch.gen2sim_validity),
+                    }
+                    for branch in corpus.branches
+                    if branch.gen2sim_validity
+                ],
+                'summary': {
+                    'avg_admission_score': corpus.summary.get('avg_gen2sim_admission_score', 0.0),
+                    'avg_validity_score': corpus.summary.get('avg_gen2sim_validity_score', 0.0),
+                    'promotion_stage_counts': corpus.summary.get(
+                        'gen2sim_promotion_stage_counts',
+                        {},
+                    ),
+                },
+                'training_policy': training_policy,
+            },
+        )
     else:
         print(f"\nWARNING: No synthetic data at {args.synth_data}")
         print("Will run baseline only")
@@ -1038,6 +1099,9 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
             'offline_local_synth_actor': str(augmented_checkpoint_path) if augmented_checkpoint_path else None,
             'synthetic_branch_summary': str(branch_summary_path) if branch_summary_path else None,
             'synthetic_branch_metrics': str(branch_metrics_path) if branch_metrics_path else None,
+            'synthetic_branch_gen2sim_validity': (
+                str(branch_gen2sim_validity_path) if branch_gen2sim_validity_path else None
+            ),
             'synthetic_branch_execution_preconditions': str(branch_preconditions_path) if branch_preconditions_path else None,
             'synthetic_branch_benchmark_gate': str(branch_benchmark_path) if branch_benchmark_path else None,
             'synth_lambda_trajectory': str(lambda_path) if lambda_path else None,
@@ -1052,6 +1116,7 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
             'synth_data': args.synth_data,
             'synth_metadata': args.synth_metadata,
             'synth_gap_labels': args.synth_gap_labels,
+            'synth_gen2sim_validity': args.synth_gen2sim_validity,
             'epochs': args.epochs,
             'batch_size': args.batch_size,
             'lr': args.lr,
@@ -1136,6 +1201,14 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
                 ),
                 'synthetic_branch_metadata_present': bool(corpus is not None and corpus.summary.get('metadata_present', False)),
                 'synthetic_branch_gap_labels_present': bool(corpus is not None and corpus.summary.get('gap_labels_present', False)),
+                'synthetic_branch_gen2sim_validity_present': bool(
+                    corpus is not None and corpus.summary.get('gen2sim_validity_present', False)
+                ),
+                'avg_gen2sim_admission_score': (
+                    corpus.summary.get('avg_gen2sim_admission_score')
+                    if corpus is not None
+                    else 0.0
+                ),
             },
         )
         runner.set_regal_result(
@@ -1147,6 +1220,20 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
                 ),
                 'synthetic_branch_benchmark_gate': (
                     corpus.benchmark_gate.to_dict() if corpus is not None else {}
+                ),
+                'synthetic_branch_gen2sim_summary': (
+                    {
+                        'avg_gen2sim_admission_score': corpus.summary.get(
+                            'avg_gen2sim_admission_score',
+                            0.0,
+                        ),
+                        'gen2sim_promotion_stage_counts': corpus.summary.get(
+                            'gen2sim_promotion_stage_counts',
+                            {},
+                        ),
+                    }
+                    if corpus is not None
+                    else {}
                 ),
             },
             context_sha=config_digest,
@@ -1163,6 +1250,11 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
             runner.register_artifact('synthetic_branch_summary', branch_summary_path)
         if branch_metrics_path is not None:
             runner.register_artifact('synthetic_branch_metrics', branch_metrics_path)
+        if branch_gen2sim_validity_path is not None:
+            runner.register_artifact(
+                'synthetic_branch_gen2sim_validity',
+                branch_gen2sim_validity_path,
+            )
         if branch_preconditions_path is not None:
             runner.register_artifact('synthetic_branch_execution_preconditions', branch_preconditions_path)
         if branch_benchmark_path is not None:

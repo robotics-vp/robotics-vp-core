@@ -20,7 +20,7 @@ def _write_real_dataset(path) -> None:
     )
 
 
-def _write_synth_dataset(root) -> tuple[str, str, str]:
+def _write_synth_dataset(root) -> tuple[str, str, str, str]:
     corpus_path = root / "branches.npz"
     np.savez(
         corpus_path,
@@ -65,13 +65,45 @@ def _write_synth_dataset(root) -> tuple[str, str, str]:
         ),
         encoding="utf-8",
     )
-    return str(corpus_path), str(metadata_path), str(gap_labels_path)
+    gen2sim_validity_path = root / "branches_gen2sim_validity.json"
+    gen2sim_validity_path.write_text(
+        json.dumps(
+            [
+                {
+                    "branch_idx": 0,
+                    "assessment_id": "gen2sim_branch_0",
+                    "subject_id": "branch_0",
+                    "subject_kind": "synthetic_branch",
+                    "validity_score": 0.84,
+                    "value_support_score": 0.76,
+                    "admission_score": 0.7896,
+                    "promotion_stage": "shadow_candidate",
+                    "benchmark_gate": {"ready": False},
+                    "execution_preconditions": {"ready": True},
+                    "component_scores": {"dynamics_score": 0.9},
+                    "reason_codes": ["gen2sim_validity_ok"],
+                    "metadata": {
+                        "benchmark_signals": {"benchmark_eligible": True},
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return (
+        str(corpus_path),
+        str(metadata_path),
+        str(gap_labels_path),
+        str(gen2sim_validity_path),
+    )
 
 
 def test_local_synth_training_emits_runtime_artifacts(tmp_path) -> None:
     real_data = tmp_path / "real_rollouts.npz"
     _write_real_dataset(real_data)
-    synth_data, synth_metadata, synth_gap_labels = _write_synth_dataset(tmp_path)
+    synth_data, synth_metadata, synth_gap_labels, synth_gen2sim_validity = _write_synth_dataset(
+        tmp_path
+    )
     output_dir = tmp_path / "training_run"
 
     args = Namespace(
@@ -79,6 +111,7 @@ def test_local_synth_training_emits_runtime_artifacts(tmp_path) -> None:
         synth_data=synth_data,
         synth_metadata=synth_metadata,
         synth_gap_labels=synth_gap_labels,
+        synth_gen2sim_validity=synth_gen2sim_validity,
         w_econ_lattice=str(tmp_path / "missing_lattice.pt"),
         output_dir=str(output_dir),
         seed=7,
@@ -116,8 +149,14 @@ def test_local_synth_training_emits_runtime_artifacts(tmp_path) -> None:
 
     assert manifest["training_kind"] == "offline_local_synth"
     assert manifest["artifact_paths"]["synthetic_branch_summary"].endswith("synthetic_branch_summary.json")
+    assert manifest["artifact_paths"]["synthetic_branch_gen2sim_validity"].endswith(
+        "synthetic_branch_gen2sim_validity.json"
+    )
     assert manifest["artifact_paths"]["offline_local_synth_eval"].endswith("offline_local_synth_eval.json")
     assert manifest["metadata"]["scene_tracks_backend"] == "real"
+    assert manifest["metadata"]["avg_gen2sim_admission_score"] > 0.0
     assert payload["results"]["synthetic_branch_policy"]["benchmark_gate_ready"] is True
+    assert payload["results"]["synthetic_branch_policy"]["gen2sim_weight_scale"] == 1.0
     assert (output_dir / "synthetic_branch_execution_preconditions.json").exists()
+    assert (output_dir / "synthetic_branch_gen2sim_validity.json").exists()
     assert (output_dir / "offline_baseline_actor.pt").exists()

@@ -9,7 +9,13 @@ from src.training.synthetic_branch_corpus import (
 )
 
 
-def _write_branch_corpus(tmp_path, *, with_metadata: bool = True, with_gap_labels: bool = True):
+def _write_branch_corpus(
+    tmp_path,
+    *,
+    with_metadata: bool = True,
+    with_gap_labels: bool = True,
+    with_gen2sim: bool = True,
+):
     corpus_path = tmp_path / "branches.npz"
     np.savez(
         corpus_path,
@@ -70,6 +76,48 @@ def _write_branch_corpus(tmp_path, *, with_metadata: bool = True, with_gap_label
             ),
             encoding="utf-8",
         )
+    if with_gen2sim:
+        (tmp_path / "branches_gen2sim_validity.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "branch_idx": 0,
+                        "assessment_id": "gen2sim_branch_0",
+                        "subject_id": "branch_0",
+                        "subject_kind": "synthetic_branch",
+                        "validity_score": 0.82,
+                        "value_support_score": 0.7,
+                        "admission_score": 0.7585,
+                        "promotion_stage": "shadow_candidate",
+                        "benchmark_gate": {"ready": False},
+                        "execution_preconditions": {"ready": True},
+                        "component_scores": {"dynamics_score": 0.9},
+                        "reason_codes": ["gen2sim_validity_ok"],
+                        "metadata": {
+                            "benchmark_signals": {"benchmark_eligible": True},
+                        },
+                    },
+                    {
+                        "branch_idx": 1,
+                        "assessment_id": "gen2sim_branch_1",
+                        "subject_id": "branch_1",
+                        "subject_kind": "synthetic_branch",
+                        "validity_score": 0.55,
+                        "value_support_score": 0.3,
+                        "admission_score": 0.45375,
+                        "promotion_stage": "shadow_candidate",
+                        "benchmark_gate": {"ready": False},
+                        "execution_preconditions": {"ready": True},
+                        "component_scores": {"dynamics_score": 0.6},
+                        "reason_codes": ["benchmark_gate_not_ready"],
+                        "metadata": {
+                            "benchmark_signals": {"benchmark_eligible": False},
+                        },
+                    },
+                ]
+            ),
+            encoding="utf-8",
+        )
     return corpus_path
 
 
@@ -85,15 +133,22 @@ def test_synthetic_branch_corpus_loads_readiness_and_policy(tmp_path) -> None:
 
     assert corpus.summary["branch_count"] == 2
     assert corpus.summary["semantic_gap_labeled"] is True
+    assert corpus.summary["gen2sim_validity_present"] is True
     assert corpus.execution_preconditions.ready is True
     assert corpus.benchmark_gate.ready is True
     assert policy["effective_synth_share_cap"] == 0.3
     assert policy["benchmark_gate_ready"] is True
+    assert policy["gen2sim_weight_scale"] == 1.0
     assert branch_priority_multiplier(corpus.branches[0], policy) > 1.0
 
 
 def test_synthetic_branch_policy_caps_unproven_corpora(tmp_path) -> None:
-    corpus_path = _write_branch_corpus(tmp_path, with_metadata=False, with_gap_labels=False)
+    corpus_path = _write_branch_corpus(
+        tmp_path,
+        with_metadata=False,
+        with_gap_labels=False,
+        with_gen2sim=False,
+    )
 
     corpus = load_synthetic_branch_corpus(corpus_path)
     policy = build_synthetic_branch_training_policy(
@@ -108,6 +163,7 @@ def test_synthetic_branch_policy_caps_unproven_corpora(tmp_path) -> None:
     assert policy["effective_synth_share_cap"] <= 0.1
     assert "branch_metadata_missing" in policy["reasons"]
     assert "semantic_gap_labels_missing" in policy["reasons"]
+    assert "gen2sim_validity_missing" in policy["reasons"]
 
 
 def test_synthetic_branch_corpus_does_not_promote_passthrough_scene_tracks(tmp_path) -> None:

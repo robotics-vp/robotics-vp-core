@@ -30,6 +30,7 @@ sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from src.world_model.contractive_dynamics import StableWorldModel
 from src.valuation.trust_net import TrustNet
 from src.config.internal_profile import get_internal_experiment_profile
+from src.evidence.gen2sim_validity import assess_gen2sim_validity
 from src.evidence.scene_tracks_truth import scene_tracks_truth_from_metadata
 
 
@@ -485,6 +486,55 @@ def main():
             json.dump(gap_data, f, indent=2)
         print(f"Saved gap labels to {gap_labels_path}")
 
+    gen2sim_validity_rows = []
+    for i, branch in enumerate(branches):
+        assessment = assess_gen2sim_validity(
+            subject_id=f"{os.path.splitext(os.path.basename(args.output))[0]}_branch_{i:04d}",
+            subject_kind="synthetic_branch",
+            metadata={
+                **dict(source_runtime_metadata),
+                'scene_tracks_backend': scene_tracks_backend,
+                'teacher_runtime_backend_selected': teacher_runtime_backend,
+                'vision_backbone_selected': vision_backbone_selected,
+                'semantic_grounding_mode': semantic_grounding_mode,
+                'semantic_memory_grounded': semantic_memory_grounded,
+                'source_runtime_metadata': args.source_runtime_metadata or None,
+                'branch_gap_labels': gap_labels_path,
+                'trust_score': branch['trust_score'],
+                'std_ratio': branch['std_ratio'],
+                'branch_value': branch.get('branch_value', branch['trust_score']),
+                'coverage_gap_contribution': branch.get('gap_labels', {}).get(
+                    'coverage_gap_contribution',
+                    0.0,
+                ),
+                'economic_priority': branch.get('gap_labels', {}).get('economic_priority', 0.0),
+            },
+            trust_score=branch['trust_score'],
+            std_ratio=branch['std_ratio'],
+            branch_value=branch.get('branch_value', branch['trust_score']),
+            gap_labels=branch.get('gap_labels', {}),
+        )
+        branch['gen2sim_validity'] = assessment.to_dict()
+        gen2sim_validity_rows.append({'branch_idx': i, **assessment.to_dict()})
+
+    gen2sim_validity_path = args.output.replace('.npz', '_gen2sim_validity.json')
+    with open(gen2sim_validity_path, 'w', encoding='utf-8') as f:
+        json.dump(gen2sim_validity_rows, f, indent=2)
+    print(f"Saved gen2sim validity assessments to {gen2sim_validity_path}")
+
+    gen2sim_admission_scores = np.array(
+        [row['admission_score'] for row in gen2sim_validity_rows],
+        dtype=np.float32,
+    )
+    gen2sim_validity_scores = np.array(
+        [row['validity_score'] for row in gen2sim_validity_rows],
+        dtype=np.float32,
+    )
+    gen2sim_stage_counts = {}
+    for row in gen2sim_validity_rows:
+        stage = str(row.get('promotion_stage', 'heuristic_fallback'))
+        gen2sim_stage_counts[stage] = gen2sim_stage_counts.get(stage, 0) + 1
+
     metadata = {
         'schema_version': 'synthetic_branch_corpus_metadata_v1',
         'source_type': 'stable_world_model_local_branch_v1',
@@ -507,6 +557,16 @@ def main():
         'coverage_graph_used': args.use_coverage_graph,
         'coverage_graph_path': args.coverage_graph_path if args.use_coverage_graph else None,
         'gap_label_sample': branches[0].get('gap_labels') if branches else None,
+        'gen2sim_validity_summary': {
+            'count': len(gen2sim_validity_rows),
+            'avg_validity_score': float(gen2sim_validity_scores.mean())
+            if len(gen2sim_validity_scores)
+            else 0.0,
+            'avg_admission_score': float(gen2sim_admission_scores.mean())
+            if len(gen2sim_admission_scores)
+            else 0.0,
+            'promotion_stage_counts': gen2sim_stage_counts,
+        },
         'scene_tracks_backend': scene_tracks_backend,
         'teacher_runtime_backend_selected': teacher_runtime_backend,
         'vision_backbone_selected': vision_backbone_selected,
@@ -534,6 +594,7 @@ def main():
         },
         'future_training_artifacts': {
             'branch_gap_labels': gap_labels_path,
+            'branch_gen2sim_validity': gen2sim_validity_path,
             'source_runtime_metadata': args.source_runtime_metadata or None,
         },
     }
