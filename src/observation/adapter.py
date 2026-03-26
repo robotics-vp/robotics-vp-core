@@ -656,6 +656,8 @@ class ObservationAdapter:
                         "meta_node_count": topology.get("meta_node_count", 0),
                     },
                 )
+            for key, value in self._semantic_runtime_metadata(semantics.metadata).items():
+                combined_episode_md.setdefault(key, value)
 
         builder_inputs.setdefault("episode_config", descriptor or episode_metadata or {})
         builder_inputs.setdefault("econ_state", econ_slice or {})
@@ -673,6 +675,13 @@ class ObservationAdapter:
             meta_copy = dict(datapack_md) if isinstance(datapack_md, dict) else {}
             meta_copy.setdefault("pack_id", descriptor.get("pack_id"))
             datapack_md = meta_copy
+        if semantics and isinstance(semantics.metadata, dict):
+            semantic_runtime_md = self._semantic_runtime_metadata(semantics.metadata)
+            if semantic_runtime_md:
+                meta_copy = dict(datapack_md) if isinstance(datapack_md, dict) else {}
+                for key, value in semantic_runtime_md.items():
+                    meta_copy.setdefault(key, value)
+                datapack_md = meta_copy
         builder_inputs.setdefault("datapack_metadata", datapack_md)
         builder_inputs.setdefault("episode_step", combined_episode_md.get("timestep", 0))
         builder_inputs.setdefault("econ_slice", econ_slice)
@@ -684,6 +693,26 @@ class ObservationAdapter:
         return builder_inputs
 
     # --- semantic helpers ----------------------------------------------
+    def _semantic_runtime_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        allowed_keys = {
+            "scene_tracks_backend",
+            "teacher_runtime_backend_selected",
+            "vision_backbone_selected",
+            "semantic_grounding_mode",
+            "semantic_memory_grounded",
+            "grounded_track_object_count",
+            "quality_score",
+            "semantic_fusion",
+            "benchmark_signals",
+            "execution_preconditions",
+            "semantic_runtime_truth",
+        }
+        return {
+            key: value
+            for key, value in dict(metadata or {}).items()
+            if key in allowed_keys and value not in (None, "", [], {})
+        }
+
     def _extract_semantic_tags(self, snapshot: SemanticSnapshot) -> Dict[str, float]:
         """
         Deterministically flatten semantic tags into a score map.

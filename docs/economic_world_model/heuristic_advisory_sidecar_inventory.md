@@ -371,5 +371,5 @@ Ranking dimensions:
 ## Remaining Top Follow-Ons
 
 1. Add a real training/export path for the new semantic datapack-selection helper so the `auto -> required` promotion path is backed by an actual corpus and scorer package, not just runtime plumbing.
-2. Audit the remaining observation-adapter and runtime-backbone vision bridges so sidecar-carried grounding/quality state there either affects runtime routing/preconditions materially or stays explicitly quarantined.
+2. Replace heuristic teacher targets and dummy instruction tokens in `train_orchestration_transformer.py` with packet/evidence/runtime-corpus supervision so the wrapped trainer stops depending on synthetic teacher contracts internally.
 3. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.

@@ -136,4 +136,7 @@ def test_semantic_world_model_builder_and_backbone_bridge_stage1_state() -> None
 
     assert result.semantic_snapshot.semantic_world_model is not None
     assert result.semantic_snapshot.metadata["semantic_world_model_summary"]["topology"]["object_count"] >= 4
+    assert result.semantic_snapshot.metadata["semantic_runtime_truth"]["scene_tracks_backend"] == "real"
+    assert result.semantic_snapshot.metadata["benchmark_signals"]["semantic_grounding_non_heuristic"] is True
+    assert result.semantic_snapshot.metadata["execution_preconditions"]["ready"] is True
     assert result.orchestrator_advisory.meta_node_weights["risk_triage"] > 0.0

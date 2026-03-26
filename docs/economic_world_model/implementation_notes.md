@@ -2,6 +2,24 @@
 
 ## 2026-03-26
 
+- Observation/conditioning now reacts to semantic-runtime truth instead of merely carrying it:
+  - `src/semantic/runtime_backbone.py` now derives a compact `semantic_runtime_truth` block from the semantic world model:
+    - scene-track backend truth
+    - teacher-runtime truth
+    - vision-backbone truth
+    - benchmark signals
+    - execution-precondition summary
+  - those summaries are now written into `SemanticSnapshot.metadata`
+- `src/observation/adapter.py` now threads those runtime-truth fields into the condition-builder inputs even when they originated from semantic snapshots rather than raw datapack metadata.
+- `src/observation/condition_vector_builder.py` now uses those signals materially:
+  - benchmark-unready grounding
+  - failed execution preconditions
+  - blocked/mixed semantic fusion
+  now contribute bounded OOD and recovery signals instead of remaining sidecar-style facts with no effect on the condition vector
+- This closes the remaining runtime honesty gap for these modules:
+  - runtime truth no longer disappears between semantic snapshot construction and policy/diffusion conditioning
+  - the next missing pieces are training/export lanes that learn from these richer receipts
+
 - Rollout-labeler semantics now survive into the real datapack contract instead of dying as local sidecars:
   - `src/motor_backend/datapacks.py` now treats `quality_score`, `novelty_score`, and arbitrary `metadata` as first-class datapack-config fields
   - `src/ontology/datapack_registry.py` now upserts those richer configs into ontology records instead of skipping existing datapacks and preserving stale truth

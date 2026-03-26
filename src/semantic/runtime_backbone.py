@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
+from src.evidence.benchmark_gating import collect_benchmark_gating_signals
+from src.evidence.preconditions import build_execution_preconditions
 from src.orchestrator.semantic_orchestrator_v2 import (
     OrchestratorAdvisory,
     SemanticOrchestratorV2,
@@ -41,6 +43,84 @@ def _semantic_world_model_summary(world_model: Optional[SemanticWorldModelState]
     }
 
 
+def _semantic_runtime_truth(
+    *,
+    semantic_world_model: SemanticWorldModelState,
+    runtime_metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> Dict[str, Any]:
+    grounded_scene = _mapping(semantic_world_model.metadata.get("grounded_scene"))
+    topology = _mapping(semantic_world_model.topology)
+    scene_tracks_backend = str(
+        metadata.get("scene_tracks_backend")
+        or ("real" if grounded_scene.get("grounding_mode") == "scene_tracks" else "")
+    )
+    teacher_runtime_backend_selected = str(
+        metadata.get("teacher_runtime_backend_selected")
+        or ("real" if grounded_scene.get("teacher_trace_present", False) else "unavailable")
+    )
+    vision_backbone_selected = str(
+        metadata.get("vision_backbone_selected")
+        or metadata.get("openvla_vision_backbone_selected")
+        or ("real" if grounded_scene.get("vla_semantic_evidence_present", False) else "unavailable")
+    )
+    grounded_track_object_count = int(
+        topology.get("grounded_track_object_count")
+        or grounded_scene.get("grounded_object_count")
+        or 0
+    )
+    semantic_grounding_ready = bool(grounded_scene.get("semantic_grounding_ready", False))
+    semantic_fusion_confidence = _safe_float(
+        runtime_metrics.get(
+            "semantic_fusion_confidence_mean",
+            metadata.get("semantic_fusion_confidence_mean", 0.0),
+        ),
+    )
+    quality_score = max(
+        _safe_float(metadata.get("quality_score", 0.0)),
+        _safe_float(grounded_scene.get("scene_ir_quality", 0.0)),
+        semantic_fusion_confidence,
+    )
+    truth = {
+        "scene_tracks_backend": scene_tracks_backend,
+        "teacher_runtime_backend_selected": teacher_runtime_backend_selected,
+        "vision_backbone_selected": vision_backbone_selected,
+        "semantic_grounding_mode": (
+            "non_heuristic"
+            if semantic_grounding_ready
+            else str(grounded_scene.get("grounding_mode", "heuristic_fallback") or "heuristic_fallback")
+        ),
+        "semantic_memory_grounded": bool(grounded_track_object_count > 0 or semantic_grounding_ready),
+        "grounded_track_object_count": grounded_track_object_count,
+        "teacher_runtime_live": bool(grounded_scene.get("teacher_trace_present", False)),
+        "semantic_fusion_confidence_mean": semantic_fusion_confidence,
+        "quality_score": quality_score,
+    }
+    benchmark_signals = collect_benchmark_gating_signals(truth)
+    execution_preconditions = build_execution_preconditions(
+        subject_id=semantic_world_model.world_model_id,
+        subject_kind="semantic_runtime_snapshot",
+        signal_values={
+            **benchmark_signals,
+            "semantic_fusion_ready": semantic_fusion_confidence > 0.0,
+            "semantic_fusion_confidence_mean": semantic_fusion_confidence,
+            "quality_score": quality_score,
+        },
+        required_boolean_signals={"semantic_grounding_non_heuristic": True},
+        soft_boolean_signals={
+            "teacher_runtime_real": True,
+            "vision_backbone_real": True,
+            "semantic_fusion_ready": True,
+        },
+        metadata={"grounded_scene": grounded_scene},
+    )
+    return {
+        **truth,
+        "benchmark_signals": benchmark_signals,
+        "execution_preconditions": execution_preconditions.to_dict(),
+    }
+
+
 @dataclass(frozen=True)
 class RuntimeSemanticBackboneResult:
     semantic_world_model: SemanticWorldModelState
@@ -72,8 +152,14 @@ class SemanticRuntimeBackbone:
         backends: Optional[Sequence[str]] = None,
     ) -> RuntimeSemanticBackboneResult:
         runtime_metrics = _mapping(runtime_metrics)
+        metadata_payload = _mapping(metadata)
         topology = semantic_world_model.topology or {}
         capabilities = semantic_world_model.capability_scores or {}
+        runtime_truth = _semantic_runtime_truth(
+            semantic_world_model=semantic_world_model,
+            runtime_metrics=runtime_metrics,
+            metadata=metadata_payload,
+        )
         econ_slice = EconSlice(
             task_id=task_id,
             avg_mpl_units_per_hour=_safe_float(runtime_metrics.get("mpl", runtime_metrics.get("avg_mpl_units_per_hour", 0.0))),
@@ -84,6 +170,7 @@ class SemanticRuntimeBackbone:
             metadata={
                 "runtime_metrics": runtime_metrics,
                 "semantic_world_model_topology": topology,
+                "semantic_runtime_truth": runtime_truth,
             },
         )
         meta_slice = MetaTransformerSlice(
@@ -99,6 +186,7 @@ class SemanticRuntimeBackbone:
             metadata={
                 "semantic_world_model_id": semantic_world_model.world_model_id,
                 "active_meta_nodes": [item.node_type for item in semantic_world_model.meta_nodes],
+                "semantic_runtime_truth": runtime_truth,
             },
         )
         snapshot = SemanticSnapshot(
@@ -124,8 +212,11 @@ class SemanticRuntimeBackbone:
                 "recap": recap_summary or {},
                 "semantic_world_model": semantic_world_model.to_dict(),
                 "semantic_world_model_summary": _semantic_world_model_summary(semantic_world_model),
+                "semantic_runtime_truth": runtime_truth,
+                "benchmark_signals": runtime_truth["benchmark_signals"],
+                "execution_preconditions": runtime_truth["execution_preconditions"],
                 **runtime_metrics,
-                **_mapping(metadata),
+                **metadata_payload,
             },
         ).sorted_copy()
         advisory = self.orchestrator.propose(snapshot)

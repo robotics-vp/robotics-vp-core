@@ -260,7 +260,26 @@ class ConditionVectorBuilder:
         sampler_strategy: Optional[str],
     ) -> Dict[str, Any]:
         # Keep only JSON-safe, low-risk fields
-        allowed_keys = ["tags", "datapack_id", "backend_id", "phase", "pack_tier", "pack_id", "tfd_instruction"]
+        allowed_keys = [
+            "tags",
+            "datapack_id",
+            "backend_id",
+            "phase",
+            "pack_tier",
+            "pack_id",
+            "tfd_instruction",
+            "scene_tracks_backend",
+            "teacher_runtime_backend_selected",
+            "vision_backbone_selected",
+            "semantic_grounding_mode",
+            "semantic_memory_grounded",
+            "grounded_track_object_count",
+            "quality_score",
+            "semantic_runtime_truth",
+            "benchmark_signals",
+            "execution_preconditions",
+            "semantic_fusion",
+        ]
         meta: Dict[str, Any] = {k: v for k, v in (datapack_metadata or {}).items() if k in allowed_keys}
         if episode_metadata.get("episode_id"):
             meta["episode_id"] = episode_metadata["episode_id"]
@@ -562,6 +581,60 @@ class ConditionVectorBuilder:
             if isinstance(ood_tag, dict):
                 ood_tags.append(ood_tag)
 
+        execution_preconditions = (
+            datapack_metadata.get("execution_preconditions")
+            or episode_metadata.get("execution_preconditions")
+            or {}
+        )
+        if isinstance(execution_preconditions, dict) and not bool(execution_preconditions.get("ready", False)):
+            readiness_gap = 1.0 - self._safe_float(execution_preconditions.get("readiness_score", 0.0))
+            ood_tags.append(
+                {
+                    "name": "execution_preconditions_unready",
+                    "severity": max(0.4, readiness_gap),
+                    "source": "execution_preconditions",
+                }
+            )
+
+        benchmark_signals = (
+            datapack_metadata.get("benchmark_signals")
+            or episode_metadata.get("benchmark_signals")
+            or {}
+        )
+        if isinstance(benchmark_signals, dict):
+            if not bool(benchmark_signals.get("semantic_grounding_non_heuristic", False)):
+                ood_tags.append(
+                    {
+                        "name": "semantic_grounding_non_heuristic_missing",
+                        "severity": 0.75,
+                        "source": "grounding",
+                    }
+                )
+            if str(benchmark_signals.get("scene_tracks_backend", "") or "") in {
+                "passthrough",
+                "stub",
+                "auto",
+                "artifact_present_unknown",
+            }:
+                ood_tags.append(
+                    {
+                        "name": "scene_tracks_fallback",
+                        "severity": 0.7,
+                        "source": "scene_tracks",
+                    }
+                )
+
+        semantic_fusion = datapack_metadata.get("semantic_fusion") or episode_metadata.get("semantic_fusion") or {}
+        if isinstance(semantic_fusion, dict) and semantic_fusion.get("status") in {"blocked", "mixed"}:
+            ready_fraction = self._safe_float(semantic_fusion.get("ready_fraction", 0.0))
+            ood_tags.append(
+                {
+                    "name": "semantic_fusion_unstable",
+                    "severity": max(0.35, 1.0 - ready_fraction),
+                    "source": "semantic_fusion",
+                }
+            )
+
         if not ood_tags:
             return signals
 
@@ -619,6 +692,30 @@ class ConditionVectorBuilder:
         for recovery_tag in metadata_recovery_tags:
             if isinstance(recovery_tag, dict):
                 recovery_tags.append(recovery_tag)
+
+        execution_preconditions = (
+            datapack_metadata.get("execution_preconditions")
+            or episode_metadata.get("execution_preconditions")
+            or {}
+        )
+        if isinstance(execution_preconditions, dict) and not bool(execution_preconditions.get("ready", False)):
+            recovery_tags.append(
+                {
+                    "name": "execution_preconditions_repair",
+                    "value_add": "high",
+                    "correction_type": "execution_preconditions",
+                }
+            )
+
+        semantic_fusion = datapack_metadata.get("semantic_fusion") or episode_metadata.get("semantic_fusion") or {}
+        if isinstance(semantic_fusion, dict) and semantic_fusion.get("status") in {"blocked", "mixed"}:
+            recovery_tags.append(
+                {
+                    "name": "semantic_fusion_repair",
+                    "value_add": "high",
+                    "correction_type": "semantic_fusion",
+                }
+            )
 
         if not recovery_tags:
             return signals

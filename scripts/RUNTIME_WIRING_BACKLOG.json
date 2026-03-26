@@ -47,22 +47,12 @@
       "id": "vla_labeled_datapack_truth_contract",
       "completed_at": "2026-03-26",
       "notes": "P2 complete - DatapackConfig/registry now preserve metadata plus quality/novelty across YAML and ontology, rollout labeling aggregates teacher-runtime/SceneTracks/provenance/precondition truth into labeled datapacks, and semantic simulation enriches those datapacks with semantic-fusion artifact refs and readiness instead of dropping vision semantics as sidecars."
+    },
+    {
+      "id": "semantic_conditioning_truth_bridge",
+      "completed_at": "2026-03-26",
+      "notes": "P2 complete - semantic runtime backbone now emits compact runtime-truth / benchmark / execution-precondition summaries, and observation/condition-vector builders now preserve and react to those signals so benchmark-unready grounding or blocked fusion changes conditioning instead of remaining metadata-only."
     }
   ],
-  "backlog": [
-    {
-      "id": "vision_sidecar_runtime_semantics",
-      "priority": "P2",
-      "owner": "codex",
-      "category": "runtime_wiring",
-      "files": [
-        "src/vla/rollout_labeler.py",
-        "src/observation/adapter.py",
-        "src/semantic/runtime_backbone.py",
-        "src/vision/scene_ir_tracker/io/scene_tracks_runner.py"
-      ],
-      "blocked_by": "remaining end-to-end audit of observation-adapter/runtime-backbone sidecar semantics outside the rollout-labeler/datapack contract already tightened",
-      "notes": "Rollout-labeler and labeled-datapack truth propagation are now wired, but a remaining audit is still needed across observation adapters and runtime-backbone bridges to ensure sidecar-carried grounding/quality signals either affect routing/preconditions materially or stay explicitly quarantined."
-    }
-  ]
+  "backlog": []
 }
