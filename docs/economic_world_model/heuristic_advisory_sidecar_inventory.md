@@ -465,6 +465,14 @@ Ranking dimensions:
     - saved dataset JSON inputs
     - the real `MetaTransformerNet`
     - the existing batching/loss/eval helpers
+  - runtime-export and synthetic-fallback samples now carry the same explicit planning contract:
+    - semantic/econ/datapack/selection planning context
+    - `objective_preset`
+    - `chosen_backend`
+    - `energy_profile_weights`
+    - `data_mix_weights`
+    - `expected_deltas`
+  - `MetaTransformerNet` now trains planning heads over that contract instead of leaving those fields entirely outside the learned substrate
   - synthetic generation remains available only as an explicit fallback input source when requested
   - the script now emits canonical runtime manifests/checkpoint registry/training summaries plus an explicit `meta_transformer_package.json` runtime artifact instead of writing an opaque random checkpoint under `results/`
   - benchmark readiness is now materially stricter:
@@ -474,6 +482,7 @@ Ranking dimensions:
     - `helper_mode=disabled|auto|required`
     - bounded runtime loading of the trained package through `src/orchestrator/meta_transformer_runtime.py`
     - learned authority / policy-state / diffusion-conditioning / ontology-token influence with explicit `shadow_candidate` vs `promoted` stages
+    - bounded learned objective/backend/energy-profile/data-mix/expected-delta influence with recorded `planning_trace` and `planning_application` receipts
     - hard failure for `required` mode when the package is not benchmark-gated ready
 - current consumers:
   - `scripts/export_semantic_runtime_learning_corpus.py`
@@ -483,12 +492,14 @@ Ranking dimensions:
   - before this pass, the trainer existed and the runtime callout existed, but they were not connected:
     - training produced checkpoints
     - runtime kept using only the heuristic `MetaTransformer`
-  - that created a high-distortion fake boundary because the lane could look architecturally complete while the trained model still had no bounded runtime effect
+  - even after the first package/runtime connection, the highest-value planning fields still lived above the learned substrate as heuristic-only derivations
+  - that created a high-distortion fake boundary because the lane could look architecturally complete while the trained model still had no bounded runtime effect on the actual objective/backend/data-mix chooser
 - recommended disposition:
   - keep the runtime/export dataset as the preferred source
   - keep synthetic generation explicit and benchmark-gated as a dev fallback only
-  - keep the heuristic planner as the explicit prior
-  - let the trained package influence runtime only through the bounded helper path until benchmark-gated promotion evidence is materially dense
+  - keep the heuristic planner as the explicit prior rather than deleting it prematurely
+  - let the trained package influence runtime through the bounded helper path across the real planning surface, while keeping `orchestration_plan` as an explicit deterministic downstream projection
+  - later move the next neuralization step upward into the economic-WM/meta-node-WM layer that conditions this helper, not back downward into another fake sidecar
 - disposition tag:
   - `wired now`
   - `upgraded to heavyweight parity`

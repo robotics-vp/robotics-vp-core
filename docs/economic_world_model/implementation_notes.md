@@ -86,6 +86,21 @@
   - `src/orchestrator/meta_transformer_runtime.py` loads that package and reconstructs `MetaTransformerNet` for CPU inference
   - `src/orchestrator/meta_transformer.py` now accepts `helper_package_path` plus `helper_mode=disabled|auto|required`
   - `src/policies/meta_advisor.py` now threads the same package path/mode into the live policy facade
+- The learned package now covers the real planning seam instead of only latent embeddings:
+  - `src/orchestrator/meta_transformer_planning.py` defines a shared planning-context vector over:
+    - semantic-WM features
+    - econ signals
+    - datapack signals
+    - selector meta-choice receipts
+  - `src/orchestrator/semantic_runtime_learning.py` now exports that same context plus explicit:
+    - `objective_preset`
+    - `chosen_backend`
+    - `energy_profile_weights`
+    - `data_mix_weights`
+    - `expected_deltas`
+    into `MetaTransformerSample`
+  - `src/orchestrator/meta_transformer_training.py` now trains planning heads directly on the real `MetaTransformerNet` substrate, so the helper learns the same meta-choice surface that runtime previously derived purely by hand
+  - `src/orchestrator/meta_transformer_runtime.py` now decodes those heads and records planning traces, and `src/orchestrator/meta_transformer.py` now applies them with bounded shadow/promoted blending plus an explicit `planning_application` receipt
 - Promotion/readiness for the meta-transformer is now materially stricter and sequential:
   - sample count alone no longer promotes the lane
   - benchmark readiness now also requires enough:
@@ -97,12 +112,16 @@
   - `required` refuses those packages outright
 - This is the right current posture for meta neuralization:
   - the trained architecture, dataset substrate, and runtime helper are now real
-  - the heuristic `MetaTransformer` outputs remain the explicit prior for objective preset / backend / data mix / orchestration-plan derivation
+  - the heuristic `MetaTransformer` outputs remain the explicit prior, but they are now a bounded prior rather than the only planner:
+    - learned objective/backend candidates can override when confidence and promotion stage justify it
+    - learned energy/data-mix/expected-delta heads now blend against the prior even in `shadow_candidate`
+    - `orchestration_plan` remains a deterministic bounded projection downstream of those chosen planning fields
   - the learned package now materially influences:
     - authority selection
     - shared policy state
     - diffusion conditioning
     - ontology-token predictions
+    - objective preset / backend / energy-profile / data-mix / expected-delta choice
   - the next layer above this is not another fake package; it is later economic-WM and meta-node-WM conditioning over the same helper contract
 
 - Orchestration transformer training/eval now use one honest instruction/runtime contract:
@@ -248,6 +267,7 @@
     - training summary
     - training job result
     - canonical runtime manifest and checkpoint registry when run under `RegalTrainingRunner`
+  - synthetic fallback samples now carry the same planning-target contract as runtime-export samples instead of only authority/token labels, so the lightweight path is materially closer to the heavyweight trainer
 - This is the correct posture for the meta-transformer lane:
   - the script is no longer fake
   - synthetic data is no longer the implicit truth source

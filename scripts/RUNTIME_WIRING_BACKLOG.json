@@ -67,6 +67,11 @@
       "id": "orchestration_sequence_contract",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - orchestration transformer/runtime now use bounded multi-step tool logits with an explicit PAD/stop label, runtime planning records model sequence traces before bounded heuristic backfill, and the trainer/eval path now optimizes and reports full bounded tool-sequence behavior instead of only the first routing decision."
+    },
+    {
+      "id": "meta_transformer_planning_helper",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - meta-transformer runtime/training now carry a shared planning-context contract over semantic/econ/datapack/selector receipts, the trained helper now predicts bounded objective/backend/energy-profile/data-mix/expected-delta outputs, and runtime records both planning traces and the bounded planning_application receipt explaining why the final meta-choice stayed heuristic-prior or moved toward the learned helper."
     }
   ],
   "backlog": []
