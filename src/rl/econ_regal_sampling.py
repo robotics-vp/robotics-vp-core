@@ -2,9 +2,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Sequence
+from typing import Any, Dict
 
 from src.regality.promotion_policy import RegalPromotionPolicy
+
+
+def _clip01(value: Any) -> float:
+    try:
+        raw = float(value)
+    except Exception:
+        raw = 0.0
+    return max(0.0, min(1.0, raw))
 
 
 @dataclass(frozen=True)
@@ -16,6 +24,10 @@ class ReplaySamplingRecommendation:
     queue_tags: list[str]
     replay_action: str
     weight_multiplier: float
+    learned_route_score: float = 0.0
+    learned_authority_confidence: float = 0.0
+    learned_counterfactual_value: float = 0.0
+    learned_predicted_regret: float = 0.0
     reasons: list[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -25,6 +37,10 @@ class ReplaySamplingRecommendation:
             "queue_tags": list(self.queue_tags),
             "replay_action": self.replay_action,
             "weight_multiplier": float(self.weight_multiplier),
+            "learned_route_score": float(self.learned_route_score),
+            "learned_authority_confidence": float(self.learned_authority_confidence),
+            "learned_counterfactual_value": float(self.learned_counterfactual_value),
+            "learned_predicted_regret": float(self.learned_predicted_regret),
             "reasons": list(self.reasons),
         }
 
@@ -43,6 +59,11 @@ def recommend_sampling(
     promotion_policy: RegalPromotionPolicy,
     replay_policy_error: float,
     provenance_quality: float,
+    semantic_runtime_route_score: float = 0.0,
+    semantic_runtime_authority_confidence: float = 0.0,
+    semantic_runtime_counterfactual_value: float = 0.0,
+    semantic_runtime_predicted_regret: float = 0.0,
+    semantic_runtime_authority_switch_recommended: bool = False,
 ) -> ReplaySamplingRecommendation:
     score = 0.35
     reasons: list[str] = []
@@ -88,6 +109,27 @@ def recommend_sampling(
         score += 0.05
     if promotion_policy.stage_allows("reward_safety_regal", "budget_gate"):
         score += 0.03
+    learned_route_score = _clip01(semantic_runtime_route_score)
+    learned_authority_confidence = _clip01(semantic_runtime_authority_confidence)
+    learned_counterfactual_value = _clip01(semantic_runtime_counterfactual_value)
+    learned_predicted_regret = _clip01(semantic_runtime_predicted_regret)
+    learned_support = (0.65 * learned_route_score) + (0.35 * learned_authority_confidence)
+    if learned_support > 0.0:
+        score += min(0.12, 0.12 * learned_support)
+        reasons.append("semantic_runtime_support")
+        tags.append("runtime_score_candidate")
+    if learned_counterfactual_value > 0.0:
+        score += min(0.08, 0.08 * learned_counterfactual_value)
+        reasons.append("runtime_counterfactual_value_positive")
+        tags.append("runtime_counterfactual_candidate")
+    if learned_predicted_regret >= 0.2:
+        score += min(0.08, 0.08 * learned_predicted_regret)
+        reasons.append("runtime_predicted_regret_high")
+        tags.append("runtime_regret_review")
+    if semantic_runtime_authority_switch_recommended:
+        score += 0.04
+        reasons.append("runtime_authority_switch_recommended")
+        tags.append("authority_switch_review")
 
     score = max(0.0, min(1.0, score))
     label = "low"
@@ -117,5 +159,9 @@ def recommend_sampling(
         queue_tags=sorted(set(tags)),
         replay_action=action,
         weight_multiplier=weight_multiplier,
+        learned_route_score=learned_route_score,
+        learned_authority_confidence=learned_authority_confidence,
+        learned_counterfactual_value=learned_counterfactual_value,
+        learned_predicted_regret=learned_predicted_regret,
         reasons=reasons or ["baseline_sampling"],
     )

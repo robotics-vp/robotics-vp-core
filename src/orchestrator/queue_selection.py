@@ -134,6 +134,7 @@ def build_live_queue_selection(
                     "datapack_recommendation": episode.get("datapack_recommendation"),
                     "signal_yield_score": episode.get("signal_yield_score"),
                     "inferential_signal_yield": episode.get("inferential_signal_yield"),
+                    "semantic_runtime_score": episode.get("semantic_runtime_score"),
                     "inferential_budget_decision": episode.get("inferential_budget_decision"),
                     "execution_preconditions": episode.get("execution_preconditions"),
                     "execution_work_orders": episode.get("execution_work_orders"),
@@ -144,6 +145,7 @@ def build_live_queue_selection(
                         "sampling_recommendation": dict(episode.get("sampling_recommendation", {}) or {}),
                         "receipt_feedback": dict(episode.get("receipt_feedback", {}) or {}),
                         "inferential_signal_yield": episode.get("inferential_signal_yield"),
+                        "semantic_runtime_score": dict(episode.get("semantic_runtime_score", {}) or {}),
                         "execution_preconditions": dict(episode.get("execution_preconditions", {}) or {}),
                         "execution_work_orders": [
                             dict(row) for row in episode.get("execution_work_orders", []) or []

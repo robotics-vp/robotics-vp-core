@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from src.economics.inferential_reward import compile_signal_yield
@@ -14,6 +15,12 @@ from src.epiplexity.metadata import (
 from src.phase_h.advisory_integration import MAX_MULTIPLIER, MIN_MULTIPLIER
 from src.orchestrator.adaptation_budgeting import evaluate_adaptation_budget
 from src.orchestrator.queue_selection import build_live_queue_selection
+from src.orchestrator.semantic_runtime_learning import build_semantic_runtime_learning_row
+from src.orchestrator.semantic_runtime_scorers import (
+    coerce_semantic_runtime_scorer_package,
+    load_semantic_runtime_scorer_package,
+    score_semantic_runtime_learning_row,
+)
 from src.replay.receipt_ingest import resolve_receipt_label_bundle
 from src.replay.dataset import load_replay_dataset
 from src.replay.compatibility import check_replay_manifest_compatibility
@@ -27,6 +34,35 @@ from src.shadow_runtime.advisors import (
 )
 
 
+def _resolve_semantic_runtime_scorer_package(
+    *,
+    replay_dataset_dir: str,
+    semantic_runtime_scorer_package: Optional[Any] = None,
+    semantic_runtime_scorer_package_path: Optional[str] = None,
+) -> tuple[Optional[Any], Optional[str]]:
+    if semantic_runtime_scorer_package is not None:
+        return coerce_semantic_runtime_scorer_package(semantic_runtime_scorer_package), None
+
+    candidate_paths: list[Path] = []
+    if semantic_runtime_scorer_package_path:
+        explicit_path = Path(semantic_runtime_scorer_package_path)
+        if not explicit_path.exists():
+            raise FileNotFoundError(f"semantic runtime scorer package not found: {explicit_path}")
+        candidate_paths.append(explicit_path)
+
+    replay_root = Path(replay_dataset_dir)
+    candidate_paths.extend(
+        [
+            replay_root / "semantic_runtime_scorer_package.json",
+            replay_root.parent / "semantic_runtime_scorers" / "semantic_runtime_scorer_package.json",
+        ]
+    )
+    for candidate in candidate_paths:
+        if candidate.exists():
+            return load_semantic_runtime_scorer_package(candidate), str(candidate)
+    return None, None
+
+
 def build_shadow_advisory_output(
     *,
     replay_dataset_dir: str,
@@ -38,6 +74,8 @@ def build_shadow_advisory_output(
     receipt_label_dir: Optional[str] = None,
     receipt_label_mode: str = "synthetic_shadow",
     epiplexity_overlay_path: Optional[str] = None,
+    semantic_runtime_scorer_package: Optional[Any] = None,
+    semantic_runtime_scorer_package_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     dataset = load_replay_dataset(replay_dataset_dir)
     promotion_policy = load_regal_promotion_policy(promotion_policy_path)
@@ -66,6 +104,14 @@ def build_shadow_advisory_output(
     steps_by_episode = defaultdict(list)
     for step in dataset.steps:
         steps_by_episode[step.episode_id].append(step)
+    windows_by_episode = defaultdict(list)
+    for window in dataset.windows:
+        windows_by_episode[window.episode_id].append(window)
+    semantic_runtime_package, semantic_runtime_package_ref = _resolve_semantic_runtime_scorer_package(
+        replay_dataset_dir=replay_dataset_dir,
+        semantic_runtime_scorer_package=semantic_runtime_scorer_package,
+        semantic_runtime_scorer_package_path=semantic_runtime_scorer_package_path,
+    )
 
     episode_outputs: list[Dict[str, Any]] = []
     budget_candidates: list[InferentialTrainingCandidate] = []
@@ -143,6 +189,24 @@ def build_shadow_advisory_output(
             data_quality=data_quality,
             provenance_quality=provenance_quality,
         )
+        semantic_runtime_score = None
+        if semantic_runtime_package is not None:
+            runtime_row = build_semantic_runtime_learning_row(
+                episode,
+                steps=steps_by_episode.get(episode.episode_id, []),
+                windows=windows_by_episode.get(episode.episode_id, []),
+                root_dir=dataset.root_dir,
+                max_counterfactuals=2,
+            )
+            semantic_runtime_score = score_semantic_runtime_learning_row(
+                semantic_runtime_package,
+                runtime_row,
+            )
+        top_counterfactual_value = (
+            float(semantic_runtime_score.counterfactual_scores[0].rescored_value)
+            if semantic_runtime_score is not None and semantic_runtime_score.counterfactual_scores
+            else 0.0
+        )
 
         sampling = recommend_sampling(
             objective_profile_coverage_gap=coverage_gap,
@@ -157,6 +221,27 @@ def build_shadow_advisory_output(
             promotion_policy=promotion_policy,
             replay_policy_error=float(policy_mae or 0.0),
             provenance_quality=provenance_quality,
+            semantic_runtime_route_score=(
+                float(semantic_runtime_score.meta_route_success_probability)
+                if semantic_runtime_score is not None
+                else 0.0
+            ),
+            semantic_runtime_authority_confidence=(
+                float(semantic_runtime_score.chosen_authority_confidence)
+                if semantic_runtime_score is not None
+                else 0.0
+            ),
+            semantic_runtime_counterfactual_value=top_counterfactual_value,
+            semantic_runtime_predicted_regret=(
+                float(semantic_runtime_score.predicted_regret)
+                if semantic_runtime_score is not None
+                else 0.0
+            ),
+            semantic_runtime_authority_switch_recommended=bool(
+                semantic_runtime_score.authority_switch_recommended
+            )
+            if semantic_runtime_score is not None
+            else False,
         )
         slice_weight_multiplier = max(
             MIN_MULTIPLIER,
@@ -250,6 +335,9 @@ def build_shadow_advisory_output(
                 "pricing_recommendation": pricing_recommendation,
                 "datapack_recommendation": datapack_recommendation,
                 "sampling_recommendation": sampling.to_dict(),
+                "semantic_runtime_score": (
+                    semantic_runtime_score.to_dict() if semantic_runtime_score is not None else None
+                ),
                 "policy_advisor": policy_result.to_dict(),
                 "pricing_advisor": pricing_result.to_dict(),
                 "data_value_advisor": data_value_result.to_dict(),
@@ -334,6 +422,18 @@ def build_shadow_advisory_output(
             1
             for output in episode_outputs
             if bool(output.get("epiplexity_evidence", {}).get("overlay_joined"))
+        ),
+        "semantic_runtime_scorer_episodes": sum(
+            1 for output in episode_outputs if output.get("semantic_runtime_score") is not None
+        ),
+        "semantic_runtime_scorer_package_ref": semantic_runtime_package_ref,
+        "mean_semantic_runtime_route_score": (
+            sum(
+                float(output.get("semantic_runtime_score", {}).get("meta_route_success_probability", 0.0) or 0.0)
+                for output in episode_outputs
+                if output.get("semantic_runtime_score") is not None
+            )
+            / max(sum(1 for output in episode_outputs if output.get("semantic_runtime_score") is not None), 1)
         ),
         "mean_slice_weight_multiplier": (
             sum(float(output["slice_weight_multiplier"]) for output in episode_outputs) / max(len(episode_outputs), 1)

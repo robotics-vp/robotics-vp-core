@@ -102,6 +102,19 @@
   - harvested task→skill and skill→primitive evidence now uses the same canonical skill ids as the graph (`hrl:*`, `workcell:*`, etc.) instead of the old mismatched `skill:*` envelope
   - `src/hrl/skill_graph.py` now includes a built-in `peg_in_hole` workcell skill chain, and `src/orchestrator/coverage_loop.py` enables it automatically for workcell envs
   - this fixes the earlier failure mode where many workcell rows could still leave the coverage loop effectively blind because the evidence keys did not line up with the graph topology
+- Shadow advisory replay selection now has a learned runtime-scorer seam instead of staying purely rule-weighted:
+  - `src/orchestrator/shadow_advisory.py` now auto-loads a semantic runtime scorer package when one is colocated with the replay dataset (or when one is passed explicitly) and scores replay-native semantic runtime rows before building per-episode advisory output
+  - `src/rl/econ_regal_sampling.py` now accepts bounded learned inputs for:
+    - route success probability
+    - authority confidence
+    - counterfactual value
+    - predicted regret
+    - authority-switch recommendation
+  - those learned signals can now change sampling priority and queue tags without bypassing the existing bounded queue caps or reward math
+- Queue metadata now preserves the learned evidence instead of dropping it:
+  - `src/orchestrator/queue_selection.py` carries `semantic_runtime_score` through `build_live_queue_selection(...)`
+  - the live queue lane therefore keeps the learned-vs-fallback provenance visible when training-time bounded reweighting happens
+  - if no scorer package is present, the queue path stays functional on the explicit heuristic fallback
 
 - Added a canonical full-stack training backlog document at `docs/economic_world_model/full_stack_training_backlog.md`:
   - it records the current workspace truth that replay, coverage, and semantic-runtime corpora are still tiny

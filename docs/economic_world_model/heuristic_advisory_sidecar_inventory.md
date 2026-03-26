@@ -18,7 +18,7 @@ Ranking dimensions:
 | 3 | SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest | `fallback` | High | High | Yes | **Wired now** |
 | 3a | Bootstrap workcell runtime trace completeness + grounded-data lane classification | `sidecar` / `fallback` | High | High | Yes | **Wired now** |
 | 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
-| 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | No | Explicitly bounded, still heuristic |
+| 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | Yes | **Wired now** |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | No | Remains in training backlog |
 | 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` | `heuristic` | Medium-high | Medium-high | No | Backlogged in `scripts/RUNTIME_WIRING_BACKLOG.json` |
@@ -172,19 +172,21 @@ Ranking dimensions:
 - category: `advisory`
 - current behavior:
   - `build_shadow_advisory_output(...)` compiles policy/pricing/data-value/regal support into advisory episode rows
-  - `recommend_sampling(...)` remains rule-based over coverage gap, uncertainty, datapack value, provenance, and pricing/regal flags
-  - `apply_live_queue_selection(...)` can reweight or drop episodes in training-time selection
+  - when a semantic runtime scorer package is present, the advisory path now scores replay-native semantic runtime rows and threads bounded learned route/regret/counterfactual/authority signals into `recommend_sampling(...)`
+  - `recommend_sampling(...)` still keeps the heuristic path as fallback, but learned runtime support now influences priority, queue tags, and slice weighting in a bounded way
+  - `build_live_queue_selection(...)` and `apply_live_queue_selection(...)` now preserve the semantic-runtime score evidence in queue metadata instead of dropping it before the live queue lane
 - current consumers:
   - `scripts/train_shadow_replay_policy.py`
   - `scripts/train_shadow_offline_rl.py`
   - `scripts/train_sac_with_ontology_logging.py`
   - `scripts/run_shadow_advisory_pass.py`
 - why it is a production problem:
-  - this path already affects actual replay/training selection, but the score is still mostly rule-based
-  - it is a live control-plane seam, not just documentation
+  - this path already affects actual replay/training selection, so a missing learned-scoring seam would keep a real control-plane lane overly heuristic
+  - the remaining limitation is now scorer coverage/package availability rather than the absence of wiring
 - recommended disposition:
   - keep the bounded queue lane wired
-  - replace the scoring internals with replay-backed learned runtime scorers once coverage is broad enough
+  - auto-consume replay-backed learned runtime scorers when a package is present
+  - keep the current rule path only as an explicit fallback when no scorer package exists yet
 - disposition tag:
   - `wired now`
   - `neuralized later`
@@ -321,6 +323,6 @@ Ranking dimensions:
 ## Remaining Top Follow-Ons
 
 1. Migrate `train_vla_recap_offline.py` to the canonical training runtime.
-2. Replace bounded heuristic routing inside shadow advisory and semantic policy selection with learned runtime scorers once replay coverage is broader.
+2. Replace the remaining bounded heuristic routing inside semantic policy selection with learned runtime scorers once replay coverage is broader.
 3. Audit remaining vision-side sidecars that still preserve density/quality signals without yet changing runtime routing strongly enough, especially around real-SAM3D bring-up, SceneTracks passthrough consumers outside replay/bootstrap, and sidecar-only grounding semantics.
 4. Either replace or quarantine `train_meta_transformer_synthetic.py` so it cannot be mistaken for a real trainer.

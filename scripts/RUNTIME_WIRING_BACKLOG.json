@@ -22,22 +22,14 @@
       "id": "workcell_coverage_graph_mapping",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - the coverage harvester now canonicalizes workcell env/task/skill ids and the skill graph now includes a built-in peg_in_hole workcell chain, so workcell bootstrap rows land in the canonical coverage graph instead of collapsing to task-only evidence."
+    },
+    {
+      "id": "shadow_advisory_sampling_learning",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - shadow advisory now auto-consumes semantic runtime scorer packages when present, threads bounded learned route/regret/counterfactual/authority signals into replay sampling, and preserves that evidence through live queue-selection metadata; the heuristic path remains only as an explicit fallback when no scorer package exists yet."
     }
   ],
   "backlog": [
-    {
-      "id": "shadow_advisory_sampling_learning",
-      "priority": "P1",
-      "owner": "codex",
-      "category": "runtime_wiring",
-      "files": [
-        "src/orchestrator/shadow_advisory.py",
-        "src/rl/econ_regal_sampling.py",
-        "src/orchestrator/queue_selection.py"
-      ],
-      "blocked_by": "enough replay-backed runtime scorer coverage",
-      "notes": "Replay queue selection is wired into live training and online SAC, but the core scoring remains rule-based. Promote the learned semantic/runtime scorer package into this bounded queue lane once replay coverage is broad enough."
-    },
     {
       "id": "semantic_policy_datapack_selection",
       "priority": "P2",

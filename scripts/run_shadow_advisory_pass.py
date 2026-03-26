@@ -37,6 +37,7 @@ def main() -> None:
     parser.add_argument("--receipt-label-dir", type=str, default=None)
     parser.add_argument("--receipt-label-mode", type=str, default="synthetic_shadow")
     parser.add_argument("--epiplexity-overlays", type=str, default=None)
+    parser.add_argument("--semantic-runtime-scorer-package", type=str, default=None)
     args = parser.parse_args()
 
     output_root = Path(args.output_dir)
@@ -67,6 +68,7 @@ def main() -> None:
         receipt_label_dir=args.receipt_label_dir,
         receipt_label_mode=args.receipt_label_mode,
         epiplexity_overlay_path=args.epiplexity_overlays,
+        semantic_runtime_scorer_package_path=args.semantic_runtime_scorer_package,
     )
 
     json_path = output_root / "shadow_advisory.json"

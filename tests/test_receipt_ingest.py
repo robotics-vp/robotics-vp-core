@@ -1,6 +1,10 @@
 import json
 
 from src.orchestrator.shadow_advisory import build_shadow_advisory_output
+from src.orchestrator.semantic_runtime_scorers import (
+    SemanticRuntimeCounterfactualScore,
+    SemanticRuntimeScoreResult,
+)
 from src.replay.dataset import ReplayDatasetBuilder, load_replay_dataset
 from src.replay.receipt_ingest import (
     build_synthetic_receipt_label_bundle,
@@ -63,3 +67,64 @@ def test_receipt_ingest_roundtrip_and_shadow_advisory_consumption(tmp_path):
     assert advisory["episodes"][0]["epiplexity_evidence"]["overlay_joined"] is True
     assert "execution_preconditions" in advisory["episodes"][0]
     assert advisory["adaptation_budget"]["summary"]["work_orders"] >= 1
+
+
+def test_shadow_advisory_threads_semantic_runtime_scores_into_queue_metadata(tmp_path, monkeypatch):
+    shadow_dir = tmp_path / "shadow_run"
+    dataset_dir = tmp_path / "replay_dataset"
+    run_shadow_control_plane(
+        output_dir=shadow_dir,
+        seed=7,
+        episodes=2,
+        objective_profile_id="balanced_contract",
+        include_regal=True,
+        timestamp_base="2026-01-01T00:00:00+00:00",
+    )
+    ReplayDatasetBuilder().add_shadow_run(shadow_dir).write(dataset_dir)
+
+    monkeypatch.setattr(
+        "src.orchestrator.shadow_advisory._resolve_semantic_runtime_scorer_package",
+        lambda **kwargs: (object(), "memory://semantic_runtime_scorer"),
+    )
+
+    def _fake_score(*args, **kwargs):
+        return SemanticRuntimeScoreResult(
+            score_id="score_test",
+            semantic_world_model_id="wm_test",
+            meta_route_success_probability=0.82,
+            orchestration_route_success_probability=0.77,
+            predicted_regret=0.31,
+            preferred_authority="dino",
+            calibrated_authority="vla",
+            chosen_authority_confidence=0.74,
+            alternate_authority_confidence=0.81,
+            authority_switch_recommended=True,
+            counterfactual_scores=[
+                SemanticRuntimeCounterfactualScore(
+                    counterfactual_id="cf_test",
+                    rationale="counterfactual",
+                    rescored_value=0.68,
+                    baseline_score=0.42,
+                    executable=True,
+                    candidate={"authority_gt": "vla"},
+                )
+            ],
+            feedback_summary={},
+            metadata={},
+        )
+
+    monkeypatch.setattr(
+        "src.orchestrator.shadow_advisory.score_semantic_runtime_learning_row",
+        _fake_score,
+    )
+
+    advisory = build_shadow_advisory_output(replay_dataset_dir=str(dataset_dir))
+
+    assert advisory["summary"]["semantic_runtime_scorer_episodes"] == advisory["summary"]["episodes"]
+    assert advisory["summary"]["semantic_runtime_scorer_package_ref"] == "memory://semantic_runtime_scorer"
+    episode = advisory["episodes"][0]
+    assert episode["semantic_runtime_score"]["meta_route_success_probability"] == 0.82
+    assert "runtime_score_candidate" in episode["replay_queue_tags"]
+    assert "authority_switch_review" in episode["replay_queue_tags"]
+    queue_entry = advisory["live_queue_selection"]["entries"][0]
+    assert queue_entry["metadata"]["semantic_runtime_score"]["meta_route_success_probability"] == 0.82
