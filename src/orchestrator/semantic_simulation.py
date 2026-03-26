@@ -24,6 +24,7 @@ from src.objectives.economic_objective import EconomicObjectiveSpec, load_econom
 from src.ontology.datapack_registry import register_datapack_configs
 from src.ontology.query import find_datapacks, find_scenarios
 from src.ontology.store import OntologyStore
+from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 from src.orchestrator.schedule import BudgetExceeded, acquire_run_budget, release_run_budget
 from src.orchestrator.semantic_policy import (
     DatapackSelectionDecision,
@@ -892,6 +893,7 @@ class SimulationAgendaItem:
     economic_priority: float
     trust_priority: float
     readiness: float
+    ranking_policy: str
     rationale: str
     metadata: dict[str, Any] | None = None
 
@@ -909,6 +911,7 @@ class SimulationAgendaItem:
             "economic_priority": self.economic_priority,
             "trust_priority": self.trust_priority,
             "readiness": self.readiness,
+            "ranking_policy": self.ranking_policy,
             "rationale": self.rationale,
             "metadata": dict(self.metadata or {}),
         }
@@ -923,6 +926,8 @@ def compile_simulation_agenda(
     limit: int = 10,
     default_backend: str = "pybullet",
     default_objective: str = "balanced",
+    gap_ranker: Any = None,
+    gap_ranker_mode: Literal["disabled", "auto", "required"] = "auto",
 ) -> list[dict[str, Any]]:
     """Compile a ranked simulation agenda from the semantic coverage graph.
 
@@ -945,15 +950,19 @@ def compile_simulation_agenda(
     -------
     list of dict (``simulation_agenda_v1`` items)
     """
-    ranked_gaps = coverage_graph.rank_gaps(
+    ranked_gaps = rank_gaps_for_agenda(
         economic_weight=economic_weight,
         trust_weight=trust_weight,
         readiness_weight=readiness_weight,
         limit=limit,
+        coverage_graph=coverage_graph,
+        gap_ranker=gap_ranker,
+        gap_ranker_mode=gap_ranker_mode,
     )
 
     agenda: list[dict[str, Any]] = []
-    for rank_idx, gap in enumerate(ranked_gaps):
+    for rank_idx, ranked_gap in enumerate(ranked_gaps):
+        gap = ranked_gap.gap
         if bool(getattr(gap, "metadata", {}).get("governance_blocked", False)):
             continue
         src_node = coverage_graph.node_by_id(gap.source_id)
@@ -997,14 +1006,11 @@ def compile_simulation_agenda(
             object_family=object_family,
             objective_preset=default_objective,
             data_collection_intent=intent,
-            coverage_gap_score=gap.gap_score(
-                economic_weight=economic_weight,
-                trust_weight=trust_weight,
-                readiness_weight=readiness_weight,
-            ),
+            coverage_gap_score=ranked_gap.ranking_score,
             economic_priority=gap.economic_priority,
             trust_priority=gap.trust_priority,
             readiness=gap.promotion_readiness,
+            ranking_policy=ranked_gap.ranking_policy,
             rationale=(
                 f"Missing {gap.edge_type}: {gap.source_id} → {gap.target_id}"
                 + (
@@ -1013,6 +1019,16 @@ def compile_simulation_agenda(
                     else ""
                 )
             ),
+            metadata={
+                "agenda_helper_status": dict(ranked_gap.helper_status),
+                "score_trace": {
+                    "heuristic_score": ranked_gap.heuristic_score,
+                    "heuristic_score_norm": ranked_gap.heuristic_score_norm,
+                    "learned_score": ranked_gap.learned_score,
+                    "learned_score_norm": ranked_gap.learned_score_norm,
+                    "ranking_score": ranked_gap.ranking_score,
+                },
+            },
         )
         agenda.append(item.to_dict())
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
 from src.world_model.coverage_evidence_harvester import (
     EvidenceHarvestResult,
@@ -366,6 +366,7 @@ def run_coverage_loop(
     sim_agenda_limit: int = 10,
     diffusion_limit: int = 10,
     gap_ranker: Any = None,
+    gap_ranker_mode: Literal["disabled", "auto", "required"] = "auto",
     fill_path_policy: Any = None,
     write_artifacts: bool = False,
     artifact_dir: str = "data/coverage",
@@ -580,12 +581,16 @@ def run_coverage_loop(
         trust_weight=trust_weight,
         readiness_weight=readiness_weight,
         limit=sim_agenda_limit,
+        gap_ranker=gap_ranker,
+        gap_ranker_mode=gap_ranker_mode,
     )
 
     # Step 7: Compile gap-driven diffusion prompts
     gap_prompts = build_diffusion_prompt_from_coverage_gaps(
         coverage_graph,
         limit=diffusion_limit,
+        gap_ranker=gap_ranker,
+        gap_ranker_mode=gap_ranker_mode,
     )
     diffusion_dicts = [p.to_dict() for p in gap_prompts]
 

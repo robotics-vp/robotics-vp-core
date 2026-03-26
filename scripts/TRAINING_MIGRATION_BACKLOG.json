@@ -248,13 +248,18 @@
             "script": "train_datapack_selection_scorers.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - added the semantic run-log trainer/export lane for datapack-selection helpers with context-conditioned scorer packages, benchmark-gated auto->required promotion semantics, and canonical runtime manifest/checkpoint outputs under RegalTrainingRunner"
+        },
+        {
+            "script": "train_gap_ranker.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - wrapped the learned gap-ranker trainer with canonical dataset/precondition/package artifacts, explicit fill-outcome density benchmark gates, and bounded runtime helper packaging for simulation-agenda and diffusion-gap ranking"
         }
     ],
     "summary": {
-        "total": 31,
+        "total": 32,
         "P0": 0,
         "P1": 6,
         "P2": 6,
-        "migrated": 19
+        "migrated": 20
     }
 }

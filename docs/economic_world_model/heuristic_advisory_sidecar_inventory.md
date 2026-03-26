@@ -15,6 +15,7 @@ Ranking dimensions:
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Local synthetic branch corpus + offline local synth trainer | `lightweight_trainer_gap` | Very high | Very high | Yes | **Wired now** |
 | 2 | Stage-1 semantic seed tags + diffusion proposal routing | `heuristic` / `fallback` | Very high | High | Yes | **Wired now** |
+| 2a | Gap-ranker trainer/package + sim/gen2sim agenda ranking | `heuristic` / `lightweight_trainer_gap` | Very high | High | Yes | **Wired now, benchmark-gated** |
 | 3 | SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest | `fallback` | High | High | Yes | **Wired now** |
 | 3a | Bootstrap workcell runtime trace completeness + grounded-data lane classification | `sidecar` / `fallback` | High | High | Yes | **Wired now** |
 | 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
@@ -79,6 +80,49 @@ Ranking dimensions:
 - disposition tag:
   - `wired now`
   - `neuralized later`
+  - `benchmark-gated`
+
+### 2a. Gap-ranker trainer/package + sim/gen2sim agenda ranking
+
+- surface: learned gap-ranker packaging and bounded use in simulation-agenda / diffusion-gap ranking
+- file/path: `scripts/train_gap_ranker.py`, `src/world_model/gap_ranker_runtime.py`, `src/orchestrator/gap_agenda_ranking.py`, `src/orchestrator/semantic_simulation.py`, `src/orchestrator/diffusion_requests.py`, `src/orchestrator/coverage_loop.py`
+- category: `heuristic` / `lightweight_trainer_gap`
+- current behavior:
+  - `scripts/train_gap_ranker.py` is now a canonical trainer lane rather than a loose standalone script:
+    - emits dataset summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `gap_ranker_package.json`
+    - runtime manifest / checkpoint registry under `RegalTrainingRunner`
+  - benchmark readiness is now explicit and conservative:
+    - enough fill-outcome records
+    - enough positive coverage deltas
+    - enough fill-method diversity
+    are required before the package is treated as `promoted`
+  - `src/orchestrator/gap_agenda_ranking.py` now blends:
+    - heuristic coverage-gap ranking
+    - learned gap-ranker ranking
+    through a bounded helper weight
+  - `src/orchestrator/semantic_simulation.py` and `src/orchestrator/diffusion_requests.py` now both use that same ranking helper, emit `ranking_policy`, and record helper status plus score traces on agenda items and governed diffusion prompts
+  - `src/orchestrator/coverage_loop.py` now threads the configured gap-ranker helper into both agenda and diffusion compilation rather than reserving learned ranking only for later fill-path logic
+- current consumers:
+  - `run_coverage_loop(...)`
+  - `compile_simulation_agenda(...)`
+  - `build_diffusion_prompt_from_coverage_gaps(...)`
+  - `scripts/train_gap_ranker.py`
+- why it is a production problem:
+  - before this pass, the repo already had a learned gap ranker, but the main sim/gen2sim agenda still ignored it and ranked on heuristics alone
+  - that left a real self-improvement substrate stranded outside the actual branch-selection loop
+  - the old trainer path also emitted only a raw checkpoint, so promotion state and fallback honesty were implicit
+- recommended disposition:
+  - keep the heuristic gap score as the explicit prior
+  - use the learned gap ranker through `disabled` / `auto` / `required` helper semantics
+  - keep benchmark-unready packages as `shadow_candidate` helpers with bounded influence only
+  - later broaden the same promotion contract to the fill-path policy so every coverage-loop decision shares the same maturity semantics
+- disposition tag:
+  - `wired now`
+  - `upgraded to heavyweight parity`
   - `benchmark-gated`
 
 ### 3. SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest
@@ -417,6 +461,6 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Push the same learned/helper promotion discipline into the next sim/gen2sim agenda lane so diffusion and synth branching stop relying on bounded heuristics once replay receipts are dense enough.
-2. Deepen orchestration supervision beyond `first_tool_only_v1` so the runtime-backed trainer learns fuller action sequences instead of only the first routing decision.
-3. Continue meta-layer neuralization above the current helper path so future economic-WM and later meta-node-WM conditioning can supervise more than authority/conditioning outputs alone.
+1. Deepen orchestration supervision beyond `first_tool_only_v1` so the runtime-backed trainer learns fuller action sequences instead of only the first routing decision.
+2. Continue meta-layer neuralization above the current helper path so future economic-WM and later meta-node-WM conditioning can supervise more than authority/conditioning outputs alone.
+3. Extend the new gap-ranker helper contract across the remaining coverage-loop decisions, especially fill-path routing and later gen2sim validity evaluation, so the full synth agenda shares one honest promotion story.

@@ -2,6 +2,32 @@
 
 ## 2026-03-26
 
+- Sim/gen2sim agenda ranking now uses the learned gap-ranker substrate instead of leaving it stranded:
+  - `scripts/train_gap_ranker.py` now emits:
+    - gap-ranker dataset summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `gap_ranker_package.json`
+    - runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - `src/world_model/gap_ranker_runtime.py` now resolves that package into a runtime helper with explicit benchmark-gate status
+  - `src/orchestrator/gap_agenda_ranking.py` now blends heuristic and learned ranking with bounded helper weights:
+    - `shadow_candidate` packages are bounded
+    - `promoted` packages get stronger influence
+    - `required` mode fails if no benchmark-gated package is present
+- `src/orchestrator/semantic_simulation.py` and `src/orchestrator/diffusion_requests.py` now share that same ranking contract:
+  - simulation agenda and diffusion-gap prompts no longer diverge on “why this gap was chosen”
+  - each agenda item/prompt now records:
+    - `ranking_policy`
+    - helper promotion stage
+    - score trace (heuristic vs learned contribution)
+  - `src/orchestrator/coverage_loop.py` now threads the helper into both agenda and diffusion compilation rather than reserving learned ranking only for later stages
+- This is the right current posture for sim-agenda neuralization:
+  - the heuristic gap score remains the explicit prior
+  - the learned model is real and runtime-active
+  - promotion semantics are explicit instead of implied by checkpoint existence
+  - the next consistency upgrade is to align fill-path routing and later gen2sim validity scoring to the same helper contract
+
 - Meta-transformer runtime/training are now actually connected:
   - `scripts/train_meta_transformer_synthetic.py` now emits `meta_transformer_package.json` beside the checkpoint/model-config/precondition artifacts
   - `src/orchestrator/meta_transformer_runtime.py` loads that package and reconstructs `MetaTransformerNet` for CPU inference

@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 
 from src.constraints.constraint_set import ConstraintSet
+from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 from src.valuation.datapack_schema import DataPackMeta
 from src.valuation.guidance_profile import GuidanceProfile
 
@@ -502,6 +503,8 @@ def build_diffusion_prompt_from_coverage_gaps(
     trust_weight: float = 1.0,
     readiness_weight: float = 1.0,
     limit: int = 5,
+    gap_ranker: Any = None,
+    gap_ranker_mode: str = "auto",
 ) -> List[DiffusionPromptSpec]:
     """Build diffusion prompts from ranked coverage gaps.
 
@@ -525,15 +528,19 @@ def build_diffusion_prompt_from_coverage_gaps(
     -------
     list of DiffusionPromptSpec
     """
-    ranked_gaps = coverage_graph.rank_gaps(
+    ranked_gaps = rank_gaps_for_agenda(
+        coverage_graph=coverage_graph,
         economic_weight=economic_weight,
         trust_weight=trust_weight,
         readiness_weight=readiness_weight,
         limit=limit,
+        gap_ranker=gap_ranker,
+        gap_ranker_mode=str(gap_ranker_mode),
     )
 
     prompts: List[DiffusionPromptSpec] = []
-    for gap in ranked_gaps:
+    for ranked_gap in ranked_gaps:
+        gap = ranked_gap.gap
         if bool(getattr(gap, "metadata", {}).get("governance_blocked", False)):
             continue
         # Collect missing-edge information
@@ -576,17 +583,13 @@ def build_diffusion_prompt_from_coverage_gaps(
             primary_mode = "throughput_push"
         routing_context = {
             "routing_source": "coverage_gap_graph",
-            "coverage_gap_score": float(
-                gap.gap_score(
-                    economic_weight=economic_weight,
-                    trust_weight=trust_weight,
-                    readiness_weight=readiness_weight,
-                )
-            ),
+            "coverage_gap_score": float(ranked_gap.ranking_score),
             "economic_priority_score": float(gap.economic_priority),
             "trust_priority_score": float(gap.trust_priority),
             "benchmark_gate_ready": False,
             "semantic_grounding_mode": "coverage_gap_pending",
+            "agenda_ranking_policy": ranked_gap.ranking_policy,
+            "agenda_helper_status": dict(ranked_gap.helper_status),
             "missing_skill_edges": list(missing_skill_edges),
             "missing_env_primitives": list(missing_env_prims),
             "risk_family_targets": list(risk_targets),
@@ -627,11 +630,18 @@ def build_diffusion_prompt_from_coverage_gaps(
                     "speed_scale": 0.25 if primary_mode == "fragile_object_preservation" else 0.5,
                     "clearance_bias": 1.0 if risk_targets else 0.75,
                 },
-                "metadata": {
-                    "gap_edge_type": gap.edge_type,
-                    "promotion_readiness": float(getattr(gap, "promotion_readiness", 0.0)),
+            "metadata": {
+                "gap_edge_type": gap.edge_type,
+                "promotion_readiness": float(getattr(gap, "promotion_readiness", 0.0)),
+                "agenda_score_trace": {
+                    "heuristic_score": ranked_gap.heuristic_score,
+                    "heuristic_score_norm": ranked_gap.heuristic_score_norm,
+                    "learned_score": ranked_gap.learned_score,
+                    "learned_score_norm": ranked_gap.learned_score_norm,
+                    "ranking_score": ranked_gap.ranking_score,
                 },
-            }
+            },
+        }
         ]
 
         prompts.append(DiffusionPromptSpec(
@@ -652,11 +662,7 @@ def build_diffusion_prompt_from_coverage_gaps(
             missing_env_primitives=missing_env_prims,
             risk_family_targets=risk_targets,
             affordance_family_targets=affordance_targets,
-            coverage_gap_score=gap.gap_score(
-                economic_weight=economic_weight,
-                trust_weight=trust_weight,
-                readiness_weight=readiness_weight,
-            ),
+            coverage_gap_score=ranked_gap.ranking_score,
             economic_priority_score=gap.economic_priority,
             trust_priority_score=gap.trust_priority,
             routing_source="coverage_gap_graph",
