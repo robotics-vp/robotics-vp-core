@@ -1,5 +1,15 @@
 # Economic World Model Progress Log
 
+## 2026-03-26
+
+- Changed: fixed `scripts/economic_world_model/nightly_audit.py` progress freshness logic so `_progress_latest_date()` now returns the chronologically newest dated heading from `docs/economic_world_model/progress_log.md` instead of the last heading in file order. This avoids stale drift checks when the log is maintained newest-first.
+- Changed: tightened `tests/test_economic_world_model_nightly_audit.py::test_progress_latest_date_uses_most_recent_heading` to cover newest-first ordering (`2026-03-26` then `2026-03-24`) and assert the audit picks the real newest date.
+- Changed: ran the nightly audit loop with `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` and refreshed both audit artifacts for this run.
+- Changed: audit selection remains `next_task.id=audit_only` with `execute_now=false`, so no new safe additive scaffold was selected in this pass.
+- Verification: `./scripts/agent/verify.sh`, `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall src scripts/economic_world_model -q`, and `python3 -m pytest -q tests/test_runtime_packets.py tests/embodiment/test_registry.py tests/test_objective_runtime_builder.py tests/test_constraint_set.py tests/test_pricing_sentinel.py tests/test_value_ledger.py tests/test_economic_world_model_nightly_audit.py` passed.
+- Blocked: no additive code-path blocker was detected; this was an intentional audit-only pass because the current selector found no higher-priority missing scaffold.
+- Next recommended task: drive one real loop/training run through the now-landed receipt/readiness wiring and capture which future-training predicates remain false in practice (especially `scene_tracks_non_stub`, `teacher_runtime_real`, and `budget_settlement_live`) so nightly selection can move from `audit_only` back to a concrete additive wiring target.
+
 ## 2026-03-24
 
 - Changed: hardened the OpenVLA and MetaDINO bring-up paths to `real-or-unavailable` by default instead of silently treating stubs as acceptable runtime behavior. `src/vla/openvla_controller.py` now exposes `backend_policy` and `vision_backbone_policy` (`auto|real|disabled|stub`), reports explicit backend status, and only emits zero-action outputs when `stub` is explicitly requested. `src/vla/backbones/meta_dino_backbone.py` now behaves the same way for DINO embeddings: real model, explicit stub, or unavailable with a hard runtime error when a caller tries to use an unavailable backbone as if it were real.

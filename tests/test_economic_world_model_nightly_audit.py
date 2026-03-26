@@ -20,9 +20,16 @@ def test_progress_latest_date_uses_most_recent_heading(monkeypatch) -> None:
     monkeypatch.setattr(
         module,
         "_read_text",
-        lambda _: "\n".join(["## 2026-03-07", "notes", "## 2026-03-09", "latest"]),
+        lambda _: "\n".join(
+            [
+                "## 2026-03-26",
+                "latest-first-entry",
+                "## 2026-03-24",
+                "older-entry",
+            ]
+        ),
     )
-    assert module._progress_latest_date() == "2026-03-09"
+    assert module._progress_latest_date() == "2026-03-26"
 
 
 def test_event_spine_spec_not_pending_when_code_and_docs_are_present(monkeypatch) -> None:

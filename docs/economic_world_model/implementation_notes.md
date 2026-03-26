@@ -1,5 +1,21 @@
 # Economic World Model Implementation Notes
 
+## 2026-03-26
+
+- Nightly audit freshness logic is now robust to newest-first progress-log ordering:
+  - `_progress_latest_date()` in `scripts/economic_world_model/nightly_audit.py` now selects `max(...)` over all `## YYYY-MM-DD` headings instead of taking the final heading in file order.
+  - `tests/test_economic_world_model_nightly_audit.py::test_progress_latest_date_uses_most_recent_heading` now uses reverse-chronological headings and verifies the newest date is selected.
+- Nightly execution still remained in audit-only mode for this pass:
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` refreshed both summary artifacts.
+  - selector result stayed `next_task.id=audit_only` with `execute_now=false`, so no new safe additive scaffold was missing according to the current roadmap/doc/code scan.
+- Verification for this pass:
+  - `./scripts/agent/verify.sh`
+  - `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall src scripts/economic_world_model -q`
+  - `python3 -m pytest -q tests/test_runtime_packets.py tests/embodiment/test_registry.py tests/test_objective_runtime_builder.py tests/test_constraint_set.py tests/test_pricing_sentinel.py tests/test_value_ledger.py tests/test_economic_world_model_nightly_audit.py`
+- This keeps the lane honest: no synthetic "work landed" claim when the selector says no safe additive gap is currently missing.
+- Recommended next move remains evidence accumulation, not another schema rewrite:
+  - run real loop/training flows through receipt ingestion and readiness summaries, then use the resulting predicate failures to pick the next concrete additive wiring task.
+
 ## 2026-03-24
 
 - OpenVLA and MetaDINO are now explicit backend-policy surfaces rather than soft-fail scaffolds:

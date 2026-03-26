@@ -95,7 +95,8 @@ def _progress_latest_date() -> Optional[str]:
     progress_text = _read_text(DOCS_ROOT / "progress_log.md")
     matches = re.findall(r"^##\s+(\d{4}-\d{2}-\d{2})$", progress_text, re.MULTILINE)
     if matches:
-        return matches[-1]
+        # Progress logs are maintained newest-first; choose the newest date, not the final heading.
+        return max(matches)
     return None
 
 
