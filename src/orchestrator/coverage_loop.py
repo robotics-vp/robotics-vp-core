@@ -58,6 +58,8 @@ from src.world_model.semantic_wm_refiner import (
 )
 from src.hrl.skill_graph import SkillGraph
 from src.envs.primitive_inventory import for_env, list_registered_env_ids
+from src.orchestrator.fill_path_routing import route_fill_paths
+from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
 from src.orchestrator.diffusion_requests import build_diffusion_prompt_from_coverage_gaps
 
@@ -78,6 +80,11 @@ class FillPathDecision:
     economic_priority: float
     trust_priority: float
     readiness: float
+    routing_policy: str = "heuristic_only"
+    heuristic_fill_method: Optional[str] = None
+    learned_fill_method: Optional[str] = None
+    helper_status: Dict[str, Any] = field(default_factory=dict)
+    score_trace: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -89,6 +96,11 @@ class FillPathDecision:
             "economic_priority": self.economic_priority,
             "trust_priority": self.trust_priority,
             "readiness": self.readiness,
+            "routing_policy": self.routing_policy,
+            "heuristic_fill_method": self.heuristic_fill_method,
+            "learned_fill_method": self.learned_fill_method,
+            "helper_status": dict(self.helper_status),
+            "score_trace": dict(self.score_trace),
         }
 
 
@@ -145,6 +157,8 @@ def _decide_fill_path(
         economic_priority=econ,
         trust_priority=trust,
         readiness=readiness,
+        routing_policy="heuristic_only",
+        heuristic_fill_method=method,
     )
 
 
@@ -320,6 +334,11 @@ class CoverageLoopResult:
                     "economic_priority": decision.get("economic_priority", 0.0),
                     "trust_priority": decision.get("trust_priority", 0.0),
                     "readiness": decision.get("readiness", 0.0),
+                    "routing_policy": decision.get("routing_policy", "heuristic_only"),
+                    "heuristic_fill_method": decision.get("heuristic_fill_method"),
+                    "learned_fill_method": decision.get("learned_fill_method"),
+                    "helper_status": dict(decision.get("helper_status", {}) or {}),
+                    "score_trace": dict(decision.get("score_trace", {}) or {}),
                 },
                 pre_evidence_count=pre_count,
                 post_evidence_count=post_count,
@@ -368,6 +387,7 @@ def run_coverage_loop(
     gap_ranker: Any = None,
     gap_ranker_mode: Literal["disabled", "auto", "required"] = "auto",
     fill_path_policy: Any = None,
+    fill_path_policy_mode: Literal["disabled", "auto", "required"] = "auto",
     write_artifacts: bool = False,
     artifact_dir: str = "data/coverage",
 ) -> CoverageLoopResult:
@@ -595,44 +615,59 @@ def run_coverage_loop(
     diffusion_dicts = [p.to_dict() for p in gap_prompts]
 
     # Step 8: Compute fill-path decisions
-    ranked_gaps = coverage_graph.rank_gaps(
+    ranked_gap_records = rank_gaps_for_agenda(
+        coverage_graph,
         economic_weight=economic_weight,
         trust_weight=trust_weight,
         readiness_weight=readiness_weight,
         limit=sim_agenda_limit + diffusion_limit,
         gap_ranker=gap_ranker,
+        gap_ranker_mode=gap_ranker_mode,
+    )
+    ranked_gaps = [item.gap for item in ranked_gap_records]
+    summary["gap_ranker_helper_status"] = (
+        dict(ranked_gap_records[0].helper_status)
+        if ranked_gap_records
+        else {
+            "mode": gap_ranker_mode,
+            "status": "empty",
+            "promotion_stage": "heuristic_fallback",
+            "benchmark_gate_ready": False,
+        }
+    )
+    summary["gap_ranking_policy"] = (
+        str(ranked_gap_records[0].ranking_policy) if ranked_gap_records else "heuristic_only"
     )
     summary.setdefault(
         "top_missing_edges",
         [f"{gap.source_id} -> {gap.target_id}" for gap in ranked_gaps[:6]],
     )
 
-    if fill_path_policy is not None:
-        # Use learned fill-path policy
-        try:
-            predictions = fill_path_policy.predict_batch(ranked_gaps, coverage_graph)
-            fill_decisions = []
-            for gap, (method, confidence) in zip(ranked_gaps, predictions):
-                edge_key = f"{gap.source_id} -> {gap.target_id}"
-                econ = getattr(gap, "economic_priority", 0.0)
-                trust = getattr(gap, "trust_priority", 0.0)
-                readiness_val = getattr(gap, "promotion_readiness", 0.0)
-                gap_score_val = gap.gap_score() if callable(getattr(gap, "gap_score", None)) else 0.0
-                fill_decisions.append(FillPathDecision(
-                    edge_key=edge_key,
-                    fill_method=method,
-                    confidence=confidence,
-                    rationale=f"Learned policy: {method} (confidence={confidence:.2f})",
-                    coverage_gap_score=gap_score_val,
-                    economic_priority=econ,
-                    trust_priority=trust,
-                    readiness=readiness_val,
-                ).to_dict())
-        except Exception:
-            # Fall back to heuristic
-            fill_decisions = [_decide_fill_path(gap).to_dict() for gap in ranked_gaps]
-    else:
-        fill_decisions = [_decide_fill_path(gap).to_dict() for gap in ranked_gaps]
+    routed_decisions, fill_helper_status = route_fill_paths(
+        ranked_gap_records,
+        coverage_graph,
+        fill_path_policy=fill_path_policy,
+        fill_path_policy_mode=fill_path_policy_mode,
+    )
+    summary["fill_path_helper_status"] = dict(fill_helper_status)
+    fill_decisions = [
+        FillPathDecision(
+            edge_key=item.edge_key,
+            fill_method=item.fill_method,
+            confidence=item.confidence,
+            rationale=item.rationale,
+            coverage_gap_score=item.coverage_gap_score,
+            economic_priority=item.economic_priority,
+            trust_priority=item.trust_priority,
+            readiness=item.readiness,
+            routing_policy=item.routing_policy,
+            heuristic_fill_method=item.heuristic_fill_method,
+            learned_fill_method=item.learned_fill_method,
+            helper_status=dict(item.helper_status or {}),
+            score_trace=dict(item.score_trace or {}),
+        ).to_dict()
+        for item in routed_decisions
+    ]
 
     blocked_edge_keys = {item["edge_key"] for item in fill_decisions}
     for edge in coverage_graph.edges:
@@ -656,6 +691,8 @@ def run_coverage_loop(
                 economic_priority=float(getattr(edge, "economic_priority", 0.0)),
                 trust_priority=float(getattr(edge, "trust_priority", 0.0)),
                 readiness=float(getattr(edge, "promotion_readiness", 0.0)),
+                routing_policy="heuristic_hard_gate",
+                heuristic_fill_method="blocked",
             ).to_dict(),
         )
         blocked_edge_keys.add(edge_key)

@@ -253,13 +253,18 @@
             "script": "train_gap_ranker.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - wrapped the learned gap-ranker trainer with canonical dataset/precondition/package artifacts, explicit fill-outcome density benchmark gates, and bounded runtime helper packaging for simulation-agenda and diffusion-gap ranking"
+        },
+        {
+            "script": "train_fill_path_policy.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - wrapped the learned fill-path trainer with canonical dataset/precondition/package artifacts, explicit fill-outcome density benchmark gates, and bounded disabled|auto|required runtime helper packaging for live coverage-loop fill routing"
         }
     ],
     "summary": {
-        "total": 32,
+        "total": 33,
         "P0": 0,
         "P1": 6,
         "P2": 6,
-        "migrated": 20
+        "migrated": 21
     }
 }

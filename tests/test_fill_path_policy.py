@@ -35,17 +35,36 @@ class TestFillPathPolicyWithCoverageLoop(unittest.TestCase):
         from src.orchestrator.coverage_loop import run_coverage_loop
 
         class MockPolicy:
-            def predict_batch(self, edges, graph):
-                return [("diffusion", 0.95) for _ in edges]
+            benchmark_gate = {"ready": True}
+
+            def predict_batch_details(self, edges, graph):
+                return [
+                    {
+                        "fill_method": "diffusion",
+                        "confidence": 0.95,
+                        "method_probabilities": {
+                            "real_sim": 0.01,
+                            "diffusion": 0.95,
+                            "synthetic_branch": 0.03,
+                            "blocked": 0.01,
+                        },
+                    }
+                    for _ in edges
+                ]
 
         result = run_coverage_loop(
             self._make_runtime_rows(),
             fill_path_policy=MockPolicy(),
+            fill_path_policy_mode="required",
         )
-        # All decisions should use learned policy
+        # Decisions should record the learned helper path.
         for decision in result.fill_decisions:
-            self.assertEqual(decision["fill_method"], "diffusion")
-            self.assertIn("Learned policy", decision["rationale"])
+            self.assertIn("routing_policy", decision)
+            self.assertIn(decision["routing_policy"], {"heuristic_plus_learned_fill_path_policy", "heuristic_hard_gate"})
+            self.assertIn("score_trace", decision)
+            self.assertIn("helper_status", decision)
+        helper_status = result.coverage_summary["fill_path_helper_status"]
+        self.assertEqual(helper_status["promotion_stage"], "promoted")
 
     def test_loop_with_broken_policy_falls_back(self):
         from src.orchestrator.coverage_loop import run_coverage_loop
@@ -58,9 +77,19 @@ class TestFillPathPolicyWithCoverageLoop(unittest.TestCase):
             self._make_runtime_rows(),
             fill_path_policy=BrokenPolicy(),
         )
-        # Should fall back to heuristic — no "Learned policy" in rationale
+        # Should fall back to heuristic and record the failure honestly.
         for decision in result.fill_decisions:
-            self.assertNotIn("Learned policy", decision.get("rationale", ""))
+            self.assertEqual(decision["routing_policy"], "heuristic_only")
+            self.assertEqual(decision["helper_status"]["status"], "inference_failed")
+
+    def test_required_mode_without_helper_raises(self):
+        from src.orchestrator.coverage_loop import run_coverage_loop
+
+        with self.assertRaises(ValueError):
+            run_coverage_loop(
+                self._make_runtime_rows(),
+                fill_path_policy_mode="required",
+            )
 
 
 if __name__ == "__main__":

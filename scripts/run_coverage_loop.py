@@ -104,6 +104,18 @@ def main():
         help="Max diffusion prompt items",
     )
     parser.add_argument(
+        "--fill-path-policy",
+        type=str,
+        default=None,
+        help="Optional fill-path policy checkpoint or package JSON",
+    )
+    parser.add_argument(
+        "--fill-path-policy-mode",
+        choices=("disabled", "auto", "required"),
+        default="auto",
+        help="Promotion mode for the fill-path helper",
+    )
+    parser.add_argument(
         "--write-artifacts", action="store_true", default=True,
         help="Write output artifacts to disk (default: True)",
     )
@@ -138,6 +150,8 @@ def main():
         readiness_weight=args.readiness_weight,
         sim_agenda_limit=args.sim_limit,
         diffusion_limit=args.diffusion_limit,
+        fill_path_policy=args.fill_path_policy,
+        fill_path_policy_mode=args.fill_path_policy_mode,
         write_artifacts=write,
         artifact_dir=args.artifact_dir,
     )

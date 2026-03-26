@@ -2,6 +2,31 @@
 
 ## 2026-03-26
 
+- Fill-path routing now shares the same bounded helper contract as the rest of the coverage loop:
+  - `scripts/train_fill_path_policy.py` now emits:
+    - fill-path dataset summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `fill_path_policy_package.json`
+    - runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - `src/world_model/fill_path_runtime.py` now resolves that package into a runtime helper with explicit benchmark-gate status
+  - `src/orchestrator/fill_path_routing.py` now blends:
+    - heuristic fill-method priors
+    - learned fill-path probabilities
+    through a bounded helper weight
+  - `src/orchestrator/coverage_loop.py` now consumes that routing helper and records:
+    - `routing_policy`
+    - helper promotion stage
+    - heuristic vs learned score traces
+    on each emitted fill decision
+- This is the right current posture for fill-path neuralization:
+  - governance/readiness hard gates remain explicit
+  - the learned helper is real and runtime-active
+  - benchmark-unready packages remain bounded `shadow_candidate` helpers
+  - fill-outcome records now preserve routing traces so later economic-WM/orchestrator layers can learn on “why this path was chosen,” not just the winning method
+  - the next consistency upgrade is later gen2sim validity/value admission, not more hidden fill-path heuristics
+
 - Sim/gen2sim agenda ranking now uses the learned gap-ranker substrate instead of leaving it stranded:
   - `scripts/train_gap_ranker.py` now emits:
     - gap-ranker dataset summary

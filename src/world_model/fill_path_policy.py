@@ -8,7 +8,7 @@ on historical fill-outcome records to maximize coverage improvement.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -105,6 +105,35 @@ try:
                 for idx, c in zip(method_indices, confidences)
             ]
 
+        def predict_batch_details(
+            self,
+            edges: Sequence[Any],
+            graph: Any,
+            extractor: Optional[GapFeatureExtractor] = None,
+        ) -> List[Dict[str, Any]]:
+            """Predict fill methods with per-method probabilities."""
+            ext = extractor or GapFeatureExtractor()
+            features = ext.extract_batch(edges, graph)
+            x = torch.from_numpy(features)
+            with torch.no_grad():
+                logits, conf = self.forward(x)
+                probs = F.softmax(logits, dim=-1).cpu().numpy()
+                confidences = conf.squeeze(-1).cpu().numpy().tolist()
+            details: List[Dict[str, Any]] = []
+            for probs_row, confidence in zip(probs.tolist(), confidences):
+                method_idx = int(max(range(len(probs_row)), key=lambda idx: probs_row[idx]))
+                details.append(
+                    {
+                        "fill_method": FILL_METHODS[method_idx],
+                        "confidence": float(confidence),
+                        "method_probabilities": {
+                            method: float(prob)
+                            for method, prob in zip(FILL_METHODS, probs_row)
+                        },
+                    }
+                )
+            return details
+
         @classmethod
         def from_checkpoint(cls, path: str) -> "LearnedFillPathPolicy":
             ckpt = torch.load(path, map_location="cpu", weights_only=False)
@@ -128,6 +157,9 @@ except ImportError:
 
         @classmethod
         def from_checkpoint(cls, path: str):
+            raise ImportError("LearnedFillPathPolicy requires torch")
+
+        def predict_batch_details(self, edges, graph, extractor=None):
             raise ImportError("LearnedFillPathPolicy requires torch")
 
 
@@ -225,8 +257,68 @@ def train_fill_path_policy(
     return model
 
 
+def load_fill_path_helper_predictions(
+    helper: Any,
+    edges: Sequence[Any],
+    graph: Any,
+) -> List[Dict[str, Any]]:
+    """Normalize helper predictions into a detail-rich contract."""
+    if hasattr(helper, "predict_batch_details"):
+        details = helper.predict_batch_details(edges, graph)
+        normalized: List[Dict[str, Any]] = []
+        for detail in details:
+            payload = dict(detail or {})
+            probabilities = {
+                method: float(dict(payload.get("method_probabilities", {}) or {}).get(method, 0.0))
+                for method in FILL_METHODS
+            }
+            fill_method = str(payload.get("fill_method") or max(probabilities, key=probabilities.get))
+            confidence = float(payload.get("confidence", max(probabilities.values(), default=0.0)))
+            normalized.append(
+                {
+                    "fill_method": fill_method,
+                    "confidence": confidence,
+                    "method_probabilities": probabilities,
+                }
+            )
+        return normalized
+
+    if hasattr(helper, "predict_batch"):
+        predictions = helper.predict_batch(edges, graph)
+        normalized = []
+        for method, confidence in predictions:
+            method_name = str(method)
+            confidence_value = float(confidence)
+            background = 0.0
+            if len(FILL_METHODS) > 1:
+                background = max(0.0, (1.0 - confidence_value) / float(len(FILL_METHODS) - 1))
+            probabilities = {
+                fill_method: background for fill_method in FILL_METHODS
+            }
+            probabilities[method_name] = confidence_value
+            normalized.append(
+                {
+                    "fill_method": method_name,
+                    "confidence": confidence_value,
+                    "method_probabilities": probabilities,
+                }
+            )
+        return normalized
+
+    raise TypeError("fill-path helper must define predict_batch_details() or predict_batch()")
+
+
+def fill_path_helper_benchmark_gate(helper: Any) -> Mapping[str, Any]:
+    value = getattr(helper, "benchmark_gate", {})
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {}
+
+
 __all__ = [
     "FILL_METHODS",
     "LearnedFillPathPolicy",
+    "fill_path_helper_benchmark_gate",
+    "load_fill_path_helper_predictions",
     "train_fill_path_policy",
 ]

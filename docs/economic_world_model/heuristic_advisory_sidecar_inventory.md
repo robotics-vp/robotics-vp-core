@@ -16,6 +16,7 @@ Ranking dimensions:
 | 1 | Local synthetic branch corpus + offline local synth trainer | `lightweight_trainer_gap` | Very high | Very high | Yes | **Wired now** |
 | 2 | Stage-1 semantic seed tags + diffusion proposal routing | `heuristic` / `fallback` | Very high | High | Yes | **Wired now** |
 | 2a | Gap-ranker trainer/package + sim/gen2sim agenda ranking | `heuristic` / `lightweight_trainer_gap` | Very high | High | Yes | **Wired now, benchmark-gated** |
+| 2b | Fill-path policy trainer/package + coverage-loop fill routing | `heuristic` / `lightweight_trainer_gap` | Very high | High | Yes | **Wired now, benchmark-gated** |
 | 3 | SceneTracks passthrough/non-stub truthiness in bootstrap + replay ingest | `fallback` | High | High | Yes | **Wired now** |
 | 3a | Bootstrap workcell runtime trace completeness + grounded-data lane classification | `sidecar` / `fallback` | High | High | Yes | **Wired now** |
 | 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
@@ -120,6 +121,48 @@ Ranking dimensions:
   - use the learned gap ranker through `disabled` / `auto` / `required` helper semantics
   - keep benchmark-unready packages as `shadow_candidate` helpers with bounded influence only
   - later broaden the same promotion contract to the fill-path policy so every coverage-loop decision shares the same maturity semantics
+- disposition tag:
+  - `wired now`
+  - `upgraded to heavyweight parity`
+  - `benchmark-gated`
+
+### 2b. Fill-path policy trainer/package + coverage-loop fill routing
+
+- surface: learned fill-path policy packaging and bounded use in coverage-loop fill decisions
+- file/path: `scripts/train_fill_path_policy.py`, `src/world_model/fill_path_runtime.py`, `src/orchestrator/fill_path_routing.py`, `src/orchestrator/coverage_loop.py`
+- category: `heuristic` / `lightweight_trainer_gap`
+- current behavior:
+  - `scripts/train_fill_path_policy.py` is now a canonical trainer lane rather than a loose standalone script:
+    - emits dataset summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `fill_path_policy_package.json`
+    - runtime manifest / checkpoint registry under `RegalTrainingRunner`
+  - benchmark readiness is now explicit and conservative:
+    - enough fill-outcome records
+    - enough labeled edges
+    - enough positive coverage deltas
+    - enough distinct winning fill methods
+    are required before the package is treated as `promoted`
+  - `src/orchestrator/fill_path_routing.py` now blends:
+    - heuristic fill-method priors
+    - learned fill-path probabilities
+    through a bounded helper weight
+  - `src/orchestrator/coverage_loop.py` now consumes that routing helper with `disabled` / `auto` / `required` semantics, records helper promotion stage plus heuristic-vs-learned score traces on each fill decision, and preserves those routing traces into append-only fill-outcome records
+- current consumers:
+  - `run_coverage_loop(...)`
+  - `CoverageLoopResult.record_outcomes(...)`
+  - `scripts/run_coverage_loop.py`
+  - `scripts/train_fill_path_policy.py`
+- why it is a production problem:
+  - before this pass, the repo already had a learned fill-path model, but the live coverage loop either ignored it or switched directly to a raw `predict_batch()` hook with no package truth, promotion stage, or recorded rationale
+  - that made fill-method choice look more “neuralized” than it actually was and left later training unable to learn from the router’s own reasoning
+- recommended disposition:
+  - keep governance/readiness hard gates explicit
+  - use the learned fill-path model through `disabled` / `auto` / `required` helper semantics
+  - keep benchmark-unready packages as `shadow_candidate` helpers with bounded influence only
+  - preserve routing traces in fill-outcome records so later economic-WM/orchestrator trainers can learn on the meta-choice path itself
 - disposition tag:
   - `wired now`
   - `upgraded to heavyweight parity`
@@ -463,4 +506,4 @@ Ranking dimensions:
 
 1. Deepen orchestration supervision beyond `first_tool_only_v1` so the runtime-backed trainer learns fuller action sequences instead of only the first routing decision.
 2. Continue meta-layer neuralization above the current helper path so future economic-WM and later meta-node-WM conditioning can supervise more than authority/conditioning outputs alone.
-3. Extend the new gap-ranker helper contract across the remaining coverage-loop decisions, especially fill-path routing and later gen2sim validity evaluation, so the full synth agenda shares one honest promotion story.
+3. Extend the same helper-package and promotion discipline into later gen2sim validity/value admission so the full synth agenda shares one honest promotion story end to end, not just through agenda ranking and fill-path routing.
