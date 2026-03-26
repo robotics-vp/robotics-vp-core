@@ -120,12 +120,18 @@
     - training summary
     - training job result
     - runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
-  - records the current contract honestly as `tool_prediction_contract: first_tool_only_v1`
+  - now trains the bounded sequence contract honestly as `tool_prediction_contract: bounded_tool_sequence_v2`
+  - uses an explicit PAD/stop label in target tool sequences instead of overloading the first tool id as padding
+  - tracks:
+    - active-token accuracy
+    - first-tool accuracy
+    - full-sequence accuracy
+    - stop-token accuracy
 - This is the right current neuralization posture for orchestration:
-  - instruction and context conditioning are now stable and trainable
+  - instruction, semantic, and selector meta-choice conditioning are now stable and trainable
   - runtime-corpus receipts are the preferred supervision source
   - synthetic fallback remains available for bring-up, but no longer masquerades as benchmark-ready
-  - the next upgrade is not “make the trainer real at all”; it is “expand beyond first-tool supervision into fuller sequence/runtime labels”
+  - the next upgrade is no longer sequence supervision; it is the higher-order objective/backend/data-mix planner above the sequence head
 
 - Semantic datapack-selection is now a real learned-helper lane rather than a runtime-only seam:
   - `src/orchestrator/semantic_policy.py` now defines:

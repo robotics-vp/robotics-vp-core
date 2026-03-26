@@ -192,7 +192,7 @@
         {
             "script": "train_orchestration_transformer.py",
             "migrated_at": "2026-01-13",
-            "notes": "P1 complete - runtime-backed orchestration trainer with deterministic instruction-token contract, canonical runtime/precondition artifacts, and benchmark-gated promotion posture; remaining limitation is first_tool_only_v1 supervision"
+            "notes": "P1 complete - runtime-backed orchestration trainer now learns the bounded_tool_sequence_v2 contract with explicit PAD/stop labels, deterministic instruction-token conditioning, canonical runtime/precondition artifacts, and benchmark-gated promotion posture; remaining gap is the higher-order heuristic planner above the sequence head"
         },
         {
             "script": "train_vision_backbone.py",

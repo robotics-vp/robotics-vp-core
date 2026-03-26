@@ -62,6 +62,11 @@
       "id": "semantic_selection_meta_choice_receipts",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - semantic selection now exports a real bounded neural helper package, persists per-episode selection_summary sidecars into rollout artifacts, replay ingest preserves those summaries into runtime rows, and orchestration context encoding now reacts to selection-policy/helper-status/meta-choice features instead of dropping them after the sim run log."
+    },
+    {
+      "id": "orchestration_sequence_contract",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - orchestration transformer/runtime now use bounded multi-step tool logits with an explicit PAD/stop label, runtime planning records model sequence traces before bounded heuristic backfill, and the trainer/eval path now optimizes and reports full bounded tool-sequence behavior instead of only the first routing decision."
     }
   ],
   "backlog": []

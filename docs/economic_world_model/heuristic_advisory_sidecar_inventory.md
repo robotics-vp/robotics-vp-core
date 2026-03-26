@@ -374,8 +374,9 @@ Ranking dimensions:
   - benchmark readiness is now honest:
     - runtime-backed corpora can train immediately
     - synthetic-only or low-density runtime corpora remain benchmark-unready
-  - the remaining explicit limitation is narrower:
-    - `tool_prediction_contract` is still `first_tool_only_v1`
+  - the trainer/runtime contract is now `bounded_tool_sequence_v2`:
+    - target sequences use an explicit PAD/stop label
+    - training/eval now measure active-token, full-sequence, and stop-token behavior instead of only the first tool
 - current consumers:
   - `scripts/run_stage6_train_all.py`
   - `scripts/eval_orchestration_transformer.py`
@@ -383,11 +384,12 @@ Ranking dimensions:
 - why it is a production problem:
   - before this pass, the runtime wrapper looked modern but the actual trainer still depended on synthetic teacher contracts and dummy instruction tokens
   - that made the lane appear more runtime-grounded than it really was
-  - the remaining production limitation is that the supervision target is still only the first tool, not the full sequence/policy contract
+  - the remaining production limitation is no longer missing sequence supervision; it is that higher-order objective/backend/data-mix planning above the sequence head is still largely heuristic-prior logic
 - recommended disposition:
   - keep the runtime-backed trainer as the default path
   - preserve synthetic fallback only as a clearly benchmark-unready bootstrap lane
-  - extend the trainer later from `first_tool_only_v1` to fuller sequence supervision once runtime receipts are dense enough
+  - keep `bounded_tool_sequence_v2` as the live contract
+  - push the next neuralization step upward into the meta-transformer planning/helper layer instead of revisiting first-tool-only sequencing
 - disposition tag:
   - `wired now`
   - `upgraded to heavyweight parity`
