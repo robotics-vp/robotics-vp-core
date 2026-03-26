@@ -136,6 +136,9 @@ def test_rank_datapacks_accepts_learned_helper_adjustment() -> None:
         selection_scorer_package={
             "package_id": "selection_helper_v1",
             "feature_weights": {"novelty_score": 2.5},
+            "context_weights": {"candidate_pool_size_norm": 1.0},
+            "context_bias": 0.5,
+            "min_adjustment": 0.1,
             "bias": 0.0,
             "max_adjustment": 0.5,
         },
@@ -146,6 +149,8 @@ def test_rank_datapacks_accepts_learned_helper_adjustment() -> None:
     assert ranked[0].scorer_package_id == "selection_helper_v1"
     assert ranked[0].learned_score > 0.0
     assert ranked[0].scorer_trace["top_contributors"][0]["feature"] == "novelty_score"
+    assert ranked[0].scorer_trace["context_trace"]["policy"] == "context_conditioned_max_adjustment"
+    assert ranked[0].scorer_trace["effective_max_adjustment"] >= 0.1
     assert ranked[0].selection_features["novelty_score"] >= ranked[-1].selection_features["novelty_score"]
 
 
@@ -176,9 +181,11 @@ def test_summarize_datapack_selection_keeps_top_candidate_reasons() -> None:
         robot_family="G1",
         objective_hint="baseline",
         selection_helper_status={"mode": "disabled", "status": "disabled"},
+        selection_context={"gap_pressure": 1.0},
     )
 
     assert summary["selected_ids"] == ["dp_summary"]
     assert summary["selection_policy"] == "heuristic_only"
     assert summary["selection_helper_status"]["status"] == "disabled"
+    assert summary["selection_context"]["gap_pressure"] == 1.0
     assert summary["top_candidates"][0]["reasons"] == ["exact_tag_match", "benchmark_eligible"]

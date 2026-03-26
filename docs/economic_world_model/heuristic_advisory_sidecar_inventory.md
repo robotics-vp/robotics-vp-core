@@ -21,7 +21,7 @@ Ranking dimensions:
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | Yes | **Wired now** |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now** |
 | 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
-| 7 | Semantic datapack/scenario selection in `semantic_policy.py` | `heuristic` | Medium-high | Medium-high | No | **Wired now** |
+| 7 | Semantic datapack/scenario selection in `semantic_policy.py` plus helper trainer/export lane | `heuristic` / `lightweight_trainer_gap` | Medium-high | Medium-high | No | **Wired now, benchmark-gated** |
 | 8 | `train_meta_transformer_synthetic.py` meta-transformer trainer entrypoint | `lightweight_trainer_gap` | Medium | High | Yes | **Wired now** |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `sidecar` / `fallback` | Medium-high | Medium-high | No | **Wired now** |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
@@ -260,14 +260,29 @@ Ranking dimensions:
     - datapack quality / novelty metadata
     - benchmark/readiness support when datapack metadata carries it
     - explicit gap-fill pressure for tags not yet represented in scenario history
-  - the same feature contract is now first-class in `DatapackSelectionFeatures`, and an optional bounded learned helper package can apply a capped reranking adjustment on top of the explicit prior instead of replacing it wholesale
+  - the same feature contract is now first-class in `DatapackSelectionFeatures`, and a bounded learned helper package can apply a capped reranking adjustment on top of the explicit prior instead of replacing it wholesale
+  - the helper now also carries `DatapackSelectionContext` conditioning, so helper strength is no longer a flat scalar:
+    - candidate-pool density
+    - gap pressure
+    - benchmark/execution-ready ratios
+    - history density / cold-start pressure
+    now gate the effective adjustment cap
   - `src/orchestrator/semantic_simulation.py` now merges ontology and local fallback datapacks through the same ranked pool, records a `selection_summary` into the live simulation result plus run log, and carries explicit helper-promotion state:
     - `disabled` for bootstrap
     - `auto` for shadow/helper-when-present
     - `required` when the learned helper is a runtime precondition
+    - `required` now also insists on a benchmark-gated-ready helper package instead of accepting any package-shaped JSON
+  - `scripts/train_datapack_selection_scorers.py` now exists and produces:
+    - training dataset and dataset summary
+    - model/config artifact
+    - execution-precondition artifact
+    - scorer package JSON
+    - training summary
+    - canonical runtime manifest/checkpoint registry when run under `RegalTrainingRunner`
   - `detect_semantic_gaps(...)` still infers missing scenario tags deterministically
 - current consumers:
   - `src/orchestrator/semantic_simulation.py`
+  - `scripts/train_datapack_selection_scorers.py`
 - why it is a production problem:
   - before this pass, this determined which datapacks entered the simulation/training loop using little more than tag overlap plus ARH subtraction
   - that was too weak for a runtime surface that directly shapes synthetic agenda generation and future corpus construction
@@ -275,9 +290,11 @@ Ranking dimensions:
   - keep the current bounded scored-selection layer live now
   - preserve the explicit prior feature contract as the bootstrap fallback and training target
   - promote the learned helper sequentially: `disabled` -> `auto` -> `required`
-  - train the helper over `selection_summary` plus downstream outcome/counterfactual receipts before handing it required status
+  - keep `auto` shadow-safe by clamping benchmark-unready packages
+  - train the helper over `selection_summary` plus downstream outcome/counterfactual receipts before broadening the promoted/default path
 - disposition tag:
   - `wired now`
+  - `benchmark-gated`
   - `neuralized later`
 
 ### 8. `train_meta_transformer_synthetic.py`
@@ -370,6 +387,6 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Add a real training/export path for the new semantic datapack-selection helper so the `auto -> required` promotion path is backed by an actual corpus and scorer package, not just runtime plumbing.
-2. Replace heuristic teacher targets and dummy instruction tokens in `train_orchestration_transformer.py` with packet/evidence/runtime-corpus supervision so the wrapped trainer stops depending on synthetic teacher contracts internally.
-3. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.
+1. Replace heuristic teacher targets and dummy instruction tokens in `train_orchestration_transformer.py` with packet/evidence/runtime-corpus supervision so the wrapped trainer stops depending on synthetic teacher contracts internally.
+2. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.
+3. Push the same learned/helper promotion discipline into the next sim/gen2sim agenda lane so diffusion and synth branching stop relying on bounded heuristics once replay receipts are dense enough.

@@ -139,19 +139,6 @@
             "updated_at": "2026-03-24"
         },
         {
-            "script": "train_datapack_selection_scorers.py",
-            "priority": "P1",
-            "owner": "codex",
-            "blocked_by": "selection_summary corpora plus downstream outcome/counterfactual receipts",
-            "downstream_dependents": [
-                "semantic datapack-selection helper promotion",
-                "selection_scorer_mode=required"
-            ],
-            "notes": "High priority - bounded learned reranker over DatapackSelectionFeatures and selection_summary receipts; runtime disabled/auto/required promotion path is now wired, but this trainer/export lane does not yet exist.",
-            "created_at": "2026-03-26",
-            "updated_at": "2026-03-26"
-        },
-        {
             "script": "train_semantic_gap_conditioned_world_models.py",
             "priority": "P1",
             "owner": "codex",
@@ -256,13 +243,18 @@
             "script": "train_meta_transformer_synthetic.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - replaced the random-noise placeholder with the real meta-transformer dataset/model/loss path, explicit runtime-dataset provenance, benchmark/precondition artifacts, and canonical checkpoint/runtime outputs while keeping synthetic generation only as an explicit fallback source"
+        },
+        {
+            "script": "train_datapack_selection_scorers.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - added the semantic run-log trainer/export lane for datapack-selection helpers with context-conditioned scorer packages, benchmark-gated auto->required promotion semantics, and canonical runtime manifest/checkpoint outputs under RegalTrainingRunner"
         }
     ],
     "summary": {
         "total": 31,
         "P0": 0,
-        "P1": 7,
+        "P1": 6,
         "P2": 6,
-        "migrated": 18
+        "migrated": 19
     }
 }

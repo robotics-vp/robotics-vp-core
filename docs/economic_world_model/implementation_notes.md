@@ -2,6 +2,40 @@
 
 ## 2026-03-26
 
+- Semantic datapack-selection is now a real learned-helper lane rather than a runtime-only seam:
+  - `src/orchestrator/semantic_policy.py` now defines:
+    - `DatapackSelectionContext`
+    - context-conditioned helper adjustment caps
+    - richer `scorer_trace.context_trace` receipts
+  - the old literal feature coefficients remain only as the bootstrap prior
+  - the new learned/helper part is still bounded, but it is no longer a flat bump on top of the prior
+- `src/orchestrator/semantic_simulation.py` now enforces an honest sequential promotion path for selector helpers:
+  - `disabled`
+  - `auto` with explicit `shadow_candidate` vs `promoted` helper stages
+  - `required`, which now fails unless the scorer package is benchmark-gated ready
+  - this matters because “package exists” is no longer treated as equivalent to “package is production-ready”
+- Added `src/orchestrator/datapack_selection_training.py` plus `scripts/train_datapack_selection_scorers.py`:
+  - the trainer consumes `selection_summary` run-log receipts
+  - builds selected-outcome and positive-pairwise supervision examples
+  - learns both:
+    - feature weights over `DatapackSelectionFeatures`
+    - context weights over `DatapackSelectionContext`
+  - emits:
+    - `datapack_selection_training_dataset.json`
+    - `datapack_selection_dataset_summary.json`
+    - `datapack_selection_model_config.json`
+    - `datapack_selection_execution_preconditions.json`
+    - `datapack_selection_scorer_package.json`
+    - `datapack_selection_training_summary.json`
+    - `training_job_result.json`
+    - canonical runtime manifest/checkpoint-registry outputs under `RegalTrainingRunner`
+- This is the right current posture for selector neuralization:
+  - bootstrap prior stays explicit and auditable
+  - helper weights and helper strength are now learnable from receipts
+  - benchmark-unready packages still influence runtime only through a bounded shadow-stage clamp
+  - future conditioning can move upward into the economic WM and then the later meta-node WM without changing the current runtime contract again
+  - full counterfactual datapack-choice supervision is still a later density problem, not something this pass should fake
+
 - Observation/conditioning now reacts to semantic-runtime truth instead of merely carrying it:
   - `src/semantic/runtime_backbone.py` now derives a compact `semantic_runtime_truth` block from the semantic world model:
     - scene-track backend truth

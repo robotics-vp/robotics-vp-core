@@ -104,6 +104,9 @@ def test_run_semantic_simulation_with_stub_backend(monkeypatch, tmp_path: Path):
     assert result.simulation.selection_summary["selection_policy"] == "heuristic_plus_learned_helper"
     assert result.simulation.selection_summary["scorer_package_id"] == "selection_helper_smoke"
     assert result.simulation.selection_summary["selection_helper_status"]["status"] == "available"
+    assert result.simulation.selection_summary["selection_helper_status"]["promotion_stage"] == "shadow_candidate"
+    assert result.simulation.selection_summary["selection_helper_status"]["benchmark_gate_ready"] is False
+    assert result.simulation.selection_summary["selection_context"]["candidate_pool_size_norm"] > 0.0
     assert store.list_scenarios()
     assert any(dp.datapack_id == "dp1_vla" for dp in store.list_datapacks())
     labeled_dp = next(dp for dp in store.list_datapacks() if dp.datapack_id == "dp1_vla")
@@ -158,6 +161,58 @@ def test_run_semantic_simulation_required_selection_helper_must_exist(monkeypatc
     assert result.status == "failed"
     assert result.reason is not None
     assert "selection_scorer_mode='required'" in result.reason
+
+    reset_budget_state()
+    set_budget_config(BudgetConfig())
+
+
+def test_run_semantic_simulation_required_selection_helper_must_be_benchmark_ready(monkeypatch, tmp_path: Path):
+    reset_budget_state()
+    set_budget_config(BudgetConfig(max_concurrent_runs=2, daily_step_budget=20_000_000, daily_run_budget=10))
+    store = OntologyStore(root_dir=tmp_path / "ontology")
+    store.upsert_task(
+        Task(
+            task_id="task_ready",
+            name="Task Ready",
+            human_mpl_units_per_hour=60.0,
+            human_wage_per_hour=18.0,
+            default_energy_cost_per_wh=0.12,
+        )
+    )
+    store.append_datapacks(
+        [
+            Datapack(
+                datapack_id="dp_ready",
+                source_type="holosoma",
+                task_id="task_ready",
+                modality="motion",
+                storage_uri="data/mocap/test_ready.npz",
+                metadata={
+                    "tags": ["humanoid"],
+                    "robot_families": ["G1"],
+                    "objective_hint": "baseline",
+                },
+            )
+        ]
+    )
+
+    result = semantic_simulation.run_semantic_simulation(
+        store=store,
+        tags=["humanoid"],
+        robot_family="G1",
+        objective_hint="baseline",
+        task_id="task_ready",
+        selection_scorer_package={
+            "package_id": "selection_helper_shadow",
+            "feature_weights": {"quality_score": 1.0},
+            "max_adjustment": 0.25,
+        },
+        selection_scorer_mode="required",
+    )
+
+    assert result.status == "failed"
+    assert result.reason is not None
+    assert "benchmark-gated ready" in result.reason
 
     reset_budget_state()
     set_budget_config(BudgetConfig())

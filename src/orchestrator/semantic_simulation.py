@@ -27,6 +27,7 @@ from src.ontology.store import OntologyStore
 from src.orchestrator.schedule import BudgetExceeded, acquire_run_budget, release_run_budget
 from src.orchestrator.semantic_policy import (
     DatapackSelectionDecision,
+    DatapackSelectionScorerPackage,
     MissingScenarioSpec,
     apply_arh_penalty,
     coerce_datapack_selection_scorer_package,
@@ -137,7 +138,11 @@ def run_semantic_simulation(
             objective_name=objective_hint,
             motor_backend=motor_backend,
         )
-        resolved_selection_scorer_package, selection_scorer_package_ref = _resolve_datapack_selection_scorer_package(
+        (
+            resolved_selection_scorer_package,
+            selection_scorer_package_ref,
+            selection_helper_status,
+        ) = _resolve_datapack_selection_scorer_package(
             selection_scorer_package=selection_scorer_package,
             selection_scorer_package_path=selection_scorer_package_path,
             selection_scorer_mode=selection_scorer_mode,
@@ -214,14 +219,8 @@ def run_semantic_simulation(
             tags=tags or [],
             robot_family=robot_family,
             objective_hint=objective_hint,
-            selection_helper_status={
-                "mode": selection_scorer_mode,
-                "status": (
-                    "available"
-                    if resolved_selection_scorer_package is not None
-                    else ("disabled" if selection_scorer_mode == "disabled" else "heuristic_fallback")
-                ),
-            },
+            selection_helper_status=selection_helper_status,
+            selection_context=_selection_context_from_ranked(ranked_combined),
         )
         if selection_scorer_package_ref:
             selection_summary = {
@@ -580,17 +579,35 @@ def _resolve_datapack_selection_scorer_package(
     selection_scorer_package: Mapping[str, Any] | None,
     selection_scorer_package_path: str | None,
     selection_scorer_mode: Literal["disabled", "auto", "required"],
-) -> tuple[Mapping[str, Any] | None, str | None]:
+) -> tuple[Mapping[str, Any] | None, str | None, dict[str, Any]]:
     if selection_scorer_mode not in {"disabled", "auto", "required"}:
         raise ValueError(f"Unsupported selection_scorer_mode: {selection_scorer_mode}")
     if selection_scorer_mode == "disabled":
-        return None, None
+        return (
+            None,
+            None,
+            {
+                "mode": selection_scorer_mode,
+                "status": "disabled",
+                "promotion_stage": "disabled",
+                "benchmark_gate_ready": False,
+                "effective_max_adjustment": 0.0,
+            },
+        )
     if selection_scorer_package is not None:
         package = coerce_datapack_selection_scorer_package(selection_scorer_package)
-        return (package.to_dict() if package is not None else None), None
+        return _finalize_datapack_selection_scorer_package(
+            package,
+            selection_scorer_mode=selection_scorer_mode,
+            package_ref=None,
+        )
     if selection_scorer_package_path:
         package = load_datapack_selection_scorer_package(selection_scorer_package_path)
-        return package.to_dict(), str(Path(selection_scorer_package_path).resolve())
+        return _finalize_datapack_selection_scorer_package(
+            package,
+            selection_scorer_mode=selection_scorer_mode,
+            package_ref=str(Path(selection_scorer_package_path).resolve()),
+        )
     candidate_paths = [
         Path("artifacts/semantic_selection/datapack_selection_scorer_package.json"),
         Path("artifacts/semantic_runtime/datapack_selection_scorer_package.json"),
@@ -599,12 +616,115 @@ def _resolve_datapack_selection_scorer_package(
     for candidate in candidate_paths:
         if candidate.exists():
             package = load_datapack_selection_scorer_package(candidate)
-            return package.to_dict(), str(candidate.resolve())
+            return _finalize_datapack_selection_scorer_package(
+                package,
+                selection_scorer_mode=selection_scorer_mode,
+                package_ref=str(candidate.resolve()),
+            )
     if selection_scorer_mode == "required":
         raise FileNotFoundError(
             "selection_scorer_mode='required' but no datapack selection scorer package was found"
         )
-    return None, None
+    return (
+        None,
+        None,
+        {
+            "mode": selection_scorer_mode,
+            "status": "heuristic_fallback",
+            "promotion_stage": "heuristic_fallback",
+            "benchmark_gate_ready": False,
+            "effective_max_adjustment": 0.0,
+        },
+    )
+
+
+def _finalize_datapack_selection_scorer_package(
+    package: DatapackSelectionScorerPackage | None,
+    *,
+    selection_scorer_mode: Literal["disabled", "auto", "required"],
+    package_ref: str | None,
+) -> tuple[Mapping[str, Any] | None, str | None, dict[str, Any]]:
+    if package is None:
+        return (
+            None,
+            package_ref,
+            {
+                "mode": selection_scorer_mode,
+                "status": "heuristic_fallback",
+                "promotion_stage": "heuristic_fallback",
+                "benchmark_gate_ready": False,
+                "effective_max_adjustment": 0.0,
+            },
+        )
+    benchmark_gate = dict(package.metadata.get("benchmark_gate", {}) or {})
+    benchmark_gate_ready = bool(benchmark_gate.get("ready", False))
+    raw_max_adjustment = float(package.max_adjustment)
+    effective_max_adjustment = raw_max_adjustment
+    promotion_stage = "promoted" if benchmark_gate_ready else "shadow_candidate"
+    effective_package = package
+    if not benchmark_gate_ready:
+        shadow_cap = min(
+            raw_max_adjustment,
+            max(float(package.min_adjustment), raw_max_adjustment * 0.35 if raw_max_adjustment > 0.0 else 0.0),
+        )
+        effective_max_adjustment = max(float(package.min_adjustment), shadow_cap)
+        effective_package = DatapackSelectionScorerPackage(
+            package_id=package.package_id,
+            schema_version=package.schema_version,
+            feature_weights=dict(package.feature_weights),
+            context_weights=dict(package.context_weights),
+            bias=float(package.bias),
+            context_bias=float(package.context_bias),
+            min_adjustment=float(package.min_adjustment),
+            max_adjustment=float(effective_max_adjustment),
+            metadata={
+                **dict(package.metadata),
+                "selection_helper_promotion": {
+                    "raw_max_adjustment": raw_max_adjustment,
+                    "effective_max_adjustment": effective_max_adjustment,
+                    "benchmark_gate_ready": benchmark_gate_ready,
+                    "promotion_stage": promotion_stage,
+                },
+            },
+        )
+    if selection_scorer_mode == "required" and not benchmark_gate_ready:
+        raise FileNotFoundError(
+            "selection_scorer_mode='required' but datapack selection scorer package is not benchmark-gated ready"
+        )
+    return (
+        effective_package.to_dict(),
+        package_ref,
+        {
+            "mode": selection_scorer_mode,
+            "status": "available",
+            "promotion_stage": promotion_stage,
+            "benchmark_gate_ready": benchmark_gate_ready,
+            "raw_max_adjustment": raw_max_adjustment,
+            "effective_max_adjustment": effective_max_adjustment,
+            "conditioning_policy": (
+                "context_conditioned_max_adjustment"
+                if package.context_weights
+                else "unconditioned_max_adjustment"
+            ),
+            "package_id": package.package_id,
+        },
+    )
+
+
+def _selection_context_from_ranked(
+    ranked: Sequence[DatapackSelectionDecision],
+) -> dict[str, Any]:
+    if not ranked:
+        return {}
+    scorer_trace = dict(ranked[0].scorer_trace or {})
+    context_trace = dict(scorer_trace.get("context_trace", {}) or {})
+    context = context_trace.get("context")
+    if isinstance(context, Mapping):
+        return {
+            str(key): float(value)
+            for key, value in dict(context).items()
+        }
+    return {}
 
 
 def _merge_notes(notes: str | None, missing_specs: Sequence[MissingScenarioSpec]) -> str | None:
