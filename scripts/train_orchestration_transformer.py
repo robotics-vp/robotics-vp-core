@@ -20,7 +20,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
-from src.orchestrator.orchestration_transformer import OrchestrationTransformer
+from src.orchestrator.orchestration_transformer import (
+    OrchestrationTransformer,
+    PAD_TOOL_INDEX,
+)
 from src.orchestrator.training_dataset import (
     OrchestrationSample,
     build_mixed_training_dataset,
@@ -200,6 +203,7 @@ def _build_dataset_summary(
     instruction_seq_len: int,
     hidden: int,
     ctx_dim: int,
+    max_tool_steps: int,
 ) -> dict[str, Any]:
     source_counts = Counter(str(sample.source_type or "unknown") for sample in samples)
     tool_counts = Counter(
@@ -207,6 +211,7 @@ def _build_dataset_summary(
         for sample in samples
         if sample.target_tool_sequence
     )
+    sequence_length_counts = Counter(len(sample.target_tool_sequence) for sample in samples)
     runtime_like_count = sum(1 for sample in samples if sample.source_type == "semantic_runtime_corpus")
     benchmark_gate_ready = runtime_like_count >= ORCHESTRATION_BENCHMARK_MIN_RUNTIME_SAMPLES
     return {
@@ -225,12 +230,17 @@ def _build_dataset_summary(
         "runtime_like_count": runtime_like_count,
         "source_type_counts": dict(sorted(source_counts.items())),
         "first_tool_counts": dict(sorted(tool_counts.items())),
+        "sequence_length_counts": {
+            str(length): int(count)
+            for length, count in sorted(sequence_length_counts.items())
+        },
         "model_contract": {
             "hidden": int(hidden),
             "ctx_dim": int(ctx_dim),
             "vocab_size": int(vocab_size),
             "instruction_seq_len": int(instruction_seq_len),
-            "tool_prediction_contract": "first_tool_only_v1",
+            "max_tool_steps": int(max_tool_steps),
+            "tool_prediction_contract": "bounded_tool_sequence_v2",
         },
         "source_domain_coverage": _source_domain_coverage(samples),
         "runtime_summary": dict(dataset_info.get("runtime_summary", {}) or {}),
@@ -268,14 +278,22 @@ def _build_execution_preconditions(
     }
 
 
-def _build_model_config(*, hidden: int, ctx_dim: int, vocab_size: int, instruction_seq_len: int) -> dict[str, Any]:
+def _build_model_config(
+    *,
+    hidden: int,
+    ctx_dim: int,
+    vocab_size: int,
+    instruction_seq_len: int,
+    max_tool_steps: int,
+) -> dict[str, Any]:
     return {
         "schema_version": "orchestration_transformer_model_config_v1",
         "hidden": int(hidden),
         "ctx_dim": int(ctx_dim),
         "vocab_size": int(vocab_size),
         "instruction_seq_len": int(instruction_seq_len),
-        "tool_prediction_contract": "first_tool_only_v1",
+        "max_tool_steps": int(max_tool_steps),
+        "tool_prediction_contract": "bounded_tool_sequence_v2",
     }
 
 
@@ -283,6 +301,7 @@ def _build_trajectory_audits(samples: Sequence[OrchestrationSample]) -> list[Any
     audits: list[Any] = []
     for index, sample in enumerate(samples):
         first_tool = sample.target_tool_sequence[0].name if sample.target_tool_sequence else "NONE"
+        tool_sequence = [step.name for step in list(sample.target_tool_sequence or [])]
         reward = 1.0 if sample.source_type == "semantic_runtime_corpus" else 0.5
         audits.append(
             create_trajectory_audit(
@@ -293,10 +312,85 @@ def _build_trajectory_audits(samples: Sequence[OrchestrationSample]) -> list[Any
                     "runtime_backed": [1.0 if sample.source_type == "semantic_runtime_corpus" else 0.0],
                     "tool_count": [float(len(sample.target_tool_sequence))],
                 },
-                events=[f"first_tool:{first_tool}", f"source:{sample.source_type}"],
+                events=[
+                    f"first_tool:{first_tool}",
+                    f"tool_sequence:{'|'.join(tool_sequence) if tool_sequence else 'NONE'}",
+                    f"source:{sample.source_type}",
+                ],
             )
         )
     return audits
+
+
+def _zero_sequence_metrics() -> dict[str, float]:
+    return {
+        "token_correct": 0.0,
+        "token_total": 0.0,
+        "active_correct": 0.0,
+        "active_total": 0.0,
+        "first_correct": 0.0,
+        "sequence_correct": 0.0,
+        "sequence_total": 0.0,
+        "stop_correct": 0.0,
+        "stop_total": 0.0,
+    }
+
+
+def _sequence_loss(
+    tool_logits: torch.Tensor,
+    batch_tools: torch.Tensor,
+    criterion: nn.Module,
+) -> torch.Tensor:
+    flat_logits = tool_logits.reshape(-1, tool_logits.shape[-1])
+    flat_targets = batch_tools.reshape(-1)
+    active_mask = flat_targets != PAD_TOOL_INDEX
+    active_loss = criterion(flat_logits[active_mask], flat_targets[active_mask]) if bool(active_mask.any()) else flat_logits.sum() * 0.0
+    full_loss = criterion(flat_logits, flat_targets)
+    return active_loss + (0.35 * full_loss)
+
+
+def _sequence_metrics(
+    tool_logits: torch.Tensor,
+    batch_tools: torch.Tensor,
+) -> dict[str, float]:
+    pred = torch.argmax(tool_logits, dim=-1)
+    match = pred == batch_tools
+    active_mask = batch_tools != PAD_TOOL_INDEX
+    stop_mask = ~active_mask
+    return {
+        "token_correct": float(match.sum().item()),
+        "token_total": float(batch_tools.numel()),
+        "active_correct": float((match & active_mask).sum().item()),
+        "active_total": float(active_mask.sum().item()),
+        "first_correct": float((pred[:, 0] == batch_tools[:, 0]).sum().item()),
+        "sequence_correct": float(match.all(dim=1).sum().item()),
+        "sequence_total": float(batch_tools.shape[0]),
+        "stop_correct": float((match & stop_mask).sum().item()),
+        "stop_total": float(stop_mask.sum().item()),
+    }
+
+
+def _accumulate_sequence_metrics(
+    total_metrics: dict[str, float],
+    batch_metrics: Mapping[str, float],
+) -> None:
+    for key, value in batch_metrics.items():
+        total_metrics[key] = float(total_metrics.get(key, 0.0) + float(value))
+
+
+def _finalize_sequence_metrics(loss: float, metrics: Mapping[str, float]) -> dict[str, float]:
+    sequence_total = max(float(metrics.get("sequence_total", 0.0)), 1.0)
+    token_total = max(float(metrics.get("token_total", 0.0)), 1.0)
+    active_total = max(float(metrics.get("active_total", 0.0)), 1.0)
+    stop_total = max(float(metrics.get("stop_total", 0.0)), 1.0)
+    return {
+        "loss": float(loss),
+        "token_accuracy": float(metrics.get("token_correct", 0.0)) / token_total,
+        "active_token_accuracy": float(metrics.get("active_correct", 0.0)) / active_total,
+        "first_tool_accuracy": float(metrics.get("first_correct", 0.0)) / sequence_total,
+        "full_sequence_accuracy": float(metrics.get("sequence_correct", 0.0)) / sequence_total,
+        "stop_token_accuracy": float(metrics.get("stop_correct", 0.0)) / stop_total if metrics.get("stop_total", 0.0) > 0 else 1.0,
+    }
 
 
 def _train_epoch(
@@ -307,24 +401,17 @@ def _train_epoch(
 ) -> dict[str, float]:
     model.train()
     total_loss = 0.0
-    correct = 0
-    total = 0
+    total_metrics = _zero_sequence_metrics()
     for batch_ctx, batch_instr, batch_tools in dataloader:
         optimizer.zero_grad()
         tool_logits, _arg_vec = model(batch_instr, batch_ctx)
-        target_first_tool = batch_tools[:, 0]
-        loss = criterion(tool_logits, target_first_tool)
+        loss = _sequence_loss(tool_logits, batch_tools, criterion)
         loss.backward()
         optimizer.step()
 
         total_loss += float(loss.item())
-        pred = torch.argmax(tool_logits, dim=-1)
-        correct += int((pred == target_first_tool).sum().item())
-        total += int(batch_ctx.shape[0])
-    return {
-        "loss": total_loss / max(len(dataloader), 1),
-        "accuracy": correct / max(total, 1),
-    }
+        _accumulate_sequence_metrics(total_metrics, _sequence_metrics(tool_logits, batch_tools))
+    return _finalize_sequence_metrics(total_loss / max(len(dataloader), 1), total_metrics)
 
 
 def _evaluate(
@@ -334,21 +421,14 @@ def _evaluate(
 ) -> dict[str, float]:
     model.eval()
     total_loss = 0.0
-    correct = 0
-    total = 0
+    total_metrics = _zero_sequence_metrics()
     with torch.no_grad():
         for batch_ctx, batch_instr, batch_tools in dataloader:
             tool_logits, _arg_vec = model(batch_instr, batch_ctx)
-            target_first_tool = batch_tools[:, 0]
-            loss = criterion(tool_logits, target_first_tool)
+            loss = _sequence_loss(tool_logits, batch_tools, criterion)
             total_loss += float(loss.item())
-            pred = torch.argmax(tool_logits, dim=-1)
-            correct += int((pred == target_first_tool).sum().item())
-            total += int(batch_ctx.shape[0])
-    return {
-        "loss": total_loss / max(len(dataloader), 1),
-        "accuracy": correct / max(total, 1),
-    }
+            _accumulate_sequence_metrics(total_metrics, _sequence_metrics(tool_logits, batch_tools))
+    return _finalize_sequence_metrics(total_loss / max(len(dataloader), 1), total_metrics)
 
 
 def _subset_metrics(
@@ -377,7 +457,11 @@ def _subset_metrics(
     return {
         "count": len(samples),
         "loss": float(metrics["loss"]),
-        "accuracy": float(metrics["accuracy"]),
+        "token_accuracy": float(metrics["token_accuracy"]),
+        "active_token_accuracy": float(metrics["active_token_accuracy"]),
+        "first_tool_accuracy": float(metrics["first_tool_accuracy"]),
+        "full_sequence_accuracy": float(metrics["full_sequence_accuracy"]),
+        "stop_token_accuracy": float(metrics["stop_token_accuracy"]),
     }
 
 
@@ -412,6 +496,7 @@ def _train(
         instruction_seq_len=args.instruction_seq_len,
         hidden=args.hidden,
         ctx_dim=actual_ctx_dim,
+        max_tool_steps=int(Y.shape[1]),
     )
     execution_preconditions = _build_execution_preconditions(dataset_summary=dataset_summary)
     model_config = _build_model_config(
@@ -419,6 +504,7 @@ def _train(
         ctx_dim=actual_ctx_dim,
         vocab_size=args.vocab_size,
         instruction_seq_len=args.instruction_seq_len,
+        max_tool_steps=int(Y.shape[1]),
     )
     config_digest = sha256_json(
         {
@@ -427,6 +513,7 @@ def _train(
             "ctx_dim": actual_ctx_dim,
             "vocab_size": args.vocab_size,
             "instruction_seq_len": args.instruction_seq_len,
+            "max_tool_steps": int(Y.shape[1]),
             "epochs": args.epochs,
             "batch_size": args.batch_size,
             "lr": args.lr,
@@ -459,6 +546,7 @@ def _train(
         vocab_size=args.vocab_size,
         hidden=args.hidden,
         ctx_dim=actual_ctx_dim,
+        max_tool_steps=int(Y.shape[1]),
     )
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = nn.CrossEntropyLoss()
@@ -485,15 +573,21 @@ def _train(
         epoch_summary = {
             "epoch": int(epoch),
             "train_loss": float(train_metrics["loss"]),
-            "train_accuracy": float(train_metrics["accuracy"]),
+            "train_token_accuracy": float(train_metrics["token_accuracy"]),
+            "train_active_token_accuracy": float(train_metrics["active_token_accuracy"]),
+            "train_first_tool_accuracy": float(train_metrics["first_tool_accuracy"]),
+            "train_full_sequence_accuracy": float(train_metrics["full_sequence_accuracy"]),
             "val_loss": float(val_metrics["loss"]),
-            "val_accuracy": float(val_metrics["accuracy"]),
+            "val_token_accuracy": float(val_metrics["token_accuracy"]),
+            "val_active_token_accuracy": float(val_metrics["active_token_accuracy"]),
+            "val_first_tool_accuracy": float(val_metrics["first_tool_accuracy"]),
+            "val_full_sequence_accuracy": float(val_metrics["full_sequence_accuracy"]),
         }
         history.append(epoch_summary)
         optimizer_steps += max(len(train_loader), 1)
         print(json.dumps({"event": "epoch_complete", "data": epoch_summary}, sort_keys=True))
-        if val_metrics["accuracy"] >= best_val_acc:
-            best_val_acc = float(val_metrics["accuracy"])
+        if val_metrics["full_sequence_accuracy"] >= best_val_acc:
+            best_val_acc = float(val_metrics["full_sequence_accuracy"])
             best_epoch = int(epoch)
             torch.save(model.state_dict(), best_checkpoint_path)
 
@@ -523,7 +617,7 @@ def _train(
         "num_samples": len(samples),
         "optimizer_steps": optimizer_steps,
         "best_epoch": best_epoch,
-        "best_val_accuracy": best_val_acc,
+        "best_val_full_sequence_accuracy": best_val_acc,
         "benchmark_gate": dict(dataset_summary.get("benchmark_gate", {}) or {}),
         "subset_metrics": subset_metrics,
         "artifacts": {
@@ -602,7 +696,7 @@ def _train(
             metadata={
                 "trajectory_audit_kind": "orchestration_sample_projection",
                 "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
-                "tool_prediction_contract": "first_tool_only_v1",
+                "tool_prediction_contract": "bounded_tool_sequence_v2",
                 "dataset_source": dataset_info.get("dataset_source"),
             },
         )
@@ -625,6 +719,7 @@ def _train(
                 metadata={
                     "config_digest": config_digest,
                     "dataset_digest": dataset_summary.get("dataset_digest"),
+                    "tool_prediction_contract": "bounded_tool_sequence_v2",
                 },
             )
         )
@@ -638,7 +733,7 @@ def _train(
                 epoch=best_epoch,
                 is_best=True,
                 metadata={
-                    "best_val_accuracy": best_val_acc,
+                    "best_val_full_sequence_accuracy": best_val_acc,
                     "dataset_digest": dataset_summary.get("dataset_digest"),
                 },
             )

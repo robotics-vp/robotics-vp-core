@@ -4,7 +4,13 @@ Smoke test for the orchestration transformer scaffold.
 """
 import torch
 
-from src.orchestrator.orchestration_transformer import OrchestrationTransformer, decode_tool, _encode_ctx, _hash_tokens
+from src.orchestrator.orchestration_transformer import (
+    OrchestrationTransformer,
+    decode_tool,
+    decode_tool_sequence_logits,
+    _encode_ctx,
+    _hash_tokens,
+)
 from src.orchestrator.context import OrchestratorContext
 
 
@@ -34,10 +40,12 @@ def run_case(instr: str, objective_vec):
     )
     ctx_vec = torch.from_numpy(_encode_ctx(ctx)).unsqueeze(0)
     logits, arg_vec = model(tokens, ctx_vec)
-    tool = decode_tool(logits)
+    tool = decode_tool(logits[0, 0])
+    tool_sequence = decode_tool_sequence_logits(logits[0], max_steps=model.max_tool_steps)
     print(f"Instruction: {instr}")
     print(f"Objective vec: {objective_vec}")
     print(f"Chosen tool: {tool}")
+    print(f"Chosen tool sequence: {tool_sequence}")
     print(f"Logits: {logits.detach().numpy()}")
     print(f"Arg vec: {arg_vec.detach().numpy()}")
     print("---")

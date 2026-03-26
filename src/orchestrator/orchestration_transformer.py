@@ -4,6 +4,8 @@ Stub orchestration transformer that selects tool calls given context + instructi
 Scaffolding only; outputs tool logits over domain-specific tool names and a small
 argument vector. No integration with RL/econ math.
 """
+from __future__ import annotations
+
 from typing import List
 
 import torch
@@ -38,11 +40,21 @@ TOOL_NAMES: List[ToolName] = [
     "CALL_VLA_SINGLE_STEP",
     "CALL_VLA_FOR_DATAPACK_CLASS",
 ]
+PAD_TOOL_NAME = "<PAD>"
+TOOL_SEQUENCE_LABELS: List[str] = [*TOOL_NAMES, PAD_TOOL_NAME]
+PAD_TOOL_INDEX = len(TOOL_SEQUENCE_LABELS) - 1
 
 
 class OrchestrationTransformer(nn.Module):
-    def __init__(self, vocab_size: int = 128, hidden: int = 96, ctx_dim: int = ORCHESTRATION_CTX_DIM):
+    def __init__(
+        self,
+        vocab_size: int = 128,
+        hidden: int = 96,
+        ctx_dim: int = ORCHESTRATION_CTX_DIM,
+        max_tool_steps: int = 4,
+    ):
         super().__init__()
+        self.max_tool_steps = int(max(1, max_tool_steps))
         self.instr_embed = nn.Embedding(vocab_size, hidden)
         self.ctx_proj = nn.Linear(ctx_dim, hidden)
         self.mlp = nn.Sequential(
@@ -51,7 +63,9 @@ class OrchestrationTransformer(nn.Module):
             nn.Linear(hidden, hidden),
             nn.ReLU(),
         )
-        self.tool_head = nn.Linear(hidden, len(TOOL_NAMES))
+        self.step_queries = nn.Parameter(torch.zeros(self.max_tool_steps, hidden))
+        nn.init.normal_(self.step_queries, mean=0.0, std=0.02)
+        self.tool_head = nn.Linear(hidden, len(TOOL_SEQUENCE_LABELS))
         self.arg_head = nn.Linear(hidden, 12)   # a few continuous knobs as stub
 
     def forward(self, instr_tokens: torch.Tensor, ctx_vec: torch.Tensor):
@@ -63,14 +77,36 @@ class OrchestrationTransformer(nn.Module):
         ctx_emb = self.ctx_proj(ctx_vec)
         h = torch.cat([instr_emb, ctx_emb], dim=-1)
         h = self.mlp(h)
-        tool_logits = self.tool_head(h)
+        step_repr = h.unsqueeze(1) + self.step_queries.unsqueeze(0)
+        tool_logits = self.tool_head(step_repr)
         arg_vec = self.arg_head(h)
         return tool_logits, arg_vec
 
 
 def decode_tool(logits: torch.Tensor) -> ToolName:
-    idx = int(torch.argmax(logits, dim=-1).item())
+    idx = int(torch.argmax(logits[..., : len(TOOL_NAMES)], dim=-1).item())
     return TOOL_NAMES[idx % len(TOOL_NAMES)]
+
+
+def decode_tool_label(logits: torch.Tensor) -> str:
+    idx = int(torch.argmax(logits, dim=-1).item())
+    return TOOL_SEQUENCE_LABELS[idx % len(TOOL_SEQUENCE_LABELS)]
+
+
+def decode_tool_sequence_logits(
+    logits: torch.Tensor,
+    *,
+    max_steps: int | None = None,
+) -> list[ToolName]:
+    sequence: list[ToolName] = []
+    for step_logits in logits[: max_steps or logits.shape[0]]:
+        label = decode_tool_label(step_logits)
+        if label == PAD_TOOL_NAME:
+            break
+        tool_name = str(label)
+        if tool_name in TOOL_NAMES and tool_name not in sequence:
+            sequence.append(tool_name)  # keep bounded sequence unique and ordered
+    return sequence
 
 
 def _hash_tokens(instr: str, vocab_size: int, max_len: int = 16) -> torch.Tensor:
@@ -185,13 +221,40 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
     )
     tool_scores = {}
     for index, tool_name in enumerate(TOOL_NAMES):
-        tool_scores[tool_name] = float(logits[0, index].item()) * 0.1 + float(tool_biases.get(tool_name, 0.0))
+        tool_scores[tool_name] = (
+            float(torch.max(logits[0, :, index]).item()) * 0.1
+            + float(tool_biases.get(tool_name, 0.0))
+        )
+    model_predicted_tools = decode_tool_sequence_logits(logits[0], max_steps=max(steps, 1))
+    sequence_trace = []
+    for step_idx, step_logits in enumerate(logits[0][: max(steps, 1)]):
+        probs = torch.softmax(step_logits, dim=-1).detach().cpu().numpy()
+        ranked_step_labels = sorted(
+            (
+                {
+                    "tool": TOOL_SEQUENCE_LABELS[label_idx],
+                    "probability": float(probs[label_idx]),
+                }
+                for label_idx in range(len(TOOL_SEQUENCE_LABELS))
+            ),
+            key=lambda row: row["probability"],
+            reverse=True,
+        )
+        sequence_trace.append(
+            {
+                "step_idx": int(step_idx),
+                "predicted_label": decode_tool_label(step_logits),
+                "top_labels": ranked_step_labels[:3],
+            }
+        )
     ranked_tools = sorted(
         TOOL_NAMES,
         key=lambda name: (tool_scores.get(name, 0.0), -TOOL_NAMES.index(name)),
         reverse=True,
     )
-    selected_set = set(ranked_tools[: max(steps, 1)])
+    selected_set = set(model_predicted_tools)
+    if len(selected_set) < max(steps, 1):
+        selected_set |= set(ranked_tools[: max(steps, 1)])
     preferred_order = [
         "SET_OBJECTIVE_PRESET",
         "SET_ENERGY_PROFILE",
@@ -202,7 +265,12 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         "CALL_VLA_FOR_DATAPACK_CLASS",
         "CALL_VLA_SINGLE_STEP",
     ]
-    chosen_tools = [tool_name for tool_name in preferred_order if tool_name in selected_set]
+    chosen_tools = [tool_name for tool_name in model_predicted_tools if tool_name in TOOL_NAMES]
+    chosen_tools.extend(
+        tool_name
+        for tool_name in preferred_order
+        if tool_name in selected_set and tool_name not in chosen_tools
+    )
     for tool_name in ranked_tools:
         if tool_name not in chosen_tools:
             chosen_tools.append(tool_name)
@@ -285,6 +353,8 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
             "set_backend",
         ],
         "tool_sequence": [step.tool_call.name for step in steps_out],
+        "model_predicted_tool_sequence": list(model_predicted_tools),
+        "model_sequence_trace": list(sequence_trace),
         "semantic_plan": orchestration_plan,
     }
     if selection_summary:
@@ -339,6 +409,8 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
             "selection_feedback_features": selection_feedback_features,
             "tool_biases": tool_biases,
             "semantic_plan": orchestration_plan,
+            "model_predicted_tool_sequence": list(model_predicted_tools),
+            "model_sequence_trace": list(sequence_trace),
             "execution_preconditions": readiness.to_dict(),
             "coverage_feedback_summary": dict(semantic_summary.get("coverage_feedback_summary", {}) or {}),
         },

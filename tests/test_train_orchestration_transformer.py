@@ -76,6 +76,7 @@ def test_orchestration_instruction_tokens_are_deterministic_and_preserved(tmp_pa
 
     assert loaded_tokens == expected_tokens
     assert prediction["instruction_tokens"] == expected_tokens
+    assert isinstance(prediction["predicted_tool_sequence"], list)
 
 
 def test_orchestration_training_emits_artifacts(tmp_path: Path) -> None:
@@ -118,7 +119,8 @@ def test_orchestration_training_emits_artifacts(tmp_path: Path) -> None:
     assert summary["dataset_source"] == "semantic_runtime_export"
     assert summary["runtime_summary"]["total_rows"] == 6
     assert summary["source_type_counts"]["semantic_runtime_corpus"] == 6
-    assert model_config["tool_prediction_contract"] == "first_tool_only_v1"
+    assert model_config["tool_prediction_contract"] == "bounded_tool_sequence_v2"
+    assert model_config["max_tool_steps"] >= 1
 
 
 def test_orchestration_training_runner_emits_runtime_manifest(tmp_path: Path) -> None:

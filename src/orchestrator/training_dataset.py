@@ -20,7 +20,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
 from src.orchestrator.context import OrchestratorContext
-from src.orchestrator.orchestration_transformer import TOOL_NAMES, _encode_ctx
+from src.orchestrator.orchestration_transformer import PAD_TOOL_INDEX, TOOL_NAMES, _encode_ctx
 from src.orchestrator.toolspecs import ToolCall, ToolName
 from src.valuation.datapack_schema import DataPackMeta
 
@@ -584,9 +584,9 @@ def dataset_to_tensors(
 
     # Convert tool names to indices
     tool_to_idx = {name: i for i, name in enumerate(TOOL_NAMES)}
-    max_seq_len = max(len(s.target_tool_sequence) for s in samples)
+    max_seq_len = max(1, max(len(s.target_tool_sequence) for s in samples))
 
-    Y = np.zeros((len(samples), max_seq_len), dtype=np.int64)
+    Y = np.full((len(samples), max_seq_len), PAD_TOOL_INDEX, dtype=np.int64)
     tool_names: List[List[str]] = []
 
     for i, sample in enumerate(samples):

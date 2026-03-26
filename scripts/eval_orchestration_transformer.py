@@ -13,10 +13,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from src.orchestrator.semantic_transformer_bridge import ORCHESTRATION_CTX_DIM
 from src.orchestrator.orchestration_transformer import (
     OrchestrationTransformer,
+    PAD_TOOL_NAME,
     TOOL_NAMES,
     decode_tool,
+    decode_tool_label,
+    decode_tool_sequence_logits,
 )
 from src.orchestrator.training_dataset import (
     OrchestrationSample,
@@ -28,9 +32,20 @@ from src.orchestrator.training_dataset import (
 )
 
 
-def load_model(checkpoint_path: str, hidden: int = 96, ctx_dim: int = 36, vocab_size: int = 128):
+def load_model(
+    checkpoint_path: str,
+    hidden: int = 96,
+    ctx_dim: int = ORCHESTRATION_CTX_DIM,
+    vocab_size: int = 128,
+    max_tool_steps: int = 4,
+):
     """Load trained model from checkpoint."""
-    model = OrchestrationTransformer(vocab_size=vocab_size, hidden=hidden, ctx_dim=ctx_dim)
+    model = OrchestrationTransformer(
+        vocab_size=vocab_size,
+        hidden=hidden,
+        ctx_dim=ctx_dim,
+        max_tool_steps=max_tool_steps,
+    )
     model.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
     model.eval()
     return model
@@ -42,12 +57,7 @@ def predict_tool_sequence(
     vocab_size: int = 128,
     instruction_seq_len: int = 16,
 ):
-    """
-    Get model's tool prediction for given context.
-
-    For simplicity, we only predict the first tool.
-    In full implementation, we'd predict entire sequence.
-    """
+    """Get the model's bounded tool-sequence prediction for a given context."""
     ctx_tensor = torch.from_numpy(ctx_features).float().unsqueeze(0)
 
     # Pad/trim context if needed
@@ -64,12 +74,27 @@ def predict_tool_sequence(
     with torch.no_grad():
         tool_logits, arg_vec = model(instr_tokens, ctx_tensor)
 
-    predicted_tool = decode_tool(tool_logits[0])
-    probs = torch.softmax(tool_logits[0], dim=-1).numpy()
+    predicted_sequence = decode_tool_sequence_logits(tool_logits[0], max_steps=model.max_tool_steps)
+    first_step_probs = torch.softmax(tool_logits[0, 0, : len(TOOL_NAMES)], dim=-1).numpy()
+    per_step_probabilities = []
+    for step_idx in range(tool_logits.shape[1]):
+        probs = torch.softmax(tool_logits[0, step_idx], dim=-1).numpy()
+        per_step_probabilities.append(
+            {
+                "step_idx": int(step_idx),
+                "predicted_label": decode_tool_label(tool_logits[0, step_idx]),
+                "probabilities": {
+                    label: float(probs[idx])
+                    for idx, label in enumerate([*TOOL_NAMES, PAD_TOOL_NAME])
+                },
+            }
+        )
 
     return {
-        "predicted_tool": predicted_tool,
-        "probabilities": {TOOL_NAMES[i]: float(probs[i]) for i in range(len(TOOL_NAMES))},
+        "predicted_tool": predicted_sequence[0] if predicted_sequence else decode_tool(tool_logits[0, 0]),
+        "predicted_tool_sequence": predicted_sequence,
+        "probabilities": {TOOL_NAMES[i]: float(first_step_probs[i]) for i in range(len(TOOL_NAMES))},
+        "per_step_probabilities": per_step_probabilities,
         "arg_vec": arg_vec[0].numpy().tolist(),
     }
 
@@ -102,11 +127,26 @@ def predict_tool_sequence_for_sample(
     with torch.no_grad():
         tool_logits, arg_vec = model(instr_tokens, ctx_tensor)
 
-    predicted_tool = decode_tool(tool_logits[0])
-    probs = torch.softmax(tool_logits[0], dim=-1).numpy()
+    predicted_sequence = decode_tool_sequence_logits(tool_logits[0], max_steps=model.max_tool_steps)
+    first_step_probs = torch.softmax(tool_logits[0, 0, : len(TOOL_NAMES)], dim=-1).numpy()
+    per_step_probabilities = []
+    for step_idx in range(tool_logits.shape[1]):
+        probs = torch.softmax(tool_logits[0, step_idx], dim=-1).numpy()
+        per_step_probabilities.append(
+            {
+                "step_idx": int(step_idx),
+                "predicted_label": decode_tool_label(tool_logits[0, step_idx]),
+                "probabilities": {
+                    label: float(probs[idx])
+                    for idx, label in enumerate([*TOOL_NAMES, PAD_TOOL_NAME])
+                },
+            }
+        )
     return {
-        "predicted_tool": predicted_tool,
-        "probabilities": {TOOL_NAMES[i]: float(probs[i]) for i in range(len(TOOL_NAMES))},
+        "predicted_tool": predicted_sequence[0] if predicted_sequence else decode_tool(tool_logits[0, 0]),
+        "predicted_tool_sequence": predicted_sequence,
+        "probabilities": {TOOL_NAMES[i]: float(first_step_probs[i]) for i in range(len(TOOL_NAMES))},
+        "per_step_probabilities": per_step_probabilities,
         "arg_vec": arg_vec[0].numpy().tolist(),
         "instruction_tokens": instr_tokens[0].numpy().tolist(),
     }
@@ -158,6 +198,7 @@ def compare_model_vs_heuristic(
         },
         "model": {
             "tool": model_first_tool,
+            "tool_sequence": model_pred["predicted_tool_sequence"],
             "probabilities": model_pred["probabilities"],
             "instruction_tokens": model_pred["instruction_tokens"],
         },
@@ -280,6 +321,7 @@ def print_comparison(comparison: dict, index: int):
 
     print("\nModel Prediction:")
     print(f"  Tool: {model['tool']}")
+    print(f"  Tool Sequence: {model.get('tool_sequence', [])}")
     print("  Top Probabilities:")
     sorted_probs = sorted(model["probabilities"].items(), key=lambda x: -x[1])
     for tool, prob in sorted_probs[:3]:
