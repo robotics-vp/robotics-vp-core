@@ -2,6 +2,36 @@
 
 ## 2026-03-26
 
+- SceneTracks truth semantics now have one shared consumer-facing normalization layer instead of a replay/bootstrap-only fix:
+  - `src/evidence/scene_tracks_truth.py` now does two separate jobs:
+    - `resolve_scene_tracks_backend(...)` reads nested runner metadata like `runner.run_config.backend_selected`, passthrough flags, stub flags, and adapter status before falling back to any looser artifact hints
+    - `scene_tracks_truth_from_metadata(...)` then re-applies the canonical rule that only `real` keeps `scene_tracks_non_stub`, `semantic_grounding_non_heuristic`, and training eligibility
+  - this matters because some newer Stage-1 and synthetic-corpus paths were still treating any sidecar presence or passthrough backend as strong enough evidence, which reopened the same honesty gap we had already closed in replay/bootstrap.
+- The remaining SceneTracks truth leaks are now closed in the higher-value downstream consumers:
+  - `scripts/run_stage1_pipeline.py`
+    - no longer infers `scene_tracks_backend=real` from `scene_tracks_path` or `scene_tracks_v1` alone
+    - filters explicit `future_training_signals` so stale `scene_tracks_non_stub=true` cannot override known passthrough/stub metadata
+  - `scripts/collect_local_synthetic_branches.py`
+    - now writes normalized scene-track truth into branch metadata instead of marking passthrough corpora as non-stub
+  - `src/training/synthetic_branch_corpus.py`
+    - now re-normalizes branch source metadata before benchmark-gating the corpus, so local synth cannot look benchmark-ready on passthrough grounding
+  - `src/orchestrator/semantic_runtime_scorers.py`
+    - live runtime scoring no longer treats `scene_tracks_backend in {real,passthrough,auto}` as non-stub support
+  - `src/orchestrator/semantic_fusion_runner.py`
+    - degraded-fusion artifacts now preserve the same normalized truth instead of copying any stale `scene_tracks_non_stub` bit through failure paths
+- The SAM3D host requirement is now a first-class runtime artifact:
+  - `src/evidence/grounded_data_host.py` collects:
+    - GPU/CUDA availability
+    - OpenCV availability
+    - SAM3D repo presence
+    - SAM3D checkpoint presence
+    - one derived `real_sam3d_grounding_ready` boolean
+  - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` now emits:
+    - `grounded_data_host_capabilities`
+    - `grounded_data_host_preconditions`
+  - `src/orchestrator/loop_run_backlog.py` now consumes that same host-capability scan, so the loop backlog and the live SceneTracks runner agree on what “real grounded data is actually possible on this host” means
+  - this directly encodes the operational truth from the recent bootstrap pass: local passthrough runs are useful for plumbing, but they do not substitute for a Linux/NVIDIA + SAM3D host when grounded data is the contract.
+
 - Local synthetic branch corpora now have an explicit runtime/training contract instead of a loose NPZ-only shape:
   - `src/training/synthetic_branch_corpus.py` loads the branch corpus plus optional metadata/gap-label sidecars, summarizes source provenance and gap labels, emits an execution-precondition artifact, emits a benchmark-gate artifact, and compiles a bounded training policy from that truth.
   - this policy is intentionally conservative:

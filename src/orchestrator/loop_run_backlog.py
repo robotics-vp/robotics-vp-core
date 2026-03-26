@@ -11,6 +11,7 @@ import shutil
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from src.evidence.benchmark_gating import build_benchmark_gate_report
+from src.evidence.grounded_data_host import collect_grounded_data_host_capabilities
 from src.evidence.preconditions import ExecutionPreconditionsReport, build_execution_preconditions
 from src.utils.json_safe import to_json_safe
 
@@ -27,15 +28,6 @@ def _mapping(payload: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     return dict(to_json_safe(dict(payload or {})))
 
 
-def _torch_cuda_available() -> bool:
-    try:
-        import torch
-
-        return bool(torch.cuda.is_available())
-    except Exception:
-        return False
-
-
 def collect_host_capabilities() -> Dict[str, Any]:
     def has_module(name: str) -> bool:
         return importlib.util.find_spec(name) is not None
@@ -43,18 +35,12 @@ def collect_host_capabilities() -> Dict[str, Any]:
     openvla_model_ref = os.environ.get("OPENVLA_MODEL_NAME") or os.environ.get("OPENVLA_MODEL") or ""
     openvla_model_path_ready = bool(openvla_model_ref and Path(openvla_model_ref).exists())
     return {
-        "gpu_available": _torch_cuda_available(),
-        "cuda_available": _torch_cuda_available(),
+        **collect_grounded_data_host_capabilities(repo_root=REPO_ROOT),
         "torch_available": has_module("torch"),
         "mujoco_available": has_module("mujoco"),
-        "opencv_available": has_module("cv2"),
         "transformers_available": has_module("transformers"),
         "timm_available": has_module("timm"),
         "imageio_available": has_module("imageio"),
-        "sam3d_objects_repo_available": (REPO_ROOT / "third_party" / "sam3d_objects").exists(),
-        "sam3d_body_repo_available": (REPO_ROOT / "third_party" / "sam3d_body").exists(),
-        "sam3d_objects_checkpoint_available": (REPO_ROOT / "checkpoints" / "sam3d_objects" / "checkpoint.pth").exists(),
-        "sam3d_body_checkpoint_available": (REPO_ROOT / "checkpoints" / "sam3d_body" / "checkpoint.pth").exists(),
         "openvla_model_ref_present": bool(openvla_model_ref),
         "openvla_model_path_ready": openvla_model_path_ready,
         "droid_dataset_present": bool(

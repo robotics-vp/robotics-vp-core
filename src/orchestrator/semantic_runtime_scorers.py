@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 import numpy as np
 
 from src.learning.calibration import summarize_calibration
+from src.evidence.scene_tracks_truth import normalize_scene_tracks_truth
 from src.orchestrator.semantic_runtime_learning import (
     SemanticRuntimeCounterfactual,
     SemanticRuntimeLearningCorpus,
@@ -1049,6 +1050,13 @@ def _live_lane_summaries(
         context_metadata.get("semantic_grounded", False)
         or _safe_float(semantic_summary.get("grounded_track_object_count", 0.0)) > 0.0
     )
+    scene_tracks_truth = normalize_scene_tracks_truth(
+        backend=context_metadata.get("scene_tracks_backend") or dino_payload.get("scene_tracks_backend"),
+        explicit_non_stub=bool(context_metadata.get("scene_tracks_non_stub", False)),
+        semantic_grounding_ready=semantic_grounded,
+        training_eligible=bool(context_metadata.get("scene_tracks_training_eligible", False)),
+        explicit_non_heuristic=bool(context_metadata.get("semantic_grounding_non_heuristic", False)),
+    )
     reward_signal = 1.0 / (1.0 + np.exp(-_safe_float(getattr(orchestrator_context, "mean_w_econ", 0.0))))
     quality_score = max(
         0.25 * (1.0 if work_order_ready else 0.0)
@@ -1068,10 +1076,7 @@ def _live_lane_summaries(
         "teacher_runtime_live": bool(
             context_metadata.get("teacher_runtime_live", False) or vla_payload.get("teacher_trace_available", False)
         ),
-        "scene_tracks_non_stub": bool(
-            context_metadata.get("scene_tracks_non_stub", False)
-            or dino_payload.get("scene_tracks_backend") in {"real", "passthrough", "auto"}
-        ),
+        "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
         "semantic_fusion_confidence_mean": float(fusion_payload.get("semantic_fusion_confidence_mean", 0.0)),
         "quality_score": float(quality_score),
         "reward_signal": float(reward_signal),

@@ -14,6 +14,7 @@ from src.evidence.benchmark_gating import (
     collect_benchmark_gating_signals,
 )
 from src.evidence.preconditions import ExecutionPreconditionsReport, build_execution_preconditions
+from src.evidence.scene_tracks_truth import scene_tracks_truth_from_metadata
 from src.utils.json_safe import to_json_safe
 
 
@@ -127,8 +128,16 @@ def _source_metadata_fields(metadata: Mapping[str, Any]) -> Dict[str, Any]:
     future_signals = metadata.get("future_training_signals", {})
     if not isinstance(future_signals, Mapping):
         future_signals = {}
+    scene_tracks_truth = scene_tracks_truth_from_metadata(metadata)
     return {
-        "scene_tracks_backend": str(metadata.get("scene_tracks_backend", "") or ""),
+        "scene_tracks_backend": str(scene_tracks_truth.get("scene_tracks_backend", "") or ""),
+        "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
+        "scene_tracks_training_eligible": bool(
+            scene_tracks_truth.get("scene_tracks_training_eligible", False)
+        ),
+        "semantic_grounding_non_heuristic": bool(
+            scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
+        ),
         "teacher_runtime_backend_selected": str(
             metadata.get("teacher_runtime_backend_selected")
             or metadata.get("openvla_backend_selected")
@@ -198,13 +207,15 @@ def _summarize_corpus(
         "source_metadata": metadata_fields,
         "future_training_signals": {
             **{
-                "scene_tracks_non_stub": metadata_fields["scene_tracks_backend"] in {"real", "passthrough"},
-                "semantic_gap_labeled": bool(has_gap_labels),
-            },
-            **{
                 str(key): bool(value)
                 for key, value in dict(metadata.get("future_training_signals", {}) or {}).items()
             },
+            "scene_tracks_non_stub": bool(metadata_fields["scene_tracks_non_stub"]),
+            "scene_tracks_training_eligible": bool(metadata_fields["scene_tracks_training_eligible"]),
+            "semantic_grounding_non_heuristic": bool(
+                metadata_fields["semantic_grounding_non_heuristic"]
+            ),
+            "semantic_gap_labeled": bool(has_gap_labels),
         },
         "benchmark_signals": benchmark_signals,
     }

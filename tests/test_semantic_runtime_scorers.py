@@ -20,6 +20,7 @@ from src.orchestrator.semantic_runtime_scorer_training import (
     write_semantic_runtime_scorer_training_dataset,
 )
 from src.orchestrator.semantic_runtime_scorers import (
+    _live_lane_summaries,
     load_semantic_runtime_scorer_package,
     score_semantic_runtime_learning_row,
     train_semantic_runtime_scorer_package,
@@ -491,3 +492,62 @@ def test_pipeline_manager_emits_semantic_runtime_scoring_for_both_transformers()
     assert 0.0 <= result["semantic_runtime_scoring"]["meta_route_success_probability"] <= 1.0
     assert 0.0 <= result["semantic_runtime_scoring"]["orchestration_route_success_probability"] <= 1.0
     assert result["semantic_runtime_scoring"]["counterfactual_scores"]
+
+
+def test_live_lane_summaries_keep_passthrough_scene_tracks_out_of_non_stub_truth() -> None:
+    ctx = OrchestratorContext(
+        env_name="drawer_vase_env",
+        engine_type="pybullet",
+        task_type="drawer_vase_task",
+        customer_segment="shadow",
+        market_region="US",
+        objective_vector=[0.6, 0.2, 0.1, 0.1, 0.0],
+        wage_human=20.0,
+        energy_price_kWh=0.12,
+        mean_delta_mpl=0.0,
+        mean_delta_error=0.0,
+        mean_delta_j=0.0,
+        mean_trust=0.7,
+        mean_w_econ=0.2,
+        profile_summaries={},
+        semantic_metadata={
+            "scene_tracks_backend": "passthrough",
+            "scene_tracks_non_stub": True,
+            "teacher_runtime_live": True,
+        },
+    )
+
+    _, _, _, _, _, orchestration_target = _live_lane_summaries(
+        semantic_world_model=_semantic_world_model(),
+        orchestrator_context=ctx,
+        dino_summary={
+            "dino_proxy_available": True,
+            "dino_proxy_confidence_mean": 0.74,
+            "scene_tracks_available": True,
+            "scene_track_count": 2,
+            "scene_track_label_confidence_mean": 0.73,
+            "map_first_available": False,
+            "map_first_confidence_mean": 0.0,
+            "scene_tracks_backend": "passthrough",
+        },
+        vla_summary={
+            "vla_available": True,
+            "vla_confidence_mean": 0.61,
+            "teacher_trace_available": True,
+            "teacher_confidence_mean": 0.6,
+            "teacher_object_refs": ["drawer"],
+            "teacher_affordance_hints": ["open"],
+            "teacher_risk_hints": [],
+        },
+        fusion_summary={
+            "fusion_available": True,
+            "semantic_fusion_confidence_mean": 0.62,
+            "annotation_agreement_score": 0.81,
+            "source_confidence_gap": 0.13,
+            "fusion_advantage_score": 0.01,
+        },
+    )
+
+    outcome_summary = orchestration_target["_outcome_summary"]
+    assert outcome_summary["teacher_runtime_live"] is True
+    assert outcome_summary["scene_tracks_non_stub"] is False

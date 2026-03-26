@@ -13,6 +13,10 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+from src.evidence.grounded_data_host import (
+    build_grounded_data_host_report,
+    collect_grounded_data_host_capabilities,
+)
 from src.evidence.preconditions import build_execution_preconditions
 from src.ontology.datapack_registry import register_scene_tracks_artifact
 from src.ontology.store import OntologyStore
@@ -255,6 +259,14 @@ def run_scene_tracks(
     frame_meta["semantic_track_catalog"] = semantic_summary["track_catalog"]
     frame_meta["semantic_density_score"] = float(semantic_summary["summary"].get("semantic_density_score", 0.0))
     frame_meta["semantic_grounding_ready"] = bool(semantic_summary["summary"].get("grounding_ready", False))
+    grounded_host_capabilities = collect_grounded_data_host_capabilities()
+    grounded_host_report = build_grounded_data_host_report(
+        subject_id=str(_infer_episode_id(Path(datapack_path)) or output_path.stem),
+        subject_kind="scene_tracks_grounded_host",
+        host_capabilities=grounded_host_capabilities,
+    )
+    frame_meta["grounded_data_host_capabilities"] = grounded_host_capabilities
+    frame_meta["grounded_data_host_preconditions"] = grounded_host_report.to_dict()
     execution_preconditions = build_execution_preconditions(
         subject_id=str(_infer_episode_id(Path(datapack_path)) or output_path.stem),
         subject_kind="scene_tracks_run",

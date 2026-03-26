@@ -39,6 +39,7 @@ from src.evidence import (
     build_execution_work_order,
     collect_benchmark_gating_signals,
 )
+from src.evidence.scene_tracks_truth import scene_tracks_truth_from_metadata
 from src.governance import governance_trace_sidecar_payload
 from src.runtime import decision_ledger_sidecar_payload, event_spine_sidecar_payload
 from src.vla.transformer_planner import VLATransformerPlanner, VLAInput, VLAPlan
@@ -89,22 +90,16 @@ def _runtime_field(video_ref: Dict[str, Any], *keys: str, default: str = "") -> 
 
 def _scene_tracks_backend(video_ref: Dict[str, Any]) -> str:
     explicit = _runtime_field(video_ref, "scene_tracks_backend")
-    if explicit:
-        return explicit
-    metadata = _metadata_dict(video_ref)
-    scene_tracks_meta = metadata.get("scene_tracks_metadata", {})
-    if isinstance(scene_tracks_meta, dict):
-        runner = scene_tracks_meta.get("runner", {})
-        run_config = runner.get("run_config", {}) if isinstance(runner, dict) else {}
-        if run_config.get("use_stub_adapters") is False:
-            return "real"
-        if run_config.get("use_stub_adapters") is True:
-            return "stub"
-    if video_ref.get("scene_tracks_v1") or video_ref.get("scene_tracks_path") or video_ref.get("scene_tracks_npz"):
-        return "real"
-    if metadata.get("scene_tracks_v1") or metadata.get("scene_tracks_path") or metadata.get("scene_tracks_npz"):
-        return "real"
-    return "unavailable"
+    truth = scene_tracks_truth_from_metadata(
+        {
+            **_metadata_dict(video_ref),
+            "scene_tracks_v1": video_ref.get("scene_tracks_v1"),
+            "scene_tracks_path": video_ref.get("scene_tracks_path"),
+            "scene_tracks_npz": video_ref.get("scene_tracks_npz"),
+        },
+        explicit_backend=explicit,
+    )
+    return str(truth.get("scene_tracks_backend", "") or "unavailable")
 
 
 def _vision_backbone_selected(video_ref: Dict[str, Any]) -> str:
@@ -139,23 +134,16 @@ def _semantic_grounding_mode(video_ref: Dict[str, Any], semantic_world_model: Op
 
 
 def _scene_tracks_non_stub(video_ref: Dict[str, Any]) -> bool:
-    backend = _scene_tracks_backend(video_ref)
-    if backend:
-        return backend in {"real", "passthrough"}
-    metadata = _metadata_dict(video_ref)
-    explicit = metadata.get("future_training_signals", {})
-    if isinstance(explicit, dict) and "scene_tracks_non_stub" in explicit:
-        return bool(explicit["scene_tracks_non_stub"])
-    if "scene_tracks_non_stub" in metadata:
-        return bool(metadata["scene_tracks_non_stub"])
-    scene_tracks_meta = metadata.get("scene_tracks_metadata", {})
-    if isinstance(scene_tracks_meta, dict):
-        runner = scene_tracks_meta.get("runner", {})
-        run_config = runner.get("run_config", {}) if isinstance(runner, dict) else {}
-        execution = scene_tracks_meta.get("execution_preconditions", {})
-        if isinstance(run_config, dict) and run_config.get("use_stub_adapters") is False:
-            return bool(not isinstance(execution, dict) or execution.get("ready", True))
-    return False
+    truth = scene_tracks_truth_from_metadata(
+        {
+            **_metadata_dict(video_ref),
+            "scene_tracks_v1": video_ref.get("scene_tracks_v1"),
+            "scene_tracks_path": video_ref.get("scene_tracks_path"),
+            "scene_tracks_npz": video_ref.get("scene_tracks_npz"),
+        },
+        explicit_backend=_runtime_field(video_ref, "scene_tracks_backend"),
+    )
+    return bool(truth.get("scene_tracks_non_stub", False))
 
 
 def _teacher_runtime_live(video_ref: Dict[str, Any]) -> bool:
@@ -181,6 +169,15 @@ def _future_training_signals(
     explicit = metadata.get("future_training_signals", {})
     if not isinstance(explicit, dict):
         explicit = {}
+    scene_tracks_truth = scene_tracks_truth_from_metadata(
+        {
+            **metadata,
+            "scene_tracks_v1": video_ref.get("scene_tracks_v1"),
+            "scene_tracks_path": video_ref.get("scene_tracks_path"),
+            "scene_tracks_npz": video_ref.get("scene_tracks_npz"),
+        },
+        explicit_backend=_runtime_field(video_ref, "scene_tracks_backend"),
+    )
     topology = getattr(semantic_world_model, "topology", {}) or {}
     grounded_track_count = 0
     if isinstance(topology, dict):
@@ -201,7 +198,13 @@ def _future_training_signals(
             )
         ),
         "teacher_runtime_live": _teacher_runtime_live(video_ref),
-        "scene_tracks_non_stub": _scene_tracks_non_stub(video_ref),
+        "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
+        "scene_tracks_training_eligible": bool(
+            scene_tracks_truth.get("scene_tracks_training_eligible", False)
+        ),
+        "semantic_grounding_non_heuristic": bool(
+            scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
+        ),
         "semantic_memory_grounded": grounded_track_count > 0,
         "benchmark_gate_ready": bool(getattr(benchmark_gate, "ready", False)) if benchmark_gate is not None else False,
         "budget_settlement_live": False,
@@ -213,7 +216,19 @@ def _future_training_signals(
             if isinstance(value, bool)
         }
     )
-    derived.update({str(key): bool(value) for key, value in explicit.items()})
+    derived.update(
+        {
+            str(key): bool(value)
+            for key, value in explicit.items()
+            if str(key)
+            not in {
+                "scene_tracks_non_stub",
+                "scene_tracks_training_eligible",
+                "semantic_grounding_non_heuristic",
+                "semantic_grounding_ready",
+            }
+        }
+    )
     return dict(sorted(derived.items()))
 
 

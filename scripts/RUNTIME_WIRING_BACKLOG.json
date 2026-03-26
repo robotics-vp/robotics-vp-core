@@ -27,6 +27,11 @@
       "id": "shadow_advisory_sampling_learning",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - shadow advisory now auto-consumes semantic runtime scorer packages when present, threads bounded learned route/regret/counterfactual/authority signals into replay sampling, and preserves that evidence through live queue-selection metadata; the heuristic path remains only as an explicit fallback when no scorer package exists yet."
+    },
+    {
+      "id": "scene_tracks_truth_consumer_sweep",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - Stage 1 routing, local synthetic branch metadata, synthetic corpus benchmark gating, live semantic runtime scoring, and degraded-fusion artifacts now all share the same SceneTracks truth normalization, and the SceneTracks runner now emits explicit GPU + SAM3D host preconditions for real grounded-data readiness."
     }
   ],
   "backlog": [

@@ -305,17 +305,21 @@ Ranking dimensions:
 - category: `fallback`
 - current behavior:
   - `run_scene_tracks(...)` supports `real`, `passthrough`, and `stub`
-  - training eligibility is already explicit and strict inside the runner
+  - training eligibility is explicit and strict inside the runner
+  - the runner now also emits `grounded_data_host_capabilities` and `grounded_data_host_preconditions`, so the GPU + SAM3D dependency is executable metadata rather than an implied requirement
+  - Stage-1, synthetic-branch, and live runtime consumers now share the same truth helper, so passthrough/unknown artifact presence no longer gets reinterpreted upstream as non-stub grounding
   - callers can still choose fallback/passthrough modes
 - current consumers:
   - `scripts/run_scene_tracks.py`
   - `scripts/bootstrap_semantic_workcell_loop.py`
   - SceneTracks tests
 - why it is a production problem:
-  - the runner itself is honest, but the broader stack still has places where fallback output is interpreted too generously
+  - before the latest sweep, the runner itself was honest but several broader-stack consumers still interpreted fallback output too generously
+  - grounded-data host requirements were also visible in docs/backlogs but not emitted as a reusable runtime artifact
 - recommended disposition:
   - keep stub/passthrough support only as explicit fallback
-  - align every upstream/downstream metadata consumer with the runner’s stricter truth semantics
+  - keep every upstream/downstream metadata consumer aligned to the runner’s stricter truth semantics
+  - keep real-SAM3D host readiness explicit so benchmark-grade grounded data is not inferred from sidecar existence
 - disposition tag:
   - `remain explicit fallback`
   - `benchmark-gated`

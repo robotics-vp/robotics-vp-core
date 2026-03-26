@@ -30,6 +30,7 @@ sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from src.world_model.contractive_dynamics import StableWorldModel
 from src.valuation.trust_net import TrustNet
 from src.config.internal_profile import get_internal_experiment_profile
+from src.evidence.scene_tracks_truth import scene_tracks_truth_from_metadata
 
 
 def _load_coverage_graph(path):
@@ -513,7 +514,21 @@ def main():
         'semantic_memory_grounded': semantic_memory_grounded,
         'future_training_signals': {
             **dict(source_runtime_metadata.get('future_training_signals', {}) or {}),
-            'scene_tracks_non_stub': scene_tracks_backend in {'real', 'passthrough'},
+            **{
+                key: value
+                for key, value in scene_tracks_truth_from_metadata(
+                    {
+                        **dict(source_runtime_metadata),
+                        'scene_tracks_backend': scene_tracks_backend,
+                    }
+                ).items()
+                if key in {
+                    'scene_tracks_non_stub',
+                    'scene_tracks_training_eligible',
+                    'semantic_grounding_non_heuristic',
+                    'semantic_grounding_ready',
+                }
+            },
             'semantic_gap_labeled': bool(gap_labels_path),
             'semantic_memory_grounded': semantic_memory_grounded,
         },

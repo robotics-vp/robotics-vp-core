@@ -108,3 +108,31 @@ def test_synthetic_branch_policy_caps_unproven_corpora(tmp_path) -> None:
     assert policy["effective_synth_share_cap"] <= 0.1
     assert "branch_metadata_missing" in policy["reasons"]
     assert "semantic_gap_labels_missing" in policy["reasons"]
+
+
+def test_synthetic_branch_corpus_does_not_promote_passthrough_scene_tracks(tmp_path) -> None:
+    corpus_path = _write_branch_corpus(tmp_path, with_metadata=True, with_gap_labels=True)
+    metadata_path = tmp_path / "branches_metadata.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "synthetic_branch_corpus_metadata_v1",
+                "scene_tracks_backend": "passthrough",
+                "vision_backbone_selected": "real",
+                "semantic_grounding_mode": "heuristic_fallback",
+                "semantic_memory_grounded": True,
+                "future_training_signals": {
+                    "scene_tracks_non_stub": True,
+                    "semantic_grounding_non_heuristic": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    corpus = load_synthetic_branch_corpus(corpus_path)
+
+    assert corpus.summary["future_training_signals"]["scene_tracks_non_stub"] is False
+    assert corpus.summary["future_training_signals"]["semantic_grounding_non_heuristic"] is False
+    assert corpus.summary["benchmark_signals"]["scene_tracks_backend_real"] is False
+    assert corpus.benchmark_gate.ready is False

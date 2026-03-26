@@ -16,6 +16,7 @@ from src.evidence import (
     build_execution_preconditions,
     build_execution_work_order,
 )
+from src.evidence.scene_tracks_truth import scene_tracks_truth_from_metadata
 from src.motor_backend.rollout_capture import RolloutBundle
 from src.orchestrator.semantic_fusion import SEMANTIC_FUSION_PREFIX, fuse_semantic_evidence_mvp
 from src.semantic.runtime_backbone import SemanticRuntimeBackbone
@@ -194,6 +195,7 @@ def _future_training_signals_for_failure(
     explicit = dict(metadata or {}).get("future_training_signals", {})
     if not isinstance(explicit, Mapping):
         explicit = {}
+    scene_tracks_truth = scene_tracks_truth_from_metadata(metadata)
     derived = {
         "replay_roundtrip_complete": False,
         "promotion_trace_complete": False,
@@ -201,12 +203,15 @@ def _future_training_signals_for_failure(
             artifact_refs.get("teacher_trace_ref")
             or artifact_refs.get("teacher_trace_path")
         ),
-        "scene_tracks_non_stub": bool(dict(metadata or {}).get("scene_tracks_non_stub", False)),
+        "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
         "semantic_memory_grounded": False,
         "budget_settlement_live": False,
     }
     for key, value in explicit.items():
-        derived[str(key)] = bool(value)
+        normalized_key = str(key)
+        if normalized_key == "scene_tracks_non_stub":
+            continue
+        derived[normalized_key] = bool(value)
     return dict(sorted(derived.items()))
 
 
