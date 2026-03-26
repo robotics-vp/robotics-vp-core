@@ -2,6 +2,28 @@
 
 ## 2026-03-26
 
+- Orchestration transformer training/eval now use one honest instruction/runtime contract:
+  - `src/orchestrator/training_dataset.py` now persists `instruction_text` in saved samples, reconstructs typed samples from JSON, and derives deterministic instruction tokens from runtime/context metadata
+  - `src/orchestrator/semantic_runtime_learning.py` now preserves runtime instruction / execution-mode metadata when exporting orchestration samples from the semantic runtime corpus
+  - `scripts/eval_orchestration_transformer.py` now uses the same deterministic tokenization path instead of random placeholder tokens
+- `scripts/train_orchestration_transformer.py` is no longer just “wrapped but still fake inside”:
+  - prefers `orchestration_runtime_dataset.json` exports from the semantic runtime corpus
+  - falls back to synthetic/mixed corpora only explicitly and keeps those benchmark-unready
+  - emits:
+    - orchestration dataset + summary
+    - model config
+    - execution-precondition artifact
+    - subset metrics
+    - training summary
+    - training job result
+    - runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - records the current contract honestly as `tool_prediction_contract: first_tool_only_v1`
+- This is the right current neuralization posture for orchestration:
+  - instruction and context conditioning are now stable and trainable
+  - runtime-corpus receipts are the preferred supervision source
+  - synthetic fallback remains available for bring-up, but no longer masquerades as benchmark-ready
+  - the next upgrade is not “make the trainer real at all”; it is “expand beyond first-tool supervision into fuller sequence/runtime labels”
+
 - Semantic datapack-selection is now a real learned-helper lane rather than a runtime-only seam:
   - `src/orchestrator/semantic_policy.py` now defines:
     - `DatapackSelectionContext`

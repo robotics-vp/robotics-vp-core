@@ -19,10 +19,12 @@ from src.orchestrator.orchestration_transformer import (
     decode_tool,
 )
 from src.orchestrator.training_dataset import (
+    OrchestrationSample,
     generate_synthetic_context,
     generate_heuristic_tool_sequence,
     context_to_sample,
     build_mixed_training_dataset,
+    instruction_tokens_from_sample,
 )
 
 
@@ -34,7 +36,12 @@ def load_model(checkpoint_path: str, hidden: int = 96, ctx_dim: int = 36, vocab_
     return model
 
 
-def predict_tool_sequence(model: OrchestrationTransformer, ctx_features: np.ndarray, vocab_size: int = 128):
+def predict_tool_sequence(
+    model: OrchestrationTransformer,
+    ctx_features: np.ndarray,
+    vocab_size: int = 128,
+    instruction_seq_len: int = 16,
+):
     """
     Get model's tool prediction for given context.
 
@@ -51,8 +58,8 @@ def predict_tool_sequence(model: OrchestrationTransformer, ctx_features: np.ndar
     elif ctx_tensor.shape[1] > expected_dim:
         ctx_tensor = ctx_tensor[:, :expected_dim]
 
-    # Dummy instruction tokens
-    instr_tokens = torch.randint(1, vocab_size, (1, 8))
+    # Compatibility fallback: evaluate with an explicit empty instruction rather than random tokens.
+    instr_tokens = torch.zeros((1, instruction_seq_len), dtype=torch.long)
 
     with torch.no_grad():
         tool_logits, arg_vec = model(instr_tokens, ctx_tensor)
@@ -67,7 +74,50 @@ def predict_tool_sequence(model: OrchestrationTransformer, ctx_features: np.ndar
     }
 
 
-def compare_model_vs_heuristic(model, ctx, vocab_size: int = 128):
+def predict_tool_sequence_for_sample(
+    model: OrchestrationTransformer,
+    sample: OrchestrationSample,
+    *,
+    vocab_size: int = 128,
+    instruction_seq_len: int = 16,
+):
+    """Get the model prediction for a fully-specified sample."""
+    ctx_tensor = torch.from_numpy(sample.context_features).float().unsqueeze(0)
+
+    expected_dim = model.ctx_proj.in_features
+    if ctx_tensor.shape[1] < expected_dim:
+        pad = torch.zeros(1, expected_dim - ctx_tensor.shape[1])
+        ctx_tensor = torch.cat([ctx_tensor, pad], dim=1)
+    elif ctx_tensor.shape[1] > expected_dim:
+        ctx_tensor = ctx_tensor[:, :expected_dim]
+
+    instr_tokens = torch.from_numpy(
+        instruction_tokens_from_sample(
+            sample,
+            vocab_size=vocab_size,
+            seq_len=instruction_seq_len,
+        )
+    ).long().unsqueeze(0)
+
+    with torch.no_grad():
+        tool_logits, arg_vec = model(instr_tokens, ctx_tensor)
+
+    predicted_tool = decode_tool(tool_logits[0])
+    probs = torch.softmax(tool_logits[0], dim=-1).numpy()
+    return {
+        "predicted_tool": predicted_tool,
+        "probabilities": {TOOL_NAMES[i]: float(probs[i]) for i in range(len(TOOL_NAMES))},
+        "arg_vec": arg_vec[0].numpy().tolist(),
+        "instruction_tokens": instr_tokens[0].numpy().tolist(),
+    }
+
+
+def compare_model_vs_heuristic(
+    model,
+    ctx,
+    vocab_size: int = 128,
+    instruction_seq_len: int = 16,
+):
     """
     Compare model prediction to heuristic teacher for a single context.
 
@@ -82,7 +132,12 @@ def compare_model_vs_heuristic(model, ctx, vocab_size: int = 128):
     heuristic_rationale = heuristic_decisions[0].rationale if heuristic_decisions else "N/A"
 
     # Model prediction
-    model_pred = predict_tool_sequence(model, sample.context_features, vocab_size)
+    model_pred = predict_tool_sequence_for_sample(
+        model,
+        sample,
+        vocab_size=vocab_size,
+        instruction_seq_len=instruction_seq_len,
+    )
     model_first_tool = model_pred["predicted_tool"]
 
     # Check agreement
@@ -104,6 +159,7 @@ def compare_model_vs_heuristic(model, ctx, vocab_size: int = 128):
         "model": {
             "tool": model_first_tool,
             "probabilities": model_pred["probabilities"],
+            "instruction_tokens": model_pred["instruction_tokens"],
         },
         "agree": agree,
     }
@@ -249,6 +305,7 @@ def main():
     parser.add_argument("--hidden", type=int, default=96, help="Model hidden dimension")
     parser.add_argument("--ctx-dim", type=int, default=36, help="Context feature dimension")
     parser.add_argument("--vocab-size", type=int, default=128, help="Vocabulary size")
+    parser.add_argument("--instruction-seq-len", type=int, default=16, help="Instruction token sequence length")
     parser.add_argument("--seed", type=int, default=12345, help="Random seed for synthetic contexts")
     parser.add_argument("--save-results", type=str, default=None, help="Save results to JSON file")
     parser.add_argument("--analyze-econ-semantic", action="store_true", help="Add Pareto correlation and semantic consistency analysis")
@@ -296,7 +353,12 @@ def main():
 
     for i in range(args.num_samples):
         ctx = generate_synthetic_context(seed=args.seed + i)
-        comparison = compare_model_vs_heuristic(model, ctx, args.vocab_size)
+        comparison = compare_model_vs_heuristic(
+            model,
+            ctx,
+            args.vocab_size,
+            instruction_seq_len=args.instruction_seq_len,
+        )
         comparisons.append(comparison)
         if comparison["agree"]:
             agreements += 1

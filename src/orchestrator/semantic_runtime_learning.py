@@ -1059,6 +1059,10 @@ def build_orchestration_runtime_dataset(
                     "objective_preset": objective_preset,
                     "quality_score": row.outcome_summary.get("quality_score", 0.0),
                     "feedback_summary": row.feedback_summary,
+                    "instruction_text": row.vla_summary.get("instruction", ""),
+                    "runtime_instruction": row.vla_summary.get("instruction", ""),
+                    "execution_mode": row.orchestration_transformer_target.get("execution_mode", "advisory"),
+                    "activation_plan": row.orchestration_transformer_target.get("activation_plan", {}),
                 },
                 source_type="semantic_runtime_corpus",
             )

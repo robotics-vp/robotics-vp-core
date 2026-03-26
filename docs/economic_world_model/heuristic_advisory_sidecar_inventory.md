@@ -20,7 +20,7 @@ Ranking dimensions:
 | 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | Yes | **Wired now** |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now** |
-| 6 | `train_orchestration_transformer.py` heuristic-teacher trainer | `heuristic` / `lightweight_trainer_gap` | High | Medium-high | No | Wrapped, but target remains heuristic |
+| 6 | `train_orchestration_transformer.py` runtime-backed trainer parity | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now, benchmark-gated** |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` plus helper trainer/export lane | `heuristic` / `lightweight_trainer_gap` | Medium-high | Medium-high | No | **Wired now, benchmark-gated** |
 | 8 | `train_meta_transformer_synthetic.py` meta-transformer trainer entrypoint | `lightweight_trainer_gap` | Medium | High | Yes | **Wired now** |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `sidecar` / `fallback` | Medium-high | Medium-high | No | **Wired now** |
@@ -227,26 +227,44 @@ Ranking dimensions:
 
 ### 6. `train_orchestration_transformer.py`
 
-- surface: orchestration transformer trainer that still uses heuristic teachers and dummy instruction tokens
+- surface: orchestration transformer trainer and eval path
 - file/path: `scripts/train_orchestration_transformer.py`
-- category: `heuristic`
+- category: `lightweight_trainer_gap`
 - current behavior:
-  - already wrapped with `@regal_training`
-  - still trains against heuristic tool sequences
-  - `create_dummy_instruction_tokens(...)` supplies placeholder language tokens rather than real instruction conditioning
+  - the trainer now prefers `orchestration_runtime_dataset.json` exports from the semantic runtime corpus and only falls back to synthetic/mixed data when explicitly requested or no runtime dataset is available
+  - instruction conditioning is now deterministic and contract-aligned:
+    - `src/orchestrator/training_dataset.py` derives stable instruction text from runtime metadata/context
+    - training tensors hash that text into bounded instruction-token sequences
+    - `scripts/eval_orchestration_transformer.py` now uses the same token contract instead of random placeholder tokens
+  - the trainer now emits canonical runtime artifacts:
+    - dataset + dataset summary
+    - model config
+    - execution preconditions
+    - subset metrics
+    - training summary
+    - training job result
+    - runtime manifest / checkpoint registry through `RegalTrainingRunner`
+  - benchmark readiness is now honest:
+    - runtime-backed corpora can train immediately
+    - synthetic-only or low-density runtime corpora remain benchmark-unready
+  - the remaining explicit limitation is narrower:
+    - `tool_prediction_contract` is still `first_tool_only_v1`
 - current consumers:
   - `scripts/run_stage6_train_all.py`
   - `scripts/eval_orchestration_transformer.py`
   - `scripts/train_orchestration_transformer_v1_curriculum.py`
 - why it is a production problem:
-  - the wrapper is heavyweight, but the supervision contract is still synthetic/heuristic
-  - this can create false confidence about orchestration readiness
+  - before this pass, the runtime wrapper looked modern but the actual trainer still depended on synthetic teacher contracts and dummy instruction tokens
+  - that made the lane appear more runtime-grounded than it really was
+  - the remaining production limitation is that the supervision target is still only the first tool, not the full sequence/policy contract
 - recommended disposition:
-  - preserve the runtime wrapper
-  - replace heuristic teacher targets and dummy tokens with packet/evidence/runtime-corpus supervision
+  - keep the runtime-backed trainer as the default path
+  - preserve synthetic fallback only as a clearly benchmark-unready bootstrap lane
+  - extend the trainer later from `first_tool_only_v1` to fuller sequence supervision once runtime receipts are dense enough
 - disposition tag:
-  - `neuralized later`
+  - `wired now`
   - `upgraded to heavyweight parity`
+  - `benchmark-gated`
 
 ### 7. Semantic datapack/scenario selection in `semantic_policy.py`
 
@@ -387,6 +405,6 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Replace heuristic teacher targets and dummy instruction tokens in `train_orchestration_transformer.py` with packet/evidence/runtime-corpus supervision so the wrapped trainer stops depending on synthetic teacher contracts internally.
-2. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.
-3. Push the same learned/helper promotion discipline into the next sim/gen2sim agenda lane so diffusion and synth branching stop relying on bounded heuristics once replay receipts are dense enough.
+1. Add a stricter promotion/readiness gate for meta-transformer runs so runtime-corpus density, not just script parity, controls when the lane is taken seriously.
+2. Push the same learned/helper promotion discipline into the next sim/gen2sim agenda lane so diffusion and synth branching stop relying on bounded heuristics once replay receipts are dense enough.
+3. Deepen orchestration supervision beyond `first_tool_only_v1` so the runtime-backed trainer learns fuller action sequences instead of only the first routing decision.

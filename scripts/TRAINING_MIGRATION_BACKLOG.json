@@ -192,7 +192,7 @@
         {
             "script": "train_orchestration_transformer.py",
             "migrated_at": "2026-01-13",
-            "notes": "P1 complete - Stage6 orchestration"
+            "notes": "P1 complete - runtime-backed orchestration trainer with deterministic instruction-token contract, canonical runtime/precondition artifacts, and benchmark-gated promotion posture; remaining limitation is first_tool_only_v1 supervision"
         },
         {
             "script": "train_vision_backbone.py",

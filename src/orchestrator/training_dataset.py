@@ -14,6 +14,7 @@ No Phase B / RL / reward math changes - purely advisory.
 
 import json
 import random
+import re
 from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
@@ -22,7 +23,6 @@ from src.orchestrator.context import OrchestratorContext
 from src.orchestrator.orchestration_transformer import TOOL_NAMES, _encode_ctx
 from src.orchestrator.toolspecs import ToolCall, ToolName
 from src.valuation.datapack_schema import DataPackMeta
-from src.orchestrator.semantic_metrics import SemanticMetrics
 
 
 @dataclass
@@ -67,6 +67,80 @@ class HeuristicDecision:
     rationale: str
 
 
+def instruction_text_for_sample(sample: OrchestrationSample) -> str:
+    """Build deterministic instruction text from sample context and metadata."""
+    metadata = dict(sample.metadata or {})
+    explicit_instruction = (
+        metadata.get("instruction_text")
+        or metadata.get("instruction")
+        or metadata.get("runtime_instruction")
+    )
+    if explicit_instruction:
+        return str(explicit_instruction)
+
+    parts = [
+        f"task {sample.context.task_type}",
+        f"env {sample.context.env_name}",
+        f"engine {sample.context.engine_type}",
+        f"customer {sample.context.customer_segment}",
+    ]
+    objective_preset = str(
+        metadata.get("objective_preset")
+        or (sample.econ_semantic_summary.objective_preset if sample.econ_semantic_summary else "")
+        or "balanced"
+    )
+    if objective_preset:
+        parts.append(f"objective {objective_preset}")
+    recommended_focus = str(
+        metadata.get("recommended_focus")
+        or (sample.econ_semantic_summary.recommended_focus if sample.econ_semantic_summary else "")
+        or ""
+    )
+    if recommended_focus:
+        parts.append(f"focus {recommended_focus}")
+    urgency = str(
+        metadata.get("urgency_level")
+        or (sample.econ_semantic_summary.urgency_level if sample.econ_semantic_summary else "")
+        or ""
+    )
+    if urgency and urgency != "none":
+        parts.append(f"urgency {urgency}")
+    for gap in list((sample.context.semantic_metadata or {}).get("data_gaps", []) or [])[:4]:
+        if str(gap):
+            parts.append(f"gap {gap}")
+    return " ".join(parts)
+
+
+def instruction_tokens_from_text(
+    instruction_text: str,
+    *,
+    vocab_size: int = 128,
+    seq_len: int = 16,
+) -> np.ndarray:
+    """Hash instruction text into a deterministic bounded token sequence."""
+    tokens = re.findall(r"[a-z0-9_:+.-]+", str(instruction_text).lower())
+    ids = [((abs(hash(token)) % max(vocab_size - 1, 1)) + 1) for token in tokens[:seq_len]]
+    if not ids:
+        ids = [0]
+    while len(ids) < seq_len:
+        ids.append(0)
+    return np.asarray(ids[:seq_len], dtype=np.int64)
+
+
+def instruction_tokens_from_sample(
+    sample: OrchestrationSample,
+    *,
+    vocab_size: int = 128,
+    seq_len: int = 16,
+) -> np.ndarray:
+    """Build deterministic instruction tokens for a training sample."""
+    return instruction_tokens_from_text(
+        instruction_text_for_sample(sample),
+        vocab_size=vocab_size,
+        seq_len=seq_len,
+    )
+
+
 def heuristic_energy_profile_decision(ctx: OrchestratorContext) -> HeuristicDecision:
     """
     Decide energy profile based on energy price and market conditions.
@@ -85,17 +159,17 @@ def heuristic_energy_profile_decision(ctx: OrchestratorContext) -> HeuristicDeci
     elif energy_price > 0.15:
         if "safety" in ctx.customer_segment.lower():
             profile = "SAFE"
-            rationale = f"Moderate energy + safety customer -> SAFE profile"
+            rationale = "Moderate energy + safety customer -> SAFE profile"
         else:
             profile = "SAVER"
-            rationale = f"Moderate energy price -> SAVER profile"
+            rationale = "Moderate energy price -> SAVER profile"
     else:  # Low energy cost
         if "throughput" in ctx.customer_segment.lower():
             profile = "BOOST"
-            rationale = f"Low energy + throughput customer -> BOOST profile"
+            rationale = "Low energy + throughput customer -> BOOST profile"
         else:
             profile = "BASE"
-            rationale = f"Low energy price -> BASE profile"
+            rationale = "Low energy price -> BASE profile"
 
     # Safety override
     if "safety" in ctx.customer_segment.lower() or ctx.objective_vector[3] > 2.0:
@@ -280,6 +354,14 @@ def context_to_sample(ctx: OrchestratorContext) -> OrchestrationSample:
         metadata={
             "num_tools": len(target_sequence),
             "tools_used": [d.tool for d in decisions],
+            "instruction_text": " ".join(
+                [
+                    f"task {ctx.task_type}",
+                    f"env {ctx.env_name}",
+                    f"engine {ctx.engine_type}",
+                    f"customer {ctx.customer_segment}",
+                ]
+            ),
         },
     )
 
@@ -425,6 +507,7 @@ def sample_to_dict(sample: OrchestrationSample) -> Dict[str, Any]:
     result = {
         "context": asdict(sample.context),
         "context_features": sample.context_features.tolist(),
+        "instruction_text": instruction_text_for_sample(sample),
         "target_tool_sequence": [
             {"name": tc.name, "args": tc.args} for tc in sample.target_tool_sequence
         ],
@@ -435,6 +518,34 @@ def sample_to_dict(sample: OrchestrationSample) -> Dict[str, Any]:
     if sample.econ_semantic_summary is not None:
         result["econ_semantic_summary"] = asdict(sample.econ_semantic_summary)
     return result
+
+
+def sample_from_dict(payload: Dict[str, Any]) -> OrchestrationSample:
+    """Reconstruct an `OrchestrationSample` from a saved JSON row."""
+    context = OrchestratorContext(**dict(payload.get("context", {}) or {}))
+    target_tool_sequence = [
+        ToolCall(name=str(item.get("name")), args=dict(item.get("args", {})))
+        for item in list(payload.get("target_tool_sequence", []) or [])
+    ]
+    econ_semantic_payload = payload.get("econ_semantic_summary")
+    econ_semantic_summary = (
+        EconSemanticDecisionSummary(**dict(econ_semantic_payload))
+        if isinstance(econ_semantic_payload, dict)
+        else None
+    )
+    metadata = dict(payload.get("metadata", {}) or {})
+    instruction_text = payload.get("instruction_text")
+    if instruction_text and "instruction_text" not in metadata:
+        metadata["instruction_text"] = str(instruction_text)
+    return OrchestrationSample(
+        context=context,
+        context_features=np.asarray(payload.get("context_features", []), dtype=np.float32),
+        target_tool_sequence=target_tool_sequence,
+        heuristic_rationale=[str(item) for item in list(payload.get("heuristic_rationale", []) or [])],
+        metadata=metadata,
+        econ_semantic_summary=econ_semantic_summary,
+        source_type=str(payload.get("source_type", "heuristic")),
+    )
 
 
 def save_dataset(samples: List[OrchestrationSample], path: str) -> None:
@@ -451,6 +562,11 @@ def load_dataset(path: str) -> List[Dict[str, Any]]:
         data = json.load(f)
     print(f"Loaded {len(data)} samples from {path}")
     return data
+
+
+def load_dataset_samples(path: str) -> List[OrchestrationSample]:
+    """Load typed orchestration samples from a saved dataset JSON."""
+    return [sample_from_dict(dict(row)) for row in load_dataset(path)]
 
 
 def dataset_to_tensors(
@@ -482,6 +598,35 @@ def dataset_to_tensors(
         tool_names.append(seq)
 
     return X, Y, tool_names
+
+
+def dataset_to_model_tensors(
+    samples: List[OrchestrationSample],
+    *,
+    vocab_size: int = 128,
+    instruction_seq_len: int = 16,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[List[str]]]:
+    """
+    Convert samples to model-ready tensors including instruction tokens.
+
+    Returns:
+        X: (N, ctx_dim) context features
+        I: (N, instruction_seq_len) instruction token ids
+        Y: (N, max_seq_len) tool indices
+        tool_names: tool sequences (for reference)
+    """
+    X, Y, tool_names = dataset_to_tensors(samples)
+    instr = np.stack(
+        [
+            instruction_tokens_from_sample(
+                sample,
+                vocab_size=vocab_size,
+                seq_len=instruction_seq_len,
+            )
+            for sample in samples
+        ]
+    )
+    return X, instr, Y, tool_names
 
 
 # ==============================================================================
@@ -686,6 +831,9 @@ def build_econ_semantic_sample(
             "tools_used": [d.tool for d in decisions],
             "pareto_classification": pareto_class,
             "urgency_level": urgency_level,
+            "objective_preset": objective_preset,
+            "chosen_profile": chosen_profile,
+            "recommended_focus": recommended_focus,
         },
         econ_semantic_summary=econ_semantic_summary,
         source_type="econ_semantic",
