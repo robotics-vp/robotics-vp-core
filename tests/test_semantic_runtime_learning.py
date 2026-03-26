@@ -357,6 +357,10 @@ def test_semantic_runtime_learning_datasets_and_write_paths(tmp_path: Path) -> N
     assert len(meta_samples) == 1
     assert meta_samples[0].sample_id == corpus.rows[0].sample_id
     assert meta_samples[0].authority_gt in {"dino", "vla"}
+    assert meta_samples[0].objective_preset == corpus.rows[0].meta_transformer_target["objective_preset"]
+    assert meta_samples[0].chosen_backend == corpus.rows[0].meta_transformer_target["chosen_backend"]
+    assert meta_samples[0].task_context["selection_summary"]["selected_ids"] == ["dp_runtime"]
+    assert meta_samples[0].task_context["semantic_summary"]["world_model_id"] == "wm_runtime"
     assert len(orchestration_samples) == 1
     assert orchestration_samples[0].target_tool_sequence
     assert orchestration_samples[0].context.semantic_metadata["semantic_world_model_summary"]["world_model_id"] == "wm_runtime"

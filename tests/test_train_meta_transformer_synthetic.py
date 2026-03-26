@@ -70,8 +70,12 @@ def test_meta_transformer_training_emits_artifacts(tmp_path: Path) -> None:
     runtime_package = json.loads(Path(result["runtime_package"]).read_text(encoding="utf-8"))
     assert summary["dataset_source"] == "semantic_runtime_export"
     assert summary["runtime_summary"]["total_rows"] == 6
+    assert "objective_preset_counts" in summary
+    assert summary["model_contract"]["planning_context_dim"] > 0
     assert runtime_package["promotion_stage"] == "shadow_candidate"
     assert runtime_package["inference_contract"]["helper_blend_policy"] == "bounded_meta_transformer_helper_v1"
+    assert "objective_preset" in runtime_package["inference_contract"]["learned_fields"]
+    assert runtime_package["inference_contract"]["derived_downstream_fields"] == ["orchestration_plan"]
 
 
 def test_meta_transformer_training_runner_emits_runtime_manifest(tmp_path: Path) -> None:

@@ -9,6 +9,17 @@ from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
 
+from src.orchestrator.meta_transformer_planning import (
+    META_BACKEND_LABELS,
+    META_DATA_MIX_LABELS,
+    META_ENERGY_PROFILE_LABELS,
+    META_OBJECTIVE_PRESET_LABELS,
+    META_PLANNING_CONTEXT_DIM,
+    decode_backend_label,
+    decode_expected_delta_vector,
+    decode_named_distribution,
+    decode_objective_preset,
+)
 from src.orchestrator.meta_transformer_training import (
     TORCH_AVAILABLE,
     MetaTransformerNet,
@@ -43,6 +54,17 @@ class MetaTransformerRuntimeInference:
     policy_state: np.ndarray
     diffusion_conditioning: np.ndarray
     ontology_tokens: list[str]
+    objective_preset: str
+    objective_confidence: float
+    objective_alternate_confidence: float
+    chosen_backend: str
+    backend_confidence: float
+    backend_alternate_confidence: float
+    energy_profile_weights: Dict[str, float]
+    data_mix_weights: Dict[str, float]
+    expected_deltas: Dict[str, float]
+    planning_trace: Dict[str, Any]
+    planning_heads_available: bool
     benchmark_gate_ready: bool
     promotion_stage: str
 
@@ -80,16 +102,45 @@ class LoadedMetaTransformerRuntime:
             raise FileNotFoundError(f"Meta-transformer checkpoint not found: {checkpoint_path}")
         checkpoint_payload = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
         model_config = dict(package.model_config or checkpoint_payload.get("model_config", {}) or {})
+        self.vla_dim = int(model_config.get("vla_dim", 128))
+        self.dino_dim = int(model_config.get("dino_dim", 256))
+        self.objective_labels = list(model_config.get("objective_labels") or META_OBJECTIVE_PRESET_LABELS)
+        self.backend_labels = list(model_config.get("backend_labels") or META_BACKEND_LABELS)
+        self.energy_profile_labels = list(
+            model_config.get("energy_profile_labels") or META_ENERGY_PROFILE_LABELS
+        )
+        self.data_mix_labels = list(model_config.get("data_mix_labels") or META_DATA_MIX_LABELS)
+        self.planning_context_dim = int(
+            model_config.get("planning_context_dim", META_PLANNING_CONTEXT_DIM)
+        )
         self.model = MetaTransformerNet(
-            vla_dim=int(model_config.get("vla_dim", 128)),
-            dino_dim=int(model_config.get("dino_dim", 256)),
+            vla_dim=self.vla_dim,
+            dino_dim=self.dino_dim,
             hidden_dim=int(model_config.get("hidden_dim", 128)),
             max_output_tokens=int(model_config.get("max_semantic_tokens", 16)),
             num_heads=int(model_config.get("num_heads", 4)),
             num_layers=int(model_config.get("num_layers", 2)),
+            planning_context_dim=self.planning_context_dim,
+            objective_label_count=len(self.objective_labels),
+            backend_label_count=len(self.backend_labels),
+            energy_profile_dim=len(self.energy_profile_labels),
+            data_mix_dim=len(self.data_mix_labels),
         )
         state_dict = checkpoint_payload.get("model_state_dict", checkpoint_payload)
-        self.model.load_state_dict(state_dict)
+        load_result = self.model.load_state_dict(state_dict, strict=False)
+        missing_keys = set(load_result.missing_keys)
+        planning_prefixes = (
+            "planning_context_proj",
+            "planning_fusion",
+            "objective_head",
+            "backend_head",
+            "energy_head",
+            "data_mix_head",
+            "expected_delta_head",
+        )
+        self.planning_heads_available = not any(
+            key.startswith(planning_prefixes) for key in missing_keys
+        )
         self.model.eval()
 
     def infer(
@@ -97,17 +148,51 @@ class LoadedMetaTransformerRuntime:
         *,
         dino_features: np.ndarray,
         vla_features: np.ndarray,
+        planning_context: Optional[np.ndarray] = None,
     ) -> MetaTransformerRuntimeInference:
-        vla_tensor = torch.from_numpy(np.asarray(vla_features, dtype=np.float32)).float().unsqueeze(0)
-        dino_tensor = torch.from_numpy(np.asarray(dino_features, dtype=np.float32)).float().unsqueeze(0)
+        vla_vector = np.asarray(vla_features, dtype=np.float32).reshape(-1)
+        dino_vector = np.asarray(dino_features, dtype=np.float32).reshape(-1)
+        if vla_vector.size < self.vla_dim:
+            vla_vector = np.pad(vla_vector, (0, self.vla_dim - vla_vector.size))
+        if dino_vector.size < self.dino_dim:
+            dino_vector = np.pad(dino_vector, (0, self.dino_dim - dino_vector.size))
+        vla_tensor = torch.from_numpy(vla_vector[: self.vla_dim]).float().unsqueeze(0)
+        dino_tensor = torch.from_numpy(dino_vector[: self.dino_dim]).float().unsqueeze(0)
+        context_vector = np.asarray(
+            planning_context if planning_context is not None else np.zeros(self.planning_context_dim, dtype=np.float32),
+            dtype=np.float32,
+        ).reshape(-1)
+        if context_vector.size < self.planning_context_dim:
+            context_vector = np.pad(context_vector, (0, self.planning_context_dim - context_vector.size))
+        context_vector = context_vector[: self.planning_context_dim]
+        planning_context_tensor = torch.from_numpy(context_vector).float().unsqueeze(0)
         with torch.no_grad():
-            outputs = self.model(vla_tensor, dino_tensor)
+            outputs = self.model(vla_tensor, dino_tensor, planning_context=planning_context_tensor)
         authority_probs = torch.softmax(outputs["authority_logits"][0], dim=-1).cpu().numpy()
         authority_index = int(np.argmax(authority_probs))
         authority = "dino" if authority_index == 0 else "vla"
         alternate_authority_confidence = float(authority_probs[1 - authority_index])
         token_ids = torch.argmax(outputs["token_logits"][0], dim=-1).cpu().numpy()
         benchmark_gate_ready = bool(self.package.benchmark_gate.get("ready", False))
+        objective_probs = torch.softmax(outputs["objective_logits"][0], dim=-1).cpu().numpy()
+        objective_index = int(np.argmax(objective_probs))
+        objective_sorted = np.sort(objective_probs)[::-1]
+        objective_preset = (
+            self.objective_labels[objective_index]
+            if objective_index < len(self.objective_labels)
+            else decode_objective_preset(objective_index)
+        )
+        backend_probs = torch.softmax(outputs["backend_logits"][0], dim=-1).cpu().numpy()
+        backend_index = int(np.argmax(backend_probs))
+        backend_sorted = np.sort(backend_probs)[::-1]
+        chosen_backend = (
+            self.backend_labels[backend_index]
+            if backend_index < len(self.backend_labels)
+            else decode_backend_label(backend_index)
+        )
+        energy_logits = outputs["energy_logits"][0].cpu().numpy()
+        data_mix_logits = outputs["data_mix_logits"][0].cpu().numpy()
+        expected_delta_vector = outputs["expected_delta_vector"][0].cpu().numpy()
         return MetaTransformerRuntimeInference(
             authority=authority,
             authority_confidence=float(authority_probs[authority_index]),
@@ -115,6 +200,37 @@ class LoadedMetaTransformerRuntime:
             policy_state=outputs["policy_state"][0].cpu().numpy().astype(np.float32),
             diffusion_conditioning=outputs["diffusion_cond"][0].cpu().numpy().astype(np.float32),
             ontology_tokens=decode_semantic_tokens(token_ids),
+            objective_preset=objective_preset,
+            objective_confidence=float(objective_probs[objective_index]),
+            objective_alternate_confidence=float(objective_sorted[1] if objective_sorted.size > 1 else 0.0),
+            chosen_backend=chosen_backend,
+            backend_confidence=float(backend_probs[backend_index]),
+            backend_alternate_confidence=float(backend_sorted[1] if backend_sorted.size > 1 else 0.0),
+            energy_profile_weights=decode_named_distribution(
+                energy_logits,
+                self.energy_profile_labels,
+            ),
+            data_mix_weights=decode_named_distribution(
+                data_mix_logits,
+                self.data_mix_labels,
+            ),
+            expected_deltas=decode_expected_delta_vector(expected_delta_vector),
+            planning_trace={
+                "planning_heads_available": bool(self.planning_heads_available),
+                "planning_context_used": planning_context is not None,
+                "planning_context_norm": float(np.linalg.norm(context_vector)),
+                "objective_distribution": {
+                    self.objective_labels[idx]: float(prob)
+                    for idx, prob in enumerate(objective_probs.tolist())
+                    if idx < len(self.objective_labels)
+                },
+                "backend_distribution": {
+                    self.backend_labels[idx]: float(prob)
+                    for idx, prob in enumerate(backend_probs.tolist())
+                    if idx < len(self.backend_labels)
+                },
+            },
+            planning_heads_available=bool(self.planning_heads_available),
             benchmark_gate_ready=benchmark_gate_ready,
             promotion_stage=(
                 "promoted"

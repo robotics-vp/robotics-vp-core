@@ -28,6 +28,13 @@ from src.orchestrator.meta_transformer_training import (
     load_meta_transformer_dataset,
     save_meta_transformer_dataset,
 )
+from src.orchestrator.meta_transformer_planning import (
+    META_BACKEND_LABELS,
+    META_DATA_MIX_LABELS,
+    META_ENERGY_PROFILE_LABELS,
+    META_OBJECTIVE_PRESET_LABELS,
+    META_PLANNING_CONTEXT_DIM,
+)
 from src.training.checkpoint_registry import build_checkpoint_record
 from src.training.regal_training_runner import (
     RegalTrainingRunner,
@@ -180,9 +187,25 @@ def _build_dataset_summary(
 ) -> dict[str, Any]:
     sample_ids = [str(sample.sample_id) for sample in samples]
     authority_counts = Counter(sample.authority_gt for sample in samples)
+    objective_counts = Counter(str(sample.objective_preset or "balanced") for sample in samples)
+    backend_counts = Counter(str(sample.chosen_backend or "pybullet") for sample in samples)
     semantic_token_lengths = [len(sample.semantic_tokens) for sample in samples] or [0]
     vla_dims = {int(np.asarray(sample.vla_embedding).shape[-1]) for sample in samples}
     dino_dims = {int(np.asarray(sample.dino_embedding).shape[-1]) for sample in samples}
+    energy_mix_mean = {
+        label: float(
+            sum(float((sample.energy_profile_weights or {}).get(label, 0.0)) for sample in samples)
+            / max(len(samples), 1)
+        )
+        for label in META_ENERGY_PROFILE_LABELS
+    }
+    data_mix_mean = {
+        label: float(
+            sum(float((sample.data_mix_weights or {}).get(label, 0.0)) for sample in samples)
+            / max(len(samples), 1)
+        )
+        for label in META_DATA_MIX_LABELS
+    }
     runtime_summary = dict(dataset_info.get("runtime_summary", {}) or {})
     required_bounded_ready_count = max(
         50, int(META_TRANSFORMER_BENCHMARK_MIN_SAMPLES * META_TRANSFORMER_MIN_BOUNDED_READY_RATIO)
@@ -219,7 +242,11 @@ def _build_dataset_summary(
         ),
         "num_samples": len(samples),
         "authority_counts": dict(sorted(authority_counts.items())),
+        "objective_preset_counts": dict(sorted(objective_counts.items())),
+        "chosen_backend_counts": dict(sorted(backend_counts.items())),
         "avg_semantic_token_count": float(sum(semantic_token_lengths) / max(len(semantic_token_lengths), 1)),
+        "mean_energy_profile_weights": energy_mix_mean,
+        "mean_data_mix_weights": data_mix_mean,
         "max_semantic_tokens": int(max_semantic_tokens),
         "vla_dims": sorted(vla_dims),
         "dino_dims": sorted(dino_dims),
@@ -228,6 +255,11 @@ def _build_dataset_summary(
             "num_heads": int(num_heads),
             "num_layers": int(num_layers),
             "semantic_vocab_size": len(SEMANTIC_VOCAB),
+            "planning_context_dim": META_PLANNING_CONTEXT_DIM,
+            "objective_labels": list(META_OBJECTIVE_PRESET_LABELS),
+            "backend_labels": list(META_BACKEND_LABELS),
+            "energy_profile_labels": list(META_ENERGY_PROFILE_LABELS),
+            "data_mix_labels": list(META_DATA_MIX_LABELS),
         },
         "source_domain_coverage": _build_source_domain_coverage(samples),
         "runtime_summary": runtime_summary,
@@ -293,6 +325,11 @@ def _build_model_config(
         "num_layers": int(num_layers),
         "max_semantic_tokens": int(max_semantic_tokens),
         "semantic_vocab_size": len(SEMANTIC_VOCAB),
+        "planning_context_dim": META_PLANNING_CONTEXT_DIM,
+        "objective_labels": list(META_OBJECTIVE_PRESET_LABELS),
+        "backend_labels": list(META_BACKEND_LABELS),
+        "energy_profile_labels": list(META_ENERGY_PROFILE_LABELS),
+        "data_mix_labels": list(META_DATA_MIX_LABELS),
     }
 
 
@@ -327,6 +364,8 @@ def _build_trajectory_audits(samples: Sequence[MetaTransformerSample]) -> list[A
                 },
                 events=[
                     f"authority_gt:{sample.authority_gt}",
+                    f"objective_preset:{sample.objective_preset}",
+                    f"backend:{sample.chosen_backend}",
                     *[str(token) for token in list(sample.semantic_tokens)[:4]],
                 ],
             )
@@ -398,12 +437,13 @@ def _build_runtime_package(
                 "shared_policy_state",
                 "diffusion_conditioning",
                 "ontology_tokens",
-            ],
-            "heuristic_prior_fields": [
                 "objective_preset",
                 "energy_profile_weights",
                 "data_mix_weights",
                 "chosen_backend",
+                "expected_deltas",
+            ],
+            "derived_downstream_fields": [
                 "orchestration_plan",
             ],
             "helper_blend_policy": "bounded_meta_transformer_helper_v1",
@@ -493,6 +533,7 @@ def _train(
         max_output_tokens=args.max_semantic_tokens,
         num_heads=args.num_heads,
         num_layers=args.num_layers,
+        planning_context_dim=META_PLANNING_CONTEXT_DIM,
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -518,7 +559,11 @@ def _train(
         epoch_token_losses: list[float] = []
         for batch in train_loader:
             optimizer.zero_grad()
-            outputs = model(batch["vla_embeddings"], batch["dino_embeddings"])
+            outputs = model(
+                batch["vla_embeddings"],
+                batch["dino_embeddings"],
+                planning_context=batch["planning_context"],
+            )
             loss, metrics = compute_loss(outputs, batch)
             loss.backward()
             optimizer.step()
@@ -536,6 +581,11 @@ def _train(
             "eval_total_loss": float(eval_metrics["total_loss"]),
             "eval_authority_acc": float(eval_metrics["authority_acc"]),
             "eval_first_token_acc": float(eval_metrics["first_token_acc"]),
+            "eval_objective_acc": float(eval_metrics["objective_acc"]),
+            "eval_backend_acc": float(eval_metrics["backend_acc"]),
+            "eval_energy_mse": float(eval_metrics["energy_mse"]),
+            "eval_data_mix_mse": float(eval_metrics["data_mix_mse"]),
+            "eval_expected_delta_mse": float(eval_metrics["expected_delta_mse"]),
         }
         history.append(epoch_summary)
         print(json.dumps({"event": "epoch_complete", "data": epoch_summary}, sort_keys=True))

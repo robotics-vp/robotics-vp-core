@@ -985,6 +985,17 @@ def build_meta_transformer_runtime_dataset(
 ) -> List[MetaTransformerSample]:
     samples: List[MetaTransformerSample] = []
     for row in rows:
+        econ_signals = {
+            "mpl_urgency": max(0.0, 1.0 - _safe_float(row.outcome_summary.get("reward_signal", 0.0))),
+            "error_urgency": max(0.0, 1.0 - _safe_float(row.outcome_summary.get("quality_score", 0.0))),
+            "energy_urgency": _safe_float(row.semantic_world_model_summary.get("efficiency_router_score", 0.0)),
+        }
+        datapack_signals = {
+            "data_coverage_score": _safe_float(row.outcome_summary.get("quality_score", 0.0)),
+            "embedding_diversity": _safe_float(row.dino_summary.get("scene_track_motion_mean", 0.0)),
+            "vla_annotation_fraction": 1.0 if row.vla_summary.get("vla_available", False) else 0.0,
+            "guidance_annotation_fraction": 1.0 if row.vla_summary.get("teacher_trace_available", False) else 0.0,
+        }
         semantic_feature_vec = encode_semantic_world_model_features(row.semantic_world_model_summary)
         vla_embedding = np.array(
             [
@@ -1029,7 +1040,26 @@ def build_meta_transformer_runtime_dataset(
                     "objective_preset": row.meta_transformer_target.get("objective_preset", "balanced"),
                     "quality_score": row.outcome_summary.get("quality_score", 0.0),
                     "feedback_summary": row.feedback_summary,
+                    "semantic_summary": row.semantic_world_model_summary,
+                    "econ_signals": econ_signals,
+                    "datapack_signals": datapack_signals,
+                    "selection_summary": dict(
+                        row.metadata.get("selection_summary")
+                        or row.orchestration_transformer_target.get("selection_summary")
+                        or {}
+                    ),
+                    "chosen_backend": row.meta_transformer_target.get("chosen_backend", "pybullet"),
+                    "energy_profile_weights": dict(
+                        row.meta_transformer_target.get("energy_profile_weights", {})
+                    ),
+                    "data_mix_weights": dict(row.meta_transformer_target.get("data_mix_weights", {})),
+                    "expected_deltas": dict(row.meta_transformer_target.get("expected_deltas", {})),
                 },
+                objective_preset=str(row.meta_transformer_target.get("objective_preset", "balanced")),
+                chosen_backend=str(row.meta_transformer_target.get("chosen_backend", "pybullet")),
+                energy_profile_weights=dict(row.meta_transformer_target.get("energy_profile_weights", {})),
+                data_mix_weights=dict(row.meta_transformer_target.get("data_mix_weights", {})),
+                expected_deltas=dict(row.meta_transformer_target.get("expected_deltas", {})),
             )
         )
     return samples
