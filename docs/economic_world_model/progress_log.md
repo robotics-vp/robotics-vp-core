@@ -2,6 +2,9 @@
 
 ## 2026-03-26
 
+- Changed: added a checked-in full-stack training backlog at `docs/economic_world_model/full_stack_training_backlog.md` that ranks the real learned lanes by production importance, data dependency, and honest current readiness instead of treating every `train_*.py` surface as equally actionable.
+- Changed: added `scripts/runpod/FULL_STACK_TRAINING_BUNDLES.json` plus `scripts/runpod/assess_full_stack_training.py`, `scripts/runpod/execute_training_bundle.py`, and `scripts/runpod/launch_training_bundle.py` so the repo now has a real recurring-training scaffold for Runpod with explicit readiness gates, bundle costs, pod teardown behavior, and a default preference for data-refresh over premature heavyweight model training.
+- Changed: the new Runpod backlog intentionally keeps frozen-baseline lanes out of the recurring automation path and marks perception-neuralization as manual-only until real stage outputs and less synthetic training data exist.
 - Changed: wired training-run receipt ingest to preserve per-episode backend-truth evidence from observed online receipts before replay precondition scoring. `src/replay/receipt_ingest.py` now merges `scene_tracks_non_stub`, SceneTracks backend identity, teacher backend identity, and grounding flags into enriched episode metadata so future-training predicate checks can reflect real runtime evidence instead of defaulting false.
 - Changed: updated `tests/test_training_run_receipt_ingest.py` to include explicit real backend fields in online receipt rows and assert `signal_bool::scene_tracks_non_stub==1` and `signal_bool::teacher_runtime_real==1` in the execution-precondition summary.
 - Changed: updated `scripts/economic_world_model/run_receipt_readiness_probe.py` to emit those same backend-truth fields and re-ran the probe. Current report (`artifacts/economic_world_model/readiness_probe/readiness_probe_summary.json`) now shows all targeted predicates satisfied: `budget_settlement_live=1`, `scene_tracks_non_stub=1`, `teacher_runtime_real=1`.
@@ -12,8 +15,9 @@
 - Changed: ran the nightly audit loop with `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` and refreshed both audit artifacts for this run.
 - Changed: audit selection remains `next_task.id=audit_only` with `execute_now=false`, so no new safe additive scaffold was selected in this pass.
 - Verification: `./scripts/agent/verify.sh`, `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall src scripts/economic_world_model -q`, `python3 -m pytest -q tests/test_runtime_packets.py tests/embodiment/test_registry.py tests/test_objective_runtime_builder.py tests/test_constraint_set.py tests/test_pricing_sentinel.py tests/test_value_ledger.py tests/test_economic_world_model_nightly_audit.py tests/test_training_run_receipt_ingest.py`, and `python3 scripts/economic_world_model/run_receipt_readiness_probe.py --output-root artifacts/economic_world_model/readiness_probe --seed 17` passed.
+- Verification: `python3 -m compileall scripts/runpod -q` and `python3 scripts/runpod/assess_full_stack_training.py --bundle auto` passed.
 - Blocked: no additive code-path blocker was detected; this was an intentional audit-only pass because the current selector found no higher-priority missing scaffold.
-- Next recommended task: keep this path honest by running the same readiness probe against non-stub production-like ingestion outputs (not synthetic probe receipts) and track whether the runtime still satisfies both backend-truth predicates without explicit test fixture fields.
+- Next recommended task: use the new backlog as the source of truth for the cross-window heuristic/advisory/sidecar inventory, then wire the highest-impact non-authoritative surfaces into the live runtime/training/reward loop before choosing the next canonical WM tranche.
 
 ## 2026-03-24
 

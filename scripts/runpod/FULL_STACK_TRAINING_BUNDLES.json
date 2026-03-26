@@ -1,0 +1,260 @@
+{
+  "schema_version": "v1",
+  "updated_at": "2026-03-26",
+  "source_doc": "docs/economic_world_model/full_stack_training_backlog.md",
+  "bundles": [
+    {
+      "bundle_id": "workcell_data_refresh",
+      "priority_rank": 1,
+      "manual_only": false,
+      "title": "Workcell semantic data refresh",
+      "production_importance": "highest",
+      "recommended_runpod": {
+        "gpu_label": "A100 80GB",
+        "gpu_count": 1,
+        "container_disk_gb": 50,
+        "volume_gb": 100,
+        "hourly_price_usd": 1.39
+      },
+      "estimated_hours": {
+        "low": 1.0,
+        "high": 3.0
+      },
+      "readiness": {
+        "require_paths": [
+          "scripts/bootstrap_semantic_workcell_loop.py"
+        ]
+      },
+      "preferred_internal_data": [
+        "Repo-local workcell rollout generation",
+        "Existing ontology and replay artifacts under artifacts/ and data/"
+      ],
+      "preferred_external_data": [],
+      "commands": [
+        "python3 scripts/bootstrap_semantic_workcell_loop.py --output-root {bundle_output_root}/workcell_bootstrap --episodes 24 --steps 8 --max-frames 8 --seed 24 --backend-policy auto"
+      ],
+      "notes": "Best recurring first step because current internal replay, coverage, and semantic-runtime corpora are still too small for the heavier learned lanes."
+    },
+    {
+      "bundle_id": "semantic_runtime_training",
+      "priority_rank": 2,
+      "manual_only": false,
+      "title": "Semantic runtime scorer training",
+      "production_importance": "high",
+      "recommended_runpod": {
+        "gpu_label": "A100 80GB",
+        "gpu_count": 1,
+        "container_disk_gb": 50,
+        "volume_gb": 100,
+        "hourly_price_usd": 1.39
+      },
+      "estimated_hours": {
+        "low": 0.5,
+        "high": 2.0
+      },
+      "readiness": {
+        "min_replay_episodes": 100,
+        "min_replay_steps": 5000,
+        "require_paths": [
+          "scripts/export_semantic_runtime_learning_corpus.py",
+          "scripts/train_semantic_runtime_scorers.py"
+        ]
+      },
+      "preferred_internal_data": [
+        "Canonical replay datasets from shadow runs, online SAC, or bootstrap workcell loops"
+      ],
+      "preferred_external_data": [
+        "DROID replay conversions",
+        "Future benchmark-eligible real grounding replays"
+      ],
+      "commands": [
+        "python3 scripts/export_semantic_runtime_learning_corpus.py --replay-dataset {replay_dataset} --output-dir {bundle_output_root}/semantic_runtime_export",
+        "python3 scripts/train_semantic_runtime_scorers.py --replay-dataset {replay_dataset} --output-dir {bundle_output_root}/semantic_runtime_scorers --trainer both"
+      ],
+      "notes": "This is the lowest-dependency learned control-plane lane once replay density is high enough."
+    },
+    {
+      "bundle_id": "semantic_feedback_training",
+      "priority_rank": 3,
+      "manual_only": false,
+      "title": "Semantic feedback adapter and refiner training",
+      "production_importance": "high",
+      "recommended_runpod": {
+        "gpu_label": "A100 80GB",
+        "gpu_count": 1,
+        "container_disk_gb": 50,
+        "volume_gb": 100,
+        "hourly_price_usd": 1.39
+      },
+      "estimated_hours": {
+        "low": 1.0,
+        "high": 3.0
+      },
+      "readiness": {
+        "min_coverage_graphs": 20,
+        "require_paths": [
+          "scripts/train_semantic_feedback_adapters.py",
+          "scripts/train_semantic_wm_refiner.py"
+        ]
+      },
+      "preferred_internal_data": [
+        "Coverage-loop artifact directories with coverage_graph.json outputs"
+      ],
+      "preferred_external_data": [],
+      "commands": [
+        "python3 scripts/train_semantic_feedback_adapters.py {coverage_graph_args} --output-dir {bundle_output_root}/semantic_feedback_adapters",
+        "python3 scripts/train_semantic_wm_refiner.py {coverage_artifact_dir_args} --output-dir {bundle_output_root}/semantic_wm_refiner"
+      ],
+      "notes": "Only useful after repeated coverage-loop runs produce enough graph diversity to avoid overfitting shadow summaries."
+    },
+    {
+      "bundle_id": "shadow_model_training",
+      "priority_rank": 4,
+      "manual_only": false,
+      "title": "Shadow pricing, replay BC, and offline RL",
+      "production_importance": "high",
+      "recommended_runpod": {
+        "gpu_label": "A100 80GB",
+        "gpu_count": 1,
+        "container_disk_gb": 50,
+        "volume_gb": 100,
+        "hourly_price_usd": 1.39
+      },
+      "estimated_hours": {
+        "low": 4.0,
+        "high": 8.0
+      },
+      "readiness": {
+        "min_replay_episodes": 200,
+        "min_replay_steps": 50000,
+        "require_paths": [
+          "scripts/train_shadow_pricing_models.py",
+          "scripts/train_shadow_replay_policy.py",
+          "scripts/train_shadow_offline_rl.py",
+          "configs/shadow_models/gpu_full.yaml",
+          "configs/replay_policy/gpu_full.yaml",
+          "configs/offline_rl/gpu_full.yaml"
+        ]
+      },
+      "preferred_internal_data": [
+        "Canonical replay datasets with receipt-label coverage from shadow or online training runs"
+      ],
+      "preferred_external_data": [],
+      "commands": [
+        "python3 scripts/train_shadow_pricing_models.py --dataset-dir {replay_dataset} --config configs/shadow_models/gpu_full.yaml --output-dir {bundle_output_root}/shadow_pricing_models",
+        "python3 scripts/train_shadow_replay_policy.py --dataset-dir {replay_dataset} --config configs/replay_policy/gpu_full.yaml --output-dir {bundle_output_root}/shadow_replay_policy",
+        "python3 scripts/train_shadow_offline_rl.py --dataset-dir {replay_dataset} --config configs/offline_rl/gpu_full.yaml --output-dir {bundle_output_root}/shadow_offline_rl"
+      ],
+      "notes": "Do not spend A100 time here until replay density is materially above the current 2-3 episode smoke datasets."
+    },
+    {
+      "bundle_id": "vla_recap_training",
+      "priority_rank": 5,
+      "manual_only": false,
+      "title": "VLA RECAP head training",
+      "production_importance": "medium",
+      "recommended_runpod": {
+        "gpu_label": "A100 80GB",
+        "gpu_count": 1,
+        "container_disk_gb": 50,
+        "volume_gb": 100,
+        "hourly_price_usd": 1.39
+      },
+      "estimated_hours": {
+        "low": 0.5,
+        "high": 1.5
+      },
+      "readiness": {
+        "min_recap_rows": 1000,
+        "require_paths": [
+          "scripts/train_vla_recap_offline.py"
+        ]
+      },
+      "preferred_internal_data": [
+        "Ontology-backed RECAP datasets under results/recap or artifacts/"
+      ],
+      "preferred_external_data": [
+        "DROID-derived recap rows",
+        "Bridge/OpenVLA-compatible recap exports"
+      ],
+      "commands": [
+        "python3 scripts/train_vla_recap_offline.py --datasets {recap_dataset_args} --output-dir {bundle_output_root}/vla_recap --checkpoint-dir {bundle_output_root}/checkpoints_vla_recap --run-name recap_vla_runpod"
+      ],
+      "notes": "Currently blocked because this workspace has no non-test RECAP dataset artifacts."
+    },
+    {
+      "bundle_id": "perception_neuralization",
+      "priority_rank": 6,
+      "manual_only": true,
+      "title": "Vision and SIMA2 perception lane",
+      "production_importance": "medium",
+      "recommended_runpod": {
+        "gpu_label": "A100 80GB",
+        "gpu_count": 1,
+        "container_disk_gb": 50,
+        "volume_gb": 100,
+        "hourly_price_usd": 1.39
+      },
+      "estimated_hours": {
+        "low": 6.0,
+        "high": 12.0
+      },
+      "readiness": {
+        "require_stage1_root": true,
+        "require_stage2_root": true,
+        "require_sima2_root": true,
+        "require_paths": [
+          "scripts/train_vision_backbone_real.py",
+          "scripts/train_sima2_segmenter.py"
+        ]
+      },
+      "preferred_internal_data": [
+        "results/stage1_pipeline",
+        "results/stage2_preview",
+        "results/sima2_stress"
+      ],
+      "preferred_external_data": [
+        "Real grounding frames and labels from non-stub ingestion paths"
+      ],
+      "commands": [
+        "python3 scripts/train_vision_backbone_real.py --stage1-root {stage1_root} --stage2-root {stage2_root} --sima2-root {sima2_root} --max-samples 2048 --epochs 20 --batch-size 16 --use-mixed-precision",
+        "python3 scripts/train_sima2_segmenter.py --data-dir {sima2_root} --output-dir {bundle_output_root}/sima2_segmenter --epochs 20 --batch-size 32 --use-mixed-precision"
+      ],
+      "notes": "Keep manual-only for now because this lane still depends on missing stage outputs and partly synthetic segmenter data."
+    },
+    {
+      "bundle_id": "gap_fill_training",
+      "priority_rank": 7,
+      "manual_only": false,
+      "title": "Gap ranker and fill-path training",
+      "production_importance": "medium",
+      "recommended_runpod": {
+        "gpu_label": "A100 80GB",
+        "gpu_count": 1,
+        "container_disk_gb": 50,
+        "volume_gb": 100,
+        "hourly_price_usd": 1.39
+      },
+      "estimated_hours": {
+        "low": 0.5,
+        "high": 1.5
+      },
+      "readiness": {
+        "min_fill_outcome_rows": 1000,
+        "require_paths": [
+          "scripts/train_gap_ranker.py",
+          "scripts/train_fill_path_policy.py"
+        ]
+      },
+      "preferred_internal_data": [
+        "data/fill_outcomes.jsonl accumulated from repeated coverage-loop outcomes"
+      ],
+      "preferred_external_data": [],
+      "commands": [
+        "python3 scripts/train_gap_ranker.py --outcome-store {fill_outcomes_path} --save-dir {bundle_output_root}/gap_ranker",
+        "python3 scripts/train_fill_path_policy.py --outcome-store {fill_outcomes_path} --save-dir {bundle_output_root}/fill_path_policy"
+      ],
+      "notes": "No A100 spend until the fill-outcome store exists and is materially larger than a smoke corpus."
+    }
+  ]
+}

@@ -2,6 +2,20 @@
 
 ## 2026-03-26
 
+- Added a canonical full-stack training backlog document at `docs/economic_world_model/full_stack_training_backlog.md`:
+  - it records the current workspace truth that replay, coverage, and semantic-runtime corpora are still tiny
+  - it ranks the real learned lanes by production importance and dependency instead of by script existence
+  - it explicitly recommends `workcell_data_refresh` as the first recurring remote bundle before heavier scorer/refiner/shadow jobs
+- Added Runpod training-bundle scaffolding under `scripts/runpod/`:
+  - `FULL_STACK_TRAINING_BUNDLES.json` is the checked-in bundle source of truth
+  - `assess_full_stack_training.py` scans the workspace and emits honest readiness/blocker state
+  - `execute_training_bundle.py` runs the selected bundle locally or inside a pod and writes receipts
+  - `launch_training_bundle.py` wraps `runpodctl create pod` so recurring runs can be launched from one checked-in entrypoint
+- The Runpod path is deliberately conservative:
+  - it refuses to auto-run bundles whose data thresholds are not met unless `--force` is passed
+  - it keeps frozen-baseline lanes out of the recurring automation path
+  - it switches pod teardown behavior based on storage mode, preferring `remove` when a network volume is attached and `stop` otherwise
+- The backlog doc also captures the adjacent architectural recommendation that the next large WM tranche should likely be sim/synth/physics, but only after the repo wires high-impact heuristic/advisory/sidecar surfaces into the actual runtime/training/reward loops.
 - Training-run receipt ingestion now carries real backend-truth fields into replay precondition evaluation:
   - `src/replay/receipt_ingest.py` now extracts per-episode signal overrides from observed online receipt rows (`scene_tracks_non_stub`, `scene_tracks_backend`, teacher backend selectors, and grounding flags) and merges them into enriched replay episode metadata before `build_replay_execution_preconditions(...)`.
   - this directly fixes the prior gap where `scene_tracks_non_stub` and `teacher_runtime_real` stayed false in training-run readiness summaries despite receipt-side evidence.
