@@ -26,6 +26,9 @@ import os
 import sys
 import argparse
 import json
+from pathlib import Path
+from typing import Any, Dict, Mapping, Optional, Sequence
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -39,6 +42,20 @@ from src.controllers.synth_lambda_controller import (
     build_feature_vector
 )
 from src.controllers.synthetic_weight_controller import SyntheticWeightController
+from src.training.checkpoint_registry import build_checkpoint_record
+from src.training.regal_training_runner import (
+    RegalTrainingRunner,
+    TrainingRunConfig,
+    run_training_with_regality,
+)
+from src.training.synthetic_branch_corpus import (
+    branch_priority_multiplier,
+    build_synthetic_branch_training_policy,
+    load_synthetic_branch_corpus,
+)
+from src.utils.config_digest import sha256_json
+from src.utils.json_safe import to_json_safe
+from src.valuation.trajectory_audit import create_trajectory_audit
 
 
 class LatentActor(nn.Module):
@@ -59,29 +76,75 @@ class LatentActor(nn.Module):
         return self.net(z)
 
 
-def load_real_data(data_path, device):
-    """Load real physics rollouts."""
+def _write_json(path: Path, payload: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(to_json_safe(payload), indent=2, sort_keys=True), encoding="utf-8")
+
+
+def load_real_data_bundle(data_path, device):
+    """Load real physics rollouts plus episode structure for audits/manifests."""
     data = np.load(data_path, allow_pickle=True)
     n_episodes = int(data['n_episodes'])
 
     transitions = []
+    episodes = []
+    latent_dim = 0
+    action_dim = 0
     for ep in range(n_episodes):
         z_seq = data[f'ep_{ep}_z_sequence']
         actions = data[f'ep_{ep}_actions']
+        rewards = data[f'ep_{ep}_rewards'] if f'ep_{ep}_rewards' in data else None
+        episode_id = f"real_ep_{ep:04d}"
+        latent_dim = latent_dim or int(z_seq.shape[-1])
+        action_dim = action_dim or int(actions.shape[-1])
+        reward_values = []
         for t in range(len(actions)):
+            if rewards is not None and len(rewards) > t:
+                reward = float(rewards[t])
+            else:
+                reward = -float(np.linalg.norm(z_seq[t + 1] - z_seq[t]))
+            reward_values.append(reward)
             transitions.append({
                 'z': torch.FloatTensor(z_seq[t]).to(device),
                 'action': torch.FloatTensor(actions[t]).to(device),
                 'z_next': torch.FloatTensor(z_seq[t + 1]).to(device),
                 'source': 'real',
+                'episode_id': episode_id,
+                'step_idx': t,
                 'trust': 1.0,  # Real data has trust = 1.0
                 'econ_weight': 1.0,  # Default econ weight
+                'reward': reward,
             })
+        episodes.append({
+            'episode_id': episode_id,
+            'z_sequence': z_seq,
+            'actions': actions,
+            'rewards': reward_values,
+        })
 
-    return transitions
+    return {
+        'transitions': transitions,
+        'episodes': episodes,
+        'n_episodes': n_episodes,
+        'latent_dim': latent_dim,
+        'action_dim': action_dim,
+    }
 
 
-def load_synthetic_branches(branch_path, device, w_econ_model=None):
+def load_real_data(data_path, device):
+    """Load real physics rollouts."""
+    return load_real_data_bundle(data_path, device)['transitions']
+
+
+def load_synthetic_branches(
+    branch_path,
+    device,
+    w_econ_model=None,
+    *,
+    metadata_path=None,
+    gap_labels_path=None,
+    training_policy: Optional[Dict[str, Any]] = None,
+):
     """
     Load local synthetic branches with lattice-based economic weighting.
 
@@ -93,6 +156,11 @@ def load_synthetic_branches(branch_path, device, w_econ_model=None):
     Returns:
         transitions: list of transition dicts with econ weights
     """
+    corpus = load_synthetic_branch_corpus(
+        branch_path,
+        metadata_path=metadata_path,
+        gap_labels_path=gap_labels_path,
+    )
     data = np.load(branch_path, allow_pickle=True)
     n_branches = int(data['n_branches'])
 
@@ -102,15 +170,16 @@ def load_synthetic_branches(branch_path, device, w_econ_model=None):
     # Collect branch-level metrics for lattice scoring
     branch_metrics = []
     for i in range(n_branches):
+        branch_record = corpus.branches[i]
         trust = float(data[f'branch_{i}_trust_score'])
         brick_id = int(data[f'branch_{i}_brick_id'])
         std_ratio = float(data[f'branch_{i}_std_ratio'])
 
         # Load objective_vector (default to zeros for backward compatibility)
         if f'branch_{i}_objective_vector' in data:
-            objective_vector = data[f'branch_{i}_objective_vector']
+            objective_vector = data[f'branch_{i}_objective_vector'].tolist()
         else:
-            objective_vector = np.zeros(objective_dim, dtype=np.float32)
+            objective_vector = np.zeros(objective_dim, dtype=np.float32).tolist()
 
         # Compute proxy metrics (these would come from actual episode data in production)
         # For now, use std_ratio as proxy for ΔMPL and ΔEP
@@ -131,6 +200,8 @@ def load_synthetic_branches(branch_path, device, w_econ_model=None):
             'delta_ep': delta_ep_proxy,
             'novelty': novelty_proxy,
             'objective_vector': objective_vector,
+            'branch_value': float(branch_record.branch_value),
+            'gap_labels': dict(branch_record.gap_labels),
         })
 
     # Compute economic weights using lattice model
@@ -159,11 +230,21 @@ def load_synthetic_branches(branch_path, device, w_econ_model=None):
 
         # Update metrics with computed weights
         for i, m in enumerate(branch_metrics):
-            m['econ_weight'] = float(econ_weights[i])
+            priority_multiplier = branch_priority_multiplier(
+                corpus.branches[i],
+                training_policy or {},
+            )
+            m['priority_multiplier'] = float(priority_multiplier)
+            m['econ_weight'] = float(econ_weights[i]) * float(priority_multiplier)
     else:
         # Fallback: use trust as econ weight
         for m in branch_metrics:
-            m['econ_weight'] = m['trust']
+            priority_multiplier = branch_priority_multiplier(
+                corpus.branches[m['branch_idx']],
+                training_policy or {},
+            )
+            m['priority_multiplier'] = float(priority_multiplier)
+            m['econ_weight'] = m['trust'] * float(priority_multiplier)
 
     # Build transitions with branch-level econ weights
     transitions = []
@@ -173,6 +254,7 @@ def load_synthetic_branches(branch_path, device, w_econ_model=None):
         trust = branch_metrics[i]['trust']
         brick_id = branch_metrics[i]['brick_id']
         econ_weight = branch_metrics[i]['econ_weight']
+        branch_id = f"synth_branch_{i:04d}"
 
         for t in range(len(actions)):
             transitions.append({
@@ -180,12 +262,15 @@ def load_synthetic_branches(branch_path, device, w_econ_model=None):
                 'action': torch.FloatTensor(actions[t]).to(device),
                 'z_next': torch.FloatTensor(z_seq[t + 1]).to(device),
                 'source': 'synthetic',
+                'episode_id': branch_id,
+                'step_idx': t,
                 'trust': trust,
                 'econ_weight': econ_weight,
                 'brick_id': brick_id,
+                'reward': -float(np.linalg.norm(z_seq[t + 1] - z_seq[t])),
             })
 
-    return transitions, branch_metrics
+    return transitions, branch_metrics, corpus
 
 
 def compute_sample_weights(
@@ -285,6 +370,11 @@ def train_actor(transitions, latent_dim, action_dim, n_epochs=100, batch_size=25
 
 def evaluate_actor(actor, test_transitions, device):
     """Evaluate actor on test transitions."""
+    if not test_transitions:
+        return {
+            'action_mse': 0.0,
+            'action_mse_std': 0.0,
+        }
     actor.eval()
     mse_list = []
 
@@ -295,8 +385,8 @@ def evaluate_actor(actor, test_transitions, device):
             mse_list.append(mse)
 
     return {
-        'action_mse': np.mean(mse_list),
-        'action_mse_std': np.std(mse_list),
+        'action_mse': float(np.mean(mse_list)),
+        'action_mse_std': float(np.std(mse_list)),
     }
 
 
@@ -332,8 +422,6 @@ def train_actor_with_controller(
     # Initialize actor
     actor = LatentActor(latent_dim, action_dim).to(device)
     optimizer = optim.Adam(actor.parameters(), lr=lr)
-    criterion = nn.MSELoss()
-
     # Extract profile parameters
     objective_vector = profile['default_objective_vector']
     max_synth_share = profile.get('max_synth_share', 0.4)
@@ -371,7 +459,7 @@ def train_actor_with_controller(
     total_epochs = 0
     for window_idx in range(n_epochs // eval_every):
         # Reweight transitions with current λ_synth
-        weighted_transitions, weight_debug = compute_sample_weights(
+        weighted_transitions, _ = compute_sample_weights(
             all_transitions.copy(),
             base_trust_weight=1.0,
             econ_weight_scale=econ_weight_scale,
@@ -465,16 +553,91 @@ def train_actor_with_controller(
     return actor, history, lambda_trajectory
 
 
-def main():
-    # Load experiment profile for defaults
-    profile = get_internal_experiment_profile("default")
+def _build_real_trajectory_audits(real_bundle: Mapping[str, Any]) -> list[Any]:
+    audits = []
+    for episode in list(real_bundle.get('episodes', []) or []):
+        actions = np.asarray(episode.get('actions'))
+        rewards = [float(value) for value in list(episode.get('rewards', []) or [])]
+        if actions.size == 0:
+            continue
+        audits.append(
+            create_trajectory_audit(
+                episode_id=str(episode.get('episode_id', 'real_ep')),
+                num_steps=int(len(actions)),
+                actions=actions.astype(np.float32).tolist(),
+                rewards=rewards,
+                reward_components={"real_seed_reward": rewards},
+                events=["real_seed_episode"],
+            )
+        )
+    return audits
 
+
+def _build_synthetic_trajectory_audits(branch_path: str, corpus) -> list[Any]:
+    if corpus is None:
+        return []
+    audits = []
+    with np.load(branch_path, allow_pickle=True) as data:
+        for branch in corpus.branches:
+            z_seq = data[f'branch_{branch.branch_idx}_z_sequence']
+            actions = data[f'branch_{branch.branch_idx}_actions']
+            rewards = [
+                -float(np.linalg.norm(z_seq[t + 1] - z_seq[t]))
+                for t in range(len(actions))
+            ]
+            reward_components = {
+                "synthetic_transition_reward": rewards,
+                "branch_value": [float(branch.branch_value) for _ in rewards],
+                "branch_trust": [float(branch.trust_score) for _ in rewards],
+            }
+            events = ["synthetic_branch"]
+            skill_edge = str(branch.gap_labels.get("skill_edge", "") or "")
+            if skill_edge:
+                events.append(f"gap::{skill_edge}")
+            audits.append(
+                create_trajectory_audit(
+                    episode_id=f"synth_branch_{branch.branch_idx:04d}",
+                    num_steps=int(len(actions)),
+                    actions=np.asarray(actions).astype(np.float32).tolist(),
+                    rewards=rewards,
+                    reward_components=reward_components,
+                    events=events,
+                )
+            )
+    return audits
+
+
+def _source_domain_coverage(
+    real_bundle: Mapping[str, Any],
+    synthetic_branch_count: int,
+    synthetic_transition_count: int,
+) -> Dict[str, Any]:
+    return {
+        "total_episodes": int(real_bundle.get('n_episodes', 0)) + int(synthetic_branch_count),
+        "source_domain_counts": {
+            "real_seed": int(real_bundle.get('n_episodes', 0)),
+            "synthetic_branch": int(synthetic_branch_count),
+        },
+        "transition_counts": {
+            "real_seed": len(list(real_bundle.get('transitions', []) or [])),
+            "synthetic_branch": int(synthetic_transition_count),
+        },
+    }
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    profile = get_internal_experiment_profile("default")
     parser = argparse.ArgumentParser(description='Offline RL with local synthetic A/B test')
     parser.add_argument('--real-data', type=str, default=profile['real_data_path'])
     parser.add_argument('--synth-data', type=str, default=profile['synthetic_branches_path'])
+    parser.add_argument('--synth-metadata', type=str, default=None,
+                        help='Optional explicit metadata sidecar for synthetic branches')
+    parser.add_argument('--synth-gap-labels', type=str, default=None,
+                        help='Optional explicit gap-label sidecar for synthetic branches')
     parser.add_argument('--w-econ-lattice', type=str, default=profile['w_econ_lattice_path'],
                         help='Path to trained w_econ_lattice model')
     parser.add_argument('--output-dir', type=str, default='results')
+    parser.add_argument('--seed', type=int, default=42)
 
     # Training params
     parser.add_argument('--epochs', type=int, default=profile['ab_test_epochs'])
@@ -495,8 +658,20 @@ def main():
                         help='Path to trained lambda controller')
     parser.add_argument('--eval-every', type=int, default=20,
                         help='Epochs between controller evaluations')
+    parser.add_argument('--skip-regal-runner', action='store_true')
 
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -> Dict[str, Any]:
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+
+    profile = dict(get_internal_experiment_profile("default"))
+    output_root = Path(args.output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
@@ -509,17 +684,19 @@ def main():
 
     # Load real data
     print(f"Loading real data from {args.real_data}...")
-    real_transitions = load_real_data(args.real_data, device)
+    real_bundle = load_real_data_bundle(args.real_data, device)
+    real_transitions = list(real_bundle['transitions'])
     print(f"Loaded {len(real_transitions)} real transitions")
 
     # Get dimensions
-    latent_dim = real_transitions[0]['z'].shape[0]
-    action_dim = real_transitions[0]['action'].shape[0]
+    latent_dim = int(real_bundle['latent_dim'])
+    action_dim = int(real_bundle['action_dim'])
     print(f"Latent dim: {latent_dim}, Action dim: {action_dim}")
 
     # Split real data: 80% train, 20% test
     np.random.shuffle(real_transitions)
-    split_idx = int(0.8 * len(real_transitions))
+    split_idx = max(1, int(0.8 * len(real_transitions)))
+    split_idx = min(split_idx, max(1, len(real_transitions) - 1))
     real_train = real_transitions[:split_idx]
     real_test = real_transitions[split_idx:]
     print(f"Real: {len(real_train)} train, {len(real_test)} test")
@@ -559,19 +736,82 @@ def main():
     # Load synthetic data if available
     synth_transitions = []
     branch_metrics = []
+    branch_metrics_path = None
+    corpus = None
+    branch_summary_path = None
+    branch_preconditions_path = None
+    branch_benchmark_path = None
+    training_policy: Dict[str, Any] = {
+        'requested_synth_share': float(args.synth_weight),
+        'requested_econ_weight_scale': float(args.econ_weight_scale),
+        'effective_synth_share_cap': float(args.synth_weight),
+        'semantic_weight_scale': 1.0,
+        'gap_value_scale': 1.0,
+        'branch_priority_floor': 0.25,
+        'branch_priority_ceiling': 2.0,
+        'benchmark_gate_ready': False,
+        'execution_ready': False,
+        'reasons': ['no_synthetic_corpus_loaded'],
+    }
     if os.path.exists(args.synth_data):
+        corpus = load_synthetic_branch_corpus(
+            args.synth_data,
+            metadata_path=args.synth_metadata,
+            gap_labels_path=args.synth_gap_labels,
+        )
+        training_policy = build_synthetic_branch_training_policy(
+            corpus,
+            requested_synth_share=args.synth_weight,
+            requested_econ_weight_scale=args.econ_weight_scale,
+        )
         print(f"\nLoading synthetic branches from {args.synth_data}...")
-        synth_transitions, branch_metrics = load_synthetic_branches(args.synth_data, device, w_econ_model)
+        synth_transitions, branch_metrics, corpus = load_synthetic_branches(
+            args.synth_data,
+            device,
+            w_econ_model,
+            metadata_path=args.synth_metadata,
+            gap_labels_path=args.synth_gap_labels,
+            training_policy=training_policy,
+        )
         print(f"Loaded {len(synth_transitions)} synthetic transitions")
+        print(
+            "Synthetic training policy: "
+            f"cap={training_policy['effective_synth_share_cap']:.2f}, "
+            f"semantic_scale={training_policy['semantic_weight_scale']:.2f}, "
+            f"benchmark_ready={training_policy['benchmark_gate_ready']}"
+        )
 
         # Summary of synthetic
         trust_scores = [t['trust'] for t in synth_transitions]
         econ_weights = [t['econ_weight'] for t in synth_transitions]
         print(f"Synthetic trust: {np.mean(trust_scores):.4f} +/- {np.std(trust_scores):.4f}")
         print(f"Synthetic w_econ: {np.mean(econ_weights):.4f} +/- {np.std(econ_weights):.4f}")
+
+        branch_summary_path = output_root / 'synthetic_branch_summary.json'
+        branch_preconditions_path = output_root / 'synthetic_branch_execution_preconditions.json'
+        branch_benchmark_path = output_root / 'synthetic_branch_benchmark_gate.json'
+        _write_json(
+            branch_summary_path,
+            {
+                **corpus.to_summary(),
+                'training_policy': training_policy,
+            },
+        )
+        _write_json(branch_preconditions_path, corpus.execution_preconditions.to_dict())
+        _write_json(branch_benchmark_path, corpus.benchmark_gate.to_dict())
     else:
         print(f"\nWARNING: No synthetic data at {args.synth_data}")
         print("Will run baseline only")
+
+    effective_synth_share = min(
+        float(args.synth_weight),
+        float(training_policy.get('effective_synth_share_cap', args.synth_weight)),
+    )
+    profile['max_synth_share'] = min(
+        float(profile.get('max_synth_share', effective_synth_share)),
+        float(training_policy.get('effective_synth_share_cap', effective_synth_share)),
+    )
+    profile['target_synth_share'] = effective_synth_share
 
     # Train baseline (real-only)
     print("\n" + "="*70)
@@ -600,6 +840,7 @@ def main():
     augmented_eval = None
     augmented_history = None
     lambda_trajectory = None
+    aug_debug = None
     if synth_transitions:
         print("\n" + "="*70)
         print("TRAINING AUGMENTED (Real + Local Synthetic)")
@@ -608,7 +849,7 @@ def main():
         if args.use_lambda_controller and lambda_controller is not None:
             # Use learned lambda controller
             print("Using LEARNED LAMBDA CONTROLLER (adaptive λ_synth)")
-            print(f"Max synthetic share: {max_synth_share*100:.1f}%")
+            print(f"Max synthetic share: {profile['max_synth_share']*100:.1f}%")
             print(f"Economic weight scale: {args.econ_weight_scale}")
 
             augmented_actor, augmented_history, lambda_trajectory = train_actor_with_controller(
@@ -618,21 +859,14 @@ def main():
                 batch_size=args.batch_size, lr=args.lr, device=device
             )
 
-            # Save lambda trajectory
-            trajectory_path = os.path.join(args.output_dir, 'synth_lambda_trajectory.jsonl')
-            with open(trajectory_path, 'w') as f:
-                for entry in lambda_trajectory:
-                    f.write(json.dumps(entry) + '\n')
-            print(f"\nSaved lambda trajectory to {trajectory_path}")
-
             # Show final lambda
             if lambda_trajectory:
                 final_lambda = lambda_trajectory[-1]['lambda_synth']
                 print(f"Final λ_synth: {final_lambda:.4f}")
         else:
             # Use fixed synth_weight
-            print(f"Using FIXED λ_synth = {args.synth_weight:.2f}")
-            print(f"Synthetic contribution target: {args.synth_weight*100:.1f}%")
+            print(f"Using FIXED λ_synth = {effective_synth_share:.2f}")
+            print(f"Synthetic contribution target: {effective_synth_share*100:.1f}%")
             print(f"Economic weight scale: {args.econ_weight_scale}")
 
             augmented_train = real_train.copy() + synth_transitions.copy()
@@ -640,7 +874,7 @@ def main():
                 augmented_train,
                 base_trust_weight=1.0,
                 econ_weight_scale=args.econ_weight_scale,
-                synth_ratio=args.synth_weight,
+                synth_ratio=effective_synth_share,
                 profile=profile,
                 mode="trust_econ_lambda"
             )
@@ -672,16 +906,38 @@ def main():
             'final_loss': baseline_history['loss'][-1],
             'n_transitions': len(real_train),
         },
+        'synthetic_branch_policy': training_policy,
+        'weight_diagnostics': {
+            'baseline': baseline_debug,
+            'augmented': aug_debug,
+        },
         'config': {
             'epochs': args.epochs,
             'batch_size': args.batch_size,
             'lr': args.lr,
             'synth_weight': args.synth_weight,
+            'effective_synth_share': effective_synth_share,
             'econ_weight_scale': args.econ_weight_scale,
             'use_lambda_controller': args.use_lambda_controller,
-            'max_synth_share': max_synth_share,
+            'max_synth_share': profile.get('max_synth_share', max_synth_share),
+            'seed': args.seed,
         }
     }
+
+    if corpus is not None:
+        results['synthetic_branch_corpus'] = {
+            'summary': corpus.summary,
+            'execution_preconditions': corpus.execution_preconditions.to_dict(),
+            'benchmark_gate': corpus.benchmark_gate.to_dict(),
+        }
+        branch_metrics_path = output_root / 'synthetic_branch_metrics.json'
+        _write_json(
+            branch_metrics_path,
+            {
+                'branch_metrics': branch_metrics,
+                'training_policy': training_policy,
+            },
+        )
 
     if augmented_eval:
         augmented_result = {
@@ -696,9 +952,9 @@ def main():
         if lambda_trajectory:
             augmented_result['lambda_controller_used'] = True
             augmented_result['lambda_trajectory_summary'] = {
-                'initial_lambda': lambda_trajectory[0]['lambda_synth'],
-                'final_lambda': lambda_trajectory[-1]['lambda_synth'],
-                'mean_lambda': np.mean([t['lambda_synth'] for t in lambda_trajectory]),
+                'initial_lambda': float(lambda_trajectory[0]['lambda_synth']),
+                'final_lambda': float(lambda_trajectory[-1]['lambda_synth']),
+                'mean_lambda': float(np.mean([t['lambda_synth'] for t in lambda_trajectory])),
                 'n_adjustments': len(lambda_trajectory),
             }
         else:
@@ -711,8 +967,8 @@ def main():
         mse_pct_change = 100 * mse_delta / baseline_eval['action_mse']
 
         results['comparison'] = {
-            'mse_delta': mse_delta,
-            'mse_pct_change': mse_pct_change,
+            'mse_delta': float(mse_delta),
+            'mse_pct_change': float(mse_pct_change),
         }
 
         print(f"Baseline Action MSE:   {baseline_eval['action_mse']:.6f}")
@@ -741,18 +997,27 @@ def main():
         print("No synthetic data available for comparison")
 
     # Save results
-    os.makedirs(args.output_dir, exist_ok=True)
-    output_path = os.path.join(args.output_dir, 'offline_local_synth_eval.json')
-    with open(output_path, 'w') as f:
-        json.dump(results, f, indent=2)
+    output_path = output_root / 'offline_local_synth_eval.json'
+    _write_json(output_path, results)
     print(f"\nSaved results to {output_path}")
 
-    # Save actors
+    baseline_history_path = output_root / 'offline_baseline_history.json'
+    _write_json(baseline_history_path, baseline_history)
+    augmented_history_path = None
+    if augmented_history is not None:
+        augmented_history_path = output_root / 'offline_local_synth_history.json'
+        _write_json(augmented_history_path, augmented_history)
+    lambda_path = None
+    if lambda_trajectory:
+        lambda_path = output_root / 'synth_lambda_trajectory.json'
+        _write_json(lambda_path, {'trajectory': lambda_trajectory})
+
+    baseline_checkpoint_path = output_root / 'offline_baseline_actor.pt'
+    torch.save(baseline_actor.state_dict(), baseline_checkpoint_path)
+    augmented_checkpoint_path = None
     if augmented_eval:
-        torch.save(baseline_actor.state_dict(),
-                   os.path.join('checkpoints', 'offline_baseline_actor.pt'))
-        torch.save(augmented_actor.state_dict(),
-                   os.path.join('checkpoints', 'offline_local_synth_actor.pt'))
+        augmented_checkpoint_path = output_root / 'offline_local_synth_actor.pt'
+        torch.save(augmented_actor.state_dict(), augmented_checkpoint_path)
         print("Saved actor checkpoints")
 
     print("\n" + "="*70)
@@ -762,6 +1027,211 @@ def main():
     print("If augmented > baseline: Synthetic creates economic value!")
     print("If augmented < baseline: Synthetic poisoning - tighten gating")
     print("="*70)
+
+    payload = {
+        'results': results,
+        'artifacts': {
+            'offline_local_synth_eval': str(output_path),
+            'offline_baseline_history': str(baseline_history_path),
+            'offline_baseline_actor': str(baseline_checkpoint_path),
+            'offline_local_synth_history': str(augmented_history_path) if augmented_history_path else None,
+            'offline_local_synth_actor': str(augmented_checkpoint_path) if augmented_checkpoint_path else None,
+            'synthetic_branch_summary': str(branch_summary_path) if branch_summary_path else None,
+            'synthetic_branch_metrics': str(branch_metrics_path) if branch_metrics_path else None,
+            'synthetic_branch_execution_preconditions': str(branch_preconditions_path) if branch_preconditions_path else None,
+            'synthetic_branch_benchmark_gate': str(branch_benchmark_path) if branch_benchmark_path else None,
+            'synth_lambda_trajectory': str(lambda_path) if lambda_path else None,
+        },
+    }
+    training_job_result_path = output_root / 'training_job_result.json'
+    _write_json(training_job_result_path, payload)
+
+    if runner is not None:
+        config_digest = sha256_json({
+            'real_data': args.real_data,
+            'synth_data': args.synth_data,
+            'synth_metadata': args.synth_metadata,
+            'synth_gap_labels': args.synth_gap_labels,
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'lr': args.lr,
+            'seed': args.seed,
+            'requested_synth_weight': args.synth_weight,
+            'effective_synth_share': effective_synth_share,
+            'econ_weight_scale': args.econ_weight_scale,
+            'use_lambda_controller': args.use_lambda_controller,
+            'training_policy': training_policy,
+        })
+        real_audits = _build_real_trajectory_audits(real_bundle)
+        synth_audits = _build_synthetic_trajectory_audits(args.synth_data, corpus) if corpus is not None else []
+        eligible_ids = [episode['episode_id'] for episode in real_bundle['episodes']]
+        if corpus is not None:
+            eligible_ids.extend(f"synth_branch_{branch.branch_idx:04d}" for branch in corpus.branches)
+        runner.set_eligible_datapacks(eligible_ids)
+        runner.set_sampler_config(seed=args.seed, config_sha=config_digest)
+        for episode in real_bundle['episodes']:
+            runner.record_sample("real_seed", datapack_id=episode['episode_id'], slice_id=episode['episode_id'])
+        if corpus is not None:
+            for branch in corpus.branches:
+                branch_id = f"synth_branch_{branch.branch_idx:04d}"
+                runner.record_sample("synthetic_branch", datapack_id=branch_id, slice_id=branch_id)
+        for audit in [*real_audits, *synth_audits]:
+            runner.add_trajectory_audit(audit)
+        runner.update_step(int(args.epochs))
+        runner.set_weights(
+            baseline_weights={
+                'requested_synth_share': float(args.synth_weight),
+                'requested_econ_weight_scale': float(args.econ_weight_scale),
+            },
+            final_weights=dict(training_policy),
+        )
+        runner.configure_training_runtime(
+            training_kind="offline_local_synth",
+            config_digest=config_digest,
+            replay_dataset_summary={
+                'real_transition_count': len(real_transitions),
+                'synthetic_transition_count': len(synth_transitions),
+                'real_episode_count': int(real_bundle['n_episodes']),
+                'synthetic_branch_count': len(corpus.branches) if corpus is not None else 0,
+            },
+            objective_profile_snapshot={
+                'objective_vector': list(profile.get('default_objective_vector', [])),
+                'policy': 'trust_x_w_econ_with_bounded_synthetic_budget',
+            },
+            promotion_policy_snapshot={},
+            source_domain_coverage=_source_domain_coverage(
+                real_bundle,
+                len(corpus.branches) if corpus is not None else 0,
+                len(synth_transitions),
+            ),
+            receipt_label_coverage={},
+            metadata={
+                'requested_synth_share': float(args.synth_weight),
+                'effective_synth_share': float(effective_synth_share),
+                'synthetic_branch_policy': dict(training_policy),
+                'future_training_signals': (
+                    dict(corpus.summary.get('future_training_signals', {}) or {})
+                    if corpus is not None
+                    else {}
+                ),
+                'scene_tracks_backend': (
+                    corpus.summary.get('source_metadata', {}).get('scene_tracks_backend')
+                    if corpus is not None
+                    else 'unavailable'
+                ),
+                'teacher_runtime_backend_selected': (
+                    corpus.summary.get('source_metadata', {}).get('teacher_runtime_backend_selected')
+                    if corpus is not None
+                    else 'unavailable'
+                ),
+                'vision_backbone_selected': (
+                    corpus.summary.get('source_metadata', {}).get('vision_backbone_selected')
+                    if corpus is not None
+                    else 'unavailable'
+                ),
+                'semantic_grounding_mode': (
+                    corpus.summary.get('source_metadata', {}).get('semantic_grounding_mode')
+                    if corpus is not None
+                    else 'heuristic_fallback'
+                ),
+                'synthetic_branch_metadata_present': bool(corpus is not None and corpus.summary.get('metadata_present', False)),
+                'synthetic_branch_gap_labels_present': bool(corpus is not None and corpus.summary.get('gap_labels_present', False)),
+            },
+        )
+        runner.set_regal_result(
+            {
+                'overall_status': 'pass',
+                'synthetic_branch_policy': training_policy,
+                'synthetic_branch_execution_preconditions': (
+                    corpus.execution_preconditions.to_dict() if corpus is not None else {}
+                ),
+                'synthetic_branch_benchmark_gate': (
+                    corpus.benchmark_gate.to_dict() if corpus is not None else {}
+                ),
+            },
+            context_sha=config_digest,
+        )
+        runner.register_artifact('offline_local_synth_eval', output_path)
+        runner.register_artifact('offline_baseline_history', baseline_history_path)
+        runner.register_artifact('offline_baseline_actor', baseline_checkpoint_path)
+        runner.register_artifact('training_job_result', training_job_result_path)
+        if augmented_history_path is not None:
+            runner.register_artifact('offline_local_synth_history', augmented_history_path)
+        if augmented_checkpoint_path is not None:
+            runner.register_artifact('offline_local_synth_actor', augmented_checkpoint_path)
+        if branch_summary_path is not None:
+            runner.register_artifact('synthetic_branch_summary', branch_summary_path)
+        if branch_metrics_path is not None:
+            runner.register_artifact('synthetic_branch_metrics', branch_metrics_path)
+        if branch_preconditions_path is not None:
+            runner.register_artifact('synthetic_branch_execution_preconditions', branch_preconditions_path)
+        if branch_benchmark_path is not None:
+            runner.register_artifact('synthetic_branch_benchmark_gate', branch_benchmark_path)
+        if lambda_path is not None:
+            runner.register_artifact('synth_lambda_trajectory', lambda_path)
+        runner.register_checkpoint(
+            build_checkpoint_record(
+                checkpoint_id='offline_baseline_actor',
+                model_family='offline_local_synth_actor',
+                model_version='baseline_real_only_v1',
+                path=baseline_checkpoint_path,
+                epoch=args.epochs,
+                step=args.epochs,
+                metadata={'dataset': 'real_only'},
+            )
+        )
+        if augmented_checkpoint_path is not None:
+            runner.register_checkpoint(
+                build_checkpoint_record(
+                    checkpoint_id='offline_local_synth_actor',
+                    model_family='offline_local_synth_actor',
+                    model_version='local_synth_augmented_v1',
+                    path=augmented_checkpoint_path,
+                    epoch=args.epochs,
+                    step=args.epochs,
+                    is_best=bool(
+                        augmented_eval is not None
+                        and augmented_eval['action_mse'] <= baseline_eval['action_mse']
+                    ),
+                    metadata={'dataset': 'real_plus_synthetic', 'training_policy': training_policy},
+                )
+            )
+
+    return payload
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    args = parse_args(argv)
+    if args.skip_regal_runner:
+        payload = _run_training(args, runner=None)
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    holder: Dict[str, Any] = {}
+
+    def _wrapped(runner: RegalTrainingRunner) -> None:
+        holder['payload'] = _run_training(args, runner=runner)
+
+    plan_sha = sha256_json({
+        'script': 'train_offline_with_local_synth.py',
+        'seed': args.seed,
+        'requested_synth_share': args.synth_weight,
+        'real_data': args.real_data,
+        'synth_data': args.synth_data,
+    })
+    run_training_with_regality(
+        training_fn=_wrapped,
+        config=TrainingRunConfig(
+            output_dir=args.output_dir,
+            seed=args.seed,
+            num_episodes=args.epochs,
+            training_steps=args.epochs,
+            fail_on_verify_error=False,
+        ),
+        plan_sha=plan_sha,
+        plan_id="offline_local_synth",
+    )
+    print(json.dumps(holder.get('payload', {}), indent=2, sort_keys=True))
 
 
 if __name__ == '__main__':

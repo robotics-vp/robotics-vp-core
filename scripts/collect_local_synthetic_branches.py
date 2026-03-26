@@ -75,6 +75,32 @@ def _compute_gap_labels(coverage_graph, ep_idx, task_id="", env_id=""):
     return labels
 
 
+def _load_source_runtime_metadata(path):
+    """Load optional seed/runtime metadata describing real grounding provenance."""
+    if not path:
+        return {}
+    if not os.path.exists(path):
+        print(f"WARNING: Source runtime metadata not found at {path}")
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        return payload if isinstance(payload, dict) else {}
+    except Exception as exc:
+        print(f"WARNING: Could not parse source runtime metadata from {path}: {exc}")
+        return {}
+
+
+def _resolve_runtime_field(source_metadata, explicit_value, *keys, default=""):
+    if explicit_value:
+        return explicit_value
+    for key in keys:
+        value = source_metadata.get(key)
+        if value not in (None, ""):
+            return value
+    return default
+
+
 def extract_features_torch(z_sequence):
     """Extract episode features for trust_net."""
     global_mean = z_sequence.mean()
@@ -111,7 +137,7 @@ def get_episode_brick_id(ep_idx, brick_manifest):
             brick_id_str = brick.get('brick_id', 'brick_-1')
             try:
                 return int(brick_id_str.split('_')[1])
-            except:
+            except Exception:
                 return -1
     return -1
 
@@ -151,6 +177,16 @@ def main():
     parser.add_argument('--coverage-graph-path', type=str,
                         default='data/coverage/coverage_graph.json',
                         help='Path to coverage_graph.json from coverage loop')
+    parser.add_argument('--source-runtime-metadata', type=str, default='',
+                        help='Optional JSON metadata describing the real seed/runtime grounding status')
+    parser.add_argument('--scene-tracks-backend', type=str, default='',
+                        help='Optional explicit SceneTracks backend for the seed corpus (real/passthrough/stub/unavailable)')
+    parser.add_argument('--teacher-runtime-backend', type=str, default='',
+                        help='Optional explicit teacher-runtime backend for the seed corpus (real/stub/unavailable)')
+    parser.add_argument('--vision-backbone-selected', type=str, default='',
+                        help='Optional explicit vision-backbone status for the seed corpus (real/stub/unavailable)')
+    parser.add_argument('--semantic-grounding-mode', type=str, default='',
+                        help='Optional semantic grounding mode for the seed corpus (non_heuristic/heuristic_fallback/keyword_tags)')
 
     args = parser.parse_args()
 
@@ -237,6 +273,48 @@ def main():
             print(f"  Coverage: {summary.get('coverage_ratio', 0):.2%}")
         else:
             print("  Coverage graph not available, proceeding without gap awareness")
+
+    source_runtime_metadata = _load_source_runtime_metadata(args.source_runtime_metadata)
+    scene_tracks_backend = str(
+        _resolve_runtime_field(
+            source_runtime_metadata,
+            args.scene_tracks_backend,
+            "scene_tracks_backend",
+        )
+        or "unavailable"
+    )
+    teacher_runtime_backend = str(
+        _resolve_runtime_field(
+            source_runtime_metadata,
+            args.teacher_runtime_backend,
+            "teacher_runtime_backend_selected",
+            "openvla_backend_selected",
+        )
+        or "unavailable"
+    )
+    vision_backbone_selected = str(
+        _resolve_runtime_field(
+            source_runtime_metadata,
+            args.vision_backbone_selected,
+            "vision_backbone_selected",
+            "openvla_vision_backbone_selected",
+        )
+        or "unavailable"
+    )
+    semantic_grounding_mode = str(
+        _resolve_runtime_field(
+            source_runtime_metadata,
+            args.semantic_grounding_mode,
+            "semantic_grounding_mode",
+            "grounding_mode",
+        )
+        or ("non_heuristic" if scene_tracks_backend == "real" else "heuristic_fallback")
+    )
+    semantic_memory_grounded = bool(
+        source_runtime_metadata.get("semantic_memory_grounded", False)
+        or source_runtime_metadata.get("grounded_track_object_count", 0)
+        or scene_tracks_backend == "real"
+    )
 
     # Collect branches
     print("\n" + "="*70)
@@ -395,7 +473,20 @@ def main():
     print(f"Saved to {args.output}")
 
     # Save metadata
+    gap_labels_path = None
+    if any(b.get('gap_labels') for b in branches):
+        gap_labels_path = args.output.replace('.npz', '_gap_labels.json')
+        gap_data = [
+            {'branch_idx': i, **b.get('gap_labels', {}), 'branch_value': b.get('branch_value', 0.0)}
+            for i, b in enumerate(branches)
+        ]
+        with open(gap_labels_path, 'w') as f:
+            json.dump(gap_data, f, indent=2)
+        print(f"Saved gap labels to {gap_labels_path}")
+
     metadata = {
+        'schema_version': 'synthetic_branch_corpus_metadata_v1',
+        'source_type': 'stable_world_model_local_branch_v1',
         'world_model': args.world_model,
         'dataset': args.dataset,
         'horizon': args.horizon,
@@ -415,18 +506,22 @@ def main():
         'coverage_graph_used': args.use_coverage_graph,
         'coverage_graph_path': args.coverage_graph_path if args.use_coverage_graph else None,
         'gap_label_sample': branches[0].get('gap_labels') if branches else None,
+        'scene_tracks_backend': scene_tracks_backend,
+        'teacher_runtime_backend_selected': teacher_runtime_backend,
+        'vision_backbone_selected': vision_backbone_selected,
+        'semantic_grounding_mode': semantic_grounding_mode,
+        'semantic_memory_grounded': semantic_memory_grounded,
+        'future_training_signals': {
+            **dict(source_runtime_metadata.get('future_training_signals', {}) or {}),
+            'scene_tracks_non_stub': scene_tracks_backend in {'real', 'passthrough'},
+            'semantic_gap_labeled': bool(gap_labels_path),
+            'semantic_memory_grounded': semantic_memory_grounded,
+        },
+        'future_training_artifacts': {
+            'branch_gap_labels': gap_labels_path,
+            'source_runtime_metadata': args.source_runtime_metadata or None,
+        },
     }
-
-    # Save gap labels sidecar (for downstream consumers)
-    if any(b.get('gap_labels') for b in branches):
-        gap_labels_path = args.output.replace('.npz', '_gap_labels.json')
-        gap_data = [
-            {'branch_idx': i, **b.get('gap_labels', {}), 'branch_value': b.get('branch_value', 0.0)}
-            for i, b in enumerate(branches)
-        ]
-        with open(gap_labels_path, 'w') as f:
-            json.dump(gap_data, f, indent=2)
-        print(f"Saved gap labels to {gap_labels_path}")
 
     metadata_path = args.output.replace('.npz', '_metadata.json')
     with open(metadata_path, 'w') as f:
