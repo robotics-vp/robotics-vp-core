@@ -24,6 +24,7 @@ Ranking dimensions:
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | Yes | **Wired now** |
 | 4a | Queue dispatch policy trainer/package + replay-weighting helper | `heuristic` / `lightweight_trainer_gap` | High | High | Yes | **Wired now, benchmark-gated** |
 | 4b | Sampler policy trainer/package + base-weight / curriculum-strategy helper | `heuristic` / `lightweight_trainer_gap` | High | High | Yes | **Wired now, benchmark-gated** |
+| 4c | Semantic runtime scorer trainer/package + shadow-advisory runtime contract | `lightweight_trainer_gap` | High | High | Yes | **Wired now, benchmark-gated** |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now** |
 | 6 | `train_orchestration_transformer.py` runtime-backed trainer parity | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now, benchmark-gated** |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` plus helper trainer/export lane | `heuristic` / `lightweight_trainer_gap` | Medium-high | Medium-high | No | **Wired now, benchmark-gated** |
@@ -31,6 +32,8 @@ Ranking dimensions:
 | 8a | D4 knob model / homeostatic planner knob calibration | `stub` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 8b | `SemanticOrchestratorV2` shell policy / activation helper | `heuristic` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 8c | `PipelineManager` stage-activation shell policy | `heuristic` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
+| 8d | Semantic feedback adapter trainer/package + coverage-loop edge overlay helper | `lightweight_trainer_gap` | Medium-high | Medium-high | Yes | **Wired now, benchmark-gated** |
+| 8e | Semantic WM refiner trainer/package + bounded coverage-loop correction/mutation helper | `lightweight_trainer_gap` | Medium-high | Medium-high | Yes | **Wired now, benchmark-gated** |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `sidecar` / `fallback` | Medium-high | Medium-high | No | **Wired now** |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 
@@ -420,6 +423,42 @@ Ranking dimensions:
   - `benchmark-gated`
   - `neuralized later`
 
+### 4c. Semantic runtime scorer trainer/package + shadow-advisory runtime contract
+
+- surface: replay-backed semantic runtime scorer training plus the shadow-advisory consumer contract that decides whether learned route/regret/counterfactual/authority signals are actually trustworthy enough to affect replay selection
+- file/path: `scripts/train_semantic_runtime_scorers.py`, `src/orchestrator/semantic_runtime_scorer_runtime.py`, `src/orchestrator/shadow_advisory.py`
+- category: `lightweight_trainer_gap`
+- current behavior:
+  - `scripts/train_semantic_runtime_scorers.py` now emits:
+    - runtime training dataset
+    - dataset summary
+    - execution-precondition artifact
+    - model config
+    - training summary
+    - legacy `semantic_runtime_scorer_package.json` for compatibility
+    - canonical `semantic_runtime_scorer_runtime_package.json`
+    - canonical runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - the trainer now keeps the linear scorer package as the stable runtime contract even when torch training is also enabled, so the package written to disk is always actually loadable by production consumers
+  - `src/orchestrator/shadow_advisory.py` now prefers the canonical runtime package, preserves contract type / promotion stage / benchmark-gate status in the advisory summary, and only treats the old raw scorer JSON as an explicit legacy fallback contract
+- current consumers:
+  - `build_shadow_advisory_output(...)`
+  - `scripts/run_shadow_advisory_pass.py`
+  - `scripts/train_shadow_replay_policy.py`
+  - `scripts/train_shadow_offline_rl.py`
+  - `scripts/train_shadow_pricing_models.py`
+  - `scripts/train_sac_with_ontology_logging.py`
+- why it is a production problem:
+  - before this pass, any colocated scorer JSON looked equally “real” at consumption time even if it had no benchmark gate, no preconditions, and no canonical runtime package
+  - that let a data-sparse scorer distort real replay selection while hiding the maturity gap inside the file layout
+- recommended disposition:
+  - keep the scorer lane wired into replay selection
+  - preserve the legacy package only as an explicit fallback contract
+  - keep runtime-package promotion benchmark-gated on execution-ready, semantic-grounded, route-success, and counterfactual density
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
+  - `upgraded to heavyweight parity`
+
 ### 5. `train_vla_recap_offline.py`
 
 - surface: offline RECAP VLA heads trainer
@@ -746,6 +785,72 @@ Ranking dimensions:
   - `benchmark-gated`
   - `neuralized later`
 
+### 8d. Semantic feedback adapter trainer/package + coverage-loop edge overlay helper
+
+- surface: learned trust/econ/readiness/correction overlay helper over coverage-graph edges
+- file/path: `scripts/train_semantic_feedback_adapters.py`, `src/world_model/feedback_topology_adapters.py`, `src/world_model/feedback_topology_runtime.py`, `src/orchestrator/coverage_loop.py`, `src/orchestrator/pipeline_manager.py`
+- category: `lightweight_trainer_gap`
+- current behavior:
+  - `scripts/train_semantic_feedback_adapters.py` now emits:
+    - merged edge dataset
+    - dataset summary
+    - execution-precondition artifact
+    - model config
+    - training summary
+    - `semantic_feedback_adapter_runtime_package.json`
+    - canonical runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - `src/world_model/feedback_topology_adapters.py` checkpoints now preserve hidden-dimension/training metadata so persisted packages roundtrip honestly
+  - `src/orchestrator/coverage_loop.py` now resolves feedback helpers with `disabled|auto|required` semantics, loads runtime packages directly, and blends learned edge overlays into live coverage priorities with bounded helper weights instead of treating raw checkpoints or shadow-fit packages as equivalent
+  - `src/orchestrator/pipeline_manager.py` now passes runtime-package paths and helper modes through to the coverage loop instead of doing ad hoc `torch.load(...)` checkpoint plumbing itself
+- current consumers:
+  - `run_coverage_loop(...)`
+  - `PipelineManager.run_pipeline_step_with_causal_order(...)`
+  - `scripts/train_semantic_feedback_adapters.py`
+- why it is a production problem:
+  - before this pass, the feedback adapter had a heavyweight trainer name but no canonical package/precondition contract, and the runtime either loaded raw checkpoints or silently shadow-fit on the fly
+  - that left a fake boundary where a learned coverage helper existed on paper but had no honest production maturity semantics
+- recommended disposition:
+  - keep bounded helper blending in the live coverage loop
+  - keep shadow-fit as an explicit fallback only
+  - keep promotion benchmark-gated on repeated coverage graphs with non-trivial correction support
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
+  - `upgraded to heavyweight parity`
+
+### 8e. Semantic WM refiner trainer/package + bounded coverage-loop correction/mutation helper
+
+- surface: learned successor/refiner over semantic WM correction overlays and graph-mutation proposal scoring
+- file/path: `scripts/train_semantic_wm_refiner.py`, `src/world_model/semantic_wm_refiner_runtime.py`, `src/world_model/semantic_wm_refiner.py`, `src/orchestrator/coverage_loop.py`, `src/orchestrator/pipeline_manager.py`
+- category: `lightweight_trainer_gap`
+- current behavior:
+  - `scripts/train_semantic_wm_refiner.py` now emits:
+    - refinement dataset
+    - dataset summary
+    - execution-precondition artifact
+    - model config
+    - training summary
+    - `semantic_wm_refiner_runtime_package.json`
+    - canonical runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - `src/world_model/semantic_wm_refiner_runtime.py` now gives the lane the same `disabled|auto|required` runtime semantics as the other helper modules
+  - `src/orchestrator/coverage_loop.py` now loads runtime packages directly, scales learned correction overlays and proposal confidences by explicit shadow/promoted caps, and records helper status plus bounded scales in `semantic_wm_refiner_summary` instead of treating raw checkpoints or shadow-fit packages as indistinguishable
+  - `src/orchestrator/pipeline_manager.py` now forwards runtime-package paths and helper modes into the coverage loop rather than open-coding checkpoint loading
+- current consumers:
+  - `run_coverage_loop(...)`
+  - `PipelineManager.run_pipeline_step_with_causal_order(...)`
+  - `scripts/train_semantic_wm_refiner.py`
+- why it is a production problem:
+  - before this pass, the successor lane existed, but persisted packages had no canonical runtime contract and live coverage logic could only load raw checkpoints or shadow-fit on the current episode
+  - that made the refiner look more production-ready than it really was and blurred the line between explicit fallback and real learned runtime influence
+- recommended disposition:
+  - keep the deterministic correction overlay and governed mutation executor as the explicit prior/hard gate
+  - keep the learned refiner bounded through runtime-package scales
+  - keep promotion benchmark-gated on denser coverage artifacts rather than treating persisted checkpoints as authoritative by default
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
+  - `upgraded to heavyweight parity`
+
 ### 9. Teacher-runtime / rollout-labeler semantic sidecars
 
 - surface: external teacher contracts/envelopes and rollout labeler sidecars
@@ -809,6 +914,7 @@ Ranking dimensions:
 ## Remaining Top Follow-Ons
 
 1. Refresh the grounded-data / perception truth lane on a real GPU + SAM3D host; until that happens, workcell/bootstrap grounding remains honest but still unpromotable, and several vision-side promotion paths remain blocked by environment rather than repo wiring.
-2. Add empirical receipt targets into the new sampler-policy helper so the package can promote beyond heuristic bootstrap and stop relying mostly on distilled strategy/weight priors.
-3. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.
-4. Close the remaining data-limited trainer-parity gaps called out in `docs/economic_world_model/full_stack_training_backlog.md`, especially semantic runtime scorer density, semantic feedback adapter density, shadow pricing / offline replay density, and the perception/VLA real-data lanes.
+2. Accumulate enough execution-ready, semantic-grounded replay rows to promote the semantic runtime scorer beyond `shadow_candidate`.
+3. Accumulate enough repeated coverage-loop artifacts to promote the semantic feedback adapter and semantic WM refiner beyond `shadow_candidate`.
+4. Add empirical receipt targets into the new sampler-policy and gen2sim helpers so those packages can promote beyond heuristic bootstrap/distillation.
+5. Close the remaining data-limited trainer-parity gaps called out in `docs/economic_world_model/full_stack_training_backlog.md`, especially shadow pricing / offline replay density and the perception/VLA real-data lanes.

@@ -1037,3 +1037,23 @@
     - frontier/econ threshold and focus ratios
   - `DataPackRLSampler` now emits `sampler_policy_receipt_v1` artifacts, and the main shadow/online training entrypoints persist those receipts into runtime outputs so later training can move off heuristic bootstrap targets.
   - Honest remainder: this lane is no longer missing wiring. It is blocked on receipt density. The helper should remain benchmark-gated until queue outcome receipts and replay counterfactual labels are dense enough to promote it beyond `shadow_candidate`.
+
+- The semantic runtime scorer lane now has the same honest runtime contract as the other helper modules:
+  - `scripts/train_semantic_runtime_scorers.py` now emits:
+    - runtime training dataset
+    - dataset summary
+    - execution-precondition artifact
+    - model config
+    - training summary
+    - the legacy linear scorer package for compatibility
+    - `semantic_runtime_scorer_runtime_package.json`
+    - canonical runtime manifest / checkpoint registry artifacts under `RegalTrainingRunner`
+  - `src/orchestrator/semantic_runtime_scorer_runtime.py` gives the scorer a stable runtime-package loader, and `src/orchestrator/shadow_advisory.py` now prefers that package while preserving contract type, promotion stage, benchmark gate, and legacy-fallback truth in the advisory output.
+  - Honest remainder: this lane is no longer missing production wiring. It is blocked on execution-ready / semantic-grounded replay density for promotion.
+
+- The semantic coverage helper lanes are now canonical runtime helpers rather than raw-checkpoint sidecars:
+  - `scripts/train_semantic_feedback_adapters.py` and `scripts/train_semantic_wm_refiner.py` now emit canonical dataset/precondition/model/training/runtime-package artifacts under `RegalTrainingRunner`.
+  - `src/world_model/feedback_topology_runtime.py` and `src/world_model/semantic_wm_refiner_runtime.py` now provide bounded `disabled|auto|required` helper loading consistent with the other learned helper lanes.
+  - `src/orchestrator/coverage_loop.py` now consumes those runtime packages directly, applies explicit shadow/promoted blend weights for feedback overlays, applies explicit shadow/promoted scales for learned correction overlays and graph-mutation proposal confidences, and records helper status in the coverage summaries instead of silently treating persisted packages, raw checkpoints, and shadow-fit fallbacks as equivalent.
+  - `src/orchestrator/pipeline_manager.py` now forwards runtime-package refs and helper modes directly into the coverage loop instead of open-coding checkpoint loads.
+  - Honest remainder: these lanes are no longer missing runtime packaging. They remain benchmark-gated until enough repeated coverage-loop artifacts accumulate to promote them beyond `shadow_candidate`.

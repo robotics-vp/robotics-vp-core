@@ -26,7 +26,12 @@
     {
       "id": "shadow_advisory_sampling_learning",
       "completed_at": "2026-03-26",
-      "notes": "P1 complete - shadow advisory now auto-consumes semantic runtime scorer packages when present, threads bounded learned route/regret/counterfactual/authority signals into replay sampling, and preserves that evidence through live queue-selection metadata; the heuristic path remains only as an explicit fallback when no scorer package exists yet."
+      "notes": "P1 complete - shadow advisory now auto-consumes canonical semantic-runtime scorer runtime packages when present, preserves contract type / promotion stage / benchmark-gate truth, threads bounded learned route/regret/counterfactual/authority signals into replay sampling, and keeps the heuristic path only as an explicit fallback when no scorer package exists yet."
+    },
+    {
+      "id": "semantic_coverage_helper_runtime_contracts",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - semantic feedback adapters and semantic WM refiners now have canonical runtime-package contracts plus bounded disabled|auto|required helper loading in coverage_loop/pipeline_manager, replacing raw checkpoint blobs and implicit shadow-fit-only behavior."
     },
     {
       "id": "scene_tracks_truth_consumer_sweep",
@@ -105,6 +110,18 @@
       "priority": "P2",
       "blocked_by": "queue outcome receipts and replay counterfactual labels",
       "notes": "The sampler-policy helper is now wired into live sampling and training entrypoints, but it still trains mostly on heuristic-bootstrap receipts and needs denser queue outcome / counterfactual labels before it can promote beyond shadow_candidate."
+    },
+    {
+      "id": "semantic_runtime_scorer_density_for_promotion",
+      "priority": "P2",
+      "blocked_by": "execution-ready and semantic-grounded replay density",
+      "notes": "The semantic runtime scorer now has a canonical trainer/runtime package and shadow-advisory consumer contract, but it still needs more execution-ready, semantic-grounded replay rows before it can promote beyond shadow_candidate."
+    },
+    {
+      "id": "semantic_coverage_helper_artifact_density_for_promotion",
+      "priority": "P2",
+      "blocked_by": "repeated coverage-loop artifact accumulation",
+      "notes": "The semantic feedback adapter and semantic WM refiner now have canonical runtime-package contracts, but they still need more repeated coverage-loop artifacts and non-trivial correction/proposal histories before they can promote beyond shadow_candidate."
     },
     {
       "id": "real_sam3d_grounded_data_refresh",
