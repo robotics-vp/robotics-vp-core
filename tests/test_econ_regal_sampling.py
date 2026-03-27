@@ -40,7 +40,9 @@ def test_econ_regal_sampling_and_live_queue_shim():
         }
     )
     assert queue["summary"]["num_entries"] == 1
+    assert queue["authority_class"] == "bounded_authority_input"
     assert queue["entries"][0]["episode_id"] == "ep_001"
+    assert queue["entries"][0]["authority_class"] == "bounded_authority_input"
 
 
 def test_recommend_sampling_accepts_semantic_runtime_support():

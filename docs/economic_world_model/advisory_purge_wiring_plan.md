@@ -230,6 +230,16 @@ After Tranche A:
   - canonical metadata
   - bounded authority receipts
 
+Progress now landed:
+
+- `src/orchestrator/queue_selection.py` no longer leaves live queue inputs and queue-dispatch outputs as unnamed advisory blobs; both now emit explicit `authority_class`, `decision_scope`, `reward_math_mutation`, and `receipt_kind` fields.
+- `src/rl/episode_sampling.py` now carries that bounded-authority classification into `sampler_policy_receipt_v1` artifacts and into `dispatch_queue(...)`.
+- `src/rl/sac.py` now preserves the same classification in online replay sampling artifacts.
+
+Remaining Tranche B target:
+
+- orchestration-level receipts and higher-shell control outputs still need the same contract cleanup so bounded internal selectors stop being documented or interpreted as generic advisories.
+
 ### Tranche C: External-provider doctrine cleanup
 
 After Tranche B:

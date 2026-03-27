@@ -193,4 +193,5 @@ def test_sampler_policy_helper_updates_strategy_and_weight_trace(tmp_path: Path)
     assert trace["final_strategy"] == "frontier_prioritized"
     assert batch[0]["sampling_metadata"]["sampler_policy"]["weight_source"] == "heuristic_plus_learned_helper"
     assert sampler.last_sampler_policy_artifact is not None
+    assert sampler.last_sampler_policy_artifact["authority_class"] == "bounded_authority"
     assert sampler.last_sampler_policy_artifact["strategy_targets"]["frontier_prioritized"] > 0.0

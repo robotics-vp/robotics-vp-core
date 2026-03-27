@@ -6,14 +6,24 @@
   - backend selector training/runtime package
   - branch planner training/runtime package
   - live wrappers in `semantic_simulation`, `diffusion_requests`, and `coverage_loop` now accept those packages instead of forcing direct in-memory helper objects only
+- The package lane is now more production-shaped than "checkpoint on disk":
+  - runtime packages resolve package-relative checkpoints
+  - trainer/export outputs now stamp explicit target hardware and subsystem posture metadata
+  - the emitted package artifact is intended to be the real runtime contract, not a sidecar note for later cleanup
 - Important implementation detail:
   - the branch-planner feature contract expected `heuristic_generation_mode`
   - the runtime compiler was not passing it
   - this is now fixed, so trained branch-planner packages see the same core context fields at inference time that they saw at training time
-- This is also where the advisory pivot starts to matter for the new lower WM:
+- This is also where the complete-subsystem rule starts to matter for the new lower WM:
   - backend-selector and branch-planner outputs are no longer just "advice around the WM"
   - they are bounded-authority helper seams inside the WM’s canonical agenda / physics / branch planning path
-  - the next advisory cleanup should apply the same honesty rule to remaining live queue/curriculum/orchestration receipts
+  - the main remaining gaps are increasingly honest external blockers rather than missing neural/runtime/package scaffolding
+  - for the Unitree G1/R1-oriented target, those blockers are:
+    - Unitree-class sim adapters and robot-description assets
+    - whole-body branch and replay corpora
+    - calibration receipts for contact, balance, and latency-sensitive behavior
+    - larger GPU-backed helper training/eval
+    - humanoid benchmark receipts strong enough to justify `required` posture
 
 - Landed the next `sim_synth_physics` consolidation step:
   - WM-owned simulation jobs now carry `inferential_learnability_contract`
@@ -1216,3 +1226,15 @@
   - `src/orchestrator/coverage_loop.py` now consumes those runtime packages directly, applies explicit shadow/promoted blend weights for feedback overlays, applies explicit shadow/promoted scales for learned correction overlays and graph-mutation proposal confidences, and records helper status in the coverage summaries instead of silently treating persisted packages, raw checkpoints, and shadow-fit fallbacks as equivalent.
   - `src/orchestrator/pipeline_manager.py` now forwards runtime-package refs and helper modes directly into the coverage loop instead of open-coding checkpoint loads.
   - Honest remainder: these lanes are no longer missing runtime packaging. They remain benchmark-gated until enough repeated coverage-loop artifacts accumulate to promote them beyond `shadow_candidate`.
+
+- The sim/synth helper runtime packages are now relocatable and package-faithful instead of training-directory-bound:
+  - `scripts/train_sim_synth_backend_selector.py` and `scripts/train_sim_synth_branch_planner.py` now write runtime packages with artifact refs relative to the package root when possible, which makes the emitted package portable across training/output directories.
+  - `src/world_model/sim_synth_physics/backend_selector_runtime.py` and `src/world_model/sim_synth_physics/branch_planner_runtime.py` now resolve relative `checkpoint_path` values against `package_path` and preserve package metadata (`package_id`, `package_path`, `promotion_stage`, `metadata`) on the loaded helper object.
+  - `tests/test_sim_synth_physics_world_model.py` now exercises the end-to-end reload path using package JSONs with relative checkpoint refs, which is the real contract the downstream WM runtime will consume.
+  - Honest remainder: the helper seam is no longer brittle, but helper promotion is still limited by real branch/backend receipt density rather than packaging.
+
+- The queue/sampler lane has started the advisory-doctrine cleanup:
+  - `src/orchestrator/queue_selection.py` now emits explicit `receipt_kind`, `authority_class`, `decision_scope`, and `reward_math_mutation` fields on both live queue-selection inputs and queue-dispatch receipts.
+  - `src/rl/episode_sampling.py` now carries those fields into `sampler_policy_receipt_v1` artifacts and also emits the sampler receipt from `dispatch_queue(...)`, so the bounded authority exercised during training-distribution selection is typed instead of implicitly inferred.
+  - `src/rl/sac.py` now preserves the same bounded-authority classification in online replay sampling artifacts, which closes the last obvious runtime hole where queue influence could still look like anonymous advisory metadata.
+  - Honest remainder: this is a contract/doctrine correction, not yet the final orchestration-level advisory purge. Higher-shell and orchestration control surfaces still need the same cleanup treatment.

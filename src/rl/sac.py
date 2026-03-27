@@ -18,7 +18,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 from collections import deque
-import random
 
 Transition = tuple[Any, Any, Any, Any, Any, float]
 
@@ -331,6 +330,12 @@ class NoveltyReplayBuffer:
                     "evidence": dict(dispatch.get("evidence", {}) or {}),
                     "promotion_stage": str(dispatch.get("promotion_stage", "compare_only") or "compare_only"),
                     "influence_source": str(dispatch.get("influence_source", "heuristic") or "heuristic"),
+                    "authority_class": str(dispatch.get("authority_class", "observational_only") or "observational_only"),
+                    "decision_scope": str(
+                        dispatch.get("decision_scope", "training_distribution_only")
+                        or "training_distribution_only"
+                    ),
+                    "reward_math_mutation": bool(dispatch.get("reward_math_mutation", False)),
                     "source_domain": metadata.get("source_domain"),
                     "receipt_feedback": receipt_feedback,
                 }
@@ -349,7 +354,16 @@ class NoveltyReplayBuffer:
                 key=lambda row: (row["adjusted_rank"], -row["reweight_factor"], row["episode_id"]),
             )
         ]
+        authority_class = "observational_only"
+        if any(row.get("authority_class") == "bounded_authority" for row in entries.values()):
+            authority_class = "bounded_authority"
+        elif any(row.get("authority_class") == "ordering_only" for row in entries.values()):
+            authority_class = "ordering_only"
         return {
+            "receipt_kind": "online_replay_sampling_artifact_v1",
+            "authority_class": authority_class,
+            "decision_scope": "training_distribution_only",
+            "reward_math_mutation": False,
             "sample_call": int(self.sample_calls),
             "buffer_size": len(self.buffer),
             "selected_transition_count": int(len(indices)),

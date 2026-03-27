@@ -1,8 +1,8 @@
 """
-Episode sampling scaffolding (advisory-only).
+Episode sampling scaffolding with bounded training-distribution authority.
 
-Stage 3 extends the simple Stage 1 → RL descriptor conversion with an
-advisory sampler that can balance tiers, prioritize frontier datapacks,
+Stage 3 extends the simple Stage 1 → RL descriptor conversion with a
+bounded sampler that can balance tiers, prioritize frontier datapacks,
 and weight by economic urgency without modifying reward math or training
 algorithms.
 """
@@ -124,6 +124,13 @@ def _descriptor_signal_yield(
     return float(signal_yield.score), float(replay_weight)
 
 
+def _sampler_receipt_authority_class(queue_dispatch: Optional[Dict[str, Any]]) -> str:
+    dispatch_authority = str((queue_dispatch or {}).get("authority_class", "") or "")
+    if dispatch_authority:
+        return dispatch_authority
+    return "bounded_authority"
+
+
 def _summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase: str) -> Dict[str, Any]:
     """Compact, JSON-safe summary of condition inputs for logging."""
     tag_items = [f"{str(k)}:{float(v):.4f}" for k, v in sorted(tags.items(), key=lambda kv: str(kv[0]))]
@@ -218,7 +225,8 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         except Exception:
             data_quality_signal = float(trust_score)
 
-    # Epiplexity signals (advisory only)
+    # Epiplexity learnability stays canonical metadata for training distribution,
+    # while reward math remains unchanged.
     delta_epi = extract_epiplexity_summary_metric(datapack, metric="delta_epi_vs_baseline") or 0.0
     epi_per_flop = extract_epiplexity_summary_metric(datapack, metric="epi_per_flop") or 0.0
     epi_conf = extract_epiplexity_summary_confidence(datapack) or 0.0
@@ -706,6 +714,12 @@ class DataPackRLSampler:
             )
         dispatch["ordered_descriptors"] = ordered_descriptors
         self.last_queue_dispatch_artifact = dispatch
+        self.last_sampler_policy_artifact = self._build_sampler_policy_receipt(
+            selected=selected,
+            strategy_name=strategy_name,
+            queue_dispatch=dispatch,
+        )
+        dispatch["sampler_policy_receipt"] = copy.deepcopy(self.last_sampler_policy_artifact)
         return dispatch
 
     def _select_strategy(self, strategy: Optional[str]) -> str:
@@ -1414,12 +1428,23 @@ class DataPackRLSampler:
                     "target_source": "receipt_feedback" if has_receipt_feedback else "heuristic_bootstrap",
                     "metadata": {
                         "has_receipt_feedback": has_receipt_feedback,
+                        "queue_dispatch_authority_class": str(
+                            dispatch_decision.get(
+                                "authority_class",
+                                (queue_dispatch or {}).get("authority_class", "observational_only"),
+                            )
+                            or "observational_only"
+                        ),
                         "queue_dispatch_decision": dispatch_decision,
                     },
                 }
             )
         receipt = {
             "schema_version": "sampler_policy_receipt_v1",
+            "receipt_kind": "sampler_policy_receipt_v1",
+            "authority_class": _sampler_receipt_authority_class(queue_dispatch),
+            "decision_scope": "training_distribution_only",
+            "reward_math_mutation": False,
             "receipt_id": f"sampler_policy_{strategy_name}_{len(selected)}",
             "target_source": target_source,
             "heuristic_selected_strategy": str(
