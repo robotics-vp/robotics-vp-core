@@ -2,6 +2,16 @@
 
 ## 2026-03-27
 
+- Changed: added a typed backend runtime bridge contract inside the Phase-1 sim/synth/physics WM:
+  - `src/world_model/sim_synth_physics/runtime_bridge.py` now compiles `BackendRuntimeBridgeState` from backend binding, robot-asset contract, embodiment control constraints, and runtime-target readiness
+  - the runtime now emits `backend_runtime_bridge_receipt_v1`, writes it into the loop artifact set, and threads its ids/status into outcome receipts, loop summaries, and training-feedback manifests
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests that receipt so backend-selector and branch-planner rows preserve bridge transport/readiness/authority truth instead of reconstructing it later
+- Why this matters:
+  - backend binding is no longer the last typed stop before runtime; the WM now explicitly owns the slow-loop to runtime bridge contract
+  - Isaac/Unitree and Holosoma lanes can now name planner-vs-servo rates, transport profile, IO/telemetry contracts, safety channels, and missing runtime targets as canonical receipt truth
+  - this is another Phase-1 shift from “described integration” to “owned integration contract”, which is the right direction before the remaining blockers become fully external runtime/assets/GPU constraints
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`, and `git diff --check` passed.
+
 - Changed: turned the Phase-1 backend runtime seam from request metadata into a WM-owned concrete runtime receipt path:
   - added `src/world_model/sim_synth_physics/backend_runtime_execution.py`
   - `src/world_model/sim_synth_physics/runtime.py` now emits `backend_runtime_execution_receipt_v1` for requested Isaac/Holosoma lanes, even when the main execution contract still falls back

@@ -2,6 +2,35 @@
 
 ## 2026-03-27
 
+- Added a typed backend runtime bridge inside Phase 1:
+  - `src/world_model/sim_synth_physics/runtime_bridge.py` now compiles `BackendRuntimeBridgeState`
+  - the state captures:
+    - transport profile and runtime stack
+    - planner / control / observation rates
+    - action decimation and latency budget
+    - observation/action/telemetry contracts
+    - safety channels
+    - runtime-target readiness and missing-target truth
+  - `src/world_model/sim_synth_physics/runtime.py` now emits `backend_runtime_bridge_receipt_v1` beside the binding, runtime, shadow, calibration, render, and outcome receipts
+- Why this matters:
+  - the WM no longer treats “binding exists” as enough to describe the backend lane
+  - it now owns the actual slow-loop-to-runtime contract surface the rest of the stack will have to trust later for Isaac/Unitree/Holosoma execution
+  - replay/training no longer need to reverse-engineer planner-vs-servo timing, transport posture, or missing runtime targets from scattered metadata
+
+- Preserved the bridge contract into downstream receipt harvesters:
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests `backend_runtime_bridge_receipt_v1`
+  - backend-selector and branch-planner rows now keep:
+    - bridge receipt id
+    - bridge status
+    - execution authority
+    - transport profile
+    - bridge readiness score
+    - missing runtime targets
+- This is an important complete-subsystem step:
+  - the new bridge contract is not runtime-only bookkeeping
+  - it already affects the trainer/export truth path
+  - that is the right standard for Phase 1 if we want the honest stopping condition to become runtime/assets/GPU limits rather than more missing WM plumbing
+
 - Added a concrete backend-runtime receipt path inside Phase 1:
   - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now binds requested Isaac/Holosoma backends into explicit runtime requests and optional concrete `evaluate_policy(...)` execution
   - `src/world_model/sim_synth_physics/runtime.py` emits `backend_runtime_execution_receipt_v1` beside the existing shadow receipt

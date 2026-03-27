@@ -932,6 +932,7 @@ The WM should emit:
 - backend/fidelity choice receipt
 - physics adaptation receipt
 - backend execution binding receipt
+- backend runtime bridge receipt
 - branch render-provider receipts
 - branch outcome receipts
 - replay-ready artifact refs
@@ -947,11 +948,12 @@ Recommended flow:
 4. choose backend, fidelity, and domain-randomization regime
 5. compile typed physics adaptation policy and calibration targets
 6. resolve a concrete backend execution binding with runtime stack, entrypoints, and asset-readiness truth
-7. emit a `DiffusionConditioningState` for any render/generation branch
-8. resolve WM-owned branch/render providers for NAG/LSD/GGDS materialization
-9. execute backend adapters
-10. emit `SimulationOutcomeReceipt` and related sidecars
-11. feed receipts into replay, benchmark gating, and training datasets
+7. compile a typed backend runtime bridge contract that names transport profile, planner-vs-servo rates, IO/telemetry contracts, safety channels, and runtime-target readiness
+8. emit a `DiffusionConditioningState` for any render/generation branch
+9. resolve WM-owned branch/render providers for NAG/LSD/GGDS materialization
+10. execute backend adapters
+11. emit `SimulationOutcomeReceipt` and related sidecars
+12. feed receipts into replay, benchmark gating, and training datasets
 
 ### Phase 1 neuralization plan
 
@@ -1009,6 +1011,7 @@ Phase 1 should count as landed only when:
 - backend/fidelity selection is emitted as a first-class receipt
 - domain-randomization / system-identification policy is emitted as a typed state and receipt, not left implicit in backend metadata, and those receipts react to backend/materialization evidence once the WM loop has run
 - concrete backend execution binding is emitted as typed state and receipt, including honest Isaac/Unitree asset-readiness truth, and robot-asset/calibration/IO contracts are emitted as canonical state/receipts plus backend-local sidecars rather than left as loose missing-asset notes
+- a typed backend runtime bridge contract is emitted as canonical state and receipt, so the WM can name planner-vs-servo rates, transport profile, telemetry/action/observation contracts, and safety channels instead of flattening slow-loop-to-runtime integration into generic binding metadata
 - requested backend runtime intent is emitted as a typed runtime-request or concrete-runtime receipt, so Isaac/Holosoma paths can advance from request-binding to real evaluation or train-from-motion execution without reopening the WM boundary later
 - Unitree-target humanoid asset manifests are normalized into canonical required-asset contracts rather than treated as arbitrary manifest keys, so backend readiness reflects real robot-description, calibration, safety, and control-IO prerequisites
 - Isaac/Unitree/Holosoma runtime target manifests are emitted explicitly, so the WM can name which external runtime roots, SDKs, and asset trees are still missing on a host instead of flattening that state into one generic “backend unavailable” bit
