@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Mapping, Sequence
+from typing import Any, Dict, Iterable, Mapping, Sequence
 
 
 def _mapping(value: Any) -> Dict[str, Any]:
@@ -33,6 +33,25 @@ def _status_yield_score(status: str, fallback: float) -> float:
     if normalized in {"failed", "blocked", "rejected"}:
         return min(_clip01(fallback), 0.2)
     return _clip01(fallback)
+
+
+def _json_mappings(path: Path) -> list[Dict[str, Any]]:
+    if path.suffix == ".jsonl":
+        rows: list[Dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            if isinstance(payload, Mapping):
+                rows.append(dict(payload))
+        return rows
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, Mapping):
+        return [dict(payload)]
+    if isinstance(payload, Sequence):
+        return _mapping_list(payload)
+    return []
 
 
 def load_sim_synth_receipt_bundles(path: str | Path) -> list[Dict[str, Any]]:
@@ -64,6 +83,153 @@ def load_sim_synth_receipt_bundles(path: str | Path) -> list[Dict[str, Any]]:
     if isinstance(payload, Sequence):
         return _mapping_list(payload)
     raise ValueError(f"Unsupported sim/synth/physics receipt payload in {receipt_path}")
+
+
+def harvest_sim_synth_receipt_bundles(paths: Sequence[str | Path]) -> list[Dict[str, Any]]:
+    """Harvest live sim/synth/physics receipt bundles from files or directories."""
+
+    harvested: list[Dict[str, Any]] = []
+    by_state_id: dict[str, Dict[str, Any]] = {}
+    for candidate in _iter_receipt_inputs(paths):
+        candidate_path = Path(candidate)
+        if candidate_path.is_file():
+            try:
+                harvested.extend(load_sim_synth_receipt_bundles(candidate_path))
+            except Exception:
+                harvested.extend(_harvest_receipt_file(candidate_path))
+            continue
+        harvested.extend(_harvest_receipt_dir(candidate_path))
+
+    deduped: list[Dict[str, Any]] = []
+    for bundle in harvested:
+        state_id = str(_mapping(bundle.get("world_state")).get("state_id", "") or "")
+        if not state_id:
+            deduped.append(bundle)
+            continue
+        previous = by_state_id.get(state_id)
+        if previous is None:
+            by_state_id[state_id] = bundle
+            continue
+        prev_outcomes = _mapping_list(previous.get("simulation_outcome_receipts"))
+        next_outcomes = _mapping_list(bundle.get("simulation_outcome_receipts"))
+        if len(next_outcomes) > len(prev_outcomes):
+            by_state_id[state_id] = bundle
+    deduped.extend(by_state_id[key] for key in sorted(by_state_id))
+    return deduped
+
+
+def _iter_receipt_inputs(paths: Sequence[str | Path]) -> Iterable[Path]:
+    seen: set[Path] = set()
+    for raw in paths:
+        candidate = Path(raw).resolve()
+        if candidate in seen or not candidate.exists():
+            continue
+        seen.add(candidate)
+        yield candidate
+
+
+def _looks_like_receipt_bundle(path: Path) -> bool:
+    name = path.name.lower()
+    if any(token in name for token in ("receipt_bundle", "sim_synth", "world_state", "physics_calibration_receipt", "simulation_outcome_receipt")):
+        return True
+    return False
+
+
+def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
+    grouped_world_states: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_calibrations: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_outcomes: dict[Path, list[Dict[str, Any]]] = {}
+    explicit_bundles: list[Dict[str, Any]] = []
+
+    for path in sorted(root.rglob("*.json")) + sorted(root.rglob("*.jsonl")):
+        if not _looks_like_receipt_bundle(path):
+            continue
+        try:
+            rows = _json_mappings(path)
+        except Exception:
+            continue
+        if not rows:
+            continue
+        if path.is_file() and any(
+            isinstance(row.get("world_state"), Mapping) or row.get("bundles") or row.get("receipts")
+            for row in rows
+        ):
+            try:
+                explicit_bundles.extend(load_sim_synth_receipt_bundles(path))
+                continue
+            except Exception:
+                pass
+        for payload in rows:
+            version = str(payload.get("version", payload.get("schema_version", "")) or "")
+            parent = path.parent.resolve()
+            if version == "sim_synth_physics_world_state_v1":
+                grouped_world_states.setdefault(parent, []).append(dict(payload))
+            elif version == "physics_calibration_receipt_v1":
+                grouped_calibrations.setdefault(parent, []).append(dict(payload))
+            elif version == "simulation_outcome_receipt_v1":
+                grouped_outcomes.setdefault(parent, []).append(dict(payload))
+
+    bundles: list[Dict[str, Any]] = list(explicit_bundles)
+    all_dirs = sorted(
+        set(grouped_world_states) | set(grouped_calibrations) | set(grouped_outcomes)
+    )
+    for directory in all_dirs:
+        world_states = grouped_world_states.get(directory, [])
+        calibrations = grouped_calibrations.get(directory, [])
+        outcomes = grouped_outcomes.get(directory, [])
+        for world_state in world_states:
+            physics_context = _mapping(world_state.get("physics_context"))
+            metadata = _mapping(physics_context.get("metadata"))
+            bundle: Dict[str, Any] = {
+                "bundle_id": str(world_state.get("state_id", "")) or directory.name,
+                "world_state": dict(world_state),
+            }
+            if calibrations:
+                bundle["physics_calibration_receipt"] = dict(calibrations[-1])
+            if outcomes:
+                bundle["simulation_outcome_receipts"] = [dict(item) for item in outcomes]
+            if metadata.get("benchmark_signals"):
+                bundle["benchmark_signals"] = _mapping(metadata.get("benchmark_signals"))
+            bundles.append(bundle)
+    return bundles
+
+
+def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
+    try:
+        rows = _json_mappings(path)
+    except Exception:
+        return []
+    parent = path.parent.resolve()
+    world_states = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "sim_synth_physics_world_state_v1"
+    ]
+    calibrations = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "physics_calibration_receipt_v1"
+    ]
+    outcomes = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "simulation_outcome_receipt_v1"
+    ]
+    bundles: list[Dict[str, Any]] = []
+    for world_state in world_states:
+        bundle: Dict[str, Any] = {
+            "bundle_id": str(world_state.get("state_id", "")) or parent.name,
+            "world_state": world_state,
+        }
+        if calibrations:
+            bundle["physics_calibration_receipt"] = calibrations[-1]
+        if outcomes:
+            bundle["simulation_outcome_receipts"] = outcomes
+        bundles.append(bundle)
+    return bundles
 
 
 def build_backend_selector_rows_from_receipts(
@@ -227,5 +393,6 @@ def build_branch_planner_rows_from_receipts(
 __all__ = [
     "build_backend_selector_rows_from_receipts",
     "build_branch_planner_rows_from_receipts",
+    "harvest_sim_synth_receipt_bundles",
     "load_sim_synth_receipt_bundles",
 ]

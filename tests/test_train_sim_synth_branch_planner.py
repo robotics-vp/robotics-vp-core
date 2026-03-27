@@ -90,6 +90,64 @@ def _write_receipt_bundles(path: Path) -> Path:
     return path
 
 
+def _write_live_receipt_dir(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    world_state = {
+        "state_id": "live_state_branch",
+        "simulation_agenda": {
+            "jobs": [
+                {
+                    "job_id": "live_job_branch",
+                    "coverage_gap_score": 0.44,
+                    "economic_priority": 0.61,
+                    "trust_priority": 0.24,
+                    "readiness": 0.68,
+                    "data_collection_intent": "explore",
+                    "objective_preset": "balanced",
+                }
+            ]
+        },
+        "physics_context": {
+            "backend": "pybullet",
+            "fidelity_tier": "branch_balanced",
+            "metadata": {"benchmark_signals": {"ready": False}},
+        },
+        "synthetic_branch_plans": [
+            {
+                "plan_id": "live_plan_branch",
+                "source_job_id": "live_job_branch",
+                "generation_mode": "coverage_branch",
+                "expected_yield_score": 0.42,
+                "metadata": {
+                    "heuristic_generation_mode": "coverage_branch",
+                    "branch_helper_status": {"promotion_stage": "shadow_candidate"},
+                },
+            }
+        ],
+        "version": "sim_synth_physics_world_state_v1",
+    }
+    outcome = {
+        "receipt_id": "live_outcome_branch",
+        "job_id": "live_job_branch",
+        "branch_plan_id": "live_plan_branch",
+        "status": "completed",
+        "metadata": {
+            "realized_yield_score": 0.88,
+            "executed_generation_mode": "coverage_branch",
+        },
+        "version": "simulation_outcome_receipt_v1",
+    }
+    (path / "episode_sim_synth_world_state_v1.json").write_text(
+        json.dumps(world_state, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    (path / "episode_simulation_outcome_receipt_v1.json").write_text(
+        json.dumps(outcome, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return path
+
+
 def _write_dataset(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -215,3 +273,27 @@ def test_train_sim_synth_branch_planner_runner_emits_runtime_manifest(tmp_path: 
     )
     assert checkpoint_registry["checkpoints"][0]["model_family"] == "sim_synth_branch_planner"
     assert holder["payload"]["benchmark_gate_ready"] is False
+
+
+def test_train_sim_synth_branch_planner_harvests_receipt_dir(tmp_path: Path) -> None:
+    receipt_dir = _write_live_receipt_dir(tmp_path / "live_receipts")
+    output_dir = tmp_path / "harvest_results"
+    args = Namespace(
+        dataset=None,
+        receipt_path=None,
+        receipt_dir=[str(receipt_dir)],
+        epochs=2,
+        lr=1e-3,
+        hidden_dim=16,
+        save_dir=str(output_dir),
+        run_name="sim_synth_branch_planner_harvest",
+        seed=41,
+        skip_regal_runner=True,
+    )
+
+    result = _run_training(args, runner=None)
+    dataset_summary = json.loads(Path(result["dataset_summary"]).read_text(encoding="utf-8"))
+
+    assert dataset_summary["input_sources"]["receipt_source_kind"] == "harvested_runtime_receipts"
+    assert dataset_summary["input_sources"]["receipt_dirs"] == [str(receipt_dir)]
+    assert dataset_summary["input_sources"]["receipt_bundle_count"] == 1

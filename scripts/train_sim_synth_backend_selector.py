@@ -32,6 +32,7 @@ from src.world_model.sim_synth_physics.backend_selector import (
 )
 from src.world_model.sim_synth_physics.training_corpus import (
     build_backend_selector_rows_from_receipts,
+    harvest_sim_synth_receipt_bundles,
     load_sim_synth_receipt_bundles,
 )
 
@@ -62,6 +63,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=str,
         default=None,
         help="JSON or JSONL runtime receipt bundles exported from sim/synth/physics WM runs",
+    )
+    parser.add_argument(
+        "--receipt-dir",
+        action="append",
+        default=None,
+        help="Directory to auto-harvest live sim/synth runtime receipts from (may be repeated)",
     )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -100,19 +107,50 @@ def _load_rows(path: str | Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _build_dataset_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
+def _resolve_receipt_bundles(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if getattr(args, "receipt_path", None):
+        bundles = load_sim_synth_receipt_bundles(args.receipt_path)
+        return bundles, {
+            "receipt_path": getattr(args, "receipt_path", None),
+            "receipt_dirs": [],
+            "receipt_source_kind": "explicit_bundle",
+        }
+    receipt_dirs = [str(item) for item in list(getattr(args, "receipt_dir", []) or []) if str(item).strip()]
+    if not receipt_dirs and getattr(args, "dataset", None) is None:
+        receipt_dirs = [str(Path.cwd()), str(Path(getattr(args, "save_dir")).resolve())]
+    if not receipt_dirs:
+        return [], {
+            "receipt_path": None,
+            "receipt_dirs": [],
+            "receipt_source_kind": "none",
+        }
+    bundles = harvest_sim_synth_receipt_bundles(receipt_dirs)
+    return bundles, {
+        "receipt_path": None,
+        "receipt_dirs": receipt_dirs,
+        "receipt_source_kind": "harvested_runtime_receipts",
+    }
+
+
+def _build_dataset_rows(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    receipt_source = {
+        "receipt_path": None,
+        "receipt_dirs": [],
+        "receipt_source_kind": "none",
+        "receipt_bundle_count": 0,
+    }
     if getattr(args, "dataset", None):
         rows.extend(_load_rows(args.dataset))
-    if getattr(args, "receipt_path", None):
-        rows.extend(
-            build_backend_selector_rows_from_receipts(
-                load_sim_synth_receipt_bundles(args.receipt_path)
-            )
-        )
+    bundles, receipt_source = _resolve_receipt_bundles(args)
+    if bundles:
+        rows.extend(build_backend_selector_rows_from_receipts(bundles))
+        receipt_source["receipt_bundle_count"] = len(bundles)
     if not rows:
-        raise ValueError("No backend-selector training rows found; provide --dataset and/or --receipt-path")
-    return rows
+        raise ValueError(
+            "No backend-selector training rows found; provide --dataset, --receipt-path, or --receipt-dir"
+        )
+    return rows, receipt_source
 
 
 def _build_dataset_summary(
@@ -120,7 +158,7 @@ def _build_dataset_summary(
     dataset_path: Path,
     *,
     dataset_arg: Optional[str],
-    receipt_path: Optional[str],
+    receipt_source: Optional[Mapping[str, Any]],
 ) -> dict[str, Any]:
     backend_counts = Counter(
         str(row.get("target_backend", row.get("heuristic_backend", "other")) or "other")
@@ -171,7 +209,14 @@ def _build_dataset_summary(
         "runtime_receipt_rows": runtime_receipt_rows,
         "input_sources": {
             "dataset": dataset_arg,
-            "receipt_path": receipt_path,
+            "receipt_path": None if receipt_source is None else receipt_source.get("receipt_path"),
+            "receipt_dirs": [] if receipt_source is None else list(receipt_source.get("receipt_dirs", []) or []),
+            "receipt_source_kind": "none"
+            if receipt_source is None
+            else str(receipt_source.get("receipt_source_kind", "none")),
+            "receipt_bundle_count": 0
+            if receipt_source is None
+            else int(receipt_source.get("receipt_bundle_count", 0) or 0),
         },
         "benchmark_gate": {
             "name": "sim_synth_backend_selector_dataset_density",
@@ -325,7 +370,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         raise ImportError("PyTorch is required to train the backend selector")
     output_root = Path(args.save_dir)
     output_root.mkdir(parents=True, exist_ok=True)
-    rows = _build_dataset_rows(args)
+    rows, receipt_source = _build_dataset_rows(args)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -336,7 +381,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         rows,
         compiled_dataset_path,
         dataset_arg=getattr(args, "dataset", None),
-        receipt_path=getattr(args, "receipt_path", None),
+        receipt_source=receipt_source,
     )
     execution_preconditions = _build_execution_preconditions(dataset_summary)
     model_config = _build_model_config(args.hidden_dim)
