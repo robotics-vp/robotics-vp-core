@@ -2,6 +2,28 @@
 
 ## 2026-03-27
 
+- Changed: made the remaining Phase-1 runtime-root / policy gap more operational by teaching the WM to recognize OSS-shaped runtime layouts and policy banks:
+  - added `src/world_model/sim_synth_physics/runtime_layouts.py` plus `scripts/scan_phase1_runtime_layouts.py`
+  - Isaac/Unitree lanes now detect layout and policy posture for `IsaacLab`, `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, `xr_teleoperate`, and Unitree asset/policy roots instead of flattening everything into a generic runtime-target bit
+  - Holosoma lanes now detect repo, motion-bank, policy-bank, and retargeting-bundle posture as canonical backend metadata
+  - backend bindings, bridge receipts, runtime work orders, and host-capability scans now preserve `runtime_layout_contract`, `policy_contract`, ready profiles, and policy-readiness truth
+- Why this matters:
+  - the honest remainder is now narrowed from “some runtime roots are missing” to “which concrete repo/profile/policy surface is missing on this host”
+  - that is the right Phase-1 direction if we want the remaining blockers to become real roots/assets/policies/GPU instead of fuzzy adapter debt
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_runtime_work_orders.py`, and `git diff --check` passed.
+
+- Changed: turned those runtime-layout signals into WM-owned runtime bundles and launch specs instead of leaving them as discovery metadata only:
+  - added `src/world_model/sim_synth_physics/runtime_bundles.py`
+  - added `src/world_model/sim_synth_physics/runtime_launch.py` plus `scripts/run_phase1_runtime_launch.py`
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now emits `backend_runtime_bundle_v1` and `backend_launch_spec_v1` artifacts for Isaac/Unitree and Holosoma lanes whenever the WM materializes a runtime request
+  - runtime work orders now preserve those launch specs and append the preferred launch command to `command_hints`, so work orders point at an actual upstream-shaped bring-up path rather than only naming missing preconditions
+  - when roots, assets, and policies are ready but no in-process backend bridge exists yet, the runtime can now emit `runtime_launch_prepared` instead of pretending the only blocker is a missing local module
+  - the launch profiles are intentionally inspired by real OSS runtime shapes such as `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, `IsaacLab`, and Holosoma, while staying inside the WM’s typed-contract posture
+- Why this matters:
+  - the Phase-1 backend lane now owns not just “what is missing” but “what should be launched next when the host is ready”
+  - this is a material step toward the honest stopping condition the roadmap wants: concrete roots, assets, and policies become the blocker, not missing launch/bundle plumbing inside the repo
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_runtime_work_orders.py`, and `git diff --check` passed.
+
 - Changed: made the new backend bridge contract operational by emitting WM-owned backend runtime work orders:
   - `src/world_model/sim_synth_physics/runtime_work_orders.py` now compiles typed runtime bring-up work orders from the bridge receipt, runtime receipt, and robot-asset receipt
   - `src/world_model/sim_synth_physics/runtime.py` now writes `backend_runtime_work_orders.json` and threads work-order ids/statuses into loop summaries and training-feedback manifests

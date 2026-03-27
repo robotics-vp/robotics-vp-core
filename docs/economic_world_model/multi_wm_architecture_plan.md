@@ -1018,6 +1018,9 @@ Phase 1 should count as landed only when:
 - requested backend runtime intent is emitted as a typed runtime-request or concrete-runtime receipt, so Isaac/Holosoma paths can advance from request-binding to real evaluation or train-from-motion execution without reopening the WM boundary later
 - Unitree-target humanoid asset manifests are normalized into canonical required-asset contracts rather than treated as arbitrary manifest keys, so backend readiness reflects real robot-description, calibration, safety, and control-IO prerequisites
 - Isaac/Unitree/Holosoma runtime target manifests are emitted explicitly, so the WM can name which external runtime roots, SDKs, and asset trees are still missing on a host instead of flattening that state into one generic “backend unavailable” bit
+- Isaac/Unitree/Holosoma runtime layout contracts and policy-bank contracts are emitted explicitly, so the WM can distinguish “repo root exists”, “upstream runtime layout is actually present”, and “usable policy surface exists” instead of treating those as one missing-target class
+- backend runtime bundles and launch specs are emitted as WM-owned artifacts, so work orders can point at concrete upstream-shaped launch paths rather than only generic backlog commands
+- the backend runtime receipt can distinguish `runtime_launch_prepared` from truly missing runtime prerequisites, so “host is ready but local adapter is absent” remains an honest intermediate state instead of collapsing back into generic module-missing logic
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name
@@ -1031,6 +1034,7 @@ Named gaps that should remain explicit in this phase:
 
 - real Isaac Sim / Isaac Gym backend implementation with typed adapter ownership
 - Unitree-class humanoid sim-env integration behind a typed backend contract
+- concrete runtime launch/bundle execution behind the new WM-owned layout and launch-spec contracts
 - concrete Holosoma runtime execution and datapack/asset binding beyond the new runtime-request / optional train-or-eval receipt
 - concrete Isaac/Unitree robot assets, calibration sidecars, and simulator bindings behind the new adapter contracts
 - concrete GGDS/LDM execution at scale under the new WM-owned render-provider contracts
@@ -1050,6 +1054,7 @@ Use OSS as providers, not truth owners:
 Target posture for this phase:
 
 - real Isaac Sim / Isaac Gym / Unitree-class functionality should eventually sit behind the WM's typed backend adapters
+- the current runtime-layout and launch-spec posture is intentionally shaped around real OSS loops such as `IsaacLab`, `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, and Holosoma rather than inventing repo-local runtime conventions from scratch
 - explicit fallback to PyBullet is acceptable only while the repo is still missing those adapters or the target assets
 - the fallback posture should stay honest in receipts and benchmark reporting until the adapter gap is truly closed
 - literal stubs should be opt-in smoke aids only; the normal posture should be real-or-unavailable with honest planning-only fallback where GPU/weights are the real blocker

@@ -2,6 +2,28 @@
 
 ## 2026-03-27
 
+- Added OSS-shaped runtime-layout and policy contracts inside Phase 1:
+  - `src/world_model/sim_synth_physics/runtime_layouts.py` now scans for backend runtime layouts and policy banks rather than only generic root existence
+  - for Isaac/Unitree it recognizes `IsaacLab`, `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, `xr_teleoperate`, and Unitree asset/policy roots
+  - for Holosoma it recognizes repo, motion-bank, policy-bank, and retargeting-bundle posture
+  - those contracts now flow through backend bindings, runtime bridges, runtime work orders, and `src/orchestrator/loop_run_backlog.py`
+- Why this matters:
+  - the repo can now say which upstream-style runtime surface is actually present on a host
+  - that is more actionable than a flat “runtime target exists” bit and better aligned with the honest Phase-1 remainder around roots, assets, and policies
+
+- Added WM-owned backend runtime bundles and launch specs:
+  - `src/world_model/sim_synth_physics/runtime_bundles.py` now emits:
+    - `backend_runtime_bundle_v1`
+    - `backend_launch_spec_v1`
+  - `src/world_model/sim_synth_physics/runtime_launch.py` and `scripts/run_phase1_runtime_launch.py` now provide the launcher/preflight layer over those artifacts
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` writes those artifacts whenever it materializes an Isaac/Unitree or Holosoma runtime request
+  - the preferred launch command is derived from the discovered layout/profile/policy posture instead of being left as a human-only note
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now threads that launch command into work-order `command_hints`
+  - if the external host is otherwise ready but there is still no in-process backend adapter, the WM now emits `runtime_launch_prepared` as an honest intermediate status
+- Why this matters:
+  - the Phase-1 runtime lane now has a canonical “what to launch next” artifact
+  - this is exactly the kind of mechanics-first, scalable runtime plumbing the roadmap wants before claiming the honest remainder is external runtime/GPU/asset access
+
 - Added explicit backend runtime work orders on top of the new bridge contract:
   - `src/world_model/sim_synth_physics/runtime_work_orders.py` now emits typed work orders for the Isaac/Unitree and Holosoma runtime lanes
   - those work orders preserve:
