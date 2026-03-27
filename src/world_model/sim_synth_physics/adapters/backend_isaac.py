@@ -14,6 +14,7 @@ from ..asset_manifest import (
     recommended_assets_for_hardware_class,
 )
 from ..common import mapping
+from ..runtime_targets import describe_isaac_runtime_targets
 
 
 def _has_module(name: str) -> bool:
@@ -44,6 +45,7 @@ def build_isaac_backend_binding(
     required_assets, available_assets, missing_assets = _asset_lists(embodiment_context)
     manifest = extract_robot_asset_manifest(embodiment_context)
     normalized_manifest = normalize_robot_asset_manifest(embodiment_context)
+    runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
     adapter_ready = (
         shadow_backend_available
         or isaaclab_backend_available
@@ -100,6 +102,7 @@ def build_isaac_backend_binding(
             "recommended_asset_contracts": recommended_assets_for_hardware_class(
                 "unitree_g1_r1_class"
             ),
+            "runtime_target_contract": runtime_target_contract,
             "normalized_asset_manifest": normalized_manifest,
             "raw_asset_manifest": manifest,
             "embodiment_context": mapping(embodiment_context),

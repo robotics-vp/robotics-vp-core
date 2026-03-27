@@ -8,6 +8,7 @@ from typing import Any, Dict, Mapping
 from src.motor_backend.holosoma_backend import HOLOSOMA_TASK_MAP
 
 from ..common import mapping
+from ..runtime_targets import describe_holosoma_runtime_targets
 
 
 def _has_module(name: str) -> bool:
@@ -41,6 +42,7 @@ def build_holosoma_backend_binding(
         or embodiment_context.get("whole_body_retargeting")
     )
     reward_overlay = mapping(embodiment_context.get("whole_body_reward_overlay"))
+    runtime_target_contract = describe_holosoma_runtime_targets(embodiment_context)
     required_assets = [
         "humanoid_embodiment_context",
         "motion_source_bundle",
@@ -93,6 +95,7 @@ def build_holosoma_backend_binding(
             "motion_source_count": len(motion_sources) + len(motion_clips),
             "retargeting_contract_present": bool(retargeting_contract),
             "reward_overlay_present": bool(reward_overlay),
+            "runtime_target_contract": runtime_target_contract,
             "embodiment_context": mapping(embodiment_context),
         },
     }

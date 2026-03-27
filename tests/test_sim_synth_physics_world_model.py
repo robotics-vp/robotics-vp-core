@@ -188,6 +188,10 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
     assert world_state.backend_execution_binding.binding_status == "runtime_ready"
     assert world_state.physics_context.metadata["backend_adapter"]["supports_execution"] is True
     assert (
+        world_state.backend_execution_binding.metadata["runtime_target_contract"]["backend"]
+        == "isaac"
+    )
+    assert (
         world_state.backend_execution_binding.metadata["normalized_asset_manifest"]["unitree_robot_description"][
             "present"
         ]
@@ -224,6 +228,24 @@ def test_world_state_normalizes_unitree_asset_aliases_into_robot_contract() -> N
             "matched_aliases"
         ]
         == ["unitree_urdf"]
+    )
+
+
+def test_holosoma_binding_records_runtime_target_contract() -> None:
+    world_state = compile_sim_synth_physics_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedHolosomaBackendSelector(),
+        embodiment_context={
+            "active_embodiments": ["unitree_g1"],
+            "holosoma_root": "/tmp/holosoma_repo",
+            "motion_clip_datapacks": ["dp_motion_1"],
+        },
+    )
+
+    assert world_state.backend_execution_binding is not None
+    assert (
+        world_state.backend_execution_binding.metadata["runtime_target_contract"]["backend"]
+        == "holosoma"
     )
 
 

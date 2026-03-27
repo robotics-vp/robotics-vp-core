@@ -1,0 +1,241 @@
+{
+  "schema_version": "v1",
+  "description": "Non-training GPU run backlog for concrete runtime/materialization bring-up across the lower WMs.",
+  "goal": "Use GPU windows to prove real runtime/materialization paths and burn down non-training bring-up debt before or alongside weekly training cycles.",
+  "created_at": "2026-03-27",
+  "updated_at": "2026-03-27",
+  "backlog": [
+    {
+      "loop_run_id": "isaac_unitree_runtime_smoke",
+      "title": "Run the Isaac/Unitree local smoke with real runtime roots",
+      "command": "python3 scripts/local_isaac_smoke.py --tasks peg_in_hole --episodes 1 --max-steps 25 --out-dir artifacts/isaac_smoke_gpu",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "isaaclab_backend_module_available": true,
+        "unitree_sdk2_root_ready": true,
+        "unitree_asset_root_ready": true
+      },
+      "required_python_modules": [
+        "torch"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_env_path_vars": [
+        "ISAACLAB_ROOT",
+        "UNITREE_SDK2_ROOT",
+        "UNITREE_ASSET_ROOT"
+      ],
+      "required_internal_data": [
+        "Canonical Unitree asset and calibration manifests wired into the sim/synth WM"
+      ],
+      "required_external_data": [
+        "Isaac Lab runtime checkout",
+        "Unitree SDK2 checkout",
+        "Unitree robot asset root"
+      ],
+      "notes": "Run-only smoke. This is the concrete Phase-1 backend-runtime target for the Isaac/Unitree lane."
+    },
+    {
+      "loop_run_id": "holosoma_runtime_eval_smoke",
+      "title": "Run the Holosoma runtime evaluation smoke on an existing policy",
+      "command": "python3 scripts/local_holosoma_smoke.py --task-id humanoid_wbt_g1 --policy-id ${HOLOSOMA_POLICY_PATH} --episodes 1 --out-dir artifacts/holosoma_smoke_gpu",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "holosoma_available": true,
+        "holosoma_policy_root_ready": true
+      },
+      "required_python_modules": [
+        "torch"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_env_path_vars": [
+        "HOLOSOMA_POLICY_PATH"
+      ],
+      "required_internal_data": [
+        "Unitree-target embodiment context and reward/retargeting contract"
+      ],
+      "required_external_data": [
+        "Installed Holosoma runtime",
+        "Existing Holosoma policy checkpoint"
+      ],
+      "notes": "Run-only smoke. This keeps the Holosoma lane honest as a concrete eval path independent of training."
+    },
+    {
+      "loop_run_id": "stage1_video_diffusion_materialization",
+      "title": "Bring up real Stage-1 governed video diffusion materialization",
+      "command": "python3 scripts/run_stage1_pipeline.py --num-videos 1 --proposals-per-video 1 --output-dir artifacts/stage1_video_diffusion_real --diffusion-backend-policy real --diffusion-model-ref ${VIDEO_DIFFUSION_MODEL_NAME}",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "diffusers_available": true,
+        "video_diffusion_model_ref_present": true
+      },
+      "required_python_modules": [
+        "torch",
+        "diffusers"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_env_vars": [
+        "VIDEO_DIFFUSION_MODEL_NAME"
+      ],
+      "required_internal_data": [
+        "Stage-1 manifest or local video references",
+        "Governed video-state sidecar path"
+      ],
+      "required_external_data": [
+        "Local or cached video-diffusion checkpoint"
+      ],
+      "notes": "Materialization only. This is intentionally separate from any later diffusion fine-tuning lane."
+    },
+    {
+      "loop_run_id": "openvla_teacher_runtime_bringup",
+      "title": "Bring up the real OpenVLA teacher runtime",
+      "command": "python3 scripts/smoke_test_openvla_controller.py",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "transformers_available": true,
+        "openvla_model_ref_present": true,
+        "openvla_model_path_ready": true
+      },
+      "required_python_modules": [
+        "torch",
+        "transformers"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_env_vars": [
+        "OPENVLA_MODEL_NAME"
+      ],
+      "required_internal_data": [
+        "Teacher-runtime contract consumers in replay and runtime learning"
+      ],
+      "required_external_data": [
+        "Downloaded OpenVLA model snapshot"
+      ],
+      "notes": "Run-only teacher-provider bring-up. Keeps the external-provider truth posture honest."
+    },
+    {
+      "loop_run_id": "vision_backbone_runtime_bringup",
+      "title": "Bring up the real non-stub vision backbone runtime",
+      "command": "python3 scripts/smoke_test_vision_backbone.py",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "transformers_available": true
+      },
+      "required_python_modules": [
+        "torch",
+        "transformers"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_internal_data": [
+        "Real frame or replay capture path for perception runtime consumers"
+      ],
+      "required_external_data": [
+        "DINOv2, SigLIP, or MetaDINO weights"
+      ],
+      "notes": "Run-only non-stub runtime bring-up for the future perception WM."
+    },
+    {
+      "loop_run_id": "vjepa2_sim_synth_predictor_runtime",
+      "title": "Bring up V-JEPA 2 runtime for sim/synth predictive state",
+      "command": "python3 scripts/smoke_test_vjepa2_runtime.py --wm phase1_sim_synth_physics --backend-policy real --model-ref ${VJEPA2_MODEL_NAME}",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "torch_available": true,
+        "imageio_available": true
+      },
+      "required_python_modules": [
+        "torch",
+        "imageio"
+      ],
+      "required_commands": [
+        "python3",
+        "git"
+      ],
+      "required_paths": [
+        "third_party/vjepa2",
+        "scripts/smoke_test_vjepa2_runtime.py"
+      ],
+      "required_env_vars": [
+        "VJEPA2_MODEL_NAME"
+      ],
+      "required_internal_data": [
+        "Governed video windows and branch context exported from the sim/synth WM"
+      ],
+      "required_external_data": [
+        "Cloned upstream V-JEPA 2 runtime",
+        "Downloaded or cached V-JEPA 2 checkpoint"
+      ],
+      "notes": "Run-only predictive-state bring-up before any later fine-tuning."
+    },
+    {
+      "loop_run_id": "workcell_real_sam3d_grounding_loop",
+      "title": "Run the full workcell semantic loop with real SAM3D grounding",
+      "command": "python3 scripts/bootstrap_semantic_workcell_loop.py --output-root artifacts/semantic_grounding/workcell_loop_real_sam3d --episodes 2 --steps 5 --max-frames 5 --seed 24 --backend-policy real",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "opencv_available": true,
+        "sam3d_objects_repo_available": true,
+        "sam3d_body_repo_available": true,
+        "sam3d_objects_checkpoint_available": true,
+        "sam3d_body_checkpoint_available": true
+      },
+      "required_python_modules": [
+        "torch",
+        "cv2"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_paths": [
+        "scripts/bootstrap_semantic_workcell_loop.py",
+        "third_party/sam3d_objects",
+        "third_party/sam3d_body",
+        "checkpoints/sam3d_objects/checkpoint.pth",
+        "checkpoints/sam3d_body/checkpoint.pth"
+      ],
+      "required_internal_data": [
+        "Local workcell assets and semantic runtime capture"
+      ],
+      "required_external_data": [
+        "SAM3D objects/body repos and checkpoints"
+      ],
+      "notes": "Run-only grounded-data refresh. This remains the main non-training GPU blocker for benchmark-grade grounding."
+    }
+  ]
+}

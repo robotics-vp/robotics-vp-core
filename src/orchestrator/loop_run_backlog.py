@@ -32,7 +32,15 @@ def collect_host_capabilities() -> Dict[str, Any]:
     def has_module(name: str) -> bool:
         return importlib.util.find_spec(name) is not None
 
+    def env_path_ready(*keys: str) -> bool:
+        for key in keys:
+            value = os.environ.get(key, "")
+            if value and Path(value).exists():
+                return True
+        return False
+
     openvla_model_ref = os.environ.get("OPENVLA_MODEL_NAME") or os.environ.get("OPENVLA_MODEL") or ""
+    video_diffusion_model_ref = os.environ.get("VIDEO_DIFFUSION_MODEL_NAME") or ""
     openvla_model_path_ready = bool(openvla_model_ref and Path(openvla_model_ref).exists())
     return {
         **collect_grounded_data_host_capabilities(repo_root=REPO_ROOT),
@@ -40,9 +48,31 @@ def collect_host_capabilities() -> Dict[str, Any]:
         "mujoco_available": has_module("mujoco"),
         "transformers_available": has_module("transformers"),
         "timm_available": has_module("timm"),
+        "diffusers_available": has_module("diffusers"),
         "imageio_available": has_module("imageio"),
+        "isaacsim_available": has_module("isaacsim") or has_module("omni.isaac.kit"),
+        "isaacgym_available": has_module("isaacgym"),
+        "isaaclab_backend_module_available": has_module("src.motor_backend.workcell_isaaclab_backend"),
+        "holosoma_available": has_module("holosoma"),
         "openvla_model_ref_present": bool(openvla_model_ref),
         "openvla_model_path_ready": openvla_model_path_ready,
+        "video_diffusion_model_ref_present": bool(video_diffusion_model_ref),
+        "video_diffusion_model_path_ready": bool(
+            video_diffusion_model_ref and Path(video_diffusion_model_ref).exists()
+        ),
+        "isaaclab_root_ready": env_path_ready("ISAACLAB_ROOT", "ISAAC_LAB_ROOT"),
+        "isaacsim_root_ready": env_path_ready("ISAACSIM_ROOT", "ISAAC_SIM_ROOT", "OMNI_ISAAC_ROOT"),
+        "unitree_sdk2_root_ready": env_path_ready("UNITREE_SDK2_ROOT", "UNITREE_SDK_ROOT"),
+        "unitree_asset_root_ready": env_path_ready(
+            "UNITREE_ASSET_ROOT",
+            "UNITREE_ASSETS_ROOT",
+            "UNITREE_URDF_ROOT",
+        ),
+        "unitree_rl_gym_root_ready": env_path_ready("UNITREE_RL_GYM_ROOT"),
+        "humanoidverse_root_ready": env_path_ready("HUMANOIDVERSE_ROOT"),
+        "holosoma_root_ready": env_path_ready("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
+        "holosoma_motion_root_ready": env_path_ready("HOLOSOMA_MOTION_ROOT"),
+        "holosoma_policy_root_ready": env_path_ready("HOLOSOMA_POLICY_ROOT"),
         "droid_dataset_present": bool(
             (os.environ.get("DROID_DATASET_ROOT") and Path(os.environ["DROID_DATASET_ROOT"]).exists())
             or (REPO_ROOT / "data" / "external" / "droid").exists()

@@ -18,6 +18,7 @@ from .asset_manifest import extract_robot_asset_manifest, normalize_robot_asset_
 from .common import mapping, safe_float
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import BackendExecutionBindingReceipt, BackendRuntimeExecutionReceipt
+from .runtime_targets import describe_holosoma_runtime_targets, describe_isaac_runtime_targets
 from .state import SimSynthPhysicsWorldState
 
 
@@ -282,6 +283,7 @@ def _materialize_holosoma_binding(
         embodiment_context.get("retargeting_contract")
         or embodiment_context.get("whole_body_retargeting")
     )
+    runtime_target_contract = describe_holosoma_runtime_targets(embodiment_context)
     payload = {
         "version": "holosoma_datapack_binding_v1",
         "task_id": task_id,
@@ -295,6 +297,7 @@ def _materialize_holosoma_binding(
         "retargeting_contract": retargeting_contract,
         "motion_source_contract_present": bool(datapack_entries or motion_clips or motion_clip_paths),
         "retargeting_contract_present": bool(retargeting_contract),
+        "runtime_target_contract": runtime_target_contract,
     }
     refs: list[str] = []
     if output_root is not None:
@@ -371,6 +374,7 @@ def _materialize_isaac_binding(
     semantic_context = _mapping(world_state.input_context.get("semantic"))
     contract = world_state.robot_asset_contract
     robot_asset_manifest = extract_robot_asset_manifest(embodiment_context)
+    runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
     payload = {
         "version": "isaaclab_backend_config_v1",
         "task_id": task_id,
@@ -387,6 +391,7 @@ def _materialize_isaac_binding(
         "action_contracts": [] if contract is None else list(contract.action_contracts),
         "robot_asset_manifest": robot_asset_manifest,
         "normalized_robot_asset_manifest": normalize_robot_asset_manifest(embodiment_context),
+        "runtime_target_contract": runtime_target_contract,
     }
     refs: list[str] = []
     if output_root is not None:
@@ -402,6 +407,19 @@ def _runtime_supports_execution(backend: str) -> bool:
     if backend == "isaac":
         return _has_module("src.motor_backend.workcell_isaaclab_backend")
     return False
+
+
+def _write_runtime_target_manifest(
+    *,
+    output_root: Optional[Path],
+    backend: str,
+    runtime_target_contract: Mapping[str, Any],
+) -> list[str]:
+    if output_root is None:
+        return []
+    path = output_root / f"{backend}_runtime_target_manifest.json"
+    _write_json(path, runtime_target_contract)
+    return [str(path.resolve())]
 
 
 def _runtime_status_is_concrete(status: str) -> bool:
@@ -457,6 +475,14 @@ def materialize_backend_runtime_execution(
             task_id=task_id,
         )
     artifact_refs.extend(binding_refs)
+    runtime_target_contract = _mapping(binding_payload.get("runtime_target_contract"))
+    artifact_refs.extend(
+        _write_runtime_target_manifest(
+            output_root=output_root,
+            backend=backend,
+            runtime_target_contract=runtime_target_contract,
+        )
+    )
 
     store, econ_meter = _build_store_and_meter(
         world_state=world_state,
@@ -510,6 +536,7 @@ def materialize_backend_runtime_execution(
                 "scenario_id": scenario_id,
                 "runtime_request": runtime_request,
                 "binding_payload": binding_payload,
+                "runtime_target_contract": runtime_target_contract,
                 "missing_preconditions": missing_preconditions,
             },
         )
@@ -583,6 +610,7 @@ def materialize_backend_runtime_execution(
                 "scenario_id": scenario_id,
                 "runtime_request": runtime_request,
                 "binding_payload": binding_payload,
+                "runtime_target_contract": runtime_target_contract,
                 "error": str(exc),
             },
         )
@@ -618,6 +646,7 @@ def materialize_backend_runtime_execution(
             "scenario_id": scenario_id,
             "runtime_request": runtime_request,
             "binding_payload": binding_payload,
+            "runtime_target_contract": runtime_target_contract,
             "datapack_ids": list(datapack_ids),
             "datapack_config_ids": [cfg.id for cfg in datapack_configs],
             "raw_metrics": raw_metrics,
