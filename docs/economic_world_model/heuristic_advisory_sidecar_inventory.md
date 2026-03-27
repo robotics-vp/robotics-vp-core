@@ -28,6 +28,7 @@ Ranking dimensions:
 | 8 | `train_meta_transformer_synthetic.py` + meta-transformer runtime package/promotion path | `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 8a | D4 knob model / homeostatic planner knob calibration | `stub` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 8b | `SemanticOrchestratorV2` shell policy / activation helper | `heuristic` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
+| 8c | `PipelineManager` stage-activation shell policy | `heuristic` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `sidecar` / `fallback` | Medium-high | Medium-high | No | **Wired now** |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 
@@ -604,6 +605,52 @@ Ranking dimensions:
   - `benchmark-gated`
   - `neuralized later`
 
+### 8c. `PipelineManager` stage-activation shell policy
+
+- surface: higher-order pipeline stage activation, stage prioritization, and next-iteration config flagging above the already-real shell/meta/orchestration helpers
+- file/path: `src/orchestrator/pipeline_manager.py`, `src/orchestrator/pipeline_stage_policy.py`, `src/orchestrator/pipeline_stage_policy_training.py`, `src/orchestrator/pipeline_stage_policy_runtime.py`, `scripts/train_pipeline_stage_policy.py`
+- category: `heuristic` / `lightweight_trainer_gap`
+- current behavior:
+  - `PipelineManager.build_iteration_activation_plan()` no longer emits an unstructured all-stages-equal shell plan
+  - `src/orchestrator/pipeline_stage_policy.py` now defines:
+    - an explicit feature contract over iteration history, stage outcomes, progress trends, execution-precondition truth, shell activation readiness, and objective preset state
+    - explicit heuristic priors for:
+      - per-stage activation priority distribution
+      - config-flag scores (`increase_safety_weight`, `increase_data_collection`, `repair_execution_preconditions`)
+  - `src/orchestrator/pipeline_stage_policy_training.py` now trains a bounded helper over real `PipelineManager` state receipts:
+    - stage-priority distribution
+    - config-flag scores
+    - activation label
+  - `scripts/train_pipeline_stage_policy.py` now emits:
+    - training dataset and summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `pipeline_stage_policy_package.json`
+    - canonical runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - `src/orchestrator/pipeline_stage_policy_runtime.py` now loads the helper with `disabled|auto|required` semantics and applies bounded stage/config blending
+  - `src/orchestrator/pipeline_manager.py` now:
+    - preserves `policy_source`, `promotion_stage`, and `stage_policy_trace`
+    - reorders activated stages by bounded learned priority instead of fixed enum order
+    - lets the bounded helper materially affect next-iteration config suggestions while keeping shell activation hard-gated by execution readiness
+- current consumers:
+  - `src/orchestrator/pipeline_manager.py`
+  - `scripts/preview_pipeline_stages.py`
+  - any future control-plane/export path that consumes pipeline previews or advisory reports
+  - `scripts/train_pipeline_stage_policy.py`
+- why it is a production problem:
+  - before this pass, the repo already had learned selector, sequence, meta-transformer, knob, and semantic shell helper lanes, but `PipelineManager` still hard-coded stage order and config nudges above them
+  - that made the top-level pipeline shell look more neuralized than it actually was and blocked later learning on why the manager prioritized one stage or config repair action over another
+- recommended disposition:
+  - keep shell activation and execution preconditions as the hard gate
+  - keep the heuristic stage-policy prior explicit and auditable
+  - use the learned helper only as a bounded stage-priority/config-adjustment layer until denser runtime receipts exist
+  - move the next neuralization tranche to queue/curriculum weighting, which is now the main remaining live control-plane heuristic core
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
+  - `neuralized later`
+
 ### 9. Teacher-runtime / rollout-labeler semantic sidecars
 
 - surface: external teacher contracts/envelopes and rollout labeler sidecars
@@ -666,8 +713,7 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Neuralize the remaining stage-activation shell in `src/orchestrator/pipeline_manager.py` and adjacent pipeline control paths; `SemanticOrchestratorV2` now has a bounded helper lane, but `PipelineManager` still makes mostly deterministic stage/meta activation decisions above it.
-2. Replace the remaining heuristic queue/curriculum weighting core in `src/orchestrator/queue_selection.py`, `src/rl/episode_sampling.py`, and adjacent replay-priority logic with a bounded learned helper trained on real queue outcome receipts.
-3. Refresh the grounded-data / perception truth lane on a real GPU + SAM3D host; until that happens, workcell/bootstrap grounding remains honest but still unpromotable, and several vision-side promotion paths remain blocked by environment rather than repo wiring.
-4. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.
-5. Close the remaining data-limited trainer-parity gaps called out in `docs/economic_world_model/full_stack_training_backlog.md`, especially semantic runtime scorer density, semantic feedback adapter density, shadow pricing / offline replay density, and the perception/VLA real-data lanes.
+1. Replace the remaining heuristic queue/curriculum weighting core in `src/orchestrator/queue_selection.py`, `src/rl/episode_sampling.py`, and adjacent replay-priority logic with a bounded learned helper trained on real queue outcome receipts.
+2. Refresh the grounded-data / perception truth lane on a real GPU + SAM3D host; until that happens, workcell/bootstrap grounding remains honest but still unpromotable, and several vision-side promotion paths remain blocked by environment rather than repo wiring.
+3. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.
+4. Close the remaining data-limited trainer-parity gaps called out in `docs/economic_world_model/full_stack_training_backlog.md`, especially semantic runtime scorer density, semantic feedback adapter density, shadow pricing / offline replay density, and the perception/VLA real-data lanes.

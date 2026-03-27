@@ -82,15 +82,14 @@
       "id": "semantic_orchestrator_shell_policy",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - SemanticOrchestratorV2 now loads a real bounded shell-policy helper package trained on semantic snapshot plus orchestrator-advisory receipts, blends learned preset/strategy/safety/activation outputs against the explicit heuristic prior with disabled|auto|required semantics, and preserves policy-source/promotion/helper-trace receipts in runtime metadata."
+    },
+    {
+      "id": "pipeline_manager_stage_activation_policy",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - PipelineManager now loads a real bounded stage-policy helper package trained on pipeline-state receipts, preserves explicit stage-policy traces, reorders activated stages by bounded learned priority, and lets the helper influence next-iteration config suggestions while keeping shell activation hard-gated by execution readiness."
     }
   ],
   "backlog": [
-    {
-      "id": "pipeline_manager_stage_activation_policy",
-      "priority": "P1",
-      "blocked_by": "runtime stage-activation receipts and denser promoted orchestration/meta traces",
-      "notes": "SemanticOrchestratorV2 now has a bounded helper lane, but PipelineManager still makes mostly deterministic stage-activation and pipeline-shell decisions above the now-real selector, sequence, meta-transformer, and knob helpers."
-    },
     {
       "id": "queue_curriculum_selection_policy",
       "priority": "P1",
@@ -102,6 +101,12 @@
       "priority": "P1",
       "blocked_by": "GPU host with SAM3D checkpoints and real workcell refresh runs",
       "notes": "Grounded-data honesty is fixed, but benchmark-grade workcell/vision promotion still cannot happen until SceneTracks/SAM3D runs produce real grounded data rather than passthrough fallback outputs."
+    },
+    {
+      "id": "gen2sim_receipt_density_for_promotion",
+      "priority": "P2",
+      "blocked_by": "real runtime synth receipts and downstream datapack outcome labels",
+      "notes": "The gen2sim validity helper is wired and benchmark-gated, but it still needs empirical receipt density before it can promote beyond shadow_candidate and stop leaning on distilled explicit assessments."
     }
   ]
 }

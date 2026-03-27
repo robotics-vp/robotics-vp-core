@@ -28,6 +28,16 @@ from src.orchestrator.shell_activation import (
     evaluate_shell_activation_backlog,
     get_shell_activation_assessment,
 )
+from src.orchestrator.pipeline_stage_policy import (
+    PIPELINE_CONFIG_FLAG_KEYS,
+    PIPELINE_STAGE_LABELS,
+    build_pipeline_stage_feature_map,
+    heuristic_config_flag_scores,
+    heuristic_stage_priority_distribution,
+)
+from src.orchestrator.pipeline_stage_policy_runtime import (
+    resolve_pipeline_stage_policy_helper,
+)
 from src.orchestrator.semantic_orchestrator import SemanticOrchestrator
 from src.orchestrator.semantic_metrics import load_semantic_metrics
 from enum import Enum
@@ -283,6 +293,7 @@ class PipelineManager:
 
     # Advisory recommendations
     global_recommendations: List[str] = field(default_factory=list)
+    _stage_policy_helper: Any = field(default=None, init=False, repr=False, compare=False)
 
     def start_new_iteration(self, config: Optional[Dict[str, Any]] = None) -> PipelineIteration:
         """Start a new pipeline iteration."""
@@ -355,6 +366,20 @@ class PipelineManager:
                 last_results["recommendations"].extend(result.recommendations)
         return last_results
 
+    def _resolve_stage_policy_helper(self):
+        helper_mode = str(self.config.get("pipeline_stage_policy_helper_mode", "disabled") or "disabled")
+        if helper_mode == "disabled":
+            self._stage_policy_helper = None
+            return None
+        if self._stage_policy_helper is not None:
+            return self._stage_policy_helper
+        self._stage_policy_helper = resolve_pipeline_stage_policy_helper(
+            helper_mode=helper_mode,
+            package=self.config.get("pipeline_stage_policy_package"),
+            package_path=self.config.get("pipeline_stage_policy_package_path"),
+        )
+        return self._stage_policy_helper
+
     def build_iteration_activation_plan(self) -> Dict[str, Any]:
         """Build a bounded stage-activation plan when shell readiness is satisfied."""
 
@@ -373,33 +398,103 @@ class PipelineManager:
             "pipeline_manager_training_run_executor",
         )
         last_results = self._last_iteration_summary()
-        suggested_config = self.config.copy()
-        if last_results.get("summary_metrics", {}).get("error_rate", 0) > 0.1:
-            suggested_config["increase_safety_weight"] = True
-        if last_results.get("summary_metrics", {}).get("mpl_delta", 0) < 1.0:
-            suggested_config["increase_data_collection"] = True
-        if execution_summary and int(execution_summary.get("blocked_count", 0) or 0) > 0:
-            suggested_config["repair_execution_preconditions"] = True
+        progress = self.get_progress_metrics()
+        heuristic_flag_scores = {
+            "increase_safety_weight": 1.0
+            if last_results.get("summary_metrics", {}).get("error_rate", 0) > 0.1
+            else 0.0,
+            "increase_data_collection": 1.0
+            if last_results.get("summary_metrics", {}).get("mpl_delta", 0) < 1.0
+            else 0.0,
+            "repair_execution_preconditions": 1.0
+            if execution_summary and int(execution_summary.get("blocked_count", 0) or 0) > 0
+            else 0.0,
+        }
+        feature_map = build_pipeline_stage_feature_map(
+            config=self.config,
+            iterations=self.iterations,
+            progress=progress,
+            execution_summary=execution_summary,
+            shell_activation=shell_activation,
+            last_results=last_results,
+            suggested_config=heuristic_flag_scores,
+        )
+        heuristic_flag_scores = heuristic_config_flag_scores(feature_map)
+        heuristic_stage_distribution = heuristic_stage_priority_distribution(feature_map)
 
         execution_mode = "advisory"
         activation_work_order = None
         stage_activation_plan: Dict[str, Any] = {}
+        helper_mode = str(self.config.get("pipeline_stage_policy_helper_mode", "disabled") or "disabled")
+        policy_source = "heuristic_fallback"
+        promotion_stage = "heuristic_fallback"
+        stage_policy_trace: Dict[str, Any] = {
+            "feature_map": dict(feature_map),
+            "prior_stage_distribution": dict(heuristic_stage_distribution),
+            "final_stage_distribution": dict(heuristic_stage_distribution),
+            "prior_config_flags": dict(heuristic_flag_scores),
+            "final_config_flags": dict(heuristic_flag_scores),
+            "helper_mode": helper_mode,
+            "helper_trace": {},
+        }
+        if helper_mode != "disabled":
+            helper = self._resolve_stage_policy_helper()
+            if helper is not None:
+                helper_policy = helper.apply_to_policy(
+                    feature_map=feature_map,
+                    heuristic_policy={
+                        "stage_distribution": heuristic_stage_distribution,
+                        "config_flag_scores": heuristic_flag_scores,
+                        "activation_label": 0.0 if activation is None or activation.get("state") != "activated" else 1.0,
+                    },
+                    helper_mode=helper_mode,
+                )
+                heuristic_stage_distribution = dict(helper_policy.get("stage_distribution", {}) or heuristic_stage_distribution)
+                heuristic_flag_scores = dict(helper_policy.get("config_flag_scores", {}) or heuristic_flag_scores)
+                policy_source = str(helper_policy.get("policy_source", "heuristic_fallback") or "heuristic_fallback")
+                promotion_stage = str(helper_policy.get("promotion_stage", "heuristic_fallback") or "heuristic_fallback")
+                stage_policy_trace.update(
+                    {
+                        "final_stage_distribution": dict(heuristic_stage_distribution),
+                        "final_config_flags": dict(heuristic_flag_scores),
+                        "helper_trace": dict(helper_policy.get("helper_trace", {}) or {}),
+                    }
+                )
+        suggested_config = self.config.copy()
+        for key in PIPELINE_CONFIG_FLAG_KEYS:
+            if float(heuristic_flag_scores.get(key, 0.0) or 0.0) >= 0.55:
+                suggested_config[key] = True
         if activation and activation.get("state") == "activated":
             execution_mode = str(activation.get("target_mode", "preconditioned_iteration"))
+            ranked_stage_labels = [
+                label
+                for label, _ in sorted(
+                    heuristic_stage_distribution.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )
+                if label in PIPELINE_STAGE_LABELS
+            ]
             stage_activation_plan = {
                 "activation_id": activation.get("activation_id"),
                 "mode": execution_mode,
-                "stages": [
-                    {
-                        "stage": stage.value,
-                        "decision": "activate_stage",
-                        "config": dict(suggested_config),
-                    }
-                    for stage in PipelineStage
-                ],
+                "policy_source": policy_source,
+                "promotion_stage": promotion_stage,
+                "stages": [],
                 "repair_hints": list(activation.get("pending_requirements", []) or []),
                 "future_training_backlog": list(shell_activation.get("future_training", [])),
             }
+            for rank, stage_label in enumerate(ranked_stage_labels, start=1):
+                stage_activation_plan["stages"].append(
+                    {
+                        "stage": stage_label,
+                        "decision": "activate_stage",
+                        "priority_score": float(heuristic_stage_distribution.get(stage_label, 0.0)),
+                        "priority_rank": rank,
+                        "config": dict(suggested_config),
+                        "policy_source": policy_source,
+                    }
+                )
             activation_work_order = build_execution_work_order(
                 order_type="shell_activation",
                 subject_id=self.pipeline_id,
@@ -413,6 +508,8 @@ class PipelineManager:
                     "activation_id": activation.get("activation_id"),
                     "pipeline_id": self.pipeline_id,
                     "future_training_backlog_count": len(shell_activation.get("future_training", [])),
+                    "policy_source": policy_source,
+                    "promotion_stage": promotion_stage,
                 },
             ).to_dict()
 
@@ -423,6 +520,9 @@ class PipelineManager:
             "stage_activation_plan": stage_activation_plan,
             "activation_work_order": activation_work_order,
             "future_training_ready": bool(future_training and future_training.get("state") == "activation_ready"),
+            "policy_source": policy_source,
+            "promotion_stage": promotion_stage,
+            "stage_policy_trace": stage_policy_trace,
         }
 
     def generate_advisory_report(self) -> Dict[str, Any]:
@@ -445,6 +545,9 @@ class PipelineManager:
             "shell_activation": activation_plan.get("shell_activation", {}),
             "stage_activation_plan": activation_plan.get("stage_activation_plan", {}),
             "activation_work_order": activation_plan.get("activation_work_order"),
+            "policy_source": activation_plan.get("policy_source", "heuristic_fallback"),
+            "promotion_stage": activation_plan.get("promotion_stage", "heuristic_fallback"),
+            "stage_policy_trace": activation_plan.get("stage_policy_trace", {}),
         }
 
         # Aggregate stage-specific insights
@@ -539,6 +642,9 @@ class PipelineManager:
             "shell_activation": activation_plan.get("shell_activation", {}),
             "stage_activation_plan": activation_plan.get("stage_activation_plan", {}),
             "activation_work_order": activation_plan.get("activation_work_order"),
+            "policy_source": activation_plan.get("policy_source", "heuristic_fallback"),
+            "promotion_stage": activation_plan.get("promotion_stage", "heuristic_fallback"),
+            "stage_policy_trace": activation_plan.get("stage_policy_trace", {}),
         }
 
     def to_dict(self) -> Dict[str, Any]:

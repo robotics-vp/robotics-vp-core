@@ -2,6 +2,36 @@
 
 ## 2026-03-26
 
+- `PipelineManager` no longer strands stage activation above the learned-helper contract:
+  - `src/orchestrator/pipeline_stage_policy.py` now defines the explicit feature contract over:
+    - iteration history
+    - per-stage outcome history
+    - progress trends
+    - execution-precondition truth
+    - shell activation readiness
+    - objective preset and config-flag state
+  - it also defines the explicit heuristic priors for stage-priority distribution and next-iteration config flags, so the bootstrap logic is auditable instead of buried in one method
+  - `src/orchestrator/pipeline_stage_policy_training.py` now provides the real bounded helper training path over `PipelineManager` state receipts
+  - `scripts/train_pipeline_stage_policy.py` now emits:
+    - pipeline-stage dataset summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `pipeline_stage_policy_package.json`
+    - runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+- The pipeline-shell runtime seam is now honest and neurally scalable:
+  - `src/orchestrator/pipeline_stage_policy_runtime.py` loads helper packages with `disabled|auto|required` semantics
+  - `src/orchestrator/pipeline_manager.py` now preserves:
+    - `policy_source`
+    - `promotion_stage`
+    - `stage_policy_trace`
+    while letting bounded helpers materially affect stage priority ordering and config suggestions
+  - shell activation itself remains hard-gated by execution readiness, so the helper cannot fake activation on an unready substrate
+- The main remaining control-plane heuristic core is now queue/curriculum weighting:
+  - `SemanticOrchestratorV2` is wired
+  - `PipelineManager` is wired
+  - `queue_selection.py` / `episode_sampling.py` are the next live seam where learned signals exist but the lane still largely computes its own bounded action from heuristics
+
 - `SemanticOrchestratorV2` no longer strands the shell-policy layer outside the learned-helper contract:
   - `src/orchestrator/orchestrator_shell_policy.py` now defines the explicit feature contract over semantic snapshot truth, recap/execution readiness, segmentation/OOD pressure, semantic-WM meta state, meta expected deltas, and preset availability
   - `src/orchestrator/orchestrator_shell_policy_training.py` now provides the real bounded helper training path over snapshot-plus-advisory receipts
