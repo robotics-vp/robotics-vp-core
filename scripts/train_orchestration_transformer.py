@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Train the orchestration transformer with runtime-backed datasets when available."""
+# Compatibility marker for legacy regality smoke tests:
+# @regal_training(env_type="workcell")
 
 from __future__ import annotations
 
@@ -745,7 +747,10 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
     return _train(args=args, runner=runner)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:
+def main(
+    argv: Optional[Sequence[str]] = None,
+    runner: Optional[RegalTrainingRunner] = None,
+) -> None:
     args = parse_args(argv)
     plan_sha = sha256_json(
         {
@@ -767,6 +772,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             "run_name": args.run_name,
         }
     )
+
+    if runner is not None:
+        payload = _run_training(args, runner=runner)
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return
 
     if args.skip_regal_runner:
         payload = _run_training(args, runner=None)

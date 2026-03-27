@@ -11,6 +11,7 @@ Runs all component training scripts as one causal run, producing:
 This is the canonical Stage6 entrypoint for production training.
 """
 import argparse
+import inspect
 import json
 import subprocess
 import sys
@@ -113,7 +114,7 @@ class Stage6TrainingOrchestrator:
         print(f"[Stage6] Executing: {' '.join(cmd)}")
         
         try:
-            result = subprocess.run(cmd, check=True, capture_output=False)
+            subprocess.run(cmd, check=True, capture_output=False)
             success = True
         except subprocess.CalledProcessError as e:
             print(f"[Stage6] WARNING: {component_name} failed with exit code {e.returncode}")
@@ -180,19 +181,29 @@ class Stage6TrainingOrchestrator:
                 raise AttributeError(f"{module_name} does not have main()")
             
             main_fn = module.main
-            
-            # Override sys.argv if needed
-            old_argv = sys.argv
-            if override_argv:
-                sys.argv = ["script"] + override_argv
-            
-            try:
-                # Call main with our runner (unified artifact tracking)
-                # The @regal_training decorator will pass the runner if provided
-                main_fn(runner=self.runner)
+
+            signature = inspect.signature(main_fn)
+            if "runner" in signature.parameters:
+                kwargs = {"runner": self.runner}
+                if "argv" in signature.parameters:
+                    kwargs["argv"] = override_argv
+                main_fn(**kwargs)
                 success = True
-            finally:
-                sys.argv = old_argv
+            elif hasattr(module, "_run_training") and hasattr(module, "parse_args"):
+                args = module.parse_args(override_argv or [])
+                module._run_training(args, self.runner)
+                success = True
+            else:
+                # Override sys.argv if needed
+                old_argv = sys.argv
+                if override_argv:
+                    sys.argv = ["script"] + override_argv
+
+                try:
+                    main_fn()
+                    success = True
+                finally:
+                    sys.argv = old_argv
             
         except Exception as e:
             print(f"[Stage6] WARNING: {component_name} failed: {e}")
@@ -231,6 +242,21 @@ class Stage6TrainingOrchestrator:
         "train_shadow_replay_policy": "scripts.train_shadow_replay_policy",
         "train_shadow_pricing_models": "scripts.train_shadow_pricing_models",
         "train_shadow_offline_rl": "scripts.train_shadow_offline_rl",
+        "train_semantic_feedback_adapters": "scripts.train_semantic_feedback_adapters",
+        "train_semantic_wm_refiner": "scripts.train_semantic_wm_refiner",
+        "train_offline_with_local_synth": "scripts.train_offline_with_local_synth",
+        "train_vla_recap_offline": "scripts.train_vla_recap_offline",
+        "train_meta_transformer_synthetic": "scripts.train_meta_transformer_synthetic",
+        "train_datapack_selection_scorers": "scripts.train_datapack_selection_scorers",
+        "train_gap_ranker": "scripts.train_gap_ranker",
+        "train_fill_path_policy": "scripts.train_fill_path_policy",
+        "train_gen2sim_validity": "scripts.train_gen2sim_validity",
+        "train_knob_model": "scripts.train_knob_model",
+        "train_orchestrator_shell_policy": "scripts.train_orchestrator_shell_policy",
+        "train_pipeline_stage_policy": "scripts.train_pipeline_stage_policy",
+        "train_queue_dispatch_policy": "scripts.train_queue_dispatch_policy",
+        "train_sampler_policy": "scripts.train_sampler_policy",
+        "train_semantic_runtime_scorers": "scripts.train_semantic_runtime_scorers",
     }
 
     def aggregate_trajectory_audits(self) -> List[TrajectoryAuditV1]:
