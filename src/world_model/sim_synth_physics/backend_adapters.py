@@ -85,7 +85,7 @@ def describe_backend_adapter(backend: str) -> BackendAdapterDescriptor:
         return BackendAdapterDescriptor(
             backend="holosoma",
             adapter_name="backend_holosoma_v2",
-            adapter_status="ready" if available else "fallback_only",
+            adapter_status="ready" if available else "shadow_ready",
             supports_execution=available,
             simulator_family="isaac",
             target_hardware_class="unitree_g1_r1_class",
@@ -99,6 +99,8 @@ def describe_backend_adapter(backend: str) -> BackendAdapterDescriptor:
             metadata={
                 "provider_class": "external_execution_provider",
                 "holosoma_available": available,
+                "shadow_backend_available": True,
+                "concrete_runtime_available": available,
                 "supports_receipt_harvest": True,
                 "supports_domain_randomization": True,
                 "supports_system_identification": True,

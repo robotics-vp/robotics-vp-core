@@ -64,6 +64,18 @@ class PromotedBackendSelector:
         }
 
 
+class PromotedHolosomaBackendSelector:
+    benchmark_gate = {"ready": True}
+
+    def select_backend(self, *, context):
+        assert context["heuristic_backend"] == "pybullet"
+        return {
+            "preferred_backend": "holosoma",
+            "fidelity_tier": "high_fidelity",
+            "domain_randomization_regime": "benchmark_focus",
+        }
+
+
 class ShadowBranchPlanner:
     benchmark_gate = {"ready": False}
 
@@ -341,6 +353,16 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     }
     assert result.physics_calibration_receipt.metadata["explicit_gap_kind"] == "missing_backend_adapter"
     assert result.render_provider_receipts
+    assert all(receipt.artifact_refs for receipt in result.render_provider_receipts)
+    assert all(receipt.materialization_status != "planned_only" for receipt in result.render_provider_receipts)
+    assert all(
+        receipt.metadata["provider_truth_class"] in {
+            "scene_materialization",
+            "counterfactual_work_order",
+            "ggds_work_order",
+        }
+        for receipt in result.render_provider_receipts
+    )
     assert (tmp_path / "physics_execution_contract.json").exists()
     assert (tmp_path / "physics_adaptation_receipt.json").exists()
     assert (tmp_path / "backend_execution_binding_receipt.json").exists()
@@ -349,9 +371,46 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "render_provider_receipts.json").exists()
     assert (tmp_path / "simulation_outcome_receipts.json").exists()
     assert all(
+        receipt.metadata["artifact_materialization"] != "planned_only"
+        for receipt in result.outcome_receipts
+    )
+    assert all(
         receipt.status in {"planned_with_backend_fallback", "blocked_by_admission"}
         for receipt in result.outcome_receipts
     )
+
+
+def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None:
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedHolosomaBackendSelector(),
+        embodiment_context={"active_embodiments": ["unitree_g1"]},
+    )
+
+    result = runtime.execute_world_state(world_state, output_dir=tmp_path)
+
+    assert result.physics_execution_contract.requested_backend == "holosoma"
+    assert result.physics_execution_contract.resolved_backend == "pybullet"
+    assert result.physics_execution_contract.route_status == "fallback"
+    assert result.backend_execution_binding_receipt.binding_status in {"shadow_ready", "assets_missing"}
+    assert result.backend_shadow_execution_receipt is not None
+    assert result.backend_shadow_execution_receipt.backend == "holosoma"
+    assert result.backend_shadow_execution_receipt.execution_mode == "shadow_work_order"
+    assert result.backend_shadow_execution_receipt.execution_status in {
+        "shadow_work_order_materialized",
+        "shadow_work_order_materialized_with_preconditions",
+    }
+    assert result.backend_shadow_execution_receipt.artifact_refs
+    assert any("holosoma_shadow_work_order.json" in ref for ref in result.backend_shadow_execution_receipt.artifact_refs)
+    assert (
+        tmp_path
+        / "backend_shadow_execution"
+        / "holosoma"
+        / "holosoma_shadow_work_order.json"
+    ).exists()
 
 
 def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp_path: Path) -> None:
@@ -376,9 +435,13 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
         "",
         "shadow_executed",
         "shadow_executed_with_asset_gaps",
+        "shadow_work_order_materialized",
+        "shadow_work_order_materialized_with_preconditions",
     }
     assert feedback_manifest["planned_branch_count"] >= 1
+    assert feedback_manifest["materialized_render_provider_count"] >= 1
     assert diffusion_bundle["plans"]
     assert loop_summary["physics_execution_contract_id"] == result.physics_execution_contract.contract_id
     assert loop_summary["render_provider_receipt_count"] == len(result.render_provider_receipts)
+    assert loop_summary["materialized_render_provider_count"] >= 1
     assert result.world_state.input_context["economic"]["economic_urgency_score"] == 0.0

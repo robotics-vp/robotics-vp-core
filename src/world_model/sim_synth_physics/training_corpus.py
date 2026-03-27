@@ -493,6 +493,14 @@ def build_branch_planner_rows_from_receipts(
                         or render_provider.get("provider_status")
                         or "unknown"
                     ),
+                    "target_render_materialization_status": str(
+                        render_receipt.get("materialization_status")
+                        or render_provider.get("materialization_status")
+                        or ""
+                    ),
+                    "target_render_materialization_mode": str(
+                        render_receipt.get("materialization_mode") or ""
+                    ),
                     "target_source": target_source,
                     "promotion_stage": str(helper_status.get("promotion_stage") or "shadow_candidate"),
                     "metadata": {
@@ -500,6 +508,14 @@ def build_branch_planner_rows_from_receipts(
                         "world_state_id": world_state.get("state_id"),
                         "branch_plan_id": plan_id,
                         "render_provider_receipt_id": render_receipt.get("receipt_id"),
+                        "render_artifact_refs": list(render_receipt.get("artifact_refs") or []),
+                        "render_unsatisfied_preconditions": list(
+                            _mapping(render_receipt.get("metadata")).get(
+                                "unsatisfied_preconditions",
+                                [],
+                            )
+                            or []
+                        ),
                         "simulation_status": outcome.get("status"),
                     },
                 }

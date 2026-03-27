@@ -94,8 +94,19 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
             if result.backend_shadow_execution_receipt is None
             else result.backend_shadow_execution_receipt.receipt_id
         ),
+        "backend_shadow_execution_status": (
+            ""
+            if result.backend_shadow_execution_receipt is None
+            else result.backend_shadow_execution_receipt.execution_status
+        ),
         "physics_calibration_receipt_id": result.physics_calibration_receipt.receipt_id,
         "render_provider_receipt_count": len(result.render_provider_receipts),
+        "materialized_render_provider_count": sum(
+            1
+            for receipt in result.render_provider_receipts
+            if str(receipt.materialization_status)
+            not in {"", "planned_only", "materialization_blocked"}
+        ),
         "outcome_receipt_count": len(result.outcome_receipts),
         "summary_path": str(summary_path.resolve()),
         "artifact_paths": dict(result.artifact_paths),

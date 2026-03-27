@@ -45,7 +45,7 @@
         "scripts/train_ggds_on_lsd_vector_scenes.py",
         "src/world_model/sim_synth_physics/render_providers.py"
       ],
-      "current_state": "GGDS now requires explicit stub choice for smoke use, but real SDS/LDM rendering is still not implemented.",
+      "current_state": "WM-owned provider contracts and GGDS work-order materialization now exist, and smoke use requires explicit stub choice, but real SDS/LDM rendering is still not implemented.",
       "oss_options": [
         "diffusers + SDXL/SD3.x",
         "gsplat or equivalent Gaussian renderer",
@@ -206,6 +206,35 @@
         "whole-body replay artifacts"
       ],
       "notes": "This is a hard prerequisite for honest G1/R1-level embodiment work."
+    },
+    {
+      "id": "holosoma_runtime_execution",
+      "wm_phase": "phase1_sim_synth_physics_and_phase3_embodiment",
+      "backlog_kind": "run_and_integration",
+      "priority": "P1",
+      "current_surface": [
+        "src/motor_backend/holosoma_backend.py",
+        "src/world_model/sim_synth_physics/adapters/backend_holosoma.py",
+        "src/world_model/sim_synth_physics/shadow_execution.py"
+      ],
+      "current_state": "WM-owned Holosoma binding and shadow work-order materialization now exist, but concrete Holosoma runtime execution, datapack binding, and runtime evidence are still missing.",
+      "oss_options": [
+        "holosoma",
+        "Isaac Gym / Isaac Sim"
+      ],
+      "required_preconditions": [
+        "GPU workstation or server",
+        "Holosoma runtime installed",
+        "motion clip datapacks",
+        "reward overlay binding",
+        "Unitree-target embodiment context and retargeting contract"
+      ],
+      "recommended_outputs": [
+        "holosoma execution receipts",
+        "whole-body rollout artifacts",
+        "runtime evidence tied to canonical sim/synth WM receipts"
+      ],
+      "notes": "The shadow work-order path is meant to exhaust wiring debt first; the remaining blocker should be runtime/data/assets, not missing WM ownership."
     }
   ]
 }

@@ -833,8 +833,8 @@ This WM should not own:
 | `src/evidence/gen2sim_validity.py` | admission logic exists but is not the sole owner of synth state | becomes one submodule inside WM admission/receipt logic |
 | `scripts/collect_local_synthetic_branches.py` | branch generation is script-owned | becomes a WM branch-generation adapter / worker |
 | `src/envs/physics/isaac_backend.py` | explicit shadow-contract backend; concrete Isaac/Unitree asset runtime still missing | becomes one backend adapter behind WM backend routing |
-| `src/motor_backend/holosoma_backend.py` | backend-specific bridge is outside WM ownership | becomes an execution adapter used by the WM |
-| `src/envs/lsd3d_env/ggds.py` and NAG/LSD surfaces | stubby optimization path | becomes an explicit branch renderer/generator provider, not an owner |
+| `src/motor_backend/holosoma_backend.py` | backend-specific bridge is outside WM ownership; only shadow work-order materialization is wired today | becomes an execution adapter used by the WM |
+| `src/envs/lsd3d_env/ggds.py` and NAG/LSD surfaces | typed provider contracts and work-order/scene materialization now exist, but concrete renderer/LDM execution is still missing | becomes an explicit branch renderer/generator provider, not an owner |
 
 ### Phase 1 proposed module structure
 
@@ -1009,7 +1009,7 @@ Phase 1 should count as landed only when:
 - backend/fidelity selection is emitted as a first-class receipt
 - domain-randomization / system-identification policy is emitted as a typed state and receipt, not left implicit in backend metadata
 - concrete backend execution binding is emitted as typed state and receipt, including honest Isaac/Unitree asset-readiness truth
-- NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts and receipts, not left as free-standing provider code paths
+- NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name
 - the target posture is real Isaac Sim / Isaac Gym / Unitree-class backend functionality behind typed backend routing, not a permanent pybullet-only fallback loop
@@ -1022,10 +1022,10 @@ Named gaps that should remain explicit in this phase:
 
 - real Isaac Sim / Isaac Gym backend implementation with typed adapter ownership
 - Unitree-class humanoid sim-env integration behind a typed backend contract
-- richer Holosoma execution integration and runtime asset binding
+- concrete Holosoma runtime execution and datapack/asset binding beyond the new shadow work-order receipt
 - concrete Isaac/Unitree robot assets, calibration sidecars, and simulator bindings behind the new adapter contracts
 - concrete GGDS/LDM execution under the new WM-owned render-provider contracts
-- richer NAG/LSD runtime materialization beyond the newly typed provider-routing seam
+- concrete NAG/LSD counterfactual execution beyond the newly typed work-order/materialization seam
 - real GPU-backed grounded video state for perception-conditioned sim
 - real video-diffusion and GGDS/LDM model bring-up behind the new runtime/provider contracts tracked in `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`
 

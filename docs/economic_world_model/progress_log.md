@@ -2,6 +2,13 @@
 
 ## 2026-03-27
 
+- Changed: pushed the Phase-1 sim/synth backend/materialization loop further past compile-time-only ownership:
+  - `src/world_model/sim_synth_physics/shadow_execution.py` now materializes explicit Holosoma shadow work orders in addition to Isaac shadow execution, so Holosoma-target planning windows emit WM-owned backend receipts and artifacts rather than stopping at binding metadata
+  - `src/world_model/sim_synth_physics/render_materialization.py` now writes branch/provider artifacts for LSD scene configs and NAG/GGDS work orders, and `src/world_model/sim_synth_physics/runtime.py` now threads those artifacts into render-provider receipts, outcome receipts, and the training-feedback manifest
+  - `src/world_model/sim_synth_physics/training_corpus.py` now carries render materialization status/mode/artifact refs into branch-planner training rows instead of flattening everything back to provider-kind only
+  - the honest remaining Phase-1 gaps are now narrower: concrete Holosoma runtime execution, real Isaac/Unitree asset execution, and concrete NAG/GGDS renderer/LDM execution
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
 - Changed: pushed the sim/synth/physics WM further into backend-runtime ownership instead of leaving Isaac as a dead class:
   - `src/envs/physics/isaac_backend.py` now provides an explicit shadow-contract backend with reset/step/media/summary/state APIs backed by `IsaacAdapter`
   - `src/world_model/sim_synth_physics/runtime.py` now emits `backend_shadow_execution_receipt_v1` for Isaac-target planning windows and writes shadow execution artifacts into the WM loop output

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from src.world_model.sim_synth_physics.training_corpus import (
     build_backend_selector_rows_from_receipts,
+    build_branch_planner_rows_from_receipts,
     harvest_sim_synth_receipt_bundles,
 )
 
@@ -102,8 +103,10 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                 "provider_status": "ready",
                 "render_mode": "lsd_vector_scene",
                 "counterfactual_mode": "none",
-                "materialization_status": "ready",
+                "materialization_status": "scene_materialized",
+                "materialization_mode": "scene_config",
                 "materialization_entrypoint": "src.motor_backend.factory:make_motor_backend",
+                "artifact_refs": ["/tmp/render_provider_1/lsd_vector_scene_config.json"],
                 "version": "render_provider_receipt_v1",
             },
             indent=2,
@@ -144,6 +147,14 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert (
         backend_rows[0]["metadata"]["backend_shadow_execution_status"]
         == "shadow_executed_with_asset_gaps"
+    )
+
+    branch_rows = build_branch_planner_rows_from_receipts(bundles)
+    assert branch_rows[0]["target_render_materialization_status"] == "scene_materialized"
+    assert branch_rows[0]["target_render_materialization_mode"] == "scene_config"
+    assert (
+        branch_rows[0]["metadata"]["render_artifact_refs"]
+        == ["/tmp/render_provider_1/lsd_vector_scene_config.json"]
     )
 
 

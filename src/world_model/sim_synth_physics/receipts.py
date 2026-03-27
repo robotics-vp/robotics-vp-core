@@ -126,7 +126,9 @@ class RenderProviderReceipt:
     render_mode: str
     counterfactual_mode: str
     materialization_status: str = ""
+    materialization_mode: str = ""
     materialization_entrypoint: str = ""
+    artifact_refs: list[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     version: str = "render_provider_receipt_v1"
 
@@ -140,7 +142,9 @@ class RenderProviderReceipt:
             "render_mode": self.render_mode,
             "counterfactual_mode": self.counterfactual_mode,
             "materialization_status": self.materialization_status,
+            "materialization_mode": self.materialization_mode,
             "materialization_entrypoint": self.materialization_entrypoint,
+            "artifact_refs": strings(self.artifact_refs),
             "metadata": mapping(self.metadata),
             "version": self.version,
         }

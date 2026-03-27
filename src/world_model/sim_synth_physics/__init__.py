@@ -30,6 +30,7 @@ from .gen2sim_admission import (
     compile_gen2sim_admission_state,
 )
 from .physics_contracts import PhysicsExecutionContract
+from .render_materialization import materialize_render_provider_receipts
 from .receipts import (
     BackendExecutionBindingReceipt,
     BackendShadowExecutionReceipt,
@@ -94,6 +95,7 @@ __all__ = [
     "build_physics_adaptation_receipt",
     "build_physics_calibration_receipt",
     "materialize_backend_shadow_execution",
+    "materialize_render_provider_receipts",
     "compile_backend_execution_binding",
     "build_physics_execution_contract",
     "build_synthetic_branch_corpus_metadata",

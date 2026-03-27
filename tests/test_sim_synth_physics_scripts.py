@@ -77,6 +77,14 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
     assert Path(result["artifact_paths"]["physics_calibration_receipt"]).exists()
     assert Path(result["artifact_paths"]["render_provider_receipts"]).exists()
     assert result["backend_execution_binding_receipt_id"]
+    assert result["backend_shadow_execution_status"] in {
+        "",
+        "shadow_executed",
+        "shadow_executed_with_asset_gaps",
+        "shadow_work_order_materialized",
+        "shadow_work_order_materialized_with_preconditions",
+    }
     assert Path(result["artifact_paths"]["training_feedback_manifest"]).exists()
     assert result["render_provider_receipt_count"] >= 1
+    assert result["materialized_render_provider_count"] >= 1
     assert result["outcome_receipt_count"] >= 1

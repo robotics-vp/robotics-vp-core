@@ -30,9 +30,25 @@ def build_holosoma_backend_binding(
         or embodiment_context.get("robot_families")
         or []
     )
+    required_assets = [
+        "humanoid_embodiment_context",
+        "motion_clip_datapacks",
+        "whole_body_reward_overlay",
+        "holosoma_runtime",
+    ]
+    available_assets = ([] if not active_embodiments else ["humanoid_embodiment_context"]) + (
+        ["holosoma_runtime"] if available else []
+    )
+    missing_assets = [asset for asset in required_assets if asset not in available_assets]
+    if available and not missing_assets:
+        binding_status = "ready"
+    elif active_embodiments:
+        binding_status = "shadow_ready"
+    else:
+        binding_status = "assets_missing"
     return {
         "binding_name": "holosoma_execution_binding_v1",
-        "binding_status": "ready" if available else "fallback_only",
+        "binding_status": binding_status,
         "executor_entrypoint": "src.motor_backend.factory:make_motor_backend",
         "executor_kind": "motor_backend_factory",
         "observation_adapter_entrypoint": "",
@@ -41,16 +57,9 @@ def build_holosoma_backend_binding(
         "supports_deploy_handle": True,
         "target_runtime_stack": ["holosoma", "isaacgym", "isaacsim"],
         "asset_profile": "unitree_humanoid_shadow_assets",
-        "required_assets": [
-            "holosoma_runtime",
-            "motion_clip_datapacks",
-            "whole_body_reward_overlay",
-        ],
-        "available_assets": (
-            ["holosoma_runtime"] if available else []
-        ) + (["humanoid_embodiment_context"] if active_embodiments else []),
-        "missing_assets": ([] if available else ["holosoma_runtime"])
-        + ([] if active_embodiments else ["humanoid_embodiment_context"]),
+        "required_assets": required_assets,
+        "available_assets": available_assets,
+        "missing_assets": missing_assets,
         "metadata": {
             "engine_type": "holosoma",
             "fidelity_tier": str(physics_context.get("fidelity_tier", "")),
@@ -60,6 +69,8 @@ def build_holosoma_backend_binding(
             "system_identification_profile": str(
                 adaptation_policy.get("system_identification_profile", "")
             ),
+            "shadow_backend_available": True,
+            "concrete_runtime_available": available,
             "task_presets": sorted(HOLOSOMA_TASK_MAP.keys()),
             "embodiment_context": mapping(embodiment_context),
         },

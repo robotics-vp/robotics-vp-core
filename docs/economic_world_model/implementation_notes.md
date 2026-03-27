@@ -2,6 +2,15 @@
 
 ## 2026-03-27
 
+- Pushed Phase 1 further into real backend/provider materialization instead of stopping at typed planning state:
+  - `src/world_model/sim_synth_physics/shadow_execution.py` now emits Holosoma shadow work-order receipts/artifacts alongside Isaac shadow execution receipts
+  - `src/world_model/sim_synth_physics/render_materialization.py` now materializes LSD scene-config artifacts and NAG/GGDS work orders under the WM runtime
+  - `src/world_model/sim_synth_physics/runtime.py` now propagates those materialization results into `RenderProviderReceipt`, `SimulationOutcomeReceipt`, the training-feedback manifest, and loop summaries
+- The important doctrine point is unchanged:
+  - this is not permission to pretend Holosoma or GGDS/NAG are fully concrete runtimes yet
+  - it does mean the default posture is now WM-owned materialization with explicit preconditions and artifact refs, not provider selection that terminates at compile time
+  - the honest remaining blockers are concrete runtime/data/GPU/asset gaps, which is where Phase 1 should end up
+
 - Pushed the Phase-1 backend-execution seam past a literal Isaac stub:
   - `src/envs/physics/isaac_backend.py` now exposes an explicit shadow-contract backend with deterministic reset/step/media/summary/state behavior rather than only raising `NotImplementedError`
   - this is not being treated as "real Isaac runtime" or as permission to declare the Unitree path done

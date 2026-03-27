@@ -17,6 +17,7 @@ from .compiler import compile_sim_synth_physics_world_state
 from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
 from .physics_contracts import PhysicsExecutionContract
 from .promotion import HelperMode
+from .render_materialization import materialize_render_provider_receipts
 from .receipts import (
     BackendExecutionBindingReceipt,
     BackendShadowExecutionReceipt,
@@ -138,15 +139,21 @@ def _build_outcome_receipts(
     backend_binding_receipt: BackendExecutionBindingReceipt,
     calibration_receipt: PhysicsCalibrationReceipt,
     *,
+    backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt] = None,
+    render_provider_receipts: Optional[list[RenderProviderReceipt]] = None,
     training_feedback_path: Optional[Path] = None,
 ) -> list[SimulationOutcomeReceipt]:
     admissible_branch_ids = set(
         getattr(world_state.gen2sim_admission, "admissible_branch_ids", []) or []
     )
     job_by_id = {job.job_id: job for job in world_state.simulation_agenda.jobs}
+    render_receipts_by_plan = {
+        str(receipt.branch_plan_id): receipt for receipt in (render_provider_receipts or [])
+    }
     receipts: list[SimulationOutcomeReceipt] = []
     for index, plan in enumerate(world_state.synthetic_branch_plans):
         job = job_by_id.get(plan.source_job_id)
+        render_receipt = render_receipts_by_plan.get(str(plan.plan_id))
         receipt_payload = {
             "state_id": world_state.state_id,
             "job_id": plan.source_job_id,
@@ -202,7 +209,35 @@ def _build_outcome_receipts(
                         "" if render_provider is None else str(render_provider.provider_status)
                     ),
                     "job_rank": int(job.rank) if job is not None else index + 1,
-                    "artifact_materialization": "planned_only",
+                    "artifact_materialization": (
+                        "planned_only"
+                        if render_receipt is None
+                        else str(render_receipt.materialization_status)
+                    ),
+                    "render_materialization_mode": (
+                        "" if render_receipt is None else str(render_receipt.materialization_mode)
+                    ),
+                    "render_provider_receipt_id": (
+                        "" if render_receipt is None else str(render_receipt.receipt_id)
+                    ),
+                    "render_artifact_refs": (
+                        [] if render_receipt is None else list(render_receipt.artifact_refs)
+                    ),
+                    "render_unsatisfied_preconditions": (
+                        []
+                        if render_receipt is None
+                        else list(render_receipt.metadata.get("unsatisfied_preconditions", []) or [])
+                    ),
+                    "backend_shadow_execution_receipt_id": (
+                        ""
+                        if backend_shadow_execution_receipt is None
+                        else str(backend_shadow_execution_receipt.receipt_id)
+                    ),
+                    "backend_shadow_execution_status": (
+                        ""
+                        if backend_shadow_execution_receipt is None
+                        else str(backend_shadow_execution_receipt.execution_status)
+                    ),
                     "inferential_learnability_contract": mapping(
                         plan.inferential_learnability_contract
                     ),
@@ -237,6 +272,17 @@ def _build_training_feedback_manifest(
                 "render_provider_receipt_ref": (
                     None if render_receipt is None else render_receipt.receipt_id
                 ),
+                "render_artifact_refs": (
+                    [] if render_receipt is None else list(render_receipt.artifact_refs)
+                ),
+                "render_materialization_status": (
+                    "" if render_receipt is None else str(render_receipt.materialization_status)
+                ),
+                "render_unsatisfied_preconditions": (
+                    []
+                    if render_receipt is None
+                    else list(render_receipt.metadata.get("unsatisfied_preconditions", []) or [])
+                ),
                 "metadata": mapping(receipt.metadata),
             }
         )
@@ -261,6 +307,12 @@ def _build_training_feedback_manifest(
         "requested_backend": execution_contract.requested_backend,
         "resolved_backend": execution_contract.resolved_backend,
         "render_provider_receipt_count": len(render_provider_receipts),
+        "materialized_render_provider_count": sum(
+            1
+            for receipt in render_provider_receipts
+            if str(receipt.materialization_status)
+            not in {"", "planned_only", "materialization_blocked"}
+        ),
         "benchmark_gate_ready": bool(
             getattr(world_state.gen2sim_admission, "benchmark_gate_ready", False)
         ),
@@ -314,44 +366,6 @@ def _build_backend_execution_binding_receipt(
             "binding_metadata": mapping(binding.metadata),
         },
     )
-
-
-def _build_render_provider_receipts(
-    world_state: SimSynthPhysicsWorldState,
-    execution_contract: PhysicsExecutionContract,
-    adaptation_receipt: PhysicsAdaptationReceipt,
-) -> list[RenderProviderReceipt]:
-    receipts: list[RenderProviderReceipt] = []
-    for index, plan in enumerate(world_state.synthetic_branch_plans, start=1):
-        provider = plan.render_provider
-        if provider is None:
-            continue
-        receipts.append(
-            RenderProviderReceipt(
-                receipt_id=f"render_provider_receipt_{world_state.state_id}_{index:03d}",
-                branch_plan_id=plan.plan_id,
-                provider_id=provider.provider_id,
-                provider_kind=provider.provider_kind,
-                provider_status=provider.provider_status,
-                render_mode=provider.render_mode,
-                counterfactual_mode=provider.counterfactual_mode,
-                materialization_status=provider.materialization_status,
-                materialization_entrypoint=provider.materialization_entrypoint,
-                metadata={
-                    "world_state_id": world_state.state_id,
-                    "physics_execution_contract_id": execution_contract.contract_id,
-                    "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
-                    "generation_mode": plan.generation_mode,
-                    "fallback_provider": provider.fallback_provider,
-                    "fallback_reason": provider.fallback_reason,
-                    "ggds_mode": provider.ggds_mode,
-                    "provider_config": mapping(provider.provider_config),
-                    "target_hardware_class": adaptation_receipt.target_hardware_class,
-                    "provider_metadata": mapping(provider.metadata),
-                },
-            )
-        )
-    return receipts
 
 
 class SimSynthPhysicsRuntime:
@@ -490,10 +504,11 @@ class SimSynthPhysicsRuntime:
             output_dir=output_dir,
         )
         training_feedback_path = artifact_paths.get("training_feedback_manifest")
-        render_provider_receipts = _build_render_provider_receipts(
+        render_provider_receipts = materialize_render_provider_receipts(
             world_state,
             execution_contract,
             adaptation_receipt,
+            output_dir=output_dir,
         )
         outcome_receipts = _build_outcome_receipts(
             world_state,
@@ -501,6 +516,8 @@ class SimSynthPhysicsRuntime:
             adaptation_receipt,
             backend_binding_receipt,
             calibration_receipt,
+            backend_shadow_execution_receipt=backend_shadow_execution_receipt,
+            render_provider_receipts=render_provider_receipts,
             training_feedback_path=training_feedback_path,
         )
         training_feedback_manifest = _build_training_feedback_manifest(
@@ -583,6 +600,10 @@ class SimSynthPhysicsRuntime:
                     ),
                     "physics_calibration_receipt_id": calibration_receipt.receipt_id,
                     "render_provider_receipt_count": len(render_provider_receipts),
+                    "materialized_render_provider_count": training_feedback_manifest.get(
+                        "materialized_render_provider_count",
+                        0,
+                    ),
                     "requested_backend": execution_contract.requested_backend,
                     "resolved_backend": execution_contract.resolved_backend,
                     "route_status": execution_contract.route_status,
