@@ -2,6 +2,25 @@
 
 ## 2026-03-27
 
+- Tightened the post-September 2026 execution model:
+  - the intended cadence is now weekly A100-backed work, not occasional broad training sweeps
+  - the unit of progress is a WM sub-module, not a vague whole-WM training claim
+  - each weekly tranche should move in order from loop runs to receipt/corpus export to training to fine-tuning
+  - sim/synth/physics is still the first weekly WM focus, followed by perception/grounding, then embodiment/actuation, then economic-WM consolidation, then local meta-node neuralization and later meta-node superposition/control
+- This is the important operational constraint:
+  - after September 1, 2026, if the weekly A100 budget is spent mostly on fine-tuning before loop/provider truth is real, the program will look busy while still being structurally behind
+  - the weekly ladder is meant to prevent that failure mode
+
+- Added a dated program assumption for the pre-G1 push:
+  - serious multi-WM training is assumed to start on September 1, 2026
+  - the current multi-WM architecture should have its plumbing laid by August 31, 2026
+  - July 2027 is treated as a Unitree G1 pre-purchase readiness window, not as a promise of deployment readiness
+- This changes the interpretation of roadmap completeness:
+  - through August 31, 2026, the job is to finish canonical lower-WM and economic-WM plumbing
+  - after September 1, 2026, the emphasis should shift toward training runs, provider bring-up, calibration, benchmarks, and Unitree-specific integration
+  - if missing work after September 2026 is still mainly contract/plumbing debt, the roadmap is behind
+  - if missing work is mainly data, GPUs, calibration, assets, and benchmark evidence, the roadmap is on the right shape
+
 - Clarified the V-JEPA 2 posture across lower WMs and backlogs:
   - it should not live only as a future sim/synth/physics note
   - it now belongs explicitly in both the sim/synth/physics WM and the later perception/grounding WM

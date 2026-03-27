@@ -265,6 +265,40 @@ Current intended cadence:
 
 That is the honest order. The current repo state should not auto-jump directly to shadow RL or future governed-video training.
 
+## Weekly A100 Program From September 1, 2026
+
+Assumed operating model:
+
+- starting September 1, 2026, use A100-backed runs every week rather than occasional opportunistic training bursts
+- execute work sub-module by sub-module inside each WM
+- each weekly slot should be treated as a three-stage ladder:
+  - loop runs and provider bring-up
+  - training runs on the receipts/corpora produced by those loops
+  - fine-tuning only for the sub-modules whose loop and training evidence already pass the relevant gates
+
+Why this matters:
+
+- it prevents wasting A100 time on fine-tuning lanes whose loop surfaces are still mostly fake
+- it keeps the lower-WM program grounded in receipts rather than in architecture optimism
+- it matches the stated goal that, by July 2027, the honest blockers should be data, GPUs, calibration, assets, and benchmarks rather than missing plumbing
+
+Recommended weekly rotation for the first training season:
+
+1. Sim / synth / physics WM sub-modules
+2. Perception / grounding WM sub-modules
+3. Embodiment / actuation WM sub-modules
+4. Economic-WM consolidation lanes over the trained lower-WM outputs
+5. Local meta-node neuralization and later meta-node superposition / control lanes over the stabilized lower-WM and economic-WM outputs
+
+Within each WM, the order should stay:
+
+1. loop-run/provider-truth sub-modules
+2. corpus export and receipt quality
+3. bounded helper/predictive training
+4. fine-tuning and promotion candidates
+
+The weekly A100 budget should not be spent on later transport or meta-node work until the lower-WM weekly ladders are genuinely producing benchmark-shaped receipts.
+
 ## Suggested Readiness Thresholds
 
 The current thresholds in `scripts/runpod/FULL_STACK_TRAINING_BUNDLES.json` are intentionally conservative:

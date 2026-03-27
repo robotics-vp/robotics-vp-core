@@ -2,6 +2,21 @@
 
 ## 2026-03-27
 
+- Changed: refined the dated pre-G1 roadmap into an explicit weekly operating model after training begins:
+  - starting September 1, 2026, the docs now assume a weekly A100-backed program
+  - work is explicitly described as sub-module by sub-module inside each WM
+  - each weekly pass now follows the order: loop runs, receipt/corpus export, training runs, then fine-tuning only where the gates justify it
+  - the initial order of attack is now written as sim/synth/physics first, then perception/grounding, then embodiment/actuation, then economic-WM consolidation, then local meta-node neuralization and later meta-node superposition/control
+- Verification: `git diff --check` passed. This was a docs-only scheduling refinement.
+- Next recommended task: turn that weekly A100 doctrine into a WM-by-WM execution table with named sub-modules, target loop runs, target trainers, and entry/exit gates for each week of the first September-to-December training season.
+
+- Changed: turned the pre-G1 roadmap into a dated program assumption instead of an undated aspiration:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now assumes serious multi-WM training starts on September 1, 2026 and says the current architecture should have its plumbing laid by August 31, 2026
+  - `docs/economic_world_model/roadmap.md` now splits the work into a plumbing-first window through August 31, 2026 and a training/calibration/Unitree-hardening window from September 1, 2026 through July 2027
+  - `docs/economic_world_model/humanoid_target_readiness.md` now frames July 2027 as a pre-purchase readiness window where remaining blockers should be hardware/data/calibration/benchmark limits, not missing canonical plumbing
+- Verification: `git diff --check` passed. This was a docs-only scheduling refinement.
+- Next recommended task: translate the August 31, 2026 plumbing deadline into a per-WM checklist with explicit `must_be_real_by_sep_2026` items for sim/synth/physics, perception/grounding, embodiment/actuation, and economic-WM ingestion.
+
 - Changed: updated the WM architecture docs and model-shaped backlogs so V-JEPA 2 is no longer treated as a vague future ingredient for only one stack slice:
   - `docs/economic_world_model/multi_wm_architecture_plan.md` now places V-JEPA 2 explicitly in both the Phase-1 sim/synth/physics WM and the later Phase-2 perception/grounding WM
   - `docs/economic_world_model/roadmap.md` now says to prefer upstream `facebookresearch/vjepa2` bring-up where that is faster and more honest than local reimplementation, while keeping it behind typed provider/runtime contracts and receipts

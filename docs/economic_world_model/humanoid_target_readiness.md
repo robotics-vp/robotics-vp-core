@@ -36,6 +36,41 @@ This target is materially different from:
 - gripper-only action spaces
 - purely offline or episode-timescale control
 
+## Program Window Assumption
+
+Assume:
+
+- the first serious multi-WM training runs start on September 1, 2026
+- the current multi-WM architecture should have its plumbing laid by August 31, 2026
+- the next major external milestone is a Unitree G1 purchase window in July 2027
+
+That implies a stricter interpretation of readiness:
+
+- before September 1, 2026, the missing work should be mainly structural plumbing, canonical contracts, runtime-package seams, receipt emission, and provider truth
+- after September 1, 2026, the missing work should increasingly be training data, GPU time, calibration truth, benchmark evidence, Unitree assets, and whole-body integration
+- by July 2027, it is acceptable to still be blocked on real hardware, calibration, or benchmark evidence
+- by July 2027, it is not acceptable to still be blocked on missing lower-WM canonical state, missing replay/training exports, or missing runtime/provider contract plumbing that should have been laid in 2026
+
+## Pre-Purchase Critical Path
+
+For a July 2027 Unitree G1 step, the expected program shape is:
+
+1. By August 31, 2026: lower-WM and economic-WM plumbing is structurally real.
+2. From September 1, 2026 through December 31, 2026: run a weekly A100 program, sub-module by sub-module by WM, with loop runs, then training, then fine-tuning where the receipts justify it.
+3. From January 1, 2027 through March 31, 2027: accumulate benchmark and calibration evidence for perception, sim/backend truth, embodiment contracts, and promotion posture.
+4. From April 1, 2027 through June 30, 2027: harden Unitree-facing adapters, safety-adjacent middleware, whole-body replay/telemetry, and hardware integration discipline.
+5. In July 2027: purchase and integration should expose hardware and calibration limits, not reveal that the architecture was still missing canonical subsystem plumbing.
+
+The intended order of attack in that weekly A100 program is:
+
+- sim / synth / physics sub-modules first
+- perception / grounding sub-modules second
+- embodiment / actuation sub-modules third
+- economic-WM consolidation after the lower-WM outputs are producing real receipts
+- local meta-node neuralization and later meta-node superposition / control only after the lower-WM and economic-WM surfaces are stable enough to justify higher-layer compute
+
+That sequencing is important for a G1 target because the expensive weekly compute should first make the lower embodied/perceptual/sim surfaces real before asking the higher economic/control layers to optimize over them.
+
 ## Current Status
 
 Current status is:

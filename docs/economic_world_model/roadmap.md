@@ -46,6 +46,65 @@ Current honest state:
 - it does not yet have a full WM-transport ontology implementation
 - keep the current sequencing: lower WMs first, then economic WM consolidation, then ontology-mediated WM transport
 
+## Program Calendar
+
+Assumed dates for this roadmap:
+
+- March 27, 2026 through August 31, 2026: plumbing-first execution window
+- September 1, 2026: first serious multi-WM training runs start
+- July 2027: pre-purchase readiness window for a Unitree G1 program step
+
+This means the roadmap should be read in two major phases.
+
+Phase A: March 27, 2026 to August 31, 2026
+
+- finish the structural plumbing from the current multi-WM plan
+- make lower-WM state ownership, receipts, runtime-package seams, provider truth, and replay/training exports real
+- reserve the economic-WM ingestion contracts and later transport insertion points now so September training does not trigger another architecture rewrite
+- do not spend this window pretending benchmark or corpus gaps are architecture work if the missing piece is actually data, GPUs, assets, or calibration
+
+Must be true by August 31, 2026:
+
+- sim / synth / physics WM plumbing is structurally real
+- perception / grounding WM plumbing is structurally real
+- embodiment / actuation WM plumbing is structurally real enough to start training and later Unitree integration without another contract purge
+- economic-WM ingestion over lower-WM receipts is structurally real
+- WM-transport seams are reserved at the contract level even if transport training itself still comes later
+
+Phase B: September 1, 2026 to July 2027
+
+- shift effort toward training, provider bring-up, calibration, benchmark accumulation, and Unitree-specific integration
+- keep architecture churn low; new structure should only land when it closes a proven training or deployment blocker
+- use the lower-WM receipts to train helper packages, predictive lanes, and later economic-WM consolidation honestly
+
+Recommended sub-phases after training starts:
+
+- September 1, 2026 through December 31, 2026: first lower-WM training season, receipt accumulation, provider bring-up, and replay/corpus expansion
+- January 1, 2027 through March 31, 2027: benchmark and calibration season, especially for perception temporal state, whole-body sim execution, backend truth, and promotion gates
+- April 1, 2027 through June 30, 2027: pre-purchase hardening for Unitree G1 readiness, including safety-adjacent middleware, embodiment contracts, whole-body replay, and hardware-facing adapter discipline
+- July 2027: purchase/integration window where the honest blockers should mostly be hardware, data, calibration, GPUs, and benchmark evidence rather than missing canonical plumbing
+
+Weekly operating model from September 1, 2026 onward:
+
+- treat the post-September program as a weekly A100 cycle, not an ad hoc training queue
+- schedule work sub-module by sub-module inside each WM
+- within each weekly cycle, prefer:
+  - loop runs
+  - corpus/receipt export
+  - training runs
+  - fine-tuning
+- do not skip directly to fine-tuning when the corresponding loop-run or provider-truth lane is still weak
+- do not spread one weekly A100 budget across too many WMs at once; finish a concrete sub-module tranche, record receipts and gates, then move to the next sub-module
+
+Suggested weekly WM order for the first training season:
+
+1. Sim / synth / physics WM sub-modules
+2. Perception / grounding WM sub-modules
+3. Embodiment / actuation WM sub-modules
+4. Economic-WM ingestion and consolidation over lower-WM outputs
+5. Local meta-node neuralization and later meta-node superposition / control lanes over the stabilized lower-WM and economic-WM outputs
+6. Only later, ontology-mediated WM transport where adjacent WMs are already stable enough to justify the bridge budget
+
 ## Workstream Summary
 
 | Week / stage | Goal | Classification | Primary targets |

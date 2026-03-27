@@ -136,6 +136,61 @@ The target posture is:
 
 For the G1/R1-facing roadmap, each subsystem should be pushed until the main remaining bottlenecks are honest Unitree-class readiness inputs rather than missing neural scaffolds, missing runtime loops, or missing package contracts.
 
+## Program Timing Assumption
+
+Assume the first serious multi-WM training runs start on September 1, 2026.
+
+That changes the near-term job of this plan:
+
+- from March 27, 2026 through August 31, 2026, the priority is to lay the plumbing across the current multi-WM architecture
+- starting September 1, 2026, the priority shifts from structural bring-up to training, calibration, benchmark accumulation, and Unitree-directed subsystem hardening
+
+For this plan, "all plumbing laid by August 31, 2026" means:
+
+- the sim / synth / physics WM has canonical state, receipts, replay/training exports, runtime-package seams, and real-or-unavailable provider lanes for simulation, diffusion, render, predictive-state, and backend routing
+- the perception / grounding WM has canonical scene/grounding state, evidence-routing ownership, temporal-state seams including V-JEPA 2, calibration/provider truth, and replay/training exports
+- the embodiment / actuation WM has canonical body/action/observation state, latency and calibration receipts, safety-adjacent runtime contracts, and Unitree-facing adapter insertion points even if real assets and hardware are still pending
+- the economic WM can consume lower-WM typed receipts directly rather than reconstructing them from sidecars
+- the later WM-transport layer has reserved typed contract boundaries and adapter insertion points, even if full ontology-mediated transport training happens after lower-WM training begins
+
+What is not required by August 31, 2026:
+
+- full benchmark proof
+- production-sized corpora
+- full GPU sweeps
+- final Unitree G1 assets and hardware calibration
+- final WM-transport ontology realization
+
+What should happen after September 1, 2026:
+
+- train the lower-WM helper and predictive lanes on the now-stable canonical surfaces
+- accumulate receipts, calibration evidence, and benchmark results instead of continuing architecture drift
+- harden the economic WM over real lower-WM outputs
+- begin ontology-mediated WM transport only after the lower-WM training surfaces and economic-WM ingestion surfaces are structurally real
+
+Operational cadence after September 1, 2026:
+
+- run a weekly A100-backed program rather than an occasional catch-all training burst
+- work sub-module by sub-module inside each WM instead of trying to "train the whole architecture" at once
+- each weekly pass should follow one WM-scoped order:
+  - loop runs and provider bring-up first
+  - receipt and corpus export second
+  - training runs third
+  - fine-tuning only when the loop-run receipts and benchmark gates say the lane is real enough
+- the expected initial emphasis is:
+  - sim / synth / physics sub-modules first
+  - then perception / grounding sub-modules
+  - then embodiment / actuation sub-modules
+  - then economic-WM consolidation over the now-trained lower-WM outputs
+  - then local meta-node neuralization and later meta-node superposition / control lanes over the now-trained lower-WM and economic-WM outputs
+- the later transport/bridge work and meta-node lanes should consume those trained lower-WM surfaces rather than competing with them for the same weekly A100 budget too early
+
+The main governance implication is:
+
+- after September 1, 2026, new architectural work should be held to a higher bar
+- new structure is allowed only when it closes a proven missing contract boundary for training or Unitree-class deployment readiness
+- otherwise the effort should go into data, GPUs, providers, calibration, benchmarks, and whole-loop evidence
+
 ## Phase Exit Rule
 
 Do not move to the next named phase just because the next phase is conceptually attractive.
