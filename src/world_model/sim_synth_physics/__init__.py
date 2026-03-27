@@ -24,6 +24,11 @@ from .state import (
     SimSynthPhysicsWorldState,
     SyntheticBranchPlan,
 )
+from .training_corpus import (
+    build_backend_selector_rows_from_receipts,
+    build_branch_planner_rows_from_receipts,
+    load_sim_synth_receipt_bundles,
+)
 
 __all__ = [
     "BackendSelectorRuntimePackage",
@@ -44,10 +49,13 @@ __all__ = [
     "SyntheticBranchPlan",
     "load_backend_selector_runtime_package",
     "load_branch_planner_runtime_package",
+    "load_sim_synth_receipt_bundles",
     "resolve_backend_selector_helper",
     "resolve_branch_planner_helper",
     "train_backend_selector",
     "train_branch_planner",
+    "build_backend_selector_rows_from_receipts",
+    "build_branch_planner_rows_from_receipts",
     "compile_gap_driven_diffusion_plans",
     "compile_sim_synth_physics_world_state",
 ]

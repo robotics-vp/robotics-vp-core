@@ -30,6 +30,10 @@ from src.world_model.sim_synth_physics.backend_selector import (
     TORCH_AVAILABLE,
     train_backend_selector,
 )
+from src.world_model.sim_synth_physics.training_corpus import (
+    build_backend_selector_rows_from_receipts,
+    load_sim_synth_receipt_bundles,
+)
 
 try:
     import torch
@@ -40,6 +44,7 @@ except ImportError:  # pragma: no cover
 BACKEND_SELECTOR_MIN_ROWS = 100
 BACKEND_SELECTOR_MIN_BACKENDS = 2
 BACKEND_SELECTOR_MIN_FIDELITIES = 2
+BACKEND_SELECTOR_MIN_RUNTIME_RECEIPTS = 24
 
 
 def _artifact_ref(path: Path, *, base_dir: Path) -> str:
@@ -51,7 +56,13 @@ def _artifact_ref(path: Path, *, base_dir: Path) -> str:
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", type=str, required=True, help="JSONL or JSON dataset path")
+    parser.add_argument("--dataset", type=str, default=None, help="JSONL or JSON dataset path")
+    parser.add_argument(
+        "--receipt-path",
+        type=str,
+        default=None,
+        help="JSON or JSONL runtime receipt bundles exported from sim/synth/physics WM runs",
+    )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden-dim", type=int, default=64)
@@ -64,6 +75,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(dict(row), sort_keys=True))
+            handle.write("\n")
 
 
 def _load_rows(path: str | Path) -> list[dict[str, Any]]:
@@ -82,7 +100,28 @@ def _load_rows(path: str | Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _build_dataset_summary(rows: Sequence[Mapping[str, Any]], dataset_path: Path) -> dict[str, Any]:
+def _build_dataset_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if getattr(args, "dataset", None):
+        rows.extend(_load_rows(args.dataset))
+    if getattr(args, "receipt_path", None):
+        rows.extend(
+            build_backend_selector_rows_from_receipts(
+                load_sim_synth_receipt_bundles(args.receipt_path)
+            )
+        )
+    if not rows:
+        raise ValueError("No backend-selector training rows found; provide --dataset and/or --receipt-path")
+    return rows
+
+
+def _build_dataset_summary(
+    rows: Sequence[Mapping[str, Any]],
+    dataset_path: Path,
+    *,
+    dataset_arg: Optional[str],
+    receipt_path: Optional[str],
+) -> dict[str, Any]:
     backend_counts = Counter(
         str(row.get("target_backend", row.get("heuristic_backend", "other")) or "other")
         for row in rows
@@ -104,10 +143,13 @@ def _build_dataset_summary(rows: Sequence[Mapping[str, Any]], dataset_path: Path
         )
         for row in rows
     )
+    target_source_counts = Counter(str(row.get("target_source", "dataset_rows") or "dataset_rows") for row in rows)
+    runtime_receipt_rows = int(target_source_counts.get("runtime_receipt", 0))
     benchmark_gate_ready = (
         len(rows) >= BACKEND_SELECTOR_MIN_ROWS
         and len([label for label in backend_counts if label in BACKEND_LABELS]) >= BACKEND_SELECTOR_MIN_BACKENDS
         and len([label for label in fidelity_counts if label in FIDELITY_LABELS]) >= BACKEND_SELECTOR_MIN_FIDELITIES
+        and runtime_receipt_rows >= BACKEND_SELECTOR_MIN_RUNTIME_RECEIPTS
     )
     return {
         "schema_version": "sim_synth_backend_selector_dataset_summary_v1",
@@ -125,15 +167,23 @@ def _build_dataset_summary(rows: Sequence[Mapping[str, Any]], dataset_path: Path
         "backend_counts": dict(sorted(backend_counts.items())),
         "fidelity_counts": dict(sorted(fidelity_counts.items())),
         "randomization_counts": dict(sorted(randomization_counts.items())),
+        "target_source_counts": dict(sorted(target_source_counts.items())),
+        "runtime_receipt_rows": runtime_receipt_rows,
+        "input_sources": {
+            "dataset": dataset_arg,
+            "receipt_path": receipt_path,
+        },
         "benchmark_gate": {
             "name": "sim_synth_backend_selector_dataset_density",
             "ready": benchmark_gate_ready,
             "required_rows": BACKEND_SELECTOR_MIN_ROWS,
             "required_distinct_backends": BACKEND_SELECTOR_MIN_BACKENDS,
             "required_distinct_fidelities": BACKEND_SELECTOR_MIN_FIDELITIES,
+            "required_runtime_receipt_rows": BACKEND_SELECTOR_MIN_RUNTIME_RECEIPTS,
             "observed_rows": len(rows),
             "observed_distinct_backends": len([label for label in backend_counts if label in BACKEND_LABELS]),
             "observed_distinct_fidelities": len([label for label in fidelity_counts if label in FIDELITY_LABELS]),
+            "observed_runtime_receipt_rows": runtime_receipt_rows,
         },
     }
 
@@ -150,6 +200,10 @@ def _build_execution_preconditions(dataset_summary: Mapping[str, Any]) -> dict[s
         "dataset::fidelity_diversity": int(
             int(benchmark_gate.get("observed_distinct_fidelities", 0))
             >= int(benchmark_gate.get("required_distinct_fidelities", 0))
+        ),
+        "dataset::runtime_receipts_present": int(
+            int(benchmark_gate.get("observed_runtime_receipt_rows", 0))
+            >= int(benchmark_gate.get("required_runtime_receipt_rows", 0))
         ),
         "benchmark::backend_selector_density": int(bool(benchmark_gate.get("ready", False))),
     }
@@ -271,15 +325,19 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         raise ImportError("PyTorch is required to train the backend selector")
     output_root = Path(args.save_dir)
     output_root.mkdir(parents=True, exist_ok=True)
-    rows = _load_rows(args.dataset)
-    if not rows:
-        raise ValueError(f"No rows in {args.dataset}")
+    rows = _build_dataset_rows(args)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    dataset_path = Path(args.dataset)
-    dataset_summary = _build_dataset_summary(rows, dataset_path)
+    compiled_dataset_path = output_root / "sim_synth_backend_selector_rows.jsonl"
+    _write_jsonl(compiled_dataset_path, rows)
+    dataset_summary = _build_dataset_summary(
+        rows,
+        compiled_dataset_path,
+        dataset_arg=getattr(args, "dataset", None),
+        receipt_path=getattr(args, "receipt_path", None),
+    )
     execution_preconditions = _build_execution_preconditions(dataset_summary)
     model_config = _build_model_config(args.hidden_dim)
     config_digest = sha256_json(
@@ -311,6 +369,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
     train_accuracy = _evaluate_train_accuracy(model, rows)
     artifacts = {
         "checkpoint": str(checkpoint_path),
+        "compiled_dataset": str(compiled_dataset_path),
         "dataset_summary": str(dataset_summary_path),
         "model_config": str(model_config_path),
         "preconditions": str(preconditions_path),
@@ -344,6 +403,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
 
     result = {
         "checkpoint": str(checkpoint_path),
+        "compiled_dataset": str(compiled_dataset_path),
         "dataset_summary": str(dataset_summary_path),
         "model_config": str(model_config_path),
         "preconditions": str(preconditions_path),
@@ -388,6 +448,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
             },
         )
         runner.register_artifact("sim_synth_backend_selector_dataset_summary", dataset_summary_path)
+        runner.register_artifact("sim_synth_backend_selector_compiled_dataset", compiled_dataset_path)
         runner.register_artifact("sim_synth_backend_selector_model_config", model_config_path)
         runner.register_artifact("sim_synth_backend_selector_preconditions", preconditions_path)
         runner.register_artifact("sim_synth_backend_selector_training_summary", training_summary_path)
@@ -421,6 +482,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         {
             "training_kind": "sim_synth_backend_selector",
             "dataset": args.dataset,
+            "receipt_path": getattr(args, "receipt_path", None),
             "epochs": args.epochs,
             "lr": args.lr,
             "hidden_dim": args.hidden_dim,
@@ -442,7 +504,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         config=TrainingRunConfig(
             output_dir=args.save_dir,
             seed=args.seed,
-            num_episodes=max(1, len(_load_rows(args.dataset))),
+            num_episodes=max(1, len(_build_dataset_rows(args))),
             training_steps=max(1, args.epochs),
             fail_on_verify_error=False,
         ),
