@@ -45,7 +45,7 @@
         "scripts/train_ggds_on_lsd_vector_scenes.py",
         "src/world_model/sim_synth_physics/render_providers.py"
       ],
-      "current_state": "WM-owned provider contracts and GGDS work-order materialization now exist, and smoke use requires explicit stub choice, but real SDS/LDM rendering is still not implemented.",
+      "current_state": "WM-owned provider contracts, GGDS work-order materialization, and conditional concrete scene materialization now exist when a source Gaussian scene and initialized optimizer are present, but real SDS/LDM rendering at scale is still not implemented.",
       "oss_options": [
         "diffusers + SDXL/SD3.x",
         "gsplat or equivalent Gaussian renderer",
@@ -188,7 +188,7 @@
         "src/world_model/sim_synth_physics/adapters/backend_isaac.py",
         "src/world_model/sim_synth_physics/backend_bindings.py"
       ],
-      "current_state": "Typed backend binding contracts, an explicit Isaac shadow-contract backend, canonical robot-asset contract receipts, and backend-local asset/calibration/IO sidecars now exist, but concrete Isaac Sim / Isaac Gym / Unitree asset execution is not yet wired.",
+      "current_state": "Typed backend binding contracts, an explicit Isaac shadow-contract backend, canonical robot-asset contract receipts, backend-local asset/calibration/IO sidecars, and WM-owned runtime-request receipts now exist, but concrete Isaac Lab / Isaac Sim / Unitree asset execution still depends on a real runtime module, policies, and assets.",
       "oss_options": [
         "Isaac Sim",
         "Isaac Gym / Isaac Lab",
@@ -196,6 +196,7 @@
       ],
       "required_preconditions": [
         "GPU workstation or server",
+        "runtime policy/checkpoint",
         "Unitree robot description/assets",
         "observation/action mapping contract",
         "calibration and latency profiles"
@@ -217,7 +218,7 @@
         "src/world_model/sim_synth_physics/adapters/backend_holosoma.py",
         "src/world_model/sim_synth_physics/shadow_execution.py"
       ],
-      "current_state": "WM-owned Holosoma binding, shadow work-order materialization, canonical robot-asset contract receipts, and backend-local asset/calibration/IO sidecars now exist, but concrete Holosoma runtime execution, datapack binding, and runtime evidence are still missing.",
+      "current_state": "WM-owned Holosoma binding, shadow work-order materialization, canonical robot-asset contract receipts, backend-local asset/calibration/IO sidecars, datapack-binding artifacts, and optional concrete runtime-evaluation receipts now exist, but real Holosoma host/runtime availability, policies, and motion data are still missing.",
       "oss_options": [
         "holosoma",
         "Isaac Gym / Isaac Sim"
@@ -225,6 +226,7 @@
       "required_preconditions": [
         "GPU workstation or server",
         "Holosoma runtime installed",
+        "runtime policy/checkpoint",
         "motion clip datapacks",
         "reward overlay binding",
         "Unitree-target embodiment context and retargeting contract"

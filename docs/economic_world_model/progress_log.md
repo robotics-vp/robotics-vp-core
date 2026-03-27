@@ -2,6 +2,21 @@
 
 ## 2026-03-27
 
+- Changed: turned the Phase-1 backend runtime seam from request metadata into a WM-owned concrete runtime receipt path:
+  - added `src/world_model/sim_synth_physics/backend_runtime_execution.py`
+  - `src/world_model/sim_synth_physics/runtime.py` now emits `backend_runtime_execution_receipt_v1` for requested Isaac/Holosoma lanes, even when the main execution contract still falls back
+  - when a real runtime module and policy id are present, the WM now prefers concrete `evaluate_policy(...)` execution through existing Isaac Lab / Holosoma backend seams and records rollout/metrics artifacts instead of stopping at shadow/work-order sidecars
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests that runtime receipt so backend-selector training can distinguish planning-only, shadow-runtime, and concrete-runtime bundles
+- Changed: pushed the Phase-1 render-provider seam past pure work orders when real source artifacts and non-stub providers exist:
+  - `src/world_model/sim_synth_physics/render_materialization.py` now materializes NAG counterfactual datapacks when a real source LSD episode and non-stub renderer path are available
+  - it now materializes GGDS scene outputs when a real source Gaussian scene and concretely initialized optimizer are available
+  - otherwise the WM stays on explicit work-order receipts with named preconditions instead of silently dropping into stub render defaults
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed.
+- Blocked: the remaining explicit Phase-1 gap is now even more clearly runtime/assets/policy/GPU constrained:
+  - real Isaac Lab / Isaac Sim / Unitree runtime module plus assets and policies
+  - real Holosoma host/runtime plus policy/data availability
+  - real GGDS renderer/LDM initialization and source-scene corpus at scale
+
 - Changed: preserved robot-asset readiness through the sim/synth training-corpus path:
   - `src/world_model/sim_synth_physics/training_corpus.py` now harvests `robot_asset_contract_receipt_v1`
   - backend-selector and branch-planner training rows now carry asset-contract refs, readiness score, and missing-asset signals instead of dropping that hardware-readiness truth at export time

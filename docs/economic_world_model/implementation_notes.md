@@ -2,6 +2,27 @@
 
 ## 2026-03-27
 
+- Added a concrete backend-runtime receipt path inside Phase 1:
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now binds requested Isaac/Holosoma backends into explicit runtime requests and optional concrete `evaluate_policy(...)` execution
+  - `src/world_model/sim_synth_physics/runtime.py` emits `backend_runtime_execution_receipt_v1` beside the existing shadow receipt
+  - the loop therefore now has three honest backend postures:
+    - request/materialization only when policy/runtime are missing
+    - shadow execution/work-order materialization
+    - concrete backend evaluation when the runtime module and policy are actually present
+- Why this matters:
+  - Phase 1 is no longer blocked on inventing a backend-runtime receipt contract
+  - the remaining backend gap is now much more honestly “real runtime module + real policy/assets/calibration” rather than “missing WM plumbing”
+  - downstream trainer/export code can now distinguish shadow-runtime from concrete-runtime evidence
+
+- Added conditional concrete render execution under the Phase-1 provider seam:
+  - `src/world_model/sim_synth_physics/render_materialization.py` now executes NAG counterfactual generation when a real source LSD episode exists and the provider is genuinely non-stub
+  - it now executes GGDS scene optimization when a real source Gaussian scene exists and the optimizer is concretely initialized
+  - when those preconditions are absent, the loop stays on explicit work-order receipts with named missing requirements
+- Why this matters:
+  - the provider seam is now closer to the target “real-or-unavailable” posture
+  - the remaining gap is the actual renderer/LDM/runtime stack, not missing WM-owned materialization logic
+  - this is exactly the direction Phase 1 should be moving before we claim it is externally blocked
+
 - Preserved the new robot-asset contract in trainer-facing export:
   - the sim/synth training-corpus path now harvests `robot_asset_contract_receipt_v1`
   - backend-selector and branch-planner rows now keep asset-contract refs, readiness score, and missing-asset context
