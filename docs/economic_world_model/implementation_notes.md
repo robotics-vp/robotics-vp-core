@@ -2,6 +2,18 @@
 
 ## 2026-03-26
 
+- Landed the next `sim_synth_physics` consolidation step:
+  - WM-owned simulation jobs now carry `inferential_learnability_contract`
+  - WM-owned synthetic branch plans now carry their own inferential learnability contracts rather than borrowing admission heuristics only
+  - `Gen2SimAdmissionState` now uses bounded inferential thresholds and summary density in addition to benchmark/grounding truth
+  - `DiffusionConditioningState` now carries admissible vs blocked branch splits and inferential summaries so render budgeting and diffusion ordering are WM-owned instead of implicit orchestration behavior
+- This is the important posture shift in practice:
+  - epiplexity/inferential learnability is no longer just a replay/training concern
+  - the new lower WM now uses it directly inside simulation and synth agenda selection
+  - blocked synthetic branches remain visible, but they no longer drive diffusion priority or render budget as if they were equally admissible
+- Updated `docs/economic_world_model/multi_wm_architecture_plan.md` to make the downstream-WM rule explicit:
+  - once a WM affects replay, admission, simulation, diffusion, or training selection, it should carry epiplexity-based inferential learnability as canonical typed metadata rather than leaving it as an external overlay
+
 - Landed the first code tranche from the advisory-purge plan:
   - added `src/economics/inferential_contract.py` as the shared canonical learnability/admission contract
   - replay datasets now attach `inferential_learnability_contract` per episode and summarize learnability-class density at the manifest level
@@ -29,6 +41,10 @@
   - backend/fidelity selection now has its own benchmark-gated helper seam
   - synthetic branch planning now has its own benchmark-gated helper seam
   - both seams use explicit helper status / promotion-stage traces while heuristics remain only the prior/fallback path
+- Diffusion ownership is now also inside that WM boundary rather than in a separate orchestration helper:
+  - added `src/world_model/sim_synth_physics/diffusion_contracts.py` as the WM-owned gap-driven diffusion-plan layer
+  - `src/orchestrator/diffusion_requests.py` now adapts `SimSynthPhysicsWorldState` / `DiffusionConditioningState` into downstream prompt specs instead of recomputing ranked gaps itself
+  - `src/orchestrator/coverage_loop.py` now compiles one shared `SimSynthPhysicsWorldState` and derives both agenda and diffusion prompts from it, so those two planning surfaces stop drifting
 - The multi-WM plan and roadmap now state the rule explicitly for later phases:
   - future WMs and enabler phases should launch with bounded learned seams and typed `disabled|auto|required` runtime posture from their first tranche
   - do not create fresh heuristic-only control islands and plan to purge them later
@@ -36,7 +52,8 @@
   - canonical state ownership has moved out of a scattered orchestrator helper
   - downstream callers still keep compatibility via the legacy agenda view
   - the learned seams are present now even though promoted helper packages for backend/branch policy are still future work
-  - the next consolidation step should be diffusion-conditioning ownership, not another standalone prompt path
+  - agenda and diffusion conditioning now share one canonical WM-owned planning state
+  - the next consolidation step should be package-loading runtime shims and receipt wiring for backend/branch helper packages, not another standalone planner
 
 - Added `docs/economic_world_model/advisory_purge_wiring_plan.md` as the advisory-doctrine counterpart to the earlier heuristic sweep:
   - it separates surfaces that should remain advisory from surfaces that should become:

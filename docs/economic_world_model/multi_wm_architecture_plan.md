@@ -45,6 +45,7 @@ That means:
 - heuristics are allowed only as explicit priors and fallback logic
 - those priors must sit behind typed `disabled|auto|required` helper/runtime contracts
 - helper status, promotion stage, and decision traces must be emitted as canonical receipts
+- epiplexity-based inferential learnability should be carried as canonical typed metadata once a WM starts affecting replay, admission, simulation, diffusion, or training selection
 - no new WM should be allowed to land as a heuristic-only island that will later require a cleanup-style “heuristic purge”
 
 This rule applies to:
@@ -57,6 +58,34 @@ This rule applies to:
 - local meta-node neuralization
 - the later meta-node superposition / control WM
 - future deployment-enabler phases anywhere learned routing, calibration, or policy support appears
+
+This matters especially for the downstream WMs. Perception, embodiment, and sim/synth/physics should not only emit state; they should also emit bounded inferential learnability classes about which scenes, branches, physics regimes, or control contexts are actually improving the stack under compute and governance constraints. The economic WM should eventually consume those typed inferential receipts directly rather than reconstructing learnability from scattered sidecars later.
+
+## Complete Subsystem Rule
+
+Each WM should be built as a complete subsystem target, not as a partial architecture exercise.
+
+For this repo, "complete subsystem" means:
+
+- canonical typed state contracts exist
+- bounded learned seams exist anywhere the subsystem needs learned routing, calibration, scoring, or control support
+- those seams have real runtime-package contracts and `disabled|auto|required` loading posture
+- the live production loops already call through the subsystem boundary rather than bypassing it with parallel helper logic
+- receipts, replay exports, benchmark gates, and training-manifest artifacts already exist so later training and promotion do not require bespoke joins
+- the remaining blockers are stated honestly as:
+  - dataset density
+  - GPU budget / training time
+  - grounded hardware or sim assets
+  - calibration truth
+  - benchmark evidence
+  - external provider maturity
+
+The target posture is:
+
+- damn-near production-ready in subsystem structure and runtime wiring
+- explicitly not pretending the subsystem is production-ready when the missing pieces are still real data, GPUs, calibration, or Unitree-class hardware/sim prerequisites
+
+For the G1/R1-facing roadmap, each subsystem should be pushed until the main remaining bottlenecks are honest Unitree-class readiness inputs rather than missing neural scaffolds, missing runtime loops, or missing package contracts.
 
 ## Architectural Position
 
@@ -481,6 +510,16 @@ This is the phase to focus on next. It is the only phase described here at near-
 
 Create a canonical sim/synth/physics WM that consolidates simulation agenda compilation, diffusion conditioning, gen2sim admission context, backend/fidelity selection, and synthetic branch receipts into one governed state surface.
 
+Complete-subsystem interpretation for Phase 1:
+
+- the subsystem should own live simulation planning, diffusion planning, backend/fidelity routing, branch planning, and receipt emission in the real runtime loop
+- it should already contain the runtime-package lanes for the learned seams it needs
+- after that, the remaining blockers should be honest ones such as:
+  - lack of real Unitree-class sim adapters
+  - lack of grounded whole-body datasets
+  - lack of GPU-backed large-scale predictive training
+  - lack of calibration and benchmark receipt density
+
 ### Phase 1 ownership boundary
 
 This WM should own:
@@ -662,6 +701,8 @@ Phase 1 should count as landed only when:
 - backend/fidelity selection is emitted as a first-class receipt
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name
+- the learned seams needed by the subsystem already have runtime-package loading and live-loop integration rather than existing only as loose code hooks
+- the remaining gap list is primarily real-data / GPU / adapter / benchmark work, not missing subsystem wiring
 
 ### Phase 1 explicit gaps
 
@@ -710,6 +751,10 @@ Neuralization rule from tranche 1:
 - perception WM should expose bounded learned seams for grounding confidence, sensor-fusion calibration, view selection, and evidence routing immediately
 - fallback heuristics may remain, but only as explicit priors with helper traces and promotion posture
 
+Complete-subsystem rule:
+
+- perception WM should be pushed until the main missing pieces are real grounded 3D data, real SAM3D/GPU hosts, camera calibration truth, and Unitree-class sensor corpora, not missing runtime-package or production-loop wiring
+
 Key named gaps:
 
 - `src/vision/backbone_stub.py`
@@ -749,6 +794,10 @@ Neuralization rule from tranche 1:
 
 - embodiment WM should expose bounded learned seams for capability estimation, action-feasibility scoring, latency-envelope prediction, and backend/robot adapter selection immediately
 - fallback heuristics may remain only as explicit priors with helper traces and promotion posture
+
+Complete-subsystem rule:
+
+- embodiment WM should be pushed until the main missing pieces are real robot-description assets, whole-body control datasets, Unitree-class sim assets, safety calibration, and hardware benchmark receipts, not missing runtime-package or live-loop integration
 
 OSS dependency map:
 
@@ -975,6 +1024,10 @@ Neuralization rule from tranche 1:
 - economic-WM consolidation should keep bounded learned allocators, critics, and governance helpers wired from the first lower-WM-native runtime pass
 - lower-WM state consumption should not regress into summary-only heuristics while waiting for a later purge
 
+Complete-subsystem rule:
+
+- economic-WM consolidation should be pushed until the main blockers are receipt density, deployment economics, and lower-WM maturity, not missing federated runtime loops or missing learned-package infrastructure
+
 Preconditions:
 
 - at least two lower WMs emitting stable canonical state
@@ -1034,6 +1087,10 @@ Neuralization rule from tranche 1:
 - each bridge should launch with bounded learned translation/calibration seams and round-trip receipts immediately
 - heuristic adapters may remain as the prior, but not as the only runtime story
 
+Complete-subsystem rule:
+
+- transport bridges should be pushed until the main blockers are cross-WM corpus density and topology/latency evaluation, not missing bridge runtime contracts or missing live consumers
+
 Core decomposed evaluation:
 
 - bridge-only improvement
@@ -1080,6 +1137,10 @@ Neuralization rule from tranche 1:
 
 - each local meta-node should expose bounded learned activation / intervention seams and explicit promotion posture as soon as it becomes canonical state
 - do not reintroduce a “named shell first, neuralization later” pattern here
+
+Complete-subsystem rule:
+
+- local meta-node work should be pushed until the main blockers are counterfactual corpus density and robustness evaluation, not missing package/runtime contracts or missing replay hooks
 
 Concrete targets for this tranche:
 
@@ -1128,6 +1189,10 @@ Neuralization rule from tranche 1:
 
 - the mother-layer should also launch with bounded learned control seams, typed helper traces, and explicit promotion posture
 - it should not begin life as a heuristic governor that later needs a purge pass
+
+Complete-subsystem rule:
+
+- the mother-layer should only be considered blocked when the remaining issue is lower-WM maturity, cross-WM corpus density, or real governance benchmark evidence, not absent runtime packaging or absent live-loop wiring
 
 Preconditions:
 
@@ -1205,5 +1270,6 @@ For the next implementation tranche after this plan:
 - define the `sim_synth_physics` package structure and state contracts
 - move agenda ownership out of scattered orchestrator surfaces and into that canonical WM boundary
 - wire bounded learned seams for backend/fidelity and branch planning into that boundary immediately so the new WM does not start life as heuristic-only
+- treat the subsystem target as "push until data, GPUs, adapters, and Unitree-class assets are the real bottleneck"
 
 That is the cleanest path to make the stack a real self-improvement machine rather than only a better-instrumented control plane.

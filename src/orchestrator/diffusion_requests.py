@@ -3,9 +3,14 @@ from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 
 from src.constraints.constraint_set import ConstraintSet
-from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 from src.valuation.datapack_schema import DataPackMeta
 from src.valuation.guidance_profile import GuidanceProfile
+from src.world_model.sim_synth_physics import (
+    SimSynthPhysicsRuntime,
+    SimSynthPhysicsRuntimeConfig,
+    SimSynthPhysicsWorldState,
+    compile_gap_driven_diffusion_plans,
+)
 
 
 def _clip01(value: float) -> float:
@@ -508,10 +513,9 @@ def build_diffusion_prompt_from_coverage_gaps(
 ) -> List[DiffusionPromptSpec]:
     """Build diffusion prompts from ranked coverage gaps.
 
-    Instead of generating prompts from datapack-level guidance and flat
-    tag mixtures, this function compiles prompts from the semantic
-    coverage graph's ranked missing edges.  Each prompt targets a specific
-    missing skill–env-primitive combination.
+    This compatibility wrapper now compiles the canonical sim/synth/physics
+    world state first and then adapts the WM-owned diffusion contracts into
+    ``DiffusionPromptSpec`` objects for downstream consumers.
 
     Parameters
     ----------
@@ -528,147 +532,82 @@ def build_diffusion_prompt_from_coverage_gaps(
     -------
     list of DiffusionPromptSpec
     """
-    ranked_gaps = rank_gaps_for_agenda(
-        coverage_graph=coverage_graph,
-        economic_weight=economic_weight,
-        trust_weight=trust_weight,
-        readiness_weight=readiness_weight,
-        limit=limit,
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(
+            economic_weight=economic_weight,
+            trust_weight=trust_weight,
+            readiness_weight=readiness_weight,
+            agenda_limit=limit,
+            default_backend=engine_type,
+            default_objective=_objective_preset_from_vector(
+                objective_vector or [1.0, 1.0, 1.0, 1.0, 0.0]
+            ),
+            gap_ranker_mode=str(gap_ranker_mode),
+        )
+    )
+    world_state = runtime.compile_world_state(
+        coverage_graph,
         gap_ranker=gap_ranker,
-        gap_ranker_mode=str(gap_ranker_mode),
+    )
+    return build_diffusion_prompts_from_world_state(
+        world_state,
+        coverage_graph=coverage_graph,
+        env_name=env_name,
+        engine_type=engine_type,
+        task_type=task_type,
+        objective_vector=objective_vector,
+        customer_segment=customer_segment,
+        limit=limit,
     )
 
+
+def build_diffusion_prompts_from_world_state(
+    world_state: SimSynthPhysicsWorldState,
+    *,
+    coverage_graph: Any = None,
+    env_name: str = "unknown",
+    engine_type: Optional[str] = None,
+    task_type: Optional[str] = None,
+    objective_vector: Optional[List[float]] = None,
+    customer_segment: str = "balanced",
+    limit: Optional[int] = None,
+) -> List[DiffusionPromptSpec]:
+    """Adapt WM-owned diffusion plans into orchestrator prompt specs."""
+
+    plans = compile_gap_driven_diffusion_plans(
+        world_state,
+        coverage_graph=coverage_graph,
+        limit=limit,
+    )
     prompts: List[DiffusionPromptSpec] = []
-    for ranked_gap in ranked_gaps:
-        gap = ranked_gap.gap
-        if bool(getattr(gap, "metadata", {}).get("governance_blocked", False)):
-            continue
-        # Collect missing-edge information
-        missing_skill_edges: List[Dict[str, str]] = []
-        missing_env_prims: List[str] = []
-        risk_targets: List[str] = []
-        affordance_targets: List[str] = []
-
-        src_node = coverage_graph.node_by_id(gap.source_id)
-        tgt_node = coverage_graph.node_by_id(gap.target_id)
-
-        if tgt_node:
-            if tgt_node.node_type == "env_primitive":
-                missing_env_prims.append(tgt_node.label)
-            elif tgt_node.node_type == "risk_family":
-                risk_targets.append(tgt_node.label)
-            elif tgt_node.node_type == "affordance_family":
-                affordance_targets.append(tgt_node.label)
-
-        if src_node and tgt_node:
-            missing_skill_edges.append({
-                "from": src_node.label,
-                "to": tgt_node.label,
-                "edge_type": gap.edge_type,
-            })
-
-        rationale = (
-            f"Gap-driven: missing {gap.edge_type} edge from "
-            f"{gap.source_id} → {gap.target_id} "
-            f"(economic_priority={gap.economic_priority:.2f}, "
-            f"trust_priority={gap.trust_priority:.2f}, "
-            f"wm_validation={float(getattr(gap, 'metadata', {}).get('wm_validation_pressure', 0.0)):.2f})"
+    for plan in plans:
+        prompts.append(
+            DiffusionPromptSpec(
+                request_id=str(plan.request_id),
+                env_name=env_name,
+                engine_type=engine_type or str(plan.env_backend),
+                task_type=task_type or str(plan.task_family),
+                objective_vector=objective_vector or list(plan.objective_vector),
+                customer_segment=customer_segment,
+                skill_ids=[],
+                semantic_tags=list(plan.semantic_tags),
+                camera_pose_hint={},
+                difficulty_hint="gap_driven",
+                rationale=str(plan.rationale),
+                target_economic_effect={},
+                source_datapack_ids=[],
+                missing_skill_edges=list(plan.missing_skill_edges),
+                missing_env_primitives=list(plan.missing_env_primitives),
+                risk_family_targets=list(plan.risk_family_targets),
+                affordance_family_targets=list(plan.affordance_family_targets),
+                meta_node_targets=list(plan.meta_node_targets),
+                coverage_gap_score=float(plan.coverage_gap_score),
+                economic_priority_score=float(plan.economic_priority_score),
+                trust_priority_score=float(plan.trust_priority_score),
+                routing_source="sim_synth_physics_world_state",
+                routing_context=dict(plan.routing_context),
+                governed_hypotheses=list(plan.governed_hypotheses),
+                benchmark_signals=dict(plan.benchmark_signals),
+            )
         )
-        primary_mode = "semantic_disambiguation"
-        if risk_targets:
-            primary_mode = "fragile_object_preservation"
-        elif objective_vector and len(objective_vector) >= 4 and _safe_float(objective_vector[2], 0.0) > 1.5:
-            primary_mode = "energy_saver_retiming"
-        elif objective_vector and len(objective_vector) >= 4 and _safe_float(objective_vector[0], 0.0) > 1.5:
-            primary_mode = "throughput_push"
-        routing_context = {
-            "routing_source": "coverage_gap_graph",
-            "coverage_gap_score": float(ranked_gap.ranking_score),
-            "economic_priority_score": float(gap.economic_priority),
-            "trust_priority_score": float(gap.trust_priority),
-            "benchmark_gate_ready": False,
-            "semantic_grounding_mode": "coverage_gap_pending",
-            "agenda_ranking_policy": ranked_gap.ranking_policy,
-            "agenda_helper_status": dict(ranked_gap.helper_status),
-            "missing_skill_edges": list(missing_skill_edges),
-            "missing_env_primitives": list(missing_env_prims),
-            "risk_family_targets": list(risk_targets),
-            "affordance_family_targets": list(affordance_targets),
-            "meta_node_targets": list(
-                sorted(
-                    set(
-                        [src_node.label] if src_node is not None else []
-                    )
-                )
-            ),
-        }
-        governed_hypotheses = [
-            {
-                "hypothesis_id": f"gap_hyp_{uuid.uuid4().hex[:12]}",
-                "mode": primary_mode,
-                "semantic_tags": [gap.source_id, gap.target_id],
-                "scores": {
-                    "render_priority": _clip01(
-                        0.35
-                        + 0.25 * float(gap.economic_priority)
-                        + 0.2 * float(gap.trust_priority)
-                        + 0.2 * float(routing_context["coverage_gap_score"])
-                        + _tag_mode_priority(primary_mode, [gap.source_id, gap.target_id])
-                    ),
-                    "plausibility": _clip01(0.45 + 0.25 * float(gap.trust_priority) + 0.15 * float(getattr(gap, "promotion_readiness", 0.0))),
-                    "novelty": _clip01(0.25 + 0.35 * float(routing_context["coverage_gap_score"])),
-                    "economic_priority": _clip01(float(gap.economic_priority)),
-                    "trust_priority": _clip01(float(gap.trust_priority)),
-                },
-                "rationale": rationale,
-                "render_intent": {
-                    "should_render": True,
-                    "geometry_first": True,
-                    "routing_source": "coverage_gap_graph",
-                },
-                "action_conditioning": {
-                    "speed_scale": 0.25 if primary_mode == "fragile_object_preservation" else 0.5,
-                    "clearance_bias": 1.0 if risk_targets else 0.75,
-                },
-            "metadata": {
-                "gap_edge_type": gap.edge_type,
-                "promotion_readiness": float(getattr(gap, "promotion_readiness", 0.0)),
-                "agenda_score_trace": {
-                    "heuristic_score": ranked_gap.heuristic_score,
-                    "heuristic_score_norm": ranked_gap.heuristic_score_norm,
-                    "learned_score": ranked_gap.learned_score,
-                    "learned_score_norm": ranked_gap.learned_score_norm,
-                    "ranking_score": ranked_gap.ranking_score,
-                },
-            },
-        }
-        ]
-
-        prompts.append(DiffusionPromptSpec(
-            request_id=str(uuid.uuid4()),
-            env_name=env_name,
-            engine_type=engine_type,
-            task_type=task_type,
-            objective_vector=objective_vector or [1.0, 1.0, 1.0, 1.0, 0.0],
-            customer_segment=customer_segment,
-            skill_ids=[],
-            semantic_tags=[gap.source_id, gap.target_id],
-            camera_pose_hint={},
-            difficulty_hint="gap_driven",
-            rationale=rationale,
-            target_economic_effect={},
-            source_datapack_ids=[],
-            missing_skill_edges=missing_skill_edges,
-            missing_env_primitives=missing_env_prims,
-            risk_family_targets=risk_targets,
-            affordance_family_targets=affordance_targets,
-            coverage_gap_score=ranked_gap.ranking_score,
-            economic_priority_score=gap.economic_priority,
-            trust_priority_score=gap.trust_priority,
-            routing_source="coverage_gap_graph",
-            routing_context=routing_context,
-            governed_hypotheses=governed_hypotheses,
-            benchmark_signals={},
-        ))
-
     return prompts

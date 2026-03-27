@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, Literal, Mapping, Optional
 
+from src.economics.inferential_contract import (
+    coerce_inferential_learnability_contract,
+    summarize_inferential_learnability_contracts,
+)
 from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 
 from .adapters import build_semantic_input_context
 from .agenda import SimulationAgenda, SimulationJobSpec
+from .backend_selector_runtime import resolve_backend_selector_helper
+from .branch_planner_runtime import resolve_branch_planner_helper
 from .common import clip01, mapping, safe_float, stable_id
-from .promotion import HelperMode, infer_backend_payload, infer_branch_payload, resolve_helper
+from .inferential import (
+    adjusted_branch_yield_score,
+    agenda_score_with_inferential_prior,
+    build_branch_plan_inferential_contract,
+    build_simulation_job_inferential_contract,
+)
+from .promotion import HelperMode, infer_backend_payload, infer_branch_payload
 from .state import (
     DiffusionConditioningState,
     Gen2SimAdmissionState,
@@ -70,6 +83,9 @@ def _job_rationale(ranked_gap: Any) -> str:
 def _compile_jobs(
     coverage_graph: Any,
     *,
+    semantic_context: Optional[Mapping[str, Any]],
+    economic_context: Optional[Mapping[str, Any]],
+    benchmark_signals: Mapping[str, Any],
     economic_weight: float,
     trust_weight: float,
     readiness_weight: float,
@@ -89,7 +105,7 @@ def _compile_jobs(
         gap_ranker_mode=gap_ranker_mode,
     )
 
-    jobs: list[SimulationJobSpec] = []
+    provisional_jobs: list[tuple[SimulationJobSpec, float, int]] = []
     for rank_idx, ranked_gap in enumerate(ranked_gaps):
         gap = ranked_gap.gap
         if bool(getattr(gap, "metadata", {}).get("governance_blocked", False)):
@@ -107,22 +123,39 @@ def _compile_jobs(
             "source_id": gap.source_id,
             "target_id": gap.target_id,
             "edge_type": gap.edge_type,
-            "wm_validation_pressure": safe_float(
-                getattr(gap, "metadata", {}).get("wm_validation_pressure", 0.0),
-                0.0,
+            "wm_validation_pressure": safe_float(getattr(gap, "metadata", {}).get("wm_validation_pressure", 0.0), 0.0),
+        }
+        inferential_contract = build_simulation_job_inferential_contract(
+            job_id=stable_id(
+                "sim_job",
+                {
+                    "rank": rank_idx + 1,
+                    "source_id": gap.source_id,
+                    "target_id": gap.target_id,
+                    "edge_type": gap.edge_type,
+                    "objective_preset": default_objective,
+                    "env_backend": _env_backend(tgt_node, default_backend),
+                    "ranking_policy": ranked_gap.ranking_policy,
+                },
             ),
-        }
-        job_payload = {
-            "rank": rank_idx + 1,
-            "source_id": gap.source_id,
-            "target_id": gap.target_id,
-            "edge_type": gap.edge_type,
-            "objective_preset": default_objective,
-            "env_backend": _env_backend(tgt_node, default_backend),
-            "ranking_policy": ranked_gap.ranking_policy,
-        }
+            coverage_gap_score=safe_float(ranked_gap.ranking_score, 0.0),
+            economic_priority=economic_priority,
+            trust_priority=trust_priority,
+            readiness=readiness,
+            ranking_policy=str(ranked_gap.ranking_policy),
+            wm_validation_pressure=safe_float(coverage_targets.get("wm_validation_pressure", 0.0), 0.0),
+            benchmark_signals=benchmark_signals,
+            semantic_context=semantic_context,
+            economic_context=economic_context,
+        )
+        inferential_signal_score = clip01(inferential_contract.signal_yield.get("score", 0.0))
+        inferential_replay_weight = clip01(inferential_contract.inferential_replay_weight)
+        combined_agenda_score = agenda_score_with_inferential_prior(
+            base_ranking_score=safe_float(ranked_gap.ranking_score, 0.0),
+            contract=inferential_contract,
+        )
         job = SimulationJobSpec(
-            job_id=stable_id("sim_job", job_payload),
+            job_id=inferential_contract.subject_id,
             rank=rank_idx + 1,
             task_family=_task_family(src_node, gap.source_id),
             env_backend=_env_backend(tgt_node, default_backend),
@@ -139,6 +172,7 @@ def _compile_jobs(
             rationale=_job_rationale(ranked_gap),
             coverage_targets=coverage_targets,
             expected_receipts=list(EXPECTED_RECEIPTS),
+            inferential_learnability_contract=inferential_contract.to_dict(),
             metadata={
                 "agenda_helper_status": mapping(ranked_gap.helper_status),
                 "score_trace": {
@@ -147,10 +181,31 @@ def _compile_jobs(
                     "learned_score": safe_float(ranked_gap.learned_score, 0.0),
                     "learned_score_norm": clip01(ranked_gap.learned_score_norm),
                     "ranking_score": safe_float(ranked_gap.ranking_score, 0.0),
+                    "inferential_signal_yield_score": inferential_signal_score,
+                    "inferential_replay_weight": inferential_replay_weight,
+                    "combined_agenda_score": combined_agenda_score,
                 },
+                "agenda_inferential_policy": "ranking_plus_inferential_contract",
             },
         )
-        jobs.append(job)
+        provisional_jobs.append((job, combined_agenda_score, rank_idx))
+    provisional_jobs.sort(
+        key=lambda item: (
+            item[1],
+            item[0].economic_priority,
+            item[0].readiness,
+            -item[2],
+        ),
+        reverse=True,
+    )
+    jobs: list[SimulationJobSpec] = []
+    for resolved_rank, (job, combined_score, _original_idx) in enumerate(provisional_jobs, start=1):
+        metadata = dict(job.metadata)
+        score_trace = dict(metadata.get("score_trace", {}) or {})
+        score_trace["combined_agenda_rank"] = resolved_rank
+        score_trace["combined_agenda_score"] = combined_score
+        metadata["score_trace"] = score_trace
+        jobs.append(replace(job, rank=resolved_rank, metadata=metadata))
     return jobs
 
 
@@ -200,10 +255,9 @@ def _compile_physics_context(
     heuristic_backend = jobs[0].env_backend if jobs else str(default_backend)
     heuristic_fidelity = _heuristic_fidelity_tier(jobs)
     heuristic_randomization = _heuristic_domain_randomization_regime(jobs)
-    helper, helper_status = resolve_helper(
+    helper, helper_status = resolve_backend_selector_helper(
         backend_selector,
         mode=backend_selector_mode,
-        name="sim_synth_physics backend selector",
     )
     helper_payload = infer_backend_payload(
         helper,
@@ -284,13 +338,14 @@ def _compile_branch_plans(
     *,
     physics_context: PhysicsContextState,
     benchmark_signals: Mapping[str, Any],
+    semantic_context: Optional[Mapping[str, Any]],
+    economic_context: Optional[Mapping[str, Any]],
     branch_planner: Any,
     branch_planner_mode: HelperMode,
 ) -> list[SyntheticBranchPlan]:
-    helper, helper_status = resolve_helper(
+    helper, helper_status = resolve_branch_planner_helper(
         branch_planner,
         mode=branch_planner_mode,
-        name="sim_synth_physics branch planner",
     )
     plans: list[SyntheticBranchPlan] = []
     for job in jobs:
@@ -315,22 +370,44 @@ def _compile_branch_plans(
                 expected_yield_score = clip01(
                     helper_payload.get("expected_yield_score", heuristic_yield_score)
                 )
-        admission_preconditions = {
-            "requires_non_heuristic_grounding": bool(
-                job.data_collection_intent == "validate" and bool(job.risk_family)
-            ),
-            "requires_benchmark_ready": bool(job.readiness >= 0.8 and job.economic_priority >= 0.8),
-            "min_readiness": 0.0,
-        }
+        job_contract = coerce_inferential_learnability_contract(
+            job.inferential_learnability_contract
+        )
         plan_payload = {
             "job_id": job.job_id,
             "branch_family": f"{job.task_family}:{job.data_collection_intent}",
             "generation_mode": generation_mode,
             "render_backend": physics_context.backend,
         }
+        plan_id = stable_id("branch_plan", plan_payload)
+        branch_contract = build_branch_plan_inferential_contract(
+            plan_id=plan_id,
+            job_id=job.job_id,
+            expected_yield_score=expected_yield_score,
+            job_contract=job_contract,
+            benchmark_signals=benchmark_signals,
+            semantic_context=semantic_context,
+            economic_context=economic_context,
+        )
+        inferential_signal_score = clip01(branch_contract.signal_yield.get("score", 0.0))
+        inferential_replay_weight = clip01(branch_contract.inferential_replay_weight)
+        expected_yield_score = adjusted_branch_yield_score(
+            base_expected_yield_score=expected_yield_score,
+            contract=branch_contract,
+        )
+        admission_preconditions = {
+            "requires_non_heuristic_grounding": bool(
+                job.data_collection_intent == "validate" and bool(job.risk_family)
+            ),
+            "requires_benchmark_ready": bool(job.readiness >= 0.8 and job.economic_priority >= 0.8),
+            "min_readiness": 0.0,
+            "min_inferential_replay_weight": (
+                0.08 if job.data_collection_intent == "validate" else 0.04
+            ),
+        }
         plans.append(
             SyntheticBranchPlan(
-                plan_id=stable_id("branch_plan", plan_payload),
+                plan_id=plan_id,
                 source_job_id=job.job_id,
                 branch_family=f"{job.task_family}:{job.data_collection_intent}",
                 generation_mode=generation_mode,
@@ -339,11 +416,14 @@ def _compile_branch_plans(
                 admission_preconditions=admission_preconditions,
                 expected_yield_score=expected_yield_score,
                 selection_policy=selection_policy,
+                inferential_learnability_contract=branch_contract.to_dict(),
                 metadata={
                     "agenda_rank": job.rank,
                     "source_ranking_policy": job.ranking_policy,
                     "heuristic_generation_mode": heuristic_generation_mode,
                     "heuristic_expected_yield_score": heuristic_yield_score,
+                    "inferential_signal_yield_score": inferential_signal_score,
+                    "inferential_replay_weight": inferential_replay_weight,
                     "branch_helper_status": helper_status,
                     "branch_helper_trace": helper_payload,
                 },
@@ -357,10 +437,27 @@ def _compile_diffusion_conditioning(
     branch_plans: list[SyntheticBranchPlan],
     *,
     physics_context: PhysicsContextState,
+    gen2sim_admission: Gen2SimAdmissionState,
 ) -> Optional[DiffusionConditioningState]:
     if not jobs:
         return None
-    top_job = jobs[0]
+    admissible_branch_ids = list(gen2sim_admission.admissible_branch_ids or [])
+    blocked_branch_ids = list(gen2sim_admission.blocked_branch_ids or [])
+    branch_order = {
+        plan_id: index for index, plan_id in enumerate(admissible_branch_ids + blocked_branch_ids)
+    }
+    ordered_branch_plans = sorted(
+        branch_plans,
+        key=lambda plan: (
+            branch_order.get(plan.plan_id, len(branch_order)),
+            -safe_float(plan.expected_yield_score, 0.0),
+        ),
+    )
+    top_branch = ordered_branch_plans[0] if ordered_branch_plans else branch_plans[0]
+    top_job = next(
+        (job for job in jobs if job.job_id == top_branch.source_job_id),
+        jobs[0],
+    )
     semantic_tags = sorted(
         {
             tag
@@ -373,22 +470,30 @@ def _compile_diffusion_conditioning(
             if tag not in ("", "unknown")
         }
     )
-    governed_modes = [plan.generation_mode for plan in branch_plans[: min(len(branch_plans), 3)]]
+    governed_modes = [
+        plan.generation_mode for plan in ordered_branch_plans[: min(len(ordered_branch_plans), 3)]
+    ]
     prompt_hints = {
         "coverage_targets": [job.coverage_targets for job in jobs[: min(len(jobs), 3)]],
         "data_collection_intents": [job.data_collection_intent for job in jobs[: min(len(jobs), 3)]],
         "objective_preset": top_job.objective_preset,
+        "admissible_branch_ids": admissible_branch_ids[:3],
     }
     routing_context = {
         "routing_source": "sim_synth_physics_world_state",
         "agenda_ranking_policy": top_job.ranking_policy,
         "physics_selection_policy": physics_context.selection_policy,
-        "branch_selection_policies": [plan.selection_policy for plan in branch_plans[: min(len(branch_plans), 3)]],
+        "branch_selection_policies": [
+            plan.selection_policy
+            for plan in ordered_branch_plans[: min(len(ordered_branch_plans), 3)]
+        ],
+        "gen2sim_selection_policy": gen2sim_admission.selection_policy,
+        "gen2sim_admission_id": gen2sim_admission.admission_id,
     }
     conditioning_payload = {
         "env_backend": physics_context.backend,
         "objective_preset": top_job.objective_preset,
-        "branch_job_ids": [plan.source_job_id for plan in branch_plans],
+        "branch_job_ids": [plan.source_job_id for plan in ordered_branch_plans],
         "governed_modes": governed_modes,
     }
     return DiffusionConditioningState(
@@ -396,13 +501,19 @@ def _compile_diffusion_conditioning(
         objective_preset=top_job.objective_preset,
         env_backend=physics_context.backend,
         semantic_tags=semantic_tags,
-        branch_job_ids=[plan.source_job_id for plan in branch_plans],
+        branch_job_ids=[plan.source_job_id for plan in ordered_branch_plans],
+        admissible_branch_ids=admissible_branch_ids,
+        blocked_branch_ids=blocked_branch_ids,
         governed_modes=governed_modes,
-        render_budget=min(len(branch_plans), 3),
+        render_budget=min(len(admissible_branch_ids), 3),
         prompt_hints=prompt_hints,
         routing_context=routing_context,
+        inferential_learnability_summary=dict(
+            gen2sim_admission.inferential_learnability_summary or {}
+        ),
         metadata={
             "source_job_ids": [job.job_id for job in jobs],
+            "ordered_branch_plan_ids": [plan.plan_id for plan in ordered_branch_plans],
         },
     )
 
@@ -420,12 +531,18 @@ def _compile_gen2sim_admission(
     semantic_grounding_non_heuristic = bool(
         benchmark_signals.get("semantic_grounding_non_heuristic", False)
     )
-    admissible_branch_ids: list[str] = []
-    blocked_branch_ids: list[str] = []
+    admissible_rows: list[tuple[str, float]] = []
+    blocked_rows: list[tuple[str, float]] = []
+    contracts = []
     job_by_id = {job.job_id: job for job in jobs}
     for plan in branch_plans:
         job = job_by_id.get(plan.source_job_id)
         preconditions = dict(plan.admission_preconditions)
+        plan_contract = coerce_inferential_learnability_contract(
+            plan.inferential_learnability_contract
+        )
+        if plan_contract is not None:
+            contracts.append(plan_contract)
         admissible = True
         if bool(preconditions.get("requires_benchmark_ready", False)) and not benchmark_gate_ready:
             admissible = False
@@ -436,14 +553,39 @@ def _compile_gen2sim_admission(
             admissible = False
         if job is not None and safe_float(preconditions.get("min_readiness", 0.0), 0.0) > job.readiness:
             admissible = False
+        if (
+            plan_contract is not None
+            and safe_float(preconditions.get("min_inferential_replay_weight", 0.0), 0.0)
+            > float(plan_contract.inferential_replay_weight)
+        ):
+            admissible = False
+        admission_score = clip01(
+            0.55 * float(plan.expected_yield_score)
+            + 0.2
+            * clip01(
+                plan_contract.signal_yield.get("score", 0.0)
+                if plan_contract is not None
+                else 0.0
+            )
+            + 0.15
+            * clip01(
+                plan_contract.inferential_replay_weight if plan_contract is not None else 0.0
+            )
+            + 0.1 * float(benchmark_gate_ready)
+        )
         if admissible:
-            admissible_branch_ids.append(plan.plan_id)
+            admissible_rows.append((plan.plan_id, admission_score))
         else:
-            blocked_branch_ids.append(plan.plan_id)
+            blocked_rows.append((plan.plan_id, admission_score))
+    admissible_rows.sort(key=lambda item: item[1], reverse=True)
+    blocked_rows.sort(key=lambda item: item[1], reverse=True)
+    admissible_branch_ids = [plan_id for plan_id, _score in admissible_rows]
+    blocked_branch_ids = [plan_id for plan_id, _score in blocked_rows]
     rationale = (
         f"{len(admissible_branch_ids)} branch plans admissible, "
-        f"{len(blocked_branch_ids)} blocked by benchmark or grounding preconditions."
+        f"{len(blocked_branch_ids)} blocked by benchmark, grounding, or inferential preconditions."
     )
+    inferential_summary = summarize_inferential_learnability_contracts(contracts)
     return Gen2SimAdmissionState(
         admission_id=stable_id(
             "gen2sim_admission",
@@ -456,11 +598,16 @@ def _compile_gen2sim_admission(
         benchmark_gate_ready=benchmark_gate_ready,
         admissible_branch_ids=admissible_branch_ids,
         blocked_branch_ids=blocked_branch_ids,
-        selection_policy="receipt_gated_with_helper_traces",
+        selection_policy="receipt_gated_with_inferential_contracts",
         rationale=rationale,
+        inferential_learnability_summary=inferential_summary,
         metadata={
             "benchmark_signals": mapping(benchmark_signals),
             "semantic_grounding_non_heuristic": semantic_grounding_non_heuristic,
+            "admission_scores": {
+                **{plan_id: score for plan_id, score in admissible_rows},
+                **{plan_id: score for plan_id, score in blocked_rows},
+            },
         },
     )
 
@@ -490,6 +637,9 @@ def compile_sim_synth_physics_world_state(
     benchmark_payload = mapping(benchmark_signals)
     jobs = _compile_jobs(
         coverage_graph,
+        semantic_context=semantic_context,
+        economic_context=economic_context,
+        benchmark_signals=benchmark_payload,
         economic_weight=economic_weight,
         trust_weight=trust_weight,
         readiness_weight=readiness_weight,
@@ -514,6 +664,9 @@ def compile_sim_synth_physics_world_state(
         metadata={
             "job_count": len(jobs),
             "top_ranked_job_id": jobs[0].job_id if jobs else None,
+            "inferential_learnability_summary": summarize_inferential_learnability_contracts(
+                [job.inferential_learnability_contract for job in jobs]
+            ),
         },
     )
     physics_context = _compile_physics_context(
@@ -527,18 +680,21 @@ def compile_sim_synth_physics_world_state(
         jobs,
         physics_context=physics_context,
         benchmark_signals=benchmark_payload,
+        semantic_context=semantic_context,
+        economic_context=economic_context,
         branch_planner=branch_planner,
         branch_planner_mode=branch_planner_mode,
-    )
-    diffusion_conditioning = _compile_diffusion_conditioning(
-        jobs,
-        branch_plans,
-        physics_context=physics_context,
     )
     gen2sim_admission = _compile_gen2sim_admission(
         branch_plans,
         jobs,
         benchmark_signals=benchmark_payload,
+    )
+    diffusion_conditioning = _compile_diffusion_conditioning(
+        jobs,
+        branch_plans,
+        physics_context=physics_context,
+        gen2sim_admission=gen2sim_admission,
     )
     input_context = {
         "semantic": build_semantic_input_context(
@@ -552,6 +708,9 @@ def compile_sim_synth_physics_world_state(
     artifact_refs = {
         "coverage_window_ref": coverage_window_ref,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
+        "diffusion_conditioning_id": (
+            diffusion_conditioning.conditioning_id if diffusion_conditioning is not None else None
+        ),
     }
     state_payload = {
         "agenda_id": agenda.agenda_id,
@@ -577,5 +736,11 @@ def compile_sim_synth_physics_world_state(
             "world_model_scope": "sim_synth_physics",
             "job_count": len(jobs),
             "blocked_branch_count": len(gen2sim_admission.blocked_branch_ids),
+            "job_inferential_summary": summarize_inferential_learnability_contracts(
+                [job.inferential_learnability_contract for job in jobs]
+            ),
+            "branch_inferential_summary": summarize_inferential_learnability_contracts(
+                [plan.inferential_learnability_contract for plan in branch_plans]
+            ),
         },
     )

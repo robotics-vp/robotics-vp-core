@@ -62,6 +62,7 @@ def test_gap_driven_prompt_has_coverage_fields():
     assert p.coverage_gap_score > 0
     assert isinstance(p.missing_skill_edges, list)
     assert isinstance(p.missing_env_primitives, list) or isinstance(p.risk_family_targets, list)
+    assert "inferential_learnability_contract" in p.routing_context
 
 
 def test_no_prompts_from_fully_covered_graph():

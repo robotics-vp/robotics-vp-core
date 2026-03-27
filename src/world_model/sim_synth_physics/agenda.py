@@ -29,6 +29,7 @@ class SimulationJobSpec:
     rationale: str
     coverage_targets: Dict[str, Any] = field(default_factory=dict)
     expected_receipts: list[str] = field(default_factory=list)
+    inferential_learnability_contract: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     version: str = "sim_synth_physics_job_spec_v1"
 
@@ -51,6 +52,9 @@ class SimulationJobSpec:
             "rationale": self.rationale,
             "coverage_targets": mapping(self.coverage_targets),
             "expected_receipts": strings(self.expected_receipts),
+            "inferential_learnability_contract": mapping(
+                self.inferential_learnability_contract
+            ),
             "metadata": mapping(self.metadata),
             "version": self.version,
         }

@@ -46,10 +46,13 @@ class DiffusionConditioningState:
     env_backend: str
     semantic_tags: list[str] = field(default_factory=list)
     branch_job_ids: list[str] = field(default_factory=list)
+    admissible_branch_ids: list[str] = field(default_factory=list)
+    blocked_branch_ids: list[str] = field(default_factory=list)
     governed_modes: list[str] = field(default_factory=list)
     render_budget: int = 0
     prompt_hints: Dict[str, Any] = field(default_factory=dict)
     routing_context: Dict[str, Any] = field(default_factory=dict)
+    inferential_learnability_summary: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     version: str = "diffusion_conditioning_state_v1"
 
@@ -60,10 +63,13 @@ class DiffusionConditioningState:
             "env_backend": self.env_backend,
             "semantic_tags": strings(self.semantic_tags),
             "branch_job_ids": strings(self.branch_job_ids),
+            "admissible_branch_ids": strings(self.admissible_branch_ids),
+            "blocked_branch_ids": strings(self.blocked_branch_ids),
             "governed_modes": strings(self.governed_modes),
             "render_budget": int(self.render_budget),
             "prompt_hints": mapping(self.prompt_hints),
             "routing_context": mapping(self.routing_context),
+            "inferential_learnability_summary": mapping(self.inferential_learnability_summary),
             "metadata": mapping(self.metadata),
             "version": self.version,
         }
@@ -82,6 +88,7 @@ class SyntheticBranchPlan:
     admission_preconditions: Dict[str, Any] = field(default_factory=dict)
     expected_yield_score: float = 0.0
     selection_policy: str = "heuristic_only"
+    inferential_learnability_contract: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     version: str = "synthetic_branch_plan_v1"
 
@@ -96,6 +103,9 @@ class SyntheticBranchPlan:
             "admission_preconditions": mapping(self.admission_preconditions),
             "expected_yield_score": clip01(self.expected_yield_score),
             "selection_policy": self.selection_policy,
+            "inferential_learnability_contract": mapping(
+                self.inferential_learnability_contract
+            ),
             "metadata": mapping(self.metadata),
             "version": self.version,
         }
@@ -111,6 +121,7 @@ class Gen2SimAdmissionState:
     blocked_branch_ids: list[str] = field(default_factory=list)
     selection_policy: str = "receipt_gated"
     rationale: str = ""
+    inferential_learnability_summary: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     version: str = "gen2sim_admission_state_v1"
 
@@ -122,6 +133,9 @@ class Gen2SimAdmissionState:
             "blocked_branch_ids": strings(self.blocked_branch_ids),
             "selection_policy": self.selection_policy,
             "rationale": self.rationale,
+            "inferential_learnability_summary": mapping(
+                self.inferential_learnability_summary
+            ),
             "metadata": mapping(self.metadata),
             "version": self.version,
         }

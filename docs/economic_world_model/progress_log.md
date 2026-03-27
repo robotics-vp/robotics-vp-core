@@ -2,6 +2,15 @@
 
 ## 2026-03-26
 
+- Changed: completed the next `sim_synth_physics` tranche by threading the canonical inferential learnability contract into WM-owned agenda ranking, synthetic-branch planning, gen2sim admission, and diffusion ordering:
+  - `src/world_model/sim_synth_physics/compiler.py` now assigns inferential learnability contracts to simulation jobs and branch plans, uses them as bounded ranking priors, and includes job/branch inferential summaries in WM metadata
+  - `src/world_model/sim_synth_physics/diffusion_contracts.py` now preserves inferential contracts and diffusion-priority scores on WM-owned diffusion plans instead of treating branch admission as a side note
+  - `DiffusionConditioningState` and `Gen2SimAdmissionState` now carry admissible-vs-blocked branch splits plus inferential summaries so diffusion/render budgeting is sourced from the WM rather than implicit orchestration defaults
+  - `src/orchestrator/coverage_loop.py` now surfaces the WM inferential summaries in its runtime summary so downstream readiness and replay consumers can see the new planning truth explicitly
+- Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` to make the cross-phase rule explicit that epiplexity-based inferential learnability should be carried by downstream WMs as canonical typed metadata once they affect replay, admission, simulation, diffusion, or training selection.
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/coverage_loop.py src/orchestrator/diffusion_requests.py tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/coverage_loop.py src/orchestrator/diffusion_requests.py tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py tests/test_coverage_loop.py`, and `git diff --check` passed.
+- Next recommended task: add the first real trainer/export/runtime-package contracts for WM backend-selector and branch-planner helpers, then feed branch-outcome receipts back into the new inferential summaries instead of leaving them as one-pass priors.
+
 - Changed: completed the first code tranche from `docs/economic_world_model/advisory_purge_wiring_plan.md`. Added `src/economics/inferential_contract.py` as the shared canonical learnability/admission contract, then wired it through:
   - `src/replay/dataset.py` for per-episode `inferential_learnability_contract` plus manifest-level `inferential_learnability_summary`
   - `src/orchestrator/shadow_advisory.py` for inferential learnability summaries and canonical inferential work-order emission
@@ -33,11 +42,16 @@
   - backend/fidelity selection now has a benchmark-gated learned-helper seam
   - synthetic branch planning now has a benchmark-gated learned-helper seam
   - both seams record helper status, promotion stage, and trace receipts while keeping heuristics as explicit priors/fallbacks
+- Changed: moved gap-driven diffusion prompt compilation onto the WM-owned state instead of recomputing it inside orchestration helpers:
+  - added `src/world_model/sim_synth_physics/diffusion_contracts.py` as the WM-owned diffusion contract layer
+  - `src/orchestrator/diffusion_requests.py` now adapts WM-owned diffusion plans instead of re-ranking coverage gaps locally
+  - `src/orchestrator/coverage_loop.py` now compiles one `SimSynthPhysicsWorldState` and derives both the simulation agenda and diffusion prompts from that shared state surface
+- Changed: this means the current live control plane no longer has separate agenda-vs-diffusion gap compilers drifting apart inside the coverage loop; diffusion conditioning is now sourced from `DiffusionConditioningState` plus WM-owned branch plans and physics context.
 - Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` to make the repo rule explicit across future WMs and enabler phases:
   - no new WM should land as a heuristic-only island
   - bounded learned seams, promotion posture, and receipt traces should exist from the first tranche
-- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py tests/test_sim_synth_physics_world_model.py`, and `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_coverage_compilation.py tests/test_gap_agenda_ranking.py` passed.
-- Next recommended task: move diffusion-gap compilation onto `SimSynthPhysicsWorldState` so the WM owns both agenda and diffusion-conditioning surfaces, then add package-loading runtime shims for promoted backend-selector and branch-planner helpers.
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py src/orchestrator/diffusion_requests.py src/orchestrator/coverage_loop.py tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py src/orchestrator/diffusion_requests.py src/orchestrator/coverage_loop.py tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_coverage_compilation.py tests/test_gap_agenda_ranking.py tests/test_coverage_loop.py`, and `git diff --check` passed.
+- Next recommended task: add package-loading runtime shims plus first trainer/export contracts for the new backend-selector and branch-planner seams, then start routing backend-quality and branch-outcome receipts into replay/training artifacts.
 
 - Changed: added `docs/economic_world_model/advisory_purge_wiring_plan.md` as the advisory counterpart to the earlier heuristic/sidecar sweep. The new document:
   - narrows the repo-wide advisory doctrine

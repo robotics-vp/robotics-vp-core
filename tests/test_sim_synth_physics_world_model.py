@@ -1,6 +1,10 @@
+from src.orchestrator.diffusion_requests import build_diffusion_prompts_from_world_state
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
 from src.world_model.semantic_coverage_graph import CoverageEdge, CoverageNode, SemanticCoverageGraph
-from src.world_model.sim_synth_physics import compile_sim_synth_physics_world_state
+from src.world_model.sim_synth_physics import (
+    compile_gap_driven_diffusion_plans,
+    compile_sim_synth_physics_world_state,
+)
 
 
 def _make_test_graph() -> SemanticCoverageGraph:
@@ -68,6 +72,14 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
         plan.source_job_id for plan in world_state.synthetic_branch_plans
     ]
     assert world_state.gen2sim_admission is not None
+    assert (
+        world_state.simulation_agenda.jobs[0].inferential_learnability_contract["subject_kind"]
+        == "sim_synth_job"
+    )
+    assert (
+        world_state.synthetic_branch_plans[0].inferential_learnability_contract["subject_kind"]
+        == "synthetic_branch_plan"
+    )
 
 
 def test_world_state_uses_promoted_backend_selector_from_day_one() -> None:
@@ -96,9 +108,49 @@ def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None
     assert first_plan.metadata["branch_helper_trace"]["generation_mode"] == "neural_branch_candidate"
 
 
+def test_diffusion_conditioning_uses_admitted_branches_for_budget() -> None:
+    world_state = compile_sim_synth_physics_world_state(_make_test_graph(), limit=2)
+
+    assert world_state.diffusion_conditioning is not None
+    assert len(world_state.diffusion_conditioning.admissible_branch_ids) == 1
+    assert len(world_state.diffusion_conditioning.blocked_branch_ids) == 1
+    assert world_state.diffusion_conditioning.render_budget == 1
+    assert (
+        world_state.diffusion_conditioning.admissible_branch_ids
+        == world_state.gen2sim_admission.admissible_branch_ids
+    )
+
+
+def test_diffusion_plans_rank_admitted_branches_ahead_of_blocked_ones() -> None:
+    world_state = compile_sim_synth_physics_world_state(_make_test_graph(), limit=2)
+
+    plans = compile_gap_driven_diffusion_plans(world_state, coverage_graph=_make_test_graph())
+
+    assert len(plans) == 2
+    assert plans[0].routing_context["branch_admissible"] is True
+    assert plans[0].diffusion_priority_score >= plans[1].diffusion_priority_score
+    assert plans[0].inferential_learnability_contract["subject_kind"] == "synthetic_branch_plan"
+
+
 def test_legacy_agenda_wrapper_surfaces_wm_owned_fields() -> None:
     agenda = compile_simulation_agenda(_make_test_graph(), limit=1)
 
     assert agenda[0]["job_id"].startswith("sim_job_")
     assert agenda[0]["coverage_targets"]["source_id"] == "hrl:grasp_handle"
     assert "simulation_outcome_receipt" in agenda[0]["expected_receipts"]
+    assert "inferential_learnability_contract" in agenda[0]
+
+
+def test_diffusion_prompts_compile_from_world_state_contract() -> None:
+    world_state = compile_sim_synth_physics_world_state(_make_test_graph(), limit=1)
+    prompts = build_diffusion_prompts_from_world_state(
+        world_state,
+        coverage_graph=_make_test_graph(),
+        limit=1,
+    )
+
+    assert prompts[0].routing_source == "sim_synth_physics_world_state"
+    assert prompts[0].engine_type == world_state.physics_context.backend
+    assert prompts[0].routing_context["physics_selection_policy"] == world_state.physics_context.selection_policy
+    assert prompts[0].routing_context["branch_selection_policy"] == world_state.synthetic_branch_plans[0].selection_policy
+    assert prompts[0].governed_hypotheses[0]["metadata"]["branch_plan_id"] == world_state.synthetic_branch_plans[0].plan_id

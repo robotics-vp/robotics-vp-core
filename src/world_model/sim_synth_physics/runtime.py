@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Mapping, Optional
 
 from .compiler import compile_sim_synth_physics_world_state
+from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
 from .promotion import HelperMode
 from .state import SimSynthPhysicsWorldState
 
@@ -61,4 +62,17 @@ class SimSynthPhysicsRuntime:
             backend_selector_mode=self.config.backend_selector_mode,
             branch_planner=branch_planner,
             branch_planner_mode=self.config.branch_planner_mode,
+        )
+
+    def compile_diffusion_plans(
+        self,
+        world_state: SimSynthPhysicsWorldState,
+        *,
+        coverage_graph: Any = None,
+        limit: Optional[int] = None,
+    ) -> list[GapDrivenDiffusionPlan]:
+        return compile_gap_driven_diffusion_plans(
+            world_state,
+            coverage_graph=coverage_graph,
+            limit=limit,
         )
