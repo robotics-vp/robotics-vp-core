@@ -116,9 +116,11 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     assert admission_rows[0]["benchmark_gate"]["ready"] is False
     assert admission_rows[0]["execution_work_order"]["recommended_mode"] == "shadow_stage1_datapack"
     assert admission_rows[0]["routing_source"] == "governed_video_world_model"
+    assert admission_rows[0]["diffusion_backend_selected"] == "heuristic_fallback"
     datapacks = json.loads((tmp_path / "datapacks.json").read_text())
     assert datapacks[0]["episode_metrics"]["execution_preconditions"]["ready"] is True
     assert datapacks[0]["episode_metrics"]["benchmark_gate"]["ready"] is False
+    assert datapacks[0]["episode_metrics"]["diffusion_backend_selected"] == "heuristic_fallback"
     assert datapacks[0]["attribution"]["tier"] == 0
 
 

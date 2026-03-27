@@ -315,7 +315,7 @@ class TestDatasetExport:
                 seed=42,
             )
 
-            result = export_dataset(config, verbose=False)
+            export_dataset(config, verbose=False)
 
             # Check output files exist
             assert Path(tmpdir, "index.json").exists()
@@ -410,6 +410,14 @@ class TestGGDSTraining:
         grad = ldm.compute_sds_gradient(images, "test prompt")
         assert grad.shape == images.shape
 
+    def test_load_ldm_auto_does_not_silently_stub(self):
+        """Auto policy should report unavailability instead of silently using dummy LDMs."""
+        from scripts.train_ggds_on_lsd_vector_scenes import load_ldm
+
+        ldm, provider_truth = load_ldm(None, None, backend_policy="auto")
+        assert ldm is None
+        assert provider_truth["backend_selected"] == "unavailable"
+
     @pytest.mark.slow
     def test_ggds_smoke(self):
         """Smoke test for GGDS training."""
@@ -423,6 +431,7 @@ class TestGGDSTraining:
                 num_scenes=1,
                 num_iterations=2,
                 output_dir=tmpdir,
+                backend_policy="stub",
                 seed=42,
             )
 

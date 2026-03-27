@@ -53,6 +53,11 @@ class DiffusionProposal:
     benchmark_gate_ready: bool = False
     benchmark_signals: Dict[str, Any] = field(default_factory=dict)
     source_hypothesis_id: Optional[str] = None
+    diffusion_provider_truth: Dict[str, Any] = field(default_factory=dict)
+    diffusion_backend_selected: str = "heuristic_fallback"
+    diffusion_backend_policy: str = "auto"
+    diffusion_model_ref: str = ""
+    diffusion_materialization_mode: str = "plan_only"
 
 
 @dataclass

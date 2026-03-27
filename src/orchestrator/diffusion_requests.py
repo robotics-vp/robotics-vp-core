@@ -373,14 +373,14 @@ def build_diffusion_requests_from_guidance(pairs):
     return prompts
 
 # ==============================================================================
-# Integration with VideoDiffusionStub (Stage 1/4)
+# Integration with VideoDiffusionRuntime (Stage 1/4)
 # ==============================================================================
 
-def prompt_to_diffusion_stub_input(prompt: DiffusionPromptSpec) -> Dict[str, Any]:
+def prompt_to_diffusion_runtime_input(prompt: DiffusionPromptSpec) -> Dict[str, Any]:
     """
-    Convert DiffusionPromptSpec to inputs for VideoDiffusionStub.
+    Convert DiffusionPromptSpec to inputs for VideoDiffusionRuntime.
 
-    This bridges the orchestrator's prompt generation with the diffusion stub's API.
+    This bridges the orchestrator's prompt generation with the diffusion runtime's API.
     """
     # Derive objective preset from objective vector
     obj_vec = prompt.objective_vector
@@ -442,28 +442,29 @@ def prompt_to_diffusion_stub_input(prompt: DiffusionPromptSpec) -> Dict[str, Any
 
 def generate_proposals_from_prompts(
     prompts: List[DiffusionPromptSpec],
-    diffusion_stub=None,
+    diffusion_runtime=None,
 ) -> List[Dict[str, Any]]:
     """
-    Generate diffusion proposals from orchestrator prompts using VideoDiffusionStub.
+    Generate diffusion proposals from orchestrator prompts using VideoDiffusionRuntime.
 
     Args:
         prompts: List of DiffusionPromptSpec from orchestrator
-        diffusion_stub: Optional VideoDiffusionStub instance (creates if None)
+        diffusion_runtime: Optional VideoDiffusionRuntime instance (creates if None)
 
     Returns:
         List of proposal dicts in datapack-like format
     """
-    if diffusion_stub is None:
-        from src.diffusion.real_video_diffusion_stub import VideoDiffusionStub
-        diffusion_stub = VideoDiffusionStub()
+    if diffusion_runtime is None:
+        from src.diffusion import VideoDiffusionRuntime
+
+        diffusion_runtime = VideoDiffusionRuntime()
 
     all_proposals = []
 
     for prompt in prompts:
-        stub_input = prompt_to_diffusion_stub_input(prompt)
+        stub_input = prompt_to_diffusion_runtime_input(prompt)
 
-        proposals = diffusion_stub.propose_augmented_clips(
+        proposals = diffusion_runtime.propose_augmented_clips(
             episode_id=stub_input["episode_id"],
             media_refs=stub_input["media_refs"],
             semantic_tags=stub_input["semantic_tags"],
@@ -490,6 +491,9 @@ def generate_proposals_from_prompts(
             all_proposals.append(proposal_dict)
 
     return all_proposals
+
+
+prompt_to_diffusion_stub_input = prompt_to_diffusion_runtime_input
 
 
 # ==============================================================================

@@ -13,12 +13,14 @@ Usage:
     python scripts/train_ggds_on_lsd_vector_scenes.py \
         --num-scenes 2 \
         --num-iterations 5 \
+        --backend-policy stub \
         --output-dir outputs/ggds_smoke
 
     # Full training (requires LDM weights):
     python scripts/train_ggds_on_lsd_vector_scenes.py \
         --ldm-config configs/ldm/sdxl_config.yaml \
         --ldm-weights checkpoints/ldm/sdxl.ckpt \
+        --backend-policy real \
         --num-scenes 100 \
         --num-iterations 500 \
         --output-dir outputs/ggds_full
@@ -41,6 +43,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from src.evidence.provider_truth import build_external_provider_truth
+
+
+def _normalize_backend_policy(value: Optional[str]) -> str:
+    policy = str(value or "auto").strip().lower()
+    if policy not in {"auto", "real", "disabled", "stub"}:
+        return "auto"
+    return policy
+
 
 @dataclass
 class GGDSTrainingConfig:
@@ -50,6 +61,7 @@ class GGDSTrainingConfig:
     output_dir: str = "outputs/ggds_training"
     ldm_config: Optional[str] = None
     ldm_weights: Optional[str] = None
+    backend_policy: str = "auto"
     seed: int = 42
 
     # Scene sampling
@@ -65,6 +77,7 @@ class GGDSTrainingConfig:
     def __post_init__(self):
         if self.topology_types is None:
             self.topology_types = ["WAREHOUSE_AISLES", "KITCHEN_LAYOUT"]
+        self.backend_policy = _normalize_backend_policy(self.backend_policy)
 
 
 @dataclass
@@ -115,23 +128,74 @@ def create_dummy_ldm():
     return DummyLDM()
 
 
-def load_ldm(config_path: Optional[str], weights_path: Optional[str]):
+def load_ldm(
+    config_path: Optional[str],
+    weights_path: Optional[str],
+    *,
+    backend_policy: str = "auto",
+):
     """
     Load LDM model from config and weights.
 
     TODO: Implement real LDM loading with diffusers or custom code.
     """
+    policy = _normalize_backend_policy(backend_policy)
+    metadata = {
+        "config_path": config_path,
+        "weights_path": weights_path,
+        "oss_candidates": [
+            "diffusers + SDXL/SD3.x",
+            "LTX-Video",
+            "CogVideoX",
+            "Wan2.1",
+        ],
+    }
+    if policy == "disabled":
+        return None, build_external_provider_truth(
+            provider_id="ggds_ldm_runtime",
+            provider_kind="latent_diffusion_model",
+            provider_name="ggds_ldm_runtime",
+            available=False,
+            backend_selected="disabled",
+            fallback_mode="disabled",
+            calibration_class="not_applicable",
+            grounding_class="not_applicable",
+            metadata=metadata,
+        )
+    if policy == "stub":
+        return create_dummy_ldm(), build_external_provider_truth(
+            provider_id="ggds_ldm_runtime",
+            provider_kind="latent_diffusion_model",
+            provider_name="ggds_ldm_runtime",
+            available=False,
+            backend_selected="stub",
+            fallback_mode="explicit_stub_requested",
+            calibration_class="synthetic_stub",
+            grounding_class="not_applicable",
+            metadata=metadata,
+        )
+
     if config_path is None or weights_path is None:
-        print("WARNING: No LDM config/weights provided. Using dummy LDM.")
-        return create_dummy_ldm()
+        reason = "ldm_config_or_weights_missing"
+    else:
+        reason = "real_ldm_loader_not_implemented"
 
-    # TODO: Real implementation would look like:
-    # from diffusers import StableDiffusionPipeline
-    # pipe = StableDiffusionPipeline.from_pretrained(weights_path)
-    # return pipe
+    if policy == "real":
+        raise RuntimeError(
+            f"GGDS LDM backend unavailable (policy=real, reason={reason}, weights={weights_path or 'missing'})"
+        )
 
-    print(f"WARNING: Real LDM loading not implemented. Config: {config_path}")
-    return create_dummy_ldm()
+    return None, build_external_provider_truth(
+        provider_id="ggds_ldm_runtime",
+        provider_kind="latent_diffusion_model",
+        provider_name="ggds_ldm_runtime",
+        available=False,
+        backend_selected="unavailable",
+        fallback_mode="no_stub_default",
+        calibration_class="runtime_missing",
+        grounding_class="not_applicable",
+        metadata={**metadata, "failure_reason": reason},
+    )
 
 
 def render_gaussian_scene(gaussian_scene, camera_rig) -> np.ndarray:
@@ -163,7 +227,7 @@ def run_ggds_optimization(
     Returns:
         Tuple of (optimized_gaussian_scene, loss_curve)
     """
-    from src.envs.lsd3d_env.ggds import CameraRig, GGDSConfig, GGDSOptimizer
+    from src.envs.lsd3d_env.ggds import CameraRig
 
     # Create camera rig using factory method
     camera_rig = CameraRig.create_orbit(
@@ -173,15 +237,6 @@ def run_ggds_optimization(
         height=2.0,
         fov=60.0,
     )
-
-    # Create GGDS optimizer
-    ggds_config = GGDSConfig(
-        num_iterations=config.num_iterations,
-        learning_rate=config.learning_rate,
-        geometry_loss_weight=config.geometry_weight,
-    )
-
-    optimizer = GGDSOptimizer(config=ggds_config)
 
     # Run optimization
     loss_curve = []
@@ -238,7 +293,16 @@ def train_ggds_on_scenes(
     np.random.seed(config.seed)
 
     # Load LDM
-    ldm = load_ldm(config.ldm_config, config.ldm_weights)
+    ldm, ldm_provider_truth = load_ldm(
+        config.ldm_config,
+        config.ldm_weights,
+        backend_policy=config.backend_policy,
+    )
+    if ldm is None:
+        raise RuntimeError(
+            "GGDS training requires a real or explicit-stub LDM backend; "
+            f"resolved={ldm_provider_truth.get('backend_selected', 'unknown')}"
+        )
 
     results: List[GGDSSceneResult] = []
     total_start = time.time()
@@ -250,6 +314,7 @@ def train_ggds_on_scenes(
         print(f"Num scenes: {config.num_scenes}")
         print(f"Iterations per scene: {config.num_iterations}")
         print(f"Output: {output_dir}")
+        print(f"LDM backend: {ldm_provider_truth.get('backend_selected', 'unknown')}")
         print()
 
     for scene_idx in range(config.num_scenes):
@@ -349,6 +414,7 @@ def train_ggds_on_scenes(
             "num_iterations": config.num_iterations,
             "seed": config.seed,
         },
+        "ldm_provider_truth": ldm_provider_truth,
         "total_scenes": len(results),
         "total_time_s": total_elapsed,
         "avg_time_per_scene_s": total_elapsed / len(results) if results else 0,
@@ -417,6 +483,13 @@ def main() -> int:
         help="Path to LDM weights",
     )
     parser.add_argument(
+        "--backend-policy",
+        type=str,
+        default="auto",
+        choices=["auto", "real", "disabled", "stub"],
+        help="Real-or-unavailable policy for the GGDS latent diffusion backend.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -436,6 +509,7 @@ def main() -> int:
         output_dir=args.output_dir,
         ldm_config=args.ldm_config,
         ldm_weights=args.ldm_weights,
+        backend_policy=args.backend_policy,
         seed=args.seed,
     )
 
