@@ -111,6 +111,9 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
     assert world_state.backend_execution_binding.binding_status == "ready"
     assert world_state.robot_asset_contract is not None
     assert world_state.robot_asset_contract.asset_profile == "tabletop_workcell_assets"
+    assert world_state.backend_runtime_bridge is not None
+    assert world_state.backend_runtime_bridge.bridge_status == "runtime_bridge_ready"
+    assert world_state.backend_runtime_bridge.transport_profile == "local_python_sim_bridge"
     assert len(world_state.synthetic_branch_plans) == 2
     assert world_state.synthetic_branch_plans[0].render_provider is not None
     assert world_state.diffusion_conditioning is not None
@@ -144,13 +147,21 @@ def test_world_state_uses_promoted_backend_selector_from_day_one() -> None:
     assert world_state.backend_execution_binding.binding_status in {"assets_missing", "shadow_ready"}
     assert world_state.robot_asset_contract is not None
     assert "unitree_robot_description" in world_state.robot_asset_contract.required_assets
+    assert world_state.backend_runtime_bridge is not None
+    assert world_state.backend_runtime_bridge.bridge_status in {
+        "runtime_targets_missing",
+        "runtime_assets_missing",
+        "shadow_bridge_only",
+    }
 
 
 def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     from src.world_model.sim_synth_physics import backend_adapters as adapter_module
     from src.world_model.sim_synth_physics.adapters import backend_isaac as binding_module
+    from src.world_model.sim_synth_physics import runtime_targets as runtime_targets_module
 
     monkeypatch.setattr(
         adapter_module,
@@ -162,11 +173,33 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
         "_has_module",
         lambda name: name == "src.motor_backend.workcell_isaaclab_backend",
     )
+    monkeypatch.setattr(
+        runtime_targets_module,
+        "_has_module",
+        lambda name: name == "src.motor_backend.workcell_isaaclab_backend",
+    )
+
+    isaaclab_root = tmp_path / "isaaclab"
+    unitree_sdk_root = tmp_path / "unitree_sdk2"
+    unitree_asset_root = tmp_path / "unitree_assets"
+    isaaclab_root.mkdir()
+    unitree_sdk_root.mkdir()
+    unitree_asset_root.mkdir()
 
     world_state = compile_sim_synth_physics_world_state(
         _make_test_graph(),
         backend_selector=PromotedBackendSelector(),
         embodiment_context={
+            "isaaclab_root": str(isaaclab_root),
+            "unitree_sdk2_root": str(unitree_sdk_root),
+            "unitree_asset_root": str(unitree_asset_root),
+            "control_constraints": {
+                "control_rate_hz": 250.0,
+                "planner_rate_hz": 10.0,
+                "observation_rate_hz": 60.0,
+                "action_decimation": 4,
+                "latency_budget_ms": 8.0,
+            },
             "robot_asset_manifest": {
                 "unitree_usd": "/assets/unitree/g1.usd",
                 "joint_map_path": "/assets/unitree/joint_map.yaml",
@@ -199,6 +232,17 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
     )
     assert result.physics_execution_contract.route_status == "ready"
     assert result.physics_execution_contract.resolved_backend == "isaac"
+    assert world_state.backend_runtime_bridge is not None
+    assert world_state.backend_runtime_bridge.bridge_status == "runtime_bridge_ready"
+    assert world_state.backend_runtime_bridge.transport_profile == "isaaclab_unitree_dds_bridge"
+    assert world_state.backend_runtime_bridge.transport_stack[:2] == ["python_bridge", "isaacsim"]
+    assert "dds" in world_state.backend_runtime_bridge.transport_stack
+    assert result.backend_runtime_bridge_receipt.bridge_status == "runtime_bridge_ready"
+    assert result.backend_runtime_bridge_receipt.execution_authority == "shadow_runtime"
+    assert "whole_body_balance_guard_v1" in result.backend_runtime_bridge_receipt.safety_channels
+    assert "watchdog_state_v1" in result.backend_runtime_bridge_receipt.telemetry_contracts
+    assert result.backend_runtime_bridge_receipt.planner_rate_hz == pytest.approx(10.0)
+    assert result.backend_runtime_bridge_receipt.control_rate_hz == pytest.approx(250.0)
 
 
 def test_world_state_normalizes_unitree_asset_aliases_into_robot_contract() -> None:
@@ -231,14 +275,50 @@ def test_world_state_normalizes_unitree_asset_aliases_into_robot_contract() -> N
     )
 
 
-def test_holosoma_binding_records_runtime_target_contract() -> None:
+def test_holosoma_binding_records_runtime_target_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.world_model.sim_synth_physics.adapters import backend_holosoma as binding_module
+    from src.world_model.sim_synth_physics import runtime_targets as runtime_targets_module
+
+    monkeypatch.setattr(binding_module, "_has_module", lambda name: name == "holosoma")
+    monkeypatch.setattr(runtime_targets_module, "_has_module", lambda name: name == "holosoma")
+    holosoma_root = tmp_path / "holosoma_repo"
+    motion_root = tmp_path / "holosoma_motion"
+    policy_root = tmp_path / "holosoma_policy"
+    retargeting_root = tmp_path / "retargeting"
+    holosoma_root.mkdir()
+    motion_root.mkdir()
+    policy_root.mkdir()
+    retargeting_root.mkdir()
+
     world_state = compile_sim_synth_physics_world_state(
         _make_test_graph(),
         backend_selector=PromotedHolosomaBackendSelector(),
         embodiment_context={
             "active_embodiments": ["unitree_g1"],
-            "holosoma_root": "/tmp/holosoma_repo",
+            "holosoma_root": str(holosoma_root),
+            "holosoma_motion_root": str(motion_root),
+            "holosoma_policy_root": str(policy_root),
+            "retargeting_root": str(retargeting_root),
             "motion_clip_datapacks": ["dp_motion_1"],
+            "retargeting_contract": {"kind": "whole_body_retargeting_v1"},
+            "whole_body_reward_overlay": {"balance_weight": 1.0},
+            "robot_asset_manifest": {
+                "unitree_urdf": "/assets/unitree/g1.urdf",
+                "joint_map": "/assets/unitree/joint_map.json",
+                "camera_extrinsics": "/assets/unitree/camera_extrinsics.json",
+                "imu_extrinsics": "/assets/unitree/imu_extrinsics.json",
+                "force_torque_calibration": "/assets/unitree/ft_calibration.json",
+                "actuator_latency_profile": "/assets/unitree/latency.yaml",
+                "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
+                "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
+            },
+            "control_constraints": {
+                "servo_rate_hz": 120.0,
+                "policy_decimation": 2,
+            },
         },
     )
 
@@ -247,6 +327,10 @@ def test_holosoma_binding_records_runtime_target_contract() -> None:
         world_state.backend_execution_binding.metadata["runtime_target_contract"]["backend"]
         == "holosoma"
     )
+    assert world_state.backend_runtime_bridge is not None
+    assert world_state.backend_runtime_bridge.bridge_status == "runtime_bridge_ready"
+    assert world_state.backend_runtime_bridge.transport_profile == "holosoma_motion_runtime_bridge"
+    assert "retargeting_guard_v1" in world_state.backend_runtime_bridge.safety_channels
 
 
 def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None:
@@ -480,6 +564,12 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
         "shadow_executed_with_asset_gaps",
     }
     assert result.physics_calibration_receipt.metadata["explicit_gap_kind"] == "missing_backend_adapter"
+    assert result.backend_runtime_bridge_receipt.bridge_status in {
+        "runtime_targets_missing",
+        "runtime_assets_missing",
+        "shadow_bridge_only",
+    }
+    assert result.backend_runtime_bridge_receipt.execution_authority == "shadow_runtime"
     assert (
         result.physics_adaptation_receipt.metadata["runtime_evidence"]["shadow_execution_status"]
         in {"shadow_executed", "shadow_executed_with_asset_gaps"}
@@ -507,6 +597,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "physics_adaptation_receipt.json").exists()
     assert (tmp_path / "backend_execution_binding_receipt.json").exists()
     assert (tmp_path / "robot_asset_contract_receipt.json").exists()
+    assert (tmp_path / "backend_runtime_bridge_receipt.json").exists()
     assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
     assert (tmp_path / "backend_shadow_execution_receipt.json").exists()
     assert (tmp_path / "backend_shadow_execution" / "isaac" / "robot_asset_contract_sidecar.json").exists()
@@ -562,6 +653,8 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
             "shadow_work_order_materialized_with_preconditions",
         }
     )
+    assert result.backend_runtime_bridge_receipt.execution_authority == "shadow_runtime"
+    assert result.backend_runtime_bridge_receipt.transport_profile == "holosoma_motion_runtime_bridge"
     assert result.backend_shadow_execution_receipt.metadata["robot_asset_contract_id"] == result.world_state.robot_asset_contract.contract_id
     assert len(result.backend_shadow_execution_receipt.metadata["asset_sidecar_refs"]) == 3
     assert result.backend_shadow_execution_receipt.artifact_refs
@@ -596,6 +689,16 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert feedback_manifest["physics_adaptation_receipt_id"] == result.physics_adaptation_receipt.receipt_id
     assert feedback_manifest["backend_execution_binding_receipt_id"] == result.backend_execution_binding_receipt.receipt_id
     assert feedback_manifest["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id
+    assert (
+        feedback_manifest["backend_runtime_bridge_receipt_id"]
+        == result.backend_runtime_bridge_receipt.receipt_id
+    )
+    assert feedback_manifest["bridge_execution_authority"] in {
+        "planning_only",
+        "runtime_request_only",
+        "shadow_runtime",
+        "concrete_runtime",
+    }
     assert feedback_manifest["backend_shadow_execution_status"] in {
         "",
         "shadow_executed",
@@ -618,6 +721,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert loop_summary["render_provider_receipt_count"] == len(result.render_provider_receipts)
     assert loop_summary["materialized_render_provider_count"] >= 1
     assert loop_summary["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id
+    assert loop_summary["backend_runtime_bridge_receipt_id"] == result.backend_runtime_bridge_receipt.receipt_id
     assert result.world_state.input_context["economic"]["economic_urgency_score"] == 0.0
 
 
@@ -706,6 +810,7 @@ def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exis
         "backend_runtime_metrics.json" in ref
         for ref in result.backend_runtime_execution_receipt.artifact_refs
     )
+    assert result.backend_runtime_bridge_receipt.execution_authority == "concrete_runtime"
     assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
 
 
@@ -801,6 +906,7 @@ def test_runtime_trains_concrete_holosoma_backend_when_motion_datapacks_exist(
         "backend_runtime_metrics.json" in ref
         for ref in result.backend_runtime_execution_receipt.artifact_refs
     )
+    assert result.backend_runtime_bridge_receipt.execution_authority == "concrete_runtime"
     assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
 
 

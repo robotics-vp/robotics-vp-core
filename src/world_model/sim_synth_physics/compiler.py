@@ -25,6 +25,7 @@ from .inferential import (
 from .gen2sim_admission import compile_gen2sim_admission_state
 from .promotion import HelperMode, infer_backend_payload
 from .randomization import compile_physics_adaptation_policy
+from .runtime_bridge import compile_backend_runtime_bridge
 from .state import (
     DiffusionConditioningState,
     Gen2SimAdmissionState,
@@ -488,6 +489,12 @@ def compile_sim_synth_physics_world_state(
         adaptation_policy=physics_adaptation_policy,
         embodiment_context=embodiment_context,
     )
+    backend_runtime_bridge = compile_backend_runtime_bridge(
+        physics_context,
+        backend_execution_binding,
+        robot_asset_contract=robot_asset_contract,
+        embodiment_context=embodiment_context,
+    )
     branch_plans = compile_synthetic_branch_plans(
         jobs,
         physics_context=physics_context,
@@ -543,6 +550,7 @@ def compile_sim_synth_physics_world_state(
         physics_adaptation_policy=physics_adaptation_policy,
         backend_execution_binding=backend_execution_binding,
         robot_asset_contract=robot_asset_contract,
+        backend_runtime_bridge=backend_runtime_bridge,
         synthetic_branch_plans=branch_plans,
         gen2sim_admission=gen2sim_admission,
         diffusion_conditioning=diffusion_conditioning,

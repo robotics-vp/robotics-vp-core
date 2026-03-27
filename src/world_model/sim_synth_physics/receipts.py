@@ -141,6 +141,54 @@ class BackendRuntimeExecutionReceipt:
 
 
 @dataclass(frozen=True)
+class BackendRuntimeBridgeReceipt:
+    """Receipt for one WM-owned backend runtime bridge contract."""
+
+    receipt_id: str
+    bridge_id: str
+    backend: str
+    bridge_status: str
+    execution_authority: str
+    transport_profile: str
+    planner_rate_hz: float
+    control_rate_hz: float
+    observation_rate_hz: float
+    action_decimation: int
+    latency_budget_ms: float
+    bridge_readiness_score: float
+    action_contracts: list[str] = field(default_factory=list)
+    observation_contracts: list[str] = field(default_factory=list)
+    telemetry_contracts: list[str] = field(default_factory=list)
+    safety_channels: list[str] = field(default_factory=list)
+    artifact_refs: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_runtime_bridge_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "bridge_id": self.bridge_id,
+            "backend": self.backend,
+            "bridge_status": self.bridge_status,
+            "execution_authority": self.execution_authority,
+            "transport_profile": self.transport_profile,
+            "planner_rate_hz": float(self.planner_rate_hz),
+            "control_rate_hz": float(self.control_rate_hz),
+            "observation_rate_hz": float(self.observation_rate_hz),
+            "action_decimation": int(self.action_decimation),
+            "latency_budget_ms": float(self.latency_budget_ms),
+            "bridge_readiness_score": clip01(self.bridge_readiness_score),
+            "action_contracts": strings(self.action_contracts),
+            "observation_contracts": strings(self.observation_contracts),
+            "telemetry_contracts": strings(self.telemetry_contracts),
+            "safety_channels": strings(self.safety_channels),
+            "artifact_refs": strings(self.artifact_refs),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class RobotAssetContractReceipt:
     """Receipt for one WM-owned robot-asset contract."""
 

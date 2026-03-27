@@ -34,6 +34,7 @@ from .physics_contracts import PhysicsExecutionContract
 from .render_materialization import materialize_render_provider_receipts
 from .receipts import (
     BackendExecutionBindingReceipt,
+    BackendRuntimeBridgeReceipt,
     BackendShadowExecutionReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
@@ -41,10 +42,15 @@ from .receipts import (
     RobotAssetContractReceipt,
     SimulationOutcomeReceipt,
 )
+from .runtime_bridge import (
+    build_backend_runtime_bridge_receipt,
+    compile_backend_runtime_bridge,
+)
 from .runtime_evidence import summarize_runtime_evidence
 from .shadow_execution import materialize_backend_shadow_execution
 from .state import (
     BackendExecutionBindingState,
+    BackendRuntimeBridgeState,
     BranchRenderProviderState,
     DiffusionConditioningState,
     Gen2SimAdmissionState,
@@ -72,8 +78,10 @@ __all__ = [
     "BackendSelectorRuntimePackage",
     "BackendAdapterDescriptor",
     "BackendExecutionBindingReceipt",
+    "BackendRuntimeBridgeReceipt",
     "BackendShadowExecutionReceipt",
     "BackendExecutionBindingState",
+    "BackendRuntimeBridgeState",
     "BranchRenderProviderState",
     "BranchPlannerRuntimePackage",
     "DiffusionConditioningState",
@@ -101,9 +109,11 @@ __all__ = [
     "build_physics_adaptation_receipt",
     "build_physics_calibration_receipt",
     "compile_robot_asset_contract",
+    "compile_backend_runtime_bridge",
     "materialize_backend_shadow_execution",
     "materialize_render_provider_receipts",
     "summarize_runtime_evidence",
+    "build_backend_runtime_bridge_receipt",
     "compile_backend_execution_binding",
     "build_physics_execution_contract",
     "build_synthetic_branch_corpus_metadata",

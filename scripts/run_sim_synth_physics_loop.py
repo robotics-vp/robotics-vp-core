@@ -100,6 +100,11 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         "physics_adaptation_receipt_id": result.physics_adaptation_receipt.receipt_id,
         "backend_execution_binding_receipt_id": result.backend_execution_binding_receipt.receipt_id,
         "robot_asset_contract_receipt_id": result.robot_asset_contract_receipt.receipt_id,
+        "backend_runtime_bridge_receipt_id": result.backend_runtime_bridge_receipt.receipt_id,
+        "backend_runtime_bridge_status": result.backend_runtime_bridge_receipt.bridge_status,
+        "bridge_execution_authority": result.backend_runtime_bridge_receipt.execution_authority,
+        "bridge_transport_profile": result.backend_runtime_bridge_receipt.transport_profile,
+        "bridge_readiness_score": float(result.backend_runtime_bridge_receipt.bridge_readiness_score),
         "robot_asset_readiness_score": float(result.robot_asset_contract_receipt.readiness_score),
         "backend_runtime_execution_receipt_id": (
             None

@@ -142,6 +142,56 @@ class RobotAssetContractState:
 
 
 @dataclass(frozen=True)
+class BackendRuntimeBridgeState:
+    """Canonical slow-loop to backend-runtime bridge contract."""
+
+    bridge_id: str
+    backend: str
+    bridge_status: str
+    transport_profile: str
+    transport_stack: list[str] = field(default_factory=list)
+    required_runtime_targets: list[str] = field(default_factory=list)
+    ready_runtime_targets: list[str] = field(default_factory=list)
+    missing_runtime_targets: list[str] = field(default_factory=list)
+    planner_rate_hz: float = 0.0
+    control_rate_hz: float = 0.0
+    observation_rate_hz: float = 0.0
+    action_decimation: int = 1
+    latency_budget_ms: float = 0.0
+    bridge_readiness_score: float = 0.0
+    action_contracts: list[str] = field(default_factory=list)
+    observation_contracts: list[str] = field(default_factory=list)
+    telemetry_contracts: list[str] = field(default_factory=list)
+    safety_channels: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_runtime_bridge_state_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "bridge_id": self.bridge_id,
+            "backend": self.backend,
+            "bridge_status": self.bridge_status,
+            "transport_profile": self.transport_profile,
+            "transport_stack": strings(self.transport_stack),
+            "required_runtime_targets": strings(self.required_runtime_targets),
+            "ready_runtime_targets": strings(self.ready_runtime_targets),
+            "missing_runtime_targets": strings(self.missing_runtime_targets),
+            "planner_rate_hz": float(self.planner_rate_hz),
+            "control_rate_hz": float(self.control_rate_hz),
+            "observation_rate_hz": float(self.observation_rate_hz),
+            "action_decimation": int(self.action_decimation),
+            "latency_budget_ms": float(self.latency_budget_ms),
+            "bridge_readiness_score": clip01(self.bridge_readiness_score),
+            "action_contracts": strings(self.action_contracts),
+            "observation_contracts": strings(self.observation_contracts),
+            "telemetry_contracts": strings(self.telemetry_contracts),
+            "safety_channels": strings(self.safety_channels),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class DiffusionConditioningState:
     """Governed diffusion/render-conditioning state derived from WM state."""
 
@@ -295,6 +345,7 @@ class SimSynthPhysicsWorldState:
     physics_adaptation_policy: Optional[PhysicsAdaptationPolicyState] = None
     backend_execution_binding: Optional[BackendExecutionBindingState] = None
     robot_asset_contract: Optional[RobotAssetContractState] = None
+    backend_runtime_bridge: Optional[BackendRuntimeBridgeState] = None
     synthetic_branch_plans: list[SyntheticBranchPlan] = field(default_factory=list)
     gen2sim_admission: Optional[Gen2SimAdmissionState] = None
     diffusion_conditioning: Optional[DiffusionConditioningState] = None
@@ -321,6 +372,11 @@ class SimSynthPhysicsWorldState:
             "robot_asset_contract": (
                 self.robot_asset_contract.to_dict()
                 if self.robot_asset_contract is not None
+                else None
+            ),
+            "backend_runtime_bridge": (
+                self.backend_runtime_bridge.to_dict()
+                if self.backend_runtime_bridge is not None
                 else None
             ),
             "synthetic_branch_plans": [plan.to_dict() for plan in self.synthetic_branch_plans],

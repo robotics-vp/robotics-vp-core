@@ -21,6 +21,7 @@ from .promotion import HelperMode
 from .render_materialization import materialize_render_provider_receipts
 from .receipts import (
     BackendExecutionBindingReceipt,
+    BackendRuntimeBridgeReceipt,
     BackendRuntimeExecutionReceipt,
     BackendShadowExecutionReceipt,
     PhysicsAdaptationReceipt,
@@ -30,6 +31,7 @@ from .receipts import (
     SimulationOutcomeReceipt,
 )
 from .runtime_evidence import summarize_runtime_evidence
+from .runtime_bridge import build_backend_runtime_bridge_receipt
 from .shadow_execution import materialize_backend_shadow_execution
 from .state import SimSynthPhysicsWorldState
 
@@ -59,6 +61,7 @@ class SimSynthPhysicsLoopResult:
     physics_adaptation_receipt: PhysicsAdaptationReceipt
     backend_execution_binding_receipt: BackendExecutionBindingReceipt
     robot_asset_contract_receipt: RobotAssetContractReceipt
+    backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt
     physics_calibration_receipt: PhysicsCalibrationReceipt
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt] = None
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt] = None
@@ -75,6 +78,7 @@ class SimSynthPhysicsLoopResult:
             "physics_adaptation_receipt": self.physics_adaptation_receipt.to_dict(),
             "backend_execution_binding_receipt": self.backend_execution_binding_receipt.to_dict(),
             "robot_asset_contract_receipt": self.robot_asset_contract_receipt.to_dict(),
+            "backend_runtime_bridge_receipt": self.backend_runtime_bridge_receipt.to_dict(),
             "backend_runtime_execution_receipt": (
                 None
                 if self.backend_runtime_execution_receipt is None
@@ -109,6 +113,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "physics_adaptation_receipt": root / "physics_adaptation_receipt.json",
         "backend_execution_binding_receipt": root / "backend_execution_binding_receipt.json",
         "robot_asset_contract_receipt": root / "robot_asset_contract_receipt.json",
+        "backend_runtime_bridge_receipt": root / "backend_runtime_bridge_receipt.json",
         "backend_runtime_execution_receipt": root / "backend_runtime_execution_receipt.json",
         "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
         "physics_calibration_receipt": root / "physics_calibration_receipt.json",
@@ -162,6 +167,7 @@ def _build_outcome_receipts(
     adaptation_receipt: PhysicsAdaptationReceipt,
     backend_binding_receipt: BackendExecutionBindingReceipt,
     robot_asset_contract_receipt: RobotAssetContractReceipt,
+    backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt,
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
     calibration_receipt: PhysicsCalibrationReceipt,
     *,
@@ -274,6 +280,21 @@ def _build_outcome_receipts(
                         if backend_runtime_execution_receipt is None
                         else str(backend_runtime_execution_receipt.execution_status)
                     ),
+                    "backend_runtime_bridge_receipt_id": (
+                        backend_runtime_bridge_receipt.receipt_id
+                    ),
+                    "backend_runtime_bridge_status": (
+                        backend_runtime_bridge_receipt.bridge_status
+                    ),
+                    "backend_runtime_bridge_execution_authority": (
+                        backend_runtime_bridge_receipt.execution_authority
+                    ),
+                    "bridge_transport_profile": (
+                        backend_runtime_bridge_receipt.transport_profile
+                    ),
+                    "bridge_readiness_score": (
+                        float(backend_runtime_bridge_receipt.bridge_readiness_score)
+                    ),
                     "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
                     "robot_asset_readiness_score": float(
                         robot_asset_contract_receipt.readiness_score
@@ -293,6 +314,7 @@ def _build_training_feedback_manifest(
     adaptation_receipt: PhysicsAdaptationReceipt,
     backend_binding_receipt: BackendExecutionBindingReceipt,
     robot_asset_contract_receipt: RobotAssetContractReceipt,
+    backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt,
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
     calibration_receipt: PhysicsCalibrationReceipt,
@@ -335,6 +357,7 @@ def _build_training_feedback_manifest(
         "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
         "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
         "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
+        "backend_runtime_bridge_receipt_id": backend_runtime_bridge_receipt.receipt_id,
         "backend_runtime_execution_receipt_id": (
             None
             if backend_runtime_execution_receipt is None
@@ -359,6 +382,10 @@ def _build_training_feedback_manifest(
         ),
         "requested_backend": execution_contract.requested_backend,
         "resolved_backend": execution_contract.resolved_backend,
+        "backend_runtime_bridge_status": backend_runtime_bridge_receipt.bridge_status,
+        "bridge_execution_authority": backend_runtime_bridge_receipt.execution_authority,
+        "bridge_transport_profile": backend_runtime_bridge_receipt.transport_profile,
+        "bridge_readiness_score": float(backend_runtime_bridge_receipt.bridge_readiness_score),
         "robot_asset_readiness_score": float(robot_asset_contract_receipt.readiness_score),
         "render_provider_receipt_count": len(render_provider_receipts),
         "materialized_render_provider_count": sum(
@@ -637,6 +664,19 @@ class SimSynthPhysicsRuntime:
             execution_contract,
             backend_binding_receipt,
         )
+        backend_runtime_bridge_receipt = build_backend_runtime_bridge_receipt(
+            bridge_state=world_state.backend_runtime_bridge,
+            backend_binding_receipt_id=backend_binding_receipt.receipt_id,
+            robot_asset_contract_receipt=robot_asset_contract_receipt,
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_shadow_execution_receipt=backend_shadow_execution_receipt,
+            world_state_id=world_state.state_id,
+            physics_execution_contract_id=execution_contract.contract_id,
+            route_status=execution_contract.route_status,
+            requested_backend=execution_contract.requested_backend,
+            resolved_backend=execution_contract.resolved_backend,
+            fallback_reason=execution_contract.fallback_reason,
+        )
         calibration_receipt = build_physics_calibration_receipt(
             world_state,
             execution_contract,
@@ -649,6 +689,7 @@ class SimSynthPhysicsRuntime:
             adaptation_receipt,
             backend_binding_receipt,
             robot_asset_contract_receipt,
+            backend_runtime_bridge_receipt,
             backend_runtime_execution_receipt,
             calibration_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
@@ -688,6 +729,7 @@ class SimSynthPhysicsRuntime:
             adaptation_receipt,
             backend_binding_receipt,
             robot_asset_contract_receipt,
+            backend_runtime_bridge_receipt,
             backend_runtime_execution_receipt,
             backend_shadow_execution_receipt,
             calibration_receipt,
@@ -700,6 +742,7 @@ class SimSynthPhysicsRuntime:
             physics_adaptation_receipt=adaptation_receipt,
             backend_execution_binding_receipt=backend_binding_receipt,
             robot_asset_contract_receipt=robot_asset_contract_receipt,
+            backend_runtime_bridge_receipt=backend_runtime_bridge_receipt,
             backend_runtime_execution_receipt=backend_runtime_execution_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             physics_calibration_receipt=calibration_receipt,
@@ -727,6 +770,10 @@ class SimSynthPhysicsRuntime:
             _write_json(
                 artifact_paths["robot_asset_contract_receipt"],
                 robot_asset_contract_receipt.to_dict(),
+            )
+            _write_json(
+                artifact_paths["backend_runtime_bridge_receipt"],
+                backend_runtime_bridge_receipt.to_dict(),
             )
             if backend_runtime_execution_receipt is not None:
                 _write_json(
@@ -769,6 +816,7 @@ class SimSynthPhysicsRuntime:
                     "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
                     "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
                     "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
+                    "backend_runtime_bridge_receipt_id": backend_runtime_bridge_receipt.receipt_id,
                     "backend_runtime_execution_receipt_id": (
                         None
                         if backend_runtime_execution_receipt is None
@@ -782,6 +830,12 @@ class SimSynthPhysicsRuntime:
                     "physics_calibration_receipt_id": calibration_receipt.receipt_id,
                     "robot_asset_readiness_score": float(
                         robot_asset_contract_receipt.readiness_score
+                    ),
+                    "backend_runtime_bridge_status": backend_runtime_bridge_receipt.bridge_status,
+                    "bridge_execution_authority": backend_runtime_bridge_receipt.execution_authority,
+                    "bridge_transport_profile": backend_runtime_bridge_receipt.transport_profile,
+                    "bridge_readiness_score": float(
+                        backend_runtime_bridge_receipt.bridge_readiness_score
                     ),
                     "render_provider_receipt_count": len(render_provider_receipts),
                     "materialized_render_provider_count": training_feedback_manifest.get(

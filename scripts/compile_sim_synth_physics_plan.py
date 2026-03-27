@@ -104,6 +104,16 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         "agenda_id": world_state.simulation_agenda.agenda_id,
         "job_count": len(world_state.simulation_agenda.jobs),
         "branch_plan_count": len(world_state.synthetic_branch_plans),
+        "backend_runtime_bridge_status": (
+            ""
+            if world_state.backend_runtime_bridge is None
+            else world_state.backend_runtime_bridge.bridge_status
+        ),
+        "bridge_transport_profile": (
+            ""
+            if world_state.backend_runtime_bridge is None
+            else world_state.backend_runtime_bridge.transport_profile
+        ),
         "admissible_branch_count": len(
             getattr(world_state.gen2sim_admission, "admissible_branch_ids", []) or []
         ),

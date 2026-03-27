@@ -98,6 +98,37 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_backend_runtime_bridge_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "bridge_1",
+                "bridge_id": "bridge_state_1",
+                "backend": "isaac",
+                "bridge_status": "runtime_targets_missing",
+                "execution_authority": "shadow_runtime",
+                "transport_profile": "isaac_shadow_bridge",
+                "planner_rate_hz": 10.0,
+                "control_rate_hz": 250.0,
+                "observation_rate_hz": 60.0,
+                "action_decimation": 4,
+                "latency_budget_ms": 8.0,
+                "bridge_readiness_score": 0.55,
+                "action_contracts": ["whole_body_joint_command_v1"],
+                "observation_contracts": ["imu_state_v1"],
+                "telemetry_contracts": ["watchdog_state_v1"],
+                "safety_channels": ["joint_limit_guard_v1", "watchdog_v1"],
+                "metadata": {
+                    "runtime_target_contract": {
+                        "missing_required_target_ids": ["unitree_sdk2_root"]
+                    }
+                },
+                "version": "backend_runtime_bridge_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_backend_shadow_execution_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -172,6 +203,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["physics_adaptation_receipt"]["receipt_id"] == "adapt_1"
     assert bundles[0]["backend_execution_binding_receipt"]["receipt_id"] == "binding_1"
     assert bundles[0]["robot_asset_contract_receipt"]["receipt_id"] == "asset_1"
+    assert bundles[0]["backend_runtime_bridge_receipt"]["receipt_id"] == "bridge_1"
     assert bundles[0]["backend_runtime_execution_receipt"]["receipt_id"] == "runtime_1"
     assert bundles[0]["backend_shadow_execution_receipt"]["receipt_id"] == "shadow_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
@@ -187,6 +219,13 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["metadata"]["robot_asset_missing_assets"] == [
         "unitree_robot_description",
         "sensor_extrinsics",
+    ]
+    assert backend_rows[0]["metadata"]["backend_runtime_bridge_receipt_id"] == "bridge_1"
+    assert backend_rows[0]["metadata"]["backend_runtime_bridge_status"] == "runtime_targets_missing"
+    assert backend_rows[0]["metadata"]["bridge_execution_authority"] == "shadow_runtime"
+    assert backend_rows[0]["metadata"]["bridge_transport_profile"] == "isaac_shadow_bridge"
+    assert backend_rows[0]["metadata"]["bridge_missing_runtime_targets"] == [
+        "unitree_sdk2_root"
     ]
     assert backend_rows[0]["metadata"]["backend_shadow_execution_receipt_id"] == "shadow_1"
     assert (
@@ -204,6 +243,8 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["target_render_materialization_mode"] == "scene_config"
     assert branch_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
     assert branch_rows[0]["metadata"]["robot_asset_readiness_score"] == 0.25
+    assert branch_rows[0]["metadata"]["backend_runtime_bridge_receipt_id"] == "bridge_1"
+    assert branch_rows[0]["metadata"]["backend_runtime_bridge_status"] == "runtime_targets_missing"
     assert (
         branch_rows[0]["metadata"]["render_artifact_refs"]
         == ["/tmp/render_provider_1/lsd_vector_scene_config.json"]
