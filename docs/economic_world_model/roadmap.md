@@ -17,6 +17,32 @@
 - Treat each WM as a complete subsystem target: push canonical state, learned-package lanes, replay/receipt wiring, and production-loop integration until the honest remaining blockers are data, GPU budget, calibration assets, Unitree-class sim/hardware assets, or benchmark evidence.
 - For the next cross-WM expansion beyond the current semantic/economic readiness work, see `docs/economic_world_model/multi_wm_architecture_plan.md`.
 
+## Ontology Layering Rule
+
+Keep two ontology layers explicit throughout roadmap work.
+
+Operational / module-level ontology:
+
+- this is the in-stack ontology substrate for entities, tasks, datapacks, events, provenance, governance hooks, and module/runtime state
+- it should become more neuralized over time through learned embeddings, uncertainty-aware assertions, temporal/event structure, and trainable module-to-ontology adaptors
+- its training role is operational fidelity: better encoding/decoding, event/state prediction, temporal consistency, uncertainty calibration, provenance quality, and governance satisfaction
+- its reward should come from completed-loop postmortems, reconstruction quality, calibration quality, and operational yield, not from taking over the frozen core reward math right now
+
+WM-transport ontology:
+
+- this is distinct from the operational ontology and should appear only when adjacent WMs are real
+- it is the typed semantic/governance contract for WM-to-WM interoperability
+- the isomorphic tensor / transport bridge is the fast differentiable realization of that contract, not a replacement for it
+- its training role is improving WM-to-ontology-to-WM translation quality, preserving topology/causal structure/actionability, increasing synchronized loop success, and decomposing bridge-only vs downstream-only vs joint gains
+- its reward should come from completed-loop/postmortem outcomes, counterfactual improvement, governance satisfaction, and downstream economic yield for the adaptor/bridge layer
+
+Current honest state:
+
+- today the repo mostly has operational ontology substrate/plumbing
+- it does not yet have a fully neural ontology layer
+- it does not yet have a full WM-transport ontology implementation
+- keep the current sequencing: lower WMs first, then economic WM consolidation, then ontology-mediated WM transport
+
 ## Workstream Summary
 
 | Week / stage | Goal | Classification | Primary targets |

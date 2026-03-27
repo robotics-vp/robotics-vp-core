@@ -1,5 +1,23 @@
 # Economic World Model Progress Log
 
+## 2026-03-27
+
+- Changed: refined `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` so the ontology story is explicit and no longer easy to blur:
+  - operational / module-level ontology is now named as the in-stack cybernetic digital-twin layer for entities, tasks, datapacks, events, provenance, governance hooks, and module/runtime state
+  - WM-transport ontology is now named separately as the typed semantic/governance contract for adjacent-WM interoperability
+  - the docs now say explicitly that the isomorphic tensor / transport bridge is the differentiable realization of the WM-transport contract, not a replacement for ontology and not a reason to collapse everything into one symbolic or latent mother-layer
+- Changed: made the RL / training roles explicit for both ontology layers:
+  - operational ontology training is framed around module-to-ontology fidelity, event/state prediction, temporal consistency, uncertainty calibration, provenance quality, and governance satisfaction
+  - WM-transport ontology training is framed around WM-to-ontology-to-WM translation quality, topology/causal/dependency preservation, synchronized-loop success, and decomposed bridge-only vs downstream-only vs joint gains
+  - both layers are tied to completed-loop/postmortem quality, governance satisfaction, counterfactual improvement, and downstream yield rather than to immediate takeover of frozen core reward math
+- Changed: made current-state honesty explicit in the roadmap docs:
+  - today the repo mostly has operational ontology substrate/plumbing
+  - it does not yet have a fully neural ontology layer
+  - it does not yet have a full WM-transport ontology implementation
+  - sequencing remains lower WMs first, then economic-WM consolidation, then ontology-mediated WM transport
+- Verification: `git diff --check` passed. This was a docs-only refinement.
+- Next recommended task: when the next lower-WM tranche lands, thread the operational/module ontology language into its state contracts and receipts directly, while keeping the WM-transport ontology reserved for the later adjacent-WM bridge phase.
+
 ## 2026-03-26
 
 - Changed: completed the follow-on `sim_synth_physics` helper-package tranche and started the advisory pivot for that subsystem:

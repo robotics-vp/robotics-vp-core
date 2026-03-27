@@ -1,5 +1,24 @@
 # Economic World Model Implementation Notes
 
+## 2026-03-27
+
+- Clarified the ontology architecture into two repo-native layers instead of one vague future "ontology" bucket:
+  - operational / module-level ontology is the in-stack typed operational state substrate and digital-twin layer
+  - WM-transport ontology is the later typed interoperability contract between adjacent WMs
+- The docs now make the complement explicit:
+  - ontology defines the semantic / governance contract
+  - the isomorphic tensor / transport bridge is the compiled differentiable realization that should respect that contract
+  - neither should be used as an excuse to invent a giant symbolic mother-WM
+- The RL/training split is now explicit:
+  - operational ontology training should improve module encoding/decoding fidelity, temporal/event prediction, uncertainty calibration, provenance quality, and governance satisfaction
+  - WM-transport ontology training should improve WM-to-ontology-to-WM translation quality, preserve topology/causal structure/actionability, and decompose bridge-only vs downstream-only vs joint effects
+  - both are trained from completed-loop/postmortem quality, governance satisfaction, counterfactual improvement, and downstream yield, while frozen core reward math remains untouched for now
+- Current-state honesty is now written down in the architecture docs:
+  - the repo mostly has operational ontology substrate/plumbing today
+  - it does not yet have a fully neural ontology layer
+  - it does not yet have a full WM-transport ontology implementation
+  - lower WMs still come first, then economic-WM consolidation, then ontology-mediated transport
+
 ## 2026-03-26
 
 - Landed the real runtime-package path for the first two learned sim/synth helper seams:

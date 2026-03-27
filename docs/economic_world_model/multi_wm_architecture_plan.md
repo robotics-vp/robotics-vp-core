@@ -138,6 +138,96 @@ This matters because later:
 
 must communicate through typed state and receipts rather than culturally "optional" advisories.
 
+## Two Ontology Layers
+
+Do not collapse ontology into one vague layer.
+
+The architecture needs two distinct ontology roles:
+
+1. operational / module-level ontology inside the stack
+2. WM-transport ontology for adjacent-WM interoperability
+
+Neither of these should become a giant symbolic mother-WM.
+
+### 1. Operational / module-level ontology
+
+This is the existing in-stack ontology substrate:
+
+- canonical typed operational state for entities, tasks, datapacks, events, provenance, governance hooks, and module/runtime state
+- the cybernetic operational digital-twin layer that modules actually read from and write to
+- not just static persistence or a passive registry
+
+This layer should become more neuralized over time, but remain operationally grounded:
+
+- learned embeddings over object, action, event, and datapack types
+- uncertainty-aware assertions rather than flat boolean claims only
+- richer temporal and event structure over operational trajectories
+- trainable module-to-ontology and ontology-to-module adaptors where that improves fidelity
+
+Its RL / training role should be:
+
+- improving module-to-ontology and ontology-to-module encoding / decoding fidelity
+- improving event and state prediction plus temporal consistency
+- improving uncertainty calibration and provenance quality
+- improving governance satisfaction and policy-compliance quality
+- using completed-loop postmortems, reconstruction quality, calibration quality, and operational yield as the main training signals
+
+Important boundary:
+
+- this is not permission to rewrite the repo’s frozen core reward math directly right now
+- reward for this layer should come from completed-loop quality, reconstruction, calibration, provenance, and operational yield, not from ontology taking over the core reward path
+
+### 2. WM-transport ontology
+
+This is distinct from the operational ontology.
+
+It is the typed semantic and governance contract for cross-WM interoperability between adjacent world models.
+
+Its job is to define:
+
+- which WM-to-WM mappings are semantically valid
+- which uncertainty, provenance, and governance fields must survive translation
+- which translated outputs remain actionable for the downstream WM
+
+This layer should work with, not replace, the differentiable bridge:
+
+- ontology = typed semantic and governance contract
+- isomorphic tensor / transport bridge = compiled differentiable realization that respects that contract
+
+Do not replace the transport tensor with ontology text or symbolic graph rewriting.
+Do not replace the ontology contract with an unconstrained tensor either.
+They are complementary layers.
+
+Its RL / training role should be:
+
+- improving WM-to-ontology-to-WM translation quality
+- preserving topology, causal structure, dependency structure, and downstream actionability across WMs
+- increasing successful synchronization across full loops
+- decomposing gains into bridge-only, downstream-WM-only, joint, and interaction effects
+- using completed-loop and postmortem reward, counterfactual improvement, governance satisfaction, and downstream economic yield as training signals for the adaptor / bridge layer
+
+### Current honest status
+
+Today the repo mostly has:
+
+- operational ontology substrate and plumbing
+- event/provenance/governance hooks
+- module-facing typed state scaffolding
+
+Today the repo does **not** yet have:
+
+- a fully neuralized operational ontology layer
+- a full WM-transport ontology implementation
+- a full ontology-mediated adjacent-WM transport runtime
+
+The sequencing remains:
+
+1. lower WMs first
+2. economic WM consolidation over lower canonical state
+3. ontology-mediated WM transport between adjacent WMs
+
+That sequencing should not be inverted by introducing a premature ontology mother-layer.
+
 ## Topology
 
 ```mermaid
@@ -1041,6 +1131,17 @@ Objective:
 
 This should be middleware, not a mother-WM.
 
+### WM-transport ontology vs differentiable bridge
+
+This phase should explicitly contain two cooperating pieces:
+
+- a WM-transport ontology that defines the typed semantic, uncertainty, provenance, and governance contract for valid adjacent-WM mappings
+- an isomorphic tensor / transport bridge that is the fast differentiable realization of that contract
+
+The ontology is the contract layer.
+The tensor bridge is the compiled differentiable bridge.
+Do not collapse one into the other.
+
 ### Transport layer role
 
 Each bridge should:
@@ -1048,6 +1149,7 @@ Each bridge should:
 - translate one WM’s canonical state into the vocabulary of the adjacent WM
 - preserve topology where topology matters
 - preserve causal structure where causal structure matters
+- preserve semantic/actionability constraints defined by the WM-transport ontology
 - carry uncertainty and provenance explicitly
 - learn from completed loops and postmortem receipts
 
@@ -1100,8 +1202,10 @@ Core decomposed evaluation:
 
 Recommended training signals:
 
+- WM -> ontology -> WM translation quality
 - round-trip reconstruction
 - topology preservation
+- causal / dependency preservation
 - uncertainty calibration
 - downstream economic yield
 - governance satisfaction
