@@ -4,10 +4,12 @@
 
 - Tightened the doctrine against "stood up in name only" WMs:
   - the multi-WM plan now has an explicit mechanics-first WM readiness rule
+  - the doctrine now says neuralization is part of scalable mechanics, not a deprioritized separate layer
   - each WM should be judged on a bounded closed loop, not on whether it can emit logs or canonical-looking state objects
   - future-state completion now means all relevant downstream consumers for the hardware-ready loop are wired and changed by that WM, not merely one downstream demo consumer
 - The practical execution rule is:
-  - keep the mechanics substrate ahead of the learned layer
+  - keep the scalable mechanics substrate ahead of non-load-bearing learned claims
+  - learned control, prediction, adaptation, routing, and refinement should become part of the real subsystem as soon as they can honestly carry loop load
   - if a phase is still missing executors, adapters, safety/precondition gates, replay/training exports, or live downstream consumers, that phase is still structurally incomplete
   - the maturity ladder should be read as:
     - `schema_only`

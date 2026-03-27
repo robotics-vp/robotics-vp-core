@@ -232,6 +232,11 @@ This rule applies to Phase 1 and every later WM or deployment-enabler phase in t
 
 Do not count a WM as "stood up" just because it can log, summarize, or emit a typed state object.
 
+This rule does not de-emphasize neuralization.
+In this roadmap, neuralization is part of scalable mechanics.
+Learned control, prediction, adaptation, routing, and state refinement should become part of the real subsystem as early as they can honestly carry load.
+What should be rejected is fake neuralization that sits above missing executors, adapters, safety gates, replay exports, or downstream consumers.
+
 A WM should count as real only when it owns a bounded closed loop with:
 
 - real upstream ingress or honest provider-unavailable truth
@@ -249,10 +254,13 @@ This means:
 
 Every WM phase should be treated as two subtracks:
 
-- mechanics substrate
+- scalable mechanics substrate
 - learned / neural layer
 
-The learned / neural layer should not be treated as primary completion while the mechanics substrate is still missing:
+These are not opposing priorities.
+The learned / neural layer is part of the scalable mechanics substrate once it affects the real loop through canonical state, receipts, execution, replay, and training.
+
+The learned / neural layer should not be treated as primary completion while the scalable mechanics substrate is still missing:
 
 - executor or backend ownership
 - controller or adapter ownership

@@ -119,7 +119,8 @@ Mechanics-first advancement rule:
 
 - do not call a WM "ready" because it can emit logs, summaries, or canonical-looking state in isolation
 - a WM only counts as structurally real when it owns a bounded closed loop with real ingress, real execution or honest execution gating, replay/training exports, and all relevant downstream consumers for the future hardware-ready loop wired
-- keep the mechanics substrate ahead of the learned layer; if a phase is still missing executors, adapters, safety gates, replay exports, or live downstream consumers, that phase is still structurally incomplete even if training code already exists
+- neuralization remains part of scalable mechanics rather than a separate luxury layer; learned control, prediction, adaptation, and routing should be made load-bearing as soon as the surrounding subsystem can carry them honestly
+- keep the scalable mechanics substrate ahead of non-load-bearing learned claims; if a phase is still missing executors, adapters, safety gates, replay exports, or live downstream consumers, that phase is still structurally incomplete even if training code already exists
 - do not let a higher WM treat a lower WM as canonical until the lower WM has crossed bounded runtime authority and is affecting the relevant downstream loop rather than merely being logged
 
 Suggested weekly WM order for the first training season:
