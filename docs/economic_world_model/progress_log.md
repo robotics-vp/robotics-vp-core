@@ -628,6 +628,20 @@
 
 ## 2026-03-27
 
+- Changed: continued Phase 1 sim/synth/physics WM implementation with typed backend-adapter, physics-adaptation, and branch/render-provider ownership:
+  - added `src/world_model/sim_synth_physics/backend_adapters.py` so backend routing now resolves explicit adapter descriptors for PyBullet, Holosoma, and the still-honest Isaac/Unitree target gap instead of treating backend names as flat strings
+  - added `src/world_model/sim_synth_physics/randomization.py` and extended `state.py`, `physics_contracts.py`, `receipts.py`, `compiler.py`, `calibration.py`, and `runtime.py` so the WM now compiles `PhysicsAdaptationPolicyState`, emits `physics_adaptation_receipt_v1`, and threads domain-randomization / system-identification / robot-asset targets into live loop artifacts rather than leaving them implicit
+  - added `src/world_model/sim_synth_physics/render_providers.py` and extended branch planning / diffusion / runtime receipts so NAG / LSD / GGDS materialization is now routed through WM-owned `BranchRenderProviderState` contracts and `render_provider_receipt_v1` artifacts instead of sitting only as adjacent provider code
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the new adaptation/provider receipts and projects them into backend-selector / branch-planner rows, which closes another Phase 1 gap between WM-owned receipts and downstream training datasets
+  - `scripts/run_sim_synth_physics_loop.py` and the sim/synth tests now preserve and verify the new receipt surfaces end-to-end
+- Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` so Phase 1 explicitly includes backend-adapter ownership, physics adaptation policy/receipt ownership, and WM-owned NAG/LSD/GGDS provider contracts before the phase can be considered exhausted apart from GPU/data/asset limits.
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/diffusion_requests.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/diffusion_requests.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py`, and `git diff --check`.
+- Blocked: Phase 1 is narrower but still not externally blocked yet. The remaining explicit in-phase work is now:
+  - real Isaac Sim / Isaac Gym execution adapters and Unitree robot assets behind the new backend contract
+  - richer Holosoma execution/runtime asset binding under the same contract
+  - concrete GGDS/LDM execution and richer NAG/LSD materialization under the new WM-owned render-provider seam
+  - real GPU-backed grounded video state for perception-conditioned sim
+
 - Changed: finished the external-provider doctrine cleanup for the remaining teacher / SceneTracks seams so provider status is now canonical metadata while provider outputs stay advisory:
   - added `src/evidence/provider_truth.py` as the shared `external_provider_truth_v1` contract for provider availability, fallback, calibration class, and grounding class
   - `src/vla/teacher_runtime.py` and `src/evidence/teacher_trace.py` now emit `provider_truth` on teacher contracts, teacher action envelopes, and teacher traces, including backend, fallback, and vision-backbone metadata

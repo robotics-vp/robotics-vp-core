@@ -1429,3 +1429,28 @@
     - domain-randomization / system-ID policy and receipts
     - NAG / LSD / GGDS productionization
   - only after those are pushed as far as the repo can honestly push them should the phase be considered blocked mainly by data, GPU, asset, or benchmark limits
+
+- Phase 1 backend ownership is now structurally better aligned with the stated target posture:
+  - `src/world_model/sim_synth_physics/backend_adapters.py` turns backend names into explicit adapter descriptors with simulator family, target hardware class, execution envelope, and fallback truth
+  - the Isaac path is still honestly non-executable, but it now carries explicit Unitree-target metadata and required-asset expectations instead of hiding as a generic backend token
+  - Holosoma is now described as a Unitree-class external execution adapter behind the WM boundary, not just as an adjacent backend module
+
+- Phase 1 now has a typed physics-adaptation layer rather than ad hoc randomization metadata:
+  - `PhysicsAdaptationPolicyState` carries domain-randomization profile, system-identification profile, robot-asset profile, randomization axes, and calibration targets
+  - `physics_adaptation_receipt_v1` is emitted in the live WM loop so downstream training and readiness logic can see whether the loop is still tabletop-oriented, humanoid-shadow-oriented, or closer to benchmark-ready adaptation posture
+  - this closes one of the explicit Phase 1 gaps from the plan: domain randomization and system identification are no longer just an aspirational note
+
+- NAG / LSD / GGDS are now wrapped by a WM-owned provider seam:
+  - each `SyntheticBranchPlan` now carries a `BranchRenderProviderState`
+  - the WM emits `render_provider_receipt_v1` artifacts and threads provider kind/status into diffusion routing and training-corpus extraction
+  - this does not mean GGDS is “done”; the concrete optimizer is still stub-only without a real LDM + renderer stack
+  - the important architectural change is that branch/render ownership now sits inside the WM boundary, so the remaining work is about making those providers concrete rather than first creating a canonical contract
+
+- Honest remaining Phase 1 blocker statement after this pass:
+  - we still should not leave Phase 1
+  - the remainder is now dominated by concrete execution assets and GPU/provider reality:
+    - Isaac Sim / Isaac Gym execution
+    - Unitree robot assets and sim-env bindings
+    - richer Holosoma runtime binding
+    - concrete GGDS/LDM materialization
+    - grounded GPU-backed perception-conditioned sim

@@ -706,8 +706,11 @@ src/world_model/sim_synth_physics/
   state.py
   agenda.py
   compiler.py
+  backend_adapters.py
   backend_router.py
   physics_contracts.py
+  randomization.py
+  render_providers.py
   diffusion_contracts.py
   synthetic_branches.py
   gen2sim_admission.py
@@ -747,14 +750,20 @@ Recommended typed objects:
   - one job with env family, backend, seed, objective preset, coverage targets, and expected receipts
 - `PhysicsContextState`
   - fidelity, backend, timestep, randomization, calibration, and safety-relevant physics settings
+- `PhysicsAdaptationPolicyState`
+  - typed domain-randomization, system-identification, robot-asset, and calibration-target policy
 - `DiffusionConditioningState`
   - governed diffusion request structure, not just a prompt string
 - `SyntheticBranchPlan`
   - branch family, gap targets, rendering/generation mode, admission preconditions
+- `BranchRenderProviderState`
+  - typed NAG/LSD/GGDS provider contract per branch, including fallback honesty
 - `Gen2SimAdmissionState`
   - explicit branch admissibility context and helper traces
 - `SimulationOutcomeReceipt`
   - outcome refs, replay refs, event/debt/governance/value refs, and readiness summary
+- `PhysicsAdaptationReceipt`
+  - emitted receipt for adaptation-policy readiness and target-hardware posture
 - `PhysicsCalibrationReceipt`
   - domain-randomization/system-ID summary and backend-quality flags
 
@@ -777,6 +786,8 @@ The WM should emit:
 - diffusion conditioning plan
 - synthetic branch plan
 - backend/fidelity choice receipt
+- physics adaptation receipt
+- branch render-provider receipts
 - branch outcome receipts
 - replay-ready artifact refs
 - training-feedback refs
@@ -789,10 +800,12 @@ Recommended flow:
 2. compile a `SimSynthPhysicsWorldState`
 3. rank simulation jobs and branch jobs inside one agenda
 4. choose backend, fidelity, and domain-randomization regime
-5. emit a `DiffusionConditioningState` for any render/generation branch
-6. execute backend adapters
-7. emit `SimulationOutcomeReceipt` and related sidecars
-8. feed receipts into replay, benchmark gating, and training datasets
+5. compile typed physics adaptation policy and calibration targets
+6. emit a `DiffusionConditioningState` for any render/generation branch
+7. resolve WM-owned branch/render providers for NAG/LSD/GGDS materialization
+8. execute backend adapters
+9. emit `SimulationOutcomeReceipt` and related sidecars
+10. feed receipts into replay, benchmark gating, and training datasets
 
 ### Phase 1 neuralization plan
 
@@ -845,6 +858,8 @@ Phase 1 should count as landed only when:
 - diffusion conditioning is derived from WM state instead of flat prompt assembly alone
 - synthetic branch plans are typed objects, not script-local metadata
 - backend/fidelity selection is emitted as a first-class receipt
+- domain-randomization / system-identification policy is emitted as a typed state and receipt, not left implicit in backend metadata
+- NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts and receipts, not left as free-standing provider code paths
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name
 - the target posture is real Isaac Sim / Isaac Gym / Unitree-class backend functionality behind typed backend routing, not a permanent pybullet-only fallback loop
@@ -857,9 +872,10 @@ Named gaps that should remain explicit in this phase:
 
 - real Isaac Sim / Isaac Gym backend implementation with typed adapter ownership
 - Unitree-class humanoid sim-env integration behind a typed backend contract
-- richer Holosoma integration contract
-- domain randomization and system identification policy
-- NAG / LSD / GGDS productionization
+- richer Holosoma execution integration and runtime asset binding
+- concrete Isaac/Unitree robot assets, calibration sidecars, and simulator bindings behind the new adapter contracts
+- concrete GGDS/LDM execution under the new WM-owned render-provider contracts
+- richer NAG/LSD runtime materialization beyond the newly typed provider-routing seam
 - real GPU-backed grounded video state for perception-conditioned sim
 
 ### Phase 1 OSS dependency posture
