@@ -1649,3 +1649,29 @@
     - richer Holosoma runtime binding
     - concrete GGDS/LDM materialization
     - grounded GPU-backed perception-conditioned sim
+
+- Phase 1 backend-runtime execution is now less fake around whole-body training:
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` can now use Holosoma in two honest modes:
+    - `evaluate_policy(...)` when a runtime policy id exists
+    - `train_policy(...)` when the runtime exists and the WM has motion datapacks / direct motion clips but no policy id yet
+  - the important doctrine change is that we no longer pretend “missing policy id” blocks the lane when a trainable motion-source contract is actually present
+  - `runtime_training_completed` now propagates into runtime evidence and calibration/adaptation receipts, so the train path counts as concrete loop evidence rather than a side note
+
+- Unitree-target asset contracts are now more canonical and less manifest-shaped:
+  - `src/world_model/sim_synth_physics/asset_manifest.py` normalizes humanoid asset aliases into canonical requirements such as:
+    - `unitree_robot_description`
+    - `whole_body_joint_map`
+    - `camera_extrinsics`
+    - `imu_extrinsics`
+    - `force_torque_calibration`
+    - `actuator_latency_profile`
+    - `joint_limit_profile`
+    - `safety_watchdog_profile`
+  - `adapters/backend_isaac.py` now bases backend readiness on those canonical requirements instead of a thin four-key manifest
+  - `asset_contracts.py` now unions backend-specific requirements with hardware-specific Unitree requirements, which makes the contract more honest for humanoid readiness and prevents “backend binding says one thing, hardware contract silently expects more” drift
+  - `shadow_execution.py` and backend runtime bindings now preserve normalized asset-manifest state in backend-local sidecars so later Isaac/Unitree bring-up can use the same typed contract rather than inventing a parallel asset checklist
+
+- Practical Phase 1 consequence after this tranche:
+  - the remaining backend gap is increasingly not “the WM cannot express or route the runtime”
+  - it is “the host/runtime/assets/policies are not present yet”
+  - that is the right direction for this phase

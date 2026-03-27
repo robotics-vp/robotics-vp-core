@@ -188,11 +188,13 @@
         "src/world_model/sim_synth_physics/adapters/backend_isaac.py",
         "src/world_model/sim_synth_physics/backend_bindings.py"
       ],
-      "current_state": "Typed backend binding contracts, an explicit Isaac shadow-contract backend, canonical robot-asset contract receipts, backend-local asset/calibration/IO sidecars, and WM-owned runtime-request receipts now exist, but concrete Isaac Lab / Isaac Sim / Unitree asset execution still depends on a real runtime module, policies, and assets.",
+      "current_state": "Typed backend binding contracts, an explicit Isaac shadow-contract backend, canonical robot-asset contract receipts, normalized Unitree humanoid asset manifests, backend-local asset/calibration/IO sidecars, and WM-owned runtime-request / runtime-execution receipts now exist, but concrete Isaac Lab / Isaac Sim / Unitree asset execution still depends on a real runtime module, policies, and assets.",
       "oss_options": [
         "Isaac Sim",
         "Isaac Gym / Isaac Lab",
-        "Unitree SDK2"
+        "Unitree SDK2",
+        "Unitree RL Gym / Isaac Lab humanoid forks",
+        "HumanoidVerse-style Unitree humanoid training stacks"
       ],
       "required_preconditions": [
         "GPU workstation or server",
@@ -218,10 +220,11 @@
         "src/world_model/sim_synth_physics/adapters/backend_holosoma.py",
         "src/world_model/sim_synth_physics/shadow_execution.py"
       ],
-      "current_state": "WM-owned Holosoma binding, shadow work-order materialization, canonical robot-asset contract receipts, backend-local asset/calibration/IO sidecars, datapack-binding artifacts, and optional concrete runtime-evaluation receipts now exist, but real Holosoma host/runtime availability, policies, and motion data are still missing.",
+      "current_state": "WM-owned Holosoma binding, shadow work-order materialization, canonical robot-asset contract receipts, backend-local asset/calibration/IO sidecars, datapack-binding artifacts, optional concrete runtime-evaluation receipts, and runtime train-from-motion-datapack receipts now exist, but real Holosoma host/runtime availability, policies, and motion data are still missing.",
       "oss_options": [
         "holosoma",
-        "Isaac Gym / Isaac Sim"
+        "Isaac Gym / Isaac Sim",
+        "Unitree humanoid motion-capture / retargeting stacks"
       ],
       "required_preconditions": [
         "GPU workstation or server",
@@ -236,7 +239,7 @@
         "whole-body rollout artifacts",
         "runtime evidence tied to canonical sim/synth WM receipts"
       ],
-      "notes": "The shadow work-order path is meant to exhaust wiring debt first; the remaining blocker should be runtime/data/assets, not missing WM ownership."
+      "notes": "The shadow work-order path is meant to exhaust wiring debt first. The remaining blocker should be runtime/data/assets, not missing WM ownership or a missing train-vs-eval runtime contract."
     }
   ]
 }

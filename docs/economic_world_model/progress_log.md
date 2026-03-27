@@ -856,3 +856,17 @@
   - domain-randomization and system-identification policy
   - NAG / LSD / GGDS productionization
   - grounded GPU-backed perception-conditioned sim
+- Changed: pushed the next concrete Phase 1 backend-runtime tranche so the WM gets closer to a real humanoid execution substrate instead of just request/receipt scaffolding:
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now supports a real Holosoma train-or-eval split:
+    - evaluate an existing runtime policy when a policy id exists
+    - train from motion datapacks / direct motion clips when a policy id does not exist but a motion source bundle does
+    - emit honest `runtime_training_completed` status instead of pretending a missing policy blocks the lane when the runtime can actually train
+  - `src/world_model/sim_synth_physics/runtime_evidence.py` and `src/world_model/sim_synth_physics/calibration.py` now treat concrete runtime training as real runtime evidence, so adaptation/calibration receipts react to train-path execution instead of only eval-path execution
+  - added `src/world_model/sim_synth_physics/asset_manifest.py` and threaded it through `adapters/backend_isaac.py`, `asset_contracts.py`, `backend_runtime_execution.py`, `adapters/backend_holosoma.py`, and `shadow_execution.py`
+  - Unitree-target asset manifests are now normalized into canonical hardware contracts (`unitree_robot_description`, `whole_body_joint_map`, camera/IMU/force-torque calibration, actuator latency, joint limits, safety watchdog) instead of being treated as arbitrary manifest keys
+  - the resulting robot-asset contract now honestly unions backend-specific requirements with Unitree-class hardware requirements, which makes backend readiness reflect real humanoid control prerequisites rather than a thin manifest
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`, `python3 -m json.tool scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json >/dev/null`, and `git diff --check`.
+- Blocked: this removes another structural Phase 1 excuse, but the remaining blockers are still concrete runtime/asset realities:
+  - a real Isaac Lab / Isaac Sim / Unitree backend module and assets
+  - real Holosoma host/runtime plus motion data and reward/retargeting context
+  - real GGDS/LDM and grounded video materialization on GPU

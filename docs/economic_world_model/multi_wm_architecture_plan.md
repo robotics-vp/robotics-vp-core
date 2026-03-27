@@ -1009,7 +1009,8 @@ Phase 1 should count as landed only when:
 - backend/fidelity selection is emitted as a first-class receipt
 - domain-randomization / system-identification policy is emitted as a typed state and receipt, not left implicit in backend metadata, and those receipts react to backend/materialization evidence once the WM loop has run
 - concrete backend execution binding is emitted as typed state and receipt, including honest Isaac/Unitree asset-readiness truth, and robot-asset/calibration/IO contracts are emitted as canonical state/receipts plus backend-local sidecars rather than left as loose missing-asset notes
-- requested backend runtime intent is emitted as a typed runtime-request or concrete-runtime receipt, so Isaac/Holosoma paths can advance from request-binding to real evaluation without reopening the WM boundary later
+- requested backend runtime intent is emitted as a typed runtime-request or concrete-runtime receipt, so Isaac/Holosoma paths can advance from request-binding to real evaluation or train-from-motion execution without reopening the WM boundary later
+- Unitree-target humanoid asset manifests are normalized into canonical required-asset contracts rather than treated as arbitrary manifest keys, so backend readiness reflects real robot-description, calibration, safety, and control-IO prerequisites
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name
@@ -1023,7 +1024,7 @@ Named gaps that should remain explicit in this phase:
 
 - real Isaac Sim / Isaac Gym backend implementation with typed adapter ownership
 - Unitree-class humanoid sim-env integration behind a typed backend contract
-- concrete Holosoma runtime execution and datapack/asset binding beyond the new runtime-request / optional execution receipt
+- concrete Holosoma runtime execution and datapack/asset binding beyond the new runtime-request / optional train-or-eval receipt
 - concrete Isaac/Unitree robot assets, calibration sidecars, and simulator bindings behind the new adapter contracts
 - concrete GGDS/LDM execution at scale under the new WM-owned render-provider contracts
 - concrete NAG/LSD counterfactual execution at scale beyond the new conditional execution seam
