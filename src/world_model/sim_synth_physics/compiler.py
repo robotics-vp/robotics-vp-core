@@ -11,7 +11,11 @@ from src.economics.inferential_contract import (
 )
 from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 
-from .adapters import build_semantic_input_context
+from .adapters import (
+    build_economic_input_context,
+    build_embodiment_input_context,
+    build_semantic_input_context,
+)
 from .agenda import SimulationAgenda, SimulationJobSpec
 from .backend_selector_runtime import resolve_backend_selector_helper
 from .branch_planner_runtime import resolve_branch_planner_helper
@@ -702,8 +706,8 @@ def compile_sim_synth_physics_world_state(
             coverage_graph=coverage_graph,
             semantic_context=semantic_context,
         ),
-        "economic": mapping(economic_context),
-        "embodiment": mapping(embodiment_context),
+        "economic": build_economic_input_context(economic_context),
+        "embodiment": build_embodiment_input_context(embodiment_context),
         "benchmark": benchmark_payload,
     }
     artifact_refs = {

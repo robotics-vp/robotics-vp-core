@@ -968,10 +968,9 @@ def compile_simulation_agenda(
             branch_planner_mode=branch_planner_mode,
         )
     )
-    world_state = runtime.compile_world_state(
+    return runtime.compile_legacy_agenda(
         coverage_graph,
         gap_ranker=gap_ranker,
         backend_selector=backend_selector,
         branch_planner=branch_planner,
     )
-    return world_state.simulation_agenda.to_legacy_items()

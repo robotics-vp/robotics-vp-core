@@ -551,11 +551,12 @@ def build_diffusion_prompt_from_coverage_gaps(
             branch_planner_mode=str(branch_planner_mode),
         )
     )
-    world_state = runtime.compile_world_state(
+    world_state, _diffusion_plans = runtime.compile_world_state_and_diffusion_plans(
         coverage_graph,
         gap_ranker=gap_ranker,
         backend_selector=backend_selector,
         branch_planner=branch_planner,
+        limit=limit,
     )
     return build_diffusion_prompts_from_world_state(
         world_state,

@@ -9,6 +9,8 @@ from src.world_model.semantic_coverage_graph import CoverageEdge, CoverageNode, 
 from src.world_model.sim_synth_physics import (
     LearnedBackendSelector,
     LearnedBranchPlanner,
+    SimSynthPhysicsRuntime,
+    SimSynthPhysicsRuntimeConfig,
     compile_gap_driven_diffusion_plans,
     compile_sim_synth_physics_world_state,
 )
@@ -291,3 +293,49 @@ def test_world_state_loads_branch_planner_runtime_package(tmp_path: Path) -> Non
     assert helper_status["promotion_stage"] == "promoted"
     assert helper_status["package_id"] == "branch_planner_test_pkg"
     assert helper_trace["generation_mode"] == "neural_branch_candidate"
+
+
+def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Path) -> None:
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedBackendSelector(),
+    )
+
+    result = runtime.execute_world_state(world_state, output_dir=tmp_path)
+
+    assert result.physics_execution_contract.requested_backend == "isaac"
+    assert result.physics_execution_contract.resolved_backend == "pybullet"
+    assert result.physics_execution_contract.route_status == "fallback"
+    assert result.physics_calibration_receipt.metadata["explicit_gap_kind"] == "missing_backend_adapter"
+    assert (tmp_path / "physics_execution_contract.json").exists()
+    assert (tmp_path / "physics_calibration_receipt.json").exists()
+    assert (tmp_path / "simulation_outcome_receipts.json").exists()
+    assert all(
+        receipt.status in {"planned_with_backend_fallback", "blocked_by_admission"}
+        for receipt in result.outcome_receipts
+    )
+
+
+def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp_path: Path) -> None:
+    runtime = SimSynthPhysicsRuntime(SimSynthPhysicsRuntimeConfig(default_backend="pybullet"))
+
+    result = runtime.run_planning_window(_make_test_graph(), output_dir=tmp_path)
+
+    feedback_manifest = json.loads(
+        (tmp_path / "sim_synth_training_feedback.json").read_text(encoding="utf-8")
+    )
+    diffusion_bundle = json.loads(
+        (tmp_path / "gap_driven_diffusion_plans.json").read_text(encoding="utf-8")
+    )
+    loop_summary = json.loads(
+        (tmp_path / "sim_synth_physics_loop_summary.json").read_text(encoding="utf-8")
+    )
+
+    assert feedback_manifest["world_state_id"] == result.world_state.state_id
+    assert feedback_manifest["planned_branch_count"] >= 1
+    assert diffusion_bundle["plans"]
+    assert loop_summary["physics_execution_contract_id"] == result.physics_execution_contract.contract_id
+    assert result.world_state.input_context["economic"]["economic_urgency_score"] == 0.0

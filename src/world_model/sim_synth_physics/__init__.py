@@ -11,13 +11,20 @@ from .backend_selector_runtime import (
     load_backend_selector_runtime_package,
     resolve_backend_selector_helper,
 )
+from .backend_router import (
+    BackendAdapterDescriptor,
+    build_physics_execution_contract,
+    describe_backend_adapter,
+)
 from .branch_planner import LearnedBranchPlanner, train_branch_planner
 from .branch_planner_runtime import (
     BranchPlannerRuntimePackage,
     load_branch_planner_runtime_package,
     resolve_branch_planner_helper,
 )
+from .calibration import build_physics_calibration_receipt
 from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
+from .physics_contracts import PhysicsExecutionContract
 from .receipts import PhysicsCalibrationReceipt, SimulationOutcomeReceipt
 from .state import (
     DiffusionConditioningState,
@@ -35,6 +42,7 @@ from .training_corpus import (
 
 __all__ = [
     "BackendSelectorRuntimePackage",
+    "BackendAdapterDescriptor",
     "BranchPlannerRuntimePackage",
     "DiffusionConditioningState",
     "GapDrivenDiffusionPlan",
@@ -42,7 +50,9 @@ __all__ = [
     "LearnedBackendSelector",
     "LearnedBranchPlanner",
     "PhysicsCalibrationReceipt",
+    "PhysicsExecutionContract",
     "PhysicsContextState",
+    "SimSynthPhysicsLoopResult",
     "SimSynthPhysicsRuntime",
     "SimSynthPhysicsRuntimeConfig",
     "SimSynthPhysicsWorldState",
@@ -50,7 +60,10 @@ __all__ = [
     "SimulationJobSpec",
     "SimulationOutcomeReceipt",
     "SyntheticBranchPlan",
+    "build_physics_calibration_receipt",
+    "build_physics_execution_contract",
     "compile_sim_synth_physics_world_state",
+    "describe_backend_adapter",
     "load_backend_selector_runtime_package",
     "load_branch_planner_runtime_package",
     "load_sim_synth_receipt_bundles",
@@ -70,9 +83,19 @@ def __getattr__(name: str) -> Any:
         from .compiler import compile_sim_synth_physics_world_state
 
         return compile_sim_synth_physics_world_state
-    if name in {"SimSynthPhysicsRuntime", "SimSynthPhysicsRuntimeConfig"}:
-        from .runtime import SimSynthPhysicsRuntime, SimSynthPhysicsRuntimeConfig
+    if name in {
+        "SimSynthPhysicsLoopResult",
+        "SimSynthPhysicsRuntime",
+        "SimSynthPhysicsRuntimeConfig",
+    }:
+        from .runtime import (
+            SimSynthPhysicsLoopResult,
+            SimSynthPhysicsRuntime,
+            SimSynthPhysicsRuntimeConfig,
+        )
 
+        if name == "SimSynthPhysicsLoopResult":
+            return SimSynthPhysicsLoopResult
         if name == "SimSynthPhysicsRuntime":
             return SimSynthPhysicsRuntime
         return SimSynthPhysicsRuntimeConfig
