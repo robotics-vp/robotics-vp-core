@@ -20,7 +20,10 @@ class PhysicsExecutionContract:
     calibration_profile: str
     backend_selection_policy: str
     adapter_name: str
-    route_status: str
+    simulator_family: str = ""
+    target_hardware_class: str = ""
+    adaptation_policy_id: str = ""
+    route_status: str = ""
     fallback_reason: str = ""
     receipt_kind: str = "physics_execution_contract_v1"
     authority_class: str = "bounded_authority"
@@ -39,6 +42,9 @@ class PhysicsExecutionContract:
             "calibration_profile": self.calibration_profile,
             "backend_selection_policy": self.backend_selection_policy,
             "adapter_name": self.adapter_name,
+            "simulator_family": self.simulator_family,
+            "target_hardware_class": self.target_hardware_class,
+            "adaptation_policy_id": self.adaptation_policy_id,
             "route_status": self.route_status,
             "fallback_reason": self.fallback_reason,
             "receipt_kind": self.receipt_kind,

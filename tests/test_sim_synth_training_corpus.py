@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
-from src.world_model.sim_synth_physics.training_corpus import harvest_sim_synth_receipt_bundles
+from src.world_model.sim_synth_physics.training_corpus import (
+    build_backend_selector_rows_from_receipts,
+    harvest_sim_synth_receipt_bundles,
+)
 
 
 def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path: Path) -> None:
@@ -36,6 +39,40 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_physics_adaptation_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "adapt_1",
+                "policy_id": "policy_1",
+                "backend": "pybullet",
+                "target_hardware_class": "unitree_g1_r1_class",
+                "domain_randomization_profile": "humanoid_shadow_randomization",
+                "system_identification_profile": "humanoid_shadow_system_id",
+                "readiness_score": 0.4,
+                "version": "physics_adaptation_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (receipt_dir / "episode_render_provider_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "provider_1",
+                "branch_plan_id": "plan_1",
+                "provider_id": "render_provider_1",
+                "provider_kind": "lsd_scene_graph",
+                "provider_status": "ready",
+                "render_mode": "lsd_vector_scene",
+                "counterfactual_mode": "none",
+                "version": "render_provider_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_simulation_outcome_receipt_v1.jsonl").write_text(
         json.dumps(
             {
@@ -54,8 +91,14 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
 
     assert len(bundles) == 1
     assert bundles[0]["world_state"]["state_id"] == "sim_state_1"
+    assert bundles[0]["physics_adaptation_receipt"]["receipt_id"] == "adapt_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
+    assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
     assert bundles[0]["simulation_outcome_receipts"][0]["receipt_id"] == "outcome_1"
+
+    backend_rows = build_backend_selector_rows_from_receipts(bundles)
+    assert backend_rows[0]["target_hardware_class"] == "unitree_g1_r1_class"
+    assert backend_rows[0]["target_system_identification_profile"] == "humanoid_shadow_system_id"
 
 
 def test_harvest_sim_synth_receipt_bundles_ignores_incomplete_dirs(tmp_path: Path) -> None:

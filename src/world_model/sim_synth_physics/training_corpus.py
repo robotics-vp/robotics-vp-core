@@ -130,14 +130,27 @@ def _iter_receipt_inputs(paths: Sequence[str | Path]) -> Iterable[Path]:
 
 def _looks_like_receipt_bundle(path: Path) -> bool:
     name = path.name.lower()
-    if any(token in name for token in ("receipt_bundle", "sim_synth", "world_state", "physics_calibration_receipt", "simulation_outcome_receipt")):
+    if any(
+        token in name
+        for token in (
+            "receipt_bundle",
+            "sim_synth",
+            "world_state",
+            "physics_adaptation_receipt",
+            "physics_calibration_receipt",
+            "render_provider_receipt",
+            "simulation_outcome_receipt",
+        )
+    ):
         return True
     return False
 
 
 def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_world_states: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_adaptations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_calibrations: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_render_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_outcomes: dict[Path, list[Dict[str, Any]]] = {}
     explicit_bundles: list[Dict[str, Any]] = []
 
@@ -151,7 +164,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         if not rows:
             continue
         if path.is_file() and any(
-            isinstance(row.get("world_state"), Mapping) or row.get("bundles") or row.get("receipts")
+            isinstance(row.get("world_state"), Mapping) or row.get("bundles")
             for row in rows
         ):
             try:
@@ -164,18 +177,28 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
             parent = path.parent.resolve()
             if version == "sim_synth_physics_world_state_v1":
                 grouped_world_states.setdefault(parent, []).append(dict(payload))
+            elif version == "physics_adaptation_receipt_v1":
+                grouped_adaptations.setdefault(parent, []).append(dict(payload))
             elif version == "physics_calibration_receipt_v1":
                 grouped_calibrations.setdefault(parent, []).append(dict(payload))
+            elif version == "render_provider_receipt_v1":
+                grouped_render_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "simulation_outcome_receipt_v1":
                 grouped_outcomes.setdefault(parent, []).append(dict(payload))
 
     bundles: list[Dict[str, Any]] = list(explicit_bundles)
     all_dirs = sorted(
-        set(grouped_world_states) | set(grouped_calibrations) | set(grouped_outcomes)
+        set(grouped_world_states)
+        | set(grouped_adaptations)
+        | set(grouped_calibrations)
+        | set(grouped_render_receipts)
+        | set(grouped_outcomes)
     )
     for directory in all_dirs:
         world_states = grouped_world_states.get(directory, [])
+        adaptations = grouped_adaptations.get(directory, [])
         calibrations = grouped_calibrations.get(directory, [])
+        render_receipts = grouped_render_receipts.get(directory, [])
         outcomes = grouped_outcomes.get(directory, [])
         for world_state in world_states:
             physics_context = _mapping(world_state.get("physics_context"))
@@ -184,8 +207,12 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 "bundle_id": str(world_state.get("state_id", "")) or directory.name,
                 "world_state": dict(world_state),
             }
+            if adaptations:
+                bundle["physics_adaptation_receipt"] = dict(adaptations[-1])
             if calibrations:
                 bundle["physics_calibration_receipt"] = dict(calibrations[-1])
+            if render_receipts:
+                bundle["render_provider_receipts"] = [dict(item) for item in render_receipts]
             if outcomes:
                 bundle["simulation_outcome_receipts"] = [dict(item) for item in outcomes]
             if metadata.get("benchmark_signals"):
@@ -206,11 +233,23 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "sim_synth_physics_world_state_v1"
     ]
+    adaptations = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "physics_adaptation_receipt_v1"
+    ]
     calibrations = [
         dict(payload)
         for payload in rows
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "physics_calibration_receipt_v1"
+    ]
+    render_receipts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "render_provider_receipt_v1"
     ]
     outcomes = [
         dict(payload)
@@ -224,8 +263,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             "bundle_id": str(world_state.get("state_id", "")) or parent.name,
             "world_state": world_state,
         }
+        if adaptations:
+            bundle["physics_adaptation_receipt"] = adaptations[-1]
         if calibrations:
             bundle["physics_calibration_receipt"] = calibrations[-1]
+        if render_receipts:
+            bundle["render_provider_receipts"] = render_receipts
         if outcomes:
             bundle["simulation_outcome_receipts"] = outcomes
         bundles.append(bundle)
@@ -247,6 +290,7 @@ def build_backend_selector_rows_from_receipts(
         if not jobs or not physics_context:
             continue
         physics_metadata = _mapping(physics_context.get("metadata"))
+        adaptation_receipt = _mapping(bundle_mapping.get("physics_adaptation_receipt"))
         calibration_receipt = _mapping(
             bundle_mapping.get("physics_calibration_receipt")
             or bundle_mapping.get("physics_calibration")
@@ -290,14 +334,24 @@ def build_backend_selector_rows_from_receipts(
                 ),
                 "target_domain_randomization_regime": str(
                     calibration_receipt.get("domain_randomization_regime")
+                    or adaptation_receipt.get("domain_randomization_profile")
                     or physics_context.get("domain_randomization_regime")
                     or "steady_state"
+                ),
+                "target_hardware_class": str(
+                    adaptation_receipt.get("target_hardware_class")
+                    or _mapping(physics_metadata.get("backend_adapter")).get("target_hardware_class")
+                    or "unknown"
+                ),
+                "target_system_identification_profile": str(
+                    adaptation_receipt.get("system_identification_profile") or "unknown"
                 ),
                 "target_source": target_source,
                 "promotion_stage": str(helper_status.get("promotion_stage") or "shadow_candidate"),
                 "metadata": {
                     "bundle_index": bundle_index,
                     "world_state_id": world_state.get("state_id"),
+                    "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                     "calibration_receipt_id": calibration_receipt.get("receipt_id"),
                     "calibration_quality_score": calibration_receipt.get("quality_score"),
                 },
@@ -339,6 +393,11 @@ def build_branch_planner_rows_from_receipts(
             )
             if str(receipt.get("branch_plan_id"))
         }
+        render_receipts = {
+            str(receipt.get("branch_plan_id")): receipt
+            for receipt in _mapping_list(bundle_mapping.get("render_provider_receipts"))
+            if str(receipt.get("branch_plan_id"))
+        }
         for plan_index, plan in enumerate(_mapping_list(world_state.get("synthetic_branch_plans"))):
             plan_id = str(plan.get("plan_id", ""))
             source_job_id = str(plan.get("source_job_id", ""))
@@ -346,9 +405,11 @@ def build_branch_planner_rows_from_receipts(
             if not plan_id or job is None:
                 continue
             plan_metadata = _mapping(plan.get("metadata"))
+            render_provider = _mapping(plan.get("render_provider"))
             helper_status = _mapping(plan_metadata.get("branch_helper_status"))
             outcome = _mapping(outcomes.get(plan_id))
             outcome_metadata = _mapping(outcome.get("metadata"))
+            render_receipt = _mapping(render_receipts.get(plan_id))
             target_source = "runtime_receipt" if outcome else "wm_planning_state"
             fallback_yield = _clip01(plan.get("expected_yield_score"), 0.0)
             realized_yield = _clip01(
@@ -377,12 +438,23 @@ def build_branch_planner_rows_from_receipts(
                         or "coverage_branch"
                     ),
                     "target_expected_yield_score": realized_yield,
+                    "target_render_provider_kind": str(
+                        render_receipt.get("provider_kind")
+                        or render_provider.get("provider_kind")
+                        or "unknown"
+                    ),
+                    "target_render_provider_status": str(
+                        render_receipt.get("provider_status")
+                        or render_provider.get("provider_status")
+                        or "unknown"
+                    ),
                     "target_source": target_source,
                     "promotion_stage": str(helper_status.get("promotion_stage") or "shadow_candidate"),
                     "metadata": {
                         "bundle_index": bundle_index,
                         "world_state_id": world_state.get("state_id"),
                         "branch_plan_id": plan_id,
+                        "render_provider_receipt_id": render_receipt.get("receipt_id"),
                         "simulation_status": outcome.get("status"),
                     },
                 }

@@ -14,6 +14,7 @@ from .adapters import (
     build_semantic_input_context,
 )
 from .agenda import SimulationAgenda, SimulationJobSpec
+from .backend_adapters import describe_backend_adapter
 from .backend_selector_runtime import resolve_backend_selector_helper
 from .common import clip01, mapping, safe_float, stable_id
 from .inferential import (
@@ -22,9 +23,11 @@ from .inferential import (
 )
 from .gen2sim_admission import compile_gen2sim_admission_state
 from .promotion import HelperMode, infer_backend_payload
+from .randomization import compile_physics_adaptation_policy
 from .state import (
     DiffusionConditioningState,
     Gen2SimAdmissionState,
+    PhysicsAdaptationPolicyState,
     PhysicsContextState,
     SimSynthPhysicsWorldState,
     SyntheticBranchPlan,
@@ -295,6 +298,7 @@ def _compile_physics_context(
         "selection_policy": selection_policy,
         "job_ids": [job.job_id for job in jobs],
     }
+    adapter_descriptor = describe_backend_adapter(backend)
     return PhysicsContextState(
         context_id=stable_id("physics_context", context_payload),
         backend=backend,
@@ -309,6 +313,7 @@ def _compile_physics_context(
             "heuristic_domain_randomization_regime": heuristic_randomization,
             "backend_helper_status": helper_status,
             "backend_helper_trace": helper_payload,
+            "backend_adapter": adapter_descriptor.to_dict(),
             "benchmark_signals": mapping(benchmark_signals),
         },
     )
@@ -464,9 +469,16 @@ def compile_sim_synth_physics_world_state(
         backend_selector=backend_selector,
         backend_selector_mode=backend_selector_mode,
     )
+    physics_adaptation_policy: PhysicsAdaptationPolicyState = compile_physics_adaptation_policy(
+        physics_context,
+        adapter=describe_backend_adapter(physics_context.backend),
+        benchmark_signals=benchmark_payload,
+        embodiment_context=embodiment_context,
+    )
     branch_plans = compile_synthetic_branch_plans(
         jobs,
         physics_context=physics_context,
+        physics_adaptation_policy=physics_adaptation_policy,
         benchmark_signals=benchmark_payload,
         semantic_context=semantic_context,
         economic_context=economic_context,
@@ -495,6 +507,7 @@ def compile_sim_synth_physics_world_state(
     }
     artifact_refs = {
         "coverage_window_ref": coverage_window_ref,
+        "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
         "diffusion_conditioning_id": (
             diffusion_conditioning.conditioning_id if diffusion_conditioning is not None else None
@@ -503,6 +516,7 @@ def compile_sim_synth_physics_world_state(
     state_payload = {
         "agenda_id": agenda.agenda_id,
         "physics_context_id": physics_context.context_id,
+        "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
         "admission_id": gen2sim_admission.admission_id,
     }
@@ -510,6 +524,7 @@ def compile_sim_synth_physics_world_state(
         state_id=stable_id("sim_synth_physics", state_payload),
         simulation_agenda=agenda,
         physics_context=physics_context,
+        physics_adaptation_policy=physics_adaptation_policy,
         synthetic_branch_plans=branch_plans,
         gen2sim_admission=gen2sim_admission,
         diffusion_conditioning=diffusion_conditioning,

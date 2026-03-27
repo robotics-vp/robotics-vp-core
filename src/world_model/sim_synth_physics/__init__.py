@@ -5,34 +5,41 @@ from __future__ import annotations
 from typing import Any
 
 from .agenda import SimulationAgenda, SimulationJobSpec
+from .backend_adapters import BackendAdapterDescriptor, describe_backend_adapter
 from .backend_selector import LearnedBackendSelector, train_backend_selector
 from .backend_selector_runtime import (
     BackendSelectorRuntimePackage,
     load_backend_selector_runtime_package,
     resolve_backend_selector_helper,
 )
-from .backend_router import (
-    BackendAdapterDescriptor,
-    build_physics_execution_contract,
-    describe_backend_adapter,
-)
+from .backend_router import build_physics_execution_contract
 from .branch_planner import LearnedBranchPlanner, train_branch_planner
 from .branch_planner_runtime import (
     BranchPlannerRuntimePackage,
     load_branch_planner_runtime_package,
     resolve_branch_planner_helper,
 )
-from .calibration import build_physics_calibration_receipt
+from .calibration import (
+    build_physics_adaptation_receipt,
+    build_physics_calibration_receipt,
+)
 from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
 from .gen2sim_admission import (
     assess_local_branch_corpus_gen2sim,
     compile_gen2sim_admission_state,
 )
 from .physics_contracts import PhysicsExecutionContract
-from .receipts import PhysicsCalibrationReceipt, SimulationOutcomeReceipt
+from .receipts import (
+    PhysicsAdaptationReceipt,
+    PhysicsCalibrationReceipt,
+    RenderProviderReceipt,
+    SimulationOutcomeReceipt,
+)
 from .state import (
+    BranchRenderProviderState,
     DiffusionConditioningState,
     Gen2SimAdmissionState,
+    PhysicsAdaptationPolicyState,
     PhysicsContextState,
     SimSynthPhysicsWorldState,
     SyntheticBranchPlan,
@@ -54,15 +61,19 @@ from .training_corpus import (
 __all__ = [
     "BackendSelectorRuntimePackage",
     "BackendAdapterDescriptor",
+    "BranchRenderProviderState",
     "BranchPlannerRuntimePackage",
     "DiffusionConditioningState",
     "GapDrivenDiffusionPlan",
     "Gen2SimAdmissionState",
     "LearnedBackendSelector",
     "LearnedBranchPlanner",
+    "PhysicsAdaptationPolicyState",
+    "PhysicsAdaptationReceipt",
     "PhysicsCalibrationReceipt",
     "PhysicsExecutionContract",
     "PhysicsContextState",
+    "RenderProviderReceipt",
     "SimSynthPhysicsLoopResult",
     "SimSynthPhysicsRuntime",
     "SimSynthPhysicsRuntimeConfig",
@@ -72,6 +83,7 @@ __all__ = [
     "SimulationOutcomeReceipt",
     "SyntheticBranchPlan",
     "assess_local_branch_corpus_gen2sim",
+    "build_physics_adaptation_receipt",
     "build_physics_calibration_receipt",
     "build_physics_execution_contract",
     "build_synthetic_branch_corpus_metadata",

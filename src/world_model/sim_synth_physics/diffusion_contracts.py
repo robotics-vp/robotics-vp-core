@@ -225,6 +225,7 @@ def compile_gap_driven_diffusion_plans(
             str(job.data_collection_intent),
         )
         branch_admissible = branch_plan.plan_id in admissible_branch_ids
+        render_provider = branch_plan.render_provider
         branch_contract = coerce_inferential_learnability_contract(
             branch_plan.inferential_learnability_contract
         )
@@ -253,6 +254,12 @@ def compile_gap_driven_diffusion_plans(
             "agenda_helper_status": dict(job.metadata.get("agenda_helper_status", {}) or {}),
             "branch_selection_policy": str(branch_plan.selection_policy),
             "branch_helper_status": dict(branch_plan.metadata.get("branch_helper_status", {}) or {}),
+            "render_provider_kind": (
+                "" if render_provider is None else str(render_provider.provider_kind)
+            ),
+            "render_provider_status": (
+                "" if render_provider is None else str(render_provider.provider_status)
+            ),
             "physics_selection_policy": str(world_state.physics_context.selection_policy),
             "physics_backend": str(world_state.physics_context.backend),
             "physics_helper_status": dict(
@@ -322,6 +329,9 @@ def compile_gap_driven_diffusion_plans(
                     "branch_plan_id": branch_plan.plan_id,
                     "branch_selection_policy": branch_plan.selection_policy,
                     "wm_generation_mode": branch_plan.generation_mode,
+                    "render_provider": (
+                        {} if render_provider is None else render_provider.to_dict()
+                    ),
                     "branch_helper_trace": dict(branch_plan.metadata.get("branch_helper_trace", {}) or {}),
                     "diffusion_priority_score": diffusion_priority,
                 },

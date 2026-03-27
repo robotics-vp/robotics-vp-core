@@ -17,7 +17,12 @@ from .inferential import (
     build_branch_plan_inferential_contract,
 )
 from .promotion import HelperMode, infer_branch_payload
-from .state import PhysicsContextState, SyntheticBranchPlan
+from .render_providers import compile_branch_render_provider_state
+from .state import (
+    PhysicsAdaptationPolicyState,
+    PhysicsContextState,
+    SyntheticBranchPlan,
+)
 
 
 def extract_branch_features(z_sequence: torch.Tensor) -> torch.Tensor:
@@ -276,6 +281,7 @@ def compile_synthetic_branch_plans(
     jobs: Sequence[Any],
     *,
     physics_context: PhysicsContextState,
+    physics_adaptation_policy: PhysicsAdaptationPolicyState,
     benchmark_signals: Mapping[str, Any],
     semantic_context: Optional[Mapping[str, Any]],
     economic_context: Optional[Mapping[str, Any]],
@@ -356,6 +362,14 @@ def compile_synthetic_branch_plans(
                 admission_preconditions=admission_preconditions,
                 expected_yield_score=expected_yield_score,
                 selection_policy=selection_policy,
+                render_provider=compile_branch_render_provider_state(
+                    branch_plan_id=plan_id,
+                    generation_mode=generation_mode,
+                    branch_family=f"{job.task_family}:{job.data_collection_intent}",
+                    physics_context=physics_context,
+                    physics_adaptation_policy=physics_adaptation_policy,
+                    benchmark_signals=benchmark_signals,
+                ),
                 inferential_learnability_contract=branch_contract.to_dict(),
                 metadata={
                     "agenda_rank": job.rank,
