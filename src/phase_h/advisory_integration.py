@@ -8,7 +8,7 @@ Per Phase H System Integration Requirements.
 """
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from src.evidence.preconditions import build_execution_work_order
 from src.orchestrator.shell_activation import (
@@ -344,6 +344,10 @@ class PhaseHAdvisory:
     def to_dict(self) -> Dict[str, Any]:
         """Export advisory signals as JSON-safe dict."""
         return to_json_safe({
+            "receipt_kind": "phase_h_advisory_v1",
+            "authority_class": "remain_advisory",
+            "decision_scope": "phase_h_shell_context",
+            "reward_math_mutation": False,
             "skill_multipliers": self.skill_multipliers,
             "skill_quality_signals": self.skill_quality_signals,
             "exploration_priorities": self.exploration_priorities,
@@ -351,9 +355,52 @@ class PhaseHAdvisory:
         })
 
 
+def _normalize_input_receipt_context(
+    execution_precondition_summary: Optional[Mapping[str, Any]] = None,
+    input_receipt_context: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    execution_summary = (
+        dict(execution_precondition_summary)
+        if isinstance(execution_precondition_summary, Mapping)
+        else {}
+    )
+    input_context = dict(input_receipt_context) if isinstance(input_receipt_context, Mapping) else {}
+    work_orders = [
+        dict(payload)
+        for payload in list(input_context.get("work_orders", []) or [])
+        if isinstance(payload, Mapping)
+    ]
+    metadata_receipts = [
+        dict(payload)
+        for payload in list(input_context.get("canonical_metadata_receipts", []) or [])
+        if isinstance(payload, Mapping)
+    ]
+    consumed_receipt_kinds = sorted(
+        {
+            str(payload.get("receipt_kind", "") or "")
+            for payload in [*work_orders, *metadata_receipts]
+            if str(payload.get("receipt_kind", "") or "").strip()
+        }
+    )
+    context = {
+        "execution_precondition_summary": execution_summary,
+        "inferential_admission_summary": dict(input_context.get("inferential_admission_summary", {}) or {}),
+        "control_plane_context": dict(input_context.get("control_plane_context", {}) or {}),
+        "work_order_count": len(work_orders),
+        "canonical_metadata_count": len(metadata_receipts),
+        "consumed_receipt_kinds": consumed_receipt_kinds,
+    }
+    if work_orders:
+        context["work_orders"] = work_orders
+    if metadata_receipts:
+        context["canonical_metadata_receipts"] = metadata_receipts
+    return context
+
+
 def build_phase_h_activation_plan(
     advisory: PhaseHAdvisory,
     execution_precondition_summary: Optional[Dict[str, Any]] = None,
+    input_receipt_context: Optional[Mapping[str, Any]] = None,
     subject_id: str = "phase_h",
 ) -> Dict[str, Any]:
     """
@@ -369,6 +416,7 @@ def build_phase_h_activation_plan(
         if isinstance(execution_precondition_summary, dict)
         else {}
     )
+    receipt_context = _normalize_input_receipt_context(execution_summary, input_receipt_context)
     shell_activation = evaluate_shell_activation_backlog(
         execution_summary,
         module_keys=["phase_h_advisory_integration"],
@@ -405,6 +453,7 @@ def build_phase_h_activation_plan(
                 "skill_mode_suggestion": str(routing.get("skill_mode_suggestion", "balanced")),
             },
             "bounded_actions": list(activation.get("bounded_actions", []) or []),
+            "input_receipt_context": receipt_context,
         }
         activation_work_order = build_execution_work_order(
             order_type="shell_activation",
@@ -418,11 +467,18 @@ def build_phase_h_activation_plan(
             metadata={
                 "activation_id": activation.get("activation_id"),
                 "subject_id": subject_id,
+                "consumed_receipt_kinds": list(receipt_context.get("consumed_receipt_kinds", [])),
+                "work_order_count": int(receipt_context.get("work_order_count", 0)),
             },
         ).to_dict()
 
     return {
+        "receipt_kind": "phase_h_activation_receipt_v1",
+        "authority_class": "remain_advisory",
+        "decision_scope": "phase_h_shell_coordination",
+        "reward_math_mutation": False,
         "execution_mode": execution_mode,
+        "input_receipt_context": receipt_context,
         "shell_activation": shell_activation,
         "activation_plan": activation_plan,
         "activation_work_order": activation_work_order,

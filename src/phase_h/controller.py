@@ -86,14 +86,21 @@ class PhaseHCycleOrchestrator:
             "routing_advisories": advisory.routing_advisories,
         }
         execution_summary = self.config.get("execution_precondition_summary")
+        input_receipt_context = self.config.get("input_receipt_context")
         if isinstance(execution_summary, dict) and execution_summary:
             summary["execution_precondition_summary"] = execution_summary
         activation = build_phase_h_activation_plan(
             advisory,
             execution_precondition_summary=execution_summary,
+            input_receipt_context=input_receipt_context if isinstance(input_receipt_context, dict) else None,
             subject_id=f"{self.cycle_count}:{episode_count}",
         )
+        summary["receipt_kind"] = activation.get("receipt_kind", "phase_h_activation_receipt_v1")
+        summary["authority_class"] = activation.get("authority_class", "remain_advisory")
+        summary["decision_scope"] = activation.get("decision_scope", "phase_h_shell_coordination")
+        summary["reward_math_mutation"] = bool(activation.get("reward_math_mutation", False))
         summary["execution_mode"] = activation.get("execution_mode", "advisory")
+        summary["input_receipt_context"] = activation.get("input_receipt_context", {})
         summary["phase_h_activation"] = activation.get("activation_plan", {})
         summary["phase_h_activation_work_order"] = activation.get("activation_work_order")
         summary["shell_activation"] = activation.get("shell_activation", {})

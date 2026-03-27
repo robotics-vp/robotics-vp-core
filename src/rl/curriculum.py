@@ -1,9 +1,9 @@
 """
-Stage 3.2: Advisory curriculum scheduler on top of DataPackRLSampler.
+Stage 3.2: Bounded curriculum scheduler on top of DataPackRLSampler.
 
 Determines which sampler strategy to use at each training step without touching
-reward math, SAC/PPO code, or objective vectors. Purely advisory: it only
-decides which episode descriptors to surface.
+reward math, SAC/PPO code, or objective vectors. This is bounded training-
+distribution authority, not reward authority.
 """
 import copy
 import random
@@ -81,14 +81,25 @@ class DataPackCurriculum:
         rng = random.Random(seed)
         if self.advisory and getattr(self.sampler, "advisory", None) is None:
             self.sampler.advisory = self.advisory
+        selected_mix: Dict[str, float]
         if phase == "warmup":
+            selected_mix = {"balanced": 1.0}
             batch = self._sample_single("balanced", batch_size, seed)
         elif phase == "skill_building":
+            selected_mix = self._apply_advisory_mix(self.mix["skill_building"])
             batch = self._sample_mixed(self.mix["skill_building"], batch_size, seed, rng)
         elif phase == "frontier":
+            selected_mix = self._apply_advisory_mix(self.mix["frontier"])
             batch = self._sample_mixed(self.mix["frontier"], batch_size, seed, rng)
         else:  # fine_tuning
+            selected_mix = {"econ_urgency": 1.0}
             batch = self._sample_single("econ_urgency", batch_size, seed)
+        curriculum_receipt = self._build_curriculum_receipt(
+            phase=phase,
+            step=step,
+            seed=seed,
+            selected_mix=selected_mix,
+        )
 
         # Attach curriculum metadata without mutating sampler outputs
         annotated = []
@@ -97,6 +108,7 @@ class DataPackCurriculum:
             meta["phase"] = phase
             meta["step"] = step
             meta["total_steps"] = self.total_steps
+            meta["curriculum_receipt"] = curriculum_receipt
             if self.use_condition_vector:
                 tags = item.get("semantic_tags") or {}
                 tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
@@ -162,6 +174,29 @@ class DataPackCurriculum:
         if total <= 0:
             return mix
         return {k: v / total for k, v in adjusted.items()}
+
+    def _build_curriculum_receipt(
+        self,
+        *,
+        phase: str,
+        step: int,
+        seed: int,
+        selected_mix: Dict[str, float],
+    ) -> Dict[str, Any]:
+        return to_json_safe(
+            {
+                "receipt_kind": "curriculum_dispatch_receipt_v1",
+                "authority_class": "bounded_authority",
+                "decision_scope": "training_distribution_curriculum",
+                "reward_math_mutation": False,
+                "phase": phase,
+                "step": int(step),
+                "total_steps": int(self.total_steps),
+                "seed": int(seed),
+                "selected_mix": {str(key): float(value) for key, value in selected_mix.items()},
+                "advisory_attached": bool(self.advisory is not None),
+            }
+        )
 
     def _build_boundaries(self, overrides: Optional[Dict[str, float]]) -> Dict[str, float]:
         if not overrides:

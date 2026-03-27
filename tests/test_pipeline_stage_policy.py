@@ -144,11 +144,15 @@ def test_pipeline_manager_applies_stage_policy_helper(tmp_path: Path) -> None:
     package_path = _write_package(tmp_path)
     manager.config["pipeline_stage_policy_helper_mode"] = "auto"
     manager.config["pipeline_stage_policy_package_path"] = str(package_path)
+    manager.config["input_receipt_context"] = {
+        "canonical_metadata_receipts": [{"receipt_kind": "orchestrator_control_plane_context_v1"}],
+    }
 
     preview = manager.preview_next_iteration()
 
     assert preview["policy_source"] == "heuristic_plus_learned_helper"
     assert preview["promotion_stage"] == "shadow_candidate"
+    assert preview["input_receipt_context"]["consumed_receipt_kinds"] == ["orchestrator_control_plane_context_v1"]
     assert preview["stage_policy_trace"]["helper_trace"]["helper_weight"] == pytest.approx(0.12)
     assert preview["stage_activation_plan"]["policy_source"] == "heuristic_plus_learned_helper"
     assert preview["stage_activation_plan"]["stages"][0]["priority_score"] >= preview["stage_activation_plan"]["stages"][-1]["priority_score"]

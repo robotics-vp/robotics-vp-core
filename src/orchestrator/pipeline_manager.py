@@ -354,6 +354,45 @@ class PipelineManager:
         )
         return dict(execution_summary) if isinstance(execution_summary, dict) else {}
 
+    def _input_receipt_context(self) -> Dict[str, Any]:
+        payload = (
+            self.metadata.get("input_receipt_context")
+            or self.config.get("input_receipt_context")
+            or {}
+        )
+        if not isinstance(payload, dict):
+            payload = {}
+        work_orders = [
+            dict(item)
+            for item in list(payload.get("work_orders", []) or [])
+            if isinstance(item, dict)
+        ]
+        metadata_receipts = [
+            dict(item)
+            for item in list(payload.get("canonical_metadata_receipts", []) or [])
+            if isinstance(item, dict)
+        ]
+        consumed_receipt_kinds = sorted(
+            {
+                str(item.get("receipt_kind", "") or "")
+                for item in [*work_orders, *metadata_receipts]
+                if str(item.get("receipt_kind", "") or "").strip()
+            }
+        )
+        context = {
+            "execution_precondition_summary": self._execution_summary(),
+            "inferential_admission_summary": dict(payload.get("inferential_admission_summary", {}) or {}),
+            "control_plane_context": dict(payload.get("control_plane_context", {}) or {}),
+            "work_order_count": len(work_orders),
+            "canonical_metadata_count": len(metadata_receipts),
+            "consumed_receipt_kinds": consumed_receipt_kinds,
+        }
+        if work_orders:
+            context["work_orders"] = work_orders
+        if metadata_receipts:
+            context["canonical_metadata_receipts"] = metadata_receipts
+        return context
+
     def _last_iteration_summary(self) -> Dict[str, Any]:
         last_results: Dict[str, Any] = {}
         if self.iterations:
@@ -384,6 +423,7 @@ class PipelineManager:
         """Build a bounded stage-activation plan when shell readiness is satisfied."""
 
         execution_summary = self._execution_summary()
+        input_receipt_context = self._input_receipt_context()
         shell_activation = evaluate_shell_activation_backlog(
             execution_summary,
             module_keys=["pipeline_manager"],
@@ -483,6 +523,7 @@ class PipelineManager:
                 "stages": [],
                 "repair_hints": list(activation.get("pending_requirements", []) or []),
                 "future_training_backlog": list(shell_activation.get("future_training", [])),
+                "input_receipt_context": input_receipt_context,
             }
             for rank, stage_label in enumerate(ranked_stage_labels, start=1):
                 stage_activation_plan["stages"].append(
@@ -510,12 +551,19 @@ class PipelineManager:
                     "future_training_backlog_count": len(shell_activation.get("future_training", [])),
                     "policy_source": policy_source,
                     "promotion_stage": promotion_stage,
+                    "consumed_receipt_kinds": list(input_receipt_context.get("consumed_receipt_kinds", [])),
+                    "work_order_count": int(input_receipt_context.get("work_order_count", 0)),
                 },
             ).to_dict()
 
         return {
+            "receipt_kind": "pipeline_stage_activation_receipt_v1",
+            "authority_class": "remain_advisory",
+            "decision_scope": "pipeline_shell_coordination",
+            "reward_math_mutation": False,
             "execution_mode": execution_mode,
             "suggested_config": suggested_config,
+            "input_receipt_context": input_receipt_context,
             "shell_activation": shell_activation,
             "stage_activation_plan": stage_activation_plan,
             "activation_work_order": activation_work_order,
@@ -533,6 +581,10 @@ class PipelineManager:
         """
         activation_plan = self.build_iteration_activation_plan()
         report: Dict[str, Any] = {
+            "receipt_kind": activation_plan.get("receipt_kind", "pipeline_stage_activation_receipt_v1"),
+            "authority_class": activation_plan.get("authority_class", "remain_advisory"),
+            "decision_scope": activation_plan.get("decision_scope", "pipeline_shell_coordination"),
+            "reward_math_mutation": bool(activation_plan.get("reward_math_mutation", False)),
             "pipeline_id": self.pipeline_id,
             "name": self.name,
             "total_iterations": len(self.iterations),
@@ -542,6 +594,7 @@ class PipelineManager:
             "action_items": [],
             "execution_preconditions": {},
             "execution_mode": activation_plan.get("execution_mode", "advisory"),
+            "input_receipt_context": activation_plan.get("input_receipt_context", {}),
             "shell_activation": activation_plan.get("shell_activation", {}),
             "stage_activation_plan": activation_plan.get("stage_activation_plan", {}),
             "activation_work_order": activation_plan.get("activation_work_order"),
@@ -632,6 +685,10 @@ class PipelineManager:
         execution_summary = self._execution_summary()
 
         return {
+            "receipt_kind": activation_plan.get("receipt_kind", "pipeline_stage_activation_receipt_v1"),
+            "authority_class": activation_plan.get("authority_class", "remain_advisory"),
+            "decision_scope": activation_plan.get("decision_scope", "pipeline_shell_coordination"),
+            "reward_math_mutation": bool(activation_plan.get("reward_math_mutation", False)),
             "iteration_number": len(self.iterations) + 1,
             "last_iteration_summary": last_results,
             "suggested_config": activation_plan.get("suggested_config", self.config.copy()),
@@ -639,6 +696,7 @@ class PipelineManager:
             "advisory_notes": self.global_recommendations,
             "execution_preconditions": execution_summary,
             "execution_mode": activation_plan.get("execution_mode", "advisory"),
+            "input_receipt_context": activation_plan.get("input_receipt_context", {}),
             "shell_activation": activation_plan.get("shell_activation", {}),
             "stage_activation_plan": activation_plan.get("stage_activation_plan", {}),
             "activation_work_order": activation_plan.get("activation_work_order"),
