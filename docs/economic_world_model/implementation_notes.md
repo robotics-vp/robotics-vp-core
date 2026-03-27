@@ -2,6 +2,19 @@
 
 ## 2026-03-26
 
+- Added `docs/economic_world_model/humanoid_target_readiness.md` as the concrete G1/R1-facing readiness artifact:
+  - it converts the high-level hardware-target discussion into an explicit checklist
+  - it includes a benchmark matrix for balance, locomotion-manipulation, recovery, dexterity, degraded sensing/comms, and related humanoid-specific promotion classes
+  - it records a repo-grounded gap map against current files such as:
+    - `src/embodiment/core.py`
+    - `src/embodiment/registry.py`
+    - `src/envs/physics/isaac_backend.py`
+    - `src/ingestion/x_humanoid_adapter.py`
+    - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py`
+    - `src/motor_backend/workcell_env_backend.py`
+  - it also makes Unitree sim-env integration, robot asset/calibration handling, companion-compute middleware, and teleop/recovery fallback explicit future requirements rather than implied concerns
+- `docs/economic_world_model/multi_wm_architecture_plan.md` now links to that readiness artifact from the humanoid-target and Phase 3.5 sections so the planning stack has one concrete checklist for later embodied-target work.
+
 - Added `docs/economic_world_model/multi_wm_architecture_plan.md` to make the next architecture expansion explicit instead of leaving it as conversational intent:
   - the stack should grow into:
     - perception / grounding WM

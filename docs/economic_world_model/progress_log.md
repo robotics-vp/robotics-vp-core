@@ -2,6 +2,17 @@
 
 ## 2026-03-26
 
+- Changed: added `docs/economic_world_model/humanoid_target_readiness.md` as the concrete follow-on artifact for the new G1/R1-facing plan. It turns the hardware-target discussion into:
+  - an explicit readiness checklist
+  - a benchmark matrix
+  - a repo-grounded gap map
+  - a model-capacity review target list
+  - a Unitree sim-env integration checklist
+  - companion-compute / comms / calibration / teleop fallback requirements
+- Changed: linked that readiness artifact back into `docs/economic_world_model/multi_wm_architecture_plan.md` so the humanoid-target sections now point to a concrete checklist instead of only future intent.
+- Verification: `git diff --check` passed. This was a docs-only planning pass; no code paths changed.
+- Next recommended task: when the repo returns from planning to implementation, use `docs/economic_world_model/humanoid_target_readiness.md` as the acceptance checklist for the eventual Unitree sim integration and embodiment-contract refit work.
+
 - Changed: added `docs/economic_world_model/multi_wm_architecture_plan.md` as the new multi-stage architecture plan for the next world-model stack. The document makes the topology explicit:
   - perception / grounding WM
   - embodiment / actuation WM

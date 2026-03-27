@@ -129,6 +129,10 @@ The right rule is:
 
 That means the stack needs an explicit future **model-capacity audit**, not just more modules.
 
+The concrete follow-on checklist for this is now captured in:
+
+- `docs/economic_world_model/humanoid_target_readiness.md`
+
 Subsystems that likely need capacity reconsideration for G1/R1-class readiness:
 
 - embodiment / actuation WM encoders and action-state models
@@ -753,6 +757,10 @@ Preconditions:
 - initial embodiment WM contract draft
 - initial perception WM contract draft
 - identified target hardware assumptions for Unitree-class robots
+
+Reference artifact:
+
+- `docs/economic_world_model/humanoid_target_readiness.md`
 
 ### Phase 4 - Deployment Enabler Phases
 
