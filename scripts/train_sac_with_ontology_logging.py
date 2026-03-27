@@ -593,9 +593,13 @@ def main(runner=None, _wrapped_args=None):
     advisory_path = output_root / "online_shadow_advisory.json"
     scorer_preconditions_path = output_root / "semantic_runtime_scorer_preconditions.json"
     scorer_work_orders_path = output_root / "semantic_runtime_scorer_work_orders.json"
+    inferential_summary_path = output_root / "inferential_learnability_summary.json"
+    inferential_work_orders_path = output_root / "inferential_work_orders.json"
     _write_json(advisory_path, advisory)
     _write_json(scorer_preconditions_path, advisory["semantic_runtime_scorer_preconditions"])
     _write_json(scorer_work_orders_path, {"work_orders": advisory["semantic_runtime_scorer_work_orders"]})
+    _write_json(inferential_summary_path, advisory["inferential_learnability_summary"])
+    _write_json(inferential_work_orders_path, {"work_orders": advisory["inferential_work_orders"]})
     report = build_promotion_evidence_report(
         dataset=dataset,
         promotion_policy=promotion_policy,
@@ -659,6 +663,12 @@ def main(runner=None, _wrapped_args=None):
             promotion_policy_snapshot=promotion_policy.to_dict(),
             source_domain_coverage=build_source_domain_coverage(dataset),
             receipt_label_coverage=receipt_bundle.coverage_summary(),
+            inferential_learnability_summary=dict(
+                advisory.get("inferential_learnability_summary", {}) or {}
+            ),
+            inferential_work_order_summary=dict(
+                advisory.get("adaptation_budget", {}).get("summary", {}) or {}
+            ),
             artifact_schema_compatibility=list(dataset.manifest.metadata.get("schema_compatibility", []) or []),
             metadata={
                 "update_count": update_count,
@@ -674,6 +684,8 @@ def main(runner=None, _wrapped_args=None):
         runner.register_artifact("online_shadow_advisory", advisory_path)
         runner.register_artifact("semantic_runtime_scorer_preconditions", scorer_preconditions_path)
         runner.register_artifact("semantic_runtime_scorer_work_orders", scorer_work_orders_path)
+        runner.register_artifact("inferential_learnability_summary", inferential_summary_path)
+        runner.register_artifact("inferential_work_orders", inferential_work_orders_path)
         runner.register_artifact("receipt_label_bundle", receipt_paths["bundle"])
         runner.register_artifact("receipt_label_summary", receipt_paths["summary"])
         runner.register_artifact("regal_promotion_eval", promotion_paths["json"])

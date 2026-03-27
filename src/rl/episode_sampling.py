@@ -16,6 +16,10 @@ import hashlib
 from src.objectives.compiler import ObjectiveCompiler
 from src.objectives.profile import ObjectiveProfile
 from src.objectives.tensor import ObjectiveTensor
+from src.economics.inferential_contract import (
+    build_inferential_learnability_contract,
+    coerce_inferential_learnability_contract,
+)
 from src.orchestrator.queue_selection import (
     QueueDispatchConfig,
     QueueDispatchMode,
@@ -314,15 +318,38 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
     )
     epi_conf = float(episode.datapack_summary.get("epi_confidence", 0.0) or 0.0)
     transfer_score = max(0.0, 1.0 - float(episode.condition_vector.get("ood_risk_level", 0.0) or 0.0))
-    signal_yield_score, inferential_replay_weight = _descriptor_signal_yield(
-        frontier_gain=frontier_gain,
-        epiplexity_delta=epi_delta,
-        epiplexity_confidence=epi_conf,
-        transfer_score=transfer_score,
-        data_quality=quality_score,
-        provenance_quality=pricing_confidence,
-        trust_score=pricing_confidence,
+    execution_preconditions = dict(episode.metadata.get("execution_preconditions", {}) or {})
+    future_signals = dict(execution_preconditions.get("metadata", {}).get("future_training_signals", {}) or {})
+    learnability_contract = coerce_inferential_learnability_contract(
+        episode.metadata.get("inferential_learnability_contract")
     )
+    if learnability_contract is None:
+        learnability_contract = build_inferential_learnability_contract(
+            subject_id=episode.episode_id,
+            subject_kind="replay_episode",
+            datapack_id=str(
+                episode.metadata.get("datapack_id")
+                or episode.datapack_summary.get("datapack_id")
+                or episode.episode_id
+            ),
+            frontier_gain=frontier_gain,
+            epiplexity_delta=epi_delta,
+            epiplexity_confidence=epi_conf,
+            transfer_score=transfer_score,
+            data_quality=quality_score,
+            provenance_quality=pricing_confidence,
+            trust_score=pricing_confidence,
+            benchmark_eligible=bool(future_signals.get("benchmark_eligible", False)),
+            semantic_grounding_non_heuristic=bool(
+                future_signals.get("semantic_grounding_non_heuristic", False)
+            ),
+            promotion_trace_complete=bool(future_signals.get("promotion_trace_complete", False)),
+            budget_settlement_live=bool(future_signals.get("budget_settlement_live", False)),
+            overlay_joined=bool(episode.metadata.get("epiplexity_overlay_joined", False)),
+            metadata={"source": "replay_episode_descriptor"},
+        )
+    signal_yield_score = float(learnability_contract.signal_yield.get("score", 0.0))
+    inferential_replay_weight = float(learnability_contract.inferential_replay_weight)
     descriptor = {
         "pack_id": episode.episode_id,
         "episode_id": episode.episode_id,
@@ -353,11 +380,15 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
         "delta_J": float(episode.econ_tensor_summary.get("axes", {}).get("value_earned", 0.0) or 0.0),
         "sampling_weight": max(0.1, 1.0 + frontier_gain),
         "w_embodiment": 1.0,
-        "w_epi": max(0.0, frontier_gain),
+        "w_epi": max(
+            0.0,
+            float(learnability_contract.epiplexity_delta) * float(learnability_contract.epiplexity_confidence),
+        ),
         "delta_epi_per_flop": epi_delta,
         "epi_confidence": epi_conf,
         "signal_yield_score": float(signal_yield_score),
         "inferential_replay_weight": float(inferential_replay_weight),
+        "inferential_learnability_contract": learnability_contract.to_dict(),
         "episode_length": int(episode.total_steps),
         "tags": {
             "source": episode.source_domain,
@@ -371,9 +402,9 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
             "quality_score": quality_score,
             "pricing_confidence": pricing_confidence,
             "signal_yield_score": float(signal_yield_score),
+            "learnability_class": learnability_contract.learnability_class,
         },
     }
-    execution_preconditions = dict(episode.metadata.get("execution_preconditions", {}) or {})
     if execution_preconditions:
         descriptor["unified_quality_weight"] = max(0.0, float(execution_preconditions.get("readiness_score", 1.0)))
         descriptor["unified_quality_eligible"] = bool(execution_preconditions.get("ready", True))

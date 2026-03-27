@@ -4,6 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from src.economics.inferential_contract import (
+    build_inferential_learnability_contract,
+    coerce_inferential_learnability_contract,
+)
 from src.economics.inferential_reward import compile_inferential_reward
 from src.regality.promotion_policy import RegalMaturityStage, RegalPromotionPolicy
 from src.utils.config_digest import sha256_json
@@ -159,6 +163,45 @@ class InferentialTrainingGate:
             "episode_id": candidate.episode_id,
             "inferential_reward": inferential_reward.to_dict(),
         }
+        learnability_contract = coerce_inferential_learnability_contract(
+            candidate.metadata.get("inferential_learnability_contract")
+        )
+        if learnability_contract is None:
+            inferential_metadata = dict(candidate.metadata.get("inferential_metadata", {}) or {})
+            learnability_contract = build_inferential_learnability_contract(
+                subject_id=candidate.episode_id,
+                subject_kind="replay_episode",
+                datapack_id=str(
+                    candidate.metadata.get("datapack_id")
+                    or inferential_metadata.get("datapack_id")
+                    or candidate.episode_id
+                ),
+                frontier_gain=candidate.frontier_gain,
+                epiplexity_delta=candidate.epiplexity_delta,
+                epiplexity_confidence=candidate.epiplexity_confidence,
+                transfer_score=candidate.transfer_score,
+                data_quality=candidate.data_quality,
+                provenance_quality=candidate.provenance_quality,
+                trust_score=float(candidate.pricing_summary.get("confidence", 0.0) or 0.5),
+                overlay_joined=bool(
+                    candidate.metadata.get("epiplexity_overlay_joined")
+                    or inferential_metadata.get("overlay_joined")
+                ),
+                benchmark_eligible=bool(inferential_metadata.get("benchmark_eligible", False)),
+                semantic_grounding_non_heuristic=bool(
+                    inferential_metadata.get("semantic_grounding_non_heuristic", False)
+                ),
+                promotion_trace_complete=bool(inferential_metadata.get("promotion_trace_complete", False)),
+                budget_settlement_live=bool(inferential_metadata.get("budget_settlement_live", False)),
+                summary_present=inferential_metadata.get("summary_present"),
+                signal_yield=inferential_reward.signal_yield,
+                metadata={
+                    "source_domain": candidate.source_domain,
+                    "objective_profile_id": candidate.objective_profile_id,
+                    **inferential_metadata,
+                },
+            )
+        artifact_summary["inferential_learnability_contract"] = learnability_contract.to_dict()
 
         if integrity_failed:
             reasons.append("objective_integrity_failure")

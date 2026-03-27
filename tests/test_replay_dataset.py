@@ -39,9 +39,11 @@ def test_replay_dataset_builds_from_shadow_run(tmp_path):
     assert loaded.steps[0].metadata["runtime_packet_id"].startswith("runtime_")
     assert loaded.steps[0].metadata["event_refs"]
     assert loaded.windows[0].metadata["decision_refs"]
+    assert loaded.episodes[0].metadata["inferential_learnability_contract"]["subject_kind"] == "replay_episode"
     assert bundle.manifest.metadata["sources"][0]["runtime_packet_count"] == 2
     assert bundle.manifest.metadata["sources"][0]["event_count"] >= 10
     assert bundle.manifest.metadata["sources"][0]["decision_count"] >= 8
+    assert bundle.manifest.metadata["inferential_learnability_summary"]["contract_count"] == 2
 
 
 def test_replay_dataset_builds_from_workcell_episode_log(tmp_path):
@@ -177,6 +179,7 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.episodes[0].metadata["semantic_memory_grounded"] is True
     assert bundle.episodes[0].metadata["semantic_grounding_non_heuristic"] is False
     assert bundle.episodes[0].metadata["selection_summary"]["selected_ids"] == ["dp_rollout"]
+    assert bundle.episodes[0].metadata["inferential_learnability_contract"]["subject_id"] == "ep_rollout_001"
     assert bundle.manifest.metadata["schema_compatibility"][0]["compatible"] is True
 
 

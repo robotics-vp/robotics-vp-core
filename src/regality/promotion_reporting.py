@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
+from src.economics.inferential_contract import summarize_inferential_learnability_contracts
 from src.learning.calibration import summarize_calibration
 from src.replay.dataset import ReplayDatasetBundle
 from src.regality.promotion_policy import (
@@ -323,6 +324,13 @@ def build_promotion_evidence_report(
             if bool(trace_preconditions_by_episode.get(episode.episode_id, {}).get("ready", False))
         ),
         "work_order_count": sum(len(rows) for rows in work_orders_by_episode.values()),
+        "inferential_learnability_summary": summarize_inferential_learnability_contracts(
+            [
+                dict(episode.metadata.get("inferential_learnability_contract", {}) or {})
+                for episode in dataset.episodes
+                if episode.metadata.get("inferential_learnability_contract")
+            ]
+        ),
     }
     return PromotionEvidenceReport(
         schema_version="regal_promotion_evidence_v1",

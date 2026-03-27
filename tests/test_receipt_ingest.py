@@ -67,8 +67,11 @@ def test_receipt_ingest_roundtrip_and_shadow_advisory_consumption(tmp_path):
     assert advisory["episodes"][0]["receipt_feedback"]["deployment_outcome"] is not None
     assert advisory["summary"]["epiplexity_overlay_joins"] >= 1
     assert advisory["episodes"][0]["epiplexity_evidence"]["overlay_joined"] is True
+    assert advisory["episodes"][0]["inferential_learnability_contract"]["learnability_class"] == "portable_receipt_backed"
     assert "execution_preconditions" in advisory["episodes"][0]
     assert advisory["adaptation_budget"]["summary"]["work_orders"] >= 1
+    assert advisory["inferential_learnability_summary"]["contract_count"] == advisory["summary"]["episodes"]
+    assert advisory["inferential_work_orders"][0]["metadata"]["contract_kind"] == "inferential_execution_work_order_v1"
     assert advisory["semantic_runtime_scorer_preconditions"]["fallback_active"] is True
     assert advisory["semantic_runtime_scorer_work_orders"][0]["reason"] == "semantic_runtime_scorer_package_missing"
 

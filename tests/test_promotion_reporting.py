@@ -36,6 +36,7 @@ def test_promotion_reporting_emits_sidecars(tmp_path):
     assert report.summary["node_count"] >= 5
     assert report.receipt_label_coverage["total_labels"] > 0
     assert report.summary["trace_ready_episode_count"] == dataset.manifest.num_episodes
+    assert report.summary["inferential_learnability_summary"]["contract_count"] == dataset.manifest.num_episodes
     assert report.node_reports[0].coverage["trace_ready_episode_count"] == dataset.manifest.num_episodes
     assert paths["json"]
     assert paths["markdown"]

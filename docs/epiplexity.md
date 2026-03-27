@@ -18,6 +18,13 @@ So the current repo posture is:
 - advisory / bounded today
 - candidate canonical learnability class later
 
+The first concrete promotion step has now landed:
+
+- replay episodes can carry `inferential_learnability_contract`
+- replay manifests can summarize learnability-class density
+- shadow/adaptation paths can emit canonical inferential work-order artifacts
+- training runtime manifests can persist inferential learnability and work-order summaries
+
 ## Key Components
 - `EpiplexityTracker`: runs probe learners, caches absolute runs, records compute accounting (`flops_estimate`), and derives baseline-relative deltas only at read time.
 - `PrequentialAUCLossEstimator`: area-under-loss-curve proxy with deterministic compute estimation.
@@ -32,6 +39,11 @@ Epiplexity results are stored in datapack metadata:
 - `data/datapacks/epiplexity_overlays.jsonl`: additive overlay sidecar loaded automatically by `DataPackRepo`
 
 By default, only summaries are attached to datapacks; full per-run details live in the cache (`artifacts/epiplexity_cache/`). To store full runs in datapack metadata, pass `--store-full-runs` to the CLI (debug only).
+
+The canonical downstream carrier is now the inferential contract layer rather than raw overlay inspection alone:
+
+- `inferential_learnability_contract` on replay episodes
+- `inferential_learnability_summary` on replay and training manifests
 
 ## CLI
 Run a synthetic evaluation:

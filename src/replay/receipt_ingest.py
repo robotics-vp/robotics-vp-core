@@ -333,6 +333,12 @@ def _training_run_future_training_context(
         "future_training_artifacts": dict(sorted(future_training_artifacts.items())),
         "future_training_signals": dict(sorted(future_training_signals.items())),
         "budget_settlement_payload": budget_settlement_payload,
+        "inferential_learnability_summary": dict(
+            getattr(manifest, "inferential_learnability_summary", {}) or {}
+        ),
+        "inferential_work_order_summary": dict(
+            getattr(manifest, "inferential_work_order_summary", {}) or {}
+        ),
     }
 
 
@@ -389,6 +395,12 @@ def _enrich_training_run_dataset(
     context = _training_run_future_training_context(root, manifest=manifest, dataset=dataset)
     future_training_artifacts = dict(context.get("future_training_artifacts", {}) or {})
     future_training_signals = dict(context.get("future_training_signals", {}) or {})
+    inferential_learnability_summary = dict(
+        context.get("inferential_learnability_summary", {}) or {}
+    )
+    inferential_work_order_summary = dict(
+        context.get("inferential_work_order_summary", {}) or {}
+    )
     if not future_training_artifacts and not future_training_signals:
         return dataset
 
@@ -452,6 +464,9 @@ def _enrich_training_run_dataset(
             "execution_precondition_summary": summary,
             "training_run_future_training_artifacts": future_training_artifacts,
             "training_run_future_training_signals": future_training_signals,
+            "inferential_learnability_summary": inferential_learnability_summary
+            or dict(dataset.manifest.metadata.get("inferential_learnability_summary", {}) or {}),
+            "inferential_work_order_summary": inferential_work_order_summary,
         },
     )
     return ReplayDatasetBundle(
@@ -541,6 +556,12 @@ def build_training_run_receipt_label_bundle(
             ),
             "execution_precondition_summary": dict(
                 dataset.manifest.metadata.get("execution_precondition_summary", {}) or {}
+            ),
+            "inferential_learnability_summary": dict(
+                dataset.manifest.metadata.get("inferential_learnability_summary", {}) or {}
+            ),
+            "inferential_work_order_summary": dict(
+                dataset.manifest.metadata.get("inferential_work_order_summary", {}) or {}
             ),
             "observation_source": (
                 "online_episode_receipts"

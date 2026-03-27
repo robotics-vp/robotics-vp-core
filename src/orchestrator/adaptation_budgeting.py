@@ -4,10 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from src.evidence.preconditions import build_execution_work_order
+from src.economics.inferential_contract import build_inferential_execution_work_order
 from src.economics.inferential_training_gate import (
     InferentialTrainingCandidate,
-    InferentialTrainingDecision,
     InferentialTrainingGate,
 )
 
@@ -48,29 +47,15 @@ def evaluate_adaptation_budget(
             continue
         if decision.decision == "no_op":
             continue
-        order_type = {
-            "adapt_now": "adaptation_training",
-            "collect_more_data": "data_collection",
-            "require_review": "human_review",
-        }.get(decision.decision, "advisory_followup")
-        work_order = build_execution_work_order(
-            order_type=order_type,
-            subject_id=candidate.episode_id,
-            subject_kind="replay_episode",
-            decision=decision.decision,
-            priority=max(0.0, float(decision.allowed_budget or decision.net_benefit)),
-            recommended_mode=decision.recommended_training_mode,
+        work_order = build_inferential_execution_work_order(
+            decision=decision,
             readiness=readiness,
-            reasons=decision.reasons,
-            artifact_refs={
-                "run_id": candidate.run_id,
-                "episode_id": candidate.episode_id,
-            },
-            metadata={
-                "decision_id": decision.decision_id,
-                "objective_profile_id": candidate.objective_profile_id,
-                "source_domain": candidate.source_domain,
-            },
+            run_id=candidate.run_id,
+            episode_id=candidate.episode_id,
+            objective_profile_id=candidate.objective_profile_id,
+            source_domain=candidate.source_domain,
+            datapack_id=str(candidate.metadata.get("datapack_id") or candidate.episode_id),
+            learnability_contract=candidate.metadata.get("inferential_learnability_contract"),
         )
         work_orders.append(work_order.to_dict())
     return AdaptationBudgetArtifact(

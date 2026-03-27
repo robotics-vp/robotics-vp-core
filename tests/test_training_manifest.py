@@ -58,6 +58,8 @@ def test_training_manifest_and_checkpoint_registry_roundtrip(tmp_path):
         source_domain_coverage={"source_domain_counts": {"synthetic": 3}},
         receipt_label_coverage={"total_labels": 3},
         artifact_paths={"training_summary": str(artifact_path)},
+        inferential_learnability_summary={"contract_count": 3, "benchmark_receipt_backed_count": 1},
+        inferential_work_order_summary={"work_orders": 2},
         checkpoint_registry_path=str(registry_path),
         checkpoint_registry_digest=registry_sha,
         promotion_evidence_path=str(artifact_path),
