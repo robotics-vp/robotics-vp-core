@@ -2,6 +2,17 @@
 
 ## 2026-03-27
 
+- Tightened the long-range Unitree program target:
+  - July 2027 remains the purchase / initial integration milestone
+  - September 30, 2027 is now the explicit stronger target for sustainably autonomous G1 operation
+- This materially changes how the roadmap should be read:
+  - it is not enough for the stack to be merely "purchase-ready" by mid-2027
+  - by September 2027 the control loop should be able to run repeatedly on G1, emit replay/telemetry/calibration/safety/governance receipts, export those artifacts into recurring training cycles, and improve without recurring architecture rewrites
+- The practical prioritization effect is:
+  - lower-WM plumbing and deployment-enabler phases are even more central now
+  - Phase 4A/4B/4C/4E-style work is no longer just predeployment hygiene; it is part of the path to sustainable autonomy
+  - if the program reaches summer 2027 with missing on-robot replay capture, missing degraded-mode truth, missing recovery/teleop tracing, or missing recurring export/retrain plumbing, then it is behind even if the purchase/integration moment itself succeeds
+
 - Tightened the post-September 2026 execution model:
   - the intended cadence is now weekly A100-backed work, not occasional broad training sweeps
   - the unit of progress is a WM sub-module, not a vague whole-WM training claim

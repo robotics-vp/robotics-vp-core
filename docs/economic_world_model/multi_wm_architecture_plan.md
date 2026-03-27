@@ -140,6 +140,13 @@ For the G1/R1-facing roadmap, each subsystem should be pushed until the main rem
 
 Assume the first serious multi-WM training runs start on September 1, 2026.
 
+Assume also that the stronger end target is September 30, 2027:
+
+- the Unitree G1 control loop is running sustainably
+- replay, telemetry, calibration, safety, and governance receipts are being collected continuously
+- the stack can feed those receipts into recurring training and bounded redeployment
+- ongoing improvement is happening from the live loop rather than from isolated integration events only
+
 That changes the near-term job of this plan:
 
 - from March 27, 2026 through August 31, 2026, the priority is to lay the plumbing across the current multi-WM architecture
@@ -167,6 +174,7 @@ What should happen after September 1, 2026:
 - accumulate receipts, calibration evidence, and benchmark results instead of continuing architecture drift
 - harden the economic WM over real lower-WM outputs
 - begin ontology-mediated WM transport only after the lower-WM training surfaces and economic-WM ingestion surfaces are structurally real
+- as hardware comes online, convert those trained surfaces into recurring on-robot loops instead of treating G1 as a one-time integration event
 
 Operational cadence after September 1, 2026:
 
@@ -190,6 +198,7 @@ The main governance implication is:
 - after September 1, 2026, new architectural work should be held to a higher bar
 - new structure is allowed only when it closes a proven missing contract boundary for training or Unitree-class deployment readiness
 - otherwise the effort should go into data, GPUs, providers, calibration, benchmarks, and whole-loop evidence
+- by the time the program reaches September 2027, the remaining blockers should be model quality, data density, compute, calibration, and safety evidence, not missing loop plumbing for autonomous operation and improvement
 
 ## Phase Exit Rule
 

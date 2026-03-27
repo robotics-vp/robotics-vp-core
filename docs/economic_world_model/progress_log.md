@@ -2,6 +2,16 @@
 
 ## 2026-03-27
 
+- Changed: tightened the long-range Unitree target in the planning docs:
+  - July 2027 now remains the purchase / initial integration milestone
+  - September 30, 2027 is now the explicit stronger target for sustainably autonomous G1 operation
+  - the docs now say that by that date the control loop should be running repeatedly, collecting replay/telemetry/governance receipts, and feeding recurring improvement cycles rather than still behaving like a one-off bring-up effort
+- Changed: aligned the roadmap consequences of that stronger target:
+  - `docs/economic_world_model/roadmap.md` now extends the post-September 2026 execution program through September 2027
+  - `docs/economic_world_model/humanoid_target_readiness.md` now adds the post-purchase conversion window from July through August 2027 and the September 2027 autonomy bar
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now makes the same target explicit so lower-WM and deployment-enabler phases are judged against recurring on-robot loop readiness, not just pre-purchase structure
+- Verification: `git diff --check` passed. This was a docs-only target-tightening pass.
+
 - Changed: refined the dated pre-G1 roadmap into an explicit weekly operating model after training begins:
   - starting September 1, 2026, the docs now assume a weekly A100-backed program
   - work is explicitly described as sub-module by sub-module inside each WM
