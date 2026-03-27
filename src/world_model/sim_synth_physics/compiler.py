@@ -6,7 +6,6 @@ from dataclasses import replace
 from typing import Any, Literal, Mapping, Optional
 
 from src.economics.inferential_contract import summarize_inferential_learnability_contracts
-from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 
 from .adapters import (
     build_economic_input_context,
@@ -99,6 +98,8 @@ def _compile_jobs(
     gap_ranker: Any,
     gap_ranker_mode: Literal["disabled", "auto", "required"],
 ) -> list[SimulationJobSpec]:
+    from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
+
     ranked_gaps = rank_gaps_for_agenda(
         coverage_graph=coverage_graph,
         economic_weight=economic_weight,

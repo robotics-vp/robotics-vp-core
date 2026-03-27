@@ -691,7 +691,7 @@ Current anchors:
 
 Current gaps:
 
-- `src/envs/physics/isaac_backend.py` is still a stub
+- `src/envs/physics/isaac_backend.py` is now an explicit shadow-contract backend rather than a literal stub, but concrete Isaac Sim / Isaac Gym / Unitree asset execution is still an open Phase-1 gap
 - parts of the LSD / NAG / GGDS path remain stubby
 - agenda ownership is still orchestrator-heavy instead of WM-owned
 - diffusion, gen2sim, and synthetic branch generation are not yet owned by one canonical state service
@@ -832,7 +832,7 @@ This WM should not own:
 | `src/orchestrator/diffusion_requests.py` | diffusion request logic is adjacent to but not owned by a WM | becomes a diffusion-plan adapter fed by WM state |
 | `src/evidence/gen2sim_validity.py` | admission logic exists but is not the sole owner of synth state | becomes one submodule inside WM admission/receipt logic |
 | `scripts/collect_local_synthetic_branches.py` | branch generation is script-owned | becomes a WM branch-generation adapter / worker |
-| `src/envs/physics/isaac_backend.py` | stub backend with no canonical contract | becomes one backend adapter behind WM backend routing |
+| `src/envs/physics/isaac_backend.py` | explicit shadow-contract backend; concrete Isaac/Unitree asset runtime still missing | becomes one backend adapter behind WM backend routing |
 | `src/motor_backend/holosoma_backend.py` | backend-specific bridge is outside WM ownership | becomes an execution adapter used by the WM |
 | `src/envs/lsd3d_env/ggds.py` and NAG/LSD surfaces | stubby optimization path | becomes an explicit branch renderer/generator provider, not an owner |
 

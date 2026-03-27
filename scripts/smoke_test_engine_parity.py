@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Smoke test for backend API parity between PyBullet and Isaac stubs.
+Smoke test for backend API parity between PyBullet and Isaac shadow contracts.
 
 Verifies:
-1. Both backends can be constructed (Isaac as stub)
+1. Both backends can be constructed (Isaac as shadow-contract backend)
 2. They share the same interface methods
 3. Engine type tagging is correct
 4. EpisodeInfoSummary -> DataPackMeta -> orchestrator context works without errors
@@ -11,6 +11,12 @@ Verifies:
 """
 
 import inspect
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 # Physics backends
 from src.envs.physics.base_engine import PhysicsBackend
@@ -438,41 +444,23 @@ def test_orchestrator_context_integration():
     print(f"  PASS: Orchestrator context fields: {orchestrator_context_fields}")
 
 
-def test_not_implemented_errors():
-    """Test that physics methods still raise NotImplementedError."""
-    print("\nTest 8: Physics methods raise NotImplementedError (as expected)")
+def test_shadow_execution_contract():
+    """Test that Isaac exposes a working shadow execution loop."""
+    print("\nTest 8: Isaac shadow execution contract")
 
     isaac = IsaacBackend(env_config={"env_name": "test"})
-
-    physics_methods = [
-        ("reset", ()),
-        ("step", (None,)),
-        ("get_episode_info", ()),
-        ("get_info_history", ()),
-        ("close", ()),
-        ("get_observation_space", ()),
-        ("get_action_space", ()),
-        ("render", ()),
-        ("seed", ()),
-        ("get_state", ()),
-        ("set_state", (None,)),
-        ("get_batch_episode_info", ()),
-        ("reset_env", (0,)),
-    ]
-
-    for method_name, args in physics_methods:
-        method = getattr(isaac, method_name)
-        try:
-            method(*args)
-            print(f"  FAIL: {method_name} should raise NotImplementedError")
-            assert False, f"{method_name} did not raise NotImplementedError"
-        except NotImplementedError:
-            pass  # Expected
-        except TypeError:
-            # Some methods have required args, which is fine
-            pass
-
-    print("  PASS: All physics methods raise NotImplementedError (Isaac stub)")
+    obs = isaac.reset()
+    assert isinstance(obs, dict)
+    obs2, reward, done, info = isaac.step([0.0] * 12)
+    assert isinstance(obs2, dict)
+    assert isinstance(reward, float)
+    assert isinstance(done, bool)
+    assert isinstance(info, dict)
+    assert isaac.get_episode_info().episode_id
+    assert isaac.get_batch_episode_info()
+    assert isaac.get_state()["mode"] == "shadow_contract"
+    assert isaac.get_action_space()["shape"] == [12]
+    print("  PASS: Isaac shadow loop executes and summarizes correctly")
 
 
 def main():
@@ -487,15 +475,14 @@ def main():
     test_datapack_creation_from_backend()
     test_media_refs_hooks()
     test_orchestrator_context_integration()
-    test_not_implemented_errors()
+    test_shadow_execution_contract()
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED")
     print("=" * 60)
-    print("\nIsaac backend stub is ready for future implementation.")
-    print("When you implement Isaac Gym physics, fill in the methods that")
-    print("currently raise NotImplementedError, and all higher layers")
-    print("(datapacks, orchestrator, RewardBuilder, solver) will 'just work'.")
+print("\nIsaac backend now provides an explicit shadow contract.")
+print("The next step is real Isaac Sim / Isaac Gym / Unitree asset execution,")
+print("not replacing another literal stub.")
 
 
 if __name__ == "__main__":

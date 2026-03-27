@@ -89,6 +89,11 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         "physics_execution_contract_id": result.physics_execution_contract.contract_id,
         "physics_adaptation_receipt_id": result.physics_adaptation_receipt.receipt_id,
         "backend_execution_binding_receipt_id": result.backend_execution_binding_receipt.receipt_id,
+        "backend_shadow_execution_receipt_id": (
+            None
+            if result.backend_shadow_execution_receipt is None
+            else result.backend_shadow_execution_receipt.receipt_id
+        ),
         "physics_calibration_receipt_id": result.physics_calibration_receipt.receipt_id,
         "render_provider_receipt_count": len(result.render_provider_receipts),
         "outcome_receipt_count": len(result.outcome_receipts),

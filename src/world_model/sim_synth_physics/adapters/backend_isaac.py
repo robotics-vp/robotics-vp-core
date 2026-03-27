@@ -44,8 +44,9 @@ def build_isaac_backend_binding(
 ) -> Dict[str, Any]:
     isaacsim_available = _has_module("isaacsim") or _has_module("omni.isaac.kit")
     isaacgym_available = _has_module("isaacgym")
+    shadow_backend_available = True
     required_assets, available_assets, missing_assets = _asset_lists(embodiment_context)
-    adapter_ready = isaacsim_available or isaacgym_available
+    adapter_ready = shadow_backend_available or isaacsim_available or isaacgym_available
     binding_status = "integration_pending"
     if adapter_ready and not missing_assets:
         binding_status = "shadow_ready"
@@ -74,8 +75,10 @@ def build_isaac_backend_binding(
             "system_identification_profile": str(
                 adaptation_policy.get("system_identification_profile", "")
             ),
+            "shadow_backend_available": shadow_backend_available,
             "isaacsim_available": isaacsim_available,
             "isaacgym_available": isaacgym_available,
+            "concrete_runtime_available": bool(isaacsim_available or isaacgym_available),
             "embodiment_context": mapping(embodiment_context),
         },
     }

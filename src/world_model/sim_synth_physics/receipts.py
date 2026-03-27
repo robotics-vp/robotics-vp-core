@@ -89,6 +89,32 @@ class BackendExecutionBindingReceipt:
 
 
 @dataclass(frozen=True)
+class BackendShadowExecutionReceipt:
+    """Receipt for WM-owned backend shadow execution/materialization."""
+
+    receipt_id: str
+    backend: str
+    execution_mode: str
+    execution_status: str
+    episode_ids: list[str] = field(default_factory=list)
+    artifact_refs: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_shadow_execution_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "backend": self.backend,
+            "execution_mode": self.execution_mode,
+            "execution_status": self.execution_status,
+            "episode_ids": strings(self.episode_ids),
+            "artifact_refs": strings(self.artifact_refs),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class RenderProviderReceipt:
     """Materialization receipt for one WM-owned branch/render provider selection."""
 

@@ -32,11 +32,13 @@ from .gen2sim_admission import (
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import (
     BackendExecutionBindingReceipt,
+    BackendShadowExecutionReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
     RenderProviderReceipt,
     SimulationOutcomeReceipt,
 )
+from .shadow_execution import materialize_backend_shadow_execution
 from .state import (
     BackendExecutionBindingState,
     BranchRenderProviderState,
@@ -65,6 +67,7 @@ __all__ = [
     "BackendSelectorRuntimePackage",
     "BackendAdapterDescriptor",
     "BackendExecutionBindingReceipt",
+    "BackendShadowExecutionReceipt",
     "BackendExecutionBindingState",
     "BranchRenderProviderState",
     "BranchPlannerRuntimePackage",
@@ -90,6 +93,7 @@ __all__ = [
     "assess_local_branch_corpus_gen2sim",
     "build_physics_adaptation_receipt",
     "build_physics_calibration_receipt",
+    "materialize_backend_shadow_execution",
     "compile_backend_execution_binding",
     "build_physics_execution_contract",
     "build_synthetic_branch_corpus_metadata",

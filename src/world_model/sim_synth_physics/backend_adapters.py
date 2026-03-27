@@ -117,23 +117,26 @@ def describe_backend_adapter(backend: str) -> BackendAdapterDescriptor:
     if normalized == "isaac":
         isaacsim_available = _has_module("isaacsim") or _has_module("omni.isaac.kit")
         isaacgym_available = _has_module("isaacgym")
+        shadow_backend_available = True
         return BackendAdapterDescriptor(
             backend="isaac",
             adapter_name="backend_isaac_unitree_target_v1",
-            adapter_status="fallback_only",
+            adapter_status="shadow_ready",
             supports_execution=False,
             simulator_family="isaac",
             target_hardware_class="unitree_g1_r1_class",
             execution_envelope="humanoid_shadow_and_unitree_target",
             fallback_backend="pybullet",
             fallback_reason=(
-                "isaac backend remains an explicit integration gap: runtime routing exists, "
-                "but concrete Isaac Sim / Isaac Gym / Unitree asset execution is not wired yet"
+                "isaac backend remains an explicit real-runtime integration gap: "
+                "shadow execution and adapter routing exist, but concrete Isaac Sim / "
+                "Isaac Gym / Unitree asset execution is not wired yet"
             ),
             metadata={
                 "provider_class": "explicit_gap",
                 "gap_kind": "missing_backend_adapter",
-                "stub_backend": True,
+                "stub_backend": False,
+                "shadow_backend_available": shadow_backend_available,
                 "supports_receipt_harvest": False,
                 "supports_domain_randomization": True,
                 "supports_system_identification": True,

@@ -76,6 +76,22 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_backend_shadow_execution_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "shadow_1",
+                "backend": "isaac",
+                "execution_mode": "shadow_contract",
+                "execution_status": "shadow_executed_with_asset_gaps",
+                "episode_ids": ["shadow_episode_1"],
+                "artifact_refs": ["/tmp/shadow_episode_1/rgb.json"],
+                "version": "backend_shadow_execution_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_render_provider_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -115,6 +131,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["world_state"]["state_id"] == "sim_state_1"
     assert bundles[0]["physics_adaptation_receipt"]["receipt_id"] == "adapt_1"
     assert bundles[0]["backend_execution_binding_receipt"]["receipt_id"] == "binding_1"
+    assert bundles[0]["backend_shadow_execution_receipt"]["receipt_id"] == "shadow_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
     assert bundles[0]["simulation_outcome_receipts"][0]["receipt_id"] == "outcome_1"
@@ -122,6 +139,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     backend_rows = build_backend_selector_rows_from_receipts(bundles)
     assert backend_rows[0]["target_hardware_class"] == "unitree_g1_r1_class"
     assert backend_rows[0]["target_system_identification_profile"] == "humanoid_shadow_system_id"
+    assert backend_rows[0]["target_source"] == "runtime_receipt"
+    assert backend_rows[0]["metadata"]["backend_shadow_execution_receipt_id"] == "shadow_1"
+    assert (
+        backend_rows[0]["metadata"]["backend_shadow_execution_status"]
+        == "shadow_executed_with_asset_gaps"
+    )
 
 
 def test_harvest_sim_synth_receipt_bundles_ignores_incomplete_dirs(tmp_path: Path) -> None:

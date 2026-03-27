@@ -2,6 +2,13 @@
 
 ## 2026-03-27
 
+- Changed: pushed the sim/synth/physics WM further into backend-runtime ownership instead of leaving Isaac as a dead class:
+  - `src/envs/physics/isaac_backend.py` now provides an explicit shadow-contract backend with reset/step/media/summary/state APIs backed by `IsaacAdapter`
+  - `src/world_model/sim_synth_physics/runtime.py` now emits `backend_shadow_execution_receipt_v1` for Isaac-target planning windows and writes shadow execution artifacts into the WM loop output
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests that receipt so backend-selector training rows can distinguish planning-only bundles from shadow-runtime bundles
+  - the Phase-1 docs/backlog now describe the honest remaining gap as concrete Isaac Sim / Isaac Gym / Unitree asset execution rather than a literal backend stub
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_isaac_backend_shadow_contract.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`, JSON validation for `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`, and `git diff --check` passed.
+
 - Changed: tightened the roadmap doctrine against "WM stands up as logging only":
   - `docs/economic_world_model/multi_wm_architecture_plan.md` now defines a mechanics-first WM readiness rule and a maturity ladder from `schema_only` through `production_recurrent`
   - the doctrine now explicitly treats neuralization as part of scalable mechanics rather than as a separate later luxury

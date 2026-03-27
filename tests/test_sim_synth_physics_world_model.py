@@ -114,7 +114,7 @@ def test_world_state_uses_promoted_backend_selector_from_day_one() -> None:
     assert world_state.physics_adaptation_policy is not None
     assert world_state.physics_adaptation_policy.target_hardware_class == "unitree_g1_r1_class"
     assert world_state.backend_execution_binding is not None
-    assert world_state.backend_execution_binding.binding_status in {"integration_pending", "assets_missing", "shadow_ready"}
+    assert world_state.backend_execution_binding.binding_status in {"assets_missing", "shadow_ready"}
 
 
 def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None:
@@ -329,15 +329,22 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert result.physics_execution_contract.route_status == "fallback"
     assert result.physics_adaptation_receipt.target_hardware_class == "unitree_g1_r1_class"
     assert result.backend_execution_binding_receipt.binding_status in {
-        "integration_pending",
         "assets_missing",
         "shadow_ready",
+    }
+    assert result.backend_shadow_execution_receipt is not None
+    assert result.backend_shadow_execution_receipt.backend == "isaac"
+    assert result.backend_shadow_execution_receipt.execution_mode == "shadow_contract"
+    assert result.backend_shadow_execution_receipt.execution_status in {
+        "shadow_executed",
+        "shadow_executed_with_asset_gaps",
     }
     assert result.physics_calibration_receipt.metadata["explicit_gap_kind"] == "missing_backend_adapter"
     assert result.render_provider_receipts
     assert (tmp_path / "physics_execution_contract.json").exists()
     assert (tmp_path / "physics_adaptation_receipt.json").exists()
     assert (tmp_path / "backend_execution_binding_receipt.json").exists()
+    assert (tmp_path / "backend_shadow_execution_receipt.json").exists()
     assert (tmp_path / "physics_calibration_receipt.json").exists()
     assert (tmp_path / "render_provider_receipts.json").exists()
     assert (tmp_path / "simulation_outcome_receipts.json").exists()
@@ -365,6 +372,11 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert feedback_manifest["world_state_id"] == result.world_state.state_id
     assert feedback_manifest["physics_adaptation_receipt_id"] == result.physics_adaptation_receipt.receipt_id
     assert feedback_manifest["backend_execution_binding_receipt_id"] == result.backend_execution_binding_receipt.receipt_id
+    assert feedback_manifest["backend_shadow_execution_status"] in {
+        "",
+        "shadow_executed",
+        "shadow_executed_with_asset_gaps",
+    }
     assert feedback_manifest["planned_branch_count"] >= 1
     assert diffusion_bundle["plans"]
     assert loop_summary["physics_execution_contract_id"] == result.physics_execution_contract.contract_id

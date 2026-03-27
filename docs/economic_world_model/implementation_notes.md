@@ -2,6 +2,20 @@
 
 ## 2026-03-27
 
+- Pushed the Phase-1 backend-execution seam past a literal Isaac stub:
+  - `src/envs/physics/isaac_backend.py` now exposes an explicit shadow-contract backend with deterministic reset/step/media/summary/state behavior rather than only raising `NotImplementedError`
+  - this is not being treated as "real Isaac runtime" or as permission to declare the Unitree path done
+  - the honest remaining gap is now narrower:
+    - concrete Isaac Sim / Isaac Gym / Unitree asset execution
+    - robot descriptions, latency/calibration sidecars, and hardware-grade runtime evidence
+- The WM now uses that seam directly:
+  - `src/world_model/sim_synth_physics/runtime.py` emits a `backend_shadow_execution_receipt_v1` whenever an Isaac-target planning window can at least exercise the explicit shadow contract
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests that receipt so backend-selector training can tell the difference between planning-only bundles and shadow-runtime bundles
+  - this is the right current posture for Phase 1:
+    - no literal stub default
+    - real shadow execution/materialization where possible
+    - explicit remaining gap where concrete Isaac/Unitree execution is still absent
+
 - Tightened the doctrine against "stood up in name only" WMs:
   - the multi-WM plan now has an explicit mechanics-first WM readiness rule
   - the doctrine now says neuralization is part of scalable mechanics, not a deprioritized separate layer
