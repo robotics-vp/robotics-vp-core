@@ -752,18 +752,22 @@ Recommended typed objects:
   - fidelity, backend, timestep, randomization, calibration, and safety-relevant physics settings
 - `PhysicsAdaptationPolicyState`
   - typed domain-randomization, system-identification, robot-asset, and calibration-target policy
+- `BackendExecutionBindingState`
+  - concrete execution binding for the chosen backend, including runtime stack, entrypoints, and asset readiness
 - `DiffusionConditioningState`
   - governed diffusion request structure, not just a prompt string
 - `SyntheticBranchPlan`
   - branch family, gap targets, rendering/generation mode, admission preconditions
 - `BranchRenderProviderState`
-  - typed NAG/LSD/GGDS provider contract per branch, including fallback honesty
+  - typed NAG/LSD/GGDS provider contract per branch, including fallback honesty and materialization configuration
 - `Gen2SimAdmissionState`
   - explicit branch admissibility context and helper traces
 - `SimulationOutcomeReceipt`
   - outcome refs, replay refs, event/debt/governance/value refs, and readiness summary
 - `PhysicsAdaptationReceipt`
   - emitted receipt for adaptation-policy readiness and target-hardware posture
+- `BackendExecutionBindingReceipt`
+  - emitted receipt for executor entrypoint, runtime stack, and robot-asset readiness
 - `PhysicsCalibrationReceipt`
   - domain-randomization/system-ID summary and backend-quality flags
 
@@ -787,6 +791,7 @@ The WM should emit:
 - synthetic branch plan
 - backend/fidelity choice receipt
 - physics adaptation receipt
+- backend execution binding receipt
 - branch render-provider receipts
 - branch outcome receipts
 - replay-ready artifact refs
@@ -801,11 +806,12 @@ Recommended flow:
 3. rank simulation jobs and branch jobs inside one agenda
 4. choose backend, fidelity, and domain-randomization regime
 5. compile typed physics adaptation policy and calibration targets
-6. emit a `DiffusionConditioningState` for any render/generation branch
-7. resolve WM-owned branch/render providers for NAG/LSD/GGDS materialization
-8. execute backend adapters
-9. emit `SimulationOutcomeReceipt` and related sidecars
-10. feed receipts into replay, benchmark gating, and training datasets
+6. resolve a concrete backend execution binding with runtime stack, entrypoints, and asset-readiness truth
+7. emit a `DiffusionConditioningState` for any render/generation branch
+8. resolve WM-owned branch/render providers for NAG/LSD/GGDS materialization
+9. execute backend adapters
+10. emit `SimulationOutcomeReceipt` and related sidecars
+11. feed receipts into replay, benchmark gating, and training datasets
 
 ### Phase 1 neuralization plan
 
@@ -859,6 +865,7 @@ Phase 1 should count as landed only when:
 - synthetic branch plans are typed objects, not script-local metadata
 - backend/fidelity selection is emitted as a first-class receipt
 - domain-randomization / system-identification policy is emitted as a typed state and receipt, not left implicit in backend metadata
+- concrete backend execution binding is emitted as typed state and receipt, including honest Isaac/Unitree asset-readiness truth
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts and receipts, not left as free-standing provider code paths
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name

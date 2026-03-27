@@ -1435,6 +1435,12 @@
   - the Isaac path is still honestly non-executable, but it now carries explicit Unitree-target metadata and required-asset expectations instead of hiding as a generic backend token
   - Holosoma is now described as a Unitree-class external execution adapter behind the WM boundary, not just as an adjacent backend module
 
+- Phase 1 backend execution binding is now a real state surface, not just metadata:
+  - `src/world_model/sim_synth_physics/adapters/backend_pybullet.py`, `backend_holosoma.py`, and `backend_isaac.py` encode the actual runtime entrypoints and asset expectations for each backend family
+  - `src/world_model/sim_synth_physics/backend_bindings.py` compiles those into `BackendExecutionBindingState`
+  - the loop now emits `backend_execution_binding_receipt_v1`, so runtime stack, observation adapter, asset profile, and missing-asset truth are canonical artifacts rather than inference from backend names
+  - this is especially important for the Unitree-target Isaac path, because the repo can now say “binding exists but assets are missing” instead of collapsing that state into one generic fallback string
+
 - Phase 1 now has a typed physics-adaptation layer rather than ad hoc randomization metadata:
   - `PhysicsAdaptationPolicyState` carries domain-randomization profile, system-identification profile, robot-asset profile, randomization axes, and calibration targets
   - `physics_adaptation_receipt_v1` is emitted in the live WM loop so downstream training and readiness logic can see whether the loop is still tabletop-oriented, humanoid-shadow-oriented, or closer to benchmark-ready adaptation posture
@@ -1443,7 +1449,8 @@
 - NAG / LSD / GGDS are now wrapped by a WM-owned provider seam:
   - each `SyntheticBranchPlan` now carries a `BranchRenderProviderState`
   - the WM emits `render_provider_receipt_v1` artifacts and threads provider kind/status into diffusion routing and training-corpus extraction
-  - this does not mean GGDS is “done”; the concrete optimizer is still stub-only without a real LDM + renderer stack
+  - the provider seam is now richer than selection metadata: it also carries materialization entrypoints and provider config payloads for NAG counterfactual generation and GGDS scene texturing
+  - this still does not mean GGDS is “done”; the concrete optimizer is still stub-only without a real LDM + renderer stack
   - the important architectural change is that branch/render ownership now sits inside the WM boundary, so the remaining work is about making those providers concrete rather than first creating a canonical contract
 
 - Honest remaining Phase 1 blocker statement after this pass:

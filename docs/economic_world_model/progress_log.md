@@ -628,6 +628,21 @@
 
 ## 2026-03-27
 
+- Changed: continued Phase 1 sim/synth/physics implementation by turning backend execution from a descriptor-only concept into a WM-owned binding surface:
+  - added concrete backend-binding modules in `src/world_model/sim_synth_physics/adapters/backend_pybullet.py`, `backend_holosoma.py`, and `backend_isaac.py`
+  - added `src/world_model/sim_synth_physics/backend_bindings.py` plus `BackendExecutionBindingState` / `backend_execution_binding_receipt_v1`, so the WM now emits executor entrypoints, observation-adapter entrypoints, runtime stack, asset profiles, and missing-asset truth for the selected backend
+  - the Isaac / Unitree-target path still stays honest: it now carries explicit asset readiness for robot description, joint mapping, sensor extrinsics, and actuator-latency profiles instead of pretending that “isaac” is already executable
+- Changed: deepened the NAG/LSD/GGDS provider seam from provider-kind selection into materialization configuration:
+  - `src/world_model/sim_synth_physics/render_providers.py` now resolves materialization entrypoints, provider config payloads, and `materialization_status` for NAG counterfactual generation and GGDS scene texturing
+  - `BranchRenderProviderState` and `render_provider_receipt_v1` now preserve materialization entrypoints and config instead of only provider-kind/status metadata
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests backend-binding receipts and the richer render-provider receipts so those contracts survive into downstream trainer datasets
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_nag_lsd_integration.py`, and `git diff --check`.
+- Blocked: this keeps shrinking the implementable Phase 1 gap list, but the main honest blockers are still concrete external assets/execution rather than missing WM ownership:
+  - real Isaac Sim / Isaac Gym execution through the new binding seam
+  - Unitree robot assets and calibration sidecars
+  - richer Holosoma runtime asset binding on an actual host
+  - concrete GGDS/LDM execution on a host with the required rendering stack
+
 - Changed: continued Phase 1 sim/synth/physics WM implementation with typed backend-adapter, physics-adaptation, and branch/render-provider ownership:
   - added `src/world_model/sim_synth_physics/backend_adapters.py` so backend routing now resolves explicit adapter descriptors for PyBullet, Holosoma, and the still-honest Isaac/Unitree target gap instead of treating backend names as flat strings
   - added `src/world_model/sim_synth_physics/randomization.py` and extended `state.py`, `physics_contracts.py`, `receipts.py`, `compiler.py`, `calibration.py`, and `runtime.py` so the WM now compiles `PhysicsAdaptationPolicyState`, emits `physics_adaptation_receipt_v1`, and threads domain-randomization / system-identification / robot-asset targets into live loop artifacts rather than leaving them implicit
