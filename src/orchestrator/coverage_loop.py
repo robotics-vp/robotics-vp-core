@@ -35,10 +35,12 @@ from src.world_model.fill_outcome_store import (
     FillOutcomeStore,
 )
 from src.world_model.semantic_feedback_packets import (
+    GraphMutationProposal,
     SemanticCoverageFeedback,
     compile_semantic_coverage_feedback,
 )
 from src.world_model.semantic_wm_correction import (
+    SemanticWMCorrectionOverlay,
     apply_semantic_wm_correction_overlay,
     compile_semantic_wm_correction_overlay,
 )
@@ -46,22 +48,95 @@ from src.world_model.graph_mutation_executor import (
     GovernedGraphMutationExecutor,
     GraphMutationExecutionResult,
 )
-from src.world_model.feedback_topology_adapters import (
-    SemanticFeedbackAdapterPackage,
-    shadow_fit_feedback_adapter_package,
-)
+from src.world_model.feedback_topology_adapters import shadow_fit_feedback_adapter_package
+from src.world_model.feedback_topology_runtime import resolve_feedback_adapter_helper
 from src.world_model.semantic_wm_refiner import (
-    SemanticWMRefinerPackage,
     merge_graph_mutation_proposals,
     merge_semantic_wm_correction_overlays,
     shadow_fit_semantic_wm_refiner_package,
 )
+from src.world_model.semantic_wm_refiner_runtime import resolve_semantic_wm_refiner_helper
 from src.hrl.skill_graph import SkillGraph
 from src.envs.primitive_inventory import for_env, list_registered_env_ids
 from src.orchestrator.fill_path_routing import route_fill_paths
 from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
 from src.orchestrator.diffusion_requests import build_diffusion_prompt_from_coverage_gaps
+
+
+def _clip01(value: float) -> float:
+    return float(max(0.0, min(1.0, value)))
+
+
+def _bounded_blend(base_value: float, learned_value: float, weight: float) -> float:
+    weight = _clip01(weight)
+    return _clip01((1.0 - weight) * float(base_value) + weight * float(learned_value))
+
+
+def _feedback_adapter_helper_weight(helper_status: Mapping[str, Any], helper: Any) -> float:
+    inference_contract = dict(getattr(helper, "inference_contract", {}) or {})
+    if bool(helper_status.get("benchmark_gate_ready", False)):
+        return float(inference_contract.get("promoted_helper_weight", 0.42))
+    return float(inference_contract.get("shadow_candidate_helper_weight", 0.18))
+
+
+def _scale_semantic_wm_overlay(
+    overlay: SemanticWMCorrectionOverlay,
+    scale: float,
+) -> SemanticWMCorrectionOverlay:
+    return SemanticWMCorrectionOverlay(
+        object_confidence_adjustments={
+            str(key): float(value) * float(scale)
+            for key, value in overlay.object_confidence_adjustments.items()
+        },
+        relation_confidence_adjustments={
+            str(key): float(value) * float(scale)
+            for key, value in overlay.relation_confidence_adjustments.items()
+        },
+        capability_adjustments={
+            str(key): float(value) * float(scale)
+            for key, value in overlay.capability_adjustments.items()
+        },
+        topology_adjustments=dict(overlay.topology_adjustments or {}),
+        meta_node_pressure=float(overlay.meta_node_pressure) * float(scale),
+        target_refs=list(overlay.target_refs or []),
+        metadata={**dict(overlay.metadata or {}), "bounded_scale": float(scale)},
+    )
+
+
+def _scale_graph_mutation_proposals(
+    proposals: Sequence[GraphMutationProposal],
+    scale: float,
+) -> List[GraphMutationProposal]:
+    scaled: List[GraphMutationProposal] = []
+    damp = _clip01(scale)
+    for proposal in proposals:
+        scaled.append(
+            GraphMutationProposal(
+                proposal_id=str(proposal.proposal_id),
+                action=str(proposal.action),
+                target_ref=str(proposal.target_ref),
+                confidence=_clip01(0.5 + ((float(proposal.confidence) - 0.5) * damp)),
+                rationale=str(proposal.rationale),
+                source_refs=list(proposal.source_refs or []),
+                metadata={**dict(proposal.metadata or {}), "bounded_scale": float(damp)},
+            )
+        )
+    return scaled
+
+
+def _semantic_wm_refiner_overlay_scale(helper_status: Mapping[str, Any], helper: Any) -> float:
+    inference_contract = dict(getattr(helper, "inference_contract", {}) or {})
+    if bool(helper_status.get("benchmark_gate_ready", False)):
+        return float(inference_contract.get("promoted_overlay_scale", 0.62))
+    return float(inference_contract.get("shadow_candidate_overlay_scale", 0.28))
+
+
+def _semantic_wm_refiner_proposal_scale(helper_status: Mapping[str, Any], helper: Any) -> float:
+    inference_contract = dict(getattr(helper, "inference_contract", {}) or {})
+    if bool(helper_status.get("benchmark_gate_ready", False)):
+        return float(inference_contract.get("promoted_proposal_scale", 0.35))
+    return float(inference_contract.get("shadow_candidate_proposal_scale", 0.18))
 
 
 # ---------------------------------------------------------------------------
@@ -376,8 +451,10 @@ def run_coverage_loop(
     vla_hints: Optional[Sequence[Mapping[str, Any]]] = None,
     semantic_world_model: Optional[Any] = None,
     feedback_adapter_package: Optional[Any] = None,
+    feedback_adapter_mode: Literal["disabled", "auto", "required"] = "auto",
     shadow_fit_feedback_adapter: bool = True,
     semantic_wm_refiner_package: Optional[Any] = None,
+    semantic_wm_refiner_mode: Literal["disabled", "auto", "required"] = "auto",
     shadow_fit_semantic_wm_refiner: bool = True,
     economic_weight: float = 1.0,
     trust_weight: float = 1.0,
@@ -448,14 +525,11 @@ def run_coverage_loop(
         semantic_world_model,
         wm_validation_packets,
     )
-    refiner: Optional[SemanticWMRefinerPackage]
-    refiner = semantic_wm_refiner_package if isinstance(semantic_wm_refiner_package, SemanticWMRefinerPackage) else None
-    if refiner is None and isinstance(semantic_wm_refiner_package, Mapping) and "object_state_dict" in semantic_wm_refiner_package:
-        try:
-            refiner = SemanticWMRefinerPackage.from_checkpoint(semantic_wm_refiner_package)
-        except Exception:
-            refiner = None
-    if refiner is None and shadow_fit_semantic_wm_refiner:
+    refiner, refiner_helper_status = resolve_semantic_wm_refiner_helper(
+        semantic_wm_refiner_package,
+        mode=semantic_wm_refiner_mode,
+    )
+    if refiner is None and shadow_fit_semantic_wm_refiner and semantic_wm_refiner_mode != "required":
         refiner = shadow_fit_semantic_wm_refiner_package(
             semantic_world_model,
             correction_overlay=correction_overlay,
@@ -463,19 +537,34 @@ def run_coverage_loop(
             wm_validation_packets=wm_validation_packets,
             graph_mutation_proposals=feedback.graph_mutation_proposals,
         )
+        if refiner is not None:
+            refiner_helper_status = {
+                "mode": semantic_wm_refiner_mode,
+                "status": "shadow_fit",
+                "promotion_stage": "shadow_fit_fallback",
+                "benchmark_gate_ready": False,
+            }
     refiner_summary: Dict[str, Any] = {}
     learned_graph_mutation_proposals: List[Dict[str, Any]] = []
     if refiner is not None:
-        learned_overlay = refiner.predict_correction_overlay(
-            semantic_world_model,
-            wm_validation_packets=wm_validation_packets,
-            feedback_summary=feedback.feedback_summary,
+        overlay_scale = _semantic_wm_refiner_overlay_scale(refiner_helper_status, refiner)
+        proposal_scale = _semantic_wm_refiner_proposal_scale(refiner_helper_status, refiner)
+        learned_overlay = _scale_semantic_wm_overlay(
+            refiner.predict_correction_overlay(
+                semantic_world_model,
+                wm_validation_packets=wm_validation_packets,
+                feedback_summary=feedback.feedback_summary,
+            ),
+            overlay_scale,
         )
-        learned_scored_proposals = refiner.score_graph_mutation_proposals(
-            semantic_world_model,
-            feedback.graph_mutation_proposals,
-            wm_validation_packets=wm_validation_packets,
-            feedback_summary=feedback.feedback_summary,
+        learned_scored_proposals = _scale_graph_mutation_proposals(
+            refiner.score_graph_mutation_proposals(
+                semantic_world_model,
+                feedback.graph_mutation_proposals,
+                wm_validation_packets=wm_validation_packets,
+                feedback_summary=feedback.feedback_summary,
+            ),
+            proposal_scale,
         )
         feedback = SemanticCoverageFeedback(
             feedback_summary=dict(feedback.feedback_summary),
@@ -498,9 +587,17 @@ def run_coverage_loop(
         ]
         refiner_summary = {
             "active": True,
+            "helper_status": dict(refiner_helper_status),
             "package_metadata": dict(getattr(refiner, "metadata", {}) or {}),
+            "overlay_scale": float(overlay_scale),
+            "proposal_scale": float(proposal_scale),
             "learned_overlay_pressure": float(getattr(learned_overlay, "meta_node_pressure", 0.0)),
             "learned_graph_mutation_count": len(learned_graph_mutation_proposals),
+        }
+    else:
+        refiner_summary = {
+            "active": False,
+            "helper_status": dict(refiner_helper_status),
         }
     corrected_semantic_world_model = apply_semantic_wm_correction_overlay(
         semantic_world_model,
@@ -553,27 +650,44 @@ def run_coverage_loop(
         edge_metadata=feedback.edge_metadata,
     )
 
-    adapter: Optional[SemanticFeedbackAdapterPackage]
-    adapter = feedback_adapter_package if isinstance(feedback_adapter_package, SemanticFeedbackAdapterPackage) else None
-    if adapter is None and isinstance(feedback_adapter_package, Mapping) and "state_dict" in feedback_adapter_package:
-        try:
-            adapter = SemanticFeedbackAdapterPackage.from_checkpoint(feedback_adapter_package)
-        except Exception:
-            adapter = None
-    if adapter is None and shadow_fit_feedback_adapter:
+    adapter, feedback_adapter_helper_status = resolve_feedback_adapter_helper(
+        feedback_adapter_package,
+        mode=feedback_adapter_mode,
+    )
+    if adapter is None and shadow_fit_feedback_adapter and feedback_adapter_mode != "required":
         adapter = shadow_fit_feedback_adapter_package(coverage_graph)
+        if adapter is not None:
+            feedback_adapter_helper_status = {
+                "mode": feedback_adapter_mode,
+                "status": "shadow_fit",
+                "promotion_stage": "shadow_fit_fallback",
+                "benchmark_gate_ready": False,
+            }
+    feedback_adapter_weight = 0.0
     if adapter is not None:
+        feedback_adapter_weight = _feedback_adapter_helper_weight(feedback_adapter_helper_status, adapter)
         predictions = adapter.predict_edges(coverage_graph.edges)
         for edge, prediction in zip(coverage_graph.edges, predictions):
-            edge.economic_priority = float(max(edge.economic_priority, prediction.get("economic_priority", edge.economic_priority)))
-            edge.trust_priority = float(max(edge.trust_priority, prediction.get("trust_priority", edge.trust_priority)))
+            edge.economic_priority = _bounded_blend(
+                edge.economic_priority,
+                float(prediction.get("economic_priority", edge.economic_priority)),
+                feedback_adapter_weight,
+            )
+            edge.trust_priority = _bounded_blend(
+                edge.trust_priority,
+                float(prediction.get("trust_priority", edge.trust_priority)),
+                feedback_adapter_weight,
+            )
             if not bool(edge.metadata.get("governance_blocked", False)):
-                edge.promotion_readiness = float(max(edge.promotion_readiness, prediction.get("promotion_readiness", edge.promotion_readiness)))
-            edge.metadata["wm_validation_pressure"] = float(
-                max(
-                    float(edge.metadata.get("wm_validation_pressure", 0.0)),
-                    prediction.get("wm_correction_pressure", 0.0),
+                edge.promotion_readiness = _bounded_blend(
+                    edge.promotion_readiness,
+                    float(prediction.get("promotion_readiness", edge.promotion_readiness)),
+                    feedback_adapter_weight,
                 )
+            edge.metadata["wm_validation_pressure"] = _bounded_blend(
+                float(edge.metadata.get("wm_validation_pressure", 0.0)),
+                float(prediction.get("wm_correction_pressure", 0.0)),
+                feedback_adapter_weight,
             )
 
     # Step 5: Rank missing edges (implicit in rank_gaps)
@@ -589,8 +703,10 @@ def run_coverage_loop(
     summary["feedback_loop"]["graph_mutation_applied_count"] = int(mutation_result.metadata.get("applied_count", 0))
     summary["feedback_loop"]["graph_mutation_blocked_count"] = int(mutation_result.metadata.get("blocked_count", 0))
     summary["feedback_loop"]["wm_correction_pressure"] = float(correction_overlay.meta_node_pressure)
-    if refiner_summary:
-        summary["feedback_loop"]["learned_refinement_active"] = True
+    summary["feedback_loop"]["feedback_adapter_helper_status"] = dict(feedback_adapter_helper_status)
+    summary["feedback_loop"]["feedback_adapter_helper_weight"] = float(feedback_adapter_weight)
+    summary["feedback_loop"]["learned_refinement_active"] = bool(refiner_summary.get("active", False))
+    if refiner_summary.get("active"):
         summary["feedback_loop"]["learned_graph_mutation_count"] = int(refiner_summary.get("learned_graph_mutation_count", 0))
         summary["feedback_loop"]["learned_overlay_pressure"] = float(refiner_summary.get("learned_overlay_pressure", 0.0))
 

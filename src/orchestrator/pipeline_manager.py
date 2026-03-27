@@ -907,31 +907,17 @@ def run_pipeline_step_with_causal_order(
 
             cov_rows = list(semantic_coverage_config.get("runtime_rows", []))
             feedback_adapter_package = semantic_coverage_config.get("feedback_adapter_package")
+            if feedback_adapter_package is None:
+                feedback_adapter_package = semantic_coverage_config.get("feedback_adapter_runtime_package")
             feedback_adapter_checkpoint = semantic_coverage_config.get("feedback_adapter_checkpoint")
             semantic_wm_refiner_package = semantic_coverage_config.get("semantic_wm_refiner_package")
+            if semantic_wm_refiner_package is None:
+                semantic_wm_refiner_package = semantic_coverage_config.get("semantic_wm_refiner_runtime_package")
             semantic_wm_refiner_checkpoint = semantic_coverage_config.get("semantic_wm_refiner_checkpoint")
-            if feedback_adapter_package is None and feedback_adapter_checkpoint:
-                try:
-                    import torch
-
-                    feedback_adapter_package = torch.load(
-                        str(feedback_adapter_checkpoint),
-                        map_location="cpu",
-                        weights_only=False,
-                    )
-                except Exception:
-                    feedback_adapter_package = None
-            if semantic_wm_refiner_package is None and semantic_wm_refiner_checkpoint:
-                try:
-                    import torch
-
-                    semantic_wm_refiner_package = torch.load(
-                        str(semantic_wm_refiner_checkpoint),
-                        map_location="cpu",
-                        weights_only=False,
-                    )
-                except Exception:
-                    semantic_wm_refiner_package = None
+            if feedback_adapter_package is None:
+                feedback_adapter_package = feedback_adapter_checkpoint
+            if semantic_wm_refiner_package is None:
+                semantic_wm_refiner_package = semantic_wm_refiner_checkpoint
             cov_result = run_coverage_loop(
                 cov_rows,
                 econ_signals=econ_signals.to_dict(),
@@ -949,8 +935,10 @@ def run_pipeline_step_with_causal_order(
                 vla_hints=semantic_coverage_config.get("vla_hints"),
                 semantic_world_model=semantic_world_model,
                 feedback_adapter_package=feedback_adapter_package,
+                feedback_adapter_mode=str(semantic_coverage_config.get("feedback_adapter_mode", "auto")),
                 shadow_fit_feedback_adapter=bool(semantic_coverage_config.get("shadow_fit_feedback_adapter", True)),
                 semantic_wm_refiner_package=semantic_wm_refiner_package,
+                semantic_wm_refiner_mode=str(semantic_coverage_config.get("semantic_wm_refiner_mode", "auto")),
                 shadow_fit_semantic_wm_refiner=bool(semantic_coverage_config.get("shadow_fit_semantic_wm_refiner", True)),
                 economic_weight=float(semantic_coverage_config.get("economic_weight", 1.0)),
                 trust_weight=float(semantic_coverage_config.get("trust_weight", 1.0)),

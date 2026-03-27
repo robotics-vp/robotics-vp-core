@@ -137,6 +137,7 @@ try:
     class SemanticFeedbackAdapterPackage:
         model: _MultiHeadNet
         feature_names: List[str] = field(default_factory=lambda: list(FEATURE_NAMES))
+        metadata: Dict[str, Any] = field(default_factory=dict)
 
         def predict_edges(self, edges: Sequence[Any]) -> List[Dict[str, float]]:
             if not edges:
@@ -159,15 +160,24 @@ try:
         def to_checkpoint(self) -> Dict[str, Any]:
             return {
                 "feature_names": list(self.feature_names),
+                "metadata": dict(self.metadata),
                 "state_dict": self.model.state_dict(),
             }
 
         @classmethod
         def from_checkpoint(cls, payload: Mapping[str, Any]) -> "SemanticFeedbackAdapterPackage":
-            model = _MultiHeadNet(input_dim=len(payload.get("feature_names", FEATURE_NAMES)), hidden_dim=48)
+            metadata = dict(payload.get("metadata", {}) or {})
+            model = _MultiHeadNet(
+                input_dim=len(payload.get("feature_names", FEATURE_NAMES)),
+                hidden_dim=int(metadata.get("hidden_dim", 48)),
+            )
             model.load_state_dict(payload["state_dict"])
             model.eval()
-            return cls(model=model, feature_names=list(payload.get("feature_names", FEATURE_NAMES)))
+            return cls(
+                model=model,
+                feature_names=list(payload.get("feature_names", FEATURE_NAMES)),
+                metadata=metadata,
+            )
 
 
     def train_semantic_feedback_adapter_package(
@@ -200,7 +210,16 @@ try:
             loss.backward()
             optimizer.step()
         model.eval()
-        return SemanticFeedbackAdapterPackage(model=model, feature_names=list(dataset.feature_names))
+        return SemanticFeedbackAdapterPackage(
+            model=model,
+            feature_names=list(dataset.feature_names),
+            metadata={
+                "hidden_dim": int(hidden_dim),
+                "epochs": int(epochs),
+                "learning_rate": float(learning_rate),
+                "dataset_metadata": dict(dataset.metadata),
+            },
+        )
 
 
     def shadow_fit_feedback_adapter_package(
@@ -223,12 +242,13 @@ except Exception:
     @dataclass
     class SemanticFeedbackAdapterPackage:  # type: ignore[no-redef]
         feature_names: List[str] = field(default_factory=lambda: list(FEATURE_NAMES))
+        metadata: Dict[str, Any] = field(default_factory=dict)
 
         def predict_edges(self, edges: Sequence[Any]) -> List[Dict[str, float]]:
             return []
 
         def to_checkpoint(self) -> Dict[str, Any]:
-            return {"feature_names": list(self.feature_names)}
+            return {"feature_names": list(self.feature_names), "metadata": dict(self.metadata)}
 
     def train_semantic_feedback_adapter_package(*args: Any, **kwargs: Any) -> SemanticFeedbackAdapterPackage:  # type: ignore[no-redef]
         raise ImportError("train_semantic_feedback_adapter_package requires torch")
