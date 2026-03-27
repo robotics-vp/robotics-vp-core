@@ -10,7 +10,17 @@ import json
 import numpy as np
 from typing import List, Optional, Dict, Any, Iterator
 
-from src.epiplexity.metadata import apply_epiplexity_overlay, load_epiplexity_overlay_map, write_epiplexity_overlays
+from src.economics.inferential_contract import (
+    build_inferential_learnability_contract,
+    coerce_inferential_learnability_contract,
+)
+from src.epiplexity.metadata import (
+    apply_epiplexity_overlay,
+    extract_epiplexity_summary_confidence,
+    extract_epiplexity_summary_metric,
+    load_epiplexity_overlay_map,
+    write_epiplexity_overlays,
+)
 from .datapack_schema import DataPackMeta
 
 
@@ -127,6 +137,7 @@ class DataPackRepo:
         # Load from file
         datapacks = list(self.iter_all(task_name))
         self._apply_epiplexity_overlays(datapacks)
+        self._attach_inferential_learnability_contracts(datapacks)
 
         # Update cache
         self._cache[task_name] = datapacks
@@ -319,6 +330,49 @@ class DataPackRepo:
                 continue
             apply_epiplexity_overlay(dp, overlay)
         self._epiplexity_overlay_mtime = os.path.getmtime(overlay_path)
+
+    def _attach_inferential_learnability_contracts(self, datapacks: List[DataPackMeta]) -> None:
+        for dp in datapacks:
+            existing_contract = coerce_inferential_learnability_contract(
+                getattr(dp, "inferential_learnability_contract", None)
+            )
+            if existing_contract is not None and existing_contract.receipt_backed:
+                dp.inferential_learnability_contract = existing_contract.to_dict()
+                continue
+            trust_score = float(getattr(dp.attribution, "trust_score", 0.5) or 0.5)
+            data_quality = float(trust_score)
+            if dp.process_reward_profile is not None and getattr(
+                dp.process_reward_profile, "has_data", lambda: True
+            )():
+                try:
+                    data_quality = float(dp.process_reward_profile.quality_score())
+                except Exception:
+                    data_quality = float(trust_score)
+            epiplexity_delta = float(
+                extract_epiplexity_summary_metric(dp, metric="delta_epi_vs_baseline") or 0.0
+            )
+            epiplexity_confidence = float(extract_epiplexity_summary_confidence(dp) or 0.0)
+            contract = build_inferential_learnability_contract(
+                subject_id=str(dp.episode_id or dp.pack_id),
+                subject_kind="datapack",
+                datapack_id=str(dp.pack_id),
+                frontier_gain=max(0.0, float(getattr(dp.attribution, "delta_J", 0.0) or 0.0)),
+                epiplexity_delta=epiplexity_delta,
+                epiplexity_confidence=epiplexity_confidence,
+                transfer_score=max(0.0, float(getattr(dp.attribution, "mvd_score", 0.0) or 0.0)),
+                data_quality=data_quality,
+                provenance_quality=trust_score,
+                trust_score=trust_score,
+                overlay_joined=bool(dp.epiplexity_summary),
+                summary_present=bool(dp.epiplexity_summary),
+                metadata={
+                    "source": "datapack_repo",
+                    "task_name": dp.task_name,
+                    "env_type": dp.env_type,
+                    "bucket": dp.bucket,
+                },
+            )
+            dp.inferential_learnability_contract = contract.to_dict()
 
     def get_positive_for_skill(
         self,

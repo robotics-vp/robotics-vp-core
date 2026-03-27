@@ -41,6 +41,7 @@ class TrainingRuntimeManifest:
     receipt_label_coverage: Dict[str, Any]
     artifact_paths: Dict[str, str]
     inferential_learnability_summary: Dict[str, Any] = field(default_factory=dict)
+    inferential_admission_summary: Dict[str, Any] = field(default_factory=dict)
     inferential_work_order_summary: Dict[str, Any] = field(default_factory=dict)
     checkpoint_registry_path: Optional[str] = None
     checkpoint_registry_digest: Optional[str] = None
@@ -80,6 +81,7 @@ class TrainingRuntimeManifest:
             "source_domain_coverage": dict(self.source_domain_coverage),
             "receipt_label_coverage": dict(self.receipt_label_coverage),
             "inferential_learnability_summary": dict(self.inferential_learnability_summary),
+            "inferential_admission_summary": dict(self.inferential_admission_summary),
             "inferential_work_order_summary": dict(self.inferential_work_order_summary),
             "artifact_paths": dict(self.artifact_paths),
             "checkpoint_registry_path": self.checkpoint_registry_path,
@@ -119,6 +121,9 @@ class TrainingRuntimeManifest:
             receipt_label_coverage=dict(payload.get("receipt_label_coverage", {}) or {}),
             inferential_learnability_summary=dict(
                 payload.get("inferential_learnability_summary", {}) or {}
+            ),
+            inferential_admission_summary=dict(
+                payload.get("inferential_admission_summary", {}) or {}
             ),
             inferential_work_order_summary=dict(
                 payload.get("inferential_work_order_summary", {}) or {}
@@ -282,6 +287,7 @@ def build_training_runtime_summary_markdown(
         "",
         "## Inferential",
         f"- Learnability contracts: {manifest.inferential_learnability_summary.get('contract_count', 0)}",
+        f"- Admission decisions: {manifest.inferential_admission_summary.get('decision_count', 0)}",
         f"- Benchmark receipt-backed: {manifest.inferential_learnability_summary.get('benchmark_receipt_backed_count', 0)}",
         f"- Inferential work orders: {manifest.inferential_work_order_summary.get('work_orders', 0)}",
         "",

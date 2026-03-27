@@ -642,6 +642,9 @@ class DataPackMeta:
     epiplexity: Optional[Dict[str, Any]] = None
     epiplexity_summary: Optional[Dict[str, Any]] = None
 
+    # Canonical inferential learnability metadata for downstream training/replay selection.
+    inferential_learnability_contract: Optional[Dict[str, Any]] = None
+
     # Homeostatic control signals (optional) - for closed-loop controller
     signal_bundle: Optional[Dict[str, Any]] = None
     # Contains serialized SignalBundle with epiplexity, stability, alignment metrics
@@ -709,6 +712,9 @@ class DataPackMeta:
             "episode_embedding": to_json_safe(self.episode_embedding),
             "epiplexity": to_json_safe(self.epiplexity),
             "epiplexity_summary": to_json_safe(self.epiplexity_summary),
+            "inferential_learnability_contract": to_json_safe(
+                self.inferential_learnability_contract
+            ),
             "signal_bundle": to_json_safe(self.signal_bundle),
             "graph_summary_v1": to_json_safe(self.graph_summary_v1),
             "econ_tensor_v1": to_json_safe(self.econ_tensor_v1),
@@ -784,6 +790,7 @@ class DataPackMeta:
             episode_embedding=d.get("episode_embedding"),
             epiplexity=d.get("epiplexity"),
             epiplexity_summary=d.get("epiplexity_summary"),
+            inferential_learnability_contract=d.get("inferential_learnability_contract"),
             signal_bundle=d.get("signal_bundle"),
             graph_summary_v1=d.get("graph_summary_v1"),
             econ_tensor_v1=d.get("econ_tensor_v1"),

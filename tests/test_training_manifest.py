@@ -9,6 +9,7 @@ from src.training.checkpoint_registry import (
 from src.training.training_manifest import (
     TrainingRuntimeManifest,
     check_training_runtime_manifest_compatibility,
+    load_training_runtime_manifest,
     write_training_runtime_manifest,
 )
 
@@ -59,6 +60,7 @@ def test_training_manifest_and_checkpoint_registry_roundtrip(tmp_path):
         receipt_label_coverage={"total_labels": 3},
         artifact_paths={"training_summary": str(artifact_path)},
         inferential_learnability_summary={"contract_count": 3, "benchmark_receipt_backed_count": 1},
+        inferential_admission_summary={"decision_count": 3, "decision_counts": {"adapt_now": 2}},
         inferential_work_order_summary={"work_orders": 2},
         checkpoint_registry_path=str(registry_path),
         checkpoint_registry_digest=registry_sha,
@@ -69,6 +71,8 @@ def test_training_manifest_and_checkpoint_registry_roundtrip(tmp_path):
     manifest_path = tmp_path / "training_runtime_manifest.json"
     manifest_sha = write_training_runtime_manifest(manifest_path, manifest)
     assert manifest_sha
+    loaded = load_training_runtime_manifest(manifest_path)
+    assert loaded.inferential_admission_summary["decision_count"] == 3
     assert check_training_runtime_manifest_compatibility(manifest).compatible is True
 
 

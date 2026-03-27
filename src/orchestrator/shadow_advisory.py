@@ -605,9 +605,15 @@ def build_shadow_advisory_output(
         candidates=budget_candidates,
         execution_preconditions=execution_preconditions_by_episode,
     )
+    inferential_admission_contract = dict(budget_artifact.admission_contract or {})
     decisions_by_episode: Dict[str, Dict[str, Any]] = {
         str(row.get("artifact_summary", {}).get("episode_id", candidate.episode_id)): row
         for row, candidate in zip(budget_artifact.decisions, budget_candidates)
+    }
+    admission_rows_by_episode: Dict[str, Dict[str, Any]] = {
+        str(row.get("episode_id", "")): dict(row)
+        for row in list(inferential_admission_contract.get("episode_decisions", []) or [])
+        if isinstance(row, dict)
     }
     work_orders_by_episode: Dict[str, list[Dict[str, Any]]] = defaultdict(list)
     for work_order in budget_artifact.work_orders:
@@ -615,6 +621,7 @@ def build_shadow_advisory_output(
     for episode_output, candidate in zip(episode_outputs, budget_candidates):
         budget_decision = decisions_by_episode.get(candidate.episode_id) or gate.evaluate(candidate).to_dict()
         episode_output["inferential_budget_decision"] = budget_decision
+        episode_output["inferential_admission"] = admission_rows_by_episode.get(candidate.episode_id, {})
         episode_output["collect_more_data"] = budget_decision["decision"] == "collect_more_data"
         episode_output["retrain"] = budget_decision["decision"] == "adapt_now"
         episode_output["execution_work_orders"] = work_orders_by_episode.get(candidate.episode_id, [])
@@ -671,6 +678,9 @@ def build_shadow_advisory_output(
     summary["inferential_learnability_summary"] = summarize_inferential_learnability_contracts(
         inferential_contract_rows
     )
+    summary["inferential_admission_summary"] = dict(
+        (budget_artifact.admission_contract or {}).get("summary", {}) or {}
+    )
     payload: Dict[str, Any] = {
         "summary": summary,
         "episodes": episode_outputs,
@@ -683,6 +693,7 @@ def build_shadow_advisory_output(
         "semantic_runtime_scorer_work_orders": scorer_work_orders,
         "adaptation_budget": budget_artifact.to_dict(),
         "inferential_learnability_summary": dict(summary["inferential_learnability_summary"]),
+        "inferential_admission_contract": inferential_admission_contract,
         "inferential_work_orders": [dict(row) for row in budget_artifact.work_orders],
         "adaptation_work_orders": [
             row for row in budget_artifact.work_orders

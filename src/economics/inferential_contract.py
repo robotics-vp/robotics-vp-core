@@ -291,6 +291,125 @@ def summarize_inferential_learnability_contracts(
     }
 
 
+def summarize_inferential_work_orders(
+    work_orders: Sequence[ExecutionWorkOrder | Mapping[str, Any]],
+) -> Dict[str, Any]:
+    rows: list[Dict[str, Any]] = []
+    for row in list(work_orders or []):
+        if isinstance(row, ExecutionWorkOrder):
+            rows.append(row.to_dict())
+        elif isinstance(row, Mapping):
+            rows.append(dict(to_json_safe(dict(row))))
+    order_type_counts: Dict[str, int] = {}
+    ready_count = 0
+    blocked_count = 0
+    for row in rows:
+        order_type = str(row.get("order_type", "unknown") or "unknown")
+        order_type_counts[order_type] = order_type_counts.get(order_type, 0) + 1
+        if bool(row.get("ready", False)):
+            ready_count += 1
+        else:
+            blocked_count += 1
+    return {
+        "work_orders": len(rows),
+        "ready_count": ready_count,
+        "blocked_count": blocked_count,
+        "order_type_counts": dict(sorted(order_type_counts.items())),
+    }
+
+
+def build_inferential_admission_contract(
+    *,
+    candidates: Sequence[Any],
+    decisions: Sequence[Any],
+    work_orders: Sequence[ExecutionWorkOrder | Mapping[str, Any]],
+) -> Dict[str, Any]:
+    work_order_rows: list[Dict[str, Any]] = []
+    for row in list(work_orders or []):
+        if isinstance(row, ExecutionWorkOrder):
+            work_order_rows.append(row.to_dict())
+        elif isinstance(row, Mapping):
+            work_order_rows.append(dict(to_json_safe(dict(row))))
+    work_orders_by_episode: Dict[str, list[Dict[str, Any]]] = {}
+    for row in work_order_rows:
+        work_orders_by_episode.setdefault(str(row.get("subject_id", "")), []).append(dict(row))
+
+    decision_counts: Dict[str, int] = {}
+    contracts: list[Dict[str, Any]] = []
+    episode_rows: list[Dict[str, Any]] = []
+    for candidate, decision in zip(list(candidates or []), list(decisions or [])):
+        decision_name = str(getattr(decision, "decision", "no_op") or "no_op")
+        decision_counts[decision_name] = decision_counts.get(decision_name, 0) + 1
+        decision_artifact_summary = getattr(decision, "artifact_summary", {}) or {}
+        contract = coerce_inferential_learnability_contract(
+            getattr(candidate, "metadata", {}).get("inferential_learnability_contract")
+            if isinstance(getattr(candidate, "metadata", None), Mapping)
+            else None
+        )
+        if contract is None and isinstance(decision_artifact_summary, Mapping):
+            contract = coerce_inferential_learnability_contract(
+                decision_artifact_summary.get("inferential_learnability_contract")
+            )
+        contract_payload = contract.to_dict() if contract is not None else {}
+        if contract_payload:
+            contracts.append(contract_payload)
+        episode_id = str(getattr(candidate, "episode_id", "") or "")
+        datapack_id = str(
+            (
+                getattr(candidate, "metadata", {}) or {}
+            ).get("datapack_id", episode_id)
+            if isinstance(getattr(candidate, "metadata", None), Mapping)
+            else episode_id
+        )
+        episode_work_orders = list(work_orders_by_episode.get(episode_id, []))
+        episode_rows.append(
+            {
+                "episode_id": episode_id,
+                "datapack_id": datapack_id,
+                "decision_id": str(getattr(decision, "decision_id", "") or ""),
+                "decision": decision_name,
+                "recommended_training_mode": str(
+                    getattr(decision, "recommended_training_mode", "no_training") or "no_training"
+                ),
+                "authority_class": "work_order",
+                "decision_scope": "training_admission_and_data_collection",
+                "reward_math_mutation": False,
+                "learnability_class": str(
+                    contract.learnability_class if contract is not None else "missing"
+                ),
+                "inferential_replay_weight": float(
+                    contract.inferential_replay_weight if contract is not None else 0.0
+                ),
+                "ready_work_order_count": sum(
+                    1 for row in episode_work_orders if bool(row.get("ready", False))
+                ),
+                "blocked_work_order_count": sum(
+                    1 for row in episode_work_orders if not bool(row.get("ready", False))
+                ),
+                "reasons": list(getattr(decision, "reasons", []) or []),
+                "artifact_summary": dict(decision_artifact_summary)
+                if isinstance(decision_artifact_summary, Mapping)
+                else {},
+                "inferential_learnability_contract": contract_payload or None,
+            }
+        )
+    return {
+        "schema_version": "inferential_admission_contract_v1",
+        "contract_kind": "inferential_admission_contract_v1",
+        "authority_class": "work_order",
+        "decision_scope": "training_admission_and_data_collection",
+        "reward_math_mutation": False,
+        "episode_decisions": episode_rows,
+        "work_orders": work_order_rows,
+        "summary": {
+            "decision_count": len(episode_rows),
+            "decision_counts": dict(sorted(decision_counts.items())),
+            "learnability_summary": summarize_inferential_learnability_contracts(contracts),
+            "work_order_summary": summarize_inferential_work_orders(work_order_rows),
+        },
+    }
+
+
 def build_inferential_execution_work_order(
     *,
     decision: Any,
@@ -356,9 +475,11 @@ def build_inferential_execution_work_order(
 
 __all__ = [
     "InferentialLearnabilityContract",
+    "build_inferential_admission_contract",
     "build_inferential_execution_work_order",
     "build_inferential_learnability_contract",
     "classify_learnability_class",
     "coerce_inferential_learnability_contract",
+    "summarize_inferential_work_orders",
     "summarize_inferential_learnability_contracts",
 ]

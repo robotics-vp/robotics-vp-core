@@ -4,7 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from src.economics.inferential_contract import build_inferential_execution_work_order
+from src.economics.inferential_contract import (
+    build_inferential_admission_contract,
+    build_inferential_execution_work_order,
+)
 from src.economics.inferential_training_gate import (
     InferentialTrainingCandidate,
     InferentialTrainingGate,
@@ -18,12 +21,14 @@ class AdaptationBudgetArtifact:
     decisions: list[Dict[str, Any]]
     summary: Dict[str, Any]
     work_orders: list[Dict[str, Any]] = field(default_factory=list)
+    admission_contract: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "decisions": list(self.decisions),
             "summary": dict(self.summary),
             "work_orders": list(self.work_orders),
+            "admission_contract": dict(self.admission_contract),
         }
 
 
@@ -58,6 +63,11 @@ def evaluate_adaptation_budget(
             learnability_contract=candidate.metadata.get("inferential_learnability_contract"),
         )
         work_orders.append(work_order.to_dict())
+    admission_contract = build_inferential_admission_contract(
+        candidates=candidates,
+        decisions=decisions,
+        work_orders=work_orders,
+    )
     return AdaptationBudgetArtifact(
         decisions=payloads,
         summary={
@@ -71,4 +81,5 @@ def evaluate_adaptation_budget(
             "blocked_work_orders": sum(1 for row in work_orders if not row.get("ready")),
         },
         work_orders=work_orders,
+        admission_contract=admission_contract,
     )

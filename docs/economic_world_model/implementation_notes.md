@@ -1242,3 +1242,28 @@
   - `src/rl/episode_sampling.py` now carries those fields into `sampler_policy_receipt_v1` artifacts and also emits the sampler receipt from `dispatch_queue(...)`, so the bounded authority exercised during training-distribution selection is typed instead of implicitly inferred.
   - `src/rl/sac.py` now preserves the same bounded-authority classification in online replay sampling artifacts, which closes the last obvious runtime hole where queue influence could still look like anonymous advisory metadata.
   - Honest remainder: this is a contract/doctrine correction, not yet the final orchestration-level advisory purge. Higher-shell and orchestration control surfaces still need the same cleanup treatment.
+
+- Inferential admission is now a first-class contract instead of an interpretation of summaries:
+  - `src/economics/inferential_contract.py` now defines `inferential_admission_contract_v1`, which packages per-episode decisions, learnability-class carry-through, and work-order summaries into one canonical artifact.
+  - `src/economics/inferential_training_gate.py` now emits typed work-order-class decisions with explicit `receipt_kind`, `authority_class`, `decision_scope`, and `reward_math_mutation` fields.
+  - `src/orchestrator/adaptation_budgeting.py` and `src/orchestrator/shadow_advisory.py` now propagate that admission contract into live advisory outputs and per-episode rows, so downstream consumers stop reverse-engineering admission truth from `adaptation_budget.summary`.
+
+- The canonical training/runtime path now preserves inferential admission directly:
+  - `src/training/regal_training_runner.py` and `src/training/training_manifest.py` now carry `inferential_admission_summary` in the unified runtime manifest.
+  - `scripts/train_shadow_replay_policy.py`, `scripts/train_shadow_offline_rl.py`, `scripts/train_shadow_pricing_models.py`, `scripts/train_sac_with_ontology_logging.py`, and `scripts/run_shadow_advisory_pass.py` now emit/register `inferential_admission_contract.json` beside the existing learnability and work-order artifacts.
+  - This matters because trainer/runtime reporting can now distinguish:
+    - learnability class density
+    - admission decision density
+    - executable work-order density
+    instead of flattening them into one advisory budget summary.
+
+- Epiplexity-based learnability is now promoted into datapack-owned canonical metadata:
+  - `src/valuation/datapack_schema.py` now includes `inferential_learnability_contract`.
+  - `src/valuation/datapack_repo.py` now attaches or preserves that contract when datapacks are loaded and epiplexity overlays are applied, while preserving richer receipt-backed contracts if they already exist.
+  - `src/rl/episode_sampling.py` now preserves the datapack’s canonical learnability contract in RL descriptors instead of always reconstructing signal-yield state from local epiplexity fields.
+  - This closes the doctrine gap where epiplexity was “visible” but not yet treated as canonical selection metadata across datapacks, replay descriptors, and training artifacts.
+
+- Honest next advisory cleanup after this pass:
+  - internal orchestration sidecars still need a companion `control_plane_context` / receipt path
+  - especially `semantic_fusion_runner`, `runtime_backbone`, Stage-1 pipeline emissions, and replay ingest
+  - that is now the next place where bounded internal selectors still look softer than they really are

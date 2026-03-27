@@ -238,6 +238,26 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         provenance_quality=float(trust_score),
         trust_score=float(trust_score),
     )
+    learnability_contract = coerce_inferential_learnability_contract(
+        getattr(datapack, "inferential_learnability_contract", None)
+    )
+    if learnability_contract is None:
+        learnability_contract = build_inferential_learnability_contract(
+            subject_id=str(datapack.episode_id or datapack.pack_id),
+            subject_kind="datapack",
+            datapack_id=str(datapack.pack_id),
+            frontier_gain=max(0.0, float(delta_J)),
+            epiplexity_delta=float(delta_epi),
+            epiplexity_confidence=float(epi_conf),
+            data_quality=data_quality_signal,
+            provenance_quality=float(trust_score),
+            trust_score=float(trust_score),
+            overlay_joined=bool(datapack.epiplexity_summary),
+            summary_present=bool(datapack.epiplexity_summary),
+            metadata={"source": "datapack_descriptor"},
+        )
+    signal_yield_score = float(learnability_contract.signal_yield.get("score", signal_yield_score))
+    inferential_replay_weight = float(learnability_contract.inferential_replay_weight)
 
     # Episode length heuristic (can be overridden by env defaults)
     episode_length = 1000  # Default
@@ -274,6 +294,7 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         "epi_confidence": float(epi_conf),
         "signal_yield_score": float(signal_yield_score),
         "inferential_replay_weight": float(inferential_replay_weight),
+        "inferential_learnability_contract": learnability_contract.to_dict(),
         "embodiment_drift_score": embodiment_drift_score if embodiment_drift_score is not None else 0.0,
         "embodiment_physically_impossible_contacts": embodiment_impossible_contacts or 0,
         "embodiment_trust_override_candidate": bool(embodiment_trust_override)

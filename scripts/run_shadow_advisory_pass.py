@@ -78,6 +78,7 @@ def main() -> None:
     scorer_preconditions_path = output_root / "semantic_runtime_scorer_preconditions.json"
     scorer_work_orders_path = output_root / "semantic_runtime_scorer_work_orders.json"
     inferential_summary_path = output_root / "inferential_learnability_summary.json"
+    inferential_admission_path = output_root / "inferential_admission_contract.json"
     inferential_work_orders_path = output_root / "inferential_work_orders.json"
     json_path.write_text(json.dumps(advisory, indent=2, sort_keys=True), encoding="utf-8")
     md_path.write_text(_advisory_markdown(advisory), encoding="utf-8")
@@ -93,6 +94,10 @@ def main() -> None:
     )
     inferential_summary_path.write_text(
         json.dumps(advisory["inferential_learnability_summary"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    inferential_admission_path.write_text(
+        json.dumps(advisory["inferential_admission_contract"], indent=2, sort_keys=True),
         encoding="utf-8",
     )
     inferential_work_orders_path.write_text(

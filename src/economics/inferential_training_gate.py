@@ -86,6 +86,10 @@ class InferentialTrainingDecision:
     recommended_training_mode: str
     reasons: list[str]
     artifact_summary: Dict[str, Any]
+    receipt_kind: str = "inferential_training_decision_v1"
+    authority_class: str = "work_order"
+    decision_scope: str = "training_admission_and_data_collection"
+    reward_math_mutation: bool = False
 
     @property
     def decision_id(self) -> str:
@@ -102,6 +106,10 @@ class InferentialTrainingDecision:
             "recommended_training_mode": self.recommended_training_mode,
             "reasons": list(self.reasons),
             "artifact_summary": dict(self.artifact_summary),
+            "receipt_kind": self.receipt_kind,
+            "authority_class": self.authority_class,
+            "decision_scope": self.decision_scope,
+            "reward_math_mutation": bool(self.reward_math_mutation),
         }
 
     def to_dict(self) -> Dict[str, Any]:

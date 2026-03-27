@@ -235,6 +235,9 @@ Progress now landed:
 - `src/orchestrator/queue_selection.py` no longer leaves live queue inputs and queue-dispatch outputs as unnamed advisory blobs; both now emit explicit `authority_class`, `decision_scope`, `reward_math_mutation`, and `receipt_kind` fields.
 - `src/rl/episode_sampling.py` now carries that bounded-authority classification into `sampler_policy_receipt_v1` artifacts and into `dispatch_queue(...)`.
 - `src/rl/sac.py` now preserves the same classification in online replay sampling artifacts.
+- `src/economics/inferential_contract.py` now defines `inferential_admission_contract_v1`, and `src/orchestrator/shadow_advisory.py` now emits it directly instead of forcing downstream consumers to reconstruct admission truth from `adaptation_budget.summary`.
+- `src/training/regal_training_runner.py` and the main shadow/online training entrypoints now preserve `inferential_admission_summary` and `inferential_admission_contract.json` as canonical runtime artifacts.
+- `src/valuation/datapack_schema.py`, `src/valuation/datapack_repo.py`, and `src/rl/episode_sampling.py` now preserve epiplexity-based `inferential_learnability_contract` as datapack-owned canonical metadata rather than leaving learnability to be recomputed ad hoc downstream.
 
 Remaining Tranche B target:
 
