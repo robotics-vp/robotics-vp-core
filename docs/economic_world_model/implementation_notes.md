@@ -2,6 +2,42 @@
 
 ## 2026-03-26
 
+- Landed the first code tranche from the advisory-purge plan:
+  - added `src/economics/inferential_contract.py` as the shared canonical learnability/admission contract
+  - replay datasets now attach `inferential_learnability_contract` per episode and summarize learnability-class density at the manifest level
+  - `src/orchestrator/shadow_advisory.py` now emits inferential learnability summaries plus canonical inferential work orders instead of leaving epiplexity/inferential evidence as overlay-only context
+  - `src/orchestrator/adaptation_budgeting.py` now builds inferential execution work orders through one shared helper instead of reassembling the same contract ad hoc
+  - `src/training/training_manifest.py` and `src/training/regal_training_runner.py` now persist inferential learnability and inferential work-order summaries in canonical runtime manifests
+  - the shadow/offline training entrypoints now register explicit `inferential_learnability_summary` and `inferential_work_orders` artifacts beside the existing advisory and scorer artifacts
+- This is the concrete posture shift for epiplexity/inferential evidence:
+  - still additive and outside frozen reward math
+  - no longer just an overlay for replay and training consumers
+  - replay descriptors and promotion reporting can now consume a replay-native inferential contract instead of recomputing only from scattered summary fields
+
+- Started the first real implementation tranche under the new multi-WM plan instead of leaving it as architecture-only:
+  - added `src/world_model/sim_synth_physics/` as the initial canonical package for the next lower WM
+  - the package now defines typed state for:
+    - agenda ownership
+    - backend/fidelity context
+    - diffusion conditioning
+    - synthetic branch plans
+    - gen2sim admission
+    - outcome/calibration receipts
+  - `src/orchestrator/semantic_simulation.py` now delegates agenda compilation into that WM runtime/compiler boundary instead of owning the agenda contract itself
+- The new package is deliberately neuralization-ready from the start rather than heuristic-first:
+  - agenda ranking still uses the existing bounded learned gap-ranker path
+  - backend/fidelity selection now has its own benchmark-gated helper seam
+  - synthetic branch planning now has its own benchmark-gated helper seam
+  - both seams use explicit helper status / promotion-stage traces while heuristics remain only the prior/fallback path
+- The multi-WM plan and roadmap now state the rule explicitly for later phases:
+  - future WMs and enabler phases should launch with bounded learned seams and typed `disabled|auto|required` runtime posture from their first tranche
+  - do not create fresh heuristic-only control islands and plan to purge them later
+- This is the correct current posture for the new WM boundary:
+  - canonical state ownership has moved out of a scattered orchestrator helper
+  - downstream callers still keep compatibility via the legacy agenda view
+  - the learned seams are present now even though promoted helper packages for backend/branch policy are still future work
+  - the next consolidation step should be diffusion-conditioning ownership, not another standalone prompt path
+
 - Added `docs/economic_world_model/advisory_purge_wiring_plan.md` as the advisory-doctrine counterpart to the earlier heuristic sweep:
   - it separates surfaces that should remain advisory from surfaces that should become:
     - canonical metadata

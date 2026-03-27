@@ -2,6 +2,43 @@
 
 ## 2026-03-26
 
+- Changed: completed the first code tranche from `docs/economic_world_model/advisory_purge_wiring_plan.md`. Added `src/economics/inferential_contract.py` as the shared canonical learnability/admission contract, then wired it through:
+  - `src/replay/dataset.py` for per-episode `inferential_learnability_contract` plus manifest-level `inferential_learnability_summary`
+  - `src/orchestrator/shadow_advisory.py` for inferential learnability summaries and canonical inferential work-order emission
+  - `src/orchestrator/adaptation_budgeting.py` for shared inferential execution-work-order construction
+  - `src/rl/episode_sampling.py` so replay descriptors can consume the canonical inferential contract instead of recomputing solely from scattered summary fields
+  - `src/regality/promotion_reporting.py` so promotion evidence can now see learnability-class density directly
+  - `src/training/training_manifest.py` and `src/training/regal_training_runner.py` so canonical training manifests persist inferential learnability and inferential work-order summaries
+- Changed: the main shadow-training entrypoints now write and register explicit inferential artifacts instead of burying them inside `shadow_advisory.json` only:
+  - `scripts/train_shadow_offline_rl.py`
+  - `scripts/train_shadow_replay_policy.py`
+  - `scripts/train_shadow_pricing_models.py`
+  - `scripts/train_sac_with_ontology_logging.py`
+  - `scripts/run_shadow_advisory_pass.py`
+- Changed: updated `docs/epiplexity.md` so it reflects the newly landed current state; replay and training now have a canonical inferential contract layer even though broader learnability promotion is still incomplete.
+- Verification: `python3 -m compileall src/economics/inferential_contract.py src/economics/inferential_training_gate.py src/orchestrator/adaptation_budgeting.py src/orchestrator/shadow_advisory.py src/orchestrator/queue_selection.py src/replay/dataset.py src/replay/receipt_ingest.py src/regality/promotion_reporting.py src/rl/episode_sampling.py src/training/training_manifest.py src/training/regal_training_runner.py scripts/train_shadow_offline_rl.py scripts/train_shadow_replay_policy.py scripts/train_shadow_pricing_models.py scripts/train_sac_with_ontology_logging.py scripts/run_shadow_advisory_pass.py tests/test_inferential_contract.py tests/test_replay_dataset.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/test_promotion_reporting.py -q`, `python3 -m ruff check src/economics/inferential_contract.py src/economics/inferential_training_gate.py src/orchestrator/adaptation_budgeting.py src/orchestrator/shadow_advisory.py src/orchestrator/queue_selection.py src/replay/dataset.py src/replay/receipt_ingest.py src/regality/promotion_reporting.py src/rl/episode_sampling.py src/training/training_manifest.py src/training/regal_training_runner.py scripts/train_shadow_offline_rl.py scripts/train_shadow_replay_policy.py scripts/train_shadow_pricing_models.py scripts/train_sac_with_ontology_logging.py scripts/run_shadow_advisory_pass.py tests/test_inferential_contract.py tests/test_replay_dataset.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/test_promotion_reporting.py`, `python3 -m pytest -q tests/test_inferential_contract.py tests/test_inferential_training_gate.py tests/test_replay_dataset.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/test_promotion_reporting.py tests/test_queue_dispatch_policy.py tests/test_queue_dispatch_integration.py tests/test_online_queue_dispatch_integration.py tests/test_online_promotion_reporting.py`, and `git diff --check` passed.
+- Next recommended task: take the second advisory tranche by reclassifying live queue/curriculum/orchestration outputs from "advisory-only" to explicit bounded-authority receipts, then thread the inferential learnability contract into synthetic-branch admission and sim/diffusion agenda ranking.
+
+- Changed: started Phase 1A / 1B from `docs/economic_world_model/multi_wm_architecture_plan.md` by landing the first canonical `src/world_model/sim_synth_physics/` package. The new additive WM boundary now owns:
+  - typed `SimSynthPhysicsWorldState`
+  - WM-owned `SimulationAgenda` / `SimulationJobSpec`
+  - `PhysicsContextState`
+  - `DiffusionConditioningState`
+  - `SyntheticBranchPlan`
+  - `Gen2SimAdmissionState`
+  - canonical receipt contracts for calibration and simulation outcomes
+- Changed: moved live simulation-agenda compilation out of `src/orchestrator/semantic_simulation.py` and into the new WM compiler/runtime boundary. The orchestration surface now consumes the WM-owned agenda contract and returns the legacy agenda view only for compatibility.
+- Changed: wired bounded learned seams into the new WM boundary from the start instead of leaving them as a later cleanup:
+  - agenda ranking continues to use the existing promoted/shadow gap-ranker path
+  - backend/fidelity selection now has a benchmark-gated learned-helper seam
+  - synthetic branch planning now has a benchmark-gated learned-helper seam
+  - both seams record helper status, promotion stage, and trace receipts while keeping heuristics as explicit priors/fallbacks
+- Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` to make the repo rule explicit across future WMs and enabler phases:
+  - no new WM should land as a heuristic-only island
+  - bounded learned seams, promotion posture, and receipt traces should exist from the first tranche
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py tests/test_sim_synth_physics_world_model.py`, and `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_coverage_compilation.py tests/test_gap_agenda_ranking.py` passed.
+- Next recommended task: move diffusion-gap compilation onto `SimSynthPhysicsWorldState` so the WM owns both agenda and diffusion-conditioning surfaces, then add package-loading runtime shims for promoted backend-selector and branch-planner helpers.
+
 - Changed: added `docs/economic_world_model/advisory_purge_wiring_plan.md` as the advisory counterpart to the earlier heuristic/sidecar sweep. The new document:
   - narrows the repo-wide advisory doctrine
   - separates surfaces that should remain advisory from surfaces that should become canonical metadata, preconditions, work orders, bounded authority, or later benchmark-gated successors

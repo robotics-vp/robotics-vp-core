@@ -36,6 +36,28 @@ The recommended next WM to build is:
 
 That is the highest-leverage next step because the current production flywheel gap is less about semantic representation itself and more about what the stack actually decides to simulate, diffuse, synthesize, admit, and feed back into training.
 
+## Cross-Phase Neuralization Rule
+
+Every new WM or future enabling phase should launch with bounded learned seams from its first implementation tranche.
+
+That means:
+
+- heuristics are allowed only as explicit priors and fallback logic
+- those priors must sit behind typed `disabled|auto|required` helper/runtime contracts
+- helper status, promotion stage, and decision traces must be emitted as canonical receipts
+- no new WM should be allowed to land as a heuristic-only island that will later require a cleanup-style “heuristic purge”
+
+This rule applies to:
+
+- sim / synth / physics WM
+- perception / grounding WM
+- embodiment / actuation WM
+- economic WM consolidation
+- cross-WM transport bridges
+- local meta-node neuralization
+- the later meta-node superposition / control WM
+- future deployment-enabler phases anywhere learned routing, calibration, or policy support appears
+
 ## Architectural Position
 
 ### What already exists
@@ -591,13 +613,16 @@ Recommended flow:
 
 Do not start with a giant generative simulator model.
 
-Start with bounded learned helper lanes inside the WM:
+Do start with bounded learned helper seams in Phase 1A / 1B itself rather than adding them later as a cleanup:
 
 - agenda ranking
 - backend/fidelity selection
+- synthetic branch planning
 - synthetic branch admission
 - branch-value / branch-yield prediction
 - physics-calibration confidence prediction
+
+For this phase, heuristics are only acceptable as explicit priors with fallback semantics and receipt traces.
 
 Only after the receipt density is real should the WM expand into:
 
@@ -680,6 +705,11 @@ Phase outcome:
 
 - one canonical scene/grounding state surface feeding semantic, embodiment, and sim WMs
 
+Neuralization rule from tranche 1:
+
+- perception WM should expose bounded learned seams for grounding confidence, sensor-fusion calibration, view selection, and evidence routing immediately
+- fallback heuristics may remain, but only as explicit priors with helper traces and promotion posture
+
 Key named gaps:
 
 - `src/vision/backbone_stub.py`
@@ -714,6 +744,11 @@ Why needed:
 Phase outcome:
 
 - action feasibility, embodiment capability, latency, and control envelopes become first-class typed state
+
+Neuralization rule from tranche 1:
+
+- embodiment WM should expose bounded learned seams for capability estimation, action-feasibility scoring, latency-envelope prediction, and backend/robot adapter selection immediately
+- fallback heuristics may remain only as explicit priors with helper traces and promotion posture
 
 OSS dependency map:
 
@@ -785,6 +820,11 @@ Reference artifact:
 ### Phase 4 - Deployment Enabler Phases
 
 These are not optional side quests. They are named future phases that must exist before serious embodied deployment.
+
+Cross-phase rule here too:
+
+- if an enabler phase introduces learned routing, calibration, safety scoring, operator-handoff selection, or degradation handling, that seam should ship as a bounded helper/runtime contract from the first landing
+- do not strand those decisions in untyped helper code and plan to “neuralize later”
 
 ### Phase 4A - Real-Time Control Loop Separation
 
@@ -930,6 +970,11 @@ Key changes in this phase:
 - train on lower-WM receipts and cross-WM counterfactuals
 - condition meta-transformer and higher planners on lower-WM canonical contracts instead of only derived summary vectors
 
+Neuralization rule from tranche 1:
+
+- economic-WM consolidation should keep bounded learned allocators, critics, and governance helpers wired from the first lower-WM-native runtime pass
+- lower-WM state consumption should not regress into summary-only heuristics while waiting for a later purge
+
 Preconditions:
 
 - at least two lower WMs emitting stable canonical state
@@ -984,6 +1029,11 @@ src/world_model/transport/
 
 Train bridges by freezing adjacent WMs first.
 
+Neuralization rule from tranche 1:
+
+- each bridge should launch with bounded learned translation/calibration seams and round-trip receipts immediately
+- heuristic adapters may remain as the prior, but not as the only runtime story
+
 Core decomposed evaluation:
 
 - bridge-only improvement
@@ -1025,6 +1075,11 @@ What should improve in this phase:
 - local meta-node embeddings should become more geometric/topological and less just named scalar buckets
 - meta-node success should be measured independently from downstream loop success where possible
 - meta-node interaction effects should be logged, not only final routed actions
+
+Neuralization rule from tranche 1:
+
+- each local meta-node should expose bounded learned activation / intervention seams and explicit promotion posture as soon as it becomes canonical state
+- do not reintroduce a “named shell first, neuralization later” pattern here
 
 Concrete targets for this tranche:
 
@@ -1068,6 +1123,11 @@ What it should not do:
 - directly replace lower WMs
 - become a giant hidden-state monolith
 - erase local WM contracts or governance traces
+
+Neuralization rule from tranche 1:
+
+- the mother-layer should also launch with bounded learned control seams, typed helper traces, and explicit promotion posture
+- it should not begin life as a heuristic governor that later needs a purge pass
 
 Preconditions:
 
@@ -1144,5 +1204,6 @@ For the next implementation tranche after this plan:
 - start **Phase 1A and Phase 1B** only
 - define the `sim_synth_physics` package structure and state contracts
 - move agenda ownership out of scattered orchestrator surfaces and into that canonical WM boundary
+- wire bounded learned seams for backend/fidelity and branch planning into that boundary immediately so the new WM does not start life as heuristic-only
 
 That is the cleanest path to make the stack a real self-improvement machine rather than only a better-instrumented control plane.
