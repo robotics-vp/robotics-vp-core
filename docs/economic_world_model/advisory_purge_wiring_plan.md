@@ -262,6 +262,37 @@ After Tranche B:
 - keep teacher/VLA outputs advisory
 - require availability/calibration/grounding classes to be non-advisory metadata everywhere
 
+Progress now landed:
+
+- `src/evidence/provider_truth.py` now defines `external_provider_truth_v1` as the shared canonical metadata contract for external-provider status.
+- `src/vla/teacher_runtime.py` and `src/evidence/teacher_trace.py` now preserve `provider_truth` on teacher contracts, teacher action envelopes, and teacher traces.
+- `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` and `src/evidence/scene_tracks_truth.py` now preserve explicit `scene_tracks_provider_truth`, including grounding class and calibration class.
+- `src/vla/rollout_labeler.py` and `src/replay/ingest.py` now carry teacher / SceneTracks provider truth into datapack and replay metadata, so downstream consumers do not need to infer provider availability or grounding mode from advisory outputs.
+
+Updated Tranche C target:
+
+- keep extending the same doctrine to any newly added external-provider lanes
+- do not reopen the current teacher / SceneTracks split unless the repo adds materially richer provider-specific calibration or grounding receipts
+
+### Tranche D: Higher-shell and curriculum doctrine cleanup
+
+After Tranche C:
+
+- keep top shells non-sovereign
+- require them to consume canonical preconditions, control-plane context, and work-order receipts explicitly
+- stop describing live curriculum scheduling as purely advisory when it changes training distribution
+
+Progress now landed:
+
+- `src/phase_h/advisory_integration.py`, `src/phase_h/controller.py`, and `src/phase_h/economic_learner.py` now emit typed shell receipt fields and preserve `input_receipt_context` from canonical execution/precondition/work-order sources.
+- `src/orchestrator/pipeline_manager.py` now carries that same typed input receipt context into preview/report/activation artifacts and into activation work-order metadata.
+- `src/rl/curriculum.py` now emits `curriculum_dispatch_receipt_v1` and is treated as bounded training-distribution authority rather than pure advisory overlay.
+
+Updated Tranche D target:
+
+- keep future shell additions on this typed input/output contract from day one
+- avoid creating another layer of anonymous shell summaries above the newly canonical lower-WM receipts
+
 ## Phase B Math Posture Update
 
 ### What should not change now

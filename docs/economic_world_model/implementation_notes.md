@@ -1293,3 +1293,19 @@
   - external-provider doctrine cleanup still remains
   - higher-shell orchestration and Phase H surfaces still need the same reclassification treatment
   - but the lower semantic-runtime boundary is no longer one of the major advisory-truth gaps
+
+- External-provider doctrine is now explicit in code instead of being a convention:
+  - `src/evidence/provider_truth.py` defines the shared `external_provider_truth_v1` contract so teacher/VLA and SceneTracks lanes can publish canonical provider availability / fallback / calibration / grounding metadata without promoting their predictions to truth.
+  - `src/vla/teacher_runtime.py` and `src/evidence/teacher_trace.py` now preserve `provider_truth` on teacher adapter contracts, teacher action envelopes, and teacher traces; this means replay and downstream runtime-learning can see whether the teacher was real, disabled, unavailable, or degraded without inferring that from the prediction payload itself.
+  - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` now emits `scene_tracks_provider_truth`, and `src/evidence/scene_tracks_truth.py` now treats that explicit grounding-class metadata as canonical when it exists.
+  - `src/vla/rollout_labeler.py` and `src/replay/ingest.py` now preserve both teacher and SceneTracks provider truth into datapack/replay metadata, which is the important doctrine correction: provider outputs remain advisory, provider status does not.
+
+- The remaining top-shell and curriculum doctrine lag is now also closed:
+  - `src/phase_h/advisory_integration.py`, `src/phase_h/controller.py`, and `src/phase_h/economic_learner.py` now emit typed shell receipt fields and preserve `input_receipt_context` instead of flattening consumed execution/precondition/work-order inputs into generic advisory summaries.
+  - `src/orchestrator/pipeline_manager.py` now carries the same typed input receipt context through build/preview/report flows and into shell activation work-order metadata.
+  - `src/rl/curriculum.py` is no longer described as “purely advisory”; it now emits `curriculum_dispatch_receipt_v1` as bounded training-distribution authority, which matches what the module has really been doing.
+
+- Honest remainder after this pass:
+  - no major non-GPU advisory contract gap remains in the already-wired internal control-plane stack
+  - real grounded-data promotion still depends on GPU + SAM3D and better receipt density
+  - future advisory cleanup, if any, should mostly be doctrine cleanup in newly added modules rather than another large retroactive purge of the existing loop
