@@ -73,8 +73,10 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
     assert summary["world_state_id"] == result["world_state_id"]
     assert Path(result["artifact_paths"]["physics_execution_contract"]).exists()
     assert Path(result["artifact_paths"]["physics_adaptation_receipt"]).exists()
+    assert Path(result["artifact_paths"]["backend_execution_binding_receipt"]).exists()
     assert Path(result["artifact_paths"]["physics_calibration_receipt"]).exists()
     assert Path(result["artifact_paths"]["render_provider_receipts"]).exists()
+    assert result["backend_execution_binding_receipt_id"]
     assert Path(result["artifact_paths"]["training_feedback_manifest"]).exists()
     assert result["render_provider_receipt_count"] >= 1
     assert result["outcome_receipt_count"] >= 1

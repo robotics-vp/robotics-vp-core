@@ -15,6 +15,7 @@ from .adapters import (
 )
 from .agenda import SimulationAgenda, SimulationJobSpec
 from .backend_adapters import describe_backend_adapter
+from .backend_bindings import compile_backend_execution_binding
 from .backend_selector_runtime import resolve_backend_selector_helper
 from .common import clip01, mapping, safe_float, stable_id
 from .inferential import (
@@ -475,6 +476,11 @@ def compile_sim_synth_physics_world_state(
         benchmark_signals=benchmark_payload,
         embodiment_context=embodiment_context,
     )
+    backend_execution_binding = compile_backend_execution_binding(
+        physics_context,
+        adaptation_policy=physics_adaptation_policy,
+        embodiment_context=embodiment_context,
+    )
     branch_plans = compile_synthetic_branch_plans(
         jobs,
         physics_context=physics_context,
@@ -508,6 +514,7 @@ def compile_sim_synth_physics_world_state(
     artifact_refs = {
         "coverage_window_ref": coverage_window_ref,
         "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
+        "backend_execution_binding_id": backend_execution_binding.binding_id,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
         "diffusion_conditioning_id": (
             diffusion_conditioning.conditioning_id if diffusion_conditioning is not None else None
@@ -525,6 +532,7 @@ def compile_sim_synth_physics_world_state(
         simulation_agenda=agenda,
         physics_context=physics_context,
         physics_adaptation_policy=physics_adaptation_policy,
+        backend_execution_binding=backend_execution_binding,
         synthetic_branch_plans=branch_plans,
         gen2sim_admission=gen2sim_admission,
         diffusion_conditioning=diffusion_conditioning,

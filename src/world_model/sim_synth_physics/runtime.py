@@ -18,6 +18,7 @@ from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diff
 from .physics_contracts import PhysicsExecutionContract
 from .promotion import HelperMode
 from .receipts import (
+    BackendExecutionBindingReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
     RenderProviderReceipt,
@@ -49,6 +50,7 @@ class SimSynthPhysicsLoopResult:
     world_state: SimSynthPhysicsWorldState
     physics_execution_contract: PhysicsExecutionContract
     physics_adaptation_receipt: PhysicsAdaptationReceipt
+    backend_execution_binding_receipt: BackendExecutionBindingReceipt
     physics_calibration_receipt: PhysicsCalibrationReceipt
     render_provider_receipts: list[RenderProviderReceipt] = field(default_factory=list)
     outcome_receipts: list[SimulationOutcomeReceipt] = field(default_factory=list)
@@ -61,6 +63,7 @@ class SimSynthPhysicsLoopResult:
             "world_state": self.world_state.to_dict(),
             "physics_execution_contract": self.physics_execution_contract.to_dict(),
             "physics_adaptation_receipt": self.physics_adaptation_receipt.to_dict(),
+            "backend_execution_binding_receipt": self.backend_execution_binding_receipt.to_dict(),
             "physics_calibration_receipt": self.physics_calibration_receipt.to_dict(),
             "render_provider_receipts": [
                 receipt.to_dict() for receipt in self.render_provider_receipts
@@ -83,6 +86,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "world_state": root / "sim_synth_physics_world_state.json",
         "physics_execution_contract": root / "physics_execution_contract.json",
         "physics_adaptation_receipt": root / "physics_adaptation_receipt.json",
+        "backend_execution_binding_receipt": root / "backend_execution_binding_receipt.json",
         "physics_calibration_receipt": root / "physics_calibration_receipt.json",
         "render_provider_receipts": root / "render_provider_receipts.json",
         "simulation_outcome_receipts": root / "simulation_outcome_receipts.json",
@@ -122,6 +126,7 @@ def _build_outcome_receipts(
     world_state: SimSynthPhysicsWorldState,
     execution_contract: PhysicsExecutionContract,
     adaptation_receipt: PhysicsAdaptationReceipt,
+    backend_binding_receipt: BackendExecutionBindingReceipt,
     calibration_receipt: PhysicsCalibrationReceipt,
     *,
     training_feedback_path: Optional[Path] = None,
@@ -168,6 +173,7 @@ def _build_outcome_receipts(
                     "world_state_id": world_state.state_id,
                     "physics_execution_contract_id": execution_contract.contract_id,
                     "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+                    "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
                     "physics_calibration_receipt_id": calibration_receipt.receipt_id,
                     "requested_backend": execution_contract.requested_backend,
                     "resolved_backend": execution_contract.resolved_backend,
@@ -201,6 +207,7 @@ def _build_training_feedback_manifest(
     world_state: SimSynthPhysicsWorldState,
     execution_contract: PhysicsExecutionContract,
     adaptation_receipt: PhysicsAdaptationReceipt,
+    backend_binding_receipt: BackendExecutionBindingReceipt,
     calibration_receipt: PhysicsCalibrationReceipt,
     render_provider_receipts: list[RenderProviderReceipt],
     outcome_receipts: list[SimulationOutcomeReceipt],
@@ -228,6 +235,7 @@ def _build_training_feedback_manifest(
         "world_state_id": world_state.state_id,
         "physics_execution_contract_id": execution_contract.contract_id,
         "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+        "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
         "physics_calibration_receipt_id": calibration_receipt.receipt_id,
         "route_status": execution_contract.route_status,
         "requested_backend": execution_contract.requested_backend,
@@ -244,6 +252,48 @@ def _build_training_feedback_manifest(
         ),
         "rows": rows,
     }
+
+
+def _build_backend_execution_binding_receipt(
+    world_state: SimSynthPhysicsWorldState,
+    execution_contract: PhysicsExecutionContract,
+    adaptation_receipt: PhysicsAdaptationReceipt,
+) -> BackendExecutionBindingReceipt:
+    binding = world_state.backend_execution_binding
+    if binding is None:
+        return BackendExecutionBindingReceipt(
+            receipt_id=f"backend_execution_binding_receipt_{world_state.state_id}",
+            binding_id="",
+            backend=execution_contract.resolved_backend,
+            binding_status="missing",
+            executor_entrypoint="",
+            asset_profile="",
+            metadata={
+                "world_state_id": world_state.state_id,
+                "physics_execution_contract_id": execution_contract.contract_id,
+                "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+            },
+        )
+    return BackendExecutionBindingReceipt(
+        receipt_id=f"backend_execution_binding_receipt_{world_state.state_id}",
+        binding_id=binding.binding_id,
+        backend=binding.backend,
+        binding_status=binding.binding_status,
+        executor_entrypoint=binding.executor_entrypoint,
+        asset_profile=binding.asset_profile,
+        metadata={
+            "world_state_id": world_state.state_id,
+            "physics_execution_contract_id": execution_contract.contract_id,
+            "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+            "executor_kind": binding.executor_kind,
+            "observation_adapter_entrypoint": binding.observation_adapter_entrypoint,
+            "target_runtime_stack": list(binding.target_runtime_stack),
+            "required_assets": list(binding.required_assets),
+            "available_assets": list(binding.available_assets),
+            "missing_assets": list(binding.missing_assets),
+            "binding_metadata": mapping(binding.metadata),
+        },
+    )
 
 
 def _build_render_provider_receipts(
@@ -265,6 +315,8 @@ def _build_render_provider_receipts(
                 provider_status=provider.provider_status,
                 render_mode=provider.render_mode,
                 counterfactual_mode=provider.counterfactual_mode,
+                materialization_status=provider.materialization_status,
+                materialization_entrypoint=provider.materialization_entrypoint,
                 metadata={
                     "world_state_id": world_state.state_id,
                     "physics_execution_contract_id": execution_contract.contract_id,
@@ -273,6 +325,7 @@ def _build_render_provider_receipts(
                     "fallback_provider": provider.fallback_provider,
                     "fallback_reason": provider.fallback_reason,
                     "ggds_mode": provider.ggds_mode,
+                    "provider_config": mapping(provider.provider_config),
                     "target_hardware_class": adaptation_receipt.target_hardware_class,
                     "provider_metadata": mapping(provider.metadata),
                 },
@@ -400,6 +453,11 @@ class SimSynthPhysicsRuntime:
             world_state,
             execution_contract,
         )
+        backend_binding_receipt = _build_backend_execution_binding_receipt(
+            world_state,
+            execution_contract,
+            adaptation_receipt,
+        )
         calibration_receipt = build_physics_calibration_receipt(
             world_state,
             execution_contract,
@@ -415,6 +473,7 @@ class SimSynthPhysicsRuntime:
             world_state,
             execution_contract,
             adaptation_receipt,
+            backend_binding_receipt,
             calibration_receipt,
             training_feedback_path=training_feedback_path,
         )
@@ -422,6 +481,7 @@ class SimSynthPhysicsRuntime:
             world_state,
             execution_contract,
             adaptation_receipt,
+            backend_binding_receipt,
             calibration_receipt,
             render_provider_receipts,
             outcome_receipts,
@@ -430,6 +490,7 @@ class SimSynthPhysicsRuntime:
             world_state=world_state,
             physics_execution_contract=execution_contract,
             physics_adaptation_receipt=adaptation_receipt,
+            backend_execution_binding_receipt=backend_binding_receipt,
             physics_calibration_receipt=calibration_receipt,
             render_provider_receipts=render_provider_receipts,
             outcome_receipts=outcome_receipts,
@@ -447,6 +508,10 @@ class SimSynthPhysicsRuntime:
             _write_json(
                 artifact_paths["physics_adaptation_receipt"],
                 adaptation_receipt.to_dict(),
+            )
+            _write_json(
+                artifact_paths["backend_execution_binding_receipt"],
+                backend_binding_receipt.to_dict(),
             )
             _write_json(
                 artifact_paths["physics_calibration_receipt"],
@@ -477,6 +542,7 @@ class SimSynthPhysicsRuntime:
                     "world_state_id": world_state.state_id,
                     "physics_execution_contract_id": execution_contract.contract_id,
                     "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+                    "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
                     "physics_calibration_receipt_id": calibration_receipt.receipt_id,
                     "render_provider_receipt_count": len(render_provider_receipts),
                     "requested_backend": execution_contract.requested_backend,

@@ -5,6 +5,11 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from src.envs.lsd3d_env.ggds import create_default_optimizer
+from src.vision.nag.integration_lsd_backend import (
+    NAGEditPolicyConfig,
+    NAGFromLSDConfig,
+)
+from src.config.lsd_vector_scene_config import LSDVectorSceneConfig
 
 from .common import stable_id
 from .state import BranchRenderProviderState, PhysicsAdaptationPolicyState, PhysicsContextState
@@ -57,6 +62,11 @@ def compile_branch_render_provider_state(
     counterfactual_mode = "none"
     ggds_mode = "disabled"
     provider_status = "ready" if lsd_available else "blocked"
+    materialization_status = "ready" if lsd_available else "blocked"
+    materialization_entrypoint = "src.motor_backend.factory:make_motor_backend"
+    provider_config: dict[str, Any] = {
+        "lsd_vector_scene": LSDVectorSceneConfig().to_dict(),
+    }
     fallback_provider = ""
     fallback_reason = ""
 
@@ -65,6 +75,18 @@ def compile_branch_render_provider_state(
         counterfactual_mode = "nag_counterfactual"
         render_mode = "gaussian_renderer" if nag_renderer_available else "pre_rendered_frames"
         provider_status = "ready" if nag_renderer_available else "partial"
+        materialization_status = "ready" if nag_renderer_available else "partial"
+        materialization_entrypoint = (
+            "src.vision.nag.integration_lsd_backend:generate_nag_counterfactuals_for_lsd_episode"
+        )
+        provider_config = {
+            "nag_from_lsd": NAGFromLSDConfig(
+                use_stub_renderer=not nag_renderer_available,
+                enable_scene_ir_filter=semantic_grounding_ready,
+                enable_motion_plausibility_filter=benchmark_ready,
+            ).__dict__,
+            "nag_edit_policy": NAGEditPolicyConfig().__dict__,
+        }
         if not nag_renderer_available:
             fallback_provider = "lsd_pre_rendered_frames"
             fallback_reason = (
@@ -75,6 +97,12 @@ def compile_branch_render_provider_state(
         ggds_mode = "concrete_ggds" if ggds_concrete_available else "stub_only"
         render_mode = "ggds_texturing" if ggds_concrete_available else "lsd_scene_only"
         provider_status = "ready" if ggds_concrete_available else "partial"
+        materialization_status = "ready" if ggds_concrete_available else "partial"
+        materialization_entrypoint = "src.envs.lsd3d_env.ggds:GGDSOptimizer.optimize_scene"
+        provider_config = {
+            "lsd_vector_scene": LSDVectorSceneConfig(enable_nag_overlay=True).to_dict(),
+            "ggds": create_default_optimizer().config.__dict__,
+        }
         if not ggds_concrete_available:
             fallback_provider = "lsd_scene_graph"
             fallback_reason = (
@@ -100,6 +128,9 @@ def compile_branch_render_provider_state(
         render_mode=render_mode,
         counterfactual_mode=counterfactual_mode,
         ggds_mode=ggds_mode,
+        materialization_status=materialization_status,
+        materialization_entrypoint=materialization_entrypoint,
+        provider_config=provider_config,
         fallback_provider=fallback_provider,
         fallback_reason=fallback_reason,
         metadata={
@@ -121,6 +152,8 @@ def compile_branch_render_provider_state(
             "concrete_render_required": bool(
                 benchmark_ready or generation_mode in {"physics_probe", "geometry_guarded_rollout"}
             ),
+            "materialization_status": materialization_status,
+            "materialization_entrypoint": materialization_entrypoint,
             "gap_kind": (
                 ""
                 if provider_status == "ready"

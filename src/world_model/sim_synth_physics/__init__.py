@@ -6,6 +6,7 @@ from typing import Any
 
 from .agenda import SimulationAgenda, SimulationJobSpec
 from .backend_adapters import BackendAdapterDescriptor, describe_backend_adapter
+from .backend_bindings import compile_backend_execution_binding
 from .backend_selector import LearnedBackendSelector, train_backend_selector
 from .backend_selector_runtime import (
     BackendSelectorRuntimePackage,
@@ -30,12 +31,14 @@ from .gen2sim_admission import (
 )
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import (
+    BackendExecutionBindingReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
     RenderProviderReceipt,
     SimulationOutcomeReceipt,
 )
 from .state import (
+    BackendExecutionBindingState,
     BranchRenderProviderState,
     DiffusionConditioningState,
     Gen2SimAdmissionState,
@@ -61,6 +64,8 @@ from .training_corpus import (
 __all__ = [
     "BackendSelectorRuntimePackage",
     "BackendAdapterDescriptor",
+    "BackendExecutionBindingReceipt",
+    "BackendExecutionBindingState",
     "BranchRenderProviderState",
     "BranchPlannerRuntimePackage",
     "DiffusionConditioningState",
@@ -85,6 +90,7 @@ __all__ = [
     "assess_local_branch_corpus_gen2sim",
     "build_physics_adaptation_receipt",
     "build_physics_calibration_receipt",
+    "compile_backend_execution_binding",
     "build_physics_execution_contract",
     "build_synthetic_branch_corpus_metadata",
     "collect_local_synthetic_branch_records",

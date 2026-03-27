@@ -137,6 +137,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "sim_synth",
             "world_state",
             "physics_adaptation_receipt",
+            "backend_execution_binding_receipt",
             "physics_calibration_receipt",
             "render_provider_receipt",
             "simulation_outcome_receipt",
@@ -149,6 +150,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
 def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_world_states: dict[Path, list[Dict[str, Any]]] = {}
     grouped_adaptations: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_backend_bindings: dict[Path, list[Dict[str, Any]]] = {}
     grouped_calibrations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_render_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_outcomes: dict[Path, list[Dict[str, Any]]] = {}
@@ -179,6 +181,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_world_states.setdefault(parent, []).append(dict(payload))
             elif version == "physics_adaptation_receipt_v1":
                 grouped_adaptations.setdefault(parent, []).append(dict(payload))
+            elif version == "backend_execution_binding_receipt_v1":
+                grouped_backend_bindings.setdefault(parent, []).append(dict(payload))
             elif version == "physics_calibration_receipt_v1":
                 grouped_calibrations.setdefault(parent, []).append(dict(payload))
             elif version == "render_provider_receipt_v1":
@@ -190,6 +194,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     all_dirs = sorted(
         set(grouped_world_states)
         | set(grouped_adaptations)
+        | set(grouped_backend_bindings)
         | set(grouped_calibrations)
         | set(grouped_render_receipts)
         | set(grouped_outcomes)
@@ -197,6 +202,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     for directory in all_dirs:
         world_states = grouped_world_states.get(directory, [])
         adaptations = grouped_adaptations.get(directory, [])
+        backend_bindings = grouped_backend_bindings.get(directory, [])
         calibrations = grouped_calibrations.get(directory, [])
         render_receipts = grouped_render_receipts.get(directory, [])
         outcomes = grouped_outcomes.get(directory, [])
@@ -209,6 +215,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
             }
             if adaptations:
                 bundle["physics_adaptation_receipt"] = dict(adaptations[-1])
+            if backend_bindings:
+                bundle["backend_execution_binding_receipt"] = dict(backend_bindings[-1])
             if calibrations:
                 bundle["physics_calibration_receipt"] = dict(calibrations[-1])
             if render_receipts:
@@ -239,6 +247,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "physics_adaptation_receipt_v1"
     ]
+    backend_bindings = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "backend_execution_binding_receipt_v1"
+    ]
     calibrations = [
         dict(payload)
         for payload in rows
@@ -265,6 +279,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         }
         if adaptations:
             bundle["physics_adaptation_receipt"] = adaptations[-1]
+        if backend_bindings:
+            bundle["backend_execution_binding_receipt"] = backend_bindings[-1]
         if calibrations:
             bundle["physics_calibration_receipt"] = calibrations[-1]
         if render_receipts:
@@ -291,6 +307,7 @@ def build_backend_selector_rows_from_receipts(
             continue
         physics_metadata = _mapping(physics_context.get("metadata"))
         adaptation_receipt = _mapping(bundle_mapping.get("physics_adaptation_receipt"))
+        backend_binding_receipt = _mapping(bundle_mapping.get("backend_execution_binding_receipt"))
         calibration_receipt = _mapping(
             bundle_mapping.get("physics_calibration_receipt")
             or bundle_mapping.get("physics_calibration")
@@ -352,6 +369,8 @@ def build_backend_selector_rows_from_receipts(
                     "bundle_index": bundle_index,
                     "world_state_id": world_state.get("state_id"),
                     "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
+                    "backend_execution_binding_receipt_id": backend_binding_receipt.get("receipt_id"),
+                    "backend_binding_status": backend_binding_receipt.get("binding_status"),
                     "calibration_receipt_id": calibration_receipt.get("receipt_id"),
                     "calibration_quality_score": calibration_receipt.get("quality_score"),
                 },

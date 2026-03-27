@@ -63,6 +63,32 @@ class PhysicsAdaptationReceipt:
 
 
 @dataclass(frozen=True)
+class BackendExecutionBindingReceipt:
+    """Backend execution-binding receipt for one WM planning window."""
+
+    receipt_id: str
+    binding_id: str
+    backend: str
+    binding_status: str
+    executor_entrypoint: str
+    asset_profile: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_execution_binding_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "binding_id": self.binding_id,
+            "backend": self.backend,
+            "binding_status": self.binding_status,
+            "executor_entrypoint": self.executor_entrypoint,
+            "asset_profile": self.asset_profile,
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class RenderProviderReceipt:
     """Materialization receipt for one WM-owned branch/render provider selection."""
 
@@ -73,6 +99,8 @@ class RenderProviderReceipt:
     provider_status: str
     render_mode: str
     counterfactual_mode: str
+    materialization_status: str = ""
+    materialization_entrypoint: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
     version: str = "render_provider_receipt_v1"
 
@@ -85,6 +113,8 @@ class RenderProviderReceipt:
             "provider_status": self.provider_status,
             "render_mode": self.render_mode,
             "counterfactual_mode": self.counterfactual_mode,
+            "materialization_status": self.materialization_status,
+            "materialization_entrypoint": self.materialization_entrypoint,
             "metadata": mapping(self.metadata),
             "version": self.version,
         }

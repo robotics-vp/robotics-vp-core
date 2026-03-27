@@ -56,6 +56,26 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_backend_execution_binding_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "binding_1",
+                "binding_id": "binding_state_1",
+                "backend": "isaac",
+                "binding_status": "assets_missing",
+                "executor_entrypoint": "src.envs.physics.backend_factory:make_backend",
+                "asset_profile": "unitree_humanoid_shadow_assets",
+                "metadata": {
+                    "required_assets": ["unitree_robot_description"],
+                    "missing_assets": ["unitree_robot_description"],
+                },
+                "version": "backend_execution_binding_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_render_provider_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -66,6 +86,8 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                 "provider_status": "ready",
                 "render_mode": "lsd_vector_scene",
                 "counterfactual_mode": "none",
+                "materialization_status": "ready",
+                "materialization_entrypoint": "src.motor_backend.factory:make_motor_backend",
                 "version": "render_provider_receipt_v1",
             },
             indent=2,
@@ -92,6 +114,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert len(bundles) == 1
     assert bundles[0]["world_state"]["state_id"] == "sim_state_1"
     assert bundles[0]["physics_adaptation_receipt"]["receipt_id"] == "adapt_1"
+    assert bundles[0]["backend_execution_binding_receipt"]["receipt_id"] == "binding_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
     assert bundles[0]["simulation_outcome_receipts"][0]["receipt_id"] == "outcome_1"

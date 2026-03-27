@@ -82,6 +82,8 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
     assert world_state.physics_context.backend == "pybullet"
     assert world_state.physics_adaptation_policy is not None
     assert world_state.physics_adaptation_policy.domain_randomization_profile
+    assert world_state.backend_execution_binding is not None
+    assert world_state.backend_execution_binding.binding_status == "ready"
     assert len(world_state.synthetic_branch_plans) == 2
     assert world_state.synthetic_branch_plans[0].render_provider is not None
     assert world_state.diffusion_conditioning is not None
@@ -111,6 +113,8 @@ def test_world_state_uses_promoted_backend_selector_from_day_one() -> None:
     assert world_state.physics_context.metadata["backend_helper_status"]["promotion_stage"] == "promoted"
     assert world_state.physics_adaptation_policy is not None
     assert world_state.physics_adaptation_policy.target_hardware_class == "unitree_g1_r1_class"
+    assert world_state.backend_execution_binding is not None
+    assert world_state.backend_execution_binding.binding_status in {"integration_pending", "assets_missing", "shadow_ready"}
 
 
 def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None:
@@ -131,6 +135,7 @@ def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None
         "lsd_ggds_scene",
         "nag_lsd_counterfactual",
     }
+    assert first_plan.render_provider.materialization_entrypoint
 
 
 def test_diffusion_conditioning_uses_admitted_branches_for_budget() -> None:
@@ -179,6 +184,7 @@ def test_diffusion_prompts_compile_from_world_state_contract() -> None:
     assert prompts[0].routing_context["physics_selection_policy"] == world_state.physics_context.selection_policy
     assert prompts[0].routing_context["branch_selection_policy"] == world_state.synthetic_branch_plans[0].selection_policy
     assert prompts[0].routing_context["render_provider_kind"] == world_state.synthetic_branch_plans[0].render_provider.provider_kind
+    assert prompts[0].governed_hypotheses[0]["metadata"]["render_provider"]["materialization_entrypoint"]
     assert prompts[0].governed_hypotheses[0]["metadata"]["branch_plan_id"] == world_state.synthetic_branch_plans[0].plan_id
 
 
@@ -322,10 +328,16 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert result.physics_execution_contract.resolved_backend == "pybullet"
     assert result.physics_execution_contract.route_status == "fallback"
     assert result.physics_adaptation_receipt.target_hardware_class == "unitree_g1_r1_class"
+    assert result.backend_execution_binding_receipt.binding_status in {
+        "integration_pending",
+        "assets_missing",
+        "shadow_ready",
+    }
     assert result.physics_calibration_receipt.metadata["explicit_gap_kind"] == "missing_backend_adapter"
     assert result.render_provider_receipts
     assert (tmp_path / "physics_execution_contract.json").exists()
     assert (tmp_path / "physics_adaptation_receipt.json").exists()
+    assert (tmp_path / "backend_execution_binding_receipt.json").exists()
     assert (tmp_path / "physics_calibration_receipt.json").exists()
     assert (tmp_path / "render_provider_receipts.json").exists()
     assert (tmp_path / "simulation_outcome_receipts.json").exists()
@@ -352,6 +364,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
 
     assert feedback_manifest["world_state_id"] == result.world_state.state_id
     assert feedback_manifest["physics_adaptation_receipt_id"] == result.physics_adaptation_receipt.receipt_id
+    assert feedback_manifest["backend_execution_binding_receipt_id"] == result.backend_execution_binding_receipt.receipt_id
     assert feedback_manifest["planned_branch_count"] >= 1
     assert diffusion_bundle["plans"]
     assert loop_summary["physics_execution_contract_id"] == result.physics_execution_contract.contract_id

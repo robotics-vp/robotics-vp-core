@@ -72,6 +72,44 @@ class PhysicsAdaptationPolicyState:
 
 
 @dataclass(frozen=True)
+class BackendExecutionBindingState:
+    """Concrete execution-binding state for the selected backend."""
+
+    binding_id: str
+    backend: str
+    binding_name: str
+    binding_status: str
+    executor_entrypoint: str
+    executor_kind: str
+    observation_adapter_entrypoint: str
+    target_runtime_stack: list[str] = field(default_factory=list)
+    asset_profile: str = ""
+    required_assets: list[str] = field(default_factory=list)
+    available_assets: list[str] = field(default_factory=list)
+    missing_assets: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_execution_binding_state_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "binding_id": self.binding_id,
+            "backend": self.backend,
+            "binding_name": self.binding_name,
+            "binding_status": self.binding_status,
+            "executor_entrypoint": self.executor_entrypoint,
+            "executor_kind": self.executor_kind,
+            "observation_adapter_entrypoint": self.observation_adapter_entrypoint,
+            "target_runtime_stack": strings(self.target_runtime_stack),
+            "asset_profile": self.asset_profile,
+            "required_assets": strings(self.required_assets),
+            "available_assets": strings(self.available_assets),
+            "missing_assets": strings(self.missing_assets),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class DiffusionConditioningState:
     """Governed diffusion/render-conditioning state derived from WM state."""
 
@@ -119,6 +157,9 @@ class BranchRenderProviderState:
     render_mode: str
     counterfactual_mode: str
     ggds_mode: str
+    materialization_status: str = ""
+    materialization_entrypoint: str = ""
+    provider_config: Dict[str, Any] = field(default_factory=dict)
     fallback_provider: str = ""
     fallback_reason: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -132,6 +173,9 @@ class BranchRenderProviderState:
             "render_mode": self.render_mode,
             "counterfactual_mode": self.counterfactual_mode,
             "ggds_mode": self.ggds_mode,
+            "materialization_status": self.materialization_status,
+            "materialization_entrypoint": self.materialization_entrypoint,
+            "provider_config": mapping(self.provider_config),
             "fallback_provider": self.fallback_provider,
             "fallback_reason": self.fallback_reason,
             "metadata": mapping(self.metadata),
@@ -217,6 +261,7 @@ class SimSynthPhysicsWorldState:
     simulation_agenda: SimulationAgenda
     physics_context: PhysicsContextState
     physics_adaptation_policy: Optional[PhysicsAdaptationPolicyState] = None
+    backend_execution_binding: Optional[BackendExecutionBindingState] = None
     synthetic_branch_plans: list[SyntheticBranchPlan] = field(default_factory=list)
     gen2sim_admission: Optional[Gen2SimAdmissionState] = None
     diffusion_conditioning: Optional[DiffusionConditioningState] = None
@@ -233,6 +278,11 @@ class SimSynthPhysicsWorldState:
             "physics_adaptation_policy": (
                 self.physics_adaptation_policy.to_dict()
                 if self.physics_adaptation_policy is not None
+                else None
+            ),
+            "backend_execution_binding": (
+                self.backend_execution_binding.to_dict()
+                if self.backend_execution_binding is not None
                 else None
             ),
             "synthetic_branch_plans": [plan.to_dict() for plan in self.synthetic_branch_plans],
