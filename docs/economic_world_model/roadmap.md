@@ -4,9 +4,11 @@
 
 - Favor additive infrastructure over refactors.
 - Keep VLA and foundation-model paths external, pluggable, and sidecar/advisory.
+- Narrow the advisory doctrine for internal surfaces: external providers and preview layers may remain advisory, but internal typed quality/readiness/learnability artifacts should graduate into canonical metadata, preconditions, work orders, or bounded authority once they affect runtime or training.
 - Preserve objective integrity. No premature scalarization upstream of explicit contract compile.
 - Preserve the stable Phase B checkpoint and legacy contractive dynamics math as a baseline, but additive governed video-state work in `src/world_model/` is now in scope.
 - Treat Phase B as a two-layer program: frozen baseline for rollback/comparison, additive successor scaffolding for governed video-state and later learned top-layer work.
+- Treat frozen Phase B math as the current canonical rollback anchor, not as philosophically immutable forever; any future replacement must come only through benchmark-gated successor evidence, not casual edits.
 - Sequence work so each stage leaves behind reusable docs, schemas, tests, and automation hooks.
 - Treat video-world-model work as a subset of economic-world-model readiness: geometry/evidence/governance first, rendering and training second.
 - Do not overfit the stack to one paper architecture. Keep predictor, planner, context, and rollout configuration modular.

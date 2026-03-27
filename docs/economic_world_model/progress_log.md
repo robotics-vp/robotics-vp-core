@@ -2,6 +2,16 @@
 
 ## 2026-03-26
 
+- Changed: added `docs/economic_world_model/advisory_purge_wiring_plan.md` as the advisory counterpart to the earlier heuristic/sidecar sweep. The new document:
+  - narrows the repo-wide advisory doctrine
+  - separates surfaces that should remain advisory from surfaces that should become canonical metadata, preconditions, work orders, bounded authority, or later benchmark-gated successors
+  - ranks the current advisory gaps with epiplexity / inferential signal-yield / inferential work-order promotion as the top remaining tranche
+  - updates the architectural posture on frozen Phase B math: keep it as the rollback anchor now, but do not treat it as philosophically immutable forever once successor layers earn replacement through evidence
+- Changed: updated `docs/epiplexity.md` so the current posture is explicit: epiplexity remains bounded and non-reward-changing today, but it is now documented as the likely future canonical learnability class rather than a permanently advisory overlay.
+- Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` to reflect the same doctrine shift. The multi-WM plan now says internal WM-to-WM state and receipts should not stay culturally advisory once they affect runtime or training, and the roadmap now encodes the same narrower advisory rule plus the benchmark-gated successor stance on frozen Phase B math.
+- Verification: `git diff --check` passed. This was a docs-only advisory doctrine pass; no code paths changed.
+- Next recommended task: execute the new top tranche in code by promoting epiplexity / inferential signal-yield from overlay-shaped evidence into canonical learnability metadata and executor-facing inferential work-order contracts across replay, training manifests, and benchmark reporting.
+
 - Changed: added `docs/economic_world_model/humanoid_target_readiness.md` as the concrete follow-on artifact for the new G1/R1-facing plan. It turns the hardware-target discussion into:
   - an explicit readiness checklist
   - a benchmark matrix

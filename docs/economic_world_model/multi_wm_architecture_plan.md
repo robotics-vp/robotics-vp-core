@@ -67,6 +67,26 @@ Do:
 - let the economic WM become the allocator/governor over lower WMs once those lower surfaces are real
 - add the transport layer only after at least two adjacent WMs emit stable canonical surfaces
 
+### Advisory posture inside the WM topology
+
+The multi-WM topology only stays honest if internal WM-to-WM communication is not treated as another advisory blob layer.
+
+The right doctrine is:
+
+- external OSS providers can remain advisory or pluggable
+- preview/report tools can remain advisory
+- internal typed state, readiness classes, helper traces, and selection receipts should graduate into canonical metadata, preconditions, work orders, or bounded authority as they begin to affect runtime or training
+
+This matters because later:
+
+- the sim / synth / physics WM
+- the perception / grounding WM
+- the embodiment / actuation WM
+- the economic WM
+- the transport bridges between them
+
+must communicate through typed state and receipts rather than culturally "optional" advisories.
+
 ## Topology
 
 ```mermaid

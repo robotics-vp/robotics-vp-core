@@ -2,6 +2,23 @@
 
 ## 2026-03-26
 
+- Added `docs/economic_world_model/advisory_purge_wiring_plan.md` as the advisory-doctrine counterpart to the earlier heuristic sweep:
+  - it separates surfaces that should remain advisory from surfaces that should become:
+    - canonical metadata
+    - preconditions
+    - work orders
+    - bounded authority
+    - benchmark-gated successors
+  - it ranks the current advisory gaps and identifies epiplexity / inferential signal-yield as the top remaining tranche because those signals already shape replay weighting and adaptation budgeting while still behaving too much like overlays
+  - it also records the architectural posture shift that frozen Phase B math should stay the rollback anchor now without being treated as sacred forever once benchmark-gated successor evidence eventually exists
+- Updated `docs/epiplexity.md` to reflect the same posture:
+  - epiplexity remains bounded and non-reward-changing today
+  - but its portable summaries are now explicitly framed as a future canonical learnability class rather than a permanently advisory metric
+- Updated `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` so the new multi-WM topology and roadmap rules explicitly distinguish:
+  - external advisory providers
+  - preview/report layers
+  - internal typed WM-to-WM receipts that should graduate out of the advisory bucket once they shape runtime or training
+
 - Added `docs/economic_world_model/humanoid_target_readiness.md` as the concrete G1/R1-facing readiness artifact:
   - it converts the high-level hardware-target discussion into an explicit checklist
   - it includes a benchmark matrix for balance, locomotion-manipulation, recovery, dexterity, degraded sensing/comms, and related humanoid-specific promotion classes
