@@ -16,6 +16,9 @@
     - `src/orchestrator/diffusion_requests.py`
     - `src/orchestrator/coverage_loop.py`
   - helper packages now resolve package-relative checkpoints and carry explicit target-hardware/subsystem-posture metadata, so the emitted artifacts are closer to production-shaped packages than local-path training leftovers
+  - the trainer/export lane now also accepts canonical WM runtime receipt bundles rather than only pre-shaped row datasets:
+    - `src/world_model/sim_synth_physics/training_corpus.py` projects `SimSynthPhysicsWorldState`, calibration receipts, and simulation-outcome receipts into backend-selector and branch-planner rows
+    - the training scripts now emit a compiled dataset artifact even when the source input was runtime receipts, which is the right direction for a real subsystem corpus lane
   - fixed a real contract mismatch while landing that path: the branch-planner runtime context now includes `heuristic_generation_mode`, so the trained feature contract matches live inference instead of silently degrading
 - Changed: started the advisory follow-up for this subsystem by tightening the doctrine in `docs/economic_world_model/advisory_purge_wiring_plan.md`: sim/synth backend and branch helper lanes are now part of the bounded-authority bucket rather than another advisory-shaped planning seam.
 - Changed: tightened the subsystem doctrine in the core planning docs so each WM is treated as a damn-near-production-ready subsystem target with honest remaining blockers:
@@ -30,7 +33,7 @@
   - calibration receipts for contact-rich whole-body behavior
   - GPU budget for materially larger helper training/eval
   - G1/R1-class benchmark evidence for promotion beyond `auto`
-- Next recommended task: feed branch-outcome and calibration receipts back into the backend-selector and branch-planner corpora/export lane so this WM keeps moving toward a complete subsystem instead of pivoting early to another control-plane seam.
+- Next recommended task: wire the compiled receipt-derived datasets into real artifact harvesters and branch-execution paths so the backend-selector and branch-planner corpora are sourced from live sim receipts by default rather than only by manual receipt-bundle export.
 
 - Changed: completed the next `sim_synth_physics` tranche by threading the canonical inferential learnability contract into WM-owned agenda ranking, synthetic-branch planning, gen2sim admission, and diffusion ordering:
   - `src/world_model/sim_synth_physics/compiler.py` now assigns inferential learnability contracts to simulation jobs and branch plans, uses them as bounded ranking priors, and includes job/branch inferential summaries in WM metadata

@@ -13,6 +13,11 @@ It is a planning and audit artifact that answers:
 - what benchmark classes and contracts are missing
 - which model-capacity and environment assumptions must be revisited
 
+It also assumes the stronger subsystem rule from the multi-WM plan:
+
+- each lower WM and each deployment-enabler phase should be pushed until the main remaining blockers are honest G1/R1-class data, GPU, calibration, middleware, and benchmark prerequisites
+- missing neural scaffolds, missing package/runtime lanes, or missing production-loop integration should not remain as the reason a subsystem is "not ready"
+
 ## Target Assumption
 
 The target considered here is:

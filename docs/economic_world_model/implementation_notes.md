@@ -10,6 +10,10 @@
   - runtime packages resolve package-relative checkpoints
   - trainer/export outputs now stamp explicit target hardware and subsystem posture metadata
   - the emitted package artifact is intended to be the real runtime contract, not a sidecar note for later cleanup
+- The next concrete step toward a complete subsystem also landed:
+  - backend-selector and branch-planner trainers can now ingest canonical WM runtime receipt bundles instead of requiring only hand-shaped row datasets
+  - `src/world_model/sim_synth_physics/training_corpus.py` is the shared contract for that projection
+  - the trainer scripts now emit compiled dataset artifacts so receipt-derived rows become a stable training corpus artifact, not a transient loader path
 - Important implementation detail:
   - the branch-planner feature contract expected `heuristic_generation_mode`
   - the runtime compiler was not passing it
