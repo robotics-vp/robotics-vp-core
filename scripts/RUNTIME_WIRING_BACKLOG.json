@@ -72,7 +72,31 @@
       "id": "meta_transformer_planning_helper",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - meta-transformer runtime/training now carry a shared planning-context contract over semantic/econ/datapack/selector receipts, the trained helper now predicts bounded objective/backend/energy-profile/data-mix/expected-delta outputs, and runtime records both planning traces and the bounded planning_application receipt explaining why the final meta-choice stayed heuristic-prior or moved toward the learned helper."
+    },
+    {
+      "id": "knob_model_homeostatic_helper",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - removed the fake D4 learned stub, added a canonical knob-model trainer/runtime-package lane with runtime receipt ingestion, wired bounded benchmark-gated helper loading into the homeostatic planner, and preserved knob-policy regime/base-config receipts in GateStatus plus closed-loop smoke artifacts."
     }
   ],
-  "backlog": []
+  "backlog": [
+    {
+      "id": "higher_order_orchestrator_shell_policy",
+      "priority": "P1",
+      "blocked_by": "runtime shell outcome receipts and denser promoted orchestration/meta traces",
+      "notes": "SemanticOrchestrator, SemanticOrchestratorV2, and PipelineManager still make mostly deterministic shell/stage/meta-choice decisions above the now-real selector, sequence, meta-transformer, and knob helper lanes."
+    },
+    {
+      "id": "queue_curriculum_selection_policy",
+      "priority": "P1",
+      "blocked_by": "queue outcome receipts and replay counterfactual labels",
+      "notes": "Queue selection, replay weighting, and episode sampling still use a largely heuristic core even though they now ingest learned helper scores; this needs its own bounded learned policy layer."
+    },
+    {
+      "id": "real_sam3d_grounded_data_refresh",
+      "priority": "P1",
+      "blocked_by": "GPU host with SAM3D checkpoints and real workcell refresh runs",
+      "notes": "Grounded-data honesty is fixed, but benchmark-grade workcell/vision promotion still cannot happen until SceneTracks/SAM3D runs produce real grounded data rather than passthrough fallback outputs."
+    }
+  ]
 }

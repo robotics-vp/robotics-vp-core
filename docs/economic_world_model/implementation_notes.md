@@ -937,4 +937,34 @@
     - `src/world_model/feedback_topology_adapters.py` provides the learned trust/econ/readiness/correction overlay package plus shadow-fit training from real coverage edges, and `scripts/train_semantic_feedback_adapters.py` provides the heavyweight persisted training path.
     - `src/world_model/semantic_wm_refiner.py` now sits beside the deterministic builder as a learned successor layer. It learns bounded object/relation/capability correction deltas plus graph-mutation proposal scoring, and `scripts/train_semantic_wm_refiner.py` provides the heavyweight persisted training path from coverage-loop artifacts.
     - `src/orchestrator/coverage_loop.py` now emits both `input_semantic_world_model.json` and `semantic_wm_refiner_summary.json`, shadow-fits or loads a persisted refiner package, merges learned deltas with the heuristic correction overlay, and keeps the resulting outputs inside the governed correction/mutation route rather than writing directly into the base builder.
-  - The remaining limitation is no longer missing code-paths. It is whether enough real coverage-loop artifacts exist to promote those learned overlay adapters and governed graph mutations from shadow/provisional use into stronger production authority.
+- The remaining limitation is no longer missing code-paths. It is whether enough real coverage-loop artifacts exist to promote those learned overlay adapters and governed graph mutations from shadow/provisional use into stronger production authority.
+
+- D4 knob calibration is now a real helper lane rather than a fake learned label:
+  - `src/regal/knob_model.py` keeps the heuristic provider as the explicit prior and delegates learned resolution to `src/regal/knob_model_runtime.py`.
+  - `resolve_knob_model(...)` enforces the same honest bounded helper semantics used elsewhere in this pass:
+    - no package -> heuristic fallback unless `required=True`
+    - non-benchmark-gated package -> bounded `shadow_candidate` helper only
+    - benchmark-gated package -> stronger but still bounded influence
+- `scripts/train_knob_model.py` is the canonical trainer for that lane. It accepts either:
+  - explicit knob training dataset JSON
+  - runtime/exported `knob_policy_receipt_v1` JSON or JSONL
+  - optional heuristic-bootstrap synthetic rows as an additive fallback source
+  and emits the full runtime contract:
+  - `knob_model_dataset.json`
+  - dataset summary
+  - execution-preconditions report
+  - training summary
+  - `knob_model_package.json`
+  - canonical runtime manifest / checkpoint registry artifacts
+- `src/orchestrator/homeostatic_plan_writer.py` now preserves enough context to make future training honest:
+  - `GateStatus.knob_policy`
+  - `GateStatus.knob_policy_used`
+  - `GateStatus.knob_regime_features`
+  - `GateStatus.knob_base_config`
+  This means the knob lane’s meta-choice no longer disappears once the plan is written.
+- `scripts/run_closed_loop_smoke.py` now writes `knob_policy_receipt.json` so the repo has an immediate regression/smoke substrate for knob-model training without inventing a fake online learner.
+- The next mandate-level runtime gaps are above this helper, not inside it:
+  - higher-order orchestrator shell/stage/meta-choice policy is still largely deterministic
+  - queue/curriculum weighting is still mostly heuristic
+  - real grounded-data promotion is still blocked on GPU + SAM3D availability
+  - several remaining heavyweight trainers are still data-limited rather than plumbing-limited, as recorded in `docs/economic_world_model/full_stack_training_backlog.md`

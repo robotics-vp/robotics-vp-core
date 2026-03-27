@@ -263,13 +263,18 @@
             "script": "train_gen2sim_validity.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - added the gen2sim validity dataset/model/runtime-package lane, explicit empirical-density benchmark gating, and bounded helper loading for synth-value admission while keeping promotion honest until real receipts exist"
+        },
+        {
+            "script": "train_knob_model.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - replaced the fake D4 stub with a canonical knob-model trainer/runtime-package lane, runtime receipt ingestion, benchmark-gated helper loading, and unified RegalTrainingRunner artifact emission"
         }
     ],
     "summary": {
-        "total": 35,
+        "total": 36,
         "P0": 0,
         "P1": 7,
         "P2": 6,
-        "migrated": 22
+        "migrated": 23
     }
 }

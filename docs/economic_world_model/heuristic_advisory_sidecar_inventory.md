@@ -26,6 +26,7 @@ Ranking dimensions:
 | 6 | `train_orchestration_transformer.py` runtime-backed trainer parity | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now, benchmark-gated** |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` plus helper trainer/export lane | `heuristic` / `lightweight_trainer_gap` | Medium-high | Medium-high | No | **Wired now, benchmark-gated** |
 | 8 | `train_meta_transformer_synthetic.py` + meta-transformer runtime package/promotion path | `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
+| 8a | D4 knob model / homeostatic planner knob calibration | `stub` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `sidecar` / `fallback` | Medium-high | Medium-high | No | **Wired now** |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 
@@ -505,6 +506,54 @@ Ranking dimensions:
   - `upgraded to heavyweight parity`
   - `benchmark-gated`
 
+### 8a. D4 knob model / homeostatic planner knob calibration
+
+- surface: D4 knob calibration trainer/runtime plus bounded homeostatic planner integration
+- file/path: `src/regal/knob_model.py`, `src/regal/knob_model_training.py`, `src/regal/knob_model_runtime.py`, `scripts/train_knob_model.py`, `src/orchestrator/policy_hooks.py`, `src/orchestrator/homeostatic_plan_writer.py`, `scripts/run_closed_loop_smoke.py`
+- category: `stub` / `lightweight_trainer_gap`
+- current behavior:
+  - the fake `StubLearnedKnobModel` is gone; `get_knob_model(...)` now resolves either the heuristic fallback or a real runtime package/checkpoint through `resolve_knob_model(...)`
+  - `scripts/train_knob_model.py` is now the canonical trainer lane for this helper:
+    - accepts runtime receipt JSON/JSONL and/or explicit training dataset JSON
+    - can still append heuristic-bootstrap synthetic rows as an explicit fallback source
+    - emits:
+      - `knob_model_dataset.json`
+      - dataset summary
+      - execution-precondition artifact
+      - training summary
+      - `knob_model_package.json`
+      - canonical runtime manifest/checkpoint registry under `RegalTrainingRunner`
+  - runtime package loading is honest and bounded:
+    - relative checkpoint paths are resolved against the package path
+    - `required=True` refuses non-benchmark-gated packages
+    - `shadow_candidate` packages stay bounded to a small helper weight while `promoted` packages can move farther from the heuristic prior
+  - `src/orchestrator/homeostatic_plan_writer.py` now preserves:
+    - `knob_policy`
+    - `knob_policy_used`
+    - `knob_regime_features`
+    - `knob_base_config`
+    inside `GateStatus`, so later training and debugging no longer lose the model’s input context
+  - `scripts/run_closed_loop_smoke.py` now emits `knob_policy_receipt.json` with regime features, base config, applied policy, and manifest linkage instead of pretending the knob lane is learned without a trainable/runtime receipt substrate
+  - `src/orchestrator/policy_hooks.py` now uses real `exposure_count`, `datapack_count`, and objective-profile labeling for regime-feature construction instead of silently dropping those features
+- current consumers:
+  - `src/orchestrator/homeostatic_plan_writer.py`
+  - `src/orchestrator/policy_hooks.py`
+  - `scripts/run_closed_loop_smoke.py`
+  - any future trainer that consumes `knob_policy_receipt_v1`
+- why it is a production problem:
+  - before this pass, the runtime could claim a learned D4 knob policy while actually delegating to heuristics under a fake learned label
+  - that distorted a live control-plane surface that directly affects homeostatic plan gain/patience behavior
+  - there was also no canonical training/runtime contract for the helper, so the lane had no honest promotion path
+- recommended disposition:
+  - keep the heuristic provider as the explicit prior
+  - keep learned packages bounded and benchmark-gated
+  - train on exported knob-policy receipts plus future runtime outcomes instead of synthetic/bootstrap rows alone
+  - use the new receipt contract as the future economic-WM/meta-node-WM conditioning seam for “why this knob policy was chosen”
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
+  - `neuralized later`
+
 ### 9. Teacher-runtime / rollout-labeler semantic sidecars
 
 - surface: external teacher contracts/envelopes and rollout labeler sidecars
@@ -567,6 +616,8 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Deepen orchestration supervision beyond `first_tool_only_v1` so the runtime-backed trainer learns fuller action sequences instead of only the first routing decision.
-2. Continue meta-layer neuralization above the current helper path so future economic-WM and later meta-node-WM conditioning can supervise more than authority/conditioning outputs alone.
-3. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.
+1. Neuralize the higher-order orchestrator shell policy in `src/orchestrator/semantic_orchestrator.py`, `src/orchestrator/semantic_orchestrator_v2.py`, and `src/orchestrator/pipeline_manager.py`; those layers still make deterministic shell/stage/meta-choice decisions above the newly real selector, sequence, meta-transformer, and knob helpers.
+2. Replace the remaining heuristic queue/curriculum weighting core in `src/orchestrator/queue_selection.py`, `src/rl/episode_sampling.py`, and adjacent replay-priority logic with a bounded learned helper trained on real queue outcome receipts.
+3. Refresh the grounded-data / perception truth lane on a real GPU + SAM3D host; until that happens, workcell/bootstrap grounding remains honest but still unpromotable, and several vision-side promotion paths remain blocked by environment rather than repo wiring.
+4. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.
+5. Close the remaining data-limited trainer-parity gaps called out in `docs/economic_world_model/full_stack_training_backlog.md`, especially semantic runtime scorer density, semantic feedback adapter density, shadow pricing / offline replay density, and the perception/VLA real-data lanes.
