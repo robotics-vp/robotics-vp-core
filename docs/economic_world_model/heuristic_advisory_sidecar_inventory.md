@@ -23,6 +23,7 @@ Ranking dimensions:
 | 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | Yes | **Wired now** |
 | 4a | Queue dispatch policy trainer/package + replay-weighting helper | `heuristic` / `lightweight_trainer_gap` | High | High | Yes | **Wired now, benchmark-gated** |
+| 4b | Sampler policy trainer/package + base-weight / curriculum-strategy helper | `heuristic` / `lightweight_trainer_gap` | High | High | Yes | **Wired now, benchmark-gated** |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now** |
 | 6 | `train_orchestration_transformer.py` runtime-backed trainer parity | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now, benchmark-gated** |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` plus helper trainer/export lane | `heuristic` / `lightweight_trainer_gap` | Medium-high | Medium-high | No | **Wired now, benchmark-gated** |
@@ -371,6 +372,54 @@ Ranking dimensions:
   - `benchmark-gated`
   - `neuralized later`
 
+### 4b. Sampler policy trainer/package + base-weight / curriculum-strategy helper
+
+- surface: learned sampler-policy control over strategy choice, per-episode base-weight adjustment, and bounded frontier/econ selection-plan parameters underneath live queue dispatch
+- file/path: `src/rl/episode_sampling.py`, `src/rl/sampler_policy.py`, `src/rl/sampler_policy_training.py`, `src/rl/sampler_policy_runtime.py`, `scripts/train_sampler_policy.py`, `scripts/train_shadow_replay_policy.py`, `scripts/train_shadow_offline_rl.py`, `scripts/train_shadow_pricing_models.py`, `scripts/train_sac_with_ontology_logging.py`
+- category: `heuristic` / `lightweight_trainer_gap`
+- current behavior:
+  - `src/rl/sampler_policy.py` now defines a stable feature contract over:
+    - pool-level trust/tier/frontier/econ/quality/inferential/embodiment state
+    - heuristic strategy priors
+    - per-episode base-weight features
+  - `src/rl/sampler_policy_training.py` now trains a real bounded helper over `sampler_policy_receipt_v1` artifacts:
+    - strategy distribution
+    - frontier/econ plan parameters
+    - strategy-conditioned per-episode weight targets
+  - `scripts/train_sampler_policy.py` now emits:
+    - sampler-policy dataset and summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `sampler_policy_package.json`
+    - canonical runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - `src/rl/episode_sampling.py` now resolves the helper with `disabled|auto|required` semantics and uses it to:
+    - blend strategy selection against the explicit heuristic/advisory prior
+    - blend per-episode base weights against the explicit heuristic weight
+    - blend frontier/econ threshold/focus parameters against the explicit heuristic plan
+    - preserve sampler strategy/weight traces in `sampling_metadata`
+    - emit `sampler_policy_receipt_v1` runtime artifacts for later training
+  - the main shadow/online training entrypoints now persist `sampler_policy_receipt.json` beside queue-dispatch outputs, so the learned lane is part of the actual replay/training loop instead of a side experiment
+- current consumers:
+  - `DataPackRLSampler.sample_batch(...)`
+  - `DataPackRLSampler.dispatch_queue(...)`
+  - `scripts/train_shadow_replay_policy.py`
+  - `scripts/train_shadow_offline_rl.py`
+  - `scripts/train_shadow_pricing_models.py`
+  - `scripts/train_sac_with_ontology_logging.py`
+- why it is a production problem:
+  - before this pass, the queue-dispatch helper could reweight entries, but the deeper sampler strategy choice and base-weight logic still bottlenecked on hard-coded frontier/econ/curriculum heuristics
+  - that meant the actual training distribution still depended on fake boundaries underneath the now-real queue lane
+- recommended disposition:
+  - keep explicit caller-requested strategies authoritative
+  - keep advisory override priors explicit and auditable
+  - keep the helper benchmark-gated until real queue outcome receipts and replay counterfactual labels are denser
+  - use the new sampler-policy receipts to move later from heuristic bootstrap targets to real runtime-outcome supervision
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
+  - `neuralized later`
+
 ### 5. `train_vla_recap_offline.py`
 
 - surface: offline RECAP VLA heads trainer
@@ -645,7 +694,7 @@ Ranking dimensions:
   - keep the heuristic shell advisory as the explicit prior
   - preserve bounded helper blending and explicit `shadow_candidate` vs `promoted` semantics
   - train on real semantic snapshot plus advisory receipts rather than fabricating supervision
-  - push the next neuralization step upward into `PipelineManager` stage activation and broader queue/curriculum control rather than revisiting this shell prior again immediately
+  - push the next neuralization step upward into grounded-data reality and the remaining data-limited trainer lanes rather than revisiting this shell prior again immediately
 - disposition tag:
   - `wired now`
   - `benchmark-gated`
@@ -691,7 +740,7 @@ Ranking dimensions:
   - keep shell activation and execution preconditions as the hard gate
   - keep the heuristic stage-policy prior explicit and auditable
   - use the learned helper only as a bounded stage-priority/config-adjustment layer until denser runtime receipts exist
-  - move the next neuralization tranche to queue/curriculum weighting, which is now the main remaining live control-plane heuristic core
+  - move the next neuralization tranche to the remaining receipt-density/promotion blockers and grounded-data reality now that queue/curriculum weighting is helper-backed
 - disposition tag:
   - `wired now`
   - `benchmark-gated`
@@ -759,7 +808,7 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Neuralize the remaining sampler base-weight / curriculum-strategy core in `src/rl/episode_sampling.py`; queue dispatch itself is now helper-backed, but the underlying frontier/econ/curriculum strategy logic and base weighting still remain heuristic.
-2. Refresh the grounded-data / perception truth lane on a real GPU + SAM3D host; until that happens, workcell/bootstrap grounding remains honest but still unpromotable, and several vision-side promotion paths remain blocked by environment rather than repo wiring.
+1. Refresh the grounded-data / perception truth lane on a real GPU + SAM3D host; until that happens, workcell/bootstrap grounding remains honest but still unpromotable, and several vision-side promotion paths remain blocked by environment rather than repo wiring.
+2. Add empirical receipt targets into the new sampler-policy helper so the package can promote beyond heuristic bootstrap and stop relying mostly on distilled strategy/weight priors.
 3. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.
 4. Close the remaining data-limited trainer-parity gaps called out in `docs/economic_world_model/full_stack_training_backlog.md`, especially semantic runtime scorer density, semantic feedback adapter density, shadow pricing / offline replay density, and the perception/VLA real-data lanes.

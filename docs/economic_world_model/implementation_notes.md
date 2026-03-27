@@ -1026,4 +1026,14 @@
   - `src/orchestrator/queue_dispatch_policy.py` defines a stable feature/target contract over live queue entries, preserving advisory priority, replay action, queue tags, semantic-runtime scorer outputs, execution-precondition state, and receipt-feedback outcomes.
   - `scripts/train_queue_dispatch_policy.py` is now the canonical trainer/runtime-package path for that helper under `RegalTrainingRunner`.
   - `src/orchestrator/queue_selection.py` now blends helper output against the explicit heuristic multiplier prior with bounded `disabled|auto|required` semantics, and `src/rl/episode_sampling.py` plus the main shadow/online trainer entrypoints thread that helper into the real sampling loop.
-  - Honest remainder: the deeper sampler base-weight / curriculum-strategy logic in `src/rl/episode_sampling.py` still uses frontier/econ/curriculum heuristics underneath the now-real queue-dispatch layer, so the next queue/curriculum pass should target that substrate rather than reworking dispatch again.
+  - Honest remainder at that point: the deeper sampler base-weight / curriculum-strategy logic in `src/rl/episode_sampling.py` still used frontier/econ/curriculum heuristics underneath the now-real queue-dispatch layer.
+
+- That deeper sampler substrate is now also real and bounded:
+  - `src/rl/sampler_policy.py` defines stable pool-level and episode-level feature contracts for strategy choice, frontier/econ plan parameters, and strategy-conditioned base-weight adjustment.
+  - `scripts/train_sampler_policy.py` is now the canonical trainer/runtime-package path for that helper under `RegalTrainingRunner`.
+  - `src/rl/episode_sampling.py` now blends helper outputs against explicit heuristic priors for:
+    - strategy selection
+    - per-episode base weights
+    - frontier/econ threshold and focus ratios
+  - `DataPackRLSampler` now emits `sampler_policy_receipt_v1` artifacts, and the main shadow/online training entrypoints persist those receipts into runtime outputs so later training can move off heuristic bootstrap targets.
+  - Honest remainder: this lane is no longer missing wiring. It is blocked on receipt density. The helper should remain benchmark-gated until queue outcome receipts and replay counterfactual labels are dense enough to promote it beyond `shadow_candidate`.

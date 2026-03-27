@@ -72,6 +72,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--queue-allow-slice-removal-on-integrity-failure", action="store_true")
     parser.add_argument("--queue-policy-helper-mode", type=str, default="disabled")
     parser.add_argument("--queue-policy-package-path", type=str, default=None)
+    parser.add_argument("--sampler-policy-helper-mode", type=str, default="disabled")
+    parser.add_argument("--sampler-policy-package-path", type=str, default=None)
     parser.add_argument("--learning-starts", type=int, default=64)
     parser.add_argument("--updates-per-step", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -296,6 +298,7 @@ def main(runner=None, _wrapped_args=None):
     dataset_dir = output_root / "online_replay_dataset"
     queue_history_path = output_root / "queue_dispatch_history.jsonl"
     queue_latest_path = output_root / "queue_dispatch_comparison.json"
+    sampler_policy_receipt_path = output_root / "sampler_policy_receipt.json"
     live_queue_history_path = output_root / "live_queue_selection_history.jsonl"
     live_queue_latest_path = output_root / "live_queue_selection.json"
     episode_receipts_path = output_root / "online_episode_receipts.jsonl"
@@ -548,6 +551,8 @@ def main(runner=None, _wrapped_args=None):
             queue_allow_slice_removal_on_integrity_failure=args.queue_allow_slice_removal_on_integrity_failure,
             queue_policy_helper_mode=args.queue_policy_helper_mode,
             queue_policy_package_path=args.queue_policy_package_path,
+            sampler_policy_helper_mode=args.sampler_policy_helper_mode,
+            sampler_policy_package_path=args.sampler_policy_package_path,
         )
         dispatch = sampler.dispatch_queue(
             batch_size=len(descriptors),
@@ -558,6 +563,10 @@ def main(runner=None, _wrapped_args=None):
         _write_json(live_queue_latest_path, live_queue_selection)
         _append_jsonl(live_queue_history_path, live_queue_selection)
         _write_json(queue_latest_path, dispatch)
+        _write_json(
+            sampler_policy_receipt_path,
+            dict(dispatch.get("sampler_policy_receipt", sampler.last_sampler_policy_artifact or {})),
+        )
         _append_jsonl(queue_history_path, dispatch)
 
     dataset_bundle = ReplayDatasetBuilder()
@@ -594,6 +603,7 @@ def main(runner=None, _wrapped_args=None):
         evidence_pointers={
             "live_queue_selection": str(live_queue_latest_path),
             "queue_dispatch_comparison": str(queue_latest_path),
+            "sampler_policy_receipt": str(sampler_policy_receipt_path),
             "online_shadow_advisory": str(advisory_path),
         },
     )
@@ -660,6 +670,7 @@ def main(runner=None, _wrapped_args=None):
         runner.register_artifact("online_episode_receipts", episode_receipts_path)
         runner.register_artifact("live_queue_selection", live_queue_latest_path)
         runner.register_artifact("queue_dispatch_comparison", queue_latest_path)
+        runner.register_artifact("sampler_policy_receipt", sampler_policy_receipt_path)
         runner.register_artifact("online_shadow_advisory", advisory_path)
         runner.register_artifact("semantic_runtime_scorer_preconditions", scorer_preconditions_path)
         runner.register_artifact("semantic_runtime_scorer_work_orders", scorer_work_orders_path)

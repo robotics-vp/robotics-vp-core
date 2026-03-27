@@ -55,6 +55,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--queue-allow-slice-removal-on-integrity-failure", action="store_true")
     parser.add_argument("--queue-policy-helper-mode", type=str, default="disabled")
     parser.add_argument("--queue-policy-package-path", type=str, default=None)
+    parser.add_argument("--sampler-policy-helper-mode", type=str, default="disabled")
+    parser.add_argument("--sampler-policy-package-path", type=str, default=None)
     parser.add_argument("--skip-regal-runner", action="store_true")
     return parser.parse_args(argv)
 
@@ -96,6 +98,8 @@ def _select_episode_ids(
         queue_allow_slice_removal_on_integrity_failure=args.queue_allow_slice_removal_on_integrity_failure,
         queue_policy_helper_mode=args.queue_policy_helper_mode,
         queue_policy_package_path=args.queue_policy_package_path,
+        sampler_policy_helper_mode=args.sampler_policy_helper_mode,
+        sampler_policy_package_path=args.sampler_policy_package_path,
     )
     dispatch = sampler.dispatch_queue(
         batch_size=args.max_queue_episodes or len(descriptors),
@@ -103,7 +107,12 @@ def _select_episode_ids(
         strategy=args.queue_strategy,
     )
     dispatch_path = output_root / "queue_dispatch_comparison.json"
+    sampler_policy_receipt_path = output_root / "sampler_policy_receipt.json"
     _write_json(dispatch_path, dispatch)
+    _write_json(
+        sampler_policy_receipt_path,
+        dict(dispatch.get("sampler_policy_receipt", sampler.last_sampler_policy_artifact or {})),
+    )
     selected_episode_ids = [
         str(row.get("pack_id") or row.get("episode_id"))
         for row in dispatch.get("ordered_descriptors", [])
@@ -115,6 +124,7 @@ def _select_episode_ids(
         "semantic_runtime_scorer_preconditions": str(scorer_preconditions_path),
         "semantic_runtime_scorer_work_orders": str(scorer_work_orders_path),
         "queue_dispatch_comparison": str(dispatch_path),
+        "sampler_policy_receipt": str(sampler_policy_receipt_path),
     }, advisory, dispatch
 
 
@@ -206,6 +216,7 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
         runner.register_artifact("semantic_runtime_scorer_preconditions", queue_paths["semantic_runtime_scorer_preconditions"])
         runner.register_artifact("semantic_runtime_scorer_work_orders", queue_paths["semantic_runtime_scorer_work_orders"])
         runner.register_artifact("queue_dispatch_comparison", queue_paths["queue_dispatch_comparison"])
+        runner.register_artifact("sampler_policy_receipt", queue_paths["sampler_policy_receipt"])
         runner.register_artifact("regal_promotion_eval", promotion_paths["json"])
         runner.register_artifact("regal_promotion_eval_markdown", promotion_paths["markdown"])
         runner.register_artifact("replay_policy_metrics", result.metrics_path)

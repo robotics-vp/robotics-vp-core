@@ -283,13 +283,18 @@
             "script": "train_queue_dispatch_policy.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - added the queue-dispatch trainer/runtime-package lane over live queue-entry receipts, bounded disabled|auto|required helper loading in queue selection and RL sampler entrypoints, and canonical RegalTrainingRunner dataset/precondition/package/runtime artifacts"
+        },
+        {
+            "script": "train_sampler_policy.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - added the sampler-policy trainer/runtime-package lane over sampler-policy receipts, bounded disabled|auto|required helper loading for strategy/base-weight/frontier-econ plan control in DataPackRLSampler, and canonical RegalTrainingRunner dataset/precondition/package/runtime artifacts"
         }
     ],
     "summary": {
-        "total": 39,
+        "total": 40,
         "P0": 0,
         "P1": 7,
         "P2": 6,
-        "migrated": 26
+        "migrated": 27
     }
 }

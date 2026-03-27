@@ -92,14 +92,19 @@
       "id": "queue_dispatch_reweight_policy",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - queue selection now loads a real bounded queue-dispatch helper package, blends learned dispatch scores against the explicit heuristic multiplier prior, preserves queue-policy traces on live decisions, and the main RL/shadow training entrypoints can pass that helper into the actual replay-selection loop."
+    },
+    {
+      "id": "sampler_base_weight_strategy_policy",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - DataPackRLSampler now loads a real bounded sampler-policy helper package, blends learned strategy selection, per-episode base weights, and frontier/econ threshold/focus parameters against explicit heuristic priors, preserves sampler traces in sampling metadata, and the main shadow/online training entrypoints persist sampler-policy receipts into runtime outputs."
     }
   ],
   "backlog": [
     {
-      "id": "sampler_base_weight_strategy_policy",
-      "priority": "P1",
+      "id": "sampler_policy_receipt_density_for_promotion",
+      "priority": "P2",
       "blocked_by": "queue outcome receipts and replay counterfactual labels",
-      "notes": "Queue-dispatch reweighting is now helper-backed, but the deeper sampler base-weight and curriculum-strategy core in episode_sampling.py still uses frontier/econ/curriculum heuristics underneath that layer and needs its own bounded learned policy contract."
+      "notes": "The sampler-policy helper is now wired into live sampling and training entrypoints, but it still trains mostly on heuristic-bootstrap receipts and needs denser queue outcome / counterfactual labels before it can promote beyond shadow_candidate."
     },
     {
       "id": "real_sam3d_grounded_data_refresh",

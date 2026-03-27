@@ -21,6 +21,15 @@ from src.orchestrator.queue_selection import (
     QueueDispatchMode,
     apply_live_queue_selection,
 )
+from src.rl.sampler_policy import (
+    SAMPLER_PLAN_PARAMETER_NAMES,
+    SAMPLER_POLICY_STRATEGIES,
+    build_default_sampling_plan,
+    build_sampler_episode_feature_map,
+    build_sampler_pool_feature_map,
+    normalize_strategy_distribution,
+)
+from src.rl.sampler_policy_runtime import resolve_sampler_policy_helper
 from src.valuation.datapack_schema import DataPackMeta
 from src.rl.episode_descriptor_validator import (
     normalize_episode_descriptor,
@@ -460,6 +469,8 @@ class DataPackRLSampler:
         queue_allow_slice_removal_on_integrity_failure: bool = False,
         queue_policy_helper_mode: str = "disabled",
         queue_policy_package_path: Optional[str] = None,
+        sampler_policy_helper_mode: str = "disabled",
+        sampler_policy_package_path: Optional[str] = None,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
@@ -500,6 +511,15 @@ class DataPackRLSampler:
         from src.policies.registry import build_all_policies
 
         self.policies = policies or build_all_policies()
+        self.sampler_policy_helper_mode = str(sampler_policy_helper_mode or "disabled")
+        self.sampler_policy_package_path = sampler_policy_package_path
+        self.sampler_policy_helper = resolve_sampler_policy_helper(
+            helper_mode=self.sampler_policy_helper_mode,
+            package_path=self.sampler_policy_package_path,
+        )
+        self.last_sampler_policy_artifact: Optional[Dict[str, Any]] = None
+        self._last_sampler_strategy_trace: Optional[Dict[str, Any]] = None
+        self._last_sampler_weight_traces: Dict[str, Dict[str, Any]] = {}
         provided_scores = recap_scores or {}
         path_scores = _load_recap_scores(recap_scores_path)
         self.recap_scores = {**path_scores, **provided_scores}
@@ -533,6 +553,7 @@ class DataPackRLSampler:
         if batch_size <= 0:
             return []
 
+        self._last_sampler_weight_traces = {}
         strategy_name = self._select_strategy(strategy)
         rng = random.Random(seed)
 
@@ -567,6 +588,11 @@ class DataPackRLSampler:
             ]
         else:
             rng.shuffle(selected)  # Deterministic shuffle for batch decorrelation
+            self.last_sampler_policy_artifact = self._build_sampler_policy_receipt(
+                selected=selected,
+                strategy_name=strategy_name,
+                queue_dispatch=dispatch,
+            )
         return [
             self._format_output(
                 ep,
@@ -608,6 +634,7 @@ class DataPackRLSampler:
     ) -> Dict[str, Any]:
         """Build a bounded queue-dispatch artifact over the episode pool."""
         effective_size = batch_size or len(self._eligible_pool())
+        self._last_sampler_weight_traces = {}
         strategy_name = self._select_strategy(strategy)
         rng = random.Random(seed)
         selected = self._sample_with_strategy(
@@ -651,14 +678,89 @@ class DataPackRLSampler:
         return dispatch
 
     def _select_strategy(self, strategy: Optional[str]) -> str:
-        if strategy:
-            return strategy.lower()
-        if self.advisory and self.advisory.sampler_strategy_overrides:
-            weights = self.advisory.sampler_strategy_overrides
-            # Deterministic choice: highest weight then lexicographic
-            ordered = sorted(weights.items(), key=lambda kv: (-kv[1], kv[0]))
-            return ordered[0][0]
-        return self.default_strategy.lower()
+        requested_strategy = strategy.lower() if strategy else None
+        heuristic_distribution = self._heuristic_strategy_distribution(requested_strategy)
+        ordered = sorted(heuristic_distribution.items(), key=lambda kv: (-kv[1], kv[0]))
+        heuristic_selected_strategy = ordered[0][0]
+        final_strategy = heuristic_selected_strategy
+        sampling_plan = build_default_sampling_plan()
+        strategy_source = "heuristic_prior"
+        promotion_stage = "heuristic_fallback"
+        helper_trace: Dict[str, Any] = {}
+
+        if self.sampler_policy_helper is not None:
+            helper_result = self.sampler_policy_helper.score_pool(
+                self._eligible_pool(),
+                heuristic_strategy_distribution=heuristic_distribution,
+            )
+            helper_distribution = normalize_strategy_distribution(
+                helper_result.get("strategy_distribution", {})
+            )
+            helper_plan = dict(helper_result.get("sampling_plan", {}) or {})
+            blend_policy = dict(self.sampler_policy_helper.inference_contract.get("helper_blend_policy", {}) or {})
+            stage = str(self.sampler_policy_helper.promotion_stage or "shadow_candidate")
+            strategy_weight = float(
+                blend_policy.get(
+                    "promoted_strategy_weight" if stage == "promoted" else "shadow_candidate_strategy_weight",
+                    0.35 if stage == "promoted" else 0.12,
+                )
+            )
+            plan_weight = float(
+                blend_policy.get(
+                    "promoted_plan_weight" if stage == "promoted" else "shadow_candidate_plan_weight",
+                    0.35 if stage == "promoted" else 0.12,
+                )
+            )
+            blended_distribution = {
+                candidate: float(
+                    max(0.0, (1.0 - strategy_weight) * heuristic_distribution.get(candidate, 0.0))
+                    + max(0.0, strategy_weight * helper_distribution.get(candidate, 0.0))
+                )
+                for candidate in SAMPLER_POLICY_STRATEGIES
+            }
+            blended_distribution = normalize_strategy_distribution(blended_distribution)
+            final_strategy = requested_strategy or sorted(
+                blended_distribution.items(), key=lambda kv: (-kv[1], kv[0])
+            )[0][0]
+            sampling_plan = {
+                name: max(
+                    0.0,
+                    min(
+                        1.0,
+                        (1.0 - plan_weight) * float(build_default_sampling_plan().get(name, 0.0))
+                        + plan_weight * float(helper_plan.get(name, build_default_sampling_plan().get(name, 0.0))),
+                    ),
+                )
+                for name in SAMPLER_PLAN_PARAMETER_NAMES
+            }
+            strategy_source = (
+                "heuristic_plus_learned_helper" if requested_strategy is None else "requested_plus_learned_plan"
+            )
+            promotion_stage = stage
+            helper_trace = {
+                "helper_weight": strategy_weight,
+                "plan_weight": plan_weight,
+                "helper_strategy_distribution": helper_distribution,
+                "blended_strategy_distribution": blended_distribution,
+                "helper_sampling_plan": helper_plan,
+            }
+        else:
+            blended_distribution = heuristic_distribution
+            if requested_strategy is not None:
+                final_strategy = requested_strategy
+
+        self._last_sampler_strategy_trace = {
+            "requested_strategy": requested_strategy,
+            "heuristic_selected_strategy": heuristic_selected_strategy,
+            "final_strategy": final_strategy,
+            "heuristic_strategy_distribution": heuristic_distribution,
+            "strategy_source": strategy_source,
+            "promotion_stage": promotion_stage,
+            "sampling_plan": sampling_plan,
+            "helper_trace": helper_trace,
+            "selection_locked": requested_strategy is not None,
+        }
+        return final_strategy
 
     def _weight_strategy_for_strategy(self, strategy_name: str) -> str:
         if strategy_name in {
@@ -788,6 +890,57 @@ class DataPackRLSampler:
         return adjusted
 
     def _compute_base_weights(self, episodes: List[Dict[str, Any]], strategy: str) -> List[float]:
+        heuristic_weights = self._compute_heuristic_base_weights(episodes, strategy)
+        if not episodes or self.sampler_policy_helper is None:
+            traces = dict(self._last_sampler_weight_traces)
+            traces.update({
+                _episode_key(episode): {
+                    "strategy": strategy,
+                    "heuristic_weight": float(weight),
+                    "final_weight": float(weight),
+                    "weight_source": "heuristic_prior",
+                    "promotion_stage": "heuristic_fallback",
+                }
+                for episode, weight in zip(episodes, heuristic_weights)
+            })
+            self._last_sampler_weight_traces = traces
+            return heuristic_weights
+        blend_policy = dict(self.sampler_policy_helper.inference_contract.get("helper_blend_policy", {}) or {})
+        stage = str(self.sampler_policy_helper.promotion_stage or "shadow_candidate")
+        helper_weight = float(
+            blend_policy.get(
+                "promoted_episode_weight" if stage == "promoted" else "shadow_candidate_episode_weight",
+                0.35 if stage == "promoted" else 0.12,
+            )
+        )
+        adjusted: List[float] = []
+        traces: Dict[str, Dict[str, Any]] = {}
+        for episode, heuristic_weight in zip(episodes, heuristic_weights):
+            helper_result = self.sampler_policy_helper.score_episode(episode, strategy)
+            helper_score = float(helper_result.get("weight_score", 0.5))
+            helper_multiplier = 0.7 + 0.6 * max(0.0, min(1.0, helper_score))
+            final_weight = max(
+                0.0,
+                float(heuristic_weight) * ((1.0 - helper_weight) + helper_weight * helper_multiplier),
+            )
+            adjusted.append(final_weight)
+            traces[_episode_key(episode)] = {
+                "strategy": strategy,
+                "heuristic_weight": float(heuristic_weight),
+                "helper_weight": helper_weight,
+                "helper_score": helper_score,
+                "helper_multiplier": helper_multiplier,
+                "final_weight": final_weight,
+                "weight_source": "heuristic_plus_learned_helper",
+                "promotion_stage": stage,
+                "feature_map": helper_result.get("feature_map", {}),
+            }
+        merged_traces = dict(self._last_sampler_weight_traces)
+        merged_traces.update(traces)
+        self._last_sampler_weight_traces = merged_traces
+        return adjusted
+
+    def _compute_heuristic_base_weights(self, episodes: List[Dict[str, Any]], strategy: str) -> List[float]:
         if not episodes:
             return []
         policy = getattr(self, "policies", None)
@@ -842,6 +995,26 @@ class DataPackRLSampler:
                 for w, ep in zip(weights, episodes)
             ]
         return clamped
+
+    def _heuristic_strategy_distribution(self, requested_strategy: Optional[str]) -> Dict[str, float]:
+        if requested_strategy:
+            return normalize_strategy_distribution({requested_strategy: 1.0})
+        if self.advisory and self.advisory.sampler_strategy_overrides:
+            return normalize_strategy_distribution(self.advisory.sampler_strategy_overrides)
+        default_strategy = self.default_strategy.lower()
+        soft_prior = {strategy: 0.25 for strategy in SAMPLER_POLICY_STRATEGIES}
+        soft_prior[default_strategy] = 0.4
+        return normalize_strategy_distribution(soft_prior)
+
+    def _resolve_sampling_plan(self, strategy_name: str) -> Dict[str, float]:
+        default_plan = build_default_sampling_plan()
+        trace = self._last_sampler_strategy_trace or {}
+        trace_strategy = str(trace.get("final_strategy", "") or "")
+        if trace_strategy == strategy_name:
+            plan = dict(trace.get("sampling_plan", {}) or {})
+            if plan:
+                return {name: float(plan.get(name, default_plan[name])) for name in SAMPLER_PLAN_PARAMETER_NAMES}
+        return default_plan
 
     def _eligible_pool(self) -> List[Dict[str, Any]]:
         if not self.use_unified_quality:
@@ -913,12 +1086,13 @@ class DataPackRLSampler:
     def _sample_frontier_prioritized(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
         """Bias sampling toward high ΔMPL/ΔJ datapacks while keeping diversity."""
         episodes = self._eligible_pool()
+        plan = self._resolve_sampling_plan("frontier_prioritized")
         scores = [ep["frontier_score"] for ep in episodes]
-        threshold = _percentile(scores, 0.65)
+        threshold = _percentile(scores, float(plan.get("frontier_threshold_quantile", 0.65)))
         urgent = [ep for ep in episodes if ep["frontier_score"] >= threshold]
         non_urgent = [ep for ep in episodes if ep["frontier_score"] < threshold]
 
-        urgent_count = min(max(int(batch_size * 0.7), 1), len(urgent))
+        urgent_count = min(max(int(batch_size * float(plan.get("frontier_focus_ratio", 0.7))), 1), len(urgent))
         weights_urgent = self._compute_weights(urgent, strategy="frontier_prioritized")
         selected = _weighted_sample_without_replacement(urgent, weights_urgent, urgent_count, rng)
 
@@ -932,12 +1106,13 @@ class DataPackRLSampler:
     def _sample_econ_urgency(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
         """Weight by economic urgency and novelty, with a diversity buffer."""
         episodes = self._eligible_pool()
+        plan = self._resolve_sampling_plan("econ_urgency")
         scores = [ep["econ_urgency_score"] for ep in episodes]
-        threshold = _percentile(scores, 0.6)
+        threshold = _percentile(scores, float(plan.get("econ_threshold_quantile", 0.6)))
         urgent = [ep for ep in episodes if ep["econ_urgency_score"] >= threshold]
         baseline = [ep for ep in episodes if ep["econ_urgency_score"] < threshold]
 
-        urgent_count = min(max(int(batch_size * 0.65), 1), len(urgent))
+        urgent_count = min(max(int(batch_size * float(plan.get("econ_focus_ratio", 0.65))), 1), len(urgent))
         critical = [ep for ep in urgent if (ep["enrichment"].get("supervision_hints", {}) or {}).get("priority_level", "").lower() == "critical"]
         critical_sorted = sorted(critical, key=lambda ep: ep["econ_urgency_score"], reverse=True)
         critical_selection = critical_sorted[: min(len(critical_sorted), urgent_count)]
@@ -1020,6 +1195,13 @@ class DataPackRLSampler:
             "novelty_score": episode["novelty_score"],
             "expected_mpl_gain": episode["expected_mpl_gain"],
         }
+        weight_trace = self._last_sampler_weight_traces.get(_episode_key(episode), {})
+        if weight_trace:
+            descriptor["sampling_metadata"]["sampler_policy"] = copy.deepcopy(weight_trace)
+        if self._last_sampler_strategy_trace:
+            descriptor["sampling_metadata"]["sampler_strategy_trace"] = copy.deepcopy(
+                self._last_sampler_strategy_trace
+            )
         if queue_dispatch:
             descriptor["sampling_metadata"]["queue_dispatch"] = copy.deepcopy(queue_dispatch)
         if self.use_condition_vector:
@@ -1110,7 +1292,117 @@ class DataPackRLSampler:
             for row in dispatch.get("entries", [])
         }
         self.last_queue_dispatch_artifact = dispatch
+        self.last_sampler_policy_artifact = self._build_sampler_policy_receipt(
+            selected=selected,
+            strategy_name=strategy_name,
+            queue_dispatch=dispatch,
+        )
+        dispatch["sampler_policy_receipt"] = copy.deepcopy(self.last_sampler_policy_artifact)
         return dispatch
+
+    def _build_sampler_policy_receipt(
+        self,
+        *,
+        selected: List[Dict[str, Any]],
+        strategy_name: str,
+        queue_dispatch: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        heuristic_distribution = self._heuristic_strategy_distribution(
+            str((self._last_sampler_strategy_trace or {}).get("requested_strategy") or "") or None
+        )
+        pool_feature_map = build_sampler_pool_feature_map(
+            selected,
+            heuristic_strategy_distribution=heuristic_distribution,
+        )
+        strategy_scores: Dict[str, float] = {}
+        normalized_targets: Dict[str, Dict[str, float]] = {}
+        for candidate in SAMPLER_POLICY_STRATEGIES:
+            weights = self._compute_heuristic_base_weights(selected, candidate)
+            scale = max(max(weights) if weights else 0.0, 1e-6)
+            normalized = {
+                _episode_key(episode): max(0.0, min(1.0, float(weight / scale)))
+                for episode, weight in zip(selected, weights)
+            }
+            normalized_targets[candidate] = normalized
+            if weights:
+                top_k = max(1, len(weights) // 4)
+                top_mean = sum(sorted(weights, reverse=True)[:top_k]) / float(top_k)
+                strategy_scores[candidate] = 0.6 * (sum(weights) / float(len(weights))) + 0.4 * top_mean
+            else:
+                strategy_scores[candidate] = 0.0
+        total_score = sum(max(0.0, value) for value in strategy_scores.values())
+        strategy_targets = {
+            candidate: (
+                0.5 * heuristic_distribution.get(candidate, 0.0)
+                + 0.5 * (max(0.0, strategy_scores.get(candidate, 0.0)) / total_score if total_score > 0.0 else 0.0)
+            )
+            for candidate in SAMPLER_POLICY_STRATEGIES
+        }
+        strategy_targets = normalize_strategy_distribution(strategy_targets)
+        frontier_scores = [float(episode.get("frontier_score", 0.0)) for episode in selected]
+        econ_scores = [float(episode.get("econ_urgency_score", 0.0)) for episode in selected]
+        frontier_peak = max(frontier_scores) if frontier_scores else 0.0
+        frontier_mean = sum(frontier_scores) / float(max(len(frontier_scores), 1))
+        econ_peak = max(econ_scores) if econ_scores else 0.0
+        econ_mean = sum(econ_scores) / float(max(len(econ_scores), 1))
+        frontier_concentration = max(0.0, min(1.0, (frontier_peak - frontier_mean) / max(frontier_peak, 1.0)))
+        econ_concentration = max(0.0, min(1.0, (econ_peak - econ_mean) / max(econ_peak, 1.0)))
+        sampling_plan_targets = {
+            "frontier_threshold_quantile": max(0.45, min(0.75, 0.70 - 0.20 * frontier_concentration)),
+            "frontier_focus_ratio": max(0.45, min(0.85, 0.55 + 0.25 * frontier_concentration)),
+            "econ_threshold_quantile": max(0.40, min(0.75, 0.67 - 0.20 * econ_concentration)),
+            "econ_focus_ratio": max(0.45, min(0.85, 0.52 + 0.25 * econ_concentration)),
+        }
+        selected_ids = {_episode_key(episode) for episode in selected}
+        dispatch_map = {
+            str(row.get("episode_id", "")): dict(row)
+            for row in list((queue_dispatch or {}).get("entries", []) or [])
+            if isinstance(row, dict)
+        }
+        target_source = "heuristic_bootstrap"
+        episode_entries: List[Dict[str, Any]] = []
+        for episode in selected:
+            episode_id = _episode_key(episode)
+            dispatch_decision = dispatch_map.get(episode_id, {})
+            has_receipt_feedback = bool(
+                dict(dispatch_decision.get("metadata", {}) or {})
+                .get("evidence", {})
+                .get("receipt_feedback")
+            )
+            if has_receipt_feedback:
+                target_source = "receipt_feedback"
+            episode_entries.append(
+                {
+                    "episode_id": episode_id,
+                    "feature_map": build_sampler_episode_feature_map(episode),
+                    "strategy_weight_targets": {
+                        candidate: float(normalized_targets.get(candidate, {}).get(episode_id, 0.0))
+                        for candidate in SAMPLER_POLICY_STRATEGIES
+                    },
+                    "selected_in_batch": episode_id in selected_ids and not bool(dispatch_decision.get("dropped", False)),
+                    "target_source": "receipt_feedback" if has_receipt_feedback else "heuristic_bootstrap",
+                    "metadata": {
+                        "has_receipt_feedback": has_receipt_feedback,
+                        "queue_dispatch_decision": dispatch_decision,
+                    },
+                }
+            )
+        receipt = {
+            "schema_version": "sampler_policy_receipt_v1",
+            "receipt_id": f"sampler_policy_{strategy_name}_{len(selected)}",
+            "target_source": target_source,
+            "heuristic_selected_strategy": str(
+                (self._last_sampler_strategy_trace or {}).get("heuristic_selected_strategy", strategy_name)
+            ),
+            "final_strategy": str((self._last_sampler_strategy_trace or {}).get("final_strategy", strategy_name)),
+            "pool_feature_map": pool_feature_map,
+            "strategy_targets": strategy_targets,
+            "sampling_plan_targets": sampling_plan_targets,
+            "runtime_trace": copy.deepcopy(self._last_sampler_strategy_trace or {}),
+            "episode_entries": episode_entries,
+            "queue_dispatch_summary": copy.deepcopy(dict((queue_dispatch or {}).get("summary", {}) or {})),
+        }
+        return receipt
 
 
 def _normalize_enrichment(enrichment: Optional[Dict[str, Any]]) -> Dict[str, Any]:
