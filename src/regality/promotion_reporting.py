@@ -1,6 +1,7 @@
 """Recurring promotion-evidence reporting for regal and advisor authority."""
 from __future__ import annotations
 
+from collections import Counter
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -127,6 +128,9 @@ def build_promotion_evidence_report(
         episode.episode_id: dict(episode.metadata.get("execution_preconditions", {}) or {})
         for episode in dataset.episodes
     }
+    control_plane_context_summary = _control_plane_context_summary(dataset)
+    teacher_provider_truth_summary = _provider_truth_summary(dataset, "teacher_provider_truth")
+    scene_tracks_provider_truth_summary = _provider_truth_summary(dataset, "scene_tracks_provider_truth")
 
     node_reports: list[PromotionEvidenceRecord] = []
     for node_id in node_ids:
@@ -150,6 +154,9 @@ def build_promotion_evidence_report(
         counterfactual_count = 0
         value_target_count = 0
         executable_work_order_count = 0
+        control_plane_context_count = 0
+        teacher_provider_truth_count = 0
+        scene_tracks_provider_truth_count = 0
 
         for episode in dataset.episodes:
             deployment_label = deployment_by_episode.get(episode.episode_id)
@@ -159,6 +166,12 @@ def build_promotion_evidence_report(
             trace_preconditions = trace_preconditions_by_episode.get(episode.episode_id, {})
             if bool(trace_preconditions.get("ready", False)):
                 trace_ready_count += 1
+            if episode.metadata.get("control_plane_context"):
+                control_plane_context_count += 1
+            if episode.metadata.get("teacher_provider_truth"):
+                teacher_provider_truth_count += 1
+            if episode.metadata.get("scene_tracks_provider_truth"):
+                scene_tracks_provider_truth_count += 1
             episode_work_orders = work_orders_by_episode.get(episode.episode_id, [])
             executable_work_order_count += sum(1 for row in episode_work_orders if row.get("ready"))
             if _episode_has_ref(episode, "counterfactual_eval_ref", "counterfactual_eval_path"):
@@ -251,6 +264,9 @@ def build_promotion_evidence_report(
                     ),
                     "trace_ready_episode_count": trace_ready_count,
                     "trace_ready_rate": round(trace_ready_count / float(max(1, len(predictions))), 6),
+                    "control_plane_context_episode_count": control_plane_context_count,
+                    "teacher_provider_truth_episode_count": teacher_provider_truth_count,
+                    "scene_tracks_provider_truth_episode_count": scene_tracks_provider_truth_count,
                     "counterfactual_episode_count": counterfactual_count,
                     "value_target_episode_count": value_target_count,
                     "source_domains": sorted({episode.source_domain for episode in dataset.episodes}),
@@ -324,6 +340,15 @@ def build_promotion_evidence_report(
             if bool(trace_preconditions_by_episode.get(episode.episode_id, {}).get("ready", False))
         ),
         "work_order_count": sum(len(rows) for rows in work_orders_by_episode.values()),
+        "work_order_ready_count": sum(
+            1
+            for rows in work_orders_by_episode.values()
+            for row in rows
+            if row.get("ready")
+        ),
+        "control_plane_context_summary": control_plane_context_summary,
+        "teacher_provider_truth_summary": teacher_provider_truth_summary,
+        "scene_tracks_provider_truth_summary": scene_tracks_provider_truth_summary,
         "inferential_learnability_summary": summarize_inferential_learnability_contracts(
             [
                 dict(episode.metadata.get("inferential_learnability_contract", {}) or {})
@@ -465,6 +490,9 @@ def _node_signals(
 
 
 def _promotion_markdown(report: PromotionEvidenceReport) -> str:
+    control_plane_context = dict(report.summary.get("control_plane_context_summary", {}) or {})
+    teacher_provider = dict(report.summary.get("teacher_provider_truth_summary", {}) or {})
+    scene_tracks_provider = dict(report.summary.get("scene_tracks_provider_truth_summary", {}) or {})
     lines = [
         "# Regal Promotion Evidence",
         "",
@@ -474,6 +502,9 @@ def _promotion_markdown(report: PromotionEvidenceReport) -> str:
         f"- Recommend promote: {report.summary.get('recommend_promote', 0)}",
         f"- Recommend hold: {report.summary.get('recommend_hold', 0)}",
         f"- Recommend demote: {report.summary.get('recommend_demote', 0)}",
+        f"- Control-plane context coverage: {control_plane_context.get('contract_count', 0)}",
+        f"- Teacher provider-truth coverage: {teacher_provider.get('contract_count', 0)}",
+        f"- SceneTracks provider-truth coverage: {scene_tracks_provider.get('contract_count', 0)}",
         "",
         "## Nodes",
     ]
@@ -494,6 +525,76 @@ def _promotion_markdown(report: PromotionEvidenceReport) -> str:
             ]
         )
     return "\n".join(lines) + "\n"
+
+
+def _provider_truth_summary(dataset: ReplayDatasetBundle, key: str) -> Dict[str, Any]:
+    contracts = [
+        dict(episode.metadata.get(key, {}) or {})
+        for episode in dataset.episodes
+        if episode.metadata.get(key)
+    ]
+    backend_counts = Counter(
+        str(contract.get("backend_selected", "") or "")
+        for contract in contracts
+        if str(contract.get("backend_selected", "") or "").strip()
+    )
+    availability_counts = Counter(
+        str(contract.get("availability_class", "") or "")
+        for contract in contracts
+        if str(contract.get("availability_class", "") or "").strip()
+    )
+    grounding_counts = Counter(
+        str(contract.get("grounding_class", "") or "")
+        for contract in contracts
+        if str(contract.get("grounding_class", "") or "").strip()
+    )
+    calibration_counts = Counter(
+        str(contract.get("calibration_class", "") or "")
+        for contract in contracts
+        if str(contract.get("calibration_class", "") or "").strip()
+    )
+    return {
+        "contract_count": len(contracts),
+        "backend_counts": dict(sorted(backend_counts.items())),
+        "availability_class_counts": dict(sorted(availability_counts.items())),
+        "grounding_class_counts": dict(sorted(grounding_counts.items())),
+        "calibration_class_counts": dict(sorted(calibration_counts.items())),
+    }
+
+
+def _control_plane_context_summary(dataset: ReplayDatasetBundle) -> Dict[str, Any]:
+    contexts = [
+        dict(episode.metadata.get("control_plane_context", {}) or {})
+        for episode in dataset.episodes
+        if episode.metadata.get("control_plane_context")
+    ]
+    receipt_kind_counts = Counter(
+        str(context.get("receipt_kind", "") or "")
+        for context in contexts
+        if str(context.get("receipt_kind", "") or "").strip()
+    )
+    authority_counts = Counter(
+        str(context.get("authority_class", "") or "")
+        for context in contexts
+        if str(context.get("authority_class", "") or "").strip()
+    )
+    execution_mode_counts = Counter(
+        str(context.get("execution_mode", "") or "")
+        for context in contexts
+        if str(context.get("execution_mode", "") or "").strip()
+    )
+    policy_source_counts = Counter(
+        str(context.get("policy_source", "") or "")
+        for context in contexts
+        if str(context.get("policy_source", "") or "").strip()
+    )
+    return {
+        "contract_count": len(contexts),
+        "receipt_kind_counts": dict(sorted(receipt_kind_counts.items())),
+        "authority_class_counts": dict(sorted(authority_counts.items())),
+        "execution_mode_counts": dict(sorted(execution_mode_counts.items())),
+        "policy_source_counts": dict(sorted(policy_source_counts.items())),
+    }
 
 
 __all__ = [
