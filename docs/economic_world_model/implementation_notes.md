@@ -2,6 +2,15 @@
 
 ## 2026-03-27
 
+- Pushed the Phase-1 adaptation/calibration seam past mostly plan-time scoring:
+  - `src/world_model/sim_synth_physics/runtime_evidence.py` now summarizes backend shadow execution, render materialization, and branch-outcome evidence
+  - `src/world_model/sim_synth_physics/calibration.py` now uses that evidence when computing readiness/quality and stores the evidence summary directly in receipt metadata
+  - `src/world_model/sim_synth_physics/runtime.py` now rebuilds adaptation/calibration receipts after materialization and outcome compilation so the emitted receipts reflect loop evidence rather than only pre-execution intent
+- This is the right direction for Phase 1:
+  - keep typed adaptation/calibration receipts
+  - make them react to real WM loop evidence as soon as that evidence exists
+  - keep the honest remaining gaps focused on concrete runtimes/assets/GPU/data, not missing feedback plumbing
+
 - Pushed Phase 1 further into real backend/provider materialization instead of stopping at typed planning state:
   - `src/world_model/sim_synth_physics/shadow_execution.py` now emits Holosoma shadow work-order receipts/artifacts alongside Isaac shadow execution receipts
   - `src/world_model/sim_synth_physics/render_materialization.py` now materializes LSD scene-config artifacts and NAG/GGDS work orders under the WM runtime

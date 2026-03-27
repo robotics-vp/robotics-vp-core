@@ -152,7 +152,7 @@ def _materialize_ggds_scene(
 def materialize_render_provider_receipts(
     world_state: SimSynthPhysicsWorldState,
     execution_contract: PhysicsExecutionContract,
-    adaptation_receipt: PhysicsAdaptationReceipt,
+    adaptation_receipt: PhysicsAdaptationReceipt | None,
     *,
     output_dir: str | Path | None = None,
 ) -> list[RenderProviderReceipt]:
@@ -213,13 +213,19 @@ def materialize_render_provider_receipts(
                 metadata={
                     "world_state_id": world_state.state_id,
                     "physics_execution_contract_id": execution_contract.contract_id,
-                    "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+                    "physics_adaptation_receipt_id": (
+                        "" if adaptation_receipt is None else adaptation_receipt.receipt_id
+                    ),
                     "generation_mode": plan.generation_mode,
                     "fallback_provider": provider.fallback_provider,
                     "fallback_reason": provider.fallback_reason,
                     "ggds_mode": provider.ggds_mode,
                     "provider_config": mapping(provider.provider_config),
-                    "target_hardware_class": adaptation_receipt.target_hardware_class,
+                    "target_hardware_class": (
+                        execution_contract.target_hardware_class
+                        if adaptation_receipt is None
+                        else adaptation_receipt.target_hardware_class
+                    ),
                     "provider_metadata": mapping(provider.metadata),
                     "provider_truth_class": str(provider_metadata.get("provider_truth_class", "")),
                     "unsatisfied_preconditions": list(

@@ -13,6 +13,8 @@ from .state import SimSynthPhysicsWorldState
 def build_physics_adaptation_receipt(
     world_state: SimSynthPhysicsWorldState,
     execution_contract: PhysicsExecutionContract,
+    *,
+    runtime_evidence: Dict[str, Any] | None = None,
 ) -> PhysicsAdaptationReceipt:
     adaptation_policy = world_state.physics_adaptation_policy
     benchmark_signals = mapping(world_state.physics_context.metadata.get("benchmark_signals", {}))
@@ -20,6 +22,7 @@ def build_physics_adaptation_receipt(
         benchmark_signals.get("ready", False)
         or benchmark_signals.get("benchmark_eligible", False)
     )
+    runtime_evidence = mapping(runtime_evidence)
     target_hardware_class = (
         ""
         if adaptation_policy is None
@@ -34,6 +37,16 @@ def build_physics_adaptation_receipt(
         readiness += 0.14
     if str(execution_contract.fidelity_tier) == "high_fidelity":
         readiness += 0.08
+    if runtime_evidence.get("shadow_execution_status"):
+        readiness += 0.08
+    readiness += 0.04 * min(
+        3.0,
+        safe_float(runtime_evidence.get("materialized_render_provider_count", 0.0), 0.0),
+    )
+    readiness -= 0.02 * min(
+        4.0,
+        safe_float(runtime_evidence.get("render_precondition_gap_count", 0.0), 0.0),
+    )
     if target_hardware_class == "unitree_g1_r1_class" and execution_contract.resolved_backend not in {
         "isaac",
         "holosoma",
@@ -57,6 +70,7 @@ def build_physics_adaptation_receipt(
                 "route_status": execution_contract.route_status,
                 "fallback_reason": execution_contract.fallback_reason,
                 "benchmark_gate_ready": benchmark_gate_ready,
+                "runtime_evidence": runtime_evidence,
             },
         )
     payload = {
@@ -86,6 +100,7 @@ def build_physics_adaptation_receipt(
             "robot_asset_profile": adaptation_policy.robot_asset_profile,
             "latency_budget_ms": safe_float(adaptation_policy.metadata.get("latency_budget_ms", 0.0), 0.0),
             "contact_risk_score": clip01(adaptation_policy.metadata.get("contact_risk_score", 0.0)),
+            "runtime_evidence": runtime_evidence,
         },
     )
 
@@ -95,6 +110,7 @@ def build_physics_calibration_receipt(
     execution_contract: PhysicsExecutionContract,
     *,
     adaptation_receipt: PhysicsAdaptationReceipt | None = None,
+    runtime_evidence: Dict[str, Any] | None = None,
 ) -> PhysicsCalibrationReceipt:
     benchmark_signals = mapping(world_state.physics_context.metadata.get("benchmark_signals", {}))
     benchmark_gate_ready = bool(
@@ -102,6 +118,7 @@ def build_physics_calibration_receipt(
         or benchmark_signals.get("benchmark_eligible", False)
     )
     helper_status = mapping(world_state.physics_context.metadata.get("backend_helper_status", {}))
+    runtime_evidence = mapping(runtime_evidence)
     base_quality = 0.2
     if execution_contract.route_status == "ready":
         base_quality = 0.62
@@ -120,6 +137,20 @@ def build_physics_calibration_receipt(
             and execution_contract.resolved_backend not in {"isaac", "holosoma"}
         ):
             base_quality -= 0.08
+    if runtime_evidence.get("shadow_execution_status"):
+        base_quality += 0.06
+    base_quality += 0.03 * min(
+        3.0,
+        safe_float(runtime_evidence.get("materialized_render_provider_count", 0.0), 0.0),
+    )
+    base_quality += 0.01 * min(
+        6.0,
+        safe_float(runtime_evidence.get("render_artifact_count", 0.0), 0.0),
+    )
+    base_quality -= 0.02 * min(
+        4.0,
+        safe_float(runtime_evidence.get("render_precondition_gap_count", 0.0), 0.0),
+    )
     quality_score = clip01(base_quality)
     payload: Dict[str, Any] = {
         "state_id": world_state.state_id,
@@ -157,6 +188,7 @@ def build_physics_calibration_receipt(
             "adaptation_readiness_score": (
                 0.0 if adaptation_receipt is None else clip01(adaptation_receipt.readiness_score)
             ),
+            "runtime_evidence": runtime_evidence,
         },
     )
 

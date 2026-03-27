@@ -2,6 +2,12 @@
 
 ## 2026-03-27
 
+- Changed: pushed Phase-1 physics adaptation/calibration receipts closer to real runtime evidence:
+  - `src/world_model/sim_synth_physics/runtime_evidence.py` now summarizes backend shadow execution, render materialization, and branch-outcome evidence
+  - `src/world_model/sim_synth_physics/calibration.py` now folds that evidence into adaptation/calibration readiness metadata and scores instead of relying only on plan-time route/fidelity heuristics
+  - `src/world_model/sim_synth_physics/runtime.py` now rebuilds those receipts after backend/render/outcome materialization so the emitted loop artifacts reflect actual WM loop evidence
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
 - Changed: pushed the Phase-1 sim/synth backend/materialization loop further past compile-time-only ownership:
   - `src/world_model/sim_synth_physics/shadow_execution.py` now materializes explicit Holosoma shadow work orders in addition to Isaac shadow execution, so Holosoma-target planning windows emit WM-owned backend receipts and artifacts rather than stopping at binding metadata
   - `src/world_model/sim_synth_physics/render_materialization.py` now writes branch/provider artifacts for LSD scene configs and NAG/GGDS work orders, and `src/world_model/sim_synth_physics/runtime.py` now threads those artifacts into render-provider receipts, outcome receipts, and the training-feedback manifest

@@ -352,6 +352,16 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
         "shadow_executed_with_asset_gaps",
     }
     assert result.physics_calibration_receipt.metadata["explicit_gap_kind"] == "missing_backend_adapter"
+    assert (
+        result.physics_adaptation_receipt.metadata["runtime_evidence"]["shadow_execution_status"]
+        in {"shadow_executed", "shadow_executed_with_asset_gaps"}
+    )
+    assert (
+        result.physics_calibration_receipt.metadata["runtime_evidence"][
+            "materialized_render_provider_count"
+        ]
+        >= 1
+    )
     assert result.render_provider_receipts
     assert all(receipt.artifact_refs for receipt in result.render_provider_receipts)
     assert all(receipt.materialization_status != "planned_only" for receipt in result.render_provider_receipts)
@@ -403,6 +413,13 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
         "shadow_work_order_materialized",
         "shadow_work_order_materialized_with_preconditions",
     }
+    assert (
+        result.physics_adaptation_receipt.metadata["runtime_evidence"]["shadow_execution_status"]
+        in {
+            "shadow_work_order_materialized",
+            "shadow_work_order_materialized_with_preconditions",
+        }
+    )
     assert result.backend_shadow_execution_receipt.artifact_refs
     assert any("holosoma_shadow_work_order.json" in ref for ref in result.backend_shadow_execution_receipt.artifact_refs)
     assert (

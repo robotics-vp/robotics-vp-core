@@ -1007,7 +1007,7 @@ Phase 1 should count as landed only when:
 - diffusion conditioning is derived from WM state instead of flat prompt assembly alone
 - synthetic branch plans are typed objects, not script-local metadata
 - backend/fidelity selection is emitted as a first-class receipt
-- domain-randomization / system-identification policy is emitted as a typed state and receipt, not left implicit in backend metadata
+- domain-randomization / system-identification policy is emitted as a typed state and receipt, not left implicit in backend metadata, and those receipts react to backend/materialization evidence once the WM loop has run
 - concrete backend execution binding is emitted as typed state and receipt, including honest Isaac/Unitree asset-readiness truth
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
 - replay/training consume WM receipts without bespoke joins

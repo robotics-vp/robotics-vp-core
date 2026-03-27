@@ -26,6 +26,7 @@ from .receipts import (
     RenderProviderReceipt,
     SimulationOutcomeReceipt,
 )
+from .runtime_evidence import summarize_runtime_evidence
 from .shadow_execution import materialize_backend_shadow_execution
 from .state import SimSynthPhysicsWorldState
 
@@ -329,7 +330,7 @@ def _build_training_feedback_manifest(
 def _build_backend_execution_binding_receipt(
     world_state: SimSynthPhysicsWorldState,
     execution_contract: PhysicsExecutionContract,
-    adaptation_receipt: PhysicsAdaptationReceipt,
+    adaptation_receipt: PhysicsAdaptationReceipt | None = None,
 ) -> BackendExecutionBindingReceipt:
     binding = world_state.backend_execution_binding
     if binding is None:
@@ -343,7 +344,9 @@ def _build_backend_execution_binding_receipt(
             metadata={
                 "world_state_id": world_state.state_id,
                 "physics_execution_contract_id": execution_contract.contract_id,
-                "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+                "physics_adaptation_receipt_id": (
+                    "" if adaptation_receipt is None else adaptation_receipt.receipt_id
+                ),
             },
         )
     return BackendExecutionBindingReceipt(
@@ -356,7 +359,9 @@ def _build_backend_execution_binding_receipt(
         metadata={
             "world_state_id": world_state.state_id,
             "physics_execution_contract_id": execution_contract.contract_id,
-            "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+            "physics_adaptation_receipt_id": (
+                "" if adaptation_receipt is None else adaptation_receipt.receipt_id
+            ),
             "executor_kind": binding.executor_kind,
             "observation_adapter_entrypoint": binding.observation_adapter_entrypoint,
             "target_runtime_stack": list(binding.target_runtime_stack),
@@ -483,9 +488,42 @@ class SimSynthPhysicsRuntime:
             world_state,
             fallback_backend=self.config.fallback_backend,
         )
+        backend_binding_receipt = _build_backend_execution_binding_receipt(
+            world_state,
+            execution_contract,
+        )
+        backend_shadow_execution_receipt = materialize_backend_shadow_execution(
+            world_state,
+            execution_contract,
+            backend_binding_receipt,
+            output_dir=output_dir,
+        )
+        training_feedback_path = artifact_paths.get("training_feedback_manifest")
+        runtime_evidence = summarize_runtime_evidence(
+            backend_shadow_execution_receipt=backend_shadow_execution_receipt,
+            render_provider_receipts=[],
+            outcome_receipts=[],
+        )
         adaptation_receipt = build_physics_adaptation_receipt(
             world_state,
             execution_contract,
+            runtime_evidence=runtime_evidence,
+        )
+        render_provider_receipts = materialize_render_provider_receipts(
+            world_state,
+            execution_contract,
+            adaptation_receipt,
+            output_dir=output_dir,
+        )
+        runtime_evidence = summarize_runtime_evidence(
+            backend_shadow_execution_receipt=backend_shadow_execution_receipt,
+            render_provider_receipts=render_provider_receipts,
+            outcome_receipts=[],
+        )
+        adaptation_receipt = build_physics_adaptation_receipt(
+            world_state,
+            execution_contract,
+            runtime_evidence=runtime_evidence,
         )
         backend_binding_receipt = _build_backend_execution_binding_receipt(
             world_state,
@@ -496,19 +534,7 @@ class SimSynthPhysicsRuntime:
             world_state,
             execution_contract,
             adaptation_receipt=adaptation_receipt,
-        )
-        backend_shadow_execution_receipt = materialize_backend_shadow_execution(
-            world_state,
-            execution_contract,
-            backend_binding_receipt,
-            output_dir=output_dir,
-        )
-        training_feedback_path = artifact_paths.get("training_feedback_manifest")
-        render_provider_receipts = materialize_render_provider_receipts(
-            world_state,
-            execution_contract,
-            adaptation_receipt,
-            output_dir=output_dir,
+            runtime_evidence=runtime_evidence,
         )
         outcome_receipts = _build_outcome_receipts(
             world_state,
@@ -519,6 +545,27 @@ class SimSynthPhysicsRuntime:
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=render_provider_receipts,
             training_feedback_path=training_feedback_path,
+        )
+        runtime_evidence = summarize_runtime_evidence(
+            backend_shadow_execution_receipt=backend_shadow_execution_receipt,
+            render_provider_receipts=render_provider_receipts,
+            outcome_receipts=outcome_receipts,
+        )
+        adaptation_receipt = build_physics_adaptation_receipt(
+            world_state,
+            execution_contract,
+            runtime_evidence=runtime_evidence,
+        )
+        backend_binding_receipt = _build_backend_execution_binding_receipt(
+            world_state,
+            execution_contract,
+            adaptation_receipt,
+        )
+        calibration_receipt = build_physics_calibration_receipt(
+            world_state,
+            execution_contract,
+            adaptation_receipt=adaptation_receipt,
+            runtime_evidence=runtime_evidence,
         )
         training_feedback_manifest = _build_training_feedback_manifest(
             world_state,
