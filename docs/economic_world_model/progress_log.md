@@ -2,6 +2,14 @@
 
 ## 2026-03-27
 
+- Changed: refined `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` so the repo now says explicitly that multi-WM work must rerun the deterministic-prior / heuristic audit inside each WM boundary rather than assuming the earlier heuristic purge finished the job globally.
+- Changed: the docs now frame the earlier heuristic pass correctly:
+  - it was a high-value repo-wide sweep over the live stack
+  - it was not a substitute for per-WM review once new canonical WM boundaries are introduced
+  - each WM tranche now needs its own explicit disposition of deterministic owners vs fallback priors vs learned/runtime-package seams
+- Verification: `git diff --check` passed. This was a docs-only refinement.
+- Next recommended task: as each new WM tranche lands, add a short per-WM heuristic-review checklist and receipt of what was kept as fallback prior vs neuralized seam so the doctrine stays operational.
+
 - Changed: refined `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` so the ontology story is explicit and no longer easy to blur:
   - operational / module-level ontology is now named as the in-stack cybernetic digital-twin layer for entities, tasks, datapacks, events, provenance, governance hooks, and module/runtime state
   - WM-transport ontology is now named separately as the typed semantic/governance contract for adjacent-WM interoperability

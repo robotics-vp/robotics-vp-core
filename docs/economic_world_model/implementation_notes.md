@@ -2,6 +2,15 @@
 
 ## 2026-03-27
 
+- Clarified the relationship between the old heuristic purge and new multi-WM work:
+  - the earlier heuristic/advisory sweep should be treated as the first repo-wide high-impact pass
+  - it should not be treated as proof that every later WM module has already had its deterministic priors reviewed
+  - each WM boundary should explicitly rerun that audit for its own canonical state, runtime seams, replay/training exports, benchmark surfaces, and adapters
+- The architecture docs now say this directly so the rule is operational:
+  - a WM is not structurally "done" just because an earlier global purge happened
+  - the remaining heuristics inside that WM must be explicitly classified as fallback priors or lifted into learned/runtime-package seams
+  - the stopping condition should be data/GPU/assets/calibration/benchmark limits, not inherited confidence from the old sweep
+
 - Clarified the ontology architecture into two repo-native layers instead of one vague future "ontology" bucket:
   - operational / module-level ontology is the in-stack typed operational state substrate and digital-twin layer
   - WM-transport ontology is the later typed interoperability contract between adjacent WMs

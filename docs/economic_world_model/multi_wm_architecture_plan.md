@@ -61,6 +61,33 @@ This rule applies to:
 
 This matters especially for the downstream WMs. Perception, embodiment, and sim/synth/physics should not only emit state; they should also emit bounded inferential learnability classes about which scenes, branches, physics regimes, or control contexts are actually improving the stack under compute and governance constraints. The economic WM should eventually consume those typed inferential receipts directly rather than reconstructing learnability from scattered sidecars later.
 
+## Per-WM Heuristic Review Rule
+
+The earlier heuristic/advisory purge pass was an important repo-wide first sweep, but it should not be treated as globally final for multi-WM work.
+
+For each WM boundary, we should explicitly rerun the question:
+
+- which deterministic priors still materially shape this WM
+- which of them may remain explicit fallback priors
+- which of them must become learned/helper seams
+- which outputs should become canonical metadata, preconditions, work orders, or bounded authority
+
+Do not assume the earlier heuristic pass already finished that job for every future WM module just because it covered the highest-leverage live stack at the time.
+
+For each WM tranche, this review should be done against the WM's own:
+
+- canonical state contracts
+- runtime ownership boundaries
+- replay/training exports
+- benchmark and promotion surfaces
+- adapter and execution interfaces
+
+The expected outcome is:
+
+- heuristics may remain only as explicit priors/fallbacks with receipts
+- no WM should be declared structurally complete while it still contains unreviewed deterministic owners that could have been lifted into learned/runtime-package seams
+- the honest reason to stop should be data, GPU, asset, calibration, or benchmark limits, not the assumption that a prior global purge already covered the WM implicitly
+
 ## Complete Subsystem Rule
 
 Each WM should be built as a complete subsystem target, not as a partial architecture exercise.
