@@ -278,13 +278,18 @@
             "script": "train_pipeline_stage_policy.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - added the PipelineManager stage-policy trainer/runtime-package lane over pipeline-state receipts, bounded disabled|auto|required helper loading in PipelineManager, explicit stage-policy traces, and canonical RegalTrainingRunner dataset/precondition/package/runtime artifacts"
+        },
+        {
+            "script": "train_queue_dispatch_policy.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - added the queue-dispatch trainer/runtime-package lane over live queue-entry receipts, bounded disabled|auto|required helper loading in queue selection and RL sampler entrypoints, and canonical RegalTrainingRunner dataset/precondition/package/runtime artifacts"
         }
     ],
     "summary": {
-        "total": 38,
+        "total": 39,
         "P0": 0,
         "P1": 7,
         "P2": 6,
-        "migrated": 25
+        "migrated": 26
     }
 }

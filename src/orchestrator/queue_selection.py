@@ -7,6 +7,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
+from src.orchestrator.queue_dispatch_policy_runtime import (
+    resolve_queue_dispatch_policy_helper,
+)
 from src.utils.config_digest import sha256_json
 
 
@@ -60,6 +63,8 @@ class QueueDispatchConfig:
     max_downweight: float = 0.5
     allow_slice_removal_on_integrity_failure: bool = False
     severe_integrity_actions: tuple[str, ...] = ("deny_shadow", "suppress")
+    policy_helper_mode: str = "disabled"
+    policy_package_path: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -68,6 +73,8 @@ class QueueDispatchConfig:
             "max_downweight": float(self.max_downweight),
             "allow_slice_removal_on_integrity_failure": bool(self.allow_slice_removal_on_integrity_failure),
             "severe_integrity_actions": list(self.severe_integrity_actions),
+            "policy_helper_mode": str(self.policy_helper_mode),
+            "policy_package_path": self.policy_package_path,
         }
 
 
@@ -88,6 +95,8 @@ class QueueDispatchDecision:
     dropped: bool
     promotion_stage: str
     influence_source: str
+    dispatch_policy_source: str = "heuristic_fallback"
+    dispatch_promotion_stage: str = "heuristic_fallback"
     reasons: list[str] = field(default_factory=list)
     evidence: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -107,6 +116,8 @@ class QueueDispatchDecision:
             "dropped": bool(self.dropped),
             "promotion_stage": self.promotion_stage,
             "influence_source": self.influence_source,
+            "dispatch_policy_source": self.dispatch_policy_source,
+            "dispatch_promotion_stage": self.dispatch_promotion_stage,
             "reasons": list(self.reasons),
             "evidence": dict(self.evidence),
             "metadata": dict(self.metadata),
@@ -224,6 +235,10 @@ def apply_live_queue_selection(
         }
 
     queue_payload = _load_queue_payload(live_queue_selection)
+    queue_helper = resolve_queue_dispatch_policy_helper(
+        helper_mode=str(dispatch_config.policy_helper_mode or "disabled"),
+        package_path=dispatch_config.policy_package_path,
+    )
     queue_entries = {
         str(entry.get("episode_id", "")): dict(entry)
         for entry in list(queue_payload.get("entries", []) or [])
@@ -243,15 +258,47 @@ def apply_live_queue_selection(
         dropped = False
         promotion_stage = str(metadata.get("promotion_stage", "compare_only") or "compare_only")
         influence_source = str(metadata.get("influence_source", "heuristic") or "heuristic")
+        dispatch_policy_source = "heuristic_fallback"
+        dispatch_promotion_stage = "heuristic_fallback"
 
         if mode in {QueueDispatchMode.BOUNDED_REWEIGHT, QueueDispatchMode.PROMOTED_GATE_ELIGIBLE}:
-            multiplier = _bounded_multiplier(
+            heuristic_multiplier = _bounded_multiplier(
                 priority_score=priority_score,
                 replay_action=replay_action,
                 tags=tags,
                 max_upweight=dispatch_config.max_upweight,
                 max_downweight=dispatch_config.max_downweight,
             )
+            multiplier = heuristic_multiplier
+            if queue_helper is not None:
+                helper_scoring = queue_helper.score_entry(queue_entry)
+                helper_blend = dict(queue_helper.inference_contract.get("helper_blend_policy", {}) or {})
+                helper_weight = float(
+                    helper_blend.get(
+                        "promoted_helper_weight" if queue_helper.benchmark_gate.get("ready", False) else "shadow_candidate_helper_weight",
+                        0.35 if queue_helper.benchmark_gate.get("ready", False) else 0.12,
+                    )
+                )
+                learned_multiplier = _score_to_multiplier(
+                    helper_scoring["dispatch_score"],
+                    max_upweight=dispatch_config.max_upweight,
+                    max_downweight=dispatch_config.max_downweight,
+                )
+                multiplier = ((1.0 - helper_weight) * multiplier) + (helper_weight * learned_multiplier)
+                dispatch_policy_source = "heuristic_plus_learned_helper"
+                dispatch_promotion_stage = (
+                    "promoted" if queue_helper.benchmark_gate.get("ready", False) else queue_helper.promotion_stage
+                )
+                evidence["queue_policy_trace"] = {
+                    "package_id": queue_helper.package.package_id,
+                    "helper_weight": helper_weight,
+                    "benchmark_gate_ready": bool(queue_helper.benchmark_gate.get("ready", False)),
+                    "heuristic_multiplier": float(heuristic_multiplier),
+                    "learned_dispatch_score": float(helper_scoring["dispatch_score"]),
+                    "learned_multiplier": float(learned_multiplier),
+                    "final_multiplier": float(multiplier),
+                }
+                reasons.append("queue_policy_helper_applied")
             adjusted_weight = base_weight * multiplier
             if abs(multiplier - 1.0) > 1e-6:
                 reasons.append("bounded_reweight_applied")
@@ -292,12 +339,16 @@ def apply_live_queue_selection(
                 dropped=dropped,
                 promotion_stage=promotion_stage,
                 influence_source=influence_source,
+                dispatch_policy_source=dispatch_policy_source,
+                dispatch_promotion_stage=dispatch_promotion_stage,
                 reasons=reasons,
                 evidence=evidence,
                 metadata={
                     **metadata,
                     "mode": mode.value,
                     "base_weight_source": "explicit" if base_weights else "descriptor",
+                    "dispatch_policy_source": dispatch_policy_source,
+                    "dispatch_promotion_stage": dispatch_promotion_stage,
                 },
             )
         )
@@ -323,6 +374,8 @@ def apply_live_queue_selection(
                 dropped=decision.dropped,
                 promotion_stage=decision.promotion_stage,
                 influence_source=decision.influence_source,
+                dispatch_policy_source=decision.dispatch_policy_source,
+                dispatch_promotion_stage=decision.dispatch_promotion_stage,
                 reasons=list(decision.reasons),
                 evidence=dict(decision.evidence),
                 metadata=dict(decision.metadata),
@@ -360,6 +413,16 @@ def apply_live_queue_selection(
         },
     }
     return payload
+
+
+def _score_to_multiplier(
+    dispatch_score: float,
+    *,
+    max_upweight: float,
+    max_downweight: float,
+) -> float:
+    score = max(0.0, min(1.0, float(dispatch_score)))
+    return float(max_downweight) + (score * (float(max_upweight) - float(max_downweight)))
 
 
 def _load_queue_payload(

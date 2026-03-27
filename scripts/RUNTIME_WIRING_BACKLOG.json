@@ -87,14 +87,19 @@
       "id": "pipeline_manager_stage_activation_policy",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - PipelineManager now loads a real bounded stage-policy helper package trained on pipeline-state receipts, preserves explicit stage-policy traces, reorders activated stages by bounded learned priority, and lets the helper influence next-iteration config suggestions while keeping shell activation hard-gated by execution readiness."
+    },
+    {
+      "id": "queue_dispatch_reweight_policy",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - queue selection now loads a real bounded queue-dispatch helper package, blends learned dispatch scores against the explicit heuristic multiplier prior, preserves queue-policy traces on live decisions, and the main RL/shadow training entrypoints can pass that helper into the actual replay-selection loop."
     }
   ],
   "backlog": [
     {
-      "id": "queue_curriculum_selection_policy",
+      "id": "sampler_base_weight_strategy_policy",
       "priority": "P1",
       "blocked_by": "queue outcome receipts and replay counterfactual labels",
-      "notes": "Queue selection, replay weighting, and episode sampling still use a largely heuristic core even though they now ingest learned helper scores; this needs its own bounded learned policy layer."
+      "notes": "Queue-dispatch reweighting is now helper-backed, but the deeper sampler base-weight and curriculum-strategy core in episode_sampling.py still uses frontier/econ/curriculum heuristics underneath that layer and needs its own bounded learned policy contract."
     },
     {
       "id": "real_sam3d_grounded_data_refresh",

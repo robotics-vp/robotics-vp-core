@@ -22,6 +22,7 @@ Ranking dimensions:
 | 3a | Bootstrap workcell runtime trace completeness + grounded-data lane classification | `sidecar` / `fallback` | High | High | Yes | **Wired now** |
 | 3b | Workcell `peg_in_hole` coverage-graph mapping | `heuristic` | High | High | Yes | **Wired now** |
 | 4 | Shadow advisory replay sampling and queue reweighting | `heuristic` / `advisory` | High | High | Yes | **Wired now** |
+| 4a | Queue dispatch policy trainer/package + replay-weighting helper | `heuristic` / `lightweight_trainer_gap` | High | High | Yes | **Wired now, benchmark-gated** |
 | 5 | `train_vla_recap_offline.py` lightweight trainer path | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now** |
 | 6 | `train_orchestration_transformer.py` runtime-backed trainer parity | `lightweight_trainer_gap` | High | Medium-high | Yes | **Wired now, benchmark-gated** |
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` plus helper trainer/export lane | `heuristic` / `lightweight_trainer_gap` | Medium-high | Medium-high | No | **Wired now, benchmark-gated** |
@@ -323,6 +324,51 @@ Ranking dimensions:
   - keep the current rule path only as an explicit fallback when no scorer package exists yet
 - disposition tag:
   - `wired now`
+  - `neuralized later`
+
+### 4a. Queue dispatch policy trainer/package + replay-weighting helper
+
+- surface: learned queue-dispatch scoring over live queue entries before replay weighting and slice ordering
+- file/path: `src/orchestrator/queue_selection.py`, `src/orchestrator/queue_dispatch_policy.py`, `src/orchestrator/queue_dispatch_policy_training.py`, `src/orchestrator/queue_dispatch_policy_runtime.py`, `scripts/train_queue_dispatch_policy.py`, `src/rl/episode_sampling.py`
+- category: `heuristic` / `lightweight_trainer_gap`
+- current behavior:
+  - `src/orchestrator/queue_dispatch_policy.py` now defines an explicit feature contract over:
+    - advisory queue priority
+    - replay action
+    - queue tags
+    - promotion/influence state
+    - semantic-runtime scorer outputs
+    - execution-precondition state
+    - receipt-feedback outcome truth when present
+  - `src/orchestrator/queue_dispatch_policy_training.py` now trains a bounded helper that predicts dispatch desirability from those queue-entry receipts instead of leaving the final reweight multiplier entirely hand-written
+  - `scripts/train_queue_dispatch_policy.py` now emits:
+    - queue-dispatch dataset and summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `queue_dispatch_policy_package.json`
+    - canonical runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - `src/orchestrator/queue_selection.py` now loads the helper with `disabled|auto|required` semantics and blends learned dispatch scores into the final reweight multiplier while preserving explicit queue-policy traces
+  - `src/rl/episode_sampling.py` now exposes queue-policy helper mode/package plumbing through `DataPackRLSampler`, and the main shadow/online training entrypoints can pass that helper into the actual replay-selection loop
+- current consumers:
+  - `apply_live_queue_selection(...)`
+  - `DataPackRLSampler.dispatch_queue(...)`
+  - `DataPackRLSampler._apply_queue_dispatch_weight_adjustments(...)`
+  - `scripts/train_shadow_replay_policy.py`
+  - `scripts/train_shadow_offline_rl.py`
+  - `scripts/train_shadow_pricing_models.py`
+  - `scripts/train_sac_with_ontology_logging.py`
+- why it is a production problem:
+  - before this pass, learned selector/meta/scorer lanes could flow into queue entries, but the final multiplier that changed replay weighting was still a fixed tag/action heuristic
+  - that meant the training distribution still bottlenecked on a heuristic shell even after the upstream helper lanes were wired
+- recommended disposition:
+  - keep hard integrity drops and promotion gates explicit
+  - keep the old multiplier as the auditable heuristic prior
+  - use the learned helper as a bounded replay-weighting overlay with preserved queue-policy traces
+  - next, move deeper into `episode_sampling.py` base-weight strategy logic, which still uses frontier/econ/curriculum heuristics underneath the now-real queue-dispatch layer
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
   - `neuralized later`
 
 ### 5. `train_vla_recap_offline.py`
@@ -713,7 +759,7 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Replace the remaining heuristic queue/curriculum weighting core in `src/orchestrator/queue_selection.py`, `src/rl/episode_sampling.py`, and adjacent replay-priority logic with a bounded learned helper trained on real queue outcome receipts.
+1. Neuralize the remaining sampler base-weight / curriculum-strategy core in `src/rl/episode_sampling.py`; queue dispatch itself is now helper-backed, but the underlying frontier/econ/curriculum strategy logic and base weighting still remain heuristic.
 2. Refresh the grounded-data / perception truth lane on a real GPU + SAM3D host; until that happens, workcell/bootstrap grounding remains honest but still unpromotable, and several vision-side promotion paths remain blocked by environment rather than repo wiring.
 3. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.
 4. Close the remaining data-limited trainer-parity gaps called out in `docs/economic_world_model/full_stack_training_backlog.md`, especially semantic runtime scorer density, semantic feedback adapter density, shadow pricing / offline replay density, and the perception/VLA real-data lanes.

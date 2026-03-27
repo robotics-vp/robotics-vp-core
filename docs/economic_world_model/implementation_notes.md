@@ -1021,3 +1021,9 @@
   - queue/curriculum weighting is still mostly heuristic
   - real grounded-data promotion is still blocked on GPU + SAM3D availability
   - several remaining heavyweight trainers are still data-limited rather than plumbing-limited, as recorded in `docs/economic_world_model/full_stack_training_backlog.md`
+
+- Queue dispatch is no longer the fake boundary in that lane:
+  - `src/orchestrator/queue_dispatch_policy.py` defines a stable feature/target contract over live queue entries, preserving advisory priority, replay action, queue tags, semantic-runtime scorer outputs, execution-precondition state, and receipt-feedback outcomes.
+  - `scripts/train_queue_dispatch_policy.py` is now the canonical trainer/runtime-package path for that helper under `RegalTrainingRunner`.
+  - `src/orchestrator/queue_selection.py` now blends helper output against the explicit heuristic multiplier prior with bounded `disabled|auto|required` semantics, and `src/rl/episode_sampling.py` plus the main shadow/online trainer entrypoints thread that helper into the real sampling loop.
+  - Honest remainder: the deeper sampler base-weight / curriculum-strategy logic in `src/rl/episode_sampling.py` still uses frontier/econ/curriculum heuristics underneath the now-real queue-dispatch layer, so the next queue/curriculum pass should target that substrate rather than reworking dispatch again.

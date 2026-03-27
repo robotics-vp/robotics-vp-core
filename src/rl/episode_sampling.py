@@ -458,6 +458,8 @@ class DataPackRLSampler:
         queue_max_upweight: float = 2.0,
         queue_max_downweight: float = 0.5,
         queue_allow_slice_removal_on_integrity_failure: bool = False,
+        queue_policy_helper_mode: str = "disabled",
+        queue_policy_package_path: Optional[str] = None,
     ) -> None:
         self.default_strategy = default_strategy
         self.tier_ratios = tier_ratios or {0: 0.2, 1: 0.5, 2: 0.3}
@@ -475,6 +477,8 @@ class DataPackRLSampler:
             max_upweight=queue_max_upweight,
             max_downweight=queue_max_downweight,
             allow_slice_removal_on_integrity_failure=queue_allow_slice_removal_on_integrity_failure,
+            policy_helper_mode=queue_policy_helper_mode,
+            policy_package_path=queue_policy_package_path,
         )
         self.last_queue_dispatch_artifact: Optional[Dict[str, Any]] = None
         if isinstance(unified_quality_profile, dict):

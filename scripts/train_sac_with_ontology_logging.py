@@ -70,6 +70,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--queue-max-upweight", type=float, default=2.0)
     parser.add_argument("--queue-max-downweight", type=float, default=0.5)
     parser.add_argument("--queue-allow-slice-removal-on-integrity-failure", action="store_true")
+    parser.add_argument("--queue-policy-helper-mode", type=str, default="disabled")
+    parser.add_argument("--queue-policy-package-path", type=str, default=None)
     parser.add_argument("--learning-starts", type=int, default=64)
     parser.add_argument("--updates-per-step", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -544,6 +546,8 @@ def main(runner=None, _wrapped_args=None):
             queue_max_upweight=args.queue_max_upweight,
             queue_max_downweight=args.queue_max_downweight,
             queue_allow_slice_removal_on_integrity_failure=args.queue_allow_slice_removal_on_integrity_failure,
+            queue_policy_helper_mode=args.queue_policy_helper_mode,
+            queue_policy_package_path=args.queue_policy_package_path,
         )
         dispatch = sampler.dispatch_queue(
             batch_size=len(descriptors),
