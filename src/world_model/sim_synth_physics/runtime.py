@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Mapping, Optional
 
+from .backend_runtime_execution import materialize_backend_runtime_execution
 from .backend_router import build_physics_execution_contract
 from .calibration import (
     build_physics_adaptation_receipt,
@@ -20,6 +21,7 @@ from .promotion import HelperMode
 from .render_materialization import materialize_render_provider_receipts
 from .receipts import (
     BackendExecutionBindingReceipt,
+    BackendRuntimeExecutionReceipt,
     BackendShadowExecutionReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
@@ -58,6 +60,7 @@ class SimSynthPhysicsLoopResult:
     backend_execution_binding_receipt: BackendExecutionBindingReceipt
     robot_asset_contract_receipt: RobotAssetContractReceipt
     physics_calibration_receipt: PhysicsCalibrationReceipt
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt] = None
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt] = None
     render_provider_receipts: list[RenderProviderReceipt] = field(default_factory=list)
     outcome_receipts: list[SimulationOutcomeReceipt] = field(default_factory=list)
@@ -72,6 +75,11 @@ class SimSynthPhysicsLoopResult:
             "physics_adaptation_receipt": self.physics_adaptation_receipt.to_dict(),
             "backend_execution_binding_receipt": self.backend_execution_binding_receipt.to_dict(),
             "robot_asset_contract_receipt": self.robot_asset_contract_receipt.to_dict(),
+            "backend_runtime_execution_receipt": (
+                None
+                if self.backend_runtime_execution_receipt is None
+                else self.backend_runtime_execution_receipt.to_dict()
+            ),
             "backend_shadow_execution_receipt": (
                 None
                 if self.backend_shadow_execution_receipt is None
@@ -101,6 +109,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "physics_adaptation_receipt": root / "physics_adaptation_receipt.json",
         "backend_execution_binding_receipt": root / "backend_execution_binding_receipt.json",
         "robot_asset_contract_receipt": root / "robot_asset_contract_receipt.json",
+        "backend_runtime_execution_receipt": root / "backend_runtime_execution_receipt.json",
         "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
         "physics_calibration_receipt": root / "physics_calibration_receipt.json",
         "render_provider_receipts": root / "render_provider_receipts.json",
@@ -108,6 +117,16 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "training_feedback_manifest": root / "sim_synth_training_feedback.json",
         "loop_summary": root / "sim_synth_physics_loop_summary.json",
         "diffusion_plans": root / "gap_driven_diffusion_plans.json",
+    }
+
+
+def _is_materialized_render_status(status: str) -> bool:
+    return str(status or "") in {
+        "scene_materialized",
+        "counterfactuals_materialized",
+        "ggds_scene_materialized",
+        "work_order_materialized",
+        "work_order_materialized_with_preconditions",
     }
 
 
@@ -143,6 +162,7 @@ def _build_outcome_receipts(
     adaptation_receipt: PhysicsAdaptationReceipt,
     backend_binding_receipt: BackendExecutionBindingReceipt,
     robot_asset_contract_receipt: RobotAssetContractReceipt,
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
     calibration_receipt: PhysicsCalibrationReceipt,
     *,
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt] = None,
@@ -244,6 +264,16 @@ def _build_outcome_receipts(
                         if backend_shadow_execution_receipt is None
                         else str(backend_shadow_execution_receipt.execution_status)
                     ),
+                    "backend_runtime_execution_receipt_id": (
+                        ""
+                        if backend_runtime_execution_receipt is None
+                        else str(backend_runtime_execution_receipt.receipt_id)
+                    ),
+                    "backend_runtime_execution_status": (
+                        ""
+                        if backend_runtime_execution_receipt is None
+                        else str(backend_runtime_execution_receipt.execution_status)
+                    ),
                     "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
                     "robot_asset_readiness_score": float(
                         robot_asset_contract_receipt.readiness_score
@@ -263,6 +293,7 @@ def _build_training_feedback_manifest(
     adaptation_receipt: PhysicsAdaptationReceipt,
     backend_binding_receipt: BackendExecutionBindingReceipt,
     robot_asset_contract_receipt: RobotAssetContractReceipt,
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
     calibration_receipt: PhysicsCalibrationReceipt,
     render_provider_receipts: list[RenderProviderReceipt],
@@ -304,6 +335,11 @@ def _build_training_feedback_manifest(
         "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
         "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
         "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
+        "backend_runtime_execution_receipt_id": (
+            None
+            if backend_runtime_execution_receipt is None
+            else backend_runtime_execution_receipt.receipt_id
+        ),
         "backend_shadow_execution_receipt_id": (
             None
             if backend_shadow_execution_receipt is None
@@ -316,6 +352,11 @@ def _build_training_feedback_manifest(
             if backend_shadow_execution_receipt is None
             else backend_shadow_execution_receipt.execution_status
         ),
+        "backend_runtime_execution_status": (
+            ""
+            if backend_runtime_execution_receipt is None
+            else backend_runtime_execution_receipt.execution_status
+        ),
         "requested_backend": execution_contract.requested_backend,
         "resolved_backend": execution_contract.resolved_backend,
         "robot_asset_readiness_score": float(robot_asset_contract_receipt.readiness_score),
@@ -323,8 +364,7 @@ def _build_training_feedback_manifest(
         "materialized_render_provider_count": sum(
             1
             for receipt in render_provider_receipts
-            if str(receipt.materialization_status)
-            not in {"", "planned_only", "materialization_blocked"}
+            if _is_materialized_render_status(str(receipt.materialization_status))
         ),
         "benchmark_gate_ready": bool(
             getattr(world_state.gen2sim_admission, "benchmark_gate_ready", False)
@@ -546,6 +586,12 @@ class SimSynthPhysicsRuntime:
             world_state,
             execution_contract,
         )
+        backend_runtime_execution_receipt = materialize_backend_runtime_execution(
+            world_state,
+            execution_contract,
+            backend_binding_receipt,
+            output_dir=output_dir,
+        )
         backend_shadow_execution_receipt = materialize_backend_shadow_execution(
             world_state,
             execution_contract,
@@ -554,6 +600,7 @@ class SimSynthPhysicsRuntime:
         )
         training_feedback_path = artifact_paths.get("training_feedback_manifest")
         runtime_evidence = summarize_runtime_evidence(
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=[],
             outcome_receipts=[],
@@ -570,6 +617,7 @@ class SimSynthPhysicsRuntime:
             output_dir=output_dir,
         )
         runtime_evidence = summarize_runtime_evidence(
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=render_provider_receipts,
             outcome_receipts=[],
@@ -601,12 +649,14 @@ class SimSynthPhysicsRuntime:
             adaptation_receipt,
             backend_binding_receipt,
             robot_asset_contract_receipt,
+            backend_runtime_execution_receipt,
             calibration_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=render_provider_receipts,
             training_feedback_path=training_feedback_path,
         )
         runtime_evidence = summarize_runtime_evidence(
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=render_provider_receipts,
             outcome_receipts=outcome_receipts,
@@ -638,6 +688,7 @@ class SimSynthPhysicsRuntime:
             adaptation_receipt,
             backend_binding_receipt,
             robot_asset_contract_receipt,
+            backend_runtime_execution_receipt,
             backend_shadow_execution_receipt,
             calibration_receipt,
             render_provider_receipts,
@@ -649,6 +700,7 @@ class SimSynthPhysicsRuntime:
             physics_adaptation_receipt=adaptation_receipt,
             backend_execution_binding_receipt=backend_binding_receipt,
             robot_asset_contract_receipt=robot_asset_contract_receipt,
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             physics_calibration_receipt=calibration_receipt,
             render_provider_receipts=render_provider_receipts,
@@ -676,6 +728,11 @@ class SimSynthPhysicsRuntime:
                 artifact_paths["robot_asset_contract_receipt"],
                 robot_asset_contract_receipt.to_dict(),
             )
+            if backend_runtime_execution_receipt is not None:
+                _write_json(
+                    artifact_paths["backend_runtime_execution_receipt"],
+                    backend_runtime_execution_receipt.to_dict(),
+                )
             if backend_shadow_execution_receipt is not None:
                 _write_json(
                     artifact_paths["backend_shadow_execution_receipt"],
@@ -712,6 +769,11 @@ class SimSynthPhysicsRuntime:
                     "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
                     "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
                     "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
+                    "backend_runtime_execution_receipt_id": (
+                        None
+                        if backend_runtime_execution_receipt is None
+                        else backend_runtime_execution_receipt.receipt_id
+                    ),
                     "backend_shadow_execution_receipt_id": (
                         None
                         if backend_shadow_execution_receipt is None
@@ -729,6 +791,11 @@ class SimSynthPhysicsRuntime:
                     "requested_backend": execution_contract.requested_backend,
                     "resolved_backend": execution_contract.resolved_backend,
                     "route_status": execution_contract.route_status,
+                    "backend_runtime_execution_status": (
+                        ""
+                        if backend_runtime_execution_receipt is None
+                        else backend_runtime_execution_receipt.execution_status
+                    ),
                     "backend_shadow_execution_status": (
                         ""
                         if backend_shadow_execution_receipt is None

@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from src.motor_backend.base import MotorEvalResult
+from src.motor_backend.rollout_capture import EpisodeMetadata, EpisodeRollout, RolloutBundle
 from src.orchestrator.diffusion_requests import build_diffusion_prompts_from_world_state
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
 from src.world_model.semantic_coverage_graph import CoverageEdge, CoverageNode, SemanticCoverageGraph
@@ -87,6 +90,16 @@ class ShadowBranchPlanner:
         }
 
 
+class PromotedGGDSBranchPlanner:
+    benchmark_gate = {"ready": True}
+
+    def plan_branch(self, *, job, context):
+        return {
+            "generation_mode": "targeted_synth_rollout",
+            "expected_yield_score": 0.9,
+        }
+
+
 def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
     world_state = compile_sim_synth_physics_world_state(_make_test_graph(), limit=2)
 
@@ -131,6 +144,47 @@ def test_world_state_uses_promoted_backend_selector_from_day_one() -> None:
     assert world_state.backend_execution_binding.binding_status in {"assets_missing", "shadow_ready"}
     assert world_state.robot_asset_contract is not None
     assert "unitree_robot_description" in world_state.robot_asset_contract.required_assets
+
+
+def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.world_model.sim_synth_physics import backend_adapters as adapter_module
+    from src.world_model.sim_synth_physics.adapters import backend_isaac as binding_module
+
+    monkeypatch.setattr(
+        adapter_module,
+        "_has_module",
+        lambda name: name == "src.motor_backend.workcell_isaaclab_backend",
+    )
+    monkeypatch.setattr(
+        binding_module,
+        "_has_module",
+        lambda name: name == "src.motor_backend.workcell_isaaclab_backend",
+    )
+
+    world_state = compile_sim_synth_physics_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedBackendSelector(),
+        embodiment_context={
+            "robot_asset_manifest": {
+                "unitree_robot_description": True,
+                "joint_mapping_contract": True,
+                "sensor_extrinsics": True,
+                "actuator_latency_profile": True,
+            }
+        },
+    )
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    result = runtime.execute_world_state(world_state)
+
+    assert world_state.backend_execution_binding is not None
+    assert world_state.backend_execution_binding.binding_status == "runtime_ready"
+    assert world_state.physics_context.metadata["backend_adapter"]["supports_execution"] is True
+    assert result.physics_execution_contract.route_status == "ready"
+    assert result.physics_execution_contract.resolved_backend == "isaac"
 
 
 def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None:
@@ -350,6 +404,12 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     }
     assert result.robot_asset_contract_receipt.target_hardware_class == "unitree_g1_r1_class"
     assert result.robot_asset_contract_receipt.readiness_score < 1.0
+    assert result.backend_runtime_execution_receipt is not None
+    assert result.backend_runtime_execution_receipt.backend == "isaac"
+    assert (
+        result.backend_runtime_execution_receipt.execution_status
+        == "runtime_request_materialized_with_preconditions"
+    )
     assert result.backend_shadow_execution_receipt is not None
     assert result.backend_shadow_execution_receipt.backend == "isaac"
     assert result.backend_shadow_execution_receipt.execution_mode == "shadow_contract"
@@ -385,6 +445,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "physics_adaptation_receipt.json").exists()
     assert (tmp_path / "backend_execution_binding_receipt.json").exists()
     assert (tmp_path / "robot_asset_contract_receipt.json").exists()
+    assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
     assert (tmp_path / "backend_shadow_execution_receipt.json").exists()
     assert (tmp_path / "backend_shadow_execution" / "isaac" / "robot_asset_contract_sidecar.json").exists()
     assert (tmp_path / "backend_shadow_execution" / "isaac" / "backend_calibration_sidecar.json").exists()
@@ -419,6 +480,12 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
     assert result.physics_execution_contract.route_status == "fallback"
     assert result.backend_execution_binding_receipt.binding_status in {"shadow_ready", "assets_missing"}
     assert result.robot_asset_contract_receipt.target_hardware_class == "unitree_g1_r1_class"
+    assert result.backend_runtime_execution_receipt is not None
+    assert result.backend_runtime_execution_receipt.backend == "holosoma"
+    assert (
+        result.backend_runtime_execution_receipt.execution_status
+        == "runtime_request_materialized_with_preconditions"
+    )
     assert result.backend_shadow_execution_receipt is not None
     assert result.backend_shadow_execution_receipt.backend == "holosoma"
     assert result.backend_shadow_execution_receipt.execution_mode == "shadow_work_order"
@@ -474,6 +541,12 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
         "shadow_work_order_materialized",
         "shadow_work_order_materialized_with_preconditions",
     }
+    assert feedback_manifest["backend_runtime_execution_status"] in {
+        "",
+        "runtime_request_materialized_with_preconditions",
+        "runtime_execution_completed",
+        "runtime_execution_failed",
+    }
     assert feedback_manifest["planned_branch_count"] >= 1
     assert feedback_manifest["materialized_render_provider_count"] >= 1
     assert feedback_manifest["robot_asset_readiness_score"] >= 0.0
@@ -483,3 +556,196 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert loop_summary["materialized_render_provider_count"] >= 1
     assert loop_summary["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id
     assert result.world_state.input_context["economic"]["economic_urgency_score"] == 0.0
+
+
+def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exist(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from src.world_model.sim_synth_physics import backend_runtime_execution as runtime_exec_module
+
+    class FakeRuntimeBackend:
+        def evaluate_policy(
+            self,
+            policy_id,
+            task_id,
+            objective,
+            num_episodes,
+            scenario_id=None,
+            rollout_base_dir=None,
+            seed=None,
+        ):
+            assert task_id == "humanoid_wbt_g1"
+            assert num_episodes == 1
+            assert scenario_id
+            assert rollout_base_dir is not None
+            episode_dir = Path(rollout_base_dir) / scenario_id / "episode_000"
+            episode_dir.mkdir(parents=True, exist_ok=True)
+            trajectory_path = episode_dir / "trajectory.npz"
+            trajectory_path.write_bytes(b"fake")
+            rollout_bundle = RolloutBundle(
+                scenario_id=scenario_id,
+                episodes=[
+                    EpisodeRollout(
+                        metadata=EpisodeMetadata(
+                            episode_id=f"{scenario_id}_episode_000",
+                            task_id=task_id,
+                            robot_family="unitree_g1",
+                            seed=seed,
+                            env_params={"mode": "holosoma"},
+                        ),
+                        trajectory_path=trajectory_path,
+                    )
+                ],
+            )
+            return MotorEvalResult(
+                policy_id=policy_id,
+                raw_metrics={"success_rate": 1.0, "mpl_units_per_hour": 88.0},
+                econ_metrics={"mpl_units_per_hour": 88.0, "wage_parity": 1.4},
+                rollout_bundle=rollout_bundle,
+            )
+
+    monkeypatch.setattr(runtime_exec_module, "_runtime_supports_execution", lambda backend: backend == "holosoma")
+    monkeypatch.setattr(
+        runtime_exec_module,
+        "make_motor_backend",
+        lambda name, econ_meter, store, backend_config=None: FakeRuntimeBackend(),
+    )
+
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedHolosomaBackendSelector(),
+        embodiment_context={
+            "active_embodiments": ["unitree_g1"],
+            "holosoma_policy_id": "holosoma_policy.onnx",
+            "motion_clip_datapacks": ["dp_motion_1"],
+        },
+    )
+
+    result = runtime.execute_world_state(world_state, output_dir=tmp_path)
+
+    assert result.backend_runtime_execution_receipt is not None
+    assert result.backend_runtime_execution_receipt.backend == "holosoma"
+    assert result.backend_runtime_execution_receipt.execution_status == "runtime_execution_completed"
+    assert result.backend_runtime_execution_receipt.policy_id == "holosoma_policy.onnx"
+    assert (
+        result.physics_adaptation_receipt.metadata["runtime_evidence"]["runtime_execution_status"]
+        == "runtime_execution_completed"
+    )
+    assert any(
+        "holosoma_datapack_binding.json" in ref
+        for ref in result.backend_runtime_execution_receipt.artifact_refs
+    )
+    assert any(
+        "backend_runtime_metrics.json" in ref
+        for ref in result.backend_runtime_execution_receipt.artifact_refs
+    )
+    assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
+
+
+def test_runtime_materializes_concrete_nag_counterfactuals_when_source_episode_exists(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from src.vision.nag.integration_lsd_backend import NAGDatapack
+    from src.world_model.sim_synth_physics import render_providers
+    import src.vision.nag.integration_lsd_backend as nag_module
+
+    monkeypatch.setattr(render_providers, "_nag_renderer_available", lambda: True)
+
+    def _fake_generate(**kwargs):
+        backend_episode = kwargs["backend_episode"]
+        return [
+            NAGDatapack(
+                base_episode_id=str(backend_episode.get("episode_id", "ep_0")),
+                counterfactual_id="ep_0_cf0",
+                frames=np.zeros((2, 3, 8, 8), dtype=np.float32),
+            )
+        ]
+
+    monkeypatch.setattr(
+        nag_module,
+        "generate_nag_counterfactuals_for_lsd_episode",
+        _fake_generate,
+    )
+
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedBackendSelector(),
+        semantic_context={
+            "source_lsd_episode": {
+                "episode_id": "source_ep_1",
+                "gaussian_scene": None,
+                "scene_graph": None,
+                "num_frames": 2,
+            }
+        },
+    )
+
+    result = runtime.execute_world_state(world_state, output_dir=tmp_path)
+
+    receipt = next(
+        receipt
+        for receipt in result.render_provider_receipts
+        if receipt.provider_kind == "nag_lsd_counterfactual"
+    )
+    assert receipt.materialization_status == "counterfactuals_materialized"
+    assert receipt.materialization_mode == "counterfactual_datapacks"
+    assert receipt.metadata["provider_truth_class"] == "counterfactual_datapacks"
+    assert any("nag_counterfactual_manifest.json" in ref for ref in receipt.artifact_refs)
+
+
+def test_runtime_materializes_concrete_ggds_scene_when_source_scene_exists(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from src.envs.lsd3d_env.gaussian_scene import GaussianScene
+    from src.envs.lsd3d_env import ggds as ggds_module
+    from src.world_model.sim_synth_physics import render_providers
+
+    class FakeOptimizer:
+        def __init__(self) -> None:
+            self._is_initialized = True
+            self.config = type("Config", (), {"prompts": ["realistic scene"], "num_iterations": 2})()
+
+        def optimize_scene(self, gaussian_scene, camera_rig, prompts=None, num_iterations=None, callback=None):
+            return gaussian_scene.clone()
+
+    monkeypatch.setattr(render_providers, "_ggds_concrete_available", lambda: True)
+    monkeypatch.setattr(render_providers, "create_default_optimizer", lambda: FakeOptimizer())
+    monkeypatch.setattr(ggds_module, "create_default_optimizer", lambda config=None: FakeOptimizer())
+
+    source_scene = GaussianScene(
+        means=np.array([[0.0, 0.0, 0.0]], dtype=np.float32),
+        covs=np.array([[0.1, 0.0, 0.0, 0.1, 0.0, 0.1]], dtype=np.float32),
+        colors=np.array([[0.5, 0.5, 0.5]], dtype=np.float32),
+        opacities=np.array([1.0], dtype=np.float32),
+        normals=np.array([[0.0, 0.0, 1.0]], dtype=np.float32),
+    )
+
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        branch_planner=PromotedGGDSBranchPlanner(),
+        semantic_context={"source_gaussian_scene": source_scene.to_dict()},
+    )
+
+    result = runtime.execute_world_state(world_state, output_dir=tmp_path)
+
+    receipt = next(
+        receipt
+        for receipt in result.render_provider_receipts
+        if receipt.provider_kind == "lsd_ggds_scene"
+    )
+    assert receipt.materialization_status == "ggds_scene_materialized"
+    assert receipt.materialization_mode == "ggds_scene_optimization"
+    assert receipt.metadata["provider_truth_class"] == "ggds_scene_materialization"
+    assert any("optimized_gaussian_scene.json" in ref for ref in receipt.artifact_refs)

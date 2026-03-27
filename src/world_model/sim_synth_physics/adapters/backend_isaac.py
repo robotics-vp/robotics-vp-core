@@ -44,23 +44,39 @@ def build_isaac_backend_binding(
 ) -> Dict[str, Any]:
     isaacsim_available = _has_module("isaacsim") or _has_module("omni.isaac.kit")
     isaacgym_available = _has_module("isaacgym")
+    isaaclab_backend_available = _has_module("src.motor_backend.workcell_isaaclab_backend")
     shadow_backend_available = True
     required_assets, available_assets, missing_assets = _asset_lists(embodiment_context)
-    adapter_ready = shadow_backend_available or isaacsim_available or isaacgym_available
+    adapter_ready = (
+        shadow_backend_available
+        or isaaclab_backend_available
+        or isaacsim_available
+        or isaacgym_available
+    )
     binding_status = "integration_pending"
-    if adapter_ready and not missing_assets:
+    if isaaclab_backend_available and not missing_assets:
+        binding_status = "runtime_ready"
+    elif isaaclab_backend_available:
+        binding_status = "runtime_assets_missing"
+    elif adapter_ready and not missing_assets:
         binding_status = "shadow_ready"
     elif adapter_ready:
         binding_status = "assets_missing"
     return {
         "binding_name": "isaac_unitree_execution_binding_v1",
         "binding_status": binding_status,
-        "executor_entrypoint": "src.envs.physics.backend_factory:make_backend",
-        "executor_kind": "physics_backend_factory",
+        "executor_entrypoint": (
+            "src.motor_backend.factory:make_motor_backend"
+            if isaaclab_backend_available
+            else "src.envs.physics.backend_factory:make_backend"
+        ),
+        "executor_kind": (
+            "motor_backend_factory" if isaaclab_backend_available else "physics_backend_factory"
+        ),
         "observation_adapter_entrypoint": "src.env.isaac_adapter:IsaacAdapter",
         "supports_training": bool(adapter_ready),
         "supports_evaluation": bool(adapter_ready),
-        "supports_deploy_handle": False,
+        "supports_deploy_handle": bool(isaaclab_backend_available),
         "target_runtime_stack": ["isaacsim", "isaacgym", "unitree_sdk2"],
         "asset_profile": "unitree_humanoid_shadow_assets",
         "required_assets": required_assets,
@@ -78,7 +94,11 @@ def build_isaac_backend_binding(
             "shadow_backend_available": shadow_backend_available,
             "isaacsim_available": isaacsim_available,
             "isaacgym_available": isaacgym_available,
-            "concrete_runtime_available": bool(isaacsim_available or isaacgym_available),
+            "isaaclab_backend_available": isaaclab_backend_available,
+            "concrete_runtime_available": bool(
+                isaaclab_backend_available or isaacsim_available or isaacgym_available
+            ),
+            "runtime_backend_name": "workcell_isaaclab" if isaaclab_backend_available else "",
             "embodiment_context": mapping(embodiment_context),
         },
     }

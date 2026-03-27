@@ -15,6 +15,16 @@ from src.world_model.sim_synth_physics import (
 )
 
 
+def _is_materialized_render_status(status: str) -> bool:
+    return str(status or "") in {
+        "scene_materialized",
+        "counterfactuals_materialized",
+        "ggds_scene_materialized",
+        "work_order_materialized",
+        "work_order_materialized_with_preconditions",
+    }
+
+
 def _load_graph(path: str | Path) -> SemanticCoverageGraph:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     return SemanticCoverageGraph.from_dict(payload)
@@ -91,6 +101,16 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         "backend_execution_binding_receipt_id": result.backend_execution_binding_receipt.receipt_id,
         "robot_asset_contract_receipt_id": result.robot_asset_contract_receipt.receipt_id,
         "robot_asset_readiness_score": float(result.robot_asset_contract_receipt.readiness_score),
+        "backend_runtime_execution_receipt_id": (
+            None
+            if result.backend_runtime_execution_receipt is None
+            else result.backend_runtime_execution_receipt.receipt_id
+        ),
+        "backend_runtime_execution_status": (
+            ""
+            if result.backend_runtime_execution_receipt is None
+            else result.backend_runtime_execution_receipt.execution_status
+        ),
         "backend_shadow_execution_receipt_id": (
             None
             if result.backend_shadow_execution_receipt is None
@@ -106,8 +126,7 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         "materialized_render_provider_count": sum(
             1
             for receipt in result.render_provider_receipts
-            if str(receipt.materialization_status)
-            not in {"", "planned_only", "materialization_blocked"}
+            if _is_materialized_render_status(str(receipt.materialization_status))
         ),
         "outcome_receipt_count": len(result.outcome_receipts),
         "summary_path": str(summary_path.resolve()),

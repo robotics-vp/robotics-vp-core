@@ -114,6 +114,22 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_backend_runtime_execution_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "runtime_1",
+                "backend": "isaac",
+                "execution_mode": "workcell_isaaclab_evaluate_policy",
+                "execution_status": "runtime_execution_completed",
+                "policy_id": "policy_isaac_1",
+                "artifact_refs": ["/tmp/runtime_episode_1/trajectory.npz"],
+                "version": "backend_runtime_execution_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_render_provider_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -156,6 +172,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["physics_adaptation_receipt"]["receipt_id"] == "adapt_1"
     assert bundles[0]["backend_execution_binding_receipt"]["receipt_id"] == "binding_1"
     assert bundles[0]["robot_asset_contract_receipt"]["receipt_id"] == "asset_1"
+    assert bundles[0]["backend_runtime_execution_receipt"]["receipt_id"] == "runtime_1"
     assert bundles[0]["backend_shadow_execution_receipt"]["receipt_id"] == "shadow_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
@@ -175,6 +192,11 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert (
         backend_rows[0]["metadata"]["backend_shadow_execution_status"]
         == "shadow_executed_with_asset_gaps"
+    )
+    assert backend_rows[0]["metadata"]["backend_runtime_execution_receipt_id"] == "runtime_1"
+    assert (
+        backend_rows[0]["metadata"]["backend_runtime_execution_status"]
+        == "runtime_execution_completed"
     )
 
     branch_rows = build_branch_planner_rows_from_receipts(bundles)

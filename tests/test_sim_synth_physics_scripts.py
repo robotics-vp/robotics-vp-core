@@ -80,6 +80,12 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
     assert result["backend_execution_binding_receipt_id"]
     assert result["robot_asset_contract_receipt_id"]
     assert result["robot_asset_readiness_score"] >= 0.0
+    assert result["backend_runtime_execution_status"] in {
+        "",
+        "runtime_request_materialized_with_preconditions",
+        "runtime_execution_completed",
+        "runtime_execution_failed",
+    }
     assert result["backend_shadow_execution_status"] in {
         "",
         "shadow_executed",

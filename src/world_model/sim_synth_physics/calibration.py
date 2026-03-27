@@ -37,6 +37,8 @@ def build_physics_adaptation_receipt(
         readiness += 0.14
     if str(execution_contract.fidelity_tier) == "high_fidelity":
         readiness += 0.08
+    if str(runtime_evidence.get("runtime_execution_status", "")) == "runtime_execution_completed":
+        readiness += 0.16
     if runtime_evidence.get("shadow_execution_status"):
         readiness += 0.08
     readiness += 0.04 * min(
@@ -134,6 +136,8 @@ def build_physics_calibration_receipt(
         base_quality += 0.08
     if str(helper_status.get("promotion_stage", "")) == "promoted":
         base_quality += 0.05
+    if str(runtime_evidence.get("runtime_execution_status", "")) == "runtime_execution_completed":
+        base_quality += 0.12
     if adaptation_receipt is not None:
         base_quality += 0.12 * clip01(adaptation_receipt.readiness_score)
         if (

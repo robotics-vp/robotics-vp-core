@@ -5,21 +5,54 @@ from __future__ import annotations
 from typing import Any, Optional, Sequence
 
 from .common import mapping
-from .receipts import BackendShadowExecutionReceipt, RenderProviderReceipt, SimulationOutcomeReceipt
+from .receipts import (
+    BackendRuntimeExecutionReceipt,
+    BackendShadowExecutionReceipt,
+    RenderProviderReceipt,
+    SimulationOutcomeReceipt,
+)
+
+
+def _is_materialized_status(status: str) -> bool:
+    normalized = str(status or "")
+    return normalized in {
+        "scene_materialized",
+        "counterfactuals_materialized",
+        "ggds_scene_materialized",
+        "work_order_materialized",
+        "work_order_materialized_with_preconditions",
+    }
 
 
 def summarize_runtime_evidence(
     *,
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
     render_provider_receipts: Sequence[RenderProviderReceipt],
     outcome_receipts: Sequence[SimulationOutcomeReceipt],
 ) -> dict[str, Any]:
     render_receipts = list(render_provider_receipts)
     outcome_list = list(outcome_receipts)
+    runtime_status = (
+        ""
+        if backend_runtime_execution_receipt is None
+        else backend_runtime_execution_receipt.execution_status
+    )
     shadow_status = (
         "" if backend_shadow_execution_receipt is None else backend_shadow_execution_receipt.execution_status
     )
     return {
+        "runtime_execution_status": runtime_status,
+        "runtime_artifact_count": (
+            0
+            if backend_runtime_execution_receipt is None
+            else len(backend_runtime_execution_receipt.artifact_refs)
+        ),
+        "runtime_episode_count": (
+            0
+            if backend_runtime_execution_receipt is None
+            else int(backend_runtime_execution_receipt.metadata.get("rollout_episode_count", 0) or 0)
+        ),
         "shadow_execution_status": shadow_status,
         "shadow_artifact_count": (
             0
@@ -39,8 +72,7 @@ def summarize_runtime_evidence(
         "materialized_render_provider_count": sum(
             1
             for receipt in render_receipts
-            if str(receipt.materialization_status)
-            not in {"", "planned_only", "materialization_blocked"}
+            if _is_materialized_status(str(receipt.materialization_status))
         ),
         "blocked_render_provider_count": sum(
             1
