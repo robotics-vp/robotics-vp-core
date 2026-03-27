@@ -29,6 +29,7 @@ def _resolve_tool(executable: str, module: str, *module_args: str) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run additive full-repo verification")
+    parser.add_argument("--skip-contract-checks", action="store_true")
     parser.add_argument("--skip-ruff", action="store_true")
     parser.add_argument("--skip-format", action="store_true")
     parser.add_argument("--skip-mypy", action="store_true")
@@ -36,6 +37,8 @@ def main() -> None:
     args = parser.parse_args()
 
     checks = [_run(["python3", "-m", "compileall", "src", "scripts", "tests", "-q"])]
+    if not args.skip_contract_checks:
+        checks.append(_run(["python3", "scripts/check_canonical_receipt_contracts.py"]))
     if not args.skip_ruff:
         checks.append(_run(_resolve_tool("ruff", "ruff", "check", ".")))
     if not args.skip_format:
