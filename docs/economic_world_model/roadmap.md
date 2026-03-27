@@ -14,6 +14,7 @@
 - Do not overfit the stack to one paper architecture. Keep predictor, planner, context, and rollout configuration modular.
 - Treat a tranche as incomplete until it is wired into at least one already-executed path. For the current subset that means the Stage-1 video loop, rollout labeling, shadow runtime, replay ingest, or another live path must emit the new artifacts.
 - For any new WM or enabling subsystem, ship bounded learned seams and `disabled|auto|required` promotion posture from the first landing; keep heuristics only as explicit priors/fallbacks with receipts, not as temporary hidden owners that will later require a heuristic-purge rewrite.
+- For any new WM or enabling subsystem, bias against literal stub defaults: use real-or-unavailable provider contracts, make `stub` explicit-only for smoke/scaffolding, and record planning-only fallback truth when weights/GPU/assets are the actual blocker.
 - Treat each WM as a complete subsystem target: push canonical state, learned-package lanes, replay/receipt wiring, and production-loop integration until the honest remaining blockers are data, GPU budget, calibration assets, Unitree-class sim/hardware assets, or benchmark evidence.
 - For multi-WM work, explicitly rerun the deterministic-prior / heuristic audit inside each WM boundary; do not assume the earlier global heuristic purge already finished that job for every later WM module.
 - For the next cross-WM expansion beyond the current semantic/economic readiness work, see `docs/economic_world_model/multi_wm_architecture_plan.md`.
@@ -53,7 +54,7 @@ Current honest state:
 | Week 2 | Normalize embodiment, action, and observation contracts | scaffolding-only + additive_wiring | `src/runtime/action_adapter_v2.py`, `src/runtime/observation_adapter_v2.py`, `src/embodiment/registry.py`, `src/inference/demo_policy.py` |
 | Week 3 | Create the temporal event spine and governance trace spec/code path | docs-only + scaffolding-only | `src/runtime/event_spine.py`, `src/governance/trace.py`, replay/ontology sidecars |
 | Week 4 | Build the evidence bus and belief-state layer, plus teacher trace sidecars | scaffolding-only + additive_wiring | `src/evidence/*`, `src/orchestrator/semantic_fusion_runner.py`, `src/vla/rollout_labeler.py` |
-| Week 4.5 | Reopen the world-model package with governed video-state and geometry-first hypothesis scaffolding | additive_wiring + scaffolding-only | `src/world_model/governed_video_world_model.py`, `scripts/run_stage1_pipeline.py`, `src/diffusion/real_video_diffusion_stub.py`, `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` |
+| Week 4.5 | Reopen the world-model package with governed video-state and geometry-first hypothesis scaffolding | additive_wiring + scaffolding-only | `src/world_model/governed_video_world_model.py`, `scripts/run_stage1_pipeline.py`, `src/diffusion/video_diffusion_runtime.py`, `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` |
 | Week 5 | Add dense economic supervision and counterfactual evaluation traces | scaffolding-only + additive_wiring | `src/economics/counterfactual_eval.py`, `src/economics/value_targets.py`, `src/economics/value_ledger.py`, datapack schema sidecars |
 | Week 6 | Train and evaluate a packet-native learned control-plane scaffold | additive_wiring + behavior-changing behind flags | `src/control_plane/*`, `src/phase_h/*`, `src/orchestrator/*`, training harnesses |
 | Week 6.5 | Ground real-video plumbing with 4D reconstruction and explicit teacher runtime contracts | scaffolding-only + additive_wiring | `src/vision/reconstruction/four_d_reconstruction.py`, `src/vla/teacher_runtime.py`, `scripts/run_stage1_pipeline.py`, `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` |
@@ -215,6 +216,7 @@ Current honest state:
 - Rationale: A future video world model should be supervised by the same contract/evidence/governance substrate as the broader economic world model. Rendering should stay downstream of state and plausibility.
 - Target modules/files:
   - `src/world_model/governed_video_world_model.py`
+  - `src/diffusion/video_diffusion_runtime.py`
   - `src/diffusion/real_video_diffusion_stub.py`
   - `scripts/run_stage1_pipeline.py`
   - `src/orchestrator/semantic_fusion_runner.py`
@@ -224,7 +226,7 @@ Current honest state:
 - Deliverables:
   - `GovernedVideoWorldModel` service that consumes belief-state/evidence-first inputs and proposes candidate futures before any rendering step.
   - Stage-1 sidecars for `EvidenceBus`, `BeliefState`, governed video state, and ranked hypotheses.
-  - Diffusion/render stub that can render governed hypotheses instead of inventing futures first.
+  - Diffusion runtime/provider contract that plans governed hypotheses first and records real-or-unavailable provider truth instead of silently normalizing stub behavior.
   - Geometry/plausibility gating in the live Stage-1 loop so governed hypotheses are judged by `RegalGenPlausibilityNode` before datapacks are admitted.
   - Configurable SceneTracks stub usage rather than hardwired `use_stub_adapters=True`.
   - Clear separation between frozen stable checkpoint baseline and new advisory video-state scaffolding.
@@ -234,6 +236,7 @@ Current honest state:
   - `python3 scripts/run_stage1_pipeline.py --num-videos 1 --proposals-per-video 1 --output-dir /tmp/stage1_governed_smoke`
 - Dependencies / blockers:
   - Real 4D reconstruction, real SceneTracks adapters, and non-stub teacher models still remain future work.
+  - Real video diffusion materialization and GGDS/LDM bring-up now sit in `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`; those are no longer hidden behind stub-default posture.
   - No training loop lands here; the service is advisory and structural.
 - Do not touch:
   - `checkpoints/world_model_stable_canonical.pt`

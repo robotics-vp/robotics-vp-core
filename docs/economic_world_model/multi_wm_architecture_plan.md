@@ -61,6 +61,28 @@ This rule applies to:
 
 This matters especially for the downstream WMs. Perception, embodiment, and sim/synth/physics should not only emit state; they should also emit bounded inferential learnability classes about which scenes, branches, physics regimes, or control contexts are actually improving the stack under compute and governance constraints. The economic WM should eventually consume those typed inferential receipts directly rather than reconstructing learnability from scattered sidecars later.
 
+## No-Stub / Real-or-Unavailable Rule
+
+Future WM work should inherit an explicit bias against literal stub defaults.
+
+That means:
+
+- if a surface is only there for smoke or scaffolding, it should require explicit `stub` posture rather than silently becoming the default runtime
+- if a real OSS provider can be named and integrated later, the runtime posture should be `real` or `unavailable`, with `auto` allowed only when it records an honest fallback receipt
+- planning-only fallback is acceptable when the real bottleneck is weights, GPU, assets, or calibration, but it must be named as planning-only and must not masquerade as materialized capability
+- every later WM should inherit the same rule:
+  - perception / grounding WM
+  - embodiment / actuation WM
+  - sim / synth / physics WM
+  - economic WM successor lanes
+  - transport-bridge layers
+  - local meta-node neuralization and later superposition/control WM
+
+Operational consequence:
+
+- we should prefer real-or-unavailable provider contracts plus explicit backlogs over introducing new placeholder modules that later require another purge pass
+- the remaining model bring-up work should be tracked in `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`
+
 ## Per-WM Heuristic Review Rule
 
 The earlier heuristic/advisory purge pass was an important repo-wide first sweep, but it should not be treated as globally final for multi-WM work.
@@ -832,17 +854,20 @@ Only after the receipt density is real should the WM expand into:
 
 - learned transition models
 - learned synthetic branch proposal models
-- v-JEPA-2-style predictive state modules for video-conditioned future estimation
+- v-JEPA-2-style predictive state modules for video-conditioned future estimation and branch-future priors, preferably brought up from the upstream `facebookresearch/vjepa2` git/runtime when that is the fastest honest path
 
 ### Where v-JEPA 2 fits
 
-v-JEPA-2-style predictive modeling should be treated as a component inside the future sim/synth/perception stack, not as a separate top-level WM.
+v-JEPA-2-style predictive modeling should be treated as a component inside two lower WMs, not as a separate top-level WM.
 
 Recommended placement:
 
-- later as a predictive latent module that conditions on governed video state, scene tracks, embodiment context, and action plans
-- downstream of canonical state
-- upstream of render/synthetic branch proposal ranking
+- in the sim / synth / physics WM as a predictive latent module that conditions on governed video state, scene tracks, embodiment context, and action plans
+- in the perception / grounding WM as a temporal grounding and scene-persistence module for continuity, occlusion recovery, event structure, and action-conditioned visual state
+- pulled from the upstream `facebookresearch/vjepa2` git/runtime where that accelerates honest bring-up more than reimplementing it locally
+- downstream of canonical state and typed receipts rather than replacing them
+- upstream of branch proposal ranking, future-estimation receipts, and temporal grounding quality checks
+- wrapped as an external/provider contract with provider truth, calibration, and benchmark gating rather than treated as native truth
 
 ### Phase 1 training targets
 
@@ -884,6 +909,7 @@ Named gaps that should remain explicit in this phase:
 - concrete GGDS/LDM execution under the new WM-owned render-provider contracts
 - richer NAG/LSD runtime materialization beyond the newly typed provider-routing seam
 - real GPU-backed grounded video state for perception-conditioned sim
+- real video-diffusion and GGDS/LDM model bring-up behind the new runtime/provider contracts tracked in `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`
 
 ### Phase 1 OSS dependency posture
 
@@ -898,6 +924,7 @@ Target posture for this phase:
 - real Isaac Sim / Isaac Gym / Unitree-class functionality should eventually sit behind the WM's typed backend adapters
 - explicit fallback to PyBullet is acceptable only while the repo is still missing those adapters or the target assets
 - the fallback posture should stay honest in receipts and benchmark reporting until the adapter gap is truly closed
+- literal stubs should be opt-in smoke aids only; the normal posture should be real-or-unavailable with honest planning-only fallback where GPU/weights are the real blocker
 
 The WM should own:
 

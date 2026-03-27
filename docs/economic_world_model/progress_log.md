@@ -2,6 +2,28 @@
 
 ## 2026-03-27
 
+- Changed: converted the live Stage-1 diffusion path from an actively used stub class into a real runtime/provider contract:
+  - added `src/diffusion/video_diffusion_runtime.py`
+  - `scripts/run_stage1_pipeline.py` and `src/orchestrator/diffusion_requests.py` now call `VideoDiffusionRuntime` rather than instantiating the stub directly
+  - the runtime now records explicit provider truth (`real`, `heuristic_fallback`, `disabled`, `stub`) and materialization posture on every proposal/datapack/admission record instead of leaving diffusion status implicit
+  - `auto` now means governed planning with honest planning-only fallback when no real diffusers checkpoint is locally available; `real` is strict real-or-unavailable
+- Changed: tightened another model-stub seam in `scripts/train_ggds_on_lsd_vector_scenes.py`:
+  - the GGDS training harness no longer silently defaults to a dummy LDM in `auto`
+  - smoke use now requires explicit `--backend-policy stub`
+  - the script now emits LDM provider truth into its summary and raises honestly when no real backend is configured
+- Changed: added `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json` and updated `scripts/LOOP_RUN_BACKLOG.json` / `scripts/TRAINING_MIGRATION_BACKLOG.json` so remaining model-shaped gaps are tracked as real bring-up/fine-tune/training work with OSS targets rather than as vague future cleanup:
+  - governed video diffusion
+  - GGDS/LDM renderer stack
+  - vision backbone stub replacement
+  - semantic VLA placeholder replacement
+  - Isaac/Unitree execution bring-up
+- Changed: strengthened the cross-phase doctrine in `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md`:
+  - no new WM or enabling phase should default to literal stubs when a real-or-unavailable provider contract is possible
+  - `stub` should be explicit-only for smoke/scaffolding
+  - the normal target posture is real runtime/provider plumbing with GPU/weights/assets as the honest blocker
+- Verification: `python3 -m compileall src/diffusion src/orchestrator/diffusion_requests.py scripts/run_stage1_pipeline.py scripts/train_ggds_on_lsd_vector_scenes.py tests/test_video_diffusion_runtime.py tests/test_video_diffusion_stub_routing.py tests/test_stage1_pipeline_governed.py tests/test_lsd_integration.py -q`, `python3 -m ruff check src/diffusion src/orchestrator/diffusion_requests.py scripts/run_stage1_pipeline.py scripts/train_ggds_on_lsd_vector_scenes.py tests/test_video_diffusion_runtime.py tests/test_video_diffusion_stub_routing.py tests/test_stage1_pipeline_governed.py tests/test_lsd_integration.py`, `python3 -m pytest -q tests/test_video_diffusion_runtime.py tests/test_video_diffusion_stub_routing.py tests/test_stage1_pipeline_governed.py`, `python3 -m pytest -q tests/test_lsd_integration.py::TestGGDSTraining::test_dummy_ldm tests/test_lsd_integration.py::TestGGDSTraining::test_load_ldm_auto_does_not_silently_stub`, `python3 -m json.tool scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json >/dev/null`, `python3 -m json.tool scripts/LOOP_RUN_BACKLOG.json >/dev/null`, `python3 -m json.tool scripts/TRAINING_MIGRATION_BACKLOG.json >/dev/null`, and `git diff --check` passed.
+- Blocked: `tests/test_lsd_integration.py::TestGGDSTraining::test_ggds_smoke` did not complete promptly after this change-set, so I did not claim a full-file pass for the older LSD integration harness.
+
 - Changed: refined `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` so the repo now says explicitly that multi-WM work must rerun the deterministic-prior / heuristic audit inside each WM boundary rather than assuming the earlier heuristic purge finished the job globally.
 - Changed: the docs now frame the earlier heuristic pass correctly:
   - it was a high-value repo-wide sweep over the live stack

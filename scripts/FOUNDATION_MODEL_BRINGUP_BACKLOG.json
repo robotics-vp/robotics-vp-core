@@ -1,0 +1,155 @@
+{
+  "schema_version": "v1",
+  "description": "Backlog for replacing stub-shaped external/internal model surfaces with real-or-unavailable OSS provider contracts, fine-tuning lanes, and bring-up runs.",
+  "goal": "Make data, GPU, assets, or benchmarks the main bottleneck instead of missing model/runtime plumbing.",
+  "created_at": "2026-03-27",
+  "updated_at": "2026-03-27",
+  "backlog": [
+    {
+      "id": "stage1_video_diffusion_runtime_bringup",
+      "wm_phase": "phase1_sim_synth_physics",
+      "backlog_kind": "run_and_finetune",
+      "priority": "P1",
+      "current_surface": [
+        "src/diffusion/video_diffusion_runtime.py",
+        "scripts/run_stage1_pipeline.py",
+        "src/orchestrator/diffusion_requests.py"
+      ],
+      "current_state": "Governed diffusion planning/runtime contract exists, but real video materialization still depends on a local or cached diffusers-compatible checkpoint plus GPU.",
+      "oss_options": [
+        "LTX-Video",
+        "CogVideoX",
+        "Wan2.1",
+        "Stable Video Diffusion"
+      ],
+      "required_preconditions": [
+        "CUDA-capable host",
+        "diffusers + torch installed",
+        "local or cached video-diffusion checkpoint",
+        "conditioning decision for image-to-video or video-to-video mode"
+      ],
+      "recommended_outputs": [
+        "provider-truth receipts",
+        "materialization receipts",
+        "rendered clip artifacts tied to RuntimePacket/EventSpine refs"
+      ],
+      "notes": "Do not reintroduce stub-default behavior. Auto mode may plan with heuristic fallback, but real materialization must be real-or-unavailable."
+    },
+    {
+      "id": "ggds_ldm_renderer_stack",
+      "wm_phase": "phase1_sim_synth_physics",
+      "backlog_kind": "training_and_run",
+      "priority": "P1",
+      "current_surface": [
+        "src/envs/lsd3d_env/ggds.py",
+        "scripts/train_ggds_on_lsd_vector_scenes.py",
+        "src/world_model/sim_synth_physics/render_providers.py"
+      ],
+      "current_state": "GGDS now requires explicit stub choice for smoke use, but real SDS/LDM rendering is still not implemented.",
+      "oss_options": [
+        "diffusers + SDXL/SD3.x",
+        "gsplat or equivalent Gaussian renderer",
+        "LTX-Video or CogVideoX for longer-horizon scene-conditioned generation"
+      ],
+      "required_preconditions": [
+        "CUDA-capable host",
+        "real Gaussian renderer",
+        "local/cached LDM weights",
+        "scene-texture supervision corpus"
+      ],
+      "recommended_outputs": [
+        "GGDS provider truth",
+        "loss/optimization receipts",
+        "materialized scene-view artifacts linked to branch plans"
+      ],
+      "notes": "The target is a real WM-owned branch materializer, not another permanent LSD-only fallback."
+    },
+    {
+      "id": "vision_backbone_stub_replacement",
+      "wm_phase": "phase2_perception_grounding",
+      "backlog_kind": "training_and_finetune",
+      "priority": "P1",
+      "current_surface": [
+        "src/vision/backbone_stub.py",
+        "scripts/train_vision_backbone.py",
+        "src/datasets/vision_dataset.py",
+        "src/vision/dataset_builder.py"
+      ],
+      "current_state": "Wrapper/training scaffolding exists, but the active trainer/dataset path still defaults to deterministic stub latents.",
+      "oss_options": [
+        "DINOv2",
+        "SigLIP",
+        "InternViT",
+        "MetaDINO / DINOv2 via transformers or timm"
+      ],
+      "required_preconditions": [
+        "image-loading/runtime adapter path for VisionFrame inputs",
+        "real frame corpus",
+        "checkpoint or cached backbone weights",
+        "benchmark and promotion gates for non-stub embeddings"
+      ],
+      "recommended_outputs": [
+        "provider-truth metadata on every latent export",
+        "runtime package for real vision backbone selection",
+        "training receipts tied to perception-WM canonical state"
+      ],
+      "notes": "The migrated trainer is not enough; this surface should move to real-or-unavailable before Phase 2 is considered structurally complete."
+    },
+    {
+      "id": "semantic_vla_placeholder_replacement",
+      "wm_phase": "phase2_perception_grounding",
+      "backlog_kind": "finetune_and_run",
+      "priority": "P2",
+      "current_surface": [
+        "src/vla/semantic_vla.py",
+        "src/vla/recap_dataset_builder.py",
+        "scripts/train_vla_recap_offline.py"
+      ],
+      "current_state": "Replay/training wiring is stronger now, but the semantic VLA placeholder analysis path is still not a real production model lane.",
+      "oss_options": [
+        "OpenVLA",
+        "Octo"
+      ],
+      "required_preconditions": [
+        "real recap / teacher-labeled corpus",
+        "task-specific finetuning budget",
+        "benchmark gates for teacher/runtime/provider truth"
+      ],
+      "recommended_outputs": [
+        "teacher/runtime provider truth",
+        "VLA proposal receipts",
+        "benchmark-gated finetune packages"
+      ],
+      "notes": "Keep external VLA proposals advisory, but make availability/calibration/non-stub truth canonical everywhere."
+    },
+    {
+      "id": "isaac_unitree_backend_execution",
+      "wm_phase": "phase1_sim_synth_physics_and_phase3_embodiment",
+      "backlog_kind": "run_and_integration",
+      "priority": "P1",
+      "current_surface": [
+        "src/envs/physics/isaac_backend.py",
+        "src/world_model/sim_synth_physics/adapters/backend_isaac.py",
+        "src/world_model/sim_synth_physics/backend_bindings.py"
+      ],
+      "current_state": "Typed backend binding contracts exist, but the legacy Isaac backend is still a literal stub and Unitree assets are not yet wired.",
+      "oss_options": [
+        "Isaac Sim",
+        "Isaac Gym / Isaac Lab",
+        "Unitree SDK2"
+      ],
+      "required_preconditions": [
+        "GPU workstation or server",
+        "Unitree robot description/assets",
+        "observation/action mapping contract",
+        "calibration and latency profiles"
+      ],
+      "recommended_outputs": [
+        "backend execution receipts",
+        "calibration receipts",
+        "whole-body replay artifacts"
+      ],
+      "notes": "This is a hard prerequisite for honest G1/R1-level embodiment work."
+    }
+  ]
+}

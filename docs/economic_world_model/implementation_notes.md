@@ -2,6 +2,42 @@
 
 ## 2026-03-27
 
+- Replaced the actively used Stage-1 diffusion stub posture with an explicit runtime/provider contract:
+  - added `src/diffusion/video_diffusion_runtime.py`
+  - the new runtime wraps the governed proposal planner but resolves honest provider truth for the materialization backend
+  - `backend_policy` now follows `auto|real|disabled|stub`
+  - `real` is strict real-or-unavailable
+  - `auto` now means "go ahead with governed planning, but record `heuristic_fallback` and `plan_only` if no local/cached diffusers checkpoint exists"
+  - every `DiffusionProposal` now carries:
+    - `diffusion_provider_truth`
+    - `diffusion_backend_selected`
+    - `diffusion_backend_policy`
+    - `diffusion_model_ref`
+    - `diffusion_materialization_mode`
+- Wired that contract through the active Stage-1 and orchestration paths:
+  - `scripts/run_stage1_pipeline.py` now instantiates `VideoDiffusionRuntime` instead of using `VideoDiffusionStub` directly
+  - admission logs, datapack metrics, agent profile metadata, and pipeline stats now preserve diffusion backend/materialization truth
+  - `src/orchestrator/diffusion_requests.py` now instantiates the runtime by default for prompt-driven proposal generation
+- Tightened the GGDS/LDM seam so the repo stops silently normalizing dummy-LDM behavior:
+  - `scripts/train_ggds_on_lsd_vector_scenes.py` now accepts `--backend-policy auto|real|disabled|stub`
+  - `auto` no longer silently returns `create_dummy_ldm()`
+  - smoke/scaffolding still works, but only when the caller explicitly requests `stub`
+  - the training summary now includes `ldm_provider_truth`
+- This is the doctrine shift in practical terms:
+  - stubs are still allowed as smoke aids
+  - they are no longer acceptable as silent defaults for live WM/runtime paths once a real provider contract can exist
+  - the desired failure mode is now:
+    - real backend if locally available
+    - otherwise honest `unavailable` / `heuristic_fallback`
+    - not "pretend the stub is the backend"
+- Added `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json` to keep the remaining model-shaped gaps explicit with OSS targets and prerequisites:
+  - governed video diffusion
+  - GGDS/LDM renderer stack
+  - vision backbone stub replacement
+  - semantic VLA placeholder replacement
+  - Isaac/Unitree backend execution
+- Updated `scripts/TRAINING_MIGRATION_BACKLOG.json` and `scripts/LOOP_RUN_BACKLOG.json` so the existing training/run backlogs also describe these surfaces honestly instead of implying the migrated wrappers alone are enough.
+
 - Clarified the relationship between the old heuristic purge and new multi-WM work:
   - the earlier heuristic/advisory sweep should be treated as the first repo-wide high-impact pass
   - it should not be treated as proof that every later WM module has already had its deterministic priors reviewed

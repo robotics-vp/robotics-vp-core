@@ -3,7 +3,7 @@
   "description": "Loop-run backlog for semantic grounding, control-loop validation, and external-data bring-up.",
   "goal": "Trigger only when explicit host/data/model preconditions are satisfied.",
   "created_at": "2026-03-24",
-  "updated_at": "2026-03-24",
+  "updated_at": "2026-03-27",
   "backlog": [
     {
       "loop_run_id": "workcell_bootstrap_semantic_loop",
@@ -101,6 +101,77 @@
         "require_vision_backbone": true
       },
       "notes": "This is the preconditioned vision-lane bring-up. Dummy embeddings are not benchmark-eligible."
+    },
+    {
+      "loop_run_id": "stage1_video_diffusion_bringup",
+      "title": "Bring up a real governed video diffusion provider for Stage 1",
+      "command": "python3 scripts/run_stage1_pipeline.py --num-videos 1 --proposals-per-video 1 --output-dir artifacts/stage1_video_diffusion_real --diffusion-backend-policy real --diffusion-model-ref ${VIDEO_DIFFUSION_MODEL_NAME}",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "diffusers_available": true,
+        "video_diffusion_model_ref_present": true
+      },
+      "required_python_modules": [
+        "torch",
+        "diffusers"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_env_vars": [
+        "VIDEO_DIFFUSION_MODEL_NAME"
+      ],
+      "required_internal_data": [
+        "Stage-1 manifest or local video references",
+        "Governed video-state sidecar path"
+      ],
+      "required_external_data": [
+        "Local or cached video-diffusion checkpoint compatible with diffusers"
+      ],
+      "benchmark_gate": {
+        "require_real_scene_tracks": true,
+        "require_teacher_runtime": true,
+        "require_vision_backbone": true
+      },
+      "notes": "Auto mode may still plan with heuristic fallback, but this run is specifically for real-or-unavailable materialization bring-up."
+    },
+    {
+      "loop_run_id": "ggds_ldm_renderer_bringup",
+      "title": "Bring up the concrete GGDS LDM and renderer stack",
+      "command": "python3 scripts/train_ggds_on_lsd_vector_scenes.py --num-scenes 1 --num-iterations 10 --backend-policy real --ldm-config configs/ldm/sdxl_config.yaml --ldm-weights checkpoints/ldm/sdxl.ckpt --output-dir artifacts/ggds_real",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "diffusers_available": true,
+        "real_renderer_available": true,
+        "ldm_weights_available": true
+      },
+      "required_python_modules": [
+        "torch",
+        "diffusers"
+      ],
+      "required_commands": [
+        "python3"
+      ],
+      "required_paths": [
+        "scripts/train_ggds_on_lsd_vector_scenes.py"
+      ],
+      "required_internal_data": [
+        "LSD vector scene generation",
+        "Gaussian-scene render path"
+      ],
+      "required_external_data": [
+        "Local/cached LDM checkpoint",
+        "Concrete renderer implementation"
+      ],
+      "notes": "The smoke path is now explicit-stub-only. This run exists to close the real SDS/render bring-up gap."
     },
     {
       "loop_run_id": "workcell_real_sam3d_grounding_loop",
