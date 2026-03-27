@@ -2,6 +2,12 @@
 
 ## 2026-03-27
 
+- Changed: added an explicit Phase 8 to the long-range planning docs:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now names a production-loop runtime / weekly GPU operations phase after the WM and meta-node phases
+  - `docs/economic_world_model/roadmap.md` now describes the same endgame as Phase C: external dataset aggregation, loop runs, corpus export, training, fine-tuning, benchmarking, promotion/redeployment, then latency/inference focus
+  - `docs/economic_world_model/humanoid_target_readiness.md` now connects the post-September-2027 posture to recurring GPU/Runpod execution and backlog exhaustion rather than leaving it as an implied next step
+- Verification: `git diff --check` passed. This was a docs-only roadmap extension.
+
 - Changed: tightened the long-range Unitree target in the planning docs:
   - July 2027 now remains the purchase / initial integration milestone
   - September 30, 2027 is now the explicit stronger target for sustainably autonomous G1 operation

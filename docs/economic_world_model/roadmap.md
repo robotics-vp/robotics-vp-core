@@ -54,6 +54,7 @@ Assumed dates for this roadmap:
 - September 1, 2026: first serious multi-WM training runs start
 - July 2027: pre-purchase readiness window for a Unitree G1 program step
 - September 30, 2027: target for sustainably autonomous G1 operation with recurring data collection and bounded self-improvement
+- after Phase 7 matures: Phase 8 production-loop runtime, weekly GPU operations, backlog exhaustion, then latency/inference hardening
 
 This means the roadmap should be read in two major phases.
 
@@ -87,6 +88,20 @@ Recommended sub-phases after training starts:
 - July 1, 2027 through August 31, 2027: turn first-hardware bring-up into a recurring robot loop with replay capture, degraded-mode handling, operator/recovery traces, and training-export discipline
 - By September 30, 2027: the G1 control loop should be sustainably autonomous enough to keep running, collecting data, and improving without recurrent architecture churn
 
+Phase C: Production-loop runtime after the major WM layers are mature
+
+- operationalize the full stack as a recurring weekly GPU / Runpod program
+- interleave:
+  - external dataset aggregation
+  - loop runs
+  - corpus/receipt export
+  - training
+  - fine-tuning
+  - benchmarking
+  - promotion / redeployment
+- keep burning down the explicit run/training/provider backlogs until there are no important external or internal model lanes sitting unused
+- only after that backlog burn-down becomes routine should latency, inference throughput, and deployment cost become the dominant optimization target
+
 Weekly operating model from September 1, 2026 onward:
 
 - treat the post-September program as a weekly A100 cycle, not an ad hoc training queue
@@ -108,6 +123,7 @@ Suggested weekly WM order for the first training season:
 4. Economic-WM ingestion and consolidation over lower-WM outputs
 5. Local meta-node neuralization and later meta-node superposition / control lanes over the stabilized lower-WM and economic-WM outputs
 6. Only later, ontology-mediated WM transport where adjacent WMs are already stable enough to justify the bridge budget
+7. After the layered stack is mature enough, transition into Phase C production-loop runtime discipline with weekly GPU operations and backlog exhaustion
 
 ## Workstream Summary
 

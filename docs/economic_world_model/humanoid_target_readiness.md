@@ -68,6 +68,12 @@ For a July 2027 Unitree G1 step and a September 2027 sustainable-autonomy target
    - collect replay, telemetry, and governance receipts continuously
    - feed those artifacts into recurring training/fine-tuning cycles
    - produce bounded ongoing improvement from real robot data rather than one-off bring-up demos
+8. After that autonomy target is reached, transition into a production-loop runtime discipline:
+   - weekly GPU / Runpod execution
+   - external dataset aggregation interleaved with robot-origin loop runs
+   - recurring training, fine-tuning, benchmarking, and redeployment
+   - backlog exhaustion until important external/provider/training lanes are no longer sitting idle
+   - then a stronger focus on latency and inference efficiency
 
 The intended order of attack in that weekly A100 program is:
 
@@ -325,6 +331,12 @@ The repo should not claim it is on-track for the September 2027 target until all
 - replay, telemetry, calibration, safety, and degraded-mode traces are emitted from those runs as canonical artifacts
 - the training/export path can consume robot-origin receipts on a recurring schedule
 - bounded autonomous data collection and bounded autonomous improvement are both real loop properties rather than operator-only workflows
+
+The repo should not claim it has entered the post-September-2027 production-loop runtime phase until:
+
+- weekly GPU / Runpod operations are actually recurring rather than ad hoc
+- the important external dataset, loop-run, trainer, fine-tune, and benchmark backlogs are being actively exhausted
+- latency/inference work has become the next-order optimization problem rather than a distraction from missing training/runtime coverage
 
 ## Recommended Near-Term Use
 

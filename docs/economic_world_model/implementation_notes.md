@@ -2,6 +2,19 @@
 
 ## 2026-03-27
 
+- Added an explicit Phase 8 after the WM and meta-node phases:
+  - the multi-WM plan now treats the post-Phase-7 period as a production-loop runtime / weekly GPU operations phase rather than leaving that operating model implicit
+  - the roadmap now spells out the intended order inside that phase:
+    - external dataset aggregation and loop runs
+    - receipt / corpus export
+    - training
+    - fine-tuning where the receipts justify it
+    - benchmarking and promotion / redeployment
+    - only then latency / inference / cost hardening
+- The practical doctrine change is:
+  - backlog exhaustion is now part of the architecture plan, not just an operational preference
+  - the stack should keep burning down uncalled runs, trainers, fine-tuning lanes, and provider bring-up items until the honest blockers are mostly compute, data density, calibration, benchmark evidence, latency, and deployment cost
+
 - Tightened the long-range Unitree program target:
   - July 2027 remains the purchase / initial integration milestone
   - September 30, 2027 is now the explicit stronger target for sustainably autonomous G1 operation

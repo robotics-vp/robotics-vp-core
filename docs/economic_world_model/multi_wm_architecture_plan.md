@@ -1487,6 +1487,63 @@ Preconditions:
 - local meta-nodes have already passed their own neuralization/robustness tranche and emit canonical state plus trainable receipts
 - meta-node actions and governance satisfaction are already logged as trainable receipts
 
+### Phase 8 - Production Loop Runtime and Weekly GPU Operations
+
+Objective:
+
+- turn the now-layered stack into a recurring production self-improvement machine with real GPU scheduling, backlog exhaustion discipline, recurring loop execution, and later latency/inference hardening
+
+This is not another WM.
+It is the major runtime/operations phase that makes the full stack run continuously and honestly.
+
+What this phase should own:
+
+- weekly GPU / Runpod scheduling discipline
+- recurring loop-run orchestration across internal and external data sources
+- external dataset aggregation until important external backlogs are no longer sitting idle
+- recurring corpus/receipt export into training and fine-tuning lanes
+- benchmark execution and promotion/redeployment cadence
+- backlog exhaustion governance so uncalled runs, trainers, fine-tuning lanes, and provider bring-up items are surfaced and burned down
+- later latency, inference-throughput, and deployment-cost optimization once the major run/training backlogs are no longer the limiting factor
+
+Suggested operating order inside this phase:
+
+1. external dataset aggregation and loop-run execution
+2. receipt / corpus export and integrity checks
+3. training runs
+4. fine-tuning runs where the receipts justify it
+5. benchmarking and promotion / redeployment
+6. only after the important backlogs are largely exhausted:
+   - latency reduction
+   - inference throughput
+   - cost and scheduling efficiency
+
+Neuralization / honesty rule:
+
+- do not leave important external providers, internal model lanes, or run/fine-tune surfaces idle just because the stack already "has" a model family on paper
+- the phase should keep converting real-or-unavailable provider lanes into regularly exercised production paths until the honest blockers are mainly:
+  - GPU budget
+  - dataset density
+  - calibration and hardware constraints
+  - benchmark evidence
+  - latency / cost ceilings
+
+Complete-subsystem rule:
+
+- this phase should be pushed until the main blockers are no longer "we forgot to call this trainer/run/provider"
+- the expected remaining issues should be operational ones:
+  - throughput
+  - latency
+  - cost
+  - hardware reliability
+  - benchmark evidence under sustained operation
+
+Preconditions:
+
+- lower WMs, economic WM, and the meta-node stack are structurally real enough that weekly execution burns down real learning/deployment debt rather than discovering missing architecture every week
+- recurring replay/corpus/training/promotion paths already exist in canonical form
+- the remaining important external/provider/training/run backlogs are visible and enumerable
+
 ## OSS Dependency Map
 
 | Function | Preferred OSS posture | Role in this architecture |
