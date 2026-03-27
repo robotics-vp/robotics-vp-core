@@ -1394,3 +1394,29 @@
     - do not move to the next phase while the current phase still has implementable ownership/runtime/adapter/package gaps
     - only move when the remaining blockers are primarily data/GPU/asset/calibration/benchmark constraints
   - Phase 1 now explicitly targets real Isaac Sim / Isaac Gym / Unitree-class adapter functionality behind typed backend routing rather than letting PyBullet fallback become the de facto end state
+
+- Synthetic branch generation is less script-owned now:
+  - `src/world_model/sim_synth_physics/synthetic_branches.py` now owns:
+    - local branch rollout/gating helpers over the stable world model
+    - coverage-gap labeling for collected branches
+    - compilation of WM synthetic branch plans
+    - canonical branch corpus metadata construction
+  - `scripts/collect_local_synthetic_branches.py` still loads the world model, trust-net, and source datasets, but the script is now primarily a worker over WM-owned branch logic rather than the owner of those rules
+  - this is a meaningful Phase 1 shift because the architecture plan explicitly called out local synthetic branch generation as something that should stop being script-owned
+
+- Gen2sim admission is also more honestly inside the WM boundary now:
+  - `src/world_model/sim_synth_physics/gen2sim_admission.py` now owns:
+    - compilation of `Gen2SimAdmissionState` for live WM planning
+    - local synthetic branch corpus gen2sim assessment rows and summaries
+  - `src/world_model/sim_synth_physics/compiler.py` now delegates admission-state compilation into that module instead of open-coding the logic inline
+  - the lower-level evidence helper in `src/evidence/gen2sim_validity.py` still remains the reusable scoring engine, but it is no longer acting as the architectural owner of the branch-admission flow
+
+- Practical consequence for Phase 1 sequencing:
+  - there is still no excuse to move to Phase 2 yet
+  - the explicit remaining Phase 1 work is still implementable and still in-bounds:
+    - real Isaac Sim / Isaac Gym backend adapter work
+    - Unitree-class sim-env integration
+    - richer Holosoma execution integration
+    - domain-randomization / system-ID policy and receipts
+    - NAG / LSD / GGDS productionization
+  - only after those are pushed as far as the repo can honestly push them should the phase be considered blocked mainly by data, GPU, asset, or benchmark limits

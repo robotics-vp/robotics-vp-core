@@ -679,3 +679,22 @@
   - domain-randomization and system-ID policy
   - NAG / LSD / GGDS productionization
   - grounded GPU-backed perception-conditioned sim
+- Changed: continued the next in-phase ownership transfer by absorbing synthetic branch generation and gen2sim admission further into the sim/synth/physics WM:
+  - added `src/world_model/sim_synth_physics/synthetic_branches.py` as the WM-owned home for:
+    - local synthetic branch rollout/gating helpers
+    - branch gap labeling
+    - branch-plan compilation
+    - synthetic branch corpus metadata construction
+  - added `src/world_model/sim_synth_physics/gen2sim_admission.py` as the WM-owned home for:
+    - compilation of `Gen2SimAdmissionState`
+    - local synthetic branch corpus gen2sim assessment rows and summaries
+  - `src/world_model/sim_synth_physics/compiler.py` now calls through those modules instead of keeping branch-plan compilation and gen2sim admission logic inline
+  - `scripts/collect_local_synthetic_branches.py` is now a thinner WM worker: it still loads the stable world model and trust-net locally, but it no longer owns the branch rollout/gating rules or gen2sim corpus assessment logic
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/collect_local_synthetic_branches.py tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/collect_local_synthetic_branches.py tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py tests/test_gen2sim_validity.py`, and `git diff --check`.
+- Blocked: this narrows the script-owned branch gap, but the remaining explicit Phase 1 blockers are still the same honest ones:
+  - real Isaac Sim / Isaac Gym backend implementation
+  - Unitree-class sim-env integration
+  - richer Holosoma execution contract
+  - domain-randomization and system-identification policy
+  - NAG / LSD / GGDS productionization
+  - grounded GPU-backed perception-conditioned sim
