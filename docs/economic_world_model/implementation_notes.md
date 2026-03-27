@@ -2,6 +2,15 @@
 
 ## 2026-03-27
 
+- Added a canonical robot-asset contract inside Phase 1:
+  - `src/world_model/sim_synth_physics/asset_contracts.py` now compiles a typed asset/calibration/action/observation contract from backend binding plus embodiment context
+  - the WM state now carries `RobotAssetContractState`
+  - the runtime now emits `robot_asset_contract_receipt_v1`
+- Why this matters:
+  - the loop can now say exactly which Unitree-target robot description, mapping, calibration, and IO contracts are missing
+  - that moves another backend/hardware seam out of vague metadata and into a canonical receipt path
+  - the remaining blocker is increasingly actual assets/calibration/runtime integration, not missing schema/plumbing
+
 - Pushed the Phase-1 adaptation/calibration seam past mostly plan-time scoring:
   - `src/world_model/sim_synth_physics/runtime_evidence.py` now summarizes backend shadow execution, render materialization, and branch-outcome evidence
   - `src/world_model/sim_synth_physics/calibration.py` now uses that evidence when computing readiness/quality and stores the evidence summary directly in receipt metadata

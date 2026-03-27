@@ -2,6 +2,13 @@
 
 ## 2026-03-27
 
+- Changed: pulled Unitree/humanoid asset readiness into a canonical Phase-1 contract:
+  - added `src/world_model/sim_synth_physics/asset_contracts.py`
+  - `src/world_model/sim_synth_physics/compiler.py` now emits `RobotAssetContractState` on the WM state
+  - `src/world_model/sim_synth_physics/runtime.py` now emits `robot_asset_contract_receipt_v1` and threads it into outcome/training/loop-summary artifacts
+  - the sim/synth loop can now name concrete required assets, calibration contracts, observation contracts, and action contracts for hardware-target backends instead of only surfacing generic missing-asset strings
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
 - Changed: pushed Phase-1 physics adaptation/calibration receipts closer to real runtime evidence:
   - `src/world_model/sim_synth_physics/runtime_evidence.py` now summarizes backend shadow execution, render materialization, and branch-outcome evidence
   - `src/world_model/sim_synth_physics/calibration.py` now folds that evidence into adaptation/calibration readiness metadata and scores instead of relying only on plan-time route/fidelity heuristics

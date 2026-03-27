@@ -74,9 +74,12 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
     assert Path(result["artifact_paths"]["physics_execution_contract"]).exists()
     assert Path(result["artifact_paths"]["physics_adaptation_receipt"]).exists()
     assert Path(result["artifact_paths"]["backend_execution_binding_receipt"]).exists()
+    assert Path(result["artifact_paths"]["robot_asset_contract_receipt"]).exists()
     assert Path(result["artifact_paths"]["physics_calibration_receipt"]).exists()
     assert Path(result["artifact_paths"]["render_provider_receipts"]).exists()
     assert result["backend_execution_binding_receipt_id"]
+    assert result["robot_asset_contract_receipt_id"]
+    assert result["robot_asset_readiness_score"] >= 0.0
     assert result["backend_shadow_execution_status"] in {
         "",
         "shadow_executed",

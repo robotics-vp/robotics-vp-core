@@ -13,6 +13,7 @@ from .adapters import (
     build_semantic_input_context,
 )
 from .agenda import SimulationAgenda, SimulationJobSpec
+from .asset_contracts import compile_robot_asset_contract
 from .backend_adapters import describe_backend_adapter
 from .backend_bindings import compile_backend_execution_binding
 from .backend_selector_runtime import resolve_backend_selector_helper
@@ -482,6 +483,11 @@ def compile_sim_synth_physics_world_state(
         adaptation_policy=physics_adaptation_policy,
         embodiment_context=embodiment_context,
     )
+    robot_asset_contract = compile_robot_asset_contract(
+        backend_execution_binding,
+        adaptation_policy=physics_adaptation_policy,
+        embodiment_context=embodiment_context,
+    )
     branch_plans = compile_synthetic_branch_plans(
         jobs,
         physics_context=physics_context,
@@ -516,6 +522,7 @@ def compile_sim_synth_physics_world_state(
         "coverage_window_ref": coverage_window_ref,
         "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
         "backend_execution_binding_id": backend_execution_binding.binding_id,
+        "robot_asset_contract_id": robot_asset_contract.contract_id,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
         "diffusion_conditioning_id": (
             diffusion_conditioning.conditioning_id if diffusion_conditioning is not None else None
@@ -525,6 +532,7 @@ def compile_sim_synth_physics_world_state(
         "agenda_id": agenda.agenda_id,
         "physics_context_id": physics_context.context_id,
         "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
+        "robot_asset_contract_id": robot_asset_contract.contract_id,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
         "admission_id": gen2sim_admission.admission_id,
     }
@@ -534,6 +542,7 @@ def compile_sim_synth_physics_world_state(
         physics_context=physics_context,
         physics_adaptation_policy=physics_adaptation_policy,
         backend_execution_binding=backend_execution_binding,
+        robot_asset_contract=robot_asset_contract,
         synthetic_branch_plans=branch_plans,
         gen2sim_admission=gen2sim_admission,
         diffusion_conditioning=diffusion_conditioning,

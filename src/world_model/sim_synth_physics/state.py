@@ -110,6 +110,38 @@ class BackendExecutionBindingState:
 
 
 @dataclass(frozen=True)
+class RobotAssetContractState:
+    """Canonical robot-asset contract for backend/runtime execution."""
+
+    contract_id: str
+    asset_profile: str
+    target_hardware_class: str
+    required_assets: list[str] = field(default_factory=list)
+    available_assets: list[str] = field(default_factory=list)
+    missing_assets: list[str] = field(default_factory=list)
+    calibration_contracts: list[str] = field(default_factory=list)
+    observation_contracts: list[str] = field(default_factory=list)
+    action_contracts: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "robot_asset_contract_state_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "contract_id": self.contract_id,
+            "asset_profile": self.asset_profile,
+            "target_hardware_class": self.target_hardware_class,
+            "required_assets": strings(self.required_assets),
+            "available_assets": strings(self.available_assets),
+            "missing_assets": strings(self.missing_assets),
+            "calibration_contracts": strings(self.calibration_contracts),
+            "observation_contracts": strings(self.observation_contracts),
+            "action_contracts": strings(self.action_contracts),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class DiffusionConditioningState:
     """Governed diffusion/render-conditioning state derived from WM state."""
 
@@ -262,6 +294,7 @@ class SimSynthPhysicsWorldState:
     physics_context: PhysicsContextState
     physics_adaptation_policy: Optional[PhysicsAdaptationPolicyState] = None
     backend_execution_binding: Optional[BackendExecutionBindingState] = None
+    robot_asset_contract: Optional[RobotAssetContractState] = None
     synthetic_branch_plans: list[SyntheticBranchPlan] = field(default_factory=list)
     gen2sim_admission: Optional[Gen2SimAdmissionState] = None
     diffusion_conditioning: Optional[DiffusionConditioningState] = None
@@ -283,6 +316,11 @@ class SimSynthPhysicsWorldState:
             "backend_execution_binding": (
                 self.backend_execution_binding.to_dict()
                 if self.backend_execution_binding is not None
+                else None
+            ),
+            "robot_asset_contract": (
+                self.robot_asset_contract.to_dict()
+                if self.robot_asset_contract is not None
                 else None
             ),
             "synthetic_branch_plans": [plan.to_dict() for plan in self.synthetic_branch_plans],

@@ -89,6 +89,8 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         "physics_execution_contract_id": result.physics_execution_contract.contract_id,
         "physics_adaptation_receipt_id": result.physics_adaptation_receipt.receipt_id,
         "backend_execution_binding_receipt_id": result.backend_execution_binding_receipt.receipt_id,
+        "robot_asset_contract_receipt_id": result.robot_asset_contract_receipt.receipt_id,
+        "robot_asset_readiness_score": float(result.robot_asset_contract_receipt.readiness_score),
         "backend_shadow_execution_receipt_id": (
             None
             if result.backend_shadow_execution_receipt is None

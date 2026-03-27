@@ -115,6 +115,42 @@ class BackendShadowExecutionReceipt:
 
 
 @dataclass(frozen=True)
+class RobotAssetContractReceipt:
+    """Receipt for one WM-owned robot-asset contract."""
+
+    receipt_id: str
+    contract_id: str
+    asset_profile: str
+    target_hardware_class: str
+    readiness_score: float
+    required_assets: list[str] = field(default_factory=list)
+    available_assets: list[str] = field(default_factory=list)
+    missing_assets: list[str] = field(default_factory=list)
+    calibration_contracts: list[str] = field(default_factory=list)
+    observation_contracts: list[str] = field(default_factory=list)
+    action_contracts: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "robot_asset_contract_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "contract_id": self.contract_id,
+            "asset_profile": self.asset_profile,
+            "target_hardware_class": self.target_hardware_class,
+            "readiness_score": clip01(self.readiness_score),
+            "required_assets": strings(self.required_assets),
+            "available_assets": strings(self.available_assets),
+            "missing_assets": strings(self.missing_assets),
+            "calibration_contracts": strings(self.calibration_contracts),
+            "observation_contracts": strings(self.observation_contracts),
+            "action_contracts": strings(self.action_contracts),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class RenderProviderReceipt:
     """Materialization receipt for one WM-owned branch/render provider selection."""
 

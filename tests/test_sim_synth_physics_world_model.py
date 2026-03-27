@@ -96,6 +96,8 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
     assert world_state.physics_adaptation_policy.domain_randomization_profile
     assert world_state.backend_execution_binding is not None
     assert world_state.backend_execution_binding.binding_status == "ready"
+    assert world_state.robot_asset_contract is not None
+    assert world_state.robot_asset_contract.asset_profile == "tabletop_workcell_assets"
     assert len(world_state.synthetic_branch_plans) == 2
     assert world_state.synthetic_branch_plans[0].render_provider is not None
     assert world_state.diffusion_conditioning is not None
@@ -127,6 +129,8 @@ def test_world_state_uses_promoted_backend_selector_from_day_one() -> None:
     assert world_state.physics_adaptation_policy.target_hardware_class == "unitree_g1_r1_class"
     assert world_state.backend_execution_binding is not None
     assert world_state.backend_execution_binding.binding_status in {"assets_missing", "shadow_ready"}
+    assert world_state.robot_asset_contract is not None
+    assert "unitree_robot_description" in world_state.robot_asset_contract.required_assets
 
 
 def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None:
@@ -344,6 +348,8 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
         "assets_missing",
         "shadow_ready",
     }
+    assert result.robot_asset_contract_receipt.target_hardware_class == "unitree_g1_r1_class"
+    assert result.robot_asset_contract_receipt.readiness_score < 1.0
     assert result.backend_shadow_execution_receipt is not None
     assert result.backend_shadow_execution_receipt.backend == "isaac"
     assert result.backend_shadow_execution_receipt.execution_mode == "shadow_contract"
@@ -376,6 +382,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "physics_execution_contract.json").exists()
     assert (tmp_path / "physics_adaptation_receipt.json").exists()
     assert (tmp_path / "backend_execution_binding_receipt.json").exists()
+    assert (tmp_path / "robot_asset_contract_receipt.json").exists()
     assert (tmp_path / "backend_shadow_execution_receipt.json").exists()
     assert (tmp_path / "physics_calibration_receipt.json").exists()
     assert (tmp_path / "render_provider_receipts.json").exists()
@@ -406,6 +413,7 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
     assert result.physics_execution_contract.resolved_backend == "pybullet"
     assert result.physics_execution_contract.route_status == "fallback"
     assert result.backend_execution_binding_receipt.binding_status in {"shadow_ready", "assets_missing"}
+    assert result.robot_asset_contract_receipt.target_hardware_class == "unitree_g1_r1_class"
     assert result.backend_shadow_execution_receipt is not None
     assert result.backend_shadow_execution_receipt.backend == "holosoma"
     assert result.backend_shadow_execution_receipt.execution_mode == "shadow_work_order"
@@ -448,6 +456,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert feedback_manifest["world_state_id"] == result.world_state.state_id
     assert feedback_manifest["physics_adaptation_receipt_id"] == result.physics_adaptation_receipt.receipt_id
     assert feedback_manifest["backend_execution_binding_receipt_id"] == result.backend_execution_binding_receipt.receipt_id
+    assert feedback_manifest["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id
     assert feedback_manifest["backend_shadow_execution_status"] in {
         "",
         "shadow_executed",
@@ -457,8 +466,10 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     }
     assert feedback_manifest["planned_branch_count"] >= 1
     assert feedback_manifest["materialized_render_provider_count"] >= 1
+    assert feedback_manifest["robot_asset_readiness_score"] >= 0.0
     assert diffusion_bundle["plans"]
     assert loop_summary["physics_execution_contract_id"] == result.physics_execution_contract.contract_id
     assert loop_summary["render_provider_receipt_count"] == len(result.render_provider_receipts)
     assert loop_summary["materialized_render_provider_count"] >= 1
+    assert loop_summary["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id
     assert result.world_state.input_context["economic"]["economic_urgency_score"] == 0.0
