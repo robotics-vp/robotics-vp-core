@@ -40,6 +40,13 @@ BRANCH_PLANNER_MIN_MODES = 3
 BRANCH_PLANNER_MIN_HIGH_YIELD_ROWS = 20
 
 
+def _artifact_ref(path: Path, *, base_dir: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(base_dir.resolve()))
+    except ValueError:
+        return str(path.resolve())
+
+
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=str, required=True, help="JSONL or JSON dataset path")
@@ -178,11 +185,11 @@ def _build_runtime_package(
     return {
         "schema_version": "sim_synth_branch_planner_runtime_package_v1",
         "package_id": f"sim_synth_branch_planner_{config_digest[:12]}",
-        "checkpoint_path": str(checkpoint_path),
-        "dataset_summary_path": str(dataset_summary_path),
-        "model_config_path": str(model_config_path),
-        "preconditions_path": str(preconditions_path),
-        "training_summary_path": str(training_summary_path),
+        "checkpoint_path": _artifact_ref(checkpoint_path, base_dir=checkpoint_path.parent),
+        "dataset_summary_path": _artifact_ref(dataset_summary_path, base_dir=checkpoint_path.parent),
+        "model_config_path": _artifact_ref(model_config_path, base_dir=checkpoint_path.parent),
+        "preconditions_path": _artifact_ref(preconditions_path, base_dir=checkpoint_path.parent),
+        "training_summary_path": _artifact_ref(training_summary_path, base_dir=checkpoint_path.parent),
         "benchmark_gate": benchmark_gate,
         "execution_preconditions": dict(execution_preconditions),
         "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
@@ -197,6 +204,8 @@ def _build_runtime_package(
             "dataset_digest": dataset_summary.get("dataset_digest"),
             "training_contract": "branch_generation_mode_plus_expected_yield_v1",
             "routing_targets": ["sim_synth_physics.synthetic_branch_plans", "diffusion_contracts"],
+            "target_hardware_class": "unitree_g1_r1_class",
+            "subsystem_posture": "complete_subsystem_until_data_gpu_assets_are_bottleneck",
         },
         "model_config": dict(model_config),
     }

@@ -1,9 +1,21 @@
+import json
+from pathlib import Path
+
+import pytest
+
 from src.orchestrator.diffusion_requests import build_diffusion_prompts_from_world_state
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
 from src.world_model.semantic_coverage_graph import CoverageEdge, CoverageNode, SemanticCoverageGraph
 from src.world_model.sim_synth_physics import (
+    LearnedBackendSelector,
+    LearnedBranchPlanner,
     compile_gap_driven_diffusion_plans,
     compile_sim_synth_physics_world_state,
+)
+from src.world_model.sim_synth_physics.backend_selector import (
+    BACKEND_LABELS,
+    FIDELITY_LABELS,
+    RANDOMIZATION_LABELS,
 )
 
 
@@ -154,3 +166,128 @@ def test_diffusion_prompts_compile_from_world_state_contract() -> None:
     assert prompts[0].routing_context["physics_selection_policy"] == world_state.physics_context.selection_policy
     assert prompts[0].routing_context["branch_selection_policy"] == world_state.synthetic_branch_plans[0].selection_policy
     assert prompts[0].governed_hypotheses[0]["metadata"]["branch_plan_id"] == world_state.synthetic_branch_plans[0].plan_id
+
+
+def _write_backend_selector_package(tmp_path: Path) -> str:
+    torch = pytest.importorskip("torch")
+
+    checkpoint_path = tmp_path / "backend_selector.pt"
+    model = LearnedBackendSelector(hidden_dim=16)
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.zero_()
+        model.backend_head.bias[BACKEND_LABELS.index("isaac")] = 8.0
+        model.fidelity_head.bias[FIDELITY_LABELS.index("high_fidelity")] = 8.0
+        model.randomization_head.bias[RANDOMIZATION_LABELS.index("benchmark_focus")] = 8.0
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "input_dim": model.net[0].in_features,
+            "hidden_dim": model.net[0].out_features,
+        },
+        checkpoint_path,
+    )
+    package_path = tmp_path / "backend_selector_package.json"
+    package_path.write_text(
+        json.dumps(
+            {
+                "package_id": "backend_selector_test_pkg",
+                "checkpoint_path": checkpoint_path.name,
+                "benchmark_gate": {"ready": True},
+                "execution_preconditions": {
+                    "unsatisfied_preconditions": [],
+                    "benchmark_gate_ready": True,
+                },
+                "promotion_stage": "promoted",
+                "inference_contract": {"helper_blend_policy": "bounded_backend_selector_helper_v1"},
+                "metadata": {"target_hardware_class": "unitree_g1_r1_class"},
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return str(package_path)
+
+
+def _write_branch_planner_package(tmp_path: Path) -> str:
+    torch = pytest.importorskip("torch")
+
+    checkpoint_path = tmp_path / "branch_planner.pt"
+    model = LearnedBranchPlanner(hidden_dim=16)
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.zero_()
+        model.mode_head.bias[4] = 8.0
+        model.yield_head[0].bias.fill_(3.0)
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "input_dim": model.net[0].in_features,
+            "hidden_dim": model.net[0].out_features,
+        },
+        checkpoint_path,
+    )
+    package_path = tmp_path / "branch_planner_package.json"
+    package_path.write_text(
+        json.dumps(
+            {
+                "package_id": "branch_planner_test_pkg",
+                "checkpoint_path": checkpoint_path.name,
+                "benchmark_gate": {"ready": True},
+                "execution_preconditions": {
+                    "unsatisfied_preconditions": [],
+                    "benchmark_gate_ready": True,
+                },
+                "promotion_stage": "promoted",
+                "inference_contract": {"helper_blend_policy": "bounded_branch_planner_helper_v1"},
+                "metadata": {"target_hardware_class": "unitree_g1_r1_class"},
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return str(package_path)
+
+
+def test_world_state_loads_backend_selector_runtime_package(tmp_path: Path) -> None:
+    world_state = compile_sim_synth_physics_world_state(
+        _make_test_graph(),
+        backend_selector=_write_backend_selector_package(tmp_path),
+        backend_selector_mode="auto",
+    )
+
+    helper_status = world_state.physics_context.metadata["backend_helper_status"]
+    helper_trace = world_state.physics_context.metadata["backend_helper_trace"]
+
+    assert world_state.physics_context.backend == "isaac"
+    assert world_state.physics_context.fidelity_tier == "high_fidelity"
+    assert world_state.physics_context.domain_randomization_regime == "benchmark_focus"
+    assert world_state.physics_context.selection_policy == "heuristic_plus_learned_backend_selector"
+    assert helper_status["status"] == "loaded"
+    assert helper_status["promotion_stage"] == "promoted"
+    assert helper_status["package_id"] == "backend_selector_test_pkg"
+    assert helper_trace["preferred_backend"] == "isaac"
+
+
+def test_world_state_loads_branch_planner_runtime_package(tmp_path: Path) -> None:
+    world_state = compile_sim_synth_physics_world_state(
+        _make_test_graph(),
+        branch_planner=_write_branch_planner_package(tmp_path),
+        branch_planner_mode="auto",
+    )
+
+    first_plan = world_state.synthetic_branch_plans[0]
+    helper_status = first_plan.metadata["branch_helper_status"]
+    helper_trace = first_plan.metadata["branch_helper_trace"]
+
+    assert first_plan.generation_mode == "neural_branch_candidate"
+    assert first_plan.selection_policy == "heuristic_plus_learned_branch_planner"
+    assert helper_trace["expected_yield_score"] > 0.9
+    assert helper_trace["expected_yield_score"] > first_plan.metadata["heuristic_expected_yield_score"]
+    assert first_plan.expected_yield_score > 0.7
+    assert helper_status["status"] == "loaded"
+    assert helper_status["promotion_stage"] == "promoted"
+    assert helper_status["package_id"] == "branch_planner_test_pkg"
+    assert helper_trace["generation_mode"] == "neural_branch_candidate"

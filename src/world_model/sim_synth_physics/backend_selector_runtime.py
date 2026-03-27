@@ -26,13 +26,28 @@ def _mapping(value: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     return dict(value or {})
 
 
+def _resolve_checkpoint_path(raw_path: str | Path, *, package_path: Optional[str | Path] = None) -> Path:
+    checkpoint_path = Path(raw_path)
+    if checkpoint_path.is_absolute():
+        return checkpoint_path
+    if package_path:
+        package_parent = Path(package_path).resolve().parent
+        return (package_parent / checkpoint_path).resolve()
+    return checkpoint_path.resolve()
+
+
 def load_backend_selector_runtime_package(path: str | Path) -> BackendSelectorRuntimePackage:
     package_path = Path(path)
     payload = json.loads(package_path.read_text(encoding="utf-8"))
     return BackendSelectorRuntimePackage(
         package_id=str(payload.get("package_id") or package_path.stem),
         package_path=str(package_path.resolve()),
-        checkpoint_path=str(payload.get("checkpoint_path") or ""),
+        checkpoint_path=str(
+            _resolve_checkpoint_path(
+                str(payload.get("checkpoint_path") or ""),
+                package_path=package_path,
+            )
+        ),
         benchmark_gate=_mapping(payload.get("benchmark_gate")),
         execution_preconditions=_mapping(payload.get("execution_preconditions")),
         inference_contract=_mapping(payload.get("inference_contract")),
@@ -70,12 +85,17 @@ def resolve_backend_selector_helper(
             if hasattr(helper, "benchmark_gate")
             else False
         )
+        promotion_stage = (
+            "promoted"
+            if benchmark_gate_ready
+            else str(getattr(helper, "promotion_stage", "shadow_candidate") or "shadow_candidate")
+        )
         if mode == "required" and not benchmark_gate_ready:
             raise ValueError("backend-selector mode 'required' requires a benchmark-gated package")
         return helper, {
             "mode": mode,
             "status": "loaded_direct",
-            "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
+            "promotion_stage": promotion_stage,
             "benchmark_gate_ready": benchmark_gate_ready,
         }
 
@@ -99,7 +119,10 @@ def resolve_backend_selector_helper(
             promotion_stage=str(helper.get("promotion_stage", "shadow_candidate") or "shadow_candidate"),
             metadata=_mapping(helper.get("metadata")),
         )
-        checkpoint_path = Path(package.checkpoint_path)
+        checkpoint_path = _resolve_checkpoint_path(
+            package.checkpoint_path,
+            package_path=package.package_path or None,
+        )
 
     if checkpoint_path is None or not checkpoint_path.exists():
         if mode == "required":
@@ -113,11 +136,21 @@ def resolve_backend_selector_helper(
 
     model = LearnedBackendSelector.from_checkpoint(str(checkpoint_path))
     benchmark_gate_ready = bool(package.benchmark_gate.get("ready", False)) if package else False
+    promotion_stage = (
+        "promoted"
+        if benchmark_gate_ready
+        else str(package.promotion_stage or "shadow_candidate")
+        if package is not None
+        else "shadow_candidate"
+    )
     if package is not None:
         setattr(model, "benchmark_gate", dict(package.benchmark_gate))
         setattr(model, "execution_preconditions", dict(package.execution_preconditions))
         setattr(model, "promotion_stage", str(package.promotion_stage or "shadow_candidate"))
         setattr(model, "inference_contract", dict(package.inference_contract))
+        setattr(model, "package_id", package.package_id)
+        setattr(model, "package_path", package.package_path)
+        setattr(model, "metadata", dict(package.metadata))
     if mode == "required" and not benchmark_gate_ready:
         raise ValueError("backend-selector mode 'required' requires a benchmark-gated package")
     return model, {
@@ -125,7 +158,7 @@ def resolve_backend_selector_helper(
         "status": "loaded",
         "package_id": package.package_id if package is not None else None,
         "package_path": package.package_path if package is not None else str(checkpoint_path),
-        "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
+        "promotion_stage": promotion_stage,
         "benchmark_gate_ready": benchmark_gate_ready,
         "unsatisfied_preconditions": list(
             package.execution_preconditions.get("unsatisfied_preconditions", [])
