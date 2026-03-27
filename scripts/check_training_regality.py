@@ -30,7 +30,6 @@ TRAINING_SCRIPT_ALLOWLIST: Dict[str, str] = {
     "train_sima2_segmenter.py": "LEGACY: Perception script, no RL loop, deprecated",
     "train_spatial_rnn.py": "LEGACY: Perception script, no RL loop, deprecated",
     "train_tiny_demo.py": "LEGACY: Minimal demo for onboarding, no production use",
-    "train_knob_model.py": "LEGACY: Meta-training script, regality at different layer",
 }
 
 

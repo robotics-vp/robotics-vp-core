@@ -22,6 +22,7 @@ from src.contracts.schemas import (
     PlanPolicyConfigV1,
     PlanGainScheduleV1,
     LedgerPlanPolicyV1,
+    RegimeFeaturesV1,
 )
 from src.representation.homeostasis import (
     SignalBundle,
@@ -90,6 +91,8 @@ class GateStatus:
     # D4 Knob calibration provenance
     knob_policy: Optional[KnobPolicyV1] = None
     knob_policy_used: Optional[str] = None  # "learned" or "heuristic_fallback"
+    knob_regime_features: Optional[RegimeFeaturesV1] = None
+    knob_base_config: Optional[PlanPolicyConfigV1] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -113,6 +116,8 @@ class GateStatus:
             "ledger_policy": self.ledger_policy.model_dump() if self.ledger_policy else None,
             "knob_policy": self.knob_policy.model_dump() if self.knob_policy else None,
             "knob_policy_used": self.knob_policy_used,
+            "knob_regime_features": self.knob_regime_features.model_dump() if self.knob_regime_features else None,
+            "knob_base_config": self.knob_base_config.model_dump() if self.knob_base_config else None,
         }
 
 
@@ -675,6 +680,8 @@ def build_plan_from_signals(
     # Track knob policy for provenance
     knob_policy_used: Optional[str] = None
     knob_policy_result: Optional[KnobPolicyV1] = None
+    knob_regime_features: Optional[RegimeFeaturesV1] = None
+    knob_base_config: Optional[PlanPolicyConfigV1] = None
 
     # Add probe signal if report provided
     if probe_report:
@@ -703,6 +710,7 @@ def build_plan_from_signals(
 
     # If knob model is provided, create a KnobAwareEconPolicyProvider
     if knob_model and econ_policy_provider is None:
+        knob_base_config = config.model_copy(deep=True)
         econ_policy_provider = KnobAwareEconPolicyProvider(
             knob_model=knob_model,
             base_config=config,
@@ -720,6 +728,7 @@ def build_plan_from_signals(
             if econ_policy_provider.last_knob_policy:
                 knob_policy_result = econ_policy_provider.last_knob_policy
                 knob_policy_used = knob_policy_result.policy_source
+                knob_regime_features = econ_policy_provider.last_regime_features
         else:
             gain_schedule_override = econ_policy_provider.get_gain_schedule(signal_bundle)
 
@@ -801,6 +810,8 @@ def build_plan_from_signals(
     gate_status.ledger_policy = ledger_policy
     gate_status.knob_policy = knob_policy_result
     gate_status.knob_policy_used = knob_policy_used
+    gate_status.knob_regime_features = knob_regime_features
+    gate_status.knob_base_config = knob_base_config
 
     # Build notes
     notes = f"Priority: {action_plan.priority}. Actions: {[a.value for a in action_plan.actions]}."

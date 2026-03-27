@@ -364,6 +364,17 @@ def main():
         action="store_true",
         help="Use D4 learned/heuristic knob calibration",
     )
+    parser.add_argument(
+        "--knob-model-path",
+        type=str,
+        default=None,
+        help="Path to a trained knob-model package/checkpoint",
+    )
+    parser.add_argument(
+        "--require-learned-knobs",
+        action="store_true",
+        help="Fail if a benchmark-gated learned knob package cannot be loaded",
+    )
 
     # Trajectory audit flags (Stage-6 spatiotemporal grounding)
     parser.add_argument(
@@ -579,9 +590,15 @@ def main():
         if args.use_learned_knobs:
             from src.regal.knob_model import get_knob_model
 
-            # Use stub learned model for smoke test (simulates learned behavior)
-            knob_model = get_knob_model(use_learned=True)
-            print(f"  Using D4 knob calibration: {knob_model.model_sha}")
+            knob_model = get_knob_model(
+                use_learned=True,
+                model_path=args.knob_model_path,
+                required=args.require_learned_knobs,
+            )
+            if knob_model.model_sha:
+                print(f"  Using D4 knob calibration package: {knob_model.model_sha}")
+            else:
+                print("  No learned knob package loaded; using heuristic fallback")
 
         updated_plan, gate_status = build_plan_from_signals(
             signals,
@@ -1025,6 +1042,7 @@ def main():
         )
 
     manifest_path = output_dir / "run_manifest.json"
+    knob_receipt_path = output_dir / "knob_policy_receipt.json"
 
     # Calculate plan_applied_events SHA if it exists
     plan_events_path = output_dir / "plan_applied_events.jsonl"
@@ -1088,6 +1106,37 @@ def main():
         manifest.knob_model_sha = gate_status.knob_policy.model_sha
         manifest.knob_policy_sha = gate_status.knob_policy.sha256()
         manifest.knob_policy_used = gate_status.knob_policy_used
+        knob_receipt_payload = {
+            "schema_version": "knob_policy_receipt_v1",
+            "receipt_id": f"{run_id}:{updated_plan.plan_id}",
+            "run_id": run_id,
+            "plan_id": updated_plan.plan_id,
+            "plan_sha": updated_plan.sha256(),
+            "run_manifest_path": str(manifest_path),
+            "target_source": "runtime_receipt",
+            "promotion_stage": gate_status.knob_policy.promotion_stage or "shadow_candidate",
+            "regime_features": (
+                gate_status.knob_regime_features.model_dump(mode="json")
+                if gate_status.knob_regime_features
+                else None
+            ),
+            "base_config": (
+                gate_status.knob_base_config.model_dump(mode="json")
+                if gate_status.knob_base_config
+                else None
+            ),
+            "knob_policy": gate_status.knob_policy.model_dump(mode="json"),
+            "knob_policy_sha": gate_status.knob_policy.sha256(),
+            "metadata": {
+                "knob_policy_used": gate_status.knob_policy_used,
+                "forced_noop": bool(gate_status.forced_noop),
+                "reason": gate_status.reason,
+            },
+        }
+        knob_receipt_path.write_text(
+            json.dumps(knob_receipt_payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
 
     # Add trajectory audit SHA to manifest if available
     if trajectory_audit:
@@ -1191,6 +1240,8 @@ def main():
     print(f"  {output_dir / 'ledger.jsonl'}")
     print(f"  {manifest_path}")
     print(f"  {output_dir / 'plan_applied_events.jsonl'}")
+    if knob_receipt_path.exists():
+        print(f"  {knob_receipt_path}")
     if probe_report:
         print(f"  {output_dir / 'probe_report.json'}")
 

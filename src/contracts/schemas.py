@@ -873,6 +873,7 @@ class KnobPolicyV1(BaseModel):
     policy_source: Literal["learned", "heuristic_fallback"] = "heuristic_fallback"
     model_sha: Optional[str] = None  # SHA of learned model (if used)
     regime_features_sha: Optional[str] = None  # SHA of input features
+    promotion_stage: Optional[str] = None  # shadow_candidate/promoted/heuristic_fallback
 
     # Gain schedule overrides (clamped by hard limits)
     gain_multiplier_override: Optional[float] = None
@@ -890,6 +891,7 @@ class KnobPolicyV1(BaseModel):
     # Hard constraint validation
     clamped: bool = False  # True if any output was clamped by hard limits
     clamp_reasons: List[str] = Field(default_factory=list)
+    trace: Optional[Dict[str, Any]] = None
 
     def sha256(self) -> str:
         from src.utils.config_digest import sha256_json
@@ -1580,4 +1582,3 @@ __all__ = [
     "TaskSamplerOverrides",
     "DatapackSelectionOverrides",
 ]
-

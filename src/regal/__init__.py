@@ -18,7 +18,6 @@ from src.regal.regal_evaluator import (
 from src.regal.knob_model import (
     KnobModel,
     HeuristicKnobProvider,
-    StubLearnedKnobModel,
     get_knob_model,
 )
 from src.regal.base import RegalDecision, RegalReport, RegalNode as MetaRegalNode
@@ -40,7 +39,6 @@ __all__ = [
     # Knob calibration (D4)
     "KnobModel",
     "HeuristicKnobProvider",
-    "StubLearnedKnobModel",
     "get_knob_model",
     # Lightweight additive regal nodes
     "RegalDecision",

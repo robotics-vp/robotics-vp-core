@@ -5,6 +5,8 @@ regardless of learned/heuristic predictions.
 """
 from typing import Optional
 
+import pytest
+
 from src.contracts.schemas import (
     RegimeFeaturesV1,
     KnobPolicyV1,
@@ -13,7 +15,6 @@ from src.contracts.schemas import (
 )
 from src.regal.knob_model import (
     HeuristicKnobProvider,
-    StubLearnedKnobModel,
     get_knob_model,
     MIN_GAIN_MULTIPLIER,
     MAX_GAIN_MULTIPLIER,
@@ -283,48 +284,6 @@ class TestHeuristicKnobProvider:
             assert "navigation" in policy.task_family_biases
 
 
-class TestStubLearnedKnobModel:
-    """Tests for stub learned model."""
-
-    def test_stub_model_source_is_learned(self):
-        """Test stub model reports 'learned' source."""
-        features = RegimeFeaturesV1()
-        config = PlanPolicyConfigV1(
-            gain_schedule=PlanGainScheduleV1(),
-            default_weights={"manipulation": 0.5},
-        )
-        model = StubLearnedKnobModel()
-
-        policy = model.predict(features, config)
-
-        assert policy.policy_source == "learned"
-        assert policy.model_sha is not None
-
-    def test_stub_model_has_sha(self):
-        """Test stub model has SHA identifier."""
-        model = StubLearnedKnobModel()
-        assert model.model_sha == "stub_model_v1"
-
-    def test_stub_model_delegates_to_heuristic(self):
-        """Test stub model delegates to heuristic (with different label)."""
-        features = RegimeFeaturesV1(
-            audit_delta_success=-0.2,
-        )
-        config = PlanPolicyConfigV1(
-            gain_schedule=PlanGainScheduleV1(full_multiplier=1.5),
-            default_weights={"manipulation": 0.5},
-        )
-
-        stub = StubLearnedKnobModel()
-        heuristic = HeuristicKnobProvider()
-
-        stub_policy = stub.predict(features, config)
-        heuristic_policy = heuristic.predict(features, config)
-
-        # Should have same overrides (stub delegates to heuristic)
-        assert stub_policy.gain_multiplier_override == heuristic_policy.gain_multiplier_override
-
-
 class TestGetKnobModel:
     """Tests for knob model factory function."""
 
@@ -333,10 +292,15 @@ class TestGetKnobModel:
         model = get_knob_model(use_learned=False)
         assert isinstance(model, HeuristicKnobProvider)
 
-    def test_get_learned_model(self):
-        """Test getting learned model (stub)."""
+    def test_get_learned_model_without_package_falls_back(self):
+        """Test missing learned package falls back honestly to heuristic."""
         model = get_knob_model(use_learned=True)
-        assert isinstance(model, StubLearnedKnobModel)
+        assert isinstance(model, HeuristicKnobProvider)
+
+    def test_required_learned_model_without_package_raises(self):
+        """Test required learned package raises when absent."""
+        with pytest.raises(ValueError):
+            get_knob_model(use_learned=True, required=True)
 
     def test_default_is_heuristic(self):
         """Test default model is heuristic."""

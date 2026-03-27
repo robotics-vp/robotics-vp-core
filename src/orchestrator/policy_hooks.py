@@ -8,7 +8,7 @@ Includes D4 knob calibration integration for learned/heuristic parameter adaptat
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import Optional, Dict, Any, TYPE_CHECKING
 
 from src.contracts.schemas import (
     PlanGainScheduleV1,
@@ -123,7 +123,9 @@ def build_regime_features(
 
     # Extract exposure info
     if exposure_manifest:
-        features.current_exposure_count = getattr(exposure_manifest, "total_episodes", None)
+        features.exposure_count = int(getattr(exposure_manifest, "total_samples", 0) or 0)
+        datapack_ids = getattr(exposure_manifest, "datapack_ids", None) or []
+        features.datapack_count = int(len(datapack_ids))
 
     # Extract regal summary scores
     if regal_result and regal_result.reports:
@@ -140,22 +142,24 @@ def build_regime_features(
         features.task_family_weights = task_family_weights
 
     # Additional context
-    objective_profile: Dict[str, Any] = {}
+    objective_profile_value: Optional[str] = None
     if context:
+        for key in ("objective_profile", "objective_preset", "objective"):
+            value = context.get(key)
+            if isinstance(value, str) and value:
+                objective_profile_value = value
+                break
         weight_history = context.get("weight_history", [])
-        if weight_history:
-            objective_profile["weight_history_len"] = len(weight_history)
+        if objective_profile_value is None and weight_history:
+            objective_profile_value = "balanced"
 
     # Extract econ tensor info (if available)
     if econ_tensor is not None:
-        objective_profile["econ_tensor_sha"] = econ_tensor.sha256()
-        objective_profile["econ_basis_sha"] = econ_tensor.basis_sha
-        # Include key econ values for the model
-        if econ_tensor.stats:
-            objective_profile["econ_norm"] = econ_tensor.stats.get("norm", 0.0)
+        if objective_profile_value is None:
+            objective_profile_value = "balanced"
 
-    if objective_profile:
-        features.objective_profile = objective_profile
+    if objective_profile_value:
+        features.objective_profile = objective_profile_value
 
     return features
 

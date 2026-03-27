@@ -6,13 +6,12 @@ Learned outputs are always clamped by hard constraints.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from src.contracts.schemas import (
     RegimeFeaturesV1,
     KnobPolicyV1,
     PlanPolicyConfigV1,
-    PlanGainScheduleV1,
 )
 
 
@@ -212,62 +211,52 @@ class HeuristicKnobProvider(KnobModel):
 
 
 # =============================================================================
-# Stub Learned Model (placeholder for future implementation)
-# =============================================================================
-
-class StubLearnedKnobModel(KnobModel):
-    """Stub learned model for testing/integration.
-
-    In production, this would be replaced by a trained model.
-    Currently delegates to heuristic fallback with "learned" label.
-    """
-
-    def __init__(self, model_sha: str = "stub_model_v1"):
-        self.model_sha = model_sha
-        self._heuristic = HeuristicKnobProvider()
-
-    def predict(
-        self,
-        features: RegimeFeaturesV1,
-        base_config: PlanPolicyConfigV1,
-    ) -> KnobPolicyV1:
-        """Predict using stub (delegates to heuristic)."""
-        policy = self._heuristic.predict(features, base_config)
-        policy.policy_source = "learned"  # Mark as learned for testing
-        policy.model_sha = self.model_sha
-        return policy
-
-
-# =============================================================================
 # Factory Function
 # =============================================================================
 
-def get_knob_model(use_learned: bool = False, model_path: Optional[str] = None) -> KnobModel:
+def get_knob_model(
+    use_learned: bool = False,
+    model_path: Optional[str] = None,
+    *,
+    required: bool = False,
+) -> KnobModel:
     """Get knob model based on availability.
 
     Args:
         use_learned: Whether to try loading a learned model
-        model_path: Path to learned model (if any)
+        model_path: Path to learned package/checkpoint (if any)
+        required: If True, require a benchmark-gated learned package
 
     Returns:
         KnobModel instance (learned or heuristic fallback)
     """
-    if use_learned:
-        # In future: load trained model from model_path
-        # For now, return stub
-        return StubLearnedKnobModel()
+    if not use_learned:
+        return HeuristicKnobProvider()
 
-    return HeuristicKnobProvider()
+    from src.regal.knob_model_runtime import resolve_knob_model
+
+    return resolve_knob_model(
+        use_learned=True,
+        model_path=model_path,
+        required=required,
+    )
 
 
 __all__ = [
     "KnobModel",
     "HeuristicKnobProvider",
-    "StubLearnedKnobModel",
     "get_knob_model",
-    # Hard constraints
+    "clamp",
     "MIN_GAIN_MULTIPLIER",
     "MAX_GAIN_MULTIPLIER",
+    "MIN_CONSERVATIVE_MULTIPLIER",
+    "MAX_CONSERVATIVE_MULTIPLIER",
+    "MIN_SPEC_CONSISTENCY",
+    "MAX_SPEC_CONSISTENCY",
+    "MIN_COHERENCE",
+    "MAX_COHERENCE",
+    "MIN_HACK_PROB",
+    "MAX_HACK_PROB",
     "MIN_PATIENCE",
     "MAX_PATIENCE",
 ]
