@@ -106,6 +106,92 @@ So the answer to “should the economic WM be fully stood up first, or should do
 - the economic WM should continue to be hardened now
 - but it should **not** be considered fully neuralized or complete before at least the sim/synth/physics WM and one of perception or embodiment emit canonical state
 
+## Humanoid Target Implications
+
+The target hardware matters architecturally.
+
+If the intended long-term target is Unitree G1/R1-class readiness, then several current repo assumptions must be treated as provisional rather than production-shaped:
+
+- current environments are mostly fixed-base and tabletop-centric
+- current embodiment assumptions are still arm/gripper-oriented
+- current policy and adapter widths were not chosen under a 21+ DoF humanoid requirement
+- current safety and observation assumptions are not yet real-time, proprioceptive, or whole-body enough
+
+### Model-capacity implication
+
+Not every model in the stack needs to become large.
+
+The right rule is:
+
+- lower WMs that must represent high-dimensional body state, contact, locomotion, dexterous manipulation, and spatial perception should be allowed to scale materially
+- the economic WM can remain relatively compact if it consumes rich canonical lower-WM state instead of trying to internalize all embodiment/perception complexity itself
+- the later meta-node WM should also stay governance-sized rather than trying to become the place where raw whole-body complexity lives
+
+That means the stack needs an explicit future **model-capacity audit**, not just more modules.
+
+Subsystems that likely need capacity reconsideration for G1/R1-class readiness:
+
+- embodiment / actuation WM encoders and action-state models
+- low-level and mid-level policy heads that currently assume small action spaces
+- sim / synth / physics WM components that must model contact-rich whole-body behavior
+- perception / grounding WM components that must fuse egocentric vision, depth, proprioception, and spatial state
+- transport bridges that must preserve richer topology across body, scene, and physics state
+
+Subsystems that do **not** necessarily need to become large if the architecture is correct:
+
+- economic WM policy/value layers
+- governance and meta-choice helper layers
+- some orchestration/control-plane helpers that operate over typed summaries rather than raw robot state
+
+### Environment implication
+
+The current environment portfolio should not be treated as sufficient for humanoid readiness.
+
+Current envs such as:
+
+- `workcell`
+- `dishwashing`
+- `drawer_vase`
+
+are still useful, but they are best understood as:
+
+- manipulation skill islands
+- control-plane and replay substrate testbeds
+- partial pretraining domains
+
+They are **not** yet valid proxies for a G1/R1-class deployment regime.
+
+For humanoid-target readiness, the environment set eventually needs to cover:
+
+- whole-body reaching and balance while manipulating
+- locomotion-plus-manipulation transitions
+- bimanual coordination
+- dexterous hand contact
+- human-proximate safety constraints
+- mobile navigation and scene traversal
+- recovery from pushes, slips, and contact disturbances
+- spatially extended tasks rather than fixed workcell-only episodes
+
+This should also include an explicit future simulation lane for:
+
+- Unitree G1/R1-class robot simulation integration
+
+That means the repo should eventually carry a named sim-env integration path for Unitree-class embodiments rather than assuming current workcell/tabletop envs can be stretched into that role.
+
+### Contract implication
+
+Preparing for G1/R1-class hardware also changes what the canonical contracts must carry:
+
+- richer proprioception
+- IMU and force/torque integration
+- whole-body kinematic state
+- contact state and support polygon / balance context
+- latency and control-frequency metadata
+- hardware safety envelope refs
+- mobile spatial state
+
+This means the later embodiment, sensor-fusion, safety, and SLAM phases are not optional polish. They are part of what “hardware-readiness” means.
+
 ## Recommended WM Set
 
 ### 1. Perception / Grounding WM
@@ -482,6 +568,7 @@ Phase 1 should count as landed only when:
 Named gaps that should remain explicit in this phase:
 
 - real Isaac backend implementation
+- Unitree-class humanoid sim-env integration behind a typed backend contract
 - richer Holosoma integration contract
 - domain randomization and system identification policy
 - NAG / LSD / GGDS productionization
@@ -565,6 +652,50 @@ Preconditions:
 - stable action/observation schema refs
 - capability profiles beyond fixed-base workcell assumptions
 - initial robot descriptions for target embodiments
+
+### Phase 3.5 - Humanoid Target Capacity and Environment Refit
+
+Objective:
+
+- explicitly audit model capacity and redesign environment assumptions for G1/R1-class readiness
+
+Why this phase must exist:
+
+- a 21+ DoF humanoid target changes what “enough model” means in embodiment, perception, simulation, and transport layers
+- current envs were not designed as humanoid-readiness benchmarks
+- without an explicit refit phase, the repo could accumulate elegant middleware around the wrong training domains
+
+What this phase should deliver:
+
+- a model-capacity review across lower WMs and submodule models
+- an explicit list of modules that can stay compact versus modules that must scale
+- revised humanoid-facing observation/action/schema requirements
+- an environment roadmap that reclassifies current workcell/tabletop envs as partial domains rather than full humanoid proxies
+- a named plan for integrating Unitree G1/R1 simulation environments into the sim/synth/physics stack through typed backend adapters rather than ad hoc env forks
+- named future envs or env families for:
+  - locomotion + manipulation
+  - balance-constrained reaching
+  - bimanual manipulation
+  - dexterous hand tasks
+  - mobile navigation + task execution
+  - contact disturbance and recovery
+
+Minimum outputs:
+
+- `humanoid_target_readiness.md`-style architecture note or equivalent roadmap artifact
+- capacity budgets or scaling bands for key lower-WM modules
+- canonical schema deltas needed for proprioception, IMU, force/torque, safety, and spatial state
+- a concrete Unitree sim-env integration target:
+  - backend choice
+  - robot description source
+  - observation/action contract deltas
+  - receipt and replay compatibility plan
+
+Preconditions:
+
+- initial embodiment WM contract draft
+- initial perception WM contract draft
+- identified target hardware assumptions for Unitree-class robots
 
 ### Phase 4 - Deployment Enabler Phases
 
@@ -874,11 +1005,12 @@ The correct next macro-sequence is:
 1. build the sim/synth/physics WM
 2. build the perception/grounding WM
 3. build the embodiment/actuation WM
-4. land the real-time, sensor-fusion, safety, and SLAM enabler phases
-5. consolidate the economic WM over those lower WMs
-6. add cross-WM typed transport bridges
-7. neuralize and harden the local meta-node objects themselves
-8. build the meta-node superposition/control WM
+4. audit model capacity and refit environment assumptions for humanoid-target readiness
+5. land the real-time, sensor-fusion, safety, and SLAM enabler phases
+6. consolidate the economic WM over those lower WMs
+7. add cross-WM typed transport bridges
+8. neuralize and harden the local meta-node objects themselves
+9. build the meta-node superposition/control WM
 
 ## Immediate Follow-On Recommendation
 

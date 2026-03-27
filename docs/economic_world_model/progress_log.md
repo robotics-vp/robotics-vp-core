@@ -14,9 +14,16 @@
   - delaying deep economic-WM neuralization and the later meta-node WM until lower WMs emit stable canonical state
   - requiring a dedicated local meta-node neuralization / robustness tranche before any overarching meta-node superposition WM
 - Changed: documented the concrete Phase 1 module structure for the sim / synth / physics WM, including its proposed package boundary, typed state objects, runtime flow, receipt surfaces, OSS-provider posture, and the current repo files that should be absorbed into that boundary instead of continuing to own agenda compilation independently.
+- Changed: extended the plan with explicit G1/R1-class hardware implications instead of treating humanoid readiness as an afterthought. The plan now calls out:
+  - a future model-capacity audit for lower-WM and submodule models
+  - the fact that current workcell/tabletop envs are useful skill islands but not sufficient humanoid-readiness proxies
+  - an explicit later sim-env integration lane for Unitree G1/R1-class simulation
+  - the need to refit observation/action contracts around proprioception, IMU, force/torque, whole-body state, latency, and spatial state
+  - a dedicated later phase for humanoid target capacity and environment refit before claiming real hardware-readiness
 - Changed: added named future phases with explicit preconditions for:
   - perception / grounding WM
   - embodiment / actuation WM
+  - humanoid target capacity and environment refit
   - real-time servo vs governance loop separation
   - sensor-fusion shim
   - physical safety layer

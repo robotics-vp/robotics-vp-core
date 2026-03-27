@@ -20,6 +20,19 @@
   - but they are still mostly named bounded-control surfaces with learned layers around them
   - they are not yet fully learned geometric/cybernetic objects in their own right
   - so a dedicated local meta-node neuralization / robustness phase should land before any higher-order meta-node mother-WM
+- The plan now also makes the hardware target implication explicit:
+  - if the actual target is Unitree G1/R1-class readiness, several current assumptions are only provisional
+  - current workcell/tabletop envs should be treated as partial manipulation domains, not full humanoid-readiness proxies
+  - a future Unitree G1/R1 sim-env integration lane should be treated as a named roadmap item, not left implicit under generic “humanoid envs”
+  - a dedicated later phase should audit which lower-WM and submodule models are large enough for 21+ DoF whole-body control and which can remain compact because they operate over typed summaries
+  - the future embodiment/perception/sim contracts will need richer:
+    - proprioception
+    - IMU
+    - force/torque
+    - latency / control-rate
+    - whole-body kinematic state
+    - spatial state
+  - this is why the plan now includes a separate humanoid target capacity and environment-refit phase before claiming serious hardware-readiness
 - Phase 1 in that plan is intentionally concrete and near-implementation-shaped:
   - proposed additive package: `src/world_model/sim_synth_physics/`
   - proposed ownership:
