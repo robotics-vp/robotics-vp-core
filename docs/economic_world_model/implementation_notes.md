@@ -1309,3 +1309,28 @@
   - no major non-GPU advisory contract gap remains in the already-wired internal control-plane stack
   - real grounded-data promotion still depends on GPU + SAM3D and better receipt density
   - future advisory cleanup, if any, should mostly be doctrine cleanup in newly added modules rather than another large retroactive purge of the existing loop
+
+- Anti-regression contract hygiene is now explicit:
+  - `scripts/check_canonical_receipt_contracts.py` statically scans the main internal control-plane packages and fails when internal receipt emitters expose `receipt_kind` without the rest of the canonical authority tuple (`authority_class`, `decision_scope`, `reward_math_mutation`)
+  - the same checker now treats provider-truth surfaces as canonical metadata rather than soft conventions and fails when those surfaces are used without the shared contract path
+  - `scripts/run_full_repo_verification.py` runs this checker by default so the advisory purge turns into a maintained invariant rather than a one-time cleanup
+
+- The sim/synth corpus lane now defaults closer to live production receipts:
+  - `src/world_model/sim_synth_physics/training_corpus.py` can harvest `sim_synth_physics_world_state_v1`, `physics_calibration_receipt_v1`, and `simulation_outcome_receipt_v1` files directly from receipt directories and reassemble canonical bundles
+  - the backend-selector and branch-planner trainers can now auto-build datasets from `--receipt-dir` inputs or from nearby runtime output roots when no explicit dataset or receipt bundle is provided
+  - dataset summaries now preserve receipt provenance (`receipt_source_kind`, `receipt_dirs`, `receipt_bundle_count`) so downstream promotion decisions can tell whether a helper was fit on live harvested runtime receipts or on manually assembled bundles
+  - while landing this, the WM package surface was trimmed to avoid eager compiler/runtime imports from `src/world_model/sim_synth_physics/__init__.py`, which fixed a real circular-import failure between the package and `src/orchestrator/diffusion_requests.py`
+
+- Promotion/readiness reporting now surfaces the canonical classes that replaced advisory-only summaries:
+  - `src/regality/promotion_reporting.py` now summarizes control-plane context density and provider-truth density, not just inferential learnability density
+  - reports now carry:
+    - `work_order_ready_count`
+    - `control_plane_context_summary`
+    - `teacher_provider_truth_summary`
+    - `scene_tracks_provider_truth_summary`
+  - per-node coverage also now records control-plane / provider-truth episode counts so readiness reviews can see whether canonical metadata is actually present across the loop rather than only in spot artifacts
+
+- Practical consequence:
+  - the remaining within-mandate work is not another broad advisory purge
+  - it is maintaining these invariants as new helpers, new WMs, and new training/reporting lanes are added
+  - the real blockers now are receipt density, grounded-data availability, and benchmark evidence, not missing contract scaffolding

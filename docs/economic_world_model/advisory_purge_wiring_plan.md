@@ -293,6 +293,35 @@ Updated Tranche D target:
 - keep future shell additions on this typed input/output contract from day one
 - avoid creating another layer of anonymous shell summaries above the newly canonical lower-WM receipts
 
+### Tranche E: Anti-regression guardrails and reporting
+
+After Tranche D:
+
+- stop treating the advisory purge as a one-off cleanup
+- enforce the new doctrine in repo verification and readiness reporting
+- make receipt/provider-truth density visible in promotion outputs
+
+Progress now landed:
+
+- `scripts/check_canonical_receipt_contracts.py` now scans the main internal control-plane packages and fails when internal receipt emitters expose `receipt_kind` without the full canonical authority tuple (`authority_class`, `decision_scope`, `reward_math_mutation`).
+- The same checker also treats provider-truth surfaces as canonical metadata requirements, so new teacher / SceneTracks / external-provider lanes cannot quietly regress into advisory-only status metadata.
+- `scripts/run_full_repo_verification.py` now runs the checker by default unless `--skip-contract-checks` is passed.
+- `src/regality/promotion_reporting.py` now surfaces:
+  - `work_order_ready_count`
+  - `control_plane_context_summary`
+  - `teacher_provider_truth_summary`
+  - `scene_tracks_provider_truth_summary`
+  - per-node control-plane / provider-truth episode counts
+- The sim/synth helper trainers now also default closer to live receipt flows:
+  - `src/world_model/sim_synth_physics/training_corpus.py` can harvest runtime receipt directories directly
+  - `scripts/train_sim_synth_backend_selector.py` and `scripts/train_sim_synth_branch_planner.py` now preserve harvested receipt provenance in dataset summaries
+
+Updated Tranche E target:
+
+- keep the guardrail package list synchronized with any new internal control-plane packages
+- extend the same readiness-density reporting to future WM boundaries and helper lanes by default
+- prefer harvested receipt corpora over hand-shaped bundles whenever a subsystem runtime can already emit canonical receipts
+
 ## Phase B Math Posture Update
 
 ### What should not change now
