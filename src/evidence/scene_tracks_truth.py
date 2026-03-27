@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional
 
+from src.evidence.provider_truth import (
+    build_external_provider_truth,
+    coerce_external_provider_truth,
+)
+
 
 _FALLBACK_BACKENDS = {"passthrough", "stub", "auto"}
 _ARTIFACT_HINT_KEYS = (
@@ -117,6 +122,51 @@ def normalize_scene_tracks_truth(
     }
 
 
+def build_scene_tracks_provider_truth(
+    payload: Optional[Mapping[str, Any]] = None,
+    *,
+    explicit_backend: Any = None,
+) -> Dict[str, Any]:
+    metadata = dict(payload or {})
+    truth = scene_tracks_truth_from_metadata(metadata, explicit_backend=explicit_backend)
+    backend = str(truth.get("scene_tracks_backend", "") or "")
+    if truth.get("semantic_grounding_non_heuristic", False):
+        grounding_class = "non_heuristic_grounded"
+    elif truth.get("scene_tracks_non_stub", False):
+        grounding_class = "real_backend_unqualified"
+    elif backend == "passthrough":
+        grounding_class = "passthrough"
+    elif backend == "stub":
+        grounding_class = "stub"
+    elif backend == "artifact_present_unknown":
+        grounding_class = "artifact_present_unknown"
+    else:
+        grounding_class = "unavailable"
+    calibration_class = (
+        "camera_params_present"
+        if bool(metadata.get("camera_params_present", metadata.get("camera_name", "")))
+        else "camera_params_missing"
+    )
+    return build_external_provider_truth(
+        provider_id="scene_tracks",
+        provider_kind="scene_tracks_runtime",
+        provider_name="scene_tracks",
+        advisory_only=True,
+        available=bool(backend and backend not in {"", "unavailable"}),
+        backend_selected=backend,
+        fallback_mode="" if backend == "real" else backend,
+        calibration_class=calibration_class,
+        grounding_class=grounding_class,
+        confidence=float(metadata.get("scene_ir_quality", 0.0) or 0.0),
+        metadata={
+            "scene_tracks_non_stub": bool(truth.get("scene_tracks_non_stub", False)),
+            "semantic_grounding_non_heuristic": bool(truth.get("semantic_grounding_non_heuristic", False)),
+            "semantic_grounding_ready": bool(truth.get("semantic_grounding_ready", False)),
+            "scene_tracks_training_eligible": bool(truth.get("scene_tracks_training_eligible", False)),
+        },
+    )
+
+
 def scene_tracks_truth_from_metadata(
     payload: Optional[Mapping[str, Any]] = None,
     *,
@@ -125,6 +175,19 @@ def scene_tracks_truth_from_metadata(
     """Normalize scene-track truth semantics from metadata payloads."""
 
     metadata = dict(payload or {})
+    explicit_truth = coerce_external_provider_truth(metadata.get("scene_tracks_provider_truth"))
+    if explicit_truth:
+        backend = normalize_scene_tracks_backend(explicit_truth.get("backend_selected"))
+        grounding_class = str(explicit_truth.get("grounding_class", "") or "")
+        return normalize_scene_tracks_truth(
+            backend=backend,
+            explicit_non_stub=backend == "real" or grounding_class in {"non_heuristic_grounded", "real_backend_unqualified"},
+            semantic_grounding_ready=grounding_class == "non_heuristic_grounded",
+            training_eligible=bool(
+                explicit_truth.get("metadata", {}).get("scene_tracks_training_eligible", False)
+            ),
+            explicit_non_heuristic=grounding_class == "non_heuristic_grounded",
+        )
     future_signals = metadata.get("future_training_signals")
     if not isinstance(future_signals, Mapping):
         future_signals = {}
@@ -156,6 +219,7 @@ def scene_tracks_truth_from_metadata(
 
 
 __all__ = [
+    "build_scene_tracks_provider_truth",
     "normalize_scene_tracks_backend",
     "normalize_scene_tracks_truth",
     "resolve_scene_tracks_backend",

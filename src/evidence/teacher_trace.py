@@ -7,6 +7,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
+from src.evidence.provider_truth import (
+    build_external_provider_truth,
+    coerce_external_provider_truth,
+)
 from src.utils.config_digest import sha256_json
 from src.utils.json_safe import to_json_safe
 
@@ -118,6 +122,40 @@ def infer_teacher_semantics(
     }
 
 
+def build_teacher_provider_truth(
+    *,
+    provider_id: str = "openvla",
+    provider_name: str = "",
+    available: bool = False,
+    backend_selected: Any = "",
+    fallback_mode: Any = "",
+    confidence: Any = 0.0,
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    meta = _mapping(metadata)
+    backend = str(backend_selected or meta.get("backend_selected") or "").strip()
+    fallback = str(fallback_mode or meta.get("failure_reason") or "").strip()
+    return build_external_provider_truth(
+        provider_id=provider_id,
+        provider_kind="teacher_runtime",
+        provider_name=provider_name or provider_id,
+        advisory_only=True,
+        available=bool(available),
+        backend_selected=backend,
+        fallback_mode=fallback,
+        availability_class="real_backend" if bool(available) and backend == "real" else "",
+        calibration_class="not_applicable",
+        grounding_class="not_applicable",
+        confidence=confidence,
+        metadata={
+            **meta,
+            "vision_backbone_selected": str(meta.get("vision_backbone_selected", "")),
+            "backend_policy": str(meta.get("backend_policy", "")),
+            "failure_reason": str(meta.get("failure_reason", "")),
+        },
+    )
+
+
 @dataclass(frozen=True)
 class TeacherStep:
     """Single advisory teacher output at one step or clip slice."""
@@ -171,6 +209,7 @@ class TeacherTrace:
     summary: Dict[str, float] = field(default_factory=dict)
     provenance: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    provider_truth: Dict[str, Any] = field(default_factory=dict)
     version: str = "teacher_trace_v1"
 
     @classmethod
@@ -186,6 +225,7 @@ class TeacherTrace:
         summary: Optional[Mapping[str, Any]] = None,
         provenance: Optional[Mapping[str, Any]] = None,
         metadata: Optional[Mapping[str, Any]] = None,
+        provider_truth: Optional[Mapping[str, Any]] = None,
         trace_id: Optional[str] = None,
         version: str = "teacher_trace_v1",
     ) -> "TeacherTrace":
@@ -198,6 +238,7 @@ class TeacherTrace:
         resolved_summary = _float_mapping(summary)
         resolved_provenance = _mapping(provenance)
         resolved_metadata = _mapping(metadata)
+        resolved_provider_truth = coerce_external_provider_truth(provider_truth)
         resolved_version = str(version)
         payload: Dict[str, Any] = {
             "episode_id": resolved_episode_id,
@@ -209,6 +250,7 @@ class TeacherTrace:
             "summary": resolved_summary,
             "provenance": resolved_provenance,
             "metadata": resolved_metadata,
+            "provider_truth": resolved_provider_truth,
             "version": resolved_version,
         }
         resolved_id = trace_id or f"teacher_{sha256_json(payload)[:16]}"
@@ -223,6 +265,7 @@ class TeacherTrace:
             summary=resolved_summary,
             provenance=resolved_provenance,
             metadata=resolved_metadata,
+            provider_truth=resolved_provider_truth,
             version=resolved_version,
         )
 
@@ -238,6 +281,7 @@ class TeacherTrace:
             "summary": _float_mapping(self.summary),
             "provenance": _mapping(self.provenance),
             "metadata": _mapping(self.metadata),
+            "provider_truth": coerce_external_provider_truth(self.provider_truth),
             "version": self.version,
         }
 
@@ -257,6 +301,7 @@ class TeacherTrace:
             summary=_float_mapping(payload.get("summary")),
             provenance=_mapping(payload.get("provenance")),
             metadata=_mapping(payload.get("metadata")),
+            provider_truth=coerce_external_provider_truth(payload.get("provider_truth")),
             version=str(payload.get("version", "teacher_trace_v1")),
         )
 
@@ -271,6 +316,7 @@ class TeacherTrace:
         teacher_id: str = "openvla",
         timestamp: str = "",
         availability_reason: Optional[str] = None,
+        provider_truth: Optional[Mapping[str, Any]] = None,
     ) -> "TeacherTrace":
         action_payload = _float_mapping(action)
         confidence = float(action_payload.get("confidence", 0.0))
@@ -319,6 +365,16 @@ class TeacherTrace:
                 "affordance_hints": semantic_bundle["affordance_hints"],
                 "risk_hints": semantic_bundle["risk_hints"],
             },
+            provider_truth=provider_truth
+            or build_teacher_provider_truth(
+                provider_id=teacher_id,
+                provider_name=teacher_id,
+                available=bool(action_payload.get("vla_available", 0.0) > 0.0),
+                backend_selected="real" if bool(action_payload.get("vla_available", 0.0) > 0.0) else "unavailable",
+                fallback_mode=str(availability_reason or ""),
+                confidence=confidence,
+                metadata={"availability_reason": str(availability_reason or "")},
+            ),
         )
 
 
@@ -334,6 +390,7 @@ def load_teacher_trace_json(path: Path) -> TeacherTrace:
 __all__ = [
     "TeacherStep",
     "TeacherTrace",
+    "build_teacher_provider_truth",
     "infer_teacher_semantics",
     "load_teacher_trace_json",
     "save_teacher_trace_json",

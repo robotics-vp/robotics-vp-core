@@ -74,14 +74,19 @@ def test_rollout_labeler_stub_without_openvla(monkeypatch, tmp_path: Path):
     teacher_contract = json.loads(teacher_contract_path.read_text())
     assert teacher_contract["available"] is False
     assert teacher_contract["metadata"]["availability_reason"] == "openvla_disabled"
+    assert teacher_contract["provider_truth"]["authority_class"] == "canonical_metadata"
+    assert teacher_contract["provider_truth"]["availability_class"] == "disabled"
     teacher_action = json.loads(teacher_action_path.read_text())
     assert teacher_action["available"] is False
     assert teacher_action["failure_mode"] == "openvla_disabled"
+    assert teacher_action["provider_truth"]["authority_class"] == "canonical_metadata"
     teacher_trace = json.loads(teacher_trace_path.read_text())
     assert teacher_trace["advisory_only"] is True
+    assert teacher_trace["provider_truth"]["authority_class"] == "canonical_metadata"
     assert labeled[0].metadata["execution_preconditions"]["ready"] is False
     assert labeled[0].metadata["future_training_signals"]["semantic_grounding_non_heuristic"] is False
     assert labeled[0].metadata["teacher_runtime_backend_selected"] == "disabled"
+    assert labeled[0].metadata["teacher_provider_truth"]["availability_class"] == "disabled"
 
 
 def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):
@@ -119,6 +124,7 @@ def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):
     teacher_action = json.loads(teacher_action_path.read_text())
     assert teacher_contract["metadata"]["availability_reason"] == "boom"
     assert teacher_action["failure_mode"] == "boom"
+    assert teacher_action["provider_truth"]["authority_class"] == "canonical_metadata"
 
 
 def test_rollout_labeler_preserves_structured_teacher_semantics(monkeypatch, tmp_path: Path):
@@ -195,7 +201,9 @@ def test_rollout_labeler_preserves_structured_teacher_semantics(monkeypatch, tmp
     assert teacher_trace["metadata"]["affordance_hints"] == ["open"]
     assert teacher_trace["metadata"]["risk_hints"] == ["fragility"]
     assert "object:drawer" in teacher_trace["metadata"]["semantic_tags"]
+    assert teacher_trace["provider_truth"]["backend_selected"] == "real"
     assert labeled[0].metadata["scene_tracks_backend"] == "real"
+    assert labeled[0].metadata["scene_tracks_provider_truth"]["grounding_class"] == "non_heuristic_grounded"
     assert labeled[0].metadata["semantic_grounding_mode"] == "non_heuristic"
     assert labeled[0].metadata["grounded_track_object_count"] == 2
     assert labeled[0].metadata["future_training_signals"]["teacher_runtime_live"] is True

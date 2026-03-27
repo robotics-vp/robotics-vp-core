@@ -177,6 +177,38 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     metadata_payload["runtime_packet_id"] = "runtime_ep_rollout_001"
     metadata_payload["event_refs"] = ["event_rollout_001"]
     metadata_payload["decision_refs"] = ["decision_rollout_001"]
+    metadata_payload["scene_tracks_provider_truth"] = {
+        "provider_id": "scene_tracks",
+        "provider_kind": "scene_tracks_runtime",
+        "provider_name": "scene_tracks",
+        "advisory_only": True,
+        "available": True,
+        "backend_selected": "passthrough",
+        "fallback_mode": "passthrough",
+        "availability_class": "passthrough_backend",
+        "calibration_class": "camera_params_present",
+        "grounding_class": "passthrough",
+        "confidence": 0.2,
+        "authority_class": "canonical_metadata",
+        "decision_scope": "external_provider_status",
+        "reward_math_mutation": False,
+    }
+    metadata_payload["teacher_provider_truth"] = {
+        "provider_id": "openvla",
+        "provider_kind": "teacher_runtime",
+        "provider_name": "openvla",
+        "advisory_only": True,
+        "available": False,
+        "backend_selected": "disabled",
+        "fallback_mode": "disabled",
+        "availability_class": "disabled",
+        "calibration_class": "not_applicable",
+        "grounding_class": "not_applicable",
+        "confidence": 0.0,
+        "authority_class": "canonical_metadata",
+        "decision_scope": "external_provider_status",
+        "reward_math_mutation": False,
+    }
     metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
 
     dataset_dir = tmp_path / "replay_rollout_dataset"
@@ -198,6 +230,8 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.episodes[0].metadata["scene_tracks_non_stub"] is False
     assert bundle.episodes[0].metadata["semantic_memory_grounded"] is True
     assert bundle.episodes[0].metadata["semantic_grounding_non_heuristic"] is False
+    assert bundle.episodes[0].metadata["scene_tracks_provider_truth"]["grounding_class"] == "passthrough"
+    assert bundle.episodes[0].metadata["teacher_provider_truth"]["availability_class"] == "disabled"
     assert bundle.episodes[0].metadata["selection_summary"]["selected_ids"] == ["dp_rollout"]
     assert bundle.episodes[0].metadata["control_plane_context"]["receipt_kind"] == "orchestrator_control_plane_context_v1"
     assert bundle.episodes[0].metadata["inferential_learnability_contract"]["subject_id"] == "ep_rollout_001"

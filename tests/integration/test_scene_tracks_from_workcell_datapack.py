@@ -77,6 +77,7 @@ def test_scene_tracks_from_workcell_datapack(tmp_path: Path) -> None:
     if result.adapter_status["overall_mode"] == "passthrough":
         assert result.frame_metadata["execution_preconditions"]["ready"] is False
         assert result.frame_metadata["training_eligible"] is False
+    assert result.frame_metadata["scene_tracks_provider_truth"]["authority_class"] == "canonical_metadata"
     assert result.frame_metadata["semantic_summary"]["semantic_density_score"] > 0.0
     assert result.frame_metadata["semantic_summary"]["class_label_coverage"] > 0.0
     assert "object:end_effector" in result.frame_metadata["semantic_tags"]
@@ -158,6 +159,7 @@ def test_scene_tracks_zero_inference_passthrough_from_workcell_datapack(tmp_path
     assert result.adapter_status["overall_mode"] == "passthrough"
     assert result.adapter_status["no_inference_backend"] is True
     assert result.frame_metadata["training_eligible"] is False
+    assert result.frame_metadata["scene_tracks_provider_truth"]["grounding_class"] == "passthrough"
     assert (
         result.frame_metadata["execution_preconditions"]["metadata"]["signal_values"]["scene_ir_backend_passthrough"]
         is True

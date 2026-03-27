@@ -18,6 +18,7 @@ from src.evidence.grounded_data_host import (
     collect_grounded_data_host_capabilities,
 )
 from src.evidence.preconditions import build_execution_preconditions
+from src.evidence.scene_tracks_truth import build_scene_tracks_provider_truth
 from src.ontology.datapack_registry import register_scene_tracks_artifact
 from src.ontology.store import OntologyStore
 from src.vision.scene_ir_tracker import SceneIRTracker, SceneIRTrackerConfig
@@ -300,6 +301,11 @@ def run_scene_tracks(
     )
     frame_meta["execution_preconditions"] = execution_preconditions.to_dict()
     frame_meta["training_eligible"] = bool(execution_preconditions.ready)
+    frame_meta["camera_params_present"] = frames_contract.camera_params is not None
+    frame_meta["scene_tracks_provider_truth"] = build_scene_tracks_provider_truth(
+        frame_meta,
+        explicit_backend=backend_selected,
+    )
 
     registry_entry = _register_artifact(
         datapack_path=Path(datapack_path),
@@ -404,6 +410,7 @@ def _update_datapack_metadata(
     payload["scene_tracks_quality"] = frame_meta.get("scene_tracks_quality", {})
     payload["scene_ir_quality"] = frame_meta.get("scene_ir_quality", 0.0)
     payload["scene_tracks_semantic_summary"] = frame_meta.get("semantic_summary", {})
+    payload["scene_tracks_provider_truth"] = frame_meta.get("scene_tracks_provider_truth", {})
     payload["semantic_tags"] = sorted(
         {
             str(tag)
