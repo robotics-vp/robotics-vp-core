@@ -66,6 +66,8 @@ def _materialize_robot_asset_sidecars(
         "observation_contracts": list(contract.observation_contracts),
         "action_contracts": list(contract.action_contracts),
         "asset_readiness_score": float(contract.metadata.get("asset_readiness_score", 0.0) or 0.0),
+        "normalized_asset_manifest": mapping(contract.metadata.get("normalized_asset_manifest", {})),
+        "recommended_assets": list(contract.metadata.get("recommended_assets", []) or []),
     }
     if contract_path is not None:
         _write_json(

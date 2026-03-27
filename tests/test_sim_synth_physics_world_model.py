@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.motor_backend.base import MotorEvalResult
+from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
 from src.motor_backend.rollout_capture import EpisodeMetadata, EpisodeRollout, RolloutBundle
 from src.orchestrator.diffusion_requests import build_diffusion_prompts_from_world_state
 from src.orchestrator.semantic_simulation import compile_simulation_agenda
@@ -168,10 +168,14 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
         backend_selector=PromotedBackendSelector(),
         embodiment_context={
             "robot_asset_manifest": {
-                "unitree_robot_description": True,
-                "joint_mapping_contract": True,
-                "sensor_extrinsics": True,
-                "actuator_latency_profile": True,
+                "unitree_usd": "/assets/unitree/g1.usd",
+                "joint_map_path": "/assets/unitree/joint_map.yaml",
+                "camera_extrinsics": "/assets/unitree/camera_extrinsics.json",
+                "imu_extrinsics": "/assets/unitree/imu_extrinsics.json",
+                "force_torque_calibration": "/assets/unitree/ft_calibration.json",
+                "actuator_latency_profile": "/assets/unitree/latency.yaml",
+                "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
+                "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
             }
         },
     )
@@ -183,8 +187,44 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
     assert world_state.backend_execution_binding is not None
     assert world_state.backend_execution_binding.binding_status == "runtime_ready"
     assert world_state.physics_context.metadata["backend_adapter"]["supports_execution"] is True
+    assert (
+        world_state.backend_execution_binding.metadata["normalized_asset_manifest"]["unitree_robot_description"][
+            "present"
+        ]
+        is True
+    )
     assert result.physics_execution_contract.route_status == "ready"
     assert result.physics_execution_contract.resolved_backend == "isaac"
+
+
+def test_world_state_normalizes_unitree_asset_aliases_into_robot_contract() -> None:
+    world_state = compile_sim_synth_physics_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedBackendSelector(),
+        embodiment_context={
+            "robot_asset_manifest": {
+                "unitree_urdf": "/assets/unitree/g1.urdf",
+                "joint_map": "/assets/unitree/joint_map.json",
+                "sensor_extrinsics": "/assets/unitree/sensors.json",
+                "actuator_profile": "/assets/unitree/actuator_latency.json",
+                "joint_limit_config": "/assets/unitree/joint_limits.yaml",
+                "watchdog_profile": "/assets/unitree/watchdog.yaml",
+            }
+        },
+    )
+
+    assert world_state.robot_asset_contract is not None
+    assert "unitree_robot_description" in world_state.robot_asset_contract.available_assets
+    assert "whole_body_joint_map" in world_state.robot_asset_contract.available_assets
+    assert "camera_extrinsics" in world_state.robot_asset_contract.available_assets
+    assert "imu_extrinsics" in world_state.robot_asset_contract.available_assets
+    assert "force_torque_calibration" in world_state.robot_asset_contract.missing_assets
+    assert (
+        world_state.robot_asset_contract.metadata["normalized_asset_manifest"]["unitree_robot_description"][
+            "matched_aliases"
+        ]
+        == ["unitree_urdf"]
+    )
 
 
 def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None:
@@ -545,6 +585,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
         "",
         "runtime_request_materialized_with_preconditions",
         "runtime_execution_completed",
+        "runtime_training_completed",
         "runtime_execution_failed",
     }
     assert feedback_manifest["planned_branch_count"] >= 1
@@ -638,6 +679,101 @@ def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exis
     assert any(
         "holosoma_datapack_binding.json" in ref
         for ref in result.backend_runtime_execution_receipt.artifact_refs
+    )
+    assert any(
+        "backend_runtime_metrics.json" in ref
+        for ref in result.backend_runtime_execution_receipt.artifact_refs
+    )
+    assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
+
+
+def test_runtime_trains_concrete_holosoma_backend_when_motion_datapacks_exist(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from src.world_model.sim_synth_physics import backend_runtime_execution as runtime_exec_module
+
+    class FakeRuntimeBackend:
+        def train_policy(
+            self,
+            task_id,
+            objective,
+            datapack_ids,
+            num_envs,
+            max_steps,
+            datapack_configs=None,
+            scenario_id=None,
+            rollout_base_dir=None,
+            seed=None,
+        ):
+            assert task_id == "humanoid_wbt_g1"
+            assert datapack_ids == ["dp_motion_1"]
+            assert datapack_configs
+            assert datapack_configs[0].motion_clips
+            assert num_envs >= 1
+            assert max_steps >= 64
+            assert scenario_id
+            assert rollout_base_dir is not None
+            episode_dir = Path(rollout_base_dir) / scenario_id / "episode_000"
+            episode_dir.mkdir(parents=True, exist_ok=True)
+            trajectory_path = episode_dir / "trajectory.npz"
+            trajectory_path.write_bytes(b"fake")
+            rollout_bundle = RolloutBundle(
+                scenario_id=scenario_id,
+                episodes=[
+                    EpisodeRollout(
+                        metadata=EpisodeMetadata(
+                            episode_id=f"{scenario_id}_episode_000",
+                            task_id=task_id,
+                            robot_family="unitree_g1",
+                            seed=seed,
+                            env_params={"mode": "holosoma_train"},
+                        ),
+                        trajectory_path=trajectory_path,
+                    )
+                ],
+            )
+            return MotorTrainingResult(
+                policy_id="trained_holosoma_policy.onnx",
+                raw_metrics={"train_steps": float(max_steps), "train_return": 3.5},
+                econ_metrics={"mpl_units_per_hour": 72.0},
+                rollout_bundle=rollout_bundle,
+            )
+
+    monkeypatch.setattr(runtime_exec_module, "_runtime_supports_execution", lambda backend: backend == "holosoma")
+    monkeypatch.setattr(
+        runtime_exec_module,
+        "make_motor_backend",
+        lambda name, econ_meter, store, backend_config=None: FakeRuntimeBackend(),
+    )
+
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedHolosomaBackendSelector(),
+        embodiment_context={
+            "active_embodiments": ["unitree_g1"],
+            "motion_clip_datapacks": ["dp_motion_1"],
+            "motion_clips": [{"path": "/tmp/clip_a.npz", "weight": 0.6}],
+        },
+    )
+
+    result = runtime.execute_world_state(world_state, output_dir=tmp_path)
+
+    assert result.backend_runtime_execution_receipt is not None
+    assert result.backend_runtime_execution_receipt.backend == "holosoma"
+    assert result.backend_runtime_execution_receipt.execution_status == "runtime_training_completed"
+    assert result.backend_runtime_execution_receipt.execution_mode == "holosoma_train_policy"
+    assert result.backend_runtime_execution_receipt.policy_id == "trained_holosoma_policy.onnx"
+    assert (
+        result.physics_adaptation_receipt.metadata["runtime_evidence"]["runtime_execution_status"]
+        == "runtime_training_completed"
+    )
+    assert (
+        result.physics_adaptation_receipt.metadata["runtime_evidence"]["runtime_concrete_completed"]
+        is True
     )
     assert any(
         "backend_runtime_metrics.json" in ref

@@ -84,6 +84,7 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
         "",
         "runtime_request_materialized_with_preconditions",
         "runtime_execution_completed",
+        "runtime_training_completed",
         "runtime_execution_failed",
     }
     assert result["backend_shadow_execution_status"] in {

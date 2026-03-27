@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
+from .asset_manifest import (
+    available_assets_for_hardware_class,
+    extract_robot_asset_manifest,
+    missing_assets_for_hardware_class,
+    normalize_robot_asset_manifest,
+    recommended_assets_for_hardware_class,
+    required_assets_for_hardware_class,
+)
 from .common import clip01, mapping, stable_id
 from .state import (
     BackendExecutionBindingState,
@@ -13,12 +21,7 @@ from .state import (
 
 
 def _asset_manifest(embodiment_context: Optional[Mapping[str, Any]]) -> dict[str, Any]:
-    payload = mapping(embodiment_context)
-    return mapping(
-        payload.get("robot_asset_manifest")
-        or payload.get("asset_manifest")
-        or payload.get("robot_assets")
-    )
+    return extract_robot_asset_manifest(embodiment_context)
 
 
 def _observation_contracts(target_hardware_class: str) -> list[str]:
@@ -37,7 +40,11 @@ def _observation_contracts(target_hardware_class: str) -> list[str]:
 
 def _action_contracts(target_hardware_class: str) -> list[str]:
     if target_hardware_class == "unitree_g1_r1_class":
-        return ["whole_body_joint_command_v1", "locomotion_mode_command_v1"]
+        return [
+            "whole_body_joint_command_v1",
+            "locomotion_mode_command_v1",
+            "recovery_mode_command_v1",
+        ]
     return ["joint_command_v1"]
 
 
@@ -53,16 +60,25 @@ def compile_robot_asset_contract(
         for key, value in sorted(manifest.items())
         if value not in (None, "", False, 0, [], {})
     ]
-    available_assets = sorted(
-        set(manifest_available) | set(backend_execution_binding.available_assets)
-    )
-    required_assets = list(backend_execution_binding.required_assets)
-    missing_assets = [asset for asset in required_assets if asset not in available_assets]
     target_hardware_class = (
         ""
         if adaptation_policy is None
         else str(adaptation_policy.target_hardware_class)
     )
+    normalized_manifest = normalize_robot_asset_manifest(embodiment_context)
+    required_assets = sorted(
+        set(backend_execution_binding.required_assets)
+        | set(required_assets_for_hardware_class(target_hardware_class))
+    )
+    available_assets = sorted(
+        set(available_assets_for_hardware_class(target_hardware_class, embodiment_context))
+        | set(backend_execution_binding.available_assets)
+    )
+    missing_assets = list(missing_assets_for_hardware_class(target_hardware_class, embodiment_context))
+    for asset_name in required_assets:
+        if asset_name not in available_assets and asset_name not in missing_assets:
+            missing_assets.append(asset_name)
+    missing_assets = sorted(set(missing_assets))
     calibration_contracts = (
         []
         if adaptation_policy is None
@@ -88,6 +104,9 @@ def compile_robot_asset_contract(
             "binding_id": backend_execution_binding.binding_id,
             "binding_status": backend_execution_binding.binding_status,
             "asset_manifest": manifest,
+            "normalized_asset_manifest": normalized_manifest,
+            "manifest_declared_assets": manifest_available,
+            "recommended_assets": recommended_assets_for_hardware_class(target_hardware_class),
             "embodiment_context": mapping(embodiment_context),
             "asset_readiness_score": clip01(
                 1.0

@@ -30,15 +30,33 @@ def build_holosoma_backend_binding(
         or embodiment_context.get("robot_families")
         or []
     )
+    motion_sources = list(embodiment_context.get("motion_clip_datapacks") or [])
+    motion_clips = list(
+        embodiment_context.get("motion_clips")
+        or embodiment_context.get("motion_clip_paths")
+        or []
+    )
+    retargeting_contract = mapping(
+        embodiment_context.get("retargeting_contract")
+        or embodiment_context.get("whole_body_retargeting")
+    )
+    reward_overlay = mapping(embodiment_context.get("whole_body_reward_overlay"))
     required_assets = [
         "humanoid_embodiment_context",
-        "motion_clip_datapacks",
+        "motion_source_bundle",
+        "whole_body_retargeting_contract",
         "whole_body_reward_overlay",
         "holosoma_runtime",
     ]
-    available_assets = ([] if not active_embodiments else ["humanoid_embodiment_context"]) + (
-        ["holosoma_runtime"] if available else []
-    )
+    available_assets = ([] if not active_embodiments else ["humanoid_embodiment_context"])
+    if motion_sources or motion_clips:
+        available_assets.append("motion_source_bundle")
+    if retargeting_contract:
+        available_assets.append("whole_body_retargeting_contract")
+    if reward_overlay:
+        available_assets.append("whole_body_reward_overlay")
+    if available:
+        available_assets.append("holosoma_runtime")
     missing_assets = [asset for asset in required_assets if asset not in available_assets]
     if available and not missing_assets:
         binding_status = "ready"
@@ -72,6 +90,9 @@ def build_holosoma_backend_binding(
             "shadow_backend_available": True,
             "concrete_runtime_available": available,
             "task_presets": sorted(HOLOSOMA_TASK_MAP.keys()),
+            "motion_source_count": len(motion_sources) + len(motion_clips),
+            "retargeting_contract_present": bool(retargeting_contract),
+            "reward_overlay_present": bool(reward_overlay),
             "embodiment_context": mapping(embodiment_context),
         },
     }

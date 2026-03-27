@@ -5,6 +5,14 @@ from __future__ import annotations
 import importlib.util
 from typing import Any, Dict, Mapping
 
+from ..asset_manifest import (
+    available_assets_for_hardware_class,
+    extract_robot_asset_manifest,
+    missing_assets_for_hardware_class,
+    normalize_robot_asset_manifest,
+    required_assets_for_hardware_class,
+    recommended_assets_for_hardware_class,
+)
 from ..common import mapping
 
 
@@ -16,23 +24,10 @@ def _has_module(name: str) -> bool:
 
 
 def _asset_lists(embodiment_context: Mapping[str, Any]) -> tuple[list[str], list[str], list[str]]:
-    manifest = mapping(
-        embodiment_context.get("robot_asset_manifest")
-        or embodiment_context.get("asset_manifest")
-        or embodiment_context.get("robot_assets")
-    )
-    available = [
-        str(key)
-        for key, value in sorted(manifest.items())
-        if value not in (None, "", False, 0, [], {})
-    ]
-    required = [
-        "unitree_robot_description",
-        "joint_mapping_contract",
-        "sensor_extrinsics",
-        "actuator_latency_profile",
-    ]
-    missing = [asset for asset in required if asset not in available]
+    target_hardware_class = "unitree_g1_r1_class"
+    required = required_assets_for_hardware_class(target_hardware_class)
+    available = available_assets_for_hardware_class(target_hardware_class, embodiment_context)
+    missing = missing_assets_for_hardware_class(target_hardware_class, embodiment_context)
     return required, available, missing
 
 
@@ -47,6 +42,8 @@ def build_isaac_backend_binding(
     isaaclab_backend_available = _has_module("src.motor_backend.workcell_isaaclab_backend")
     shadow_backend_available = True
     required_assets, available_assets, missing_assets = _asset_lists(embodiment_context)
+    manifest = extract_robot_asset_manifest(embodiment_context)
+    normalized_manifest = normalize_robot_asset_manifest(embodiment_context)
     adapter_ready = (
         shadow_backend_available
         or isaaclab_backend_available
@@ -99,6 +96,12 @@ def build_isaac_backend_binding(
                 isaaclab_backend_available or isaacsim_available or isaacgym_available
             ),
             "runtime_backend_name": "workcell_isaaclab" if isaaclab_backend_available else "",
+            "required_asset_contracts": required_assets,
+            "recommended_asset_contracts": recommended_assets_for_hardware_class(
+                "unitree_g1_r1_class"
+            ),
+            "normalized_asset_manifest": normalized_manifest,
+            "raw_asset_manifest": manifest,
             "embodiment_context": mapping(embodiment_context),
         },
     }

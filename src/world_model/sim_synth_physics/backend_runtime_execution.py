@@ -8,11 +8,13 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from src.economics.econ_meter import EconomicMeter
+from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec, load_datapack_configs
 from src.motor_backend.factory import make_motor_backend
 from src.objectives.economic_objective import EconomicObjectiveSpec
 from src.ontology.models import Robot, Task
 from src.ontology.store import OntologyStore
 
+from .asset_manifest import extract_robot_asset_manifest, normalize_robot_asset_manifest
 from .common import mapping, safe_float
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import BackendExecutionBindingReceipt, BackendRuntimeExecutionReceipt
@@ -273,18 +275,26 @@ def _materialize_holosoma_binding(
     task_id: str,
 ) -> tuple[list[str], dict[str, Any]]:
     embodiment_context = _mapping(world_state.input_context.get("embodiment"))
+    datapack_entries = list(embodiment_context.get("motion_clip_datapacks") or [])
+    motion_clips = list(embodiment_context.get("motion_clips") or [])
+    motion_clip_paths = _strings(embodiment_context.get("motion_clip_paths"))
+    retargeting_contract = _mapping(
+        embodiment_context.get("retargeting_contract")
+        or embodiment_context.get("whole_body_retargeting")
+    )
     payload = {
         "version": "holosoma_datapack_binding_v1",
         "task_id": task_id,
         "active_embodiments": list(embodiment_context.get("active_embodiments") or []),
-        "motion_clip_datapacks": list(embodiment_context.get("motion_clip_datapacks") or []),
+        "motion_clip_datapacks": datapack_entries,
+        "motion_clips": motion_clips,
+        "motion_clip_paths": motion_clip_paths,
         "whole_body_reward_overlay": _mapping(
             embodiment_context.get("whole_body_reward_overlay")
         ),
-        "retargeting_contract": _mapping(
-            embodiment_context.get("retargeting_contract")
-            or embodiment_context.get("whole_body_retargeting")
-        ),
+        "retargeting_contract": retargeting_contract,
+        "motion_source_contract_present": bool(datapack_entries or motion_clips or motion_clip_paths),
+        "retargeting_contract_present": bool(retargeting_contract),
     }
     refs: list[str] = []
     if output_root is not None:
@@ -292,6 +302,63 @@ def _materialize_holosoma_binding(
         _write_json(binding_path, payload)
         refs.append(str(binding_path.resolve()))
     return refs, payload
+
+
+def _coerce_motion_clips(raw: Any) -> list[MotionClipSpec]:
+    clips: list[MotionClipSpec] = []
+    if not isinstance(raw, (list, tuple)):
+        return clips
+    for entry in raw:
+        if isinstance(entry, str):
+            clips.append(MotionClipSpec(path=entry, weight=1.0))
+            continue
+        if isinstance(entry, Mapping):
+            path = entry.get("path")
+            if not path:
+                continue
+            try:
+                weight = float(entry.get("weight", 1.0))
+            except Exception:
+                weight = 1.0
+            clips.append(MotionClipSpec(path=str(path), weight=weight))
+    return clips
+
+
+def _resolve_holosoma_datapacks(
+    world_state: SimSynthPhysicsWorldState,
+    *,
+    task_id: str,
+) -> tuple[list[str], list[DatapackConfig]]:
+    embodiment_context = _mapping(world_state.input_context.get("embodiment"))
+    datapack_entries = list(embodiment_context.get("motion_clip_datapacks") or [])
+    datapack_ids: list[str] = []
+    datapack_config_paths: list[str] = []
+    for entry in datapack_entries:
+        text = str(entry or "").strip()
+        if not text:
+            continue
+        if Path(text).exists():
+            datapack_config_paths.append(text)
+        else:
+            datapack_ids.append(text)
+
+    datapack_configs = load_datapack_configs(datapack_config_paths) if datapack_config_paths else []
+    direct_motion_clips = _coerce_motion_clips(
+        embodiment_context.get("motion_clips") or embodiment_context.get("motion_clip_paths")
+    )
+    if direct_motion_clips:
+        datapack_configs.append(
+            DatapackConfig(
+                id=f"{task_id}_runtime_motionpack",
+                description="WM-owned Holosoma runtime datapack",
+                motion_clips=direct_motion_clips,
+                tags=["humanoid", "wm_runtime"],
+                task_tags=[task_id],
+                robot_families=list(embodiment_context.get("active_embodiments") or []),
+                metadata={"source": "sim_synth_physics_backend_runtime_execution"},
+            )
+        )
+    return datapack_ids, datapack_configs
 
 
 def _materialize_isaac_binding(
@@ -303,6 +370,7 @@ def _materialize_isaac_binding(
     embodiment_context = _mapping(world_state.input_context.get("embodiment"))
     semantic_context = _mapping(world_state.input_context.get("semantic"))
     contract = world_state.robot_asset_contract
+    robot_asset_manifest = extract_robot_asset_manifest(embodiment_context)
     payload = {
         "version": "isaaclab_backend_config_v1",
         "task_id": task_id,
@@ -317,11 +385,8 @@ def _materialize_isaac_binding(
         "calibration_contracts": [] if contract is None else list(contract.calibration_contracts),
         "observation_contracts": [] if contract is None else list(contract.observation_contracts),
         "action_contracts": [] if contract is None else list(contract.action_contracts),
-        "robot_asset_manifest": _mapping(
-            embodiment_context.get("robot_asset_manifest")
-            or embodiment_context.get("asset_manifest")
-            or embodiment_context.get("robot_assets")
-        ),
+        "robot_asset_manifest": robot_asset_manifest,
+        "normalized_robot_asset_manifest": normalize_robot_asset_manifest(embodiment_context),
     }
     refs: list[str] = []
     if output_root is not None:
@@ -337,6 +402,10 @@ def _runtime_supports_execution(backend: str) -> bool:
     if backend == "isaac":
         return _has_module("src.motor_backend.workcell_isaaclab_backend")
     return False
+
+
+def _runtime_status_is_concrete(status: str) -> bool:
+    return str(status or "") in {"runtime_execution_completed", "runtime_training_completed"}
 
 
 def materialize_backend_runtime_execution(
@@ -389,12 +458,6 @@ def materialize_backend_runtime_execution(
         )
     artifact_refs.extend(binding_refs)
 
-    missing_preconditions: list[str] = []
-    if not policy_id:
-        missing_preconditions.append("runtime_policy_id")
-    if not _runtime_supports_execution(backend):
-        missing_preconditions.append("backend_runtime_module")
-
     store, econ_meter = _build_store_and_meter(
         world_state=world_state,
         backend=backend,
@@ -406,11 +469,38 @@ def materialize_backend_runtime_execution(
     rollout_base_dir = None if output_root is None else output_root / "rollouts"
 
     backend_name = "holosoma" if backend == "holosoma" else "workcell_isaaclab"
+    datapack_ids: list[str] = []
+    datapack_configs: list[DatapackConfig] = []
+    if backend == "holosoma":
+        datapack_ids, datapack_configs = _resolve_holosoma_datapacks(
+            world_state,
+            task_id=task_id,
+        )
+        binding_payload["resolved_datapack_ids"] = list(datapack_ids)
+        binding_payload["resolved_datapack_config_ids"] = [cfg.id for cfg in datapack_configs]
+
+    missing_preconditions: list[str] = []
+    can_train_holosoma = backend == "holosoma" and bool(datapack_ids or datapack_configs)
+    if not policy_id and not can_train_holosoma:
+        missing_preconditions.append("runtime_policy_id")
+    if not _runtime_supports_execution(backend):
+        missing_preconditions.append("backend_runtime_module")
+
     if missing_preconditions:
+        if backend == "holosoma" and not policy_id and not datapack_ids and not datapack_configs:
+            missing_preconditions = [
+                item for item in missing_preconditions if item != "runtime_policy_id"
+            ]
+            missing_preconditions.append("runtime_policy_id_or_motion_datapack")
+        request_mode = (
+            f"{backend_name}_train_policy"
+            if backend == "holosoma" and can_train_holosoma and not policy_id
+            else f"{backend_name}_evaluate_policy"
+        )
         return BackendRuntimeExecutionReceipt(
             receipt_id=f"backend_runtime_execution_receipt_{world_state.state_id}",
             backend=backend,
-            execution_mode=f"{backend_name}_evaluate_policy",
+            execution_mode=request_mode,
             execution_status="runtime_request_materialized_with_preconditions",
             policy_id=policy_id,
             artifact_refs=artifact_refs,
@@ -424,6 +514,8 @@ def materialize_backend_runtime_execution(
             },
         )
 
+    execution_mode = f"{backend_name}_evaluate_policy"
+    execution_status = "runtime_execution_failed"
     try:
         backend_instance = make_motor_backend(
             backend_name,
@@ -435,15 +527,35 @@ def materialize_backend_runtime_execution(
         )
         if backend_instance is None:
             raise RuntimeError(f"{backend_name} backend is not available.")
-        result = backend_instance.evaluate_policy(
-            policy_id=policy_id,
-            task_id=task_id,
-            objective=objective,
-            num_episodes=1,
-            scenario_id=scenario_id,
-            rollout_base_dir=rollout_base_dir,
-            seed=0,
-        )
+        if backend == "holosoma" and not policy_id and can_train_holosoma:
+            preferred_num_envs = max(1, min(8, len(world_state.synthetic_branch_plans) or 1))
+            preferred_max_steps = max(64, 32 * max(1, len(world_state.synthetic_branch_plans)))
+            result = backend_instance.train_policy(
+                task_id=task_id,
+                objective=objective,
+                datapack_ids=datapack_ids,
+                datapack_configs=datapack_configs,
+                num_envs=preferred_num_envs,
+                max_steps=preferred_max_steps,
+                scenario_id=scenario_id,
+                rollout_base_dir=rollout_base_dir,
+                seed=0,
+            )
+            policy_id = str(getattr(result, "policy_id", "") or "")
+            execution_mode = f"{backend_name}_train_policy"
+            execution_status = "runtime_training_completed"
+        else:
+            result = backend_instance.evaluate_policy(
+                policy_id=policy_id,
+                task_id=task_id,
+                objective=objective,
+                num_episodes=1,
+                scenario_id=scenario_id,
+                rollout_base_dir=rollout_base_dir,
+                seed=0,
+            )
+            execution_mode = f"{backend_name}_evaluate_policy"
+            execution_status = "runtime_execution_completed"
     except Exception as exc:
         if output_root is not None:
             failure_path = output_root / "backend_runtime_failure.json"
@@ -461,7 +573,7 @@ def materialize_backend_runtime_execution(
         return BackendRuntimeExecutionReceipt(
             receipt_id=f"backend_runtime_execution_receipt_{world_state.state_id}",
             backend=backend,
-            execution_mode=f"{backend_name}_evaluate_policy",
+            execution_mode=execution_mode,
             execution_status="runtime_execution_failed",
             policy_id=policy_id,
             artifact_refs=artifact_refs,
@@ -496,8 +608,8 @@ def materialize_backend_runtime_execution(
     return BackendRuntimeExecutionReceipt(
         receipt_id=f"backend_runtime_execution_receipt_{world_state.state_id}",
         backend=backend,
-        execution_mode=f"{backend_name}_evaluate_policy",
-        execution_status="runtime_execution_completed",
+        execution_mode=execution_mode,
+        execution_status=execution_status,
         policy_id=policy_id,
         artifact_refs=artifact_refs,
         metadata={
@@ -506,6 +618,8 @@ def materialize_backend_runtime_execution(
             "scenario_id": scenario_id,
             "runtime_request": runtime_request,
             "binding_payload": binding_payload,
+            "datapack_ids": list(datapack_ids),
+            "datapack_config_ids": [cfg.id for cfg in datapack_configs],
             "raw_metrics": raw_metrics,
             "econ_metrics": econ_metrics,
             "rollout_episode_count": len(list(getattr(rollout_bundle, "episodes", []) or [])),

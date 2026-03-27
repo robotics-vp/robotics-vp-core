@@ -24,6 +24,10 @@ def _is_materialized_status(status: str) -> bool:
     }
 
 
+def _is_concrete_runtime_status(status: str) -> bool:
+    return str(status or "") in {"runtime_execution_completed", "runtime_training_completed"}
+
+
 def summarize_runtime_evidence(
     *,
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
@@ -43,6 +47,7 @@ def summarize_runtime_evidence(
     )
     return {
         "runtime_execution_status": runtime_status,
+        "runtime_concrete_completed": _is_concrete_runtime_status(runtime_status),
         "runtime_artifact_count": (
             0
             if backend_runtime_execution_receipt is None
