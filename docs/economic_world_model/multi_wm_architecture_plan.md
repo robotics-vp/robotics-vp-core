@@ -87,6 +87,34 @@ The target posture is:
 
 For the G1/R1-facing roadmap, each subsystem should be pushed until the main remaining bottlenecks are honest Unitree-class readiness inputs rather than missing neural scaffolds, missing runtime loops, or missing package contracts.
 
+## Phase Exit Rule
+
+Do not move to the next named phase just because the next phase is conceptually attractive.
+
+The correct sequencing rule is:
+
+- keep executing the current phase while any named explicit gap is still addressable by:
+  - owned runtime wiring
+  - typed contracts or receipts
+  - helper/runtime-package integration
+  - adapter implementation
+  - canonical-state consolidation
+  - replay/training/reporting integration
+- only advance when the honest main blockers for the current phase are primarily:
+  - data or corpus density
+  - GPU budget or training time
+  - unavailable external assets or providers
+  - calibration truth
+  - benchmark evidence
+  - target-hardware or target-sim access
+
+In other words:
+
+- do not leave an implementable ownership/adaptation/runtime gap behind just because a later WM is more interesting
+- do move on once the current phase is structurally real and the main remainder is genuinely externalized into data/GPU/asset/benchmark constraints
+
+This rule applies to Phase 1 and every later WM or deployment-enabler phase in this document.
+
 ## Architectural Position
 
 ### What already exists
@@ -604,6 +632,7 @@ Complete-subsystem interpretation for Phase 1:
 
 - the subsystem should own live simulation planning, diffusion planning, backend/fidelity routing, branch planning, and receipt emission in the real runtime loop
 - it should already contain the runtime-package lanes for the learned seams it needs
+- do not advance to Phase 2 while Phase 1 still has implementable ownership, adapter, receipt, or training-feedback gaps inside the sim/synth/physics boundary
 - after that, the remaining blockers should be honest ones such as:
   - lack of real Unitree-class sim adapters
   - lack of grounded whole-body datasets
@@ -791,6 +820,7 @@ Phase 1 should count as landed only when:
 - backend/fidelity selection is emitted as a first-class receipt
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name
+- the target posture is real Isaac Sim / Isaac Gym / Unitree-class backend functionality behind typed backend routing, not a permanent pybullet-only fallback loop
 - the learned seams needed by the subsystem already have runtime-package loading and live-loop integration rather than existing only as loose code hooks
 - the remaining gap list is primarily real-data / GPU / adapter / benchmark work, not missing subsystem wiring
 
@@ -798,7 +828,7 @@ Phase 1 should count as landed only when:
 
 Named gaps that should remain explicit in this phase:
 
-- real Isaac backend implementation
+- real Isaac Sim / Isaac Gym backend implementation with typed adapter ownership
 - Unitree-class humanoid sim-env integration behind a typed backend contract
 - richer Holosoma integration contract
 - domain randomization and system identification policy
@@ -812,6 +842,12 @@ Use OSS as providers, not truth owners:
 - MuJoCo / dm_control / PyBullet / Isaac for physics execution
 - Holosoma where already integrated
 - later v-JEPA-2-style predictive modules for future estimation
+
+Target posture for this phase:
+
+- real Isaac Sim / Isaac Gym / Unitree-class functionality should eventually sit behind the WM's typed backend adapters
+- explicit fallback to PyBullet is acceptable only while the repo is still missing those adapters or the target assets
+- the fallback posture should stay honest in receipts and benchmark reporting until the adapter gap is truly closed
 
 The WM should own:
 
@@ -844,6 +880,7 @@ Neuralization rule from tranche 1:
 Complete-subsystem rule:
 
 - perception WM should be pushed until the main missing pieces are real grounded 3D data, real SAM3D/GPU hosts, camera calibration truth, and Unitree-class sensor corpora, not missing runtime-package or production-loop wiring
+- do not advance to Phase 3 while the perception WM still has implementable canonical-state, adapter, helper-package, or replay-wiring gaps
 
 Key named gaps:
 
@@ -888,6 +925,7 @@ Neuralization rule from tranche 1:
 Complete-subsystem rule:
 
 - embodiment WM should be pushed until the main missing pieces are real robot-description assets, whole-body control datasets, Unitree-class sim assets, safety calibration, and hardware benchmark receipts, not missing runtime-package or live-loop integration
+- do not advance past Phase 3 while embodiment still has implementable body-state, adapter, capability-model, or control-envelope gaps
 
 OSS dependency map:
 
@@ -928,6 +966,7 @@ What this phase should deliver:
   - dexterous hand tasks
   - mobile navigation + task execution
   - contact disturbance and recovery
+- do not advance beyond this refit until the remaining uncertainty is genuinely about assets, datasets, and benchmark evidence rather than carrying forward wrong environment assumptions
 
 Minimum outputs:
 

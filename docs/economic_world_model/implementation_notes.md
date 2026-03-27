@@ -1353,3 +1353,44 @@
   - the remaining within-mandate work is not another broad advisory purge
   - it is maintaining these invariants as new helpers, new WMs, and new training/reporting lanes are added
   - the real blockers now are receipt density, grounded-data availability, and benchmark evidence, not missing contract scaffolding
+
+- Phase 1 sim/synth/physics WM now has a more honest run-time boundary:
+  - `src/world_model/sim_synth_physics/runtime.py` is no longer only a compiler wrapper; it now owns:
+    - compile-time legacy agenda compatibility
+    - compile-time diffusion-plan compatibility
+    - planning-window execution into canonical backend-routing, calibration, outcome, and training-feedback artifacts
+  - the new runtime emits:
+    - `physics_execution_contract_v1`
+    - `physics_calibration_receipt_v1`
+    - `simulation_outcome_receipt_v1`
+    - `sim_synth_training_feedback_v1`
+  - this matters because the sim/synth WM is now closer to the Phase 1 requirement that it own branch-to-training feedback and receipt emission in the live loop, not just gap-ranking and branch proposal state
+
+- Backend routing is now explicit and honest:
+  - `src/world_model/sim_synth_physics/backend_router.py` preserves the difference between:
+    - requested backend
+    - resolved backend
+    - route status (`ready`, `fallback`, `blocked`)
+  - `isaac` is now treated as an explicit adapter gap with typed fallback metadata rather than an implicit generic backend name
+  - `holosoma` is treated as an external execution provider whose local availability is checked honestly at runtime
+  - this is still not "full Isaac/Unitree functionality", but it is the right in-phase posture: explicit typed ownership of the gap, not silent fallback
+
+- Phase 1 input normalization is less ad hoc now:
+  - `src/world_model/sim_synth_physics/adapters/economic_inputs.py` and `src/world_model/sim_synth_physics/adapters/embodiment_inputs.py` now normalize urgency, value-target, capability, control-constraint, and latency/contact signals before they enter WM canonical state
+  - this begins the actual module-boundary separation the architecture doc called for, instead of leaving economic and embodiment context as raw dict passthroughs
+
+- Orchestrator ownership is thinner now, which is the intended direction:
+  - `src/orchestrator/semantic_simulation.py` now asks the WM runtime for the legacy agenda view instead of building it itself
+  - `src/orchestrator/diffusion_requests.py` now goes through the WM runtime boundary to obtain world state and diffusion plans before adapting them into prompt specs
+  - this is not the end of Phase 1 ownership transfer, but it is the correct direction: orchestrator files become adapters/clients, not alternate owners
+
+- New WM-owned scripts now exist for the next tranches:
+  - `scripts/compile_sim_synth_physics_plan.py`
+  - `scripts/run_sim_synth_physics_loop.py`
+  - these scripts provide a canonical plan/loop entrypoint for Phase 1 instead of relying only on older orchestrator-side or ad hoc script flows
+
+- Architecture doctrine tightened:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now includes a cross-phase "phase exit rule":
+    - do not move to the next phase while the current phase still has implementable ownership/runtime/adapter/package gaps
+    - only move when the remaining blockers are primarily data/GPU/asset/calibration/benchmark constraints
+  - Phase 1 now explicitly targets real Isaac Sim / Isaac Gym / Unitree-class adapter functionality behind typed backend routing rather than letting PyBullet fallback become the de facto end state
