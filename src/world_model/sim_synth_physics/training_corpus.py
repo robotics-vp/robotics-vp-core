@@ -138,6 +138,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "world_state",
             "physics_adaptation_receipt",
             "backend_execution_binding_receipt",
+            "robot_asset_contract_receipt",
             "backend_shadow_execution_receipt",
             "physics_calibration_receipt",
             "render_provider_receipt",
@@ -152,6 +153,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_world_states: dict[Path, list[Dict[str, Any]]] = {}
     grouped_adaptations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_bindings: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_asset_contracts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_shadow: dict[Path, list[Dict[str, Any]]] = {}
     grouped_calibrations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_render_receipts: dict[Path, list[Dict[str, Any]]] = {}
@@ -185,6 +187,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_adaptations.setdefault(parent, []).append(dict(payload))
             elif version == "backend_execution_binding_receipt_v1":
                 grouped_backend_bindings.setdefault(parent, []).append(dict(payload))
+            elif version == "robot_asset_contract_receipt_v1":
+                grouped_asset_contracts.setdefault(parent, []).append(dict(payload))
             elif version == "backend_shadow_execution_receipt_v1":
                 grouped_backend_shadow.setdefault(parent, []).append(dict(payload))
             elif version == "physics_calibration_receipt_v1":
@@ -199,6 +203,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         set(grouped_world_states)
         | set(grouped_adaptations)
         | set(grouped_backend_bindings)
+        | set(grouped_asset_contracts)
         | set(grouped_backend_shadow)
         | set(grouped_calibrations)
         | set(grouped_render_receipts)
@@ -208,6 +213,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         world_states = grouped_world_states.get(directory, [])
         adaptations = grouped_adaptations.get(directory, [])
         backend_bindings = grouped_backend_bindings.get(directory, [])
+        asset_contracts = grouped_asset_contracts.get(directory, [])
         backend_shadow_receipts = grouped_backend_shadow.get(directory, [])
         calibrations = grouped_calibrations.get(directory, [])
         render_receipts = grouped_render_receipts.get(directory, [])
@@ -223,6 +229,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 bundle["physics_adaptation_receipt"] = dict(adaptations[-1])
             if backend_bindings:
                 bundle["backend_execution_binding_receipt"] = dict(backend_bindings[-1])
+            if asset_contracts:
+                bundle["robot_asset_contract_receipt"] = dict(asset_contracts[-1])
             if backend_shadow_receipts:
                 bundle["backend_shadow_execution_receipt"] = dict(backend_shadow_receipts[-1])
             if calibrations:
@@ -261,6 +269,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "backend_execution_binding_receipt_v1"
     ]
+    asset_contracts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "robot_asset_contract_receipt_v1"
+    ]
     backend_shadow_receipts = [
         dict(payload)
         for payload in rows
@@ -295,6 +309,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             bundle["physics_adaptation_receipt"] = adaptations[-1]
         if backend_bindings:
             bundle["backend_execution_binding_receipt"] = backend_bindings[-1]
+        if asset_contracts:
+            bundle["robot_asset_contract_receipt"] = asset_contracts[-1]
         if backend_shadow_receipts:
             bundle["backend_shadow_execution_receipt"] = backend_shadow_receipts[-1]
         if calibrations:
@@ -324,6 +340,7 @@ def build_backend_selector_rows_from_receipts(
         physics_metadata = _mapping(physics_context.get("metadata"))
         adaptation_receipt = _mapping(bundle_mapping.get("physics_adaptation_receipt"))
         backend_binding_receipt = _mapping(bundle_mapping.get("backend_execution_binding_receipt"))
+        robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
         backend_shadow_execution_receipt = _mapping(
             bundle_mapping.get("backend_shadow_execution_receipt")
         )
@@ -380,7 +397,8 @@ def build_backend_selector_rows_from_receipts(
                     or "steady_state"
                 ),
                 "target_hardware_class": str(
-                    adaptation_receipt.get("target_hardware_class")
+                    robot_asset_contract_receipt.get("target_hardware_class")
+                    or adaptation_receipt.get("target_hardware_class")
                     or _mapping(physics_metadata.get("backend_adapter")).get("target_hardware_class")
                     or "unknown"
                 ),
@@ -394,6 +412,11 @@ def build_backend_selector_rows_from_receipts(
                     "world_state_id": world_state.get("state_id"),
                     "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                     "backend_execution_binding_receipt_id": backend_binding_receipt.get("receipt_id"),
+                    "robot_asset_contract_receipt_id": robot_asset_contract_receipt.get("receipt_id"),
+                    "robot_asset_readiness_score": robot_asset_contract_receipt.get("readiness_score"),
+                    "robot_asset_missing_assets": list(
+                        robot_asset_contract_receipt.get("missing_assets") or []
+                    ),
                     "backend_binding_status": backend_binding_receipt.get("binding_status"),
                     "backend_shadow_execution_receipt_id": backend_shadow_execution_receipt.get("receipt_id"),
                     "backend_shadow_execution_status": backend_shadow_execution_receipt.get("execution_status"),
@@ -443,6 +466,7 @@ def build_branch_planner_rows_from_receipts(
             for receipt in _mapping_list(bundle_mapping.get("render_provider_receipts"))
             if str(receipt.get("branch_plan_id"))
         }
+        robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
         for plan_index, plan in enumerate(_mapping_list(world_state.get("synthetic_branch_plans"))):
             plan_id = str(plan.get("plan_id", ""))
             source_job_id = str(plan.get("source_job_id", ""))
@@ -507,6 +531,8 @@ def build_branch_planner_rows_from_receipts(
                         "bundle_index": bundle_index,
                         "world_state_id": world_state.get("state_id"),
                         "branch_plan_id": plan_id,
+                        "robot_asset_contract_receipt_id": robot_asset_contract_receipt.get("receipt_id"),
+                        "robot_asset_readiness_score": robot_asset_contract_receipt.get("readiness_score"),
                         "render_provider_receipt_id": render_receipt.get("receipt_id"),
                         "render_artifact_refs": list(render_receipt.get("artifact_refs") or []),
                         "render_unsatisfied_preconditions": list(

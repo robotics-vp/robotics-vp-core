@@ -2,6 +2,11 @@
 
 ## 2026-03-27
 
+- Changed: preserved robot-asset readiness through the sim/synth training-corpus path:
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests `robot_asset_contract_receipt_v1`
+  - backend-selector and branch-planner training rows now carry asset-contract refs, readiness score, and missing-asset signals instead of dropping that hardware-readiness truth at export time
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
 - Changed: made the new robot-asset contract load-bearing inside backend materialization:
   - `src/world_model/sim_synth_physics/shadow_execution.py` now writes backend-local robot-asset, calibration, and IO sidecars for Isaac and Holosoma shadow materialization paths
   - backend shadow receipts now carry `robot_asset_contract_id`, sidecar refs, calibration contracts, observation contracts, and action contracts

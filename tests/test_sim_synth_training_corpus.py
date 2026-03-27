@@ -77,6 +77,27 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_robot_asset_contract_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "asset_1",
+                "contract_id": "asset_contract_1",
+                "asset_profile": "unitree_humanoid_shadow_assets",
+                "target_hardware_class": "unitree_g1_r1_class",
+                "readiness_score": 0.25,
+                "required_assets": ["unitree_robot_description", "sensor_extrinsics"],
+                "available_assets": [],
+                "missing_assets": ["unitree_robot_description", "sensor_extrinsics"],
+                "calibration_contracts": ["whole_body_joint_map"],
+                "observation_contracts": ["imu_state_v1"],
+                "action_contracts": ["whole_body_joint_command_v1"],
+                "version": "robot_asset_contract_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_backend_shadow_execution_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -134,6 +155,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["world_state"]["state_id"] == "sim_state_1"
     assert bundles[0]["physics_adaptation_receipt"]["receipt_id"] == "adapt_1"
     assert bundles[0]["backend_execution_binding_receipt"]["receipt_id"] == "binding_1"
+    assert bundles[0]["robot_asset_contract_receipt"]["receipt_id"] == "asset_1"
     assert bundles[0]["backend_shadow_execution_receipt"]["receipt_id"] == "shadow_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
@@ -143,6 +165,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["target_hardware_class"] == "unitree_g1_r1_class"
     assert backend_rows[0]["target_system_identification_profile"] == "humanoid_shadow_system_id"
     assert backend_rows[0]["target_source"] == "runtime_receipt"
+    assert backend_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
+    assert backend_rows[0]["metadata"]["robot_asset_readiness_score"] == 0.25
+    assert backend_rows[0]["metadata"]["robot_asset_missing_assets"] == [
+        "unitree_robot_description",
+        "sensor_extrinsics",
+    ]
     assert backend_rows[0]["metadata"]["backend_shadow_execution_receipt_id"] == "shadow_1"
     assert (
         backend_rows[0]["metadata"]["backend_shadow_execution_status"]
@@ -152,6 +180,8 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     branch_rows = build_branch_planner_rows_from_receipts(bundles)
     assert branch_rows[0]["target_render_materialization_status"] == "scene_materialized"
     assert branch_rows[0]["target_render_materialization_mode"] == "scene_config"
+    assert branch_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
+    assert branch_rows[0]["metadata"]["robot_asset_readiness_score"] == 0.25
     assert (
         branch_rows[0]["metadata"]["render_artifact_refs"]
         == ["/tmp/render_provider_1/lsd_vector_scene_config.json"]

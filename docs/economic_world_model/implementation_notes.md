@@ -2,6 +2,13 @@
 
 ## 2026-03-27
 
+- Preserved the new robot-asset contract in trainer-facing export:
+  - the sim/synth training-corpus path now harvests `robot_asset_contract_receipt_v1`
+  - backend-selector and branch-planner rows now keep asset-contract refs, readiness score, and missing-asset context
+- This matters because:
+  - hardware-target readiness is now part of downstream training/export truth, not only runtime truth
+  - Phase 1 is therefore moving closer to the desired state where replay/training consume WM receipts directly rather than reconstructing backend readiness from loose metadata
+
 - Made the robot-asset contract operative inside backend materialization:
   - backend shadow/work-order paths now emit backend-local sidecars for:
     - robot asset contract
