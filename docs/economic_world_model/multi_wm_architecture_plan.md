@@ -1011,6 +1011,7 @@ Phase 1 should count as landed only when:
 - concrete backend execution binding is emitted as typed state and receipt, including honest Isaac/Unitree asset-readiness truth, and robot-asset/calibration/IO contracts are emitted as canonical state/receipts plus backend-local sidecars rather than left as loose missing-asset notes
 - requested backend runtime intent is emitted as a typed runtime-request or concrete-runtime receipt, so Isaac/Holosoma paths can advance from request-binding to real evaluation or train-from-motion execution without reopening the WM boundary later
 - Unitree-target humanoid asset manifests are normalized into canonical required-asset contracts rather than treated as arbitrary manifest keys, so backend readiness reflects real robot-description, calibration, safety, and control-IO prerequisites
+- Isaac/Unitree/Holosoma runtime target manifests are emitted explicitly, so the WM can name which external runtime roots, SDKs, and asset trees are still missing on a host instead of flattening that state into one generic “backend unavailable” bit
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name
@@ -1030,6 +1031,7 @@ Named gaps that should remain explicit in this phase:
 - concrete NAG/LSD counterfactual execution at scale beyond the new conditional execution seam
 - real GPU-backed grounded video state for perception-conditioned sim
 - real video-diffusion and GGDS/LDM model bring-up behind the new runtime/provider contracts tracked in `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`
+- concrete non-training GPU/materialization bring-up runs tracked in `scripts/NON_TRAINING_GPU_RUN_BACKLOG.json`
 
 ### Phase 1 OSS dependency posture
 

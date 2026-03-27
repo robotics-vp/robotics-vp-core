@@ -1675,3 +1675,31 @@
   - the remaining backend gap is increasingly not “the WM cannot express or route the runtime”
   - it is “the host/runtime/assets/policies are not present yet”
   - that is the right direction for this phase
+
+- Backend-runtime target discovery is now explicit:
+  - `src/world_model/sim_synth_physics/runtime_targets.py` describes the external runtime roots the WM is actually waiting on for each backend family
+  - for Isaac/Unitree this now includes:
+    - Isaac Lab / Isaac Sim / Unitree RL Gym / HumanoidVerse-style roots
+    - Unitree SDK2 root
+    - Unitree asset root
+    - local Python bridge availability
+  - for Holosoma this now includes:
+    - Holosoma root
+    - Holosoma motion root
+    - Holosoma policy root
+    - retargeting root
+    - local Python bridge availability
+  - these runtime-target contracts are now propagated into backend binding metadata and backend runtime-request sidecars, which makes the remaining Phase 1 blocker state much more operational
+
+- GPU bring-up queues are now explicitly split:
+  - `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json` remains the model/provider bring-up and fine-tune inventory
+  - `scripts/TRAINING_MIGRATION_BACKLOG.json` remains the training migration queue
+  - `scripts/NON_TRAINING_GPU_RUN_BACKLOG.json` is now the dedicated runtime/materialization smoke queue for:
+    - Isaac/Unitree runtime smoke
+    - Holosoma runtime eval smoke
+    - Stage-1 video diffusion materialization
+    - OpenVLA teacher runtime
+    - non-stub vision backbone runtime
+    - V-JEPA 2 runtime
+    - real SAM3D workcell grounding refresh
+  - `src/orchestrator/non_training_gpu_run_backlog.py` and `scripts/scan_non_training_gpu_run_backlog.py` make that queue evaluable with the same typed precondition logic as the broader loop-run backlog
