@@ -27,6 +27,7 @@ Ranking dimensions:
 | 7 | Semantic datapack/scenario selection in `semantic_policy.py` plus helper trainer/export lane | `heuristic` / `lightweight_trainer_gap` | Medium-high | Medium-high | No | **Wired now, benchmark-gated** |
 | 8 | `train_meta_transformer_synthetic.py` + meta-transformer runtime package/promotion path | `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 8a | D4 knob model / homeostatic planner knob calibration | `stub` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
+| 8b | `SemanticOrchestratorV2` shell policy / activation helper | `heuristic` / `lightweight_trainer_gap` | Medium-high | High | Yes | **Wired now, benchmark-gated** |
 | 9 | Teacher-runtime / rollout labeler semantic sidecars | `advisory` / `sidecar` / `fallback` | Medium-high | Medium-high | No | **Wired now** |
 | 10 | SceneTracks runner stub/passthrough backend lane | `fallback` | Medium | Medium | No | Explicit fallback kept, benchmark-gated |
 
@@ -554,6 +555,55 @@ Ranking dimensions:
   - `benchmark-gated`
   - `neuralized later`
 
+### 8b. `SemanticOrchestratorV2` shell policy / activation helper
+
+- surface: higher-order shell policy over focus presets, sampler strategy overrides, safety emphasis, and activation preference
+- file/path: `src/orchestrator/semantic_orchestrator_v2.py`, `src/orchestrator/orchestrator_shell_policy.py`, `src/orchestrator/orchestrator_shell_policy_training.py`, `src/orchestrator/orchestrator_shell_policy_runtime.py`, `scripts/train_orchestrator_shell_policy.py`
+- category: `heuristic` / `lightweight_trainer_gap`
+- current behavior:
+  - `SemanticOrchestratorV2.propose(...)` still builds an explicit heuristic advisory prior, but it no longer ends there
+  - `src/orchestrator/orchestrator_shell_policy.py` now defines a shared feature contract over:
+    - semantic snapshot truth
+    - recap/runtime readiness
+    - segmentation / OOD pressure
+    - semantic-WM meta-node state
+    - meta expected-delta state
+    - objective-preset availability
+  - `src/orchestrator/orchestrator_shell_policy_training.py` now trains a bounded multi-head helper over real semantic snapshot plus orchestrator-advisory receipts:
+    - preset distribution
+    - sampler strategy distribution
+    - safety emphasis
+    - activation preference
+  - `scripts/train_orchestrator_shell_policy.py` now emits:
+    - training dataset and summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `orchestrator_shell_policy_package.json`
+    - canonical runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+  - `src/orchestrator/orchestrator_shell_policy_runtime.py` now loads that package with `disabled|auto|required` semantics and applies bounded shadow/promoted blending to the heuristic prior while recording a `helper_trace`
+  - `SemanticOrchestratorV2` now preserves:
+    - `policy_source`
+    - `promotion_stage`
+    - helper trace metadata
+    instead of pretending the shell decision is purely heuristic or purely learned
+- current consumers:
+  - `src/orchestrator/semantic_orchestrator_v2.py`
+  - any future runtime/export lane that consumes `orchestrator_advisory_v1` receipts
+  - `scripts/train_orchestrator_shell_policy.py`
+- why it is a production problem:
+  - before this pass, the stack already had learned selector, sequence, meta-transformer, and knob helper lanes, but the shell layer above them still hard-coded focus/strategy/safety choices
+  - that left a high-distortion fake boundary where the system could look architecturally neuralized while the top-level orchestration shell still hand-assembled the actual advisory policy
+- recommended disposition:
+  - keep the heuristic shell advisory as the explicit prior
+  - preserve bounded helper blending and explicit `shadow_candidate` vs `promoted` semantics
+  - train on real semantic snapshot plus advisory receipts rather than fabricating supervision
+  - push the next neuralization step upward into `PipelineManager` stage activation and broader queue/curriculum control rather than revisiting this shell prior again immediately
+- disposition tag:
+  - `wired now`
+  - `benchmark-gated`
+  - `neuralized later`
+
 ### 9. Teacher-runtime / rollout-labeler semantic sidecars
 
 - surface: external teacher contracts/envelopes and rollout labeler sidecars
@@ -616,7 +666,7 @@ Ranking dimensions:
 
 ## Remaining Top Follow-Ons
 
-1. Neuralize the higher-order orchestrator shell policy in `src/orchestrator/semantic_orchestrator.py`, `src/orchestrator/semantic_orchestrator_v2.py`, and `src/orchestrator/pipeline_manager.py`; those layers still make deterministic shell/stage/meta-choice decisions above the newly real selector, sequence, meta-transformer, and knob helpers.
+1. Neuralize the remaining stage-activation shell in `src/orchestrator/pipeline_manager.py` and adjacent pipeline control paths; `SemanticOrchestratorV2` now has a bounded helper lane, but `PipelineManager` still makes mostly deterministic stage/meta activation decisions above it.
 2. Replace the remaining heuristic queue/curriculum weighting core in `src/orchestrator/queue_selection.py`, `src/rl/episode_sampling.py`, and adjacent replay-priority logic with a bounded learned helper trained on real queue outcome receipts.
 3. Refresh the grounded-data / perception truth lane on a real GPU + SAM3D host; until that happens, workcell/bootstrap grounding remains honest but still unpromotable, and several vision-side promotion paths remain blocked by environment rather than repo wiring.
 4. Add empirical receipt targets into the new gen2sim validity helper so the package can promote beyond heuristic distillation and stop living permanently in `shadow_candidate`.

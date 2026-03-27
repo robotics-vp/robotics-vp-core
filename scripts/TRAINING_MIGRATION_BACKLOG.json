@@ -268,13 +268,18 @@
             "script": "train_knob_model.py",
             "migrated_at": "2026-03-26",
             "notes": "P1 complete - replaced the fake D4 stub with a canonical knob-model trainer/runtime-package lane, runtime receipt ingestion, benchmark-gated helper loading, and unified RegalTrainingRunner artifact emission"
+        },
+        {
+            "script": "train_orchestrator_shell_policy.py",
+            "migrated_at": "2026-03-26",
+            "notes": "P1 complete - added the semantic snapshot plus orchestrator-advisory shell-policy trainer/runtime-package lane, bounded disabled|auto|required helper loading in SemanticOrchestratorV2, and canonical RegalTrainingRunner dataset/precondition/package/runtime artifacts"
         }
     ],
     "summary": {
-        "total": 36,
+        "total": 37,
         "P0": 0,
         "P1": 7,
         "P2": 6,
-        "migrated": 23
+        "migrated": 24
     }
 }

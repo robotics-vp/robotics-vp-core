@@ -1,7 +1,7 @@
 """
 SemanticOrchestratorV2: semantic routing shell that can emit bounded activation plans.
 """
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, replace
 from typing import Any, Dict, List, Optional
 import json
 
@@ -22,9 +22,12 @@ class OrchestratorAdvisory:
     datapack_priority_tags: List[str]
     safety_emphasis: float
     execution_mode: str = "advisory"
+    policy_source: str = "heuristic_fallback"
+    promotion_stage: Optional[str] = None
     meta_node_weights: Dict[str, float] = field(default_factory=dict)
     activation_plan: Dict[str, Any] = field(default_factory=dict)
     activation_work_order: Optional[Dict[str, Any]] = None
+    helper_trace: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
@@ -37,6 +40,20 @@ class SemanticOrchestratorV2:
         self.output_dir = self.config.get("output_dir", "results/orchestrator")
         self.write_to_file = self.config.get("write_to_file", True)
         self.trust_matrix = self.config.get("trust_matrix", {}) or {}
+        self.shell_policy_helper_mode = str(
+            self.config.get("shell_policy_helper_mode", "disabled") or "disabled"
+        )
+        self._shell_policy_helper = None
+        if self.shell_policy_helper_mode != "disabled":
+            from src.orchestrator.orchestrator_shell_policy_runtime import (
+                resolve_orchestrator_shell_policy_helper,
+            )
+
+            self._shell_policy_helper = resolve_orchestrator_shell_policy_helper(
+                helper_mode=self.shell_policy_helper_mode,
+                package=self.config.get("shell_policy_package"),
+                package_path=self.config.get("shell_policy_package_path"),
+            )
 
     def _normalize_strategy_overrides(self, strategy_overrides: Dict[str, float]) -> Dict[str, float]:
         clean = {str(key): float(max(0.0, value)) for key, value in strategy_overrides.items()}
@@ -232,6 +249,33 @@ class SemanticOrchestratorV2:
                 "semantic_capabilities": capability_scores,
             },
         )
+        if self._shell_policy_helper is not None:
+            helper_update = self._shell_policy_helper.apply_to_advisory(
+                snapshot=snapshot,
+                heuristic_advisory=advisory.to_json(),
+                trust_matrix=self.trust_matrix,
+                helper_mode=self.shell_policy_helper_mode,
+            )
+            metadata = dict(advisory.metadata)
+            metadata["shell_policy_helper"] = dict(helper_update.get("helper_trace", {}) or {})
+            metadata["shell_policy_helper_mode"] = self.shell_policy_helper_mode
+            advisory = replace(
+                advisory,
+                focus_objective_presets=list(helper_update.get("focus_objective_presets", advisory.focus_objective_presets) or advisory.focus_objective_presets),
+                sampler_strategy_overrides=self._normalize_strategy_overrides(
+                    dict(helper_update.get("sampler_strategy_overrides", advisory.sampler_strategy_overrides) or advisory.sampler_strategy_overrides)
+                ),
+                safety_emphasis=float(
+                    helper_update.get("safety_emphasis", advisory.safety_emphasis)
+                ),
+                execution_mode=str(helper_update.get("execution_mode", advisory.execution_mode) or advisory.execution_mode),
+                policy_source=str(helper_update.get("policy_source", "heuristic_plus_learned_helper") or "heuristic_plus_learned_helper"),
+                promotion_stage=str(helper_update.get("promotion_stage", "shadow_candidate") or "shadow_candidate"),
+                activation_plan=dict(helper_update.get("activation_plan", advisory.activation_plan) or {}),
+                activation_work_order=helper_update.get("activation_work_order", advisory.activation_work_order),
+                helper_trace=dict(helper_update.get("helper_trace", {}) or {}),
+                metadata=metadata,
+            )
         if self.write_to_file:
             self._write_advisory(advisory)
         return advisory

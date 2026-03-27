@@ -77,14 +77,19 @@
       "id": "knob_model_homeostatic_helper",
       "completed_at": "2026-03-26",
       "notes": "P1 complete - removed the fake D4 learned stub, added a canonical knob-model trainer/runtime-package lane with runtime receipt ingestion, wired bounded benchmark-gated helper loading into the homeostatic planner, and preserved knob-policy regime/base-config receipts in GateStatus plus closed-loop smoke artifacts."
+    },
+    {
+      "id": "semantic_orchestrator_shell_policy",
+      "completed_at": "2026-03-26",
+      "notes": "P1 complete - SemanticOrchestratorV2 now loads a real bounded shell-policy helper package trained on semantic snapshot plus orchestrator-advisory receipts, blends learned preset/strategy/safety/activation outputs against the explicit heuristic prior with disabled|auto|required semantics, and preserves policy-source/promotion/helper-trace receipts in runtime metadata."
     }
   ],
   "backlog": [
     {
-      "id": "higher_order_orchestrator_shell_policy",
+      "id": "pipeline_manager_stage_activation_policy",
       "priority": "P1",
-      "blocked_by": "runtime shell outcome receipts and denser promoted orchestration/meta traces",
-      "notes": "SemanticOrchestrator, SemanticOrchestratorV2, and PipelineManager still make mostly deterministic shell/stage/meta-choice decisions above the now-real selector, sequence, meta-transformer, and knob helper lanes."
+      "blocked_by": "runtime stage-activation receipts and denser promoted orchestration/meta traces",
+      "notes": "SemanticOrchestratorV2 now has a bounded helper lane, but PipelineManager still makes mostly deterministic stage-activation and pipeline-shell decisions above the now-real selector, sequence, meta-transformer, and knob helpers."
     },
     {
       "id": "queue_curriculum_selection_policy",

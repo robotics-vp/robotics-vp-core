@@ -2,6 +2,29 @@
 
 ## 2026-03-26
 
+- `SemanticOrchestratorV2` no longer strands the shell-policy layer outside the learned-helper contract:
+  - `src/orchestrator/orchestrator_shell_policy.py` now defines the explicit feature contract over semantic snapshot truth, recap/execution readiness, segmentation/OOD pressure, semantic-WM meta state, meta expected deltas, and preset availability
+  - `src/orchestrator/orchestrator_shell_policy_training.py` now provides the real bounded helper training path over snapshot-plus-advisory receipts
+  - `scripts/train_orchestrator_shell_policy.py` now emits:
+    - orchestrator shell dataset summary
+    - model config
+    - execution-precondition artifact
+    - training summary
+    - `orchestrator_shell_policy_package.json`
+    - runtime manifest / checkpoint registry outputs under `RegalTrainingRunner`
+- The runtime shell seam is now honest and neurally scalable:
+  - `src/orchestrator/orchestrator_shell_policy_runtime.py` loads helper packages with `disabled|auto|required` semantics
+  - `src/orchestrator/semantic_orchestrator_v2.py` now blends learned preset/strategy/safety/activation outputs against the explicit heuristic prior instead of claiming a learned shell with no package/runtime contract
+  - runtime receipts now preserve:
+    - `policy_source`
+    - `promotion_stage`
+    - `helper_trace`
+    so later economic-WM/meta-node-WM conditioning can learn on why the shell chose what it chose
+- The remaining higher-order orchestration gap is now specifically `PipelineManager`, not a vague “orchestrator” bucket:
+  - `SemanticOrchestratorV2` is wired
+  - `PipelineManager` still assembles stage activation and pipeline-shell choices mostly deterministically
+  - that should be the next control-plane neuralization tranche before broader queue/curriculum policy work
+
 - Gen2sim validity/value admission now shares the same honest helper contract as agenda ranking and fill routing:
   - `scripts/collect_local_synthetic_branches.py` now emits `*_gen2sim_validity.json`, so each local synthetic branch carries an explicit admission assessment instead of only trust/gap proxy metadata
   - `src/training/synthetic_branch_corpus.py` now loads those assessments, summarizes admission/promotion state, and changes synth-share caps plus branch-priority scaling when gen2sim validity is missing or weak
