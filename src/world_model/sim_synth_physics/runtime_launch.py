@@ -1,0 +1,166 @@
+"""Launch preparation/execution over WM-owned backend runtime bundles."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import platform
+import subprocess
+from pathlib import Path
+from typing import Any, Mapping
+
+from .common import mapping, stable_id, strings
+
+TARGET_ENV_VARS = {
+    "isaaclab_root": "ISAACLAB_ROOT",
+    "isaacsim_root": "ISAACSIM_ROOT",
+    "unitree_sdk2_root": "UNITREE_SDK2_ROOT",
+    "unitree_asset_root": "UNITREE_ASSET_ROOT",
+    "unitree_sim_isaaclab_root": "UNITREE_SIM_ISAACLAB_ROOT",
+    "unitree_rl_gym_root": "UNITREE_RL_GYM_ROOT",
+    "humanoidverse_root": "HUMANOIDVERSE_ROOT",
+    "xr_teleoperate_root": "XR_TELEOPERATE_ROOT",
+    "unitree_model_root": "UNITREE_MODEL_ROOT",
+    "unitree_policy_root": "UNITREE_POLICY_ROOT",
+    "holosoma_root": "HOLOSOMA_ROOT",
+    "holosoma_motion_root": "HOLOSOMA_MOTION_ROOT",
+    "holosoma_policy_root": "HOLOSOMA_POLICY_ROOT",
+    "retargeting_root": "RETARGETING_ROOT",
+}
+
+
+def _target_env_overrides(runtime_target_contract: Mapping[str, Any]) -> dict[str, str]:
+    overrides: dict[str, str] = {}
+    for row in list(runtime_target_contract.get("targets", []) or []):
+        row_mapping = mapping(row)
+        target_id = str(row_mapping.get("target_id", "") or "")
+        ref = str(row_mapping.get("ref", "") or "")
+        env_var = TARGET_ENV_VARS.get(target_id, "")
+        if env_var and ref:
+            overrides[env_var] = ref
+    return overrides
+
+
+def _cuda_ready() -> bool:
+    if importlib.util.find_spec("torch") is None:
+        return False
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def prepare_backend_runtime_launch(
+    runtime_bundle: Mapping[str, Any],
+    launch_spec: Mapping[str, Any],
+    *,
+    require_policy: bool = True,
+) -> dict[str, Any]:
+    bundle = mapping(runtime_bundle)
+    spec = mapping(launch_spec)
+    backend = str(bundle.get("backend", spec.get("backend", "")) or "")
+    runtime_target_contract = mapping(bundle.get("runtime_target_contract"))
+    policy_contract = mapping(bundle.get("policy_contract"))
+    missing_preconditions: list[str] = []
+    notes: list[str] = []
+    if platform.system().lower() != "linux":
+        missing_preconditions.append("linux_host")
+    if not _cuda_ready():
+        missing_preconditions.append("cuda_gpu")
+    if not bool(runtime_target_contract.get("runtime_targets_ready", False)):
+        missing_preconditions.extend(
+            strings(runtime_target_contract.get("missing_required_target_ids"))
+        )
+        if list(runtime_target_contract.get("unresolved_one_of_groups", []) or []):
+            missing_preconditions.append("runtime_profile_root")
+    if not str(spec.get("command", "") or ""):
+        missing_preconditions.append("launch_command")
+    if require_policy and not bool(
+        spec.get("policy_ready", policy_contract.get("policy_ready", False))
+    ):
+        missing_preconditions.append("policy_checkpoint")
+    if backend == "isaac":
+        notes.append("Prefer Unitree/IsaacLab-style launch profiles when available.")
+    elif backend == "holosoma":
+        notes.append("Prefer Holosoma repo plus motion/policy/retargeting roots when available.")
+    status = "ready_for_launch" if not missing_preconditions else "blocked"
+    payload = {
+        "backend": backend,
+        "preferred_profile": str(spec.get("preferred_profile", "") or ""),
+        "status": status,
+        "command": str(spec.get("command", "") or ""),
+        "cwd": str(spec.get("root", "") or ""),
+        "policy_ref": str(spec.get("policy_ref", "") or ""),
+        "env_overrides": _target_env_overrides(runtime_target_contract),
+        "missing_preconditions": missing_preconditions,
+        "notes": notes,
+    }
+    return {
+        "launch_id": stable_id("backend_runtime_launch", payload),
+        **payload,
+    }
+
+
+def execute_backend_runtime_launch(
+    runtime_bundle: Mapping[str, Any],
+    launch_spec: Mapping[str, Any],
+    *,
+    execute: bool = False,
+    cwd: str | Path | None = None,
+    require_policy: bool = True,
+) -> dict[str, Any]:
+    plan = prepare_backend_runtime_launch(
+        runtime_bundle,
+        launch_spec,
+        require_policy=require_policy,
+    )
+    if not execute:
+        plan["executed"] = False
+        return plan
+    if plan["status"] != "ready_for_launch":
+        plan["executed"] = False
+        return plan
+    env = dict(os.environ)
+    env.update({str(key): str(value) for key, value in dict(plan["env_overrides"]).items()})
+    run_cwd = str(cwd or plan["cwd"] or ".")
+    proc = subprocess.run(
+        str(plan["command"]),
+        shell=True,
+        cwd=run_cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {
+        **plan,
+        "executed": True,
+        "returncode": int(proc.returncode),
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "status": "launch_completed" if proc.returncode == 0 else "launch_failed",
+    }
+
+
+def load_runtime_artifacts(
+    *,
+    runtime_bundle_path: str | Path,
+    launch_spec_path: str | Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    runtime_bundle = mapping(
+        json.loads(Path(runtime_bundle_path).read_text(encoding="utf-8"))
+    )
+    launch_spec = mapping(
+        json.loads(Path(launch_spec_path).read_text(encoding="utf-8"))
+    )
+    return runtime_bundle, launch_spec
+
+
+__all__ = [
+    "execute_backend_runtime_launch",
+    "load_runtime_artifacts",
+    "prepare_backend_runtime_launch",
+]

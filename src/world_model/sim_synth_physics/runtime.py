@@ -469,6 +469,16 @@ def _build_backend_execution_binding_receipt(
             "required_assets": list(binding.required_assets),
             "available_assets": list(binding.available_assets),
             "missing_assets": list(binding.missing_assets),
+            "runtime_target_contract": mapping(binding.metadata).get(
+                "runtime_target_contract", {}
+            ),
+            "runtime_layout_contract": mapping(binding.metadata).get(
+                "runtime_layout_contract", {}
+            ),
+            "policy_contract": mapping(binding.metadata).get("policy_contract", {}),
+            "normalized_asset_manifest": mapping(binding.metadata).get(
+                "normalized_asset_manifest", {}
+            ),
             "binding_metadata": mapping(binding.metadata),
         },
     )

@@ -33,6 +33,13 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
                 "runtime_targets_ready": False,
                 "missing_required_target_ids": ["unitree_sdk2_root"],
             },
+            "runtime_layout_contract": {
+                "ready_profiles": ["unitree_sim_isaaclab"],
+            },
+            "policy_contract": {
+                "policy_ready": False,
+                "policy_root": "/tmp/policies",
+            },
             "missing_assets": ["unitree_robot_description"],
         },
     )
@@ -50,7 +57,12 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
         backend="isaac",
         execution_mode="workcell_isaaclab_evaluate_policy",
         execution_status="runtime_request_materialized_with_preconditions",
-        metadata={"missing_preconditions": ["runtime_policy_id"]},
+        metadata={
+            "missing_preconditions": ["runtime_policy_id"],
+            "launch_spec": {
+                "command": "python ${UNITREE_SIM_ISAACLAB_ROOT}/sim_main.py --task peg_in_hole --policy ${POLICY_REF} --headless"
+            },
+        },
     )
 
     work_orders = build_backend_runtime_work_orders(
@@ -65,6 +77,9 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
     assert work_orders[0].backend == "isaac"
     assert work_orders[0].status == "blocked_by_runtime_targets"
     assert "isaac_unitree_runtime_smoke" in work_orders[0].linked_backlog_ids
+    assert work_orders[0].metadata["runtime_layout_ready_profiles"] == ["unitree_sim_isaaclab"]
+    assert any("sim_main.py" in hint for hint in work_orders[0].command_hints)
+    assert work_orders[0].metadata["policy_ready"] is False
 
 
 def test_build_backend_runtime_work_orders_marks_concrete_runtime_complete() -> None:

@@ -100,6 +100,11 @@ def build_backend_runtime_work_orders(
         return []
     bridge_metadata = mapping(bridge_receipt.metadata)
     runtime_target_contract = mapping(bridge_metadata.get("runtime_target_contract"))
+    runtime_layout_contract = mapping(bridge_metadata.get("runtime_layout_contract"))
+    policy_contract = mapping(bridge_metadata.get("policy_contract"))
+    runtime_layout_ready_profiles = strings(
+        bridge_metadata.get("runtime_layout_ready_profiles")
+    ) or strings(runtime_layout_contract.get("ready_profiles"))
     missing_runtime_targets = strings(
         runtime_target_contract.get("missing_required_target_ids")
     )
@@ -112,8 +117,13 @@ def build_backend_runtime_work_orders(
         if runtime_receipt is None
         else mapping(runtime_receipt.metadata).get("missing_preconditions")
     )
+    runtime_metadata = {} if runtime_receipt is None else mapping(runtime_receipt.metadata)
     linked_backlog_ids = list(BACKEND_BACKLOG_IDS.get(backend, []))
     command_hints = _load_command_hints(linked_backlog_ids)
+    launch_spec = mapping(runtime_metadata.get("launch_spec"))
+    launch_command = str(launch_spec.get("command", "") or "")
+    if launch_command and launch_command not in command_hints:
+        command_hints.append(launch_command)
     work_order_kind = BACKEND_WORK_ORDER_KINDS.get(backend, f"{backend}_runtime_bringup")
     status = _work_order_status(
         bridge_receipt=bridge_receipt,
@@ -156,6 +166,12 @@ def build_backend_runtime_work_orders(
                 "runtime_targets_ready": runtime_target_contract.get(
                     "runtime_targets_ready", False
                 ),
+                "runtime_layout_ready_profiles": runtime_layout_ready_profiles,
+                "runtime_layout_contract": runtime_layout_contract,
+                "policy_contract": policy_contract,
+                "policy_ready": bool(bridge_metadata.get("policy_ready", False)),
+                "runtime_bundle": runtime_metadata.get("runtime_bundle", {}),
+                "launch_spec": launch_spec,
             },
         )
     ]

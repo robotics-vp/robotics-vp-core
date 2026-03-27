@@ -68,11 +68,16 @@ def collect_host_capabilities() -> Dict[str, Any]:
             "UNITREE_ASSETS_ROOT",
             "UNITREE_URDF_ROOT",
         ),
+        "unitree_sim_isaaclab_root_ready": env_path_ready("UNITREE_SIM_ISAACLAB_ROOT"),
         "unitree_rl_gym_root_ready": env_path_ready("UNITREE_RL_GYM_ROOT"),
         "humanoidverse_root_ready": env_path_ready("HUMANOIDVERSE_ROOT"),
+        "xr_teleoperate_root_ready": env_path_ready("XR_TELEOPERATE_ROOT"),
+        "unitree_model_root_ready": env_path_ready("UNITREE_MODEL_ROOT"),
+        "unitree_policy_root_ready": env_path_ready("UNITREE_POLICY_ROOT", "ISAAC_POLICY_ROOT"),
         "holosoma_root_ready": env_path_ready("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
         "holosoma_motion_root_ready": env_path_ready("HOLOSOMA_MOTION_ROOT"),
         "holosoma_policy_root_ready": env_path_ready("HOLOSOMA_POLICY_ROOT"),
+        "holosoma_policy_path_ready": env_path_ready("HOLOSOMA_POLICY_PATH"),
         "droid_dataset_present": bool(
             (os.environ.get("DROID_DATASET_ROOT") and Path(os.environ["DROID_DATASET_ROOT"]).exists())
             or (REPO_ROOT / "data" / "external" / "droid").exists()

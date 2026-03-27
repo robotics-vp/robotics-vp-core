@@ -47,6 +47,18 @@ from .runtime_bridge import (
     build_backend_runtime_bridge_receipt,
     compile_backend_runtime_bridge,
 )
+from .runtime_bundles import build_backend_runtime_bundle
+from .runtime_launch import (
+    execute_backend_runtime_launch,
+    load_runtime_artifacts,
+    prepare_backend_runtime_launch,
+)
+from .runtime_layouts import (
+    describe_holosoma_policy_contract,
+    describe_holosoma_runtime_layouts,
+    describe_isaac_policy_contract,
+    describe_isaac_runtime_layouts,
+)
 from .runtime_work_orders import build_backend_runtime_work_orders
 from .runtime_evidence import summarize_runtime_evidence
 from .shadow_execution import materialize_backend_shadow_execution
@@ -113,11 +125,17 @@ __all__ = [
     "build_physics_calibration_receipt",
     "compile_robot_asset_contract",
     "compile_backend_runtime_bridge",
+    "describe_holosoma_policy_contract",
+    "describe_holosoma_runtime_layouts",
+    "describe_isaac_policy_contract",
+    "describe_isaac_runtime_layouts",
     "materialize_backend_shadow_execution",
     "materialize_render_provider_receipts",
     "summarize_runtime_evidence",
     "build_backend_runtime_bridge_receipt",
+    "build_backend_runtime_bundle",
     "build_backend_runtime_work_orders",
+    "execute_backend_runtime_launch",
     "compile_backend_execution_binding",
     "build_physics_execution_contract",
     "build_synthetic_branch_corpus_metadata",
@@ -130,7 +148,9 @@ __all__ = [
     "extract_branch_features",
     "load_backend_selector_runtime_package",
     "load_branch_planner_runtime_package",
+    "load_runtime_artifacts",
     "load_sim_synth_receipt_bundles",
+    "prepare_backend_runtime_launch",
     "resolve_backend_selector_helper",
     "resolve_branch_planner_helper",
     "train_backend_selector",

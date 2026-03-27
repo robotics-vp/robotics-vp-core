@@ -224,6 +224,8 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
         world_state.backend_execution_binding.metadata["runtime_target_contract"]["backend"]
         == "isaac"
     )
+    assert "runtime_layout_contract" in world_state.backend_execution_binding.metadata
+    assert "policy_contract" in world_state.backend_execution_binding.metadata
     assert (
         world_state.backend_execution_binding.metadata["normalized_asset_manifest"]["unitree_robot_description"][
             "present"
@@ -243,6 +245,7 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
     assert "watchdog_state_v1" in result.backend_runtime_bridge_receipt.telemetry_contracts
     assert result.backend_runtime_bridge_receipt.planner_rate_hz == pytest.approx(10.0)
     assert result.backend_runtime_bridge_receipt.control_rate_hz == pytest.approx(250.0)
+    assert result.backend_runtime_bridge_receipt.metadata["runtime_layout_ready_profiles"]
 
 
 def test_world_state_normalizes_unitree_asset_aliases_into_robot_contract() -> None:
@@ -327,6 +330,8 @@ def test_holosoma_binding_records_runtime_target_contract(
         world_state.backend_execution_binding.metadata["runtime_target_contract"]["backend"]
         == "holosoma"
     )
+    assert "runtime_layout_contract" in world_state.backend_execution_binding.metadata
+    assert "policy_contract" in world_state.backend_execution_binding.metadata
     assert world_state.backend_runtime_bridge is not None
     assert world_state.backend_runtime_bridge.bridge_status == "runtime_bridge_ready"
     assert world_state.backend_runtime_bridge.transport_profile == "holosoma_motion_runtime_bridge"
@@ -580,6 +585,11 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     }
     assert "isaac_unitree_runtime_smoke" in result.backend_runtime_work_orders[0].linked_backlog_ids
     assert (
+        result.backend_runtime_execution_receipt.metadata["runtime_bundle"]["backend"]
+        == "isaac"
+    )
+    assert "launch_spec" in result.backend_runtime_execution_receipt.metadata
+    assert (
         result.physics_adaptation_receipt.metadata["runtime_evidence"]["shadow_execution_status"]
         in {"shadow_executed", "shadow_executed_with_asset_gaps"}
     )
@@ -668,6 +678,11 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
     assert result.backend_runtime_work_orders
     assert result.backend_runtime_work_orders[0].backend == "holosoma"
     assert "holosoma_runtime_eval_smoke" in result.backend_runtime_work_orders[0].linked_backlog_ids
+    assert (
+        result.backend_runtime_execution_receipt.metadata["runtime_bundle"]["backend"]
+        == "holosoma"
+    )
+    assert "launch_spec" in result.backend_runtime_execution_receipt.metadata
     assert result.backend_shadow_execution_receipt.metadata["robot_asset_contract_id"] == result.world_state.robot_asset_contract.contract_id
     assert len(result.backend_shadow_execution_receipt.metadata["asset_sidecar_refs"]) == 3
     assert result.backend_shadow_execution_receipt.artifact_refs
@@ -681,6 +696,69 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
     assert (tmp_path / "backend_shadow_execution" / "holosoma" / "robot_asset_contract_sidecar.json").exists()
     assert (tmp_path / "backend_shadow_execution" / "holosoma" / "backend_calibration_sidecar.json").exists()
     assert (tmp_path / "backend_shadow_execution" / "holosoma" / "backend_io_contract_sidecar.json").exists()
+
+
+def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from src.world_model.sim_synth_physics import runtime_launch as runtime_launch_module
+
+    monkeypatch.setattr(runtime_launch_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(runtime_launch_module, "_cuda_ready", lambda: True)
+
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    unitree_sim_root = tmp_path / "unitree_sim_isaaclab"
+    unitree_sim_root.mkdir()
+    (unitree_sim_root / "sim_main.py").write_text("", encoding="utf-8")
+    (unitree_sim_root / "dds").mkdir()
+    (unitree_sim_root / "action_provider").mkdir()
+    unitree_sdk_root = tmp_path / "unitree_sdk2"
+    unitree_sdk_root.mkdir()
+    unitree_asset_root = tmp_path / "unitree_assets"
+    unitree_asset_root.mkdir()
+    policy_root = tmp_path / "policies"
+    policy_root.mkdir()
+    policy_path = policy_root / "g1_policy.onnx"
+    policy_path.write_text("x", encoding="utf-8")
+
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedBackendSelector(),
+        embodiment_context={
+            "unitree_sim_isaaclab_root": str(unitree_sim_root),
+            "unitree_sdk2_root": str(unitree_sdk_root),
+            "unitree_asset_root": str(unitree_asset_root),
+            "isaac_policy_root": str(policy_root),
+            "runtime_policy_id": str(policy_path),
+            "robot_asset_manifest": {
+                "unitree_usd": "/assets/unitree/g1.usd",
+                "joint_map_path": "/assets/unitree/joint_map.yaml",
+                "camera_extrinsics": "/assets/unitree/camera_extrinsics.json",
+                "imu_extrinsics": "/assets/unitree/imu_extrinsics.json",
+                "force_torque_calibration": "/assets/unitree/ft_calibration.json",
+                "actuator_latency_profile": "/assets/unitree/latency.yaml",
+                "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
+                "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
+            },
+        },
+    )
+
+    result = runtime.execute_world_state(world_state)
+
+    assert result.backend_runtime_execution_receipt is not None
+    assert result.backend_runtime_execution_receipt.backend == "isaac"
+    assert result.backend_runtime_execution_receipt.execution_status == "runtime_launch_prepared"
+    assert (
+        result.backend_runtime_execution_receipt.metadata["launch_plan"]["status"]
+        == "ready_for_launch"
+    )
+    assert "sim_main.py" in result.backend_runtime_execution_receipt.metadata["launch_spec"]["command"]
+    assert any(
+        "sim_main.py" in hint for hint in result.backend_runtime_work_orders[0].command_hints
+    )
 
 
 def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp_path: Path) -> None:
@@ -723,6 +801,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert feedback_manifest["backend_runtime_execution_status"] in {
         "",
         "runtime_request_materialized_with_preconditions",
+        "runtime_launch_prepared",
         "runtime_execution_completed",
         "runtime_training_completed",
         "runtime_execution_failed",

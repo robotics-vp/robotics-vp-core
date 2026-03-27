@@ -30,6 +30,20 @@
         "UNITREE_SDK2_ROOT",
         "UNITREE_ASSET_ROOT"
       ],
+      "preferred_runtime_roots": [
+        "UNITREE_SIM_ISAACLAB_ROOT",
+        "UNITREE_RL_GYM_ROOT",
+        "HUMANOIDVERSE_ROOT",
+        "XR_TELEOPERATE_ROOT"
+      ],
+      "preferred_policy_roots": [
+        "UNITREE_POLICY_ROOT",
+        "ISAAC_POLICY_ROOT"
+      ],
+      "expected_bundle_artifacts": [
+        "backend_runtime_bundle.json",
+        "backend_launch_spec.json"
+      ],
       "required_internal_data": [
         "Canonical Unitree asset and calibration manifests wired into the sim/synth WM"
       ],
@@ -38,7 +52,7 @@
         "Unitree SDK2 checkout",
         "Unitree robot asset root"
       ],
-      "notes": "Run-only smoke. This is the concrete Phase-1 backend-runtime target for the Isaac/Unitree lane."
+      "notes": "Run-only smoke. This is the concrete Phase-1 backend-runtime target for the Isaac/Unitree lane. The WM should already have emitted backend_runtime_bundle.json and backend_launch_spec.json; use scripts/run_phase1_runtime_launch.py as the preflight/launcher wrapper."
     },
     {
       "loop_run_id": "holosoma_runtime_eval_smoke",
@@ -62,6 +76,18 @@
       "required_env_path_vars": [
         "HOLOSOMA_POLICY_PATH"
       ],
+      "preferred_runtime_roots": [
+        "HOLOSOMA_ROOT",
+        "HOLOSOMA_MOTION_ROOT",
+        "RETARGETING_ROOT"
+      ],
+      "preferred_policy_roots": [
+        "HOLOSOMA_POLICY_ROOT"
+      ],
+      "expected_bundle_artifacts": [
+        "backend_runtime_bundle.json",
+        "backend_launch_spec.json"
+      ],
       "required_internal_data": [
         "Unitree-target embodiment context and reward/retargeting contract"
       ],
@@ -69,7 +95,7 @@
         "Installed Holosoma runtime",
         "Existing Holosoma policy checkpoint"
       ],
-      "notes": "Run-only smoke. This keeps the Holosoma lane honest as a concrete eval path independent of training."
+      "notes": "Run-only smoke. This keeps the Holosoma lane honest as a concrete eval path independent of training. The WM should already have emitted backend_runtime_bundle.json and backend_launch_spec.json; use scripts/run_phase1_runtime_launch.py as the preflight/launcher wrapper."
     },
     {
       "loop_run_id": "stage1_video_diffusion_materialization",

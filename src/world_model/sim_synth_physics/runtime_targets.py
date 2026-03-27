@@ -103,9 +103,24 @@ def describe_isaac_runtime_targets(
         "unitree_rl_gym_root",
         "unitree_runtime_repo_root",
     ) or _env_path("UNITREE_RL_GYM_ROOT")
+    unitree_sim_isaaclab_root = _context_path(
+        embodiment,
+        "unitree_sim_isaaclab_root",
+    ) or _env_path("UNITREE_SIM_ISAACLAB_ROOT")
     humanoidverse_root = _context_path(embodiment, "humanoidverse_root") or _env_path(
         "HUMANOIDVERSE_ROOT"
     )
+    xr_teleoperate_root = _context_path(embodiment, "xr_teleoperate_root") or _env_path(
+        "XR_TELEOPERATE_ROOT"
+    )
+    unitree_model_root = _context_path(embodiment, "unitree_model_root") or _env_path(
+        "UNITREE_MODEL_ROOT"
+    )
+    unitree_policy_root = _context_path(
+        embodiment,
+        "unitree_policy_root",
+        "isaac_policy_root",
+    ) or _env_path("UNITREE_POLICY_ROOT", "ISAAC_POLICY_ROOT")
     records = [
         _target_record(
             target_id="isaaclab_root",
@@ -132,9 +147,33 @@ def describe_isaac_runtime_targets(
             source="embodiment_or_env",
         ),
         _target_record(
+            target_id="unitree_sim_isaaclab_root",
+            label="Unitree Isaac Lab root",
+            ref=unitree_sim_isaaclab_root,
+            source="embodiment_or_env",
+        ),
+        _target_record(
             target_id="unitree_rl_gym_root",
             label="Unitree RL Gym root",
             ref=unitree_rl_gym_root,
+            source="embodiment_or_env",
+        ),
+        _target_record(
+            target_id="xr_teleoperate_root",
+            label="XR Teleoperate root",
+            ref=xr_teleoperate_root,
+            source="embodiment_or_env",
+        ),
+        _target_record(
+            target_id="unitree_model_root",
+            label="Unitree model root",
+            ref=unitree_model_root,
+            source="embodiment_or_env",
+        ),
+        _target_record(
+            target_id="unitree_policy_root",
+            label="Unitree policy root",
+            ref=unitree_policy_root,
             source="embodiment_or_env",
         ),
         _target_record(
@@ -149,11 +188,20 @@ def describe_isaac_runtime_targets(
         records=records,
         python_bridge_available=_has_module("src.motor_backend.workcell_isaaclab_backend"),
         required_target_ids=["unitree_sdk2_root", "unitree_asset_root"],
-        one_of_groups=[["isaaclab_root", "isaacsim_root", "unitree_rl_gym_root", "humanoidverse_root"]],
+        one_of_groups=[["isaaclab_root", "isaacsim_root", "unitree_sim_isaaclab_root", "unitree_rl_gym_root", "humanoidverse_root"]],
     )
     summary["preferred_runtime_roots"] = [
         target_id
-        for target_id in ("isaaclab_root", "isaacsim_root", "unitree_rl_gym_root", "humanoidverse_root")
+        for target_id in (
+            "unitree_sim_isaaclab_root",
+            "unitree_rl_gym_root",
+            "humanoidverse_root",
+            "isaaclab_root",
+            "isaacsim_root",
+            "xr_teleoperate_root",
+            "unitree_model_root",
+            "unitree_policy_root",
+        )
         if target_id in summary["ready_target_ids"]
     ]
     return summary

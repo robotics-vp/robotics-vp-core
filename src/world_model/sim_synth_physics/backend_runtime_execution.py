@@ -15,9 +15,11 @@ from src.ontology.models import Robot, Task
 from src.ontology.store import OntologyStore
 
 from .asset_manifest import extract_robot_asset_manifest, normalize_robot_asset_manifest
-from .common import mapping, safe_float
+from .common import mapping, safe_float, strings
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import BackendExecutionBindingReceipt, BackendRuntimeExecutionReceipt
+from .runtime_bundles import build_backend_runtime_bundle
+from .runtime_launch import prepare_backend_runtime_launch
 from .runtime_targets import describe_holosoma_runtime_targets, describe_isaac_runtime_targets
 from .state import SimSynthPhysicsWorldState
 
@@ -476,6 +478,30 @@ def materialize_backend_runtime_execution(
         )
     artifact_refs.extend(binding_refs)
     runtime_target_contract = _mapping(binding_payload.get("runtime_target_contract"))
+    binding_metadata = _mapping(backend_binding_receipt.metadata)
+    binding_metadata_nested = _mapping(binding_metadata.get("binding_metadata"))
+    runtime_layout_contract = _mapping(
+        binding_metadata.get("runtime_layout_contract")
+        or binding_metadata_nested.get("runtime_layout_contract")
+    )
+    policy_contract = _mapping(
+        binding_metadata.get("policy_contract")
+        or binding_metadata_nested.get("policy_contract")
+    )
+    runtime_bundle_refs, runtime_bundle, launch_spec = build_backend_runtime_bundle(
+        backend=backend,
+        task_id=task_id,
+        policy_ref=policy_id,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        robot_asset_manifest=_mapping(binding_payload.get("robot_asset_manifest")),
+        normalized_robot_asset_manifest=_mapping(
+            binding_payload.get("normalized_robot_asset_manifest")
+        ),
+        output_root=output_root,
+    )
+    artifact_refs.extend(runtime_bundle_refs)
     artifact_refs.extend(
         _write_runtime_target_manifest(
             output_root=output_root,
@@ -507,10 +533,48 @@ def materialize_backend_runtime_execution(
 
     missing_preconditions: list[str] = []
     can_train_holosoma = backend == "holosoma" and bool(datapack_ids or datapack_configs)
+    require_policy = not (backend == "holosoma" and can_train_holosoma and not policy_id)
     if not policy_id and not can_train_holosoma:
         missing_preconditions.append("runtime_policy_id")
-    if not _runtime_supports_execution(backend):
-        missing_preconditions.append("backend_runtime_module")
+    launch_plan = prepare_backend_runtime_launch(
+        runtime_bundle,
+        launch_spec,
+        require_policy=require_policy,
+    )
+    local_runtime_supported = _runtime_supports_execution(backend)
+    if not local_runtime_supported:
+        if launch_plan["status"] == "ready_for_launch":
+            return BackendRuntimeExecutionReceipt(
+                receipt_id=f"backend_runtime_execution_receipt_{world_state.state_id}",
+                backend=backend,
+                execution_mode=(
+                    f"{backend_name}_train_policy"
+                    if backend == "holosoma" and can_train_holosoma and not policy_id
+                    else f"{backend_name}_evaluate_policy"
+                ),
+                execution_status="runtime_launch_prepared",
+                policy_id=policy_id,
+                artifact_refs=artifact_refs,
+                metadata={
+                    "world_state_id": world_state.state_id,
+                    "task_id": task_id,
+                    "scenario_id": scenario_id,
+                    "runtime_request": runtime_request,
+                    "binding_payload": binding_payload,
+                    "runtime_target_contract": runtime_target_contract,
+                    "runtime_layout_contract": runtime_layout_contract,
+                    "policy_contract": policy_contract,
+                    "runtime_bundle": runtime_bundle,
+                    "launch_spec": launch_spec,
+                    "launch_plan": launch_plan,
+                    "missing_preconditions": list(missing_preconditions),
+                },
+            )
+        for item in strings(launch_plan.get("missing_preconditions")):
+            if item not in missing_preconditions:
+                missing_preconditions.append(item)
+        if "backend_runtime_module" not in missing_preconditions:
+            missing_preconditions.append("backend_runtime_module")
 
     if missing_preconditions:
         if backend == "holosoma" and not policy_id and not datapack_ids and not datapack_configs:
@@ -537,6 +601,11 @@ def materialize_backend_runtime_execution(
                 "runtime_request": runtime_request,
                 "binding_payload": binding_payload,
                 "runtime_target_contract": runtime_target_contract,
+                "runtime_layout_contract": runtime_layout_contract,
+                "policy_contract": policy_contract,
+                "runtime_bundle": runtime_bundle,
+                "launch_spec": launch_spec,
+                "launch_plan": launch_plan,
                 "missing_preconditions": missing_preconditions,
             },
         )
@@ -611,6 +680,11 @@ def materialize_backend_runtime_execution(
                 "runtime_request": runtime_request,
                 "binding_payload": binding_payload,
                 "runtime_target_contract": runtime_target_contract,
+                "runtime_layout_contract": runtime_layout_contract,
+                "policy_contract": policy_contract,
+                "runtime_bundle": runtime_bundle,
+                "launch_spec": launch_spec,
+                "launch_plan": launch_plan,
                 "error": str(exc),
             },
         )
@@ -647,6 +721,11 @@ def materialize_backend_runtime_execution(
             "runtime_request": runtime_request,
             "binding_payload": binding_payload,
             "runtime_target_contract": runtime_target_contract,
+            "runtime_layout_contract": runtime_layout_contract,
+            "policy_contract": policy_contract,
+            "runtime_bundle": runtime_bundle,
+            "launch_spec": launch_spec,
+            "launch_plan": launch_plan,
             "datapack_ids": list(datapack_ids),
             "datapack_config_ids": [cfg.id for cfg in datapack_configs],
             "raw_metrics": raw_metrics,

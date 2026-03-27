@@ -14,6 +14,10 @@ from ..asset_manifest import (
     recommended_assets_for_hardware_class,
 )
 from ..common import mapping
+from ..runtime_layouts import (
+    describe_isaac_policy_contract,
+    describe_isaac_runtime_layouts,
+)
 from ..runtime_targets import describe_isaac_runtime_targets
 
 
@@ -46,6 +50,8 @@ def build_isaac_backend_binding(
     manifest = extract_robot_asset_manifest(embodiment_context)
     normalized_manifest = normalize_robot_asset_manifest(embodiment_context)
     runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
+    runtime_layout_contract = describe_isaac_runtime_layouts(embodiment_context)
+    policy_contract = describe_isaac_policy_contract(embodiment_context)
     adapter_ready = (
         shadow_backend_available
         or isaaclab_backend_available
@@ -103,6 +109,8 @@ def build_isaac_backend_binding(
                 "unitree_g1_r1_class"
             ),
             "runtime_target_contract": runtime_target_contract,
+            "runtime_layout_contract": runtime_layout_contract,
+            "policy_contract": policy_contract,
             "normalized_asset_manifest": normalized_manifest,
             "raw_asset_manifest": manifest,
             "embodiment_context": mapping(embodiment_context),
