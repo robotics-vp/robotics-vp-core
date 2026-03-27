@@ -32,6 +32,11 @@
     - latency / control-rate
     - whole-body kinematic state
     - spatial state
+  - the plan now also names additional humanoid-target requirements that were previously only implicit:
+    - companion-compute / communication middleware
+    - operator / teleop / recovery fallback contracts
+    - robot asset and calibration management
+    - a humanoid-specific benchmark taxonomy for promotion
   - this is why the plan now includes a separate humanoid target capacity and environment-refit phase before claiming serious hardware-readiness
 - Phase 1 in that plan is intentionally concrete and near-implementation-shaped:
   - proposed additive package: `src/world_model/sim_synth_physics/`

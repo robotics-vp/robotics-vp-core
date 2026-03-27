@@ -192,6 +192,57 @@ Preparing for G1/R1-class hardware also changes what the canonical contracts mus
 
 This means the later embodiment, sensor-fusion, safety, and SLAM phases are not optional polish. They are part of what “hardware-readiness” means.
 
+### Compute and deployment implication
+
+For G1/R1-class readiness, the stack also needs an explicit compute-placement plan.
+
+A realistic deployment split is:
+
+- fast reflex and servo control on robot or in the robot-adjacent low-level controller
+- heavier perception, 3D grounding, and some WM inference on a companion GPU or high-end onboard compute
+- economic/governance layers operating at slower rates on the same companion stack or a nearby controller
+
+That means the architecture must eventually make explicit:
+
+- what runs onboard versus offboard
+- latency and bandwidth budgets between those layers
+- what happens when the companion perception stack lags or drops
+- how ROS2 / DDS / Unitree SDK2 or equivalent middleware is bridged into canonical WM state
+- how battery, thermal, and compute-pressure receipts feed back into planning and economics
+
+### Asset and calibration implication
+
+Humanoid-target readiness also requires a named robot-asset and calibration discipline.
+
+The stack will eventually need canonical handling for:
+
+- URDF / Xacro / SRDF and related robot-description assets
+- joint naming and action-index contracts
+- sensor extrinsics and intrinsics
+- hand / end-effector definitions
+- self-collision models
+- controller gain and hardware-calibration sidecars
+
+Without that, the lower WMs can become structurally correct while still failing on actual robot identity and calibration truth.
+
+### Benchmark implication
+
+The benchmark story also changes once the target is G1/R1-class hardware.
+
+Current manipulation/workcell benchmarks remain useful, but humanoid-target promotion will need additional benchmark classes such as:
+
+- standing and balance stability
+- locomotion plus manipulation success
+- push / slip / stumble recovery
+- self-collision and joint-limit compliance
+- foot contact and support-phase consistency
+- dexterous hand task completion
+- human-proximate safety behavior
+- sensor-dropout and degraded-perception robustness
+- latency / watchdog / companion-link degradation behavior
+
+This means the repo eventually needs a humanoid-target benchmark gate, not just stronger versions of the current workcell gates.
+
 ## Recommended WM Set
 
 ### 1. Perception / Grounding WM
@@ -690,6 +741,12 @@ Minimum outputs:
   - robot description source
   - observation/action contract deltas
   - receipt and replay compatibility plan
+- a first humanoid benchmark taxonomy covering:
+  - balance
+  - locomotion-manipulation
+  - recovery
+  - dexterous manipulation
+  - degraded-sensing robustness
 
 Preconditions:
 
@@ -790,6 +847,46 @@ Preconditions:
 - perception WM canonical state
 - sensor fusion shim
 - mobile embodiment target
+
+### Phase 4E - Companion Compute and Communication Middleware
+
+Objective:
+
+- formalize the robot/companion compute split and the middleware that moves typed state between them
+
+Reason:
+
+- G1/R1-class deployments are unlikely to run every perception, grounding, and WM component in one undifferentiated process
+- communication latency, packet loss, QoS, and degraded-link behavior become real runtime concerns
+
+OSS dependency map:
+
+- ROS2 / DDS
+- Unitree SDK2
+- ZeroMQ or equivalent auxiliary transport where needed
+
+Preconditions:
+
+- embodiment and perception contracts must already exist
+- timing metadata must be part of canonical state
+- deployment targets must be explicit about onboard vs companion compute
+
+### Phase 4F - Operator / Teleop / Recovery Fallback Layer
+
+Objective:
+
+- provide explicit human-override, teleoperation, and recovery-mode contracts below the economic/governance layer
+
+Reason:
+
+- serious humanoid readiness requires a bounded operator-recovery path for bring-up, failure handling, and safety-critical override
+- this should become part of the canonical event/governance/replay story rather than an informal manual escape hatch
+
+Preconditions:
+
+- real-time control split
+- physical safety layer
+- communication middleware
 
 ### Phase 5 - Economic WM Consolidation
 

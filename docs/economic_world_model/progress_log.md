@@ -19,6 +19,9 @@
   - the fact that current workcell/tabletop envs are useful skill islands but not sufficient humanoid-readiness proxies
   - an explicit later sim-env integration lane for Unitree G1/R1-class simulation
   - the need to refit observation/action contracts around proprioception, IMU, force/torque, whole-body state, latency, and spatial state
+  - explicit future phases for companion-compute / communication middleware and operator / teleop / recovery fallback
+  - robot asset and calibration management as a first-class future concern
+  - a humanoid-specific benchmark taxonomy rather than only stronger workcell benchmarks
   - a dedicated later phase for humanoid target capacity and environment refit before claiming real hardware-readiness
 - Changed: added named future phases with explicit preconditions for:
   - perception / grounding WM
