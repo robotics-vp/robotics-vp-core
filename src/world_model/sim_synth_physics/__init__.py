@@ -24,6 +24,10 @@ from .branch_planner_runtime import (
 )
 from .calibration import build_physics_calibration_receipt
 from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
+from .gen2sim_admission import (
+    assess_local_branch_corpus_gen2sim,
+    compile_gen2sim_admission_state,
+)
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import PhysicsCalibrationReceipt, SimulationOutcomeReceipt
 from .state import (
@@ -32,6 +36,13 @@ from .state import (
     PhysicsContextState,
     SimSynthPhysicsWorldState,
     SyntheticBranchPlan,
+)
+from .synthetic_branches import (
+    build_synthetic_branch_corpus_metadata,
+    collect_local_synthetic_branch_records,
+    compile_synthetic_branch_plans,
+    compute_branch_gap_labels,
+    extract_branch_features,
 )
 from .training_corpus import (
     build_backend_selector_rows_from_receipts,
@@ -60,10 +71,17 @@ __all__ = [
     "SimulationJobSpec",
     "SimulationOutcomeReceipt",
     "SyntheticBranchPlan",
+    "assess_local_branch_corpus_gen2sim",
     "build_physics_calibration_receipt",
     "build_physics_execution_contract",
+    "build_synthetic_branch_corpus_metadata",
+    "collect_local_synthetic_branch_records",
     "compile_sim_synth_physics_world_state",
+    "compile_gen2sim_admission_state",
     "describe_backend_adapter",
+    "compile_synthetic_branch_plans",
+    "compute_branch_gap_labels",
+    "extract_branch_features",
     "load_backend_selector_runtime_package",
     "load_branch_planner_runtime_package",
     "load_sim_synth_receipt_bundles",

@@ -5,10 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Literal, Mapping, Optional
 
-from src.economics.inferential_contract import (
-    coerce_inferential_learnability_contract,
-    summarize_inferential_learnability_contracts,
-)
+from src.economics.inferential_contract import summarize_inferential_learnability_contracts
 from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 
 from .adapters import (
@@ -18,15 +15,13 @@ from .adapters import (
 )
 from .agenda import SimulationAgenda, SimulationJobSpec
 from .backend_selector_runtime import resolve_backend_selector_helper
-from .branch_planner_runtime import resolve_branch_planner_helper
 from .common import clip01, mapping, safe_float, stable_id
 from .inferential import (
-    adjusted_branch_yield_score,
     agenda_score_with_inferential_prior,
-    build_branch_plan_inferential_contract,
     build_simulation_job_inferential_contract,
 )
-from .promotion import HelperMode, infer_backend_payload, infer_branch_payload
+from .gen2sim_admission import compile_gen2sim_admission_state
+from .promotion import HelperMode, infer_backend_payload
 from .state import (
     DiffusionConditioningState,
     Gen2SimAdmissionState,
@@ -34,6 +29,7 @@ from .state import (
     SimSynthPhysicsWorldState,
     SyntheticBranchPlan,
 )
+from .synthetic_branches import compile_synthetic_branch_plans
 
 EXPECTED_RECEIPTS = [
     "simulation_outcome_receipt",
@@ -318,125 +314,6 @@ def _compile_physics_context(
     )
 
 
-def _heuristic_generation_mode(job: SimulationJobSpec, physics_context: PhysicsContextState) -> str:
-    if job.data_collection_intent == "validate":
-        return "physics_probe"
-    if physics_context.fidelity_tier == "high_fidelity":
-        return "geometry_guarded_rollout"
-    if job.data_collection_intent == "exploit":
-        return "targeted_synth_rollout"
-    return "coverage_branch"
-
-
-def _heuristic_yield_score(job: SimulationJobSpec) -> float:
-    return clip01(
-        (0.4 * clip01(job.coverage_gap_score))
-        + (0.35 * job.economic_priority)
-        + (0.15 * (1.0 - job.trust_priority))
-        + (0.10 * job.readiness)
-    )
-
-
-def _compile_branch_plans(
-    jobs: list[SimulationJobSpec],
-    *,
-    physics_context: PhysicsContextState,
-    benchmark_signals: Mapping[str, Any],
-    semantic_context: Optional[Mapping[str, Any]],
-    economic_context: Optional[Mapping[str, Any]],
-    branch_planner: Any,
-    branch_planner_mode: HelperMode,
-) -> list[SyntheticBranchPlan]:
-    helper, helper_status = resolve_branch_planner_helper(
-        branch_planner,
-        mode=branch_planner_mode,
-    )
-    plans: list[SyntheticBranchPlan] = []
-    for job in jobs:
-        heuristic_generation_mode = _heuristic_generation_mode(job, physics_context)
-        heuristic_yield_score = _heuristic_yield_score(job)
-        helper_payload = infer_branch_payload(
-            helper,
-            job=job.to_dict(),
-            context={
-                "job": job.to_dict(),
-                "physics_context": physics_context.to_dict(),
-                "benchmark_signals": mapping(benchmark_signals),
-                "heuristic_generation_mode": heuristic_generation_mode,
-            },
-        )
-        selection_policy = "heuristic_only"
-        generation_mode = heuristic_generation_mode
-        expected_yield_score = heuristic_yield_score
-        if helper_payload:
-            selection_policy = "heuristic_plus_learned_branch_planner"
-            if str(helper_status.get("promotion_stage")) == "promoted":
-                generation_mode = str(helper_payload.get("generation_mode") or heuristic_generation_mode)
-                expected_yield_score = clip01(
-                    helper_payload.get("expected_yield_score", heuristic_yield_score)
-                )
-        job_contract = coerce_inferential_learnability_contract(
-            job.inferential_learnability_contract
-        )
-        plan_payload = {
-            "job_id": job.job_id,
-            "branch_family": f"{job.task_family}:{job.data_collection_intent}",
-            "generation_mode": generation_mode,
-            "render_backend": physics_context.backend,
-        }
-        plan_id = stable_id("branch_plan", plan_payload)
-        branch_contract = build_branch_plan_inferential_contract(
-            plan_id=plan_id,
-            job_id=job.job_id,
-            expected_yield_score=expected_yield_score,
-            job_contract=job_contract,
-            benchmark_signals=benchmark_signals,
-            semantic_context=semantic_context,
-            economic_context=economic_context,
-        )
-        inferential_signal_score = clip01(branch_contract.signal_yield.get("score", 0.0))
-        inferential_replay_weight = clip01(branch_contract.inferential_replay_weight)
-        expected_yield_score = adjusted_branch_yield_score(
-            base_expected_yield_score=expected_yield_score,
-            contract=branch_contract,
-        )
-        admission_preconditions = {
-            "requires_non_heuristic_grounding": bool(
-                job.data_collection_intent == "validate" and bool(job.risk_family)
-            ),
-            "requires_benchmark_ready": bool(job.readiness >= 0.8 and job.economic_priority >= 0.8),
-            "min_readiness": 0.0,
-            "min_inferential_replay_weight": (
-                0.08 if job.data_collection_intent == "validate" else 0.04
-            ),
-        }
-        plans.append(
-            SyntheticBranchPlan(
-                plan_id=plan_id,
-                source_job_id=job.job_id,
-                branch_family=f"{job.task_family}:{job.data_collection_intent}",
-                generation_mode=generation_mode,
-                render_backend=physics_context.backend,
-                gap_target_refs=[mapping(job.coverage_targets)],
-                admission_preconditions=admission_preconditions,
-                expected_yield_score=expected_yield_score,
-                selection_policy=selection_policy,
-                inferential_learnability_contract=branch_contract.to_dict(),
-                metadata={
-                    "agenda_rank": job.rank,
-                    "source_ranking_policy": job.ranking_policy,
-                    "heuristic_generation_mode": heuristic_generation_mode,
-                    "heuristic_expected_yield_score": heuristic_yield_score,
-                    "inferential_signal_yield_score": inferential_signal_score,
-                    "inferential_replay_weight": inferential_replay_weight,
-                    "branch_helper_status": helper_status,
-                    "branch_helper_trace": helper_payload,
-                },
-            )
-        )
-    return plans
-
-
 def _compile_diffusion_conditioning(
     jobs: list[SimulationJobSpec],
     branch_plans: list[SyntheticBranchPlan],
@@ -523,100 +400,6 @@ def _compile_diffusion_conditioning(
     )
 
 
-def _compile_gen2sim_admission(
-    branch_plans: list[SyntheticBranchPlan],
-    jobs: list[SimulationJobSpec],
-    *,
-    benchmark_signals: Mapping[str, Any],
-) -> Gen2SimAdmissionState:
-    benchmark_gate_ready = bool(
-        benchmark_signals.get("ready", False)
-        or benchmark_signals.get("benchmark_eligible", False)
-    )
-    semantic_grounding_non_heuristic = bool(
-        benchmark_signals.get("semantic_grounding_non_heuristic", False)
-    )
-    admissible_rows: list[tuple[str, float]] = []
-    blocked_rows: list[tuple[str, float]] = []
-    contracts = []
-    job_by_id = {job.job_id: job for job in jobs}
-    for plan in branch_plans:
-        job = job_by_id.get(plan.source_job_id)
-        preconditions = dict(plan.admission_preconditions)
-        plan_contract = coerce_inferential_learnability_contract(
-            plan.inferential_learnability_contract
-        )
-        if plan_contract is not None:
-            contracts.append(plan_contract)
-        admissible = True
-        if bool(preconditions.get("requires_benchmark_ready", False)) and not benchmark_gate_ready:
-            admissible = False
-        if (
-            bool(preconditions.get("requires_non_heuristic_grounding", False))
-            and not semantic_grounding_non_heuristic
-        ):
-            admissible = False
-        if job is not None and safe_float(preconditions.get("min_readiness", 0.0), 0.0) > job.readiness:
-            admissible = False
-        if (
-            plan_contract is not None
-            and safe_float(preconditions.get("min_inferential_replay_weight", 0.0), 0.0)
-            > float(plan_contract.inferential_replay_weight)
-        ):
-            admissible = False
-        admission_score = clip01(
-            0.55 * float(plan.expected_yield_score)
-            + 0.2
-            * clip01(
-                plan_contract.signal_yield.get("score", 0.0)
-                if plan_contract is not None
-                else 0.0
-            )
-            + 0.15
-            * clip01(
-                plan_contract.inferential_replay_weight if plan_contract is not None else 0.0
-            )
-            + 0.1 * float(benchmark_gate_ready)
-        )
-        if admissible:
-            admissible_rows.append((plan.plan_id, admission_score))
-        else:
-            blocked_rows.append((plan.plan_id, admission_score))
-    admissible_rows.sort(key=lambda item: item[1], reverse=True)
-    blocked_rows.sort(key=lambda item: item[1], reverse=True)
-    admissible_branch_ids = [plan_id for plan_id, _score in admissible_rows]
-    blocked_branch_ids = [plan_id for plan_id, _score in blocked_rows]
-    rationale = (
-        f"{len(admissible_branch_ids)} branch plans admissible, "
-        f"{len(blocked_branch_ids)} blocked by benchmark, grounding, or inferential preconditions."
-    )
-    inferential_summary = summarize_inferential_learnability_contracts(contracts)
-    return Gen2SimAdmissionState(
-        admission_id=stable_id(
-            "gen2sim_admission",
-            {
-                "admissible": admissible_branch_ids,
-                "blocked": blocked_branch_ids,
-                "benchmark_gate_ready": benchmark_gate_ready,
-            },
-        ),
-        benchmark_gate_ready=benchmark_gate_ready,
-        admissible_branch_ids=admissible_branch_ids,
-        blocked_branch_ids=blocked_branch_ids,
-        selection_policy="receipt_gated_with_inferential_contracts",
-        rationale=rationale,
-        inferential_learnability_summary=inferential_summary,
-        metadata={
-            "benchmark_signals": mapping(benchmark_signals),
-            "semantic_grounding_non_heuristic": semantic_grounding_non_heuristic,
-            "admission_scores": {
-                **{plan_id: score for plan_id, score in admissible_rows},
-                **{plan_id: score for plan_id, score in blocked_rows},
-            },
-        },
-    )
-
-
 def compile_sim_synth_physics_world_state(
     coverage_graph: Any,
     *,
@@ -681,7 +464,7 @@ def compile_sim_synth_physics_world_state(
         backend_selector=backend_selector,
         backend_selector_mode=backend_selector_mode,
     )
-    branch_plans = _compile_branch_plans(
+    branch_plans = compile_synthetic_branch_plans(
         jobs,
         physics_context=physics_context,
         benchmark_signals=benchmark_payload,
@@ -690,7 +473,7 @@ def compile_sim_synth_physics_world_state(
         branch_planner=branch_planner,
         branch_planner_mode=branch_planner_mode,
     )
-    gen2sim_admission = _compile_gen2sim_admission(
+    gen2sim_admission = compile_gen2sim_admission_state(
         branch_plans,
         jobs,
         benchmark_signals=benchmark_payload,

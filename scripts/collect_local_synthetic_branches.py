@@ -30,8 +30,11 @@ sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 from src.world_model.contractive_dynamics import StableWorldModel
 from src.valuation.trust_net import TrustNet
 from src.config.internal_profile import get_internal_experiment_profile
-from src.evidence.gen2sim_validity import assess_gen2sim_validity
-from src.evidence.scene_tracks_truth import scene_tracks_truth_from_metadata
+from src.world_model.sim_synth_physics import (
+    assess_local_branch_corpus_gen2sim,
+    build_synthetic_branch_corpus_metadata,
+    collect_local_synthetic_branch_records,
+)
 
 
 def _load_coverage_graph(path):
@@ -44,37 +47,6 @@ def _load_coverage_graph(path):
     except Exception as e:
         print(f"WARNING: Could not load coverage graph from {path}: {e}")
         return None
-
-
-def _compute_gap_labels(coverage_graph, ep_idx, task_id="", env_id=""):
-    """Compute semantic gap labels for a branch."""
-    labels = {
-        "skill_edge": "",
-        "env_primitive_edge": "",
-        "risk_family": "",
-        "coverage_gap_contribution": 0.0,
-        "economic_priority": 0.0,
-    }
-    if coverage_graph is None:
-        return labels
-    try:
-        gaps = coverage_graph.rank_gaps(limit=50)
-        if gaps:
-            # Find the most relevant gap for this task/env combo
-            best = gaps[0]
-            for g in gaps:
-                if task_id and task_id in g.source_id:
-                    best = g
-                    break
-                if env_id and env_id in g.target_id:
-                    best = g
-                    break
-            labels["skill_edge"] = f"{best.source_id} -> {best.target_id}"
-            labels["coverage_gap_contribution"] = best.gap_score() if callable(getattr(best, 'gap_score', None)) else 0.0
-            labels["economic_priority"] = getattr(best, 'economic_priority', 0.0)
-    except Exception:
-        pass
-    return labels
 
 
 def _load_source_runtime_metadata(path):
@@ -101,22 +73,6 @@ def _resolve_runtime_field(source_metadata, explicit_value, *keys, default=""):
         if value not in (None, ""):
             return value
     return default
-
-
-def extract_features_torch(z_sequence):
-    """Extract episode features for trust_net."""
-    global_mean = z_sequence.mean()
-    global_std = z_sequence.std()
-    global_min = z_sequence.min()
-    global_max = z_sequence.max()
-    dim_var = z_sequence.mean(dim=1).std()
-    diffs = torch.abs(z_sequence[1:] - z_sequence[:-1])
-    smoothness = diffs.mean()
-
-    features = torch.stack([
-        global_mean, global_std, global_min, global_max, dim_var, smoothness
-    ])
-    return features
 
 
 def load_brick_manifest(manifest_path):
@@ -325,94 +281,23 @@ def main():
         print("  (gap-aware mode: seeds from under-covered states)")
     print("="*70)
 
-    branches = []
-    stats = {
-        'total_attempted': 0,
-        'passed_trust': 0,
-        'passed_std': 0,
-        'passed_all': 0,
-        'by_brick': {},
-    }
-
-    for ep_idx in range(n_episodes):
-        ep = episodes[ep_idx]
-        z_real = ep['z_sequence']
-        actions = ep['actions']
-        T = ep['length']
-        brick_id = get_episode_brick_id(ep_idx, brick_manifest)
-
-        if brick_id not in stats['by_brick']:
-            stats['by_brick'][brick_id] = {'attempted': 0, 'passed': 0}
-
-        # Sample start positions uniformly
-        if T <= args.horizon:
-            continue
-
-        max_start = T - args.horizon
-        start_positions = np.random.choice(max_start, size=min(args.branches_per_episode, max_start), replace=False)
-
-        for start_t in start_positions:
-            stats['total_attempted'] += 1
-            stats['by_brick'][brick_id]['attempted'] += 1
-
-            # Roll out from real z_start
-            z_init = z_real[start_t]
-            actions_segment = actions[start_t:start_t + args.horizon]
-
-            with torch.no_grad():
-                z_traj = world_model.rollout(z_init, actions_segment)
-
-            # Compute trust score
-            features = extract_features_torch(z_traj)
-            feat_norm = (features - trust_mean) / trust_std_norm
-            trust_score = trust_net(feat_norm.unsqueeze(0)).item()
-
-            # Compute std ratio
-            synth_std = z_traj.std().item()
-            std_ratio = synth_std / real_z_std
-
-            # Gate: trust
-            if trust_score < args.min_trust:
-                continue
-            stats['passed_trust'] += 1
-
-            # Gate: std ratio
-            if std_ratio < args.min_std_ratio or std_ratio > args.max_std_ratio:
-                continue
-            stats['passed_std'] += 1
-            stats['passed_all'] += 1
-            stats['by_brick'][brick_id]['passed'] += 1
-
-            # Save branch
-            # Default objective vector from profile (for future conditioning)
-            # This can be set based on episode-level goals or task specifications
-            objective_vector = np.array(profile['default_objective_vector'], dtype=np.float32)
-
-            # Compute semantic gap labels (Section G)
-            gap_labels = _compute_gap_labels(coverage_graph, ep_idx)
-            gap_score = gap_labels.get('coverage_gap_contribution', 0.0)
-
-            # Combined branch value: trust × w_econ × semantic_gap_score × readiness
-            branch_value = trust_score * max(0.01, gap_score) if coverage_graph else trust_score
-
-            branch = {
-                'z_sequence': z_traj.cpu().numpy(),
-                'actions': actions_segment.cpu().numpy(),
-                'source_episode': ep_idx,
-                'source_timestep': start_t,
-                'horizon': args.horizon,
-                'trust_score': trust_score,
-                'std_ratio': std_ratio,
-                'brick_id': brick_id,
-                'objective_vector': objective_vector,
-                'branch_value': branch_value,
-                'gap_labels': gap_labels,
-            }
-            branches.append(branch)
-
-        if (ep_idx + 1) % 10 == 0:
-            print(f"  Processed {ep_idx + 1}/{n_episodes} episodes, "
-                  f"collected {len(branches)} branches")
+    branches, stats = collect_local_synthetic_branch_records(
+        episodes=episodes,
+        world_model=world_model,
+        trust_net=trust_net,
+        trust_mean=trust_mean,
+        trust_std_norm=trust_std_norm,
+        real_z_std=real_z_std,
+        horizon=args.horizon,
+        branches_per_episode=args.branches_per_episode,
+        min_trust=args.min_trust,
+        min_std_ratio=args.min_std_ratio,
+        max_std_ratio=args.max_std_ratio,
+        objective_vector=profile['default_objective_vector'],
+        coverage_graph=coverage_graph,
+        brick_manifest=brick_manifest,
+        brick_id_fn=get_episode_brick_id,
+    )
 
     # Summary
     print("\n" + "="*70)
@@ -486,118 +371,54 @@ def main():
             json.dump(gap_data, f, indent=2)
         print(f"Saved gap labels to {gap_labels_path}")
 
-    gen2sim_validity_rows = []
-    for i, branch in enumerate(branches):
-        assessment = assess_gen2sim_validity(
-            subject_id=f"{os.path.splitext(os.path.basename(args.output))[0]}_branch_{i:04d}",
-            subject_kind="synthetic_branch",
-            metadata={
-                **dict(source_runtime_metadata),
-                'scene_tracks_backend': scene_tracks_backend,
-                'teacher_runtime_backend_selected': teacher_runtime_backend,
-                'vision_backbone_selected': vision_backbone_selected,
-                'semantic_grounding_mode': semantic_grounding_mode,
-                'semantic_memory_grounded': semantic_memory_grounded,
-                'source_runtime_metadata': args.source_runtime_metadata or None,
-                'branch_gap_labels': gap_labels_path,
-                'trust_score': branch['trust_score'],
-                'std_ratio': branch['std_ratio'],
-                'branch_value': branch.get('branch_value', branch['trust_score']),
-                'coverage_gap_contribution': branch.get('gap_labels', {}).get(
-                    'coverage_gap_contribution',
-                    0.0,
-                ),
-                'economic_priority': branch.get('gap_labels', {}).get('economic_priority', 0.0),
-            },
-            trust_score=branch['trust_score'],
-            std_ratio=branch['std_ratio'],
-            branch_value=branch.get('branch_value', branch['trust_score']),
-            gap_labels=branch.get('gap_labels', {}),
-        )
-        branch['gen2sim_validity'] = assessment.to_dict()
-        gen2sim_validity_rows.append({'branch_idx': i, **assessment.to_dict()})
+    gen2sim_validity_rows, gen2sim_summary = assess_local_branch_corpus_gen2sim(
+        branches,
+        corpus_name=os.path.splitext(os.path.basename(args.output))[0],
+        source_runtime_metadata=source_runtime_metadata,
+        scene_tracks_backend=scene_tracks_backend,
+        teacher_runtime_backend_selected=teacher_runtime_backend,
+        vision_backbone_selected=vision_backbone_selected,
+        semantic_grounding_mode=semantic_grounding_mode,
+        semantic_memory_grounded=semantic_memory_grounded,
+        gap_labels_path=gap_labels_path,
+    )
+    for row in gen2sim_validity_rows:
+        branch_idx = int(row.get('branch_idx', -1))
+        if 0 <= branch_idx < len(branches):
+            branches[branch_idx]['gen2sim_validity'] = {
+                key: value for key, value in row.items() if key != 'branch_idx'
+            }
 
     gen2sim_validity_path = args.output.replace('.npz', '_gen2sim_validity.json')
     with open(gen2sim_validity_path, 'w', encoding='utf-8') as f:
         json.dump(gen2sim_validity_rows, f, indent=2)
     print(f"Saved gen2sim validity assessments to {gen2sim_validity_path}")
 
-    gen2sim_admission_scores = np.array(
-        [row['admission_score'] for row in gen2sim_validity_rows],
-        dtype=np.float32,
+    metadata = build_synthetic_branch_corpus_metadata(
+        output_path=args.output,
+        world_model_path=args.world_model,
+        dataset_path=args.dataset,
+        horizon=args.horizon,
+        branches_per_episode=args.branches_per_episode,
+        objective_dim=args.objective_dim,
+        min_trust=args.min_trust,
+        min_std_ratio=args.min_std_ratio,
+        max_std_ratio=args.max_std_ratio,
+        stats=stats,
+        branches=branches,
+        coverage_graph_used=args.use_coverage_graph,
+        coverage_graph_path=args.coverage_graph_path,
+        source_runtime_metadata=source_runtime_metadata,
+        source_runtime_metadata_artifact=args.source_runtime_metadata or None,
+        scene_tracks_backend=scene_tracks_backend,
+        teacher_runtime_backend_selected=teacher_runtime_backend,
+        vision_backbone_selected=vision_backbone_selected,
+        semantic_grounding_mode=semantic_grounding_mode,
+        semantic_memory_grounded=semantic_memory_grounded,
+        gap_labels_path=gap_labels_path,
+        gen2sim_validity_path=gen2sim_validity_path,
+        gen2sim_summary=gen2sim_summary,
     )
-    gen2sim_validity_scores = np.array(
-        [row['validity_score'] for row in gen2sim_validity_rows],
-        dtype=np.float32,
-    )
-    gen2sim_stage_counts = {}
-    for row in gen2sim_validity_rows:
-        stage = str(row.get('promotion_stage', 'heuristic_fallback'))
-        gen2sim_stage_counts[stage] = gen2sim_stage_counts.get(stage, 0) + 1
-
-    metadata = {
-        'schema_version': 'synthetic_branch_corpus_metadata_v1',
-        'source_type': 'stable_world_model_local_branch_v1',
-        'world_model': args.world_model,
-        'dataset': args.dataset,
-        'horizon': args.horizon,
-        'branches_per_episode': args.branches_per_episode,
-        'objective_dim': args.objective_dim,
-        'min_trust': args.min_trust,
-        'min_std_ratio': args.min_std_ratio,
-        'max_std_ratio': args.max_std_ratio,
-        'total_attempted': stats['total_attempted'],
-        'passed_trust': stats['passed_trust'],
-        'passed_std': stats['passed_std'],
-        'final_branches': len(branches),
-        'pass_rate': 100 * len(branches) / max(1, stats['total_attempted']),
-        'avg_trust': float(trust_scores.mean()) if branches else 0,
-        'avg_std_ratio': float(std_ratios.mean()) if branches else 0,
-        'by_brick': stats['by_brick'],
-        'coverage_graph_used': args.use_coverage_graph,
-        'coverage_graph_path': args.coverage_graph_path if args.use_coverage_graph else None,
-        'gap_label_sample': branches[0].get('gap_labels') if branches else None,
-        'gen2sim_validity_summary': {
-            'count': len(gen2sim_validity_rows),
-            'avg_validity_score': float(gen2sim_validity_scores.mean())
-            if len(gen2sim_validity_scores)
-            else 0.0,
-            'avg_admission_score': float(gen2sim_admission_scores.mean())
-            if len(gen2sim_admission_scores)
-            else 0.0,
-            'promotion_stage_counts': gen2sim_stage_counts,
-        },
-        'scene_tracks_backend': scene_tracks_backend,
-        'teacher_runtime_backend_selected': teacher_runtime_backend,
-        'vision_backbone_selected': vision_backbone_selected,
-        'semantic_grounding_mode': semantic_grounding_mode,
-        'semantic_memory_grounded': semantic_memory_grounded,
-        'future_training_signals': {
-            **dict(source_runtime_metadata.get('future_training_signals', {}) or {}),
-            **{
-                key: value
-                for key, value in scene_tracks_truth_from_metadata(
-                    {
-                        **dict(source_runtime_metadata),
-                        'scene_tracks_backend': scene_tracks_backend,
-                    }
-                ).items()
-                if key in {
-                    'scene_tracks_non_stub',
-                    'scene_tracks_training_eligible',
-                    'semantic_grounding_non_heuristic',
-                    'semantic_grounding_ready',
-                }
-            },
-            'semantic_gap_labeled': bool(gap_labels_path),
-            'semantic_memory_grounded': semantic_memory_grounded,
-        },
-        'future_training_artifacts': {
-            'branch_gap_labels': gap_labels_path,
-            'branch_gen2sim_validity': gen2sim_validity_path,
-            'source_runtime_metadata': args.source_runtime_metadata or None,
-        },
-    }
 
     metadata_path = args.output.replace('.npz', '_metadata.json')
     with open(metadata_path, 'w') as f:
