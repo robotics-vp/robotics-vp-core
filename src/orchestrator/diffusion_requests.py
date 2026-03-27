@@ -510,6 +510,10 @@ def build_diffusion_prompt_from_coverage_gaps(
     limit: int = 5,
     gap_ranker: Any = None,
     gap_ranker_mode: str = "auto",
+    backend_selector: Any = None,
+    backend_selector_mode: str = "auto",
+    branch_planner: Any = None,
+    branch_planner_mode: str = "auto",
 ) -> List[DiffusionPromptSpec]:
     """Build diffusion prompts from ranked coverage gaps.
 
@@ -543,11 +547,15 @@ def build_diffusion_prompt_from_coverage_gaps(
                 objective_vector or [1.0, 1.0, 1.0, 1.0, 0.0]
             ),
             gap_ranker_mode=str(gap_ranker_mode),
+            backend_selector_mode=str(backend_selector_mode),
+            branch_planner_mode=str(branch_planner_mode),
         )
     )
     world_state = runtime.compile_world_state(
         coverage_graph,
         gap_ranker=gap_ranker,
+        backend_selector=backend_selector,
+        branch_planner=branch_planner,
     )
     return build_diffusion_prompts_from_world_state(
         world_state,

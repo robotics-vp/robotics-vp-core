@@ -463,6 +463,10 @@ def run_coverage_loop(
     diffusion_limit: int = 10,
     gap_ranker: Any = None,
     gap_ranker_mode: Literal["disabled", "auto", "required"] = "auto",
+    backend_selector: Any = None,
+    backend_selector_mode: Literal["disabled", "auto", "required"] = "auto",
+    branch_planner: Any = None,
+    branch_planner_mode: Literal["disabled", "auto", "required"] = "auto",
     fill_path_policy: Any = None,
     fill_path_policy_mode: Literal["disabled", "auto", "required"] = "auto",
     write_artifacts: bool = False,
@@ -718,6 +722,8 @@ def run_coverage_loop(
             readiness_weight=readiness_weight,
             agenda_limit=max(int(sim_agenda_limit), int(diffusion_limit)),
             gap_ranker_mode=gap_ranker_mode,
+            backend_selector_mode=backend_selector_mode,
+            branch_planner_mode=branch_planner_mode,
         )
     )
     sim_synth_world_state = sim_synth_runtime.compile_world_state(
@@ -725,6 +731,8 @@ def run_coverage_loop(
         economic_context=econ_signals,
         embodiment_context={"env_names": list(resolved_envs)},
         gap_ranker=gap_ranker,
+        backend_selector=backend_selector,
+        branch_planner=branch_planner,
     )
     sim_agenda = sim_synth_world_state.simulation_agenda.to_legacy_items()[:sim_agenda_limit]
     summary["sim_synth_physics_state_id"] = sim_synth_world_state.state_id

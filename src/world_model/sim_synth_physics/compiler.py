@@ -358,6 +358,7 @@ def _compile_branch_plans(
                 "job": job.to_dict(),
                 "physics_context": physics_context.to_dict(),
                 "benchmark_signals": mapping(benchmark_signals),
+                "heuristic_generation_mode": heuristic_generation_mode,
             },
         )
         selection_policy = "heuristic_only"

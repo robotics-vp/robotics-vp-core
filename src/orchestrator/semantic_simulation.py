@@ -930,6 +930,10 @@ def compile_simulation_agenda(
     default_objective: str = "balanced",
     gap_ranker: Any = None,
     gap_ranker_mode: Literal["disabled", "auto", "required"] = "auto",
+    backend_selector: Any = None,
+    backend_selector_mode: Literal["disabled", "auto", "required"] = "auto",
+    branch_planner: Any = None,
+    branch_planner_mode: Literal["disabled", "auto", "required"] = "auto",
 ) -> list[dict[str, Any]]:
     """Compile a ranked simulation agenda from the semantic coverage graph.
 
@@ -960,10 +964,14 @@ def compile_simulation_agenda(
             default_backend=default_backend,
             default_objective=default_objective,
             gap_ranker_mode=gap_ranker_mode,
+            backend_selector_mode=backend_selector_mode,
+            branch_planner_mode=branch_planner_mode,
         )
     )
     world_state = runtime.compile_world_state(
         coverage_graph,
         gap_ranker=gap_ranker,
+        backend_selector=backend_selector,
+        branch_planner=branch_planner,
     )
     return world_state.simulation_agenda.to_legacy_items()
