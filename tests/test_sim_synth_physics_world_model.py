@@ -570,6 +570,15 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
         "shadow_bridge_only",
     }
     assert result.backend_runtime_bridge_receipt.execution_authority == "shadow_runtime"
+    assert result.backend_runtime_work_orders
+    assert result.backend_runtime_work_orders[0].backend == "isaac"
+    assert result.backend_runtime_work_orders[0].status in {
+        "blocked_by_runtime_targets",
+        "blocked_by_assets",
+        "blocked_by_runtime_preconditions",
+        "ready_for_gpu_runtime",
+    }
+    assert "isaac_unitree_runtime_smoke" in result.backend_runtime_work_orders[0].linked_backlog_ids
     assert (
         result.physics_adaptation_receipt.metadata["runtime_evidence"]["shadow_execution_status"]
         in {"shadow_executed", "shadow_executed_with_asset_gaps"}
@@ -598,6 +607,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "backend_execution_binding_receipt.json").exists()
     assert (tmp_path / "robot_asset_contract_receipt.json").exists()
     assert (tmp_path / "backend_runtime_bridge_receipt.json").exists()
+    assert (tmp_path / "backend_runtime_work_orders.json").exists()
     assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
     assert (tmp_path / "backend_shadow_execution_receipt.json").exists()
     assert (tmp_path / "backend_shadow_execution" / "isaac" / "robot_asset_contract_sidecar.json").exists()
@@ -655,6 +665,9 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
     )
     assert result.backend_runtime_bridge_receipt.execution_authority == "shadow_runtime"
     assert result.backend_runtime_bridge_receipt.transport_profile == "holosoma_motion_runtime_bridge"
+    assert result.backend_runtime_work_orders
+    assert result.backend_runtime_work_orders[0].backend == "holosoma"
+    assert "holosoma_runtime_eval_smoke" in result.backend_runtime_work_orders[0].linked_backlog_ids
     assert result.backend_shadow_execution_receipt.metadata["robot_asset_contract_id"] == result.world_state.robot_asset_contract.contract_id
     assert len(result.backend_shadow_execution_receipt.metadata["asset_sidecar_refs"]) == 3
     assert result.backend_shadow_execution_receipt.artifact_refs
@@ -699,6 +712,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
         "shadow_runtime",
         "concrete_runtime",
     }
+    assert feedback_manifest["backend_runtime_work_order_count"] >= 0
     assert feedback_manifest["backend_shadow_execution_status"] in {
         "",
         "shadow_executed",
@@ -722,6 +736,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert loop_summary["materialized_render_provider_count"] >= 1
     assert loop_summary["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id
     assert loop_summary["backend_runtime_bridge_receipt_id"] == result.backend_runtime_bridge_receipt.receipt_id
+    assert loop_summary["backend_runtime_work_order_count"] >= 0
     assert result.world_state.input_context["economic"]["economic_urgency_score"] == 0.0
 
 
@@ -811,6 +826,7 @@ def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exis
         for ref in result.backend_runtime_execution_receipt.artifact_refs
     )
     assert result.backend_runtime_bridge_receipt.execution_authority == "concrete_runtime"
+    assert result.backend_runtime_work_orders[0].status == "satisfied_by_concrete_runtime"
     assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
 
 
@@ -907,6 +923,7 @@ def test_runtime_trains_concrete_holosoma_backend_when_motion_datapacks_exist(
         for ref in result.backend_runtime_execution_receipt.artifact_refs
     )
     assert result.backend_runtime_bridge_receipt.execution_authority == "concrete_runtime"
+    assert result.backend_runtime_work_orders[0].status == "satisfied_by_concrete_runtime"
     assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
 
 

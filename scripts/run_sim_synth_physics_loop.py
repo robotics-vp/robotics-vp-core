@@ -105,6 +105,10 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         "bridge_execution_authority": result.backend_runtime_bridge_receipt.execution_authority,
         "bridge_transport_profile": result.backend_runtime_bridge_receipt.transport_profile,
         "bridge_readiness_score": float(result.backend_runtime_bridge_receipt.bridge_readiness_score),
+        "backend_runtime_work_order_count": len(result.backend_runtime_work_orders),
+        "backend_runtime_work_order_statuses": [
+            receipt.status for receipt in result.backend_runtime_work_orders
+        ],
         "robot_asset_readiness_score": float(result.robot_asset_contract_receipt.readiness_score),
         "backend_runtime_execution_receipt_id": (
             None

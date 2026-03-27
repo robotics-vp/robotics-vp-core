@@ -76,6 +76,7 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
     assert Path(result["artifact_paths"]["backend_execution_binding_receipt"]).exists()
     assert Path(result["artifact_paths"]["robot_asset_contract_receipt"]).exists()
     assert Path(result["artifact_paths"]["backend_runtime_bridge_receipt"]).exists()
+    assert Path(result["artifact_paths"]["backend_runtime_work_orders"]).exists()
     assert Path(result["artifact_paths"]["physics_calibration_receipt"]).exists()
     assert Path(result["artifact_paths"]["render_provider_receipts"]).exists()
     assert result["backend_execution_binding_receipt_id"]
@@ -94,6 +95,9 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
         "shadow_runtime",
         "concrete_runtime",
     }
+    assert result["backend_runtime_work_order_count"] >= 0
+    if result["backend_runtime_work_order_count"]:
+        assert result["backend_runtime_work_order_statuses"]
     assert result["robot_asset_readiness_score"] >= 0.0
     assert result["backend_runtime_execution_status"] in {
         "",

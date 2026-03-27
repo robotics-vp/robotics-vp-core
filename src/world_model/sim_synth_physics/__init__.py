@@ -36,6 +36,7 @@ from .receipts import (
     BackendExecutionBindingReceipt,
     BackendRuntimeBridgeReceipt,
     BackendShadowExecutionReceipt,
+    BackendRuntimeWorkOrderReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
     RenderProviderReceipt,
@@ -46,6 +47,7 @@ from .runtime_bridge import (
     build_backend_runtime_bridge_receipt,
     compile_backend_runtime_bridge,
 )
+from .runtime_work_orders import build_backend_runtime_work_orders
 from .runtime_evidence import summarize_runtime_evidence
 from .shadow_execution import materialize_backend_shadow_execution
 from .state import (
@@ -79,6 +81,7 @@ __all__ = [
     "BackendAdapterDescriptor",
     "BackendExecutionBindingReceipt",
     "BackendRuntimeBridgeReceipt",
+    "BackendRuntimeWorkOrderReceipt",
     "BackendShadowExecutionReceipt",
     "BackendExecutionBindingState",
     "BackendRuntimeBridgeState",
@@ -114,6 +117,7 @@ __all__ = [
     "materialize_render_provider_receipts",
     "summarize_runtime_evidence",
     "build_backend_runtime_bridge_receipt",
+    "build_backend_runtime_work_orders",
     "compile_backend_execution_binding",
     "build_physics_execution_contract",
     "build_synthetic_branch_corpus_metadata",

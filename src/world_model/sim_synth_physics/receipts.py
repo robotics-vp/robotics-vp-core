@@ -189,6 +189,42 @@ class BackendRuntimeBridgeReceipt:
 
 
 @dataclass(frozen=True)
+class BackendRuntimeWorkOrderReceipt:
+    """Work order for a concrete backend runtime bring-up or validation pass."""
+
+    receipt_id: str
+    backend: str
+    bridge_id: str
+    work_order_kind: str
+    status: str
+    linked_backlog_ids: list[str] = field(default_factory=list)
+    command_hints: list[str] = field(default_factory=list)
+    missing_runtime_targets: list[str] = field(default_factory=list)
+    missing_assets: list[str] = field(default_factory=list)
+    missing_preconditions: list[str] = field(default_factory=list)
+    artifact_refs: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_runtime_work_order_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "backend": self.backend,
+            "bridge_id": self.bridge_id,
+            "work_order_kind": self.work_order_kind,
+            "status": self.status,
+            "linked_backlog_ids": strings(self.linked_backlog_ids),
+            "command_hints": strings(self.command_hints),
+            "missing_runtime_targets": strings(self.missing_runtime_targets),
+            "missing_assets": strings(self.missing_assets),
+            "missing_preconditions": strings(self.missing_preconditions),
+            "artifact_refs": strings(self.artifact_refs),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class RobotAssetContractReceipt:
     """Receipt for one WM-owned robot-asset contract."""
 
