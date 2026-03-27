@@ -495,6 +495,7 @@ def run_semantic_fusion_for_rollouts(
         semantic_world_model_path: Optional[Path] = None
         semantic_snapshot_path: Optional[Path] = None
         orchestrator_advisory_path: Optional[Path] = None
+        control_plane_context_path: Optional[Path] = None
         if emit_semantic_fusion and (emit_evidence_bus or emit_belief_state):
             episode_id = getattr(episode.metadata, "episode_id", "") or ""
             evidence_records: list[EvidenceRecord] = []
@@ -667,12 +668,14 @@ def run_semantic_fusion_for_rollouts(
                     semantic_world_model_path = Path(backbone_paths["semantic_world_model_path"])
                     semantic_snapshot_path = Path(backbone_paths["semantic_snapshot_path"])
                     orchestrator_advisory_path = Path(backbone_paths["orchestrator_advisory_path"])
+                    control_plane_context_path = Path(backbone_paths["control_plane_context_path"])
                     if emit_semantic_world_model:
                         summary["semantic_world_model_path"] = str(semantic_world_model_path)
                     if emit_semantic_snapshot:
                         summary["semantic_snapshot_path"] = str(semantic_snapshot_path)
                     if emit_orchestrator_advisory:
                         summary["orchestrator_advisory_path"] = str(orchestrator_advisory_path)
+                    summary["control_plane_context_path"] = str(control_plane_context_path)
 
         if emit_semantic_fusion:
             _update_episode_metadata(
@@ -685,6 +688,7 @@ def run_semantic_fusion_for_rollouts(
                     "semantic_world_model_path": str(semantic_world_model_path) if semantic_world_model_path is not None else None,
                     "semantic_snapshot_path": str(semantic_snapshot_path) if semantic_snapshot_path is not None else None,
                     "orchestrator_advisory_path": str(orchestrator_advisory_path) if orchestrator_advisory_path is not None else None,
+                    "control_plane_context_path": str(control_plane_context_path) if control_plane_context_path is not None else None,
                 },
             )
 

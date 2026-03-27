@@ -243,6 +243,17 @@ Remaining Tranche B target:
 
 - orchestration-level receipts and higher-shell control outputs still need the same contract cleanup so bounded internal selectors stop being documented or interpreted as generic advisories.
 
+Progress since that note:
+
+- `src/semantic/runtime_backbone.py` now emits `orchestrator_control_plane_context_v1` as a companion artifact beside `semantic_world_model`, `semantic_snapshot`, and `orchestrator_advisory`.
+- `scripts/run_stage1_pipeline.py`, `src/orchestrator/semantic_fusion_runner.py`, and `scripts/bootstrap_semantic_workcell_loop.py` now preserve that context artifact in the main semantic-runtime output paths.
+- `src/replay/ingest.py` now discovers `control_plane_context_path`, preserves `control_plane_context_ref`, and hydrates the parsed context into replay episode metadata.
+
+Updated remaining Tranche B target:
+
+- higher-shell orchestration and Phase H outputs still need the same contract cleanup
+- some preview/report surfaces still use advisory naming when they are really canonical metadata or bounded authority receipts
+
 ### Tranche C: External-provider doctrine cleanup
 
 After Tranche B:

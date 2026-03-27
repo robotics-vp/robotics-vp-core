@@ -121,6 +121,57 @@ def _semantic_runtime_truth(
     }
 
 
+def build_orchestrator_control_plane_context(
+    *,
+    semantic_world_model: SemanticWorldModelState,
+    semantic_snapshot: SemanticSnapshot,
+    orchestrator_advisory: OrchestratorAdvisory,
+    artifact_refs: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    snapshot_metadata = _mapping(getattr(semantic_snapshot, "metadata", {}))
+    benchmark_signals = _mapping(snapshot_metadata.get("benchmark_signals"))
+    execution_preconditions = _mapping(snapshot_metadata.get("execution_preconditions"))
+    semantic_runtime_truth = _mapping(snapshot_metadata.get("semantic_runtime_truth"))
+    return {
+        "schema_version": "orchestrator_control_plane_context_v1",
+        "receipt_kind": "orchestrator_control_plane_context_v1",
+        "authority_class": "canonical_metadata",
+        "decision_scope": "semantic_runtime_control_plane",
+        "reward_math_mutation": False,
+        "task_id": str(semantic_snapshot.task_id),
+        "semantic_world_model_id": semantic_world_model.world_model_id,
+        "semantic_world_model_summary": _semantic_world_model_summary(semantic_world_model),
+        "focus_objective_presets": list(orchestrator_advisory.focus_objective_presets),
+        "sampler_strategy_overrides": dict(orchestrator_advisory.sampler_strategy_overrides),
+        "datapack_priority_tags": list(orchestrator_advisory.datapack_priority_tags),
+        "safety_emphasis": float(orchestrator_advisory.safety_emphasis),
+        "execution_mode": str(orchestrator_advisory.execution_mode),
+        "policy_source": str(orchestrator_advisory.policy_source),
+        "promotion_stage": orchestrator_advisory.promotion_stage,
+        "meta_node_weights": dict(orchestrator_advisory.meta_node_weights),
+        "activation_plan": dict(orchestrator_advisory.activation_plan),
+        "activation_work_order": dict(orchestrator_advisory.activation_work_order or {}),
+        "helper_trace": dict(orchestrator_advisory.helper_trace or {}),
+        "benchmark_signals": benchmark_signals,
+        "execution_preconditions": execution_preconditions,
+        "semantic_runtime_truth": semantic_runtime_truth,
+        "artifact_refs": _mapping(artifact_refs),
+        "metadata": {
+            "snapshot_runtime_backbone": str(snapshot_metadata.get("runtime_backbone", "")),
+            "active_meta_nodes": sorted(
+                [
+                    str(node_type)
+                    for node_type, score in dict(orchestrator_advisory.meta_node_weights).items()
+                    if _safe_float(score) > 0.0
+                ]
+            ),
+            "capability_keys": sorted(
+                str(key) for key in dict(semantic_world_model.capability_scores or {}).keys()
+            ),
+        },
+    }
+
+
 @dataclass(frozen=True)
 class RuntimeSemanticBackboneResult:
     semantic_world_model: SemanticWorldModelState
@@ -238,14 +289,35 @@ class SemanticRuntimeBackbone:
         world_model_path = output_path / f"{file_stem}_semantic_world_model_v1.json"
         snapshot_path = output_path / f"{file_stem}_semantic_snapshot_v1.json"
         advisory_path = output_path / f"{file_stem}_orchestrator_advisory_v1.json"
+        control_plane_context_path = output_path / f"{file_stem}_control_plane_context_v1.json"
         world_model_path.write_text(json.dumps(result.semantic_world_model.to_dict(), indent=2))
         snapshot_path.write_text(json.dumps(result.semantic_snapshot.to_dict(), indent=2))
         advisory_path.write_text(json.dumps(result.orchestrator_advisory.to_json(), indent=2))
+        control_plane_context_path.write_text(
+            json.dumps(
+                build_orchestrator_control_plane_context(
+                    semantic_world_model=result.semantic_world_model,
+                    semantic_snapshot=result.semantic_snapshot,
+                    orchestrator_advisory=result.orchestrator_advisory,
+                    artifact_refs={
+                        "semantic_world_model_path": str(world_model_path),
+                        "semantic_snapshot_path": str(snapshot_path),
+                        "orchestrator_advisory_path": str(advisory_path),
+                    },
+                ),
+                indent=2,
+            )
+        )
         return {
             "semantic_world_model_path": str(world_model_path),
             "semantic_snapshot_path": str(snapshot_path),
             "orchestrator_advisory_path": str(advisory_path),
+            "control_plane_context_path": str(control_plane_context_path),
         }
 
 
-__all__ = ["RuntimeSemanticBackboneResult", "SemanticRuntimeBackbone"]
+__all__ = [
+    "RuntimeSemanticBackboneResult",
+    "SemanticRuntimeBackbone",
+    "build_orchestrator_control_plane_context",
+]

@@ -1267,3 +1267,29 @@
   - internal orchestration sidecars still need a companion `control_plane_context` / receipt path
   - especially `semantic_fusion_runner`, `runtime_backbone`, Stage-1 pipeline emissions, and replay ingest
   - that is now the next place where bounded internal selectors still look softer than they really are
+
+- That semantic-runtime companion receipt now exists:
+  - `src/semantic/runtime_backbone.py` now emits `orchestrator_control_plane_context_v1` beside the semantic WM, semantic snapshot, and orchestrator advisory.
+  - The new context artifact carries typed authority metadata (`receipt_kind`, `authority_class`, `decision_scope`, `reward_math_mutation`) plus the actual control-plane fields that matter downstream:
+    - meta-node weights
+    - focus objective presets
+    - sampler strategy overrides
+    - benchmark signals
+    - execution preconditions
+    - semantic-runtime truth
+    - semantic-WM summary
+  - This is important because the repo now has a canonical place to preserve bounded internal selector state without pretending that the original `orchestrator_advisory` JSON is itself the whole runtime truth surface.
+
+- The main semantic-runtime producers now preserve that context:
+  - `scripts/run_stage1_pipeline.py` writes `*_control_plane_context_v1.json` into `governed_video`.
+  - `src/orchestrator/semantic_fusion_runner.py` writes and records the same artifact for runtime-fusion episodes.
+  - `scripts/bootstrap_semantic_workcell_loop.py` now carries `control_plane_context_path` through bootstrap metadata and summary outputs.
+
+- Replay ingest now treats the control-plane companion as canonical metadata instead of ignoring it:
+  - `src/replay/ingest.py` discovers `control_plane_context_path` sidecars, preserves `control_plane_context_ref` in provenance, and hydrates the parsed context into replay episode metadata.
+  - This gives downstream training/runtime consumers a stable typed place to recover internal selector/meta-node state without scraping free-form sidecars.
+
+- Honest remainder after this control-plane-context pass:
+  - external-provider doctrine cleanup still remains
+  - higher-shell orchestration and Phase H surfaces still need the same reclassification treatment
+  - but the lower semantic-runtime boundary is no longer one of the major advisory-truth gaps

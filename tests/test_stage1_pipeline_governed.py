@@ -76,6 +76,7 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     semantic_world_model_files = list(governed_dir.glob("*_semantic_world_model_v1.json"))
     semantic_snapshot_files = list(governed_dir.glob("*_semantic_snapshot_v1.json"))
     orchestrator_advisory_files = list(governed_dir.glob("*_orchestrator_advisory_v1.json"))
+    control_plane_context_files = list(governed_dir.glob("*_control_plane_context_v1.json"))
     assert video_state_files
     assert reconstruction_files
     assert counterfactual_files
@@ -85,6 +86,7 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     assert semantic_world_model_files
     assert semantic_snapshot_files
     assert orchestrator_advisory_files
+    assert control_plane_context_files
     payload = json.loads(video_state_files[0].read_text())
     assert payload["version"] == "video_state_snapshot_v1"
     semantic_world_model = json.loads(semantic_world_model_files[0].read_text())
@@ -94,6 +96,10 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     assert semantic_snapshot["semantic_world_model"]["version"] == "semantic_world_model_v1"
     advisory = json.loads(orchestrator_advisory_files[0].read_text())
     assert advisory["meta_node_weights"]
+    control_plane_context = json.loads(control_plane_context_files[0].read_text())
+    assert control_plane_context["receipt_kind"] == "orchestrator_control_plane_context_v1"
+    assert control_plane_context["authority_class"] == "canonical_metadata"
+    assert control_plane_context["semantic_world_model_summary"]["world_model_id"]
     reconstruction = json.loads(reconstruction_files[0].read_text())
     assert reconstruction["version"] == "four_d_reconstruction_sidecar_v1"
     counterfactual = json.loads(counterfactual_files[0].read_text())

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
@@ -86,6 +87,7 @@ def test_emit_flag_default_on(tmp_path) -> None:
     summary = summaries[0]
     expected_path = episode_dir / "episode_test_semantic_fusion_v1.npz"
     assert summary["semantic_fusion_path"] == str(expected_path)
+    assert Path(summary["control_plane_context_path"]).exists()
     assert "semantic_fusion_keys" in summary
     assert "semantic_fusion_prefix" in summary
 

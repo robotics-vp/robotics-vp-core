@@ -149,12 +149,29 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
         ),
         encoding="utf-8",
     )
+    control_plane_context_path = episode_dir / "ep_rollout_001_control_plane_context_v1.json"
+    control_plane_context_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "orchestrator_control_plane_context_v1",
+                "receipt_kind": "orchestrator_control_plane_context_v1",
+                "authority_class": "canonical_metadata",
+                "decision_scope": "semantic_runtime_control_plane",
+                "reward_math_mutation": False,
+                "meta_node_weights": {"risk_triage": 0.6},
+                "focus_objective_presets": ["balanced_contract"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     metadata_path = episode_dir / "metadata.json"
     metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata_payload["scene_tracks_path"] = str(scene_tracks_path.relative_to(tmp_path))
     metadata_payload["semantic_world_model_path"] = str(semantic_world_model_path.relative_to(tmp_path))
     metadata_payload["runtime_packet_path"] = str(runtime_packet_path.relative_to(tmp_path))
     metadata_payload["selection_summary_path"] = str(selection_summary_path.relative_to(tmp_path))
+    metadata_payload["control_plane_context_path"] = str(control_plane_context_path.relative_to(tmp_path))
     metadata_payload["event_spine_path"] = str(event_spine_path.relative_to(tmp_path))
     metadata_payload["decision_ledger_path"] = str(decision_ledger_path.relative_to(tmp_path))
     metadata_payload["runtime_packet_id"] = "runtime_ep_rollout_001"
@@ -172,6 +189,9 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.episodes[0].provenance["semantic_world_model_ref"] == str(semantic_world_model_path.resolve())
     assert bundle.episodes[0].provenance["runtime_packet_ref"] == str(runtime_packet_path.resolve())
     assert bundle.episodes[0].provenance["selection_summary_ref"] == str(selection_summary_path.resolve())
+    assert bundle.episodes[0].provenance["control_plane_context_ref"] == str(
+        control_plane_context_path.resolve()
+    )
     assert bundle.episodes[0].provenance["event_spine_ref"] == str(event_spine_path.resolve())
     assert bundle.episodes[0].provenance["decision_ledger_ref"] == str(decision_ledger_path.resolve())
     assert bundle.episodes[0].metadata["execution_preconditions"]["ready"] is True
@@ -179,6 +199,7 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.episodes[0].metadata["semantic_memory_grounded"] is True
     assert bundle.episodes[0].metadata["semantic_grounding_non_heuristic"] is False
     assert bundle.episodes[0].metadata["selection_summary"]["selected_ids"] == ["dp_rollout"]
+    assert bundle.episodes[0].metadata["control_plane_context"]["receipt_kind"] == "orchestrator_control_plane_context_v1"
     assert bundle.episodes[0].metadata["inferential_learnability_contract"]["subject_id"] == "ep_rollout_001"
     assert bundle.manifest.metadata["schema_compatibility"][0]["compatible"] is True
 

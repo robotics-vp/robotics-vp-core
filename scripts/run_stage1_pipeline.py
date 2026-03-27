@@ -52,7 +52,10 @@ from src.valuation.datapack_schema import (
 )
 from src.regal.gen_plausibility import RegalGenPlausibilityNode
 from src.regal.base import RegalDecision
-from src.semantic.runtime_backbone import SemanticRuntimeBackbone
+from src.semantic.runtime_backbone import (
+    SemanticRuntimeBackbone,
+    build_orchestrator_control_plane_context,
+)
 from src.world_model import GovernedVideoWorldModel, SemanticWorldModelBuilder
 from src.world_model.governed_video_supervision import build_governed_video_supervision_bundle
 from src.vision.reconstruction import (
@@ -531,6 +534,7 @@ def write_stage1_sidecars(
     semantic_world_model_path = sidecar_dir / f"{episode_id}_semantic_world_model_v1.json"
     semantic_snapshot_path = sidecar_dir / f"{episode_id}_semantic_snapshot_v1.json"
     orchestrator_advisory_path = sidecar_dir / f"{episode_id}_orchestrator_advisory_v1.json"
+    control_plane_context_path = sidecar_dir / f"{episode_id}_control_plane_context_v1.json"
     evidence_bus_path.write_text(json.dumps(evidence_bus.to_dict(), indent=2))
     belief_state_path.write_text(json.dumps(belief_state.to_dict(), indent=2))
     snapshot_path.write_text(json.dumps(snapshot.to_dict(), indent=2))
@@ -546,6 +550,21 @@ def write_stage1_sidecars(
     semantic_world_model_path.write_text(json.dumps(semantic_world_model.to_dict(), indent=2))
     semantic_snapshot_path.write_text(json.dumps(semantic_snapshot.to_dict(), indent=2))
     orchestrator_advisory_path.write_text(json.dumps(orchestrator_advisory.to_json(), indent=2))
+    control_plane_context_path.write_text(
+        json.dumps(
+            build_orchestrator_control_plane_context(
+                semantic_world_model=semantic_world_model,
+                semantic_snapshot=semantic_snapshot,
+                orchestrator_advisory=orchestrator_advisory,
+                artifact_refs={
+                    "semantic_world_model_path": str(semantic_world_model_path),
+                    "semantic_snapshot_path": str(semantic_snapshot_path),
+                    "orchestrator_advisory_path": str(orchestrator_advisory_path),
+                },
+            ),
+            indent=2,
+        )
+    )
     sidecar_paths = {
         "evidence_bus_path": str(evidence_bus_path),
         "belief_state_path": str(belief_state_path),
@@ -554,6 +573,7 @@ def write_stage1_sidecars(
         "semantic_world_model_path": str(semantic_world_model_path),
         "semantic_snapshot_path": str(semantic_snapshot_path),
         "orchestrator_advisory_path": str(orchestrator_advisory_path),
+        "control_plane_context_path": str(control_plane_context_path),
     }
     metadata = video_ref.get("metadata", {})
     if not isinstance(metadata, dict):

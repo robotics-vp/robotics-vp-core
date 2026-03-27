@@ -664,6 +664,7 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "semantic_world_model_path",
         "semantic_snapshot_path",
         "orchestrator_advisory_path",
+        "control_plane_context_path",
         "teacher_trace_path",
         "vla_semantic_evidence_path",
         "semantic_fusion_path",
@@ -721,6 +722,10 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "orchestrator_advisory_path": [
             f"{episode_id}_orchestrator_advisory_v1.json",
             "*_orchestrator_advisory_v1.json",
+        ],
+        "control_plane_context_path": [
+            f"{episode_id}_control_plane_context_v1.json",
+            "*_control_plane_context_v1.json",
         ],
         "teacher_trace_path": [
             f"{episode_id}_teacher_trace_v1.json",
@@ -854,6 +859,24 @@ def _selection_summary_rollout_metadata(
     return dict(sidecar_payload or {})
 
 
+def _control_plane_context_rollout_metadata(
+    control_plane_context_path: Optional[str],
+    *,
+    metadata_payload: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload = dict(metadata_payload or {})
+    inline_context = payload.get("control_plane_context")
+    if isinstance(inline_context, Mapping):
+        return dict(inline_context)
+    if not control_plane_context_path:
+        return {}
+    try:
+        sidecar_payload = _load_json(Path(control_plane_context_path))
+    except Exception:
+        return {}
+    return dict(sidecar_payload or {}) if isinstance(sidecar_payload, Mapping) else {}
+
+
 def ingest_rollout_bundle(
     rollout_root: str | Path,
     *,
@@ -896,6 +919,10 @@ def ingest_rollout_bundle(
         )
         selection_summary = _selection_summary_rollout_metadata(
             artifact_refs.get("selection_summary_path"),
+            metadata_payload=raw_rollout_metadata,
+        )
+        control_plane_context = _control_plane_context_rollout_metadata(
+            artifact_refs.get("control_plane_context_path"),
             metadata_payload=raw_rollout_metadata,
         )
         semantic_world_model_summary = _semantic_world_model_rollout_summary(
@@ -965,6 +992,7 @@ def ingest_rollout_bundle(
                 "future_training_signals": dict(raw_rollout_metadata.get("future_training_signals", {}) or {}),
                 "semantic_world_model_summary": semantic_world_model_summary,
                 "selection_summary": dict(selection_summary or {}),
+                "control_plane_context": dict(control_plane_context or {}),
             }
             episode_payload["provenance"] = {
                 **dict(episode_payload.get("provenance", {}) or {}),
