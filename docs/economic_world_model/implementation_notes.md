@@ -2,6 +2,19 @@
 
 ## 2026-03-26
 
+- Landed the real runtime-package path for the first two learned sim/synth helper seams:
+  - backend selector training/runtime package
+  - branch planner training/runtime package
+  - live wrappers in `semantic_simulation`, `diffusion_requests`, and `coverage_loop` now accept those packages instead of forcing direct in-memory helper objects only
+- Important implementation detail:
+  - the branch-planner feature contract expected `heuristic_generation_mode`
+  - the runtime compiler was not passing it
+  - this is now fixed, so trained branch-planner packages see the same core context fields at inference time that they saw at training time
+- This is also where the advisory pivot starts to matter for the new lower WM:
+  - backend-selector and branch-planner outputs are no longer just "advice around the WM"
+  - they are bounded-authority helper seams inside the WM’s canonical agenda / physics / branch planning path
+  - the next advisory cleanup should apply the same honesty rule to remaining live queue/curriculum/orchestration receipts
+
 - Landed the next `sim_synth_physics` consolidation step:
   - WM-owned simulation jobs now carry `inferential_learnability_contract`
   - WM-owned synthetic branch plans now carry their own inferential learnability contracts rather than borrowing admission heuristics only

@@ -2,6 +2,24 @@
 
 ## 2026-03-26
 
+- Changed: completed the follow-on `sim_synth_physics` helper-package tranche and started the advisory pivot for that subsystem:
+  - added real trainer/export/runtime-package lanes for the WM backend selector and branch planner:
+    - `scripts/train_sim_synth_backend_selector.py`
+    - `scripts/train_sim_synth_branch_planner.py`
+    - `src/world_model/sim_synth_physics/backend_selector.py`
+    - `src/world_model/sim_synth_physics/backend_selector_runtime.py`
+    - `src/world_model/sim_synth_physics/branch_planner.py`
+    - `src/world_model/sim_synth_physics/branch_planner_runtime.py`
+  - the live compiler/runtime wrappers now accept those helper packages through the real WM/runtime path instead of leaving them as detached training utilities:
+    - `src/world_model/sim_synth_physics/compiler.py`
+    - `src/orchestrator/semantic_simulation.py`
+    - `src/orchestrator/diffusion_requests.py`
+    - `src/orchestrator/coverage_loop.py`
+  - fixed a real contract mismatch while landing that path: the branch-planner runtime context now includes `heuristic_generation_mode`, so the trained feature contract matches live inference instead of silently degrading
+- Changed: started the advisory follow-up for this subsystem by tightening the doctrine in `docs/economic_world_model/advisory_purge_wiring_plan.md`: sim/synth backend and branch helper lanes are now part of the bounded-authority bucket rather than another advisory-shaped planning seam.
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py`, and `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py` passed.
+- Next recommended task: keep the advisory pivot moving by reclassifying remaining live queue/curriculum/orchestration outputs from advisory naming/sidecars to explicit bounded-authority receipts and canonical internal metadata.
+
 - Changed: completed the next `sim_synth_physics` tranche by threading the canonical inferential learnability contract into WM-owned agenda ranking, synthetic-branch planning, gen2sim admission, and diffusion ordering:
   - `src/world_model/sim_synth_physics/compiler.py` now assigns inferential learnability contracts to simulation jobs and branch plans, uses them as bounded ranking priors, and includes job/branch inferential summaries in WM metadata
   - `src/world_model/sim_synth_physics/diffusion_contracts.py` now preserves inferential contracts and diffusion-priority scores on WM-owned diffusion plans instead of treating branch admission as a side note
