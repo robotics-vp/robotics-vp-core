@@ -933,6 +933,7 @@ The WM should emit:
 - physics adaptation receipt
 - backend execution binding receipt
 - backend runtime bridge receipt
+- backend runtime work-order receipts
 - branch render-provider receipts
 - branch outcome receipts
 - replay-ready artifact refs
@@ -951,9 +952,10 @@ Recommended flow:
 7. compile a typed backend runtime bridge contract that names transport profile, planner-vs-servo rates, IO/telemetry contracts, safety channels, and runtime-target readiness
 8. emit a `DiffusionConditioningState` for any render/generation branch
 9. resolve WM-owned branch/render providers for NAG/LSD/GGDS materialization
-10. execute backend adapters
-11. emit `SimulationOutcomeReceipt` and related sidecars
-12. feed receipts into replay, benchmark gating, and training datasets
+10. compile explicit backend runtime work orders for any missing runtime targets, assets, or GPU bring-up steps
+11. execute backend adapters
+12. emit `SimulationOutcomeReceipt` and related sidecars
+13. feed receipts into replay, benchmark gating, and training datasets
 
 ### Phase 1 neuralization plan
 
@@ -1012,6 +1014,7 @@ Phase 1 should count as landed only when:
 - domain-randomization / system-identification policy is emitted as a typed state and receipt, not left implicit in backend metadata, and those receipts react to backend/materialization evidence once the WM loop has run
 - concrete backend execution binding is emitted as typed state and receipt, including honest Isaac/Unitree asset-readiness truth, and robot-asset/calibration/IO contracts are emitted as canonical state/receipts plus backend-local sidecars rather than left as loose missing-asset notes
 - a typed backend runtime bridge contract is emitted as canonical state and receipt, so the WM can name planner-vs-servo rates, transport profile, telemetry/action/observation contracts, and safety channels instead of flattening slow-loop-to-runtime integration into generic binding metadata
+- backend runtime work-order receipts are emitted for the Isaac/Unitree and Holosoma lanes, so missing runtime targets, missing assets, and concrete non-training GPU bring-up tasks are explicit loop artifacts instead of only implied by bridge or runtime-request metadata
 - requested backend runtime intent is emitted as a typed runtime-request or concrete-runtime receipt, so Isaac/Holosoma paths can advance from request-binding to real evaluation or train-from-motion execution without reopening the WM boundary later
 - Unitree-target humanoid asset manifests are normalized into canonical required-asset contracts rather than treated as arbitrary manifest keys, so backend readiness reflects real robot-description, calibration, safety, and control-IO prerequisites
 - Isaac/Unitree/Holosoma runtime target manifests are emitted explicitly, so the WM can name which external runtime roots, SDKs, and asset trees are still missing on a host instead of flattening that state into one generic “backend unavailable” bit

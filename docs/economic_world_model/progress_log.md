@@ -2,6 +2,15 @@
 
 ## 2026-03-27
 
+- Changed: made the new backend bridge contract operational by emitting WM-owned backend runtime work orders:
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now compiles typed runtime bring-up work orders from the bridge receipt, runtime receipt, and robot-asset receipt
+  - `src/world_model/sim_synth_physics/runtime.py` now writes `backend_runtime_work_orders.json` and threads work-order ids/statuses into loop summaries and training-feedback manifests
+  - those work orders link directly to `scripts/NON_TRAINING_GPU_RUN_BACKLOG.json`, so the WM now names the concrete Isaac/Unitree or Holosoma runtime task to run later instead of only naming missing targets/assets abstractly
+- Why this matters:
+  - the Phase-1 backend lane now emits an executor-facing artifact, not just readiness descriptors
+  - this narrows the remaining gap further toward actual host/runtime/GPU availability and away from missing planning-to-operations wiring
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_runtime_work_orders.py`, and `git diff --check` passed.
+
 - Changed: added a typed backend runtime bridge contract inside the Phase-1 sim/synth/physics WM:
   - `src/world_model/sim_synth_physics/runtime_bridge.py` now compiles `BackendRuntimeBridgeState` from backend binding, robot-asset contract, embodiment control constraints, and runtime-target readiness
   - the runtime now emits `backend_runtime_bridge_receipt_v1`, writes it into the loop artifact set, and threads its ids/status into outcome receipts, loop summaries, and training-feedback manifests

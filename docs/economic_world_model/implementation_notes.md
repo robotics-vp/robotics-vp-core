@@ -2,6 +2,20 @@
 
 ## 2026-03-27
 
+- Added explicit backend runtime work orders on top of the new bridge contract:
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now emits typed work orders for the Isaac/Unitree and Holosoma runtime lanes
+  - those work orders preserve:
+    - linked non-training GPU backlog ids
+    - command hints
+    - missing runtime targets
+    - missing assets
+    - runtime preconditions
+    - concrete-vs-shadow execution satisfaction
+  - `src/world_model/sim_synth_physics/runtime.py` now writes `backend_runtime_work_orders.json` and threads work-order status into loop summaries and training-feedback manifests
+- Why this matters:
+  - the Phase-1 backend lane now produces an executor-facing bring-up artifact, not just a planning receipt
+  - this is the right posture for “data/GPU/runtime availability is the blocker” because the loop now says exactly what still needs to be run when the GPU/runtime window opens
+
 - Added a typed backend runtime bridge inside Phase 1:
   - `src/world_model/sim_synth_physics/runtime_bridge.py` now compiles `BackendRuntimeBridgeState`
   - the state captures:
