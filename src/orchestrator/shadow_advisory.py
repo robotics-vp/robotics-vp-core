@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from src.economics.inferential_reward import compile_signal_yield
 from src.economics.inferential_training_gate import InferentialTrainingCandidate, InferentialTrainingGate
@@ -16,6 +17,9 @@ from src.phase_h.advisory_integration import MAX_MULTIPLIER, MIN_MULTIPLIER
 from src.orchestrator.adaptation_budgeting import evaluate_adaptation_budget
 from src.orchestrator.queue_selection import build_live_queue_selection
 from src.orchestrator.semantic_runtime_learning import build_semantic_runtime_learning_row
+from src.orchestrator.semantic_runtime_scorer_runtime import (
+    load_semantic_runtime_scorer_from_runtime_package,
+)
 from src.orchestrator.semantic_runtime_scorers import (
     coerce_semantic_runtime_scorer_package,
     load_semantic_runtime_scorer_package,
@@ -45,7 +49,9 @@ def _semantic_runtime_scorer_candidate_paths(
     replay_root = Path(replay_dataset_dir)
     candidate_paths.extend(
         [
+            replay_root / "semantic_runtime_scorer_runtime_package.json",
             replay_root / "semantic_runtime_scorer_package.json",
+            replay_root.parent / "semantic_runtime_scorers" / "semantic_runtime_scorer_runtime_package.json",
             replay_root.parent / "semantic_runtime_scorers" / "semantic_runtime_scorer_package.json",
         ]
     )
@@ -64,9 +70,18 @@ def _resolve_semantic_runtime_scorer_package(
     replay_dataset_dir: str,
     semantic_runtime_scorer_package: Optional[Any] = None,
     semantic_runtime_scorer_package_path: Optional[str] = None,
-) -> tuple[Optional[Any], Optional[str]]:
+) -> tuple[Optional[Any], Optional[str], Dict[str, Any]]:
     if semantic_runtime_scorer_package is not None:
-        return coerce_semantic_runtime_scorer_package(semantic_runtime_scorer_package), None
+        return (
+            coerce_semantic_runtime_scorer_package(semantic_runtime_scorer_package),
+            None,
+            {
+                "contract_type": "direct_object",
+                "benchmark_gate": {},
+                "execution_preconditions": {},
+                "promotion_stage": "shadow_candidate",
+            },
+        )
 
     candidate_paths = _semantic_runtime_scorer_candidate_paths(
         replay_dataset_dir=replay_dataset_dir,
@@ -79,8 +94,36 @@ def _resolve_semantic_runtime_scorer_package(
     for candidate_ref in candidate_paths:
         candidate = Path(candidate_ref)
         if candidate.exists():
-            return load_semantic_runtime_scorer_package(candidate), str(candidate)
-    return None, None
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+            if isinstance(payload, Mapping) and "scorer_package_path" in payload:
+                scorer_package, runtime_package = load_semantic_runtime_scorer_from_runtime_package(candidate)
+                return (
+                    scorer_package,
+                    str(candidate),
+                    {
+                        "contract_type": "runtime_package",
+                        "benchmark_gate": dict(runtime_package.benchmark_gate or {}),
+                        "execution_preconditions": dict(runtime_package.execution_preconditions or {}),
+                        "promotion_stage": str(runtime_package.promotion_stage or "shadow_candidate"),
+                        "package_id": runtime_package.package_id,
+                    },
+                )
+            return (
+                load_semantic_runtime_scorer_package(candidate),
+                str(candidate),
+                {
+                    "contract_type": "legacy_package",
+                    "benchmark_gate": {},
+                    "execution_preconditions": {},
+                    "promotion_stage": "legacy_fallback",
+                },
+            )
+    return None, None, {
+        "contract_type": "missing",
+        "benchmark_gate": {},
+        "execution_preconditions": {},
+        "promotion_stage": "heuristic_fallback",
+    }
 
 
 def _build_semantic_runtime_scorer_preconditions(
@@ -89,23 +132,34 @@ def _build_semantic_runtime_scorer_preconditions(
     manifest_compatibility,
     semantic_runtime_package: Optional[Any],
     semantic_runtime_package_ref: Optional[str],
+    semantic_runtime_contract: Mapping[str, Any],
     candidate_paths: Sequence[str],
 ) -> tuple[Dict[str, Any], list[Dict[str, Any]]]:
     package_ready = semantic_runtime_package is not None
+    benchmark_gate = dict(semantic_runtime_contract.get("benchmark_gate", {}) or {})
+    execution_preconditions = dict(semantic_runtime_contract.get("execution_preconditions", {}) or {})
+    contract_type = str(semantic_runtime_contract.get("contract_type", "missing") or "missing")
     satisfied_preconditions = {
         "artifact::semantic_runtime_scorer_package": int(package_ready),
+        "artifact::semantic_runtime_scorer_runtime_package": int(contract_type == "runtime_package"),
         "replay_manifest::compatible": int(bool(getattr(manifest_compatibility, "compatible", False))),
+        "benchmark::semantic_runtime_runtime_row_density": int(bool(benchmark_gate.get("ready", False))),
     }
     unsatisfied = [
         key for key, value in sorted(satisfied_preconditions.items()) if not value
     ]
     preconditions = {
-        "schema_version": "semantic_runtime_scorer_preconditions_v1",
+        "schema_version": "semantic_runtime_scorer_preconditions_v2",
         "replay_dataset_dir": replay_dataset_dir,
         "semantic_runtime_scorer_package_ref": semantic_runtime_package_ref,
         "candidate_paths": list(candidate_paths),
         "ready": package_ready,
-        "fallback_active": not package_ready,
+        "fallback_active": (not package_ready) or contract_type == "legacy_package",
+        "contract_type": contract_type,
+        "promotion_stage": str(semantic_runtime_contract.get("promotion_stage", "heuristic_fallback")),
+        "benchmark_gate": benchmark_gate,
+        "execution_preconditions": execution_preconditions,
+        "benchmark_gate_ready": bool(benchmark_gate.get("ready", False)),
         "satisfied_preconditions": satisfied_preconditions,
         "unsatisfied_preconditions": unsatisfied,
         "manifest_compatibility": manifest_compatibility.to_dict(),
@@ -124,6 +178,24 @@ def _build_semantic_runtime_scorer_preconditions(
                 "candidate_paths": list(candidate_paths),
                 "required_preconditions": [
                     "artifact::semantic_runtime_scorer_package",
+                    "artifact::semantic_runtime_scorer_runtime_package",
+                    "replay_manifest::compatible",
+                ],
+            }
+        )
+    elif contract_type == "legacy_package":
+        work_orders.append(
+            {
+                "order_type": "runtime_contract_upgrade",
+                "subject_kind": "semantic_runtime_scorer_package",
+                "subject_id": replay_dataset_dir,
+                "ready": True,
+                "blocking": False,
+                "reason": "semantic_runtime_scorer_runtime_package_missing",
+                "recommended_entrypoint": "scripts/train_semantic_runtime_scorers.py",
+                "candidate_paths": list(candidate_paths),
+                "required_preconditions": [
+                    "artifact::semantic_runtime_scorer_runtime_package",
                     "replay_manifest::compatible",
                 ],
             }
@@ -179,7 +251,7 @@ def build_shadow_advisory_output(
         replay_dataset_dir=replay_dataset_dir,
         semantic_runtime_scorer_package_path=semantic_runtime_scorer_package_path,
     )
-    semantic_runtime_package, semantic_runtime_package_ref = _resolve_semantic_runtime_scorer_package(
+    semantic_runtime_package, semantic_runtime_package_ref, semantic_runtime_contract = _resolve_semantic_runtime_scorer_package(
         replay_dataset_dir=replay_dataset_dir,
         semantic_runtime_scorer_package=semantic_runtime_scorer_package,
         semantic_runtime_scorer_package_path=semantic_runtime_scorer_package_path,
@@ -189,6 +261,7 @@ def build_shadow_advisory_output(
         manifest_compatibility=manifest_compatibility,
         semantic_runtime_package=semantic_runtime_package,
         semantic_runtime_package_ref=semantic_runtime_package_ref,
+        semantic_runtime_contract=semantic_runtime_contract,
         candidate_paths=scorer_candidate_paths,
     )
 
@@ -417,6 +490,7 @@ def build_shadow_advisory_output(
                 "semantic_runtime_score": (
                     semantic_runtime_score.to_dict() if semantic_runtime_score is not None else None
                 ),
+                "semantic_runtime_scorer_contract": dict(semantic_runtime_contract),
                 "policy_advisor": policy_result.to_dict(),
                 "pricing_advisor": pricing_result.to_dict(),
                 "data_value_advisor": data_value_result.to_dict(),
@@ -507,6 +581,13 @@ def build_shadow_advisory_output(
         ),
         "semantic_runtime_scorer_ready": bool(scorer_preconditions.get("ready", False)),
         "semantic_runtime_scorer_fallback_active": bool(scorer_preconditions.get("fallback_active", False)),
+        "semantic_runtime_scorer_contract_type": str(scorer_preconditions.get("contract_type", "missing")),
+        "semantic_runtime_scorer_promotion_stage": str(
+            scorer_preconditions.get("promotion_stage", "heuristic_fallback")
+        ),
+        "semantic_runtime_scorer_benchmark_gate_ready": bool(
+            scorer_preconditions.get("benchmark_gate_ready", False)
+        ),
         "semantic_runtime_scorer_package_ref": semantic_runtime_package_ref,
         "mean_semantic_runtime_route_score": (
             sum(
