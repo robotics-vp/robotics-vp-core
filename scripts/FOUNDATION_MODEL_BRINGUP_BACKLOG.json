@@ -123,6 +123,62 @@
       "notes": "Keep external VLA proposals advisory, but make availability/calibration/non-stub truth canonical everywhere."
     },
     {
+      "id": "vjepa2_sim_synth_predictive_provider",
+      "wm_phase": "phase1_sim_synth_physics",
+      "backlog_kind": "run_and_finetune",
+      "priority": "P1",
+      "current_surface": [
+        "src/world_model/sim_synth_physics/compiler.py",
+        "src/world_model/sim_synth_physics/runtime.py",
+        "src/orchestrator/coverage_loop.py"
+      ],
+      "current_state": "The WM architecture now places V-JEPA 2 inside the sim/synth/physics subsystem for predictive state and branch-future estimation, but there is no real upstream runtime/provider lane yet.",
+      "oss_options": [
+        "facebookresearch/vjepa2"
+      ],
+      "required_preconditions": [
+        "CUDA-capable host",
+        "upstream vjepa2 checkout or packaged runtime under third_party/vjepa2",
+        "local or cached V-JEPA 2 weights",
+        "governed video windows plus action/embodiment context",
+        "typed provider-truth and calibration receipts for predictive-state outputs"
+      ],
+      "recommended_outputs": [
+        "provider-truth receipts",
+        "predictive-state and future-estimation receipts linked to SimSynthPhysicsWorldState",
+        "branch-prior and branch-value artifacts tied to simulation receipts"
+      ],
+      "notes": "Use the upstream git/runtime where that is the fastest honest path. Keep it behind typed provider/runtime contracts; V-JEPA 2 is a WM component, not a separate WM or truth owner."
+    },
+    {
+      "id": "vjepa2_perception_temporal_grounding_provider",
+      "wm_phase": "phase2_perception_grounding",
+      "backlog_kind": "run_and_finetune",
+      "priority": "P1",
+      "current_surface": [
+        "src/vision/backbone_stub.py",
+        "src/vision/dataset_builder.py",
+        "scripts/train_vision_backbone.py"
+      ],
+      "current_state": "The perception/grounding WM now explicitly reserves V-JEPA 2 for temporal grounding and scene persistence, but there is no real runtime/provider lane or benchmarked temporal-state package yet.",
+      "oss_options": [
+        "facebookresearch/vjepa2"
+      ],
+      "required_preconditions": [
+        "CUDA-capable host",
+        "upstream vjepa2 checkout or packaged runtime under third_party/vjepa2",
+        "local or cached V-JEPA 2 weights",
+        "real scene-track/video windows aligned with grounding and calibration truth",
+        "benchmark and promotion gates for non-stub temporal grounding state"
+      ],
+      "recommended_outputs": [
+        "provider-truth temporal embeddings on perception-WM state",
+        "scene-persistence and occlusion-recovery receipts",
+        "runtime package for perception/grounding temporal predictor selection"
+      ],
+      "notes": "Treat this as complementary to DINOv2, SigLIP, and the grounding stack, not a replacement for canonical state or governance contracts."
+    },
+    {
       "id": "isaac_unitree_backend_execution",
       "wm_phase": "phase1_sim_synth_physics_and_phase3_embodiment",
       "backlog_kind": "run_and_integration",

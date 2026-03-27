@@ -17,6 +17,7 @@
 - For any new WM or enabling subsystem, bias against literal stub defaults: use real-or-unavailable provider contracts, make `stub` explicit-only for smoke/scaffolding, and record planning-only fallback truth when weights/GPU/assets are the actual blocker.
 - Treat each WM as a complete subsystem target: push canonical state, learned-package lanes, replay/receipt wiring, and production-loop integration until the honest remaining blockers are data, GPU budget, calibration assets, Unitree-class sim/hardware assets, or benchmark evidence.
 - For multi-WM work, explicitly rerun the deterministic-prior / heuristic audit inside each WM boundary; do not assume the earlier global heuristic purge already finished that job for every later WM module.
+- Treat V-JEPA 2 as an external/provider lane that belongs in both the Phase-1 sim/synth/physics WM and the later Phase-2 perception/grounding WM; prefer upstream `facebookresearch/vjepa2` integration where it beats local reimplementation, but keep it behind typed provider/runtime contracts and receipts.
 - For the next cross-WM expansion beyond the current semantic/economic readiness work, see `docs/economic_world_model/multi_wm_architecture_plan.md`.
 
 ## Ontology Layering Rule
@@ -384,7 +385,7 @@ Current honest state:
 ## Explicitly Deferred
 
 - Training a multimodal economic world model before the packet/event/evidence/governance substrate exists.
-- Training a JEPA-style or DreamGen-style video model before real adapters, belief-state traces, and geometry-grounded supervision are in place.
+- Training a JEPA-style or DreamGen-style video model before real adapters, belief-state traces, and geometry-grounded supervision are in place, even though V-JEPA 2 is already part of the planned Phase-1 sim/synth/physics and Phase-2 perception/grounding backlog.
 - Collapsing the stack into a monolithic model.
 - Making external VLA/FM traces native truth.
 - Rewriting the stable Phase B baseline checkpoint instead of layering additive successor modules beside it.
@@ -394,6 +395,10 @@ Current honest state:
 - Learned video-state modeling belongs in the training backlog, not the immediate middleware pass.
 - The first admissible training target is a governed, action-conditioned latent predictor over fused video, scene-track, geometry, embodiment, and economic context rather than a raw-pixel-only generator.
 - Training should begin only after real-video grounding, teacher-runtime hardening, and governed supervision bundles are present.
+- When those prerequisites are real, track V-JEPA 2 explicitly in two fine-tuning lanes rather than one vague future bucket:
+  - sim / synth / physics predictive-state bring-up
+  - perception / grounding temporal-state bring-up
+- Prefer upstream `facebookresearch/vjepa2` bring-up and wrapper contracts over local reimplementation when the goal is faster honest subsystem progress.
 
 ## Active Autonomous Priority Order
 

@@ -2,6 +2,14 @@
 
 ## 2026-03-27
 
+- Changed: updated the WM architecture docs and model-shaped backlogs so V-JEPA 2 is no longer treated as a vague future ingredient for only one stack slice:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now places V-JEPA 2 explicitly in both the Phase-1 sim/synth/physics WM and the later Phase-2 perception/grounding WM
+  - `docs/economic_world_model/roadmap.md` now says to prefer upstream `facebookresearch/vjepa2` bring-up where that is faster and more honest than local reimplementation, while keeping it behind typed provider/runtime contracts and receipts
+  - `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`, `scripts/LOOP_RUN_BACKLOG.json`, and `scripts/TRAINING_MIGRATION_BACKLOG.json` now carry explicit V-JEPA 2 bring-up, loop-run, and fine-tuning backlog items for both WM lanes
+  - `docs/economic_world_model/full_stack_training_backlog.md` now records the same split on the fine-tuning/training side instead of leaving it as architecture prose only
+- Verification: `python3 -m json.tool scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json >/dev/null`, `python3 -m json.tool scripts/LOOP_RUN_BACKLOG.json >/dev/null`, `python3 -m json.tool scripts/TRAINING_MIGRATION_BACKLOG.json >/dev/null`, and `git diff --check` passed. This was a docs/backlog refinement.
+- Next recommended task: when the first V-JEPA 2 runtime wrapper lands, emit provider-truth, calibration, and benchmark-gate receipts directly into the sim/synth/physics and perception/grounding WM state surfaces rather than normalizing it as a generic latent helper.
+
 - Changed: converted the live Stage-1 diffusion path from an actively used stub class into a real runtime/provider contract:
   - added `src/diffusion/video_diffusion_runtime.py`
   - `scripts/run_stage1_pipeline.py` and `src/orchestrator/diffusion_requests.py` now call `VideoDiffusionRuntime` rather than instantiating the stub directly

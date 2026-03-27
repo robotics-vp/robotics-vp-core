@@ -188,6 +188,10 @@ Internal data sources:
 External data sources:
 - real grounding frames and labels from non-stub ingestion paths
 
+Planned fine-tuning split once those inputs are real:
+- V-JEPA 2 should be tracked explicitly as the temporal perception/grounding lane for scene persistence, event continuity, and action-conditioned visual state
+- prefer upstream `facebookresearch/vjepa2` bring-up and wrapper contracts over a local from-scratch reimplementation when the goal is honest progress
+
 ### 7. Gap ranker and fill-path policy
 
 Status:
@@ -215,12 +219,15 @@ Tracked in:
 Examples:
 - `train_governed_video_world_model.py`
 - `train_semantic_gap_conditioned_world_models.py`
+- `train_vjepa2_sim_synth_predictor.py`
+- `train_vjepa2_perception_grounding.py`
 
 These should stay deferred until:
 
 - non-stub SceneTracks and teacher-runtime ingestion are real
 - reconstruction/calibration sidecars are richer
 - governed supervision bundles are dense enough to justify long A100 runs
+- the split V-JEPA 2 lanes have real stage outputs, action/context packaging, and benchmark gates instead of only narrative placement
 
 ## Explicit Non-Autonomous Lanes
 

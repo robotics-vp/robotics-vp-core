@@ -2,6 +2,17 @@
 
 ## 2026-03-27
 
+- Clarified the V-JEPA 2 posture across lower WMs and backlogs:
+  - it should not live only as a future sim/synth/physics note
+  - it now belongs explicitly in both the sim/synth/physics WM and the later perception/grounding WM
+  - the preferred bring-up path is upstream `facebookresearch/vjepa2` integration when that is faster and more honest than local reimplementation
+  - the provider must still sit behind typed runtime/provider contracts, provider-truth receipts, calibration traces, and benchmark gates
+- The backlog split is now explicit rather than implied:
+  - `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json` tracks V-JEPA 2 provider bring-up for both WM lanes
+  - `scripts/LOOP_RUN_BACKLOG.json` tracks the corresponding manual bring-up runs
+  - `scripts/TRAINING_MIGRATION_BACKLOG.json` and `docs/economic_world_model/full_stack_training_backlog.md` now track the two fine-tuning lanes separately
+  - this preserves the intended sequencing: bring up lower-WM runtime/provider plumbing first, then let fine-tuning follow once the real state/receipt surfaces exist
+
 - Replaced the actively used Stage-1 diffusion stub posture with an explicit runtime/provider contract:
   - added `src/diffusion/video_diffusion_runtime.py`
   - the new runtime wraps the governed proposal planner but resolves honest provider truth for the materialization backend

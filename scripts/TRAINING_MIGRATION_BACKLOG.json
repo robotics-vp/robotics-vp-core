@@ -125,6 +125,32 @@
             "updated_at": "2026-03-09"
         },
         {
+            "script": "train_vjepa2_sim_synth_predictor.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "upstream vjepa2 runtime bringup, governed video windows with action/embodiment context, sim/synth/physics predictive receipt contract",
+            "downstream_dependents": [
+                "phase1 sim/synth/physics predictive-state promotion",
+                "branch-future estimation and ranking"
+            ],
+            "notes": "Planned fine-tuning lane for the sim/synth/physics WM. Prefer upstream facebookresearch/vjepa2 integration and typed runtime-package wrapping over local reimplementation; this is a subsystem component, not a separate WM.",
+            "created_at": "2026-03-27",
+            "updated_at": "2026-03-27"
+        },
+        {
+            "script": "train_vjepa2_perception_grounding.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "upstream vjepa2 runtime bringup, real scene-track/video grounding corpora, perception-WM temporal-state contract",
+            "downstream_dependents": [
+                "phase2 perception/grounding temporal persistence",
+                "event continuity and occlusion-consistency calibration"
+            ],
+            "notes": "Planned fine-tuning lane for perception/grounding WM temporal state. Complementary to DINOv2, SigLIP, and SAM3D rather than a replacement for canonical state or governance.",
+            "created_at": "2026-03-27",
+            "updated_at": "2026-03-27"
+        },
+        {
             "script": "train_semantic_gap_conditioned_world_models.py",
             "priority": "P1",
             "owner": "codex",

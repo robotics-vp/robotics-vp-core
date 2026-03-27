@@ -971,6 +971,7 @@ OSS dependency map:
 - segmentation: SAM2
 - open-vocab grounding: GroundingDINO
 - visual features: DINOv2 or SigLIP
+- temporal predictive state: V-JEPA 2, preferably brought in from upstream `facebookresearch/vjepa2` behind a typed provider/runtime contract
 - depth: Depth Anything V2 or UniDepth
 - 3D grounding: SAM3D, ConceptGraphs, ScanNet-style baselines
 

@@ -174,6 +174,92 @@
       "notes": "The smoke path is now explicit-stub-only. This run exists to close the real SDS/render bring-up gap."
     },
     {
+      "loop_run_id": "vjepa2_sim_synth_predictor_bringup",
+      "title": "Bring up V-JEPA 2 for sim/synth/physics predictive state",
+      "command": "python3 scripts/smoke_test_vjepa2_runtime.py --wm phase1_sim_synth_physics --backend-policy real --model-ref ${VJEPA2_MODEL_NAME}",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "torch_available": true,
+        "imageio_available": true
+      },
+      "required_python_modules": [
+        "torch",
+        "imageio"
+      ],
+      "required_commands": [
+        "python3",
+        "git"
+      ],
+      "required_paths": [
+        "third_party/vjepa2",
+        "scripts/smoke_test_vjepa2_runtime.py"
+      ],
+      "required_env_vars": [
+        "VJEPA2_MODEL_NAME"
+      ],
+      "required_internal_data": [
+        "Governed video windows and branch context exported from the sim/synth/physics WM",
+        "Embodiment/action context for action-conditioned future estimation"
+      ],
+      "required_external_data": [
+        "Cloned upstream V-JEPA 2 runtime from facebookresearch/vjepa2",
+        "Downloaded or cached V-JEPA 2 checkpoint weights"
+      ],
+      "benchmark_gate": {
+        "require_real_scene_tracks": true,
+        "require_teacher_runtime": true,
+        "require_vision_backbone": true
+      },
+      "notes": "Use the upstream git/runtime where practical. This run should prove real predictive-state/provider-truth receipts for the sim/synth/physics WM, not a placeholder encoder."
+    },
+    {
+      "loop_run_id": "vjepa2_perception_grounding_bringup",
+      "title": "Bring up V-JEPA 2 for perception/grounding temporal state",
+      "command": "python3 scripts/smoke_test_vjepa2_runtime.py --wm phase2_perception_grounding --backend-policy real --model-ref ${VJEPA2_MODEL_NAME}",
+      "cwd": ".",
+      "priority": "P1",
+      "owner": "codex",
+      "auto_trigger": false,
+      "required_capabilities": {
+        "gpu_available": true,
+        "torch_available": true,
+        "imageio_available": true
+      },
+      "required_python_modules": [
+        "torch",
+        "imageio"
+      ],
+      "required_commands": [
+        "python3",
+        "git"
+      ],
+      "required_paths": [
+        "third_party/vjepa2",
+        "scripts/smoke_test_vjepa2_runtime.py"
+      ],
+      "required_env_vars": [
+        "VJEPA2_MODEL_NAME"
+      ],
+      "required_internal_data": [
+        "Real scene-track and video windows aligned with grounding/calibration truth",
+        "Perception-WM temporal-state contracts ready to receive non-stub embeddings"
+      ],
+      "required_external_data": [
+        "Cloned upstream V-JEPA 2 runtime from facebookresearch/vjepa2",
+        "Downloaded or cached V-JEPA 2 checkpoint weights"
+      ],
+      "benchmark_gate": {
+        "require_real_scene_tracks": true,
+        "require_teacher_runtime": false,
+        "require_vision_backbone": true
+      },
+      "notes": "This run exists to prove V-JEPA 2 as the temporal grounding/persistence provider inside the perception WM rather than leaving it as vague future architecture."
+    },
+    {
       "loop_run_id": "workcell_real_sam3d_grounding_loop",
       "title": "Run the full workcell semantic loop with real SAM3D grounding",
       "command": "python3 scripts/bootstrap_semantic_workcell_loop.py --output-root artifacts/semantic_grounding/workcell_loop_real_sam3d --episodes 2 --steps 5 --max-frames 5 --seed 24 --backend-policy real",
