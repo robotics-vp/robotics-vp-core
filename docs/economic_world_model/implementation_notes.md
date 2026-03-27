@@ -2,6 +2,45 @@
 
 ## 2026-03-26
 
+- Added `docs/economic_world_model/multi_wm_architecture_plan.md` to make the next architecture expansion explicit instead of leaving it as conversational intent:
+  - the stack should grow into:
+    - perception / grounding WM
+    - embodiment / actuation WM
+    - sim / synth / physics WM
+    - economic WM over those lower WMs
+    - meta-node superposition / control WM above the economic WM
+  - this only makes sense if each lower WM becomes a canonical typed state owner rather than another advisory sidecar lane
+- The plan resolves the sequencing question explicitly:
+  - the economic WM should keep hardening now, but it should not be treated as the final neuralized top layer before lower WMs emit canonical state
+  - the next WM to build should be sim / synth / physics, because that is where the production flywheel still remains most distributed across orchestrator, diffusion, branch generation, and physics backends
+  - the future cross-WM “isomorphic tensor” idea should be implemented as typed middleware between adjacent WMs, not as an early giant shared latent
+- Phase 1 in that plan is intentionally concrete and near-implementation-shaped:
+  - proposed additive package: `src/world_model/sim_synth_physics/`
+  - proposed ownership:
+    - simulation agenda
+    - diffusion conditioning
+    - synthetic branch plans
+    - backend / fidelity selection
+    - gen2sim admission context
+    - outcome / calibration receipts
+  - proposed absorption targets:
+    - `src/orchestrator/semantic_simulation.py`
+    - `src/orchestrator/diffusion_requests.py`
+    - `src/evidence/gen2sim_validity.py`
+    - `scripts/collect_local_synthetic_branches.py`
+    - `src/envs/physics/*`
+    - `src/motor_backend/holosoma_backend.py`
+- Later phases are now explicitly named with preconditions rather than remaining hand-wavy:
+  - perception / grounding WM
+  - embodiment / actuation WM
+  - real-time servo vs governance control-loop separation
+  - sensor-fusion shim
+  - physical safety layer
+  - spatial state / SLAM integration
+  - economic-WM consolidation over lower canonical WMs
+  - cross-WM transport bridges
+  - the later meta-node superposition / control WM
+
 - `PipelineManager` no longer strands stage activation above the learned-helper contract:
   - `src/orchestrator/pipeline_stage_policy.py` now defines the explicit feature contract over:
     - iteration history

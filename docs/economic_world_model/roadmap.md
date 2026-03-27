@@ -11,6 +11,7 @@
 - Treat video-world-model work as a subset of economic-world-model readiness: geometry/evidence/governance first, rendering and training second.
 - Do not overfit the stack to one paper architecture. Keep predictor, planner, context, and rollout configuration modular.
 - Treat a tranche as incomplete until it is wired into at least one already-executed path. For the current subset that means the Stage-1 video loop, rollout labeling, shadow runtime, replay ingest, or another live path must emit the new artifacts.
+- For the next cross-WM expansion beyond the current semantic/economic readiness work, see `docs/economic_world_model/multi_wm_architecture_plan.md`.
 
 ## Workstream Summary
 

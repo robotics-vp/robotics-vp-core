@@ -2,6 +2,30 @@
 
 ## 2026-03-26
 
+- Changed: added `docs/economic_world_model/multi_wm_architecture_plan.md` as the new multi-stage architecture plan for the next world-model stack. The document makes the topology explicit:
+  - perception / grounding WM
+  - embodiment / actuation WM
+  - sim / synth / physics WM
+  - economic WM over those lower WMs
+  - meta-node superposition / control WM above the economic WM
+- Changed: made the sequencing rule explicit instead of leaving it implicit in cross-window discussion. The plan argues for:
+  - building the sim / synth / physics WM next
+  - treating the cross-WM “isomorphic transport” idea as middleware between adjacent canonical WMs rather than as a premature mother-latent
+  - delaying deep economic-WM neuralization and the later meta-node WM until lower WMs emit stable canonical state
+- Changed: documented the concrete Phase 1 module structure for the sim / synth / physics WM, including its proposed package boundary, typed state objects, runtime flow, receipt surfaces, OSS-provider posture, and the current repo files that should be absorbed into that boundary instead of continuing to own agenda compilation independently.
+- Changed: added named future phases with explicit preconditions for:
+  - perception / grounding WM
+  - embodiment / actuation WM
+  - real-time servo vs governance loop separation
+  - sensor-fusion shim
+  - physical safety layer
+  - spatial state / SLAM integration
+  - economic-WM consolidation
+  - cross-WM typed transport bridges
+  - the later meta-node superposition / control WM
+- Verification: `git diff --check` passed. This was a docs-only planning pass; no code paths changed.
+- Next recommended task: start Phase 1A / 1B from the new plan by defining the `sim_synth_physics` package boundary and moving simulation/diffusion/branch-agenda ownership out of scattered orchestrator surfaces into that canonical WM layer.
+
 - Changed: completed the `PipelineManager` stage-activation helper pass. `src/orchestrator/pipeline_stage_policy.py` now defines an explicit feature/target contract over pipeline history, execution-precondition truth, progress trends, and stage outcomes; `src/orchestrator/pipeline_stage_policy_training.py` now trains a bounded helper over real `PipelineManager` state receipts; and `scripts/train_pipeline_stage_policy.py` now emits canonical dataset/precondition/package/runtime artifacts under `RegalTrainingRunner`.
 - Changed: the pipeline shell now affects the real runtime boundary rather than only a static preview. `src/orchestrator/pipeline_stage_policy_runtime.py` now loads bounded helper packages with `disabled|auto|required` semantics, and `src/orchestrator/pipeline_manager.py` now reorders stage-activation plans by bounded learned priority, lets the helper influence next-iteration config flags, and preserves `policy_source`, `promotion_stage`, and `stage_policy_trace` receipts for future learning.
 - Verification: `python3 -m compileall src/orchestrator/pipeline_stage_policy.py src/orchestrator/pipeline_stage_policy_training.py src/orchestrator/pipeline_stage_policy_runtime.py src/orchestrator/pipeline_manager.py scripts/train_pipeline_stage_policy.py tests/test_pipeline_stage_policy.py tests/test_train_pipeline_stage_policy.py -q`, `python3 -m ruff check src/orchestrator/pipeline_stage_policy.py src/orchestrator/pipeline_stage_policy_training.py src/orchestrator/pipeline_stage_policy_runtime.py src/orchestrator/pipeline_manager.py scripts/train_pipeline_stage_policy.py tests/test_pipeline_stage_policy.py tests/test_train_pipeline_stage_policy.py`, `python3 -m pytest -q tests/test_pipeline_stage_policy.py tests/test_train_pipeline_stage_policy.py tests/test_shell_activation.py`, and `python3 scripts/check_training_regality.py --scripts-dir scripts` passed.
