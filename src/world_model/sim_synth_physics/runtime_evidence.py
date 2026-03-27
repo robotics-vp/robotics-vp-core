@@ -26,6 +26,16 @@ def summarize_runtime_evidence(
             if backend_shadow_execution_receipt is None
             else len(backend_shadow_execution_receipt.artifact_refs)
         ),
+        "shadow_missing_asset_count": (
+            0
+            if backend_shadow_execution_receipt is None
+            else len(
+                list(
+                    backend_shadow_execution_receipt.metadata.get("missing_assets", [])
+                    or []
+                )
+            )
+        ),
         "materialized_render_provider_count": sum(
             1
             for receipt in render_receipts

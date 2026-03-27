@@ -2,6 +2,12 @@
 
 ## 2026-03-27
 
+- Changed: made the new robot-asset contract load-bearing inside backend materialization:
+  - `src/world_model/sim_synth_physics/shadow_execution.py` now writes backend-local robot-asset, calibration, and IO sidecars for Isaac and Holosoma shadow materialization paths
+  - backend shadow receipts now carry `robot_asset_contract_id`, sidecar refs, calibration contracts, observation contracts, and action contracts
+  - `src/world_model/sim_synth_physics/runtime_evidence.py` and `src/world_model/sim_synth_physics/calibration.py` now react to missing-asset counts from those sidecars instead of treating asset readiness as a separate passive signal
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
 - Changed: pulled Unitree/humanoid asset readiness into a canonical Phase-1 contract:
   - added `src/world_model/sim_synth_physics/asset_contracts.py`
   - `src/world_model/sim_synth_physics/compiler.py` now emits `RobotAssetContractState` on the WM state

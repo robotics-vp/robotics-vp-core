@@ -2,6 +2,18 @@
 
 ## 2026-03-27
 
+- Made the robot-asset contract operative inside backend materialization:
+  - backend shadow/work-order paths now emit backend-local sidecars for:
+    - robot asset contract
+    - calibration contract
+    - IO contract
+  - Isaac/Holosoma shadow receipts now include those refs directly
+  - runtime evidence and calibration scoring now react to missing backend-side asset obligations
+- This is a useful Phase-1 shift:
+  - the stack is no longer only saying “assets missing”
+  - it is emitting the exact backend-local contract artifacts the future concrete runtime should satisfy
+  - the honest remainder is therefore more concretely an execution/assets problem
+
 - Added a canonical robot-asset contract inside Phase 1:
   - `src/world_model/sim_synth_physics/asset_contracts.py` now compiles a typed asset/calibration/action/observation contract from backend binding plus embodiment context
   - the WM state now carries `RobotAssetContractState`

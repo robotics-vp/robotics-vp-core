@@ -43,6 +43,10 @@ def build_physics_adaptation_receipt(
         3.0,
         safe_float(runtime_evidence.get("materialized_render_provider_count", 0.0), 0.0),
     )
+    readiness -= 0.03 * min(
+        4.0,
+        safe_float(runtime_evidence.get("shadow_missing_asset_count", 0.0), 0.0),
+    )
     readiness -= 0.02 * min(
         4.0,
         safe_float(runtime_evidence.get("render_precondition_gap_count", 0.0), 0.0),
@@ -146,6 +150,10 @@ def build_physics_calibration_receipt(
     base_quality += 0.01 * min(
         6.0,
         safe_float(runtime_evidence.get("render_artifact_count", 0.0), 0.0),
+    )
+    base_quality -= 0.02 * min(
+        4.0,
+        safe_float(runtime_evidence.get("shadow_missing_asset_count", 0.0), 0.0),
     )
     base_quality -= 0.02 * min(
         4.0,

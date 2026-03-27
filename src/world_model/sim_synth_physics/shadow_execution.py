@@ -42,6 +42,71 @@ def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8")
 
 
+def _materialize_robot_asset_sidecars(
+    world_state: SimSynthPhysicsWorldState,
+    *,
+    output_root: Optional[Path],
+    backend: str,
+) -> tuple[list[str], dict[str, Any]]:
+    contract = world_state.robot_asset_contract
+    if contract is None:
+        return [], {}
+    artifact_refs: list[str] = []
+    contract_path = None if output_root is None else output_root / "robot_asset_contract_sidecar.json"
+    calibration_path = None if output_root is None else output_root / "backend_calibration_sidecar.json"
+    io_path = None if output_root is None else output_root / "backend_io_contract_sidecar.json"
+    summary = {
+        "robot_asset_contract_id": contract.contract_id,
+        "asset_profile": contract.asset_profile,
+        "target_hardware_class": contract.target_hardware_class,
+        "required_assets": list(contract.required_assets),
+        "available_assets": list(contract.available_assets),
+        "missing_assets": list(contract.missing_assets),
+        "calibration_contracts": list(contract.calibration_contracts),
+        "observation_contracts": list(contract.observation_contracts),
+        "action_contracts": list(contract.action_contracts),
+        "asset_readiness_score": float(contract.metadata.get("asset_readiness_score", 0.0) or 0.0),
+    }
+    if contract_path is not None:
+        _write_json(
+            contract_path,
+            {
+                "version": "robot_asset_contract_sidecar_v1",
+                "backend": backend,
+                "world_state_id": world_state.state_id,
+                "robot_asset_contract": contract.to_dict(),
+            },
+        )
+        artifact_refs.append(str(contract_path.resolve()))
+    if calibration_path is not None:
+        _write_json(
+            calibration_path,
+            {
+                "version": "backend_calibration_sidecar_v1",
+                "backend": backend,
+                "world_state_id": world_state.state_id,
+                "target_hardware_class": contract.target_hardware_class,
+                "calibration_contracts": list(contract.calibration_contracts),
+                "missing_assets": list(contract.missing_assets),
+            },
+        )
+        artifact_refs.append(str(calibration_path.resolve()))
+    if io_path is not None:
+        _write_json(
+            io_path,
+            {
+                "version": "backend_io_contract_sidecar_v1",
+                "backend": backend,
+                "world_state_id": world_state.state_id,
+                "observation_contracts": list(contract.observation_contracts),
+                "action_contracts": list(contract.action_contracts),
+                "missing_assets": list(contract.missing_assets),
+            },
+        )
+        artifact_refs.append(str(io_path.resolve()))
+    return artifact_refs, summary
+
+
 def _derive_isaac_shadow_env_config(
     world_state: SimSynthPhysicsWorldState,
     *,
@@ -178,13 +243,23 @@ def _materialize_isaac_shadow_execution(
     *,
     output_root: Optional[Path],
 ) -> BackendShadowExecutionReceipt:
+    asset_sidecar_refs, asset_summary = _materialize_robot_asset_sidecars(
+        world_state,
+        output_root=output_root,
+        backend="isaac",
+    )
     env_config = _derive_isaac_shadow_env_config(world_state, output_dir=output_root)
+    env_config["robot_asset_contract_id"] = asset_summary.get("robot_asset_contract_id", "")
+    env_config["calibration_contracts"] = list(asset_summary.get("calibration_contracts", []))
+    env_config["observation_contracts"] = list(asset_summary.get("observation_contracts", []))
+    env_config["action_contracts"] = list(asset_summary.get("action_contracts", []))
+    env_config["missing_assets"] = list(asset_summary.get("missing_assets", []))
     backend = IsaacBackend(
         env_config=env_config,
         num_envs=max(1, min(2, len(world_state.synthetic_branch_plans) or 1)),
         device="cuda:0",
     )
-    artifact_refs: list[str] = []
+    artifact_refs: list[str] = list(asset_sidecar_refs)
     episode_ids: list[str] = []
     execution_status = "shadow_executed"
     summary_path = (
@@ -268,6 +343,12 @@ def _materialize_isaac_shadow_execution(
             "missing_assets": list(
                 backend_binding_receipt.metadata.get("missing_assets", []) or []
             ),
+            "robot_asset_contract_id": asset_summary.get("robot_asset_contract_id", ""),
+            "asset_sidecar_refs": list(asset_sidecar_refs),
+            "calibration_contracts": list(asset_summary.get("calibration_contracts", [])),
+            "observation_contracts": list(asset_summary.get("observation_contracts", [])),
+            "action_contracts": list(asset_summary.get("action_contracts", [])),
+            "asset_readiness_score": float(asset_summary.get("asset_readiness_score", 0.0) or 0.0),
             "env_config": mapping(env_config),
         },
     )
@@ -283,8 +364,17 @@ def _materialize_holosoma_shadow_execution(
     *,
     output_root: Optional[Path],
 ) -> BackendShadowExecutionReceipt:
+    asset_sidecar_refs, asset_summary = _materialize_robot_asset_sidecars(
+        world_state,
+        output_root=output_root,
+        backend="holosoma",
+    )
     work_order = _derive_holosoma_shadow_work_order(world_state, output_dir=output_root)
-    artifact_refs: list[str] = []
+    work_order["robot_asset_contract_id"] = asset_summary.get("robot_asset_contract_id", "")
+    work_order["calibration_contracts"] = list(asset_summary.get("calibration_contracts", []))
+    work_order["observation_contracts"] = list(asset_summary.get("observation_contracts", []))
+    work_order["action_contracts"] = list(asset_summary.get("action_contracts", []))
+    artifact_refs: list[str] = list(asset_sidecar_refs)
     summary_path = (
         None if output_root is None else output_root / "backend_shadow_execution_receipt.json"
     )
@@ -338,6 +428,12 @@ def _materialize_holosoma_shadow_execution(
             "missing_assets": missing_assets,
             "concrete_runtime_available": runtime_available,
             "unsatisfied_preconditions": unsatisfied_preconditions,
+            "robot_asset_contract_id": asset_summary.get("robot_asset_contract_id", ""),
+            "asset_sidecar_refs": list(asset_sidecar_refs),
+            "calibration_contracts": list(asset_summary.get("calibration_contracts", [])),
+            "observation_contracts": list(asset_summary.get("observation_contracts", [])),
+            "action_contracts": list(asset_summary.get("action_contracts", [])),
+            "asset_readiness_score": float(asset_summary.get("asset_readiness_score", 0.0) or 0.0),
             "work_order": mapping(work_order),
         },
     )

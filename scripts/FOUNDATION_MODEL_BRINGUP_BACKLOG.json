@@ -188,7 +188,7 @@
         "src/world_model/sim_synth_physics/adapters/backend_isaac.py",
         "src/world_model/sim_synth_physics/backend_bindings.py"
       ],
-      "current_state": "Typed backend binding contracts, an explicit Isaac shadow-contract backend, and a canonical robot-asset contract receipt now exist, but concrete Isaac Sim / Isaac Gym / Unitree asset execution is not yet wired.",
+      "current_state": "Typed backend binding contracts, an explicit Isaac shadow-contract backend, canonical robot-asset contract receipts, and backend-local asset/calibration/IO sidecars now exist, but concrete Isaac Sim / Isaac Gym / Unitree asset execution is not yet wired.",
       "oss_options": [
         "Isaac Sim",
         "Isaac Gym / Isaac Lab",
@@ -217,7 +217,7 @@
         "src/world_model/sim_synth_physics/adapters/backend_holosoma.py",
         "src/world_model/sim_synth_physics/shadow_execution.py"
       ],
-      "current_state": "WM-owned Holosoma binding, shadow work-order materialization, and canonical robot-asset contract receipts now exist, but concrete Holosoma runtime execution, datapack binding, and runtime evidence are still missing.",
+      "current_state": "WM-owned Holosoma binding, shadow work-order materialization, canonical robot-asset contract receipts, and backend-local asset/calibration/IO sidecars now exist, but concrete Holosoma runtime execution, datapack binding, and runtime evidence are still missing.",
       "oss_options": [
         "holosoma",
         "Isaac Gym / Isaac Sim"

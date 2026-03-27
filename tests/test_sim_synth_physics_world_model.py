@@ -362,6 +362,8 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
         result.physics_adaptation_receipt.metadata["runtime_evidence"]["shadow_execution_status"]
         in {"shadow_executed", "shadow_executed_with_asset_gaps"}
     )
+    assert result.backend_shadow_execution_receipt.metadata["robot_asset_contract_id"] == result.world_state.robot_asset_contract.contract_id
+    assert len(result.backend_shadow_execution_receipt.metadata["asset_sidecar_refs"]) == 3
     assert (
         result.physics_calibration_receipt.metadata["runtime_evidence"][
             "materialized_render_provider_count"
@@ -384,6 +386,9 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "backend_execution_binding_receipt.json").exists()
     assert (tmp_path / "robot_asset_contract_receipt.json").exists()
     assert (tmp_path / "backend_shadow_execution_receipt.json").exists()
+    assert (tmp_path / "backend_shadow_execution" / "isaac" / "robot_asset_contract_sidecar.json").exists()
+    assert (tmp_path / "backend_shadow_execution" / "isaac" / "backend_calibration_sidecar.json").exists()
+    assert (tmp_path / "backend_shadow_execution" / "isaac" / "backend_io_contract_sidecar.json").exists()
     assert (tmp_path / "physics_calibration_receipt.json").exists()
     assert (tmp_path / "render_provider_receipts.json").exists()
     assert (tmp_path / "simulation_outcome_receipts.json").exists()
@@ -428,6 +433,8 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
             "shadow_work_order_materialized_with_preconditions",
         }
     )
+    assert result.backend_shadow_execution_receipt.metadata["robot_asset_contract_id"] == result.world_state.robot_asset_contract.contract_id
+    assert len(result.backend_shadow_execution_receipt.metadata["asset_sidecar_refs"]) == 3
     assert result.backend_shadow_execution_receipt.artifact_refs
     assert any("holosoma_shadow_work_order.json" in ref for ref in result.backend_shadow_execution_receipt.artifact_refs)
     assert (
@@ -436,6 +443,9 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
         / "holosoma"
         / "holosoma_shadow_work_order.json"
     ).exists()
+    assert (tmp_path / "backend_shadow_execution" / "holosoma" / "robot_asset_contract_sidecar.json").exists()
+    assert (tmp_path / "backend_shadow_execution" / "holosoma" / "backend_calibration_sidecar.json").exists()
+    assert (tmp_path / "backend_shadow_execution" / "holosoma" / "backend_io_contract_sidecar.json").exists()
 
 
 def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp_path: Path) -> None:
