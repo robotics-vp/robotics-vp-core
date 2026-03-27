@@ -229,6 +229,18 @@ Important clarification:
 - this future WM does not replace those local objects
 - instead, it becomes the higher-order control layer that conditions, calibrates, and learns over them
 
+Current local meta-node maturity:
+
+- local meta-nodes are real routing/control objects now
+- but they are still mostly named bounded-control surfaces with learned layers around them
+- they are not yet fully learned geometric/cybernetic objects in their own right
+
+Implication:
+
+- the stack should not jump from today’s bounded local meta-node surfaces directly to an overarching superposition WM
+- there needs to be a local meta-node neuralization and robustness tranche first
+- that tranche should mature the local meta-node objects themselves before a mother-WM tries to learn over them
+
 Current status:
 
 - not ready to build next
@@ -738,6 +750,47 @@ Preconditions:
 - replay must preserve WM identity and provenance
 - freeze-one-side training scaffold must exist
 
+### Phase 6.5 - Local Meta-Node Neuralization and Robustness
+
+Objective:
+
+- upgrade the existing local meta-node surfaces from named bounded-control objects into more genuinely learned, stateful, cybernetic objects
+
+Why this phase must exist:
+
+- the repo already has local meta-node routing state in the semantic WM and adjacent orchestration layers
+- those objects are useful and real, but they are still closer to bounded executor/control surfaces than to learned dynamical objects
+- an overarching meta-node superposition WM would be premature if its “atoms” are still mostly hand-named shells with learned wrappers around them
+
+What should improve in this phase:
+
+- local meta-node state should become canonical and replayable rather than mostly summary-like
+- local meta-node behavior should train on its own receipts, counterfactuals, and governance outcomes
+- local meta-node embeddings should become more geometric/topological and less just named scalar buckets
+- meta-node success should be measured independently from downstream loop success where possible
+- meta-node interaction effects should be logged, not only final routed actions
+
+Concrete targets for this tranche:
+
+- canonical `MetaNodeState`-style packet surfaces inside the lower WMs
+- richer meta-node trajectory and intervention receipts
+- counterfactual training targets for:
+  - when a meta-node should activate
+  - how strongly it should activate
+  - which targets it should act on
+  - when it should defer or veto
+- robustness metrics over:
+  - stability under replay shift
+  - governance satisfaction
+  - calibration
+  - interaction consistency with neighboring meta-nodes
+
+Exit criteria:
+
+- local meta-nodes are no longer just bounded named routing shells with learned helpers around them
+- they have their own honest training/runtime/promotion story
+- the later superposition WM can treat them as mature lower-level objects instead of pseudo-symbolic placeholders
+
 ### Phase 7 - Meta-Node Superposition / Control WM
 
 Objective:
@@ -765,6 +818,7 @@ Preconditions:
 - lower WMs are robust and honest
 - economic WM is consuming canonical lower-WM state
 - transport bridges are working between adjacent WMs
+- local meta-nodes have already passed their own neuralization/robustness tranche and emit canonical state plus trainable receipts
 - meta-node actions and governance satisfaction are already logged as trainable receipts
 
 ## OSS Dependency Map
@@ -823,7 +877,8 @@ The correct next macro-sequence is:
 4. land the real-time, sensor-fusion, safety, and SLAM enabler phases
 5. consolidate the economic WM over those lower WMs
 6. add cross-WM typed transport bridges
-7. build the meta-node superposition/control WM
+7. neuralize and harden the local meta-node objects themselves
+8. build the meta-node superposition/control WM
 
 ## Immediate Follow-On Recommendation
 

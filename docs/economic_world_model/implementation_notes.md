@@ -14,6 +14,12 @@
   - the economic WM should keep hardening now, but it should not be treated as the final neuralized top layer before lower WMs emit canonical state
   - the next WM to build should be sim / synth / physics, because that is where the production flywheel still remains most distributed across orchestrator, diffusion, branch generation, and physics backends
   - the future cross-WM “isomorphic tensor” idea should be implemented as typed middleware between adjacent WMs, not as an early giant shared latent
+  - an overarching meta-node superposition WM should also stay deferred until the existing local meta-node objects themselves are neuralized and robust
+- The plan now makes the local meta-node prerequisite explicit:
+  - current local meta-nodes are real routing/control objects
+  - but they are still mostly named bounded-control surfaces with learned layers around them
+  - they are not yet fully learned geometric/cybernetic objects in their own right
+  - so a dedicated local meta-node neuralization / robustness phase should land before any higher-order meta-node mother-WM
 - Phase 1 in that plan is intentionally concrete and near-implementation-shaped:
   - proposed additive package: `src/world_model/sim_synth_physics/`
   - proposed ownership:

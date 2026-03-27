@@ -12,6 +12,7 @@
   - building the sim / synth / physics WM next
   - treating the cross-WM “isomorphic transport” idea as middleware between adjacent canonical WMs rather than as a premature mother-latent
   - delaying deep economic-WM neuralization and the later meta-node WM until lower WMs emit stable canonical state
+  - requiring a dedicated local meta-node neuralization / robustness tranche before any overarching meta-node superposition WM
 - Changed: documented the concrete Phase 1 module structure for the sim / synth / physics WM, including its proposed package boundary, typed state objects, runtime flow, receipt surfaces, OSS-provider posture, and the current repo files that should be absorbed into that boundary instead of continuing to own agenda compilation independently.
 - Changed: added named future phases with explicit preconditions for:
   - perception / grounding WM
@@ -22,6 +23,7 @@
   - spatial state / SLAM integration
   - economic-WM consolidation
   - cross-WM typed transport bridges
+  - local meta-node neuralization / robustness
   - the later meta-node superposition / control WM
 - Verification: `git diff --check` passed. This was a docs-only planning pass; no code paths changed.
 - Next recommended task: start Phase 1A / 1B from the new plan by defining the `sim_synth_physics` package boundary and moving simulation/diffusion/branch-agenda ownership out of scattered orchestrator surfaces into that canonical WM layer.
