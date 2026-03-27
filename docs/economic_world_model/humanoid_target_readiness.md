@@ -52,6 +52,7 @@ That implies a stricter interpretation of readiness:
 - by July 2027, it is acceptable to still be blocked on real hardware, calibration, or benchmark evidence
 - by July 2027, it is not acceptable to still be blocked on missing lower-WM canonical state, missing replay/training exports, or missing runtime/provider contract plumbing that should have been laid in 2026
 - by September 30, 2027, it is acceptable to still be improving benchmarks and capacity, but it is not acceptable to still be blocked on missing autonomous replay capture, missing recovery/teleop trace discipline, missing sensor/comms/control-loop separation, or missing on-robot improvement plumbing
+- a lower WM or deployment layer does not count as ready if it only logs or summarizes; for the humanoid target, it must be driving all relevant downstream modules in the future hardware-ready loop, not merely one consumer or one demo path
 
 ## Critical Path
 

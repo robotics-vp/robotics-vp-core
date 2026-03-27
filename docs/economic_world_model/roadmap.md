@@ -115,6 +115,13 @@ Weekly operating model from September 1, 2026 onward:
 - do not spread one weekly A100 budget across too many WMs at once; finish a concrete sub-module tranche, record receipts and gates, then move to the next sub-module
 - after hardware arrives, keep the same cadence on robot-origin loops: run, capture receipts, export corpus, train/fine-tune, redeploy bounded changes, then repeat
 
+Mechanics-first advancement rule:
+
+- do not call a WM "ready" because it can emit logs, summaries, or canonical-looking state in isolation
+- a WM only counts as structurally real when it owns a bounded closed loop with real ingress, real execution or honest execution gating, replay/training exports, and all relevant downstream consumers for the future hardware-ready loop wired
+- keep the mechanics substrate ahead of the learned layer; if a phase is still missing executors, adapters, safety gates, replay exports, or live downstream consumers, that phase is still structurally incomplete even if training code already exists
+- do not let a higher WM treat a lower WM as canonical until the lower WM has crossed bounded runtime authority and is affecting the relevant downstream loop rather than merely being logged
+
 Suggested weekly WM order for the first training season:
 
 1. Sim / synth / physics WM sub-modules

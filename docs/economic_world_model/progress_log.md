@@ -2,6 +2,12 @@
 
 ## 2026-03-27
 
+- Changed: tightened the roadmap doctrine against "WM stands up as logging only":
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now defines a mechanics-first WM readiness rule and a maturity ladder from `schema_only` through `production_recurrent`
+  - the rule now explicitly requires all relevant downstream consumers for the future hardware-ready loop, not merely one consumer, before a WM can count as structurally real
+  - `docs/economic_world_model/roadmap.md` and `docs/economic_world_model/humanoid_target_readiness.md` now mirror that rule so later phases cannot be declared complete on logging/demo-only behavior
+- Verification: `git diff --check` passed. This was a docs-only roadmap tightening pass.
+
 - Changed: added an explicit Phase 8 to the long-range planning docs:
   - `docs/economic_world_model/multi_wm_architecture_plan.md` now names a production-loop runtime / weekly GPU operations phase after the WM and meta-node phases
   - `docs/economic_world_model/roadmap.md` now describes the same endgame as Phase C: external dataset aggregation, loop runs, corpus export, training, fine-tuning, benchmarking, promotion/redeployment, then latency/inference focus

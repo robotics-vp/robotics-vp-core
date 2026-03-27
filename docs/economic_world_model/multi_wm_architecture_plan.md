@@ -228,6 +228,52 @@ In other words:
 
 This rule applies to Phase 1 and every later WM or deployment-enabler phase in this document.
 
+## Mechanics-First WM Readiness Rule
+
+Do not count a WM as "stood up" just because it can log, summarize, or emit a typed state object.
+
+A WM should count as real only when it owns a bounded closed loop with:
+
+- real upstream ingress or honest provider-unavailable truth
+- a real executor, backend, controller, or explicit execution gate
+- canonical state plus receipts
+- replay, training, and promotion hooks
+- all relevant downstream modules for the future full-loop, hardware-integration-ready stack actually consuming that state and changing behavior because of it
+- benchmark evidence that the module is doing more than describing the world after the fact
+
+This means:
+
+- a module that only logs desired actions is not an embodiment / actuation WM yet
+- a module that emits rich scene state that nothing important consumes is not a perception / grounding WM yet
+- a module that compiles synthetic agendas but does not drive execution, admission, replay, and training feedback is not a complete sim / synth / physics WM yet
+
+Every WM phase should be treated as two subtracks:
+
+- mechanics substrate
+- learned / neural layer
+
+The learned / neural layer should not be treated as primary completion while the mechanics substrate is still missing:
+
+- executor or backend ownership
+- controller or adapter ownership
+- safety or precondition gates
+- replay / training exports
+- downstream runtime consumption
+
+Use this maturity ladder whenever a phase claims progress:
+
+1. `schema_only`
+2. `logging_only`
+3. `shadow_runtime`
+4. `bounded_runtime_authority`
+5. `benchmark_gated_primary`
+6. `production_recurrent`
+
+Cross-WM dependency rule:
+
+- a higher WM should not treat a lower WM as canonical just because the lower WM reached `schema_only`, `logging_only`, or a pretty demo
+- for future full-loop and hardware-ready use, lower WM state should be considered mature only once the lower layer has crossed `bounded_runtime_authority` and its relevant downstream consumers are actually wired
+
 ## Architectural Position
 
 ### What already exists

@@ -2,6 +2,21 @@
 
 ## 2026-03-27
 
+- Tightened the doctrine against "stood up in name only" WMs:
+  - the multi-WM plan now has an explicit mechanics-first WM readiness rule
+  - each WM should be judged on a bounded closed loop, not on whether it can emit logs or canonical-looking state objects
+  - future-state completion now means all relevant downstream consumers for the hardware-ready loop are wired and changed by that WM, not merely one downstream demo consumer
+- The practical execution rule is:
+  - keep the mechanics substrate ahead of the learned layer
+  - if a phase is still missing executors, adapters, safety/precondition gates, replay/training exports, or live downstream consumers, that phase is still structurally incomplete
+  - the maturity ladder should be read as:
+    - `schema_only`
+    - `logging_only`
+    - `shadow_runtime`
+    - `bounded_runtime_authority`
+    - `benchmark_gated_primary`
+    - `production_recurrent`
+
 - Added an explicit Phase 8 after the WM and meta-node phases:
   - the multi-WM plan now treats the post-Phase-7 period as a production-loop runtime / weekly GPU operations phase rather than leaving that operating model implicit
   - the roadmap now spells out the intended order inside that phase:
