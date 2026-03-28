@@ -998,8 +998,9 @@ Recommended flow:
 9. resolve WM-owned branch/render providers for NAG/LSD/GGDS materialization
 10. compile explicit backend runtime work orders for any missing runtime targets, assets, or GPU bring-up steps
 11. execute backend adapters
-12. emit `SimulationOutcomeReceipt` and related sidecars
-13. feed receipts into replay, benchmark gating, and training datasets
+12. when execution is delegated to an upstream runtime, harvest upstream outcome artifacts through a WM-owned output contract rather than stopping at launch completion
+13. emit `SimulationOutcomeReceipt` and related sidecars
+14. feed receipts into replay, benchmark gating, and training datasets
 
 ### Phase 1 neuralization plan
 
@@ -1065,6 +1066,7 @@ Phase 1 should count as landed only when:
 - Isaac/Unitree/Holosoma runtime layout contracts and policy-bank contracts are emitted explicitly, so the WM can distinguish “repo root exists”, “upstream runtime layout is actually present”, and “usable policy surface exists” instead of treating those as one missing-target class
 - backend runtime bundles and launch specs are emitted as WM-owned artifacts, so work orders can point at concrete upstream-shaped launch paths rather than only generic backlog commands
 - the backend runtime receipt can distinguish `runtime_launch_prepared` from truly missing runtime prerequisites, so “host is ready but local adapter is absent” remains an honest intermediate state instead of collapsing back into generic module-missing logic
+- backend runtime output contracts and outcome receipts are emitted explicitly, so upstream runtime launches can be judged by harvested outputs rather than only `launch_completed` / `launch_failed`
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name

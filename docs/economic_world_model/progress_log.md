@@ -952,3 +952,31 @@
   - added `scripts/NON_TRAINING_GPU_RUN_BACKLOG.json`, `src/orchestrator/non_training_gpu_run_backlog.py`, and `scripts/scan_non_training_gpu_run_backlog.py` so non-training GPU runs live in their own explicit queue instead of being mixed into the training backlog
 - Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/loop_run_backlog.py src/orchestrator/non_training_gpu_run_backlog.py scripts/local_holosoma_smoke.py scripts/scan_non_training_gpu_run_backlog.py tests/test_sim_synth_runtime_targets.py tests/test_non_training_gpu_run_backlog.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/loop_run_backlog.py src/orchestrator/non_training_gpu_run_backlog.py scripts/local_holosoma_smoke.py scripts/scan_non_training_gpu_run_backlog.py tests/test_sim_synth_runtime_targets.py tests/test_non_training_gpu_run_backlog.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_non_training_gpu_run_backlog.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py tests/test_loop_run_backlog.py`, `python3 -m json.tool scripts/NON_TRAINING_GPU_RUN_BACKLOG.json >/dev/null`, and `git diff --check`.
 - Blocked: the remaining Phase 1 backend/runtime blockers are now more clearly “missing external runtime roots, SDKs, assets, GPUs, or checkpoints” rather than missing inventory of those surfaces inside the WM.
+- Changed: pushed the next Phase 1 external-runtime tranche so upstream runtime launches now feed canonical WM outcome evidence rather than terminating at `launch_completed` / `launch_failed`:
+  - added `src/world_model/sim_synth_physics/runtime_outcomes.py`
+  - the WM now compiles `backend_runtime_output_contract_v1` from runtime bundles/launch specs and harvests upstream outputs into `backend_runtime_outcome_receipt_v1`
+  - this is currently shaped around the upstream layouts we explicitly want to support:
+    - `unitree_sim_isaaclab`
+    - `unitree_rl_gym`
+    - `HumanoidVerse`
+    - `xr_teleoperate`
+    - Holosoma repo / motion bank / policy bank / retargeting roots
+  - `backend_runtime_execution.py` now threads that receipt into runtime execution metadata and artifact emission
+  - `runtime.py`, `runtime_evidence.py`, `runtime_work_orders.py`, `training_corpus.py`, `run_sim_synth_physics_loop.py`, and `run_phase1_runtime_launch.py` now preserve/use that truth end to end
+  - practical effect:
+    - the WM can distinguish `launch_not_executed`, `runtime_outputs_missing`, and `runtime_outputs_harvested`
+    - runtime work orders can now be `satisfied_by_external_runtime_outcomes`
+    - calibration/adaptation receipts now react to harvested upstream runtime evidence instead of only in-process runtime completion
+    - backend-selector and branch-planner corpora now preserve external-runtime outcome ids/status/counts rather than only launch status
+- Changed: deepened the concrete runtime-root / asset / policy posture using upstream repo conventions instead of only root existence:
+  - `runtime_layouts.py` now surfaces deploy/policy/data candidates per profile
+  - `runtime_targets.py` now includes additional optional Unitree-adjacent roots such as:
+    - `unitree_sdk2_python_root`
+    - `teleimager_root`
+    - `unitree_il_lerobot_root`
+  - `runtime_bundles.py` now carries the WM-owned output contract directly so launch artifacts and the full WM runtime speak the same upstream-runtime contract
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_phase1_runtime_launch.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_phase1_runtime_launch.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, and `git diff --check`.
+- Blocked: the honest remainder is now even more clearly external-runtime/GPU reality rather than missing WM plumbing:
+  - actual Isaac Lab / Isaac Sim / Unitree execution adapters and assets
+  - actual Holosoma host/runtime/policy/motion/retargeting assets
+  - actual GGDS / video-diffusion materialization on GPU

@@ -1802,3 +1802,44 @@
     - V-JEPA 2 runtime
     - real SAM3D workcell grounding refresh
   - `src/orchestrator/non_training_gpu_run_backlog.py` and `scripts/scan_non_training_gpu_run_backlog.py` make that queue evaluable with the same typed precondition logic as the broader loop-run backlog
+
+- External runtime launch completion is no longer the terminal truth for Phase 1 backend bring-up:
+  - `src/world_model/sim_synth_physics/runtime_outcomes.py` introduces two new canonical surfaces:
+    - `backend_runtime_output_contract_v1`
+    - `backend_runtime_outcome_receipt_v1`
+  - the contract is built from the existing runtime bundle / launch spec and the output receipt is emitted after harvesting upstream outputs from the chosen runtime profile
+  - current upstream-shaped output conventions are defined for:
+    - `unitree_sim_isaaclab`
+    - `unitree_rl_gym`
+    - `HumanoidVerse`
+    - `xr_teleoperate`
+    - Holosoma repo / motion bank / policy bank / retargeting bundle
+  - this is deliberately not overfit to one repo; it is a typed output contract that can absorb current upstream layouts while preserving WM ownership of the resulting truth
+
+- The new output receipt now changes live WM behavior rather than sitting as another sidecar:
+  - `backend_runtime_execution.py` threads output contract + output receipt into runtime execution metadata and artifact emission
+  - `runtime.py` now exposes `backend_runtime_outcome_receipt` in the canonical loop result, loop summary, and artifact set
+  - `runtime_evidence.py` now exposes:
+    - `runtime_output_status`
+    - `runtime_output_harvested`
+    - `runtime_output_artifact_count`
+    - `runtime_output_artifact_kinds`
+  - `calibration.py` now gives bounded credit to harvested upstream runtime evidence even when execution happened out-of-process rather than in the local Python bridge
+  - `runtime_work_orders.py` now allows `satisfied_by_external_runtime_outcomes` when the bridge is still shadow-authority but the upstream runtime produced harvestable outputs
+  - `training_corpus.py` now preserves external-runtime outcome ids/status/counts for backend-selector and branch-planner corpora
+
+- The runtime-root / asset / policy posture is now less flat and more upstream-realistic:
+  - `runtime_layouts.py` now exposes deploy, policy, and data candidates per profile rather than only “root exists / root missing”
+  - `runtime_targets.py` now names more optional Unitree-adjacent runtime surfaces:
+    - `unitree_sdk2_python_root`
+    - `teleimager_root`
+    - `unitree_il_lerobot_root`
+  - `runtime_bundles.py` now carries the output contract so the standalone launch path and full WM runtime share the same external-runtime expectations
+  - `scripts/run_phase1_runtime_launch.py` can now harvest upstream outcomes and emit a standalone `backend_runtime_outcome_receipt_v1`
+
+- Honest Phase 1 state after this tranche:
+  - the WM can now represent:
+    - launch prepared but not executed
+    - launch executed with no outputs harvested
+    - launch executed with outputs harvested
+  - that means the remaining backend gap is increasingly about actual external runtime/assets/GPU availability rather than missing canonical WM receipt plumbing
