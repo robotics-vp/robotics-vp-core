@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from src.world_model.sim_synth_physics.runtime_launch import (
+    build_backend_runtime_launch_receipt,
     execute_backend_runtime_launch,
     load_runtime_artifacts,
 )
@@ -29,6 +30,11 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     parser.add_argument("--execute", action="store_true", help="Actually execute the launch command.")
     parser.add_argument("--cwd", type=Path, help="Override working directory for the launch command.")
     parser.add_argument("--output", type=Path, help="Write the launch report JSON to this path.")
+    parser.add_argument(
+        "--receipt-output",
+        type=Path,
+        help="Optionally write a pure backend_runtime_launch_receipt_v1 artifact.",
+    )
     args = parser.parse_args(argv)
 
     runtime_bundle_path = args.runtime_bundle
@@ -49,15 +55,23 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         execute=bool(args.execute),
         cwd=args.cwd,
     )
+    receipt = build_backend_runtime_launch_receipt(runtime_bundle, launch_spec, result)
     payload = {
         "runtime_bundle_path": str(Path(runtime_bundle_path).resolve()),
         "launch_spec_path": str(Path(launch_spec_path).resolve()),
         "result": result,
+        "receipt": receipt.to_dict(),
     }
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-    else:
+    if args.receipt_output is not None:
+        args.receipt_output.parent.mkdir(parents=True, exist_ok=True)
+        args.receipt_output.write_text(
+            json.dumps(receipt.to_dict(), indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+    if args.output is None:
         print(json.dumps(payload, indent=2, sort_keys=True))
     return payload
 

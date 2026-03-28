@@ -7,6 +7,7 @@ from typing import Any, Optional, Sequence
 from .common import mapping
 from .receipts import (
     BackendRuntimeExecutionReceipt,
+    BackendRuntimeLaunchReceipt,
     BackendShadowExecutionReceipt,
     RenderProviderReceipt,
     SimulationOutcomeReceipt,
@@ -31,6 +32,7 @@ def _is_concrete_runtime_status(status: str) -> bool:
 def summarize_runtime_evidence(
     *,
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+    backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt],
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
     render_provider_receipts: Sequence[RenderProviderReceipt],
     outcome_receipts: Sequence[SimulationOutcomeReceipt],
@@ -42,16 +44,32 @@ def summarize_runtime_evidence(
         if backend_runtime_execution_receipt is None
         else backend_runtime_execution_receipt.execution_status
     )
+    launch_status = (
+        ""
+        if backend_runtime_launch_receipt is None
+        else backend_runtime_launch_receipt.launch_status
+    )
     shadow_status = (
         "" if backend_shadow_execution_receipt is None else backend_shadow_execution_receipt.execution_status
     )
     return {
         "runtime_execution_status": runtime_status,
+        "runtime_launch_status": launch_status,
+        "runtime_launch_executed": (
+            False
+            if backend_runtime_launch_receipt is None
+            else bool(backend_runtime_launch_receipt.executed)
+        ),
         "runtime_concrete_completed": _is_concrete_runtime_status(runtime_status),
         "runtime_artifact_count": (
             0
             if backend_runtime_execution_receipt is None
             else len(backend_runtime_execution_receipt.artifact_refs)
+        ),
+        "runtime_launch_artifact_count": (
+            0
+            if backend_runtime_launch_receipt is None
+            else len(backend_runtime_launch_receipt.artifact_refs)
         ),
         "runtime_episode_count": (
             0

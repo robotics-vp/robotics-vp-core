@@ -23,6 +23,7 @@ from .receipts import (
     BackendExecutionBindingReceipt,
     BackendRuntimeBridgeReceipt,
     BackendRuntimeExecutionReceipt,
+    BackendRuntimeLaunchReceipt,
     BackendRuntimeWorkOrderReceipt,
     BackendShadowExecutionReceipt,
     PhysicsAdaptationReceipt,
@@ -67,6 +68,7 @@ class SimSynthPhysicsLoopResult:
     physics_calibration_receipt: PhysicsCalibrationReceipt
     backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt] = field(default_factory=list)
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt] = None
+    backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt] = None
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt] = None
     render_provider_receipts: list[RenderProviderReceipt] = field(default_factory=list)
     outcome_receipts: list[SimulationOutcomeReceipt] = field(default_factory=list)
@@ -89,6 +91,11 @@ class SimSynthPhysicsLoopResult:
                 None
                 if self.backend_runtime_execution_receipt is None
                 else self.backend_runtime_execution_receipt.to_dict()
+            ),
+            "backend_runtime_launch_receipt": (
+                None
+                if self.backend_runtime_launch_receipt is None
+                else self.backend_runtime_launch_receipt.to_dict()
             ),
             "backend_shadow_execution_receipt": (
                 None
@@ -122,6 +129,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "backend_runtime_bridge_receipt": root / "backend_runtime_bridge_receipt.json",
         "backend_runtime_work_orders": root / "backend_runtime_work_orders.json",
         "backend_runtime_execution_receipt": root / "backend_runtime_execution_receipt.json",
+        "backend_runtime_launch_receipt": root / "backend_runtime_launch_receipt.json",
         "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
         "physics_calibration_receipt": root / "physics_calibration_receipt.json",
         "render_provider_receipts": root / "render_provider_receipts.json",
@@ -151,6 +159,27 @@ def _training_feedback_ref(
     if manifest_path is not None:
         return f"{manifest_path.resolve()}#branch_plan_id={plan_id}"
     return f"sim_synth_training_feedback:{state_id}#branch_plan_id={plan_id}"
+
+
+def _build_backend_runtime_launch_receipt(
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+) -> Optional[BackendRuntimeLaunchReceipt]:
+    if backend_runtime_execution_receipt is None:
+        return None
+    payload = mapping(backend_runtime_execution_receipt.metadata.get("launch_receipt"))
+    if not payload:
+        return None
+    return BackendRuntimeLaunchReceipt(
+        receipt_id=str(payload.get("receipt_id", "") or ""),
+        backend=str(payload.get("backend", "") or ""),
+        launch_profile=str(payload.get("launch_profile", "") or ""),
+        launch_status=str(payload.get("launch_status", "") or ""),
+        executed=bool(payload.get("executed", False)),
+        command=str(payload.get("command", "") or ""),
+        cwd=str(payload.get("cwd", "") or ""),
+        artifact_refs=list(payload.get("artifact_refs", []) or []),
+        metadata=mapping(payload.get("metadata")),
+    )
 
 
 def _outcome_status(
@@ -331,6 +360,7 @@ def _build_training_feedback_manifest(
     backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt,
     backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt],
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+    backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt],
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
     calibration_receipt: PhysicsCalibrationReceipt,
     render_provider_receipts: list[RenderProviderReceipt],
@@ -381,6 +411,11 @@ def _build_training_feedback_manifest(
             if backend_runtime_execution_receipt is None
             else backend_runtime_execution_receipt.receipt_id
         ),
+        "backend_runtime_launch_receipt_id": (
+            None
+            if backend_runtime_launch_receipt is None
+            else backend_runtime_launch_receipt.receipt_id
+        ),
         "backend_shadow_execution_receipt_id": (
             None
             if backend_shadow_execution_receipt is None
@@ -397,6 +432,11 @@ def _build_training_feedback_manifest(
             ""
             if backend_runtime_execution_receipt is None
             else backend_runtime_execution_receipt.execution_status
+        ),
+        "backend_runtime_launch_status": (
+            ""
+            if backend_runtime_launch_receipt is None
+            else backend_runtime_launch_receipt.launch_status
         ),
         "requested_backend": execution_contract.requested_backend,
         "resolved_backend": execution_contract.resolved_backend,
@@ -635,6 +675,8 @@ class SimSynthPhysicsRuntime:
         world_state: SimSynthPhysicsWorldState,
         *,
         output_dir: str | Path | None = None,
+        execute_external_runtime_launch: bool = False,
+        external_launch_cwd: str | Path | None = None,
     ) -> SimSynthPhysicsLoopResult:
         artifact_paths = _artifact_paths(output_dir) if output_dir is not None else {}
         execution_contract = build_physics_execution_contract(
@@ -650,6 +692,11 @@ class SimSynthPhysicsRuntime:
             execution_contract,
             backend_binding_receipt,
             output_dir=output_dir,
+            execute_external_launch=execute_external_runtime_launch,
+            external_launch_cwd=external_launch_cwd,
+        )
+        backend_runtime_launch_receipt = _build_backend_runtime_launch_receipt(
+            backend_runtime_execution_receipt
         )
         backend_shadow_execution_receipt = materialize_backend_shadow_execution(
             world_state,
@@ -660,6 +707,7 @@ class SimSynthPhysicsRuntime:
         training_feedback_path = artifact_paths.get("training_feedback_manifest")
         runtime_evidence = summarize_runtime_evidence(
             backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_launch_receipt=backend_runtime_launch_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=[],
             outcome_receipts=[],
@@ -677,6 +725,7 @@ class SimSynthPhysicsRuntime:
         )
         runtime_evidence = summarize_runtime_evidence(
             backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_launch_receipt=backend_runtime_launch_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=render_provider_receipts,
             outcome_receipts=[],
@@ -738,6 +787,7 @@ class SimSynthPhysicsRuntime:
         )
         runtime_evidence = summarize_runtime_evidence(
             backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_launch_receipt=backend_runtime_launch_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=render_provider_receipts,
             outcome_receipts=outcome_receipts,
@@ -772,6 +822,7 @@ class SimSynthPhysicsRuntime:
             backend_runtime_bridge_receipt,
             backend_runtime_work_orders,
             backend_runtime_execution_receipt,
+            backend_runtime_launch_receipt,
             backend_shadow_execution_receipt,
             calibration_receipt,
             render_provider_receipts,
@@ -786,6 +837,7 @@ class SimSynthPhysicsRuntime:
             backend_runtime_bridge_receipt=backend_runtime_bridge_receipt,
             backend_runtime_work_orders=backend_runtime_work_orders,
             backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_launch_receipt=backend_runtime_launch_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             physics_calibration_receipt=calibration_receipt,
             render_provider_receipts=render_provider_receipts,
@@ -829,6 +881,11 @@ class SimSynthPhysicsRuntime:
                     artifact_paths["backend_runtime_execution_receipt"],
                     backend_runtime_execution_receipt.to_dict(),
                 )
+            if backend_runtime_launch_receipt is not None:
+                _write_json(
+                    artifact_paths["backend_runtime_launch_receipt"],
+                    backend_runtime_launch_receipt.to_dict(),
+                )
             if backend_shadow_execution_receipt is not None:
                 _write_json(
                     artifact_paths["backend_shadow_execution_receipt"],
@@ -871,6 +928,11 @@ class SimSynthPhysicsRuntime:
                         if backend_runtime_execution_receipt is None
                         else backend_runtime_execution_receipt.receipt_id
                     ),
+                    "backend_runtime_launch_receipt_id": (
+                        None
+                        if backend_runtime_launch_receipt is None
+                        else backend_runtime_launch_receipt.receipt_id
+                    ),
                     "backend_shadow_execution_receipt_id": (
                         None
                         if backend_shadow_execution_receipt is None
@@ -903,6 +965,11 @@ class SimSynthPhysicsRuntime:
                         if backend_runtime_execution_receipt is None
                         else backend_runtime_execution_receipt.execution_status
                     ),
+                    "backend_runtime_launch_status": (
+                        ""
+                        if backend_runtime_launch_receipt is None
+                        else backend_runtime_launch_receipt.launch_status
+                    ),
                     "backend_shadow_execution_status": (
                         ""
                         if backend_shadow_execution_receipt is None
@@ -933,6 +1000,8 @@ class SimSynthPhysicsRuntime:
         backend_selector: Any = None,
         branch_planner: Any = None,
         output_dir: str | Path | None = None,
+        execute_external_runtime_launch: bool = False,
+        external_launch_cwd: str | Path | None = None,
     ) -> SimSynthPhysicsLoopResult:
         world_state = self.compile_world_state(
             coverage_graph,
@@ -944,7 +1013,12 @@ class SimSynthPhysicsRuntime:
             backend_selector=backend_selector,
             branch_planner=branch_planner,
         )
-        result = self.execute_world_state(world_state, output_dir=output_dir)
+        result = self.execute_world_state(
+            world_state,
+            output_dir=output_dir,
+            execute_external_runtime_launch=execute_external_runtime_launch,
+            external_launch_cwd=external_launch_cwd,
+        )
         if output_dir is not None:
             artifact_paths = _artifact_paths(output_dir)
             diffusion_plans = self.compile_diffusion_plans(

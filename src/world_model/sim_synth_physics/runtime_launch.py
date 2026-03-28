@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .common import mapping, stable_id, strings
+from .receipts import BackendRuntimeLaunchReceipt
 
 TARGET_ENV_VARS = {
     "isaaclab_root": "ISAACLAB_ROOT",
@@ -145,6 +146,63 @@ def execute_backend_runtime_launch(
     }
 
 
+def build_backend_runtime_launch_receipt(
+    runtime_bundle: Mapping[str, Any],
+    launch_spec: Mapping[str, Any],
+    launch_result: Mapping[str, Any],
+    *,
+    artifact_refs: list[str] | None = None,
+) -> BackendRuntimeLaunchReceipt:
+    bundle = mapping(runtime_bundle)
+    spec = mapping(launch_spec)
+    result = mapping(launch_result)
+    backend = str(result.get("backend", bundle.get("backend", spec.get("backend", ""))) or "")
+    preferred_profile = str(
+        result.get("preferred_profile", spec.get("preferred_profile", bundle.get("preferred_profile", "")))
+        or ""
+    )
+    raw_status = str(result.get("status", "") or "")
+    if raw_status == "ready_for_launch":
+        launch_status = "launch_prepared"
+    elif raw_status == "blocked":
+        launch_status = "launch_blocked"
+    else:
+        launch_status = raw_status or "launch_unknown"
+    payload = {
+        "backend": backend,
+        "preferred_profile": preferred_profile,
+        "launch_status": launch_status,
+        "executed": bool(result.get("executed", False)),
+        "command": str(result.get("command", spec.get("command", "")) or ""),
+        "cwd": str(result.get("cwd", spec.get("root", "")) or ""),
+        "policy_ref": str(result.get("policy_ref", spec.get("policy_ref", "")) or ""),
+        "runtime_targets_ready": bool(
+            bundle.get("runtime_target_contract", {}).get("runtime_targets_ready", False)
+        ),
+    }
+    return BackendRuntimeLaunchReceipt(
+        receipt_id=stable_id("backend_runtime_launch_receipt", payload),
+        backend=backend,
+        launch_profile=preferred_profile,
+        launch_status=launch_status,
+        executed=bool(result.get("executed", False)),
+        command=str(result.get("command", spec.get("command", "")) or ""),
+        cwd=str(result.get("cwd", spec.get("root", "")) or ""),
+        artifact_refs=strings(artifact_refs or []),
+        metadata={
+            "runtime_bundle": bundle,
+            "launch_spec": spec,
+            "launch_result": result,
+            "missing_preconditions": strings(result.get("missing_preconditions")),
+            "notes": strings(result.get("notes")),
+            "env_overrides": mapping(result.get("env_overrides")),
+            "returncode": result.get("returncode"),
+            "stdout": result.get("stdout", ""),
+            "stderr": result.get("stderr", ""),
+        },
+    )
+
+
 def load_runtime_artifacts(
     *,
     runtime_bundle_path: str | Path,
@@ -160,6 +218,7 @@ def load_runtime_artifacts(
 
 
 __all__ = [
+    "build_backend_runtime_launch_receipt",
     "execute_backend_runtime_launch",
     "load_runtime_artifacts",
     "prepare_backend_runtime_launch",

@@ -6,6 +6,7 @@ from pathlib import Path
 from scripts.run_phase1_runtime_launch import main as runtime_launch_main
 from src.world_model.sim_synth_physics import runtime_launch as runtime_launch_module
 from src.world_model.sim_synth_physics.runtime_launch import (
+    build_backend_runtime_launch_receipt,
     execute_backend_runtime_launch,
     prepare_backend_runtime_launch,
 )
@@ -110,6 +111,8 @@ def test_run_phase1_runtime_launch_script_dry_run(tmp_path: Path, monkeypatch) -
     assert output_path.exists()
     assert payload["result"]["status"] == "ready_for_launch"
     assert payload["result"]["executed"] is False
+    assert payload["receipt"]["launch_status"] == "launch_prepared"
+    assert payload["receipt"]["backend"] == "isaac"
 
 
 def test_execute_backend_runtime_launch_stays_dry_without_execute(monkeypatch) -> None:
@@ -131,3 +134,67 @@ def test_execute_backend_runtime_launch_stays_dry_without_execute(monkeypatch) -
 
     assert result["status"] == "ready_for_launch"
     assert result["executed"] is False
+
+
+def test_build_backend_runtime_launch_receipt_maps_ready_status() -> None:
+    receipt = build_backend_runtime_launch_receipt(
+        _isaac_bundle(),
+        {
+            "backend": "isaac",
+            "preferred_profile": "unitree_sim_isaaclab",
+            "command": "echo hello",
+            "root": "/tmp/unitree_sim_isaaclab",
+        },
+        {
+            "backend": "isaac",
+            "preferred_profile": "unitree_sim_isaaclab",
+            "status": "ready_for_launch",
+            "command": "echo hello",
+            "cwd": "/tmp/unitree_sim_isaaclab",
+            "executed": False,
+        },
+    )
+
+    assert receipt.launch_status == "launch_prepared"
+    assert receipt.executed is False
+    assert receipt.launch_profile == "unitree_sim_isaaclab"
+
+
+def test_run_phase1_runtime_launch_script_writes_pure_receipt(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(runtime_launch_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(runtime_launch_module, "_cuda_ready", lambda: True)
+
+    runtime_root = tmp_path / "runtime"
+    runtime_root.mkdir()
+    (runtime_root / "backend_runtime_bundle.json").write_text(
+        json.dumps(_isaac_bundle(), indent=2),
+        encoding="utf-8",
+    )
+    (runtime_root / "backend_launch_spec.json").write_text(
+        json.dumps(
+            {
+                "backend": "isaac",
+                "preferred_profile": "unitree_sim_isaaclab",
+                "policy_ready": True,
+                "command": "echo runtime_launch",
+                "root": ".",
+                "policy_ref": "/tmp/g1.onnx",
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    receipt_path = tmp_path / "launch_receipt.json"
+
+    runtime_launch_main(
+        [
+            "--runtime-root",
+            str(runtime_root),
+            "--receipt-output",
+            str(receipt_path),
+        ]
+    )
+
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["version"] == "backend_runtime_launch_receipt_v1"
+    assert receipt["launch_status"] == "launch_prepared"

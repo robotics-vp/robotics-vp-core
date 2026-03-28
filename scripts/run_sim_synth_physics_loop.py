@@ -63,6 +63,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--gap-ranker-mode", choices=("disabled", "auto", "required"), default="auto")
     parser.add_argument("--backend-selector-mode", choices=("disabled", "auto", "required"), default="auto")
     parser.add_argument("--branch-planner-mode", choices=("disabled", "auto", "required"), default="auto")
+    parser.add_argument(
+        "--execute-external-runtime-launch",
+        action="store_true",
+        help="Execute the prepared upstream runtime launch when the WM has a ready external launch path.",
+    )
+    parser.add_argument(
+        "--external-launch-cwd",
+        help="Optional working directory override for an executed external runtime launch.",
+    )
     return parser.parse_args(argv)
 
 
@@ -92,6 +101,8 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         backend_selector=args.backend_selector_package,
         branch_planner=args.branch_planner_package,
         output_dir=args.output_dir,
+        execute_external_runtime_launch=bool(args.execute_external_runtime_launch),
+        external_launch_cwd=args.external_launch_cwd,
     )
     summary_path = Path(args.output_dir) / "sim_synth_physics_loop_summary.json"
     return {
@@ -115,10 +126,20 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
             if result.backend_runtime_execution_receipt is None
             else result.backend_runtime_execution_receipt.receipt_id
         ),
+        "backend_runtime_launch_receipt_id": (
+            None
+            if result.backend_runtime_launch_receipt is None
+            else result.backend_runtime_launch_receipt.receipt_id
+        ),
         "backend_runtime_execution_status": (
             ""
             if result.backend_runtime_execution_receipt is None
             else result.backend_runtime_execution_receipt.execution_status
+        ),
+        "backend_runtime_launch_status": (
+            ""
+            if result.backend_runtime_launch_receipt is None
+            else result.backend_runtime_launch_receipt.launch_status
         ),
         "backend_shadow_execution_receipt_id": (
             None

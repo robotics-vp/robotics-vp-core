@@ -19,7 +19,11 @@ from .common import mapping, safe_float, strings
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import BackendExecutionBindingReceipt, BackendRuntimeExecutionReceipt
 from .runtime_bundles import build_backend_runtime_bundle
-from .runtime_launch import prepare_backend_runtime_launch
+from .runtime_launch import (
+    build_backend_runtime_launch_receipt,
+    execute_backend_runtime_launch,
+    prepare_backend_runtime_launch,
+)
 from .runtime_targets import describe_holosoma_runtime_targets, describe_isaac_runtime_targets
 from .state import SimSynthPhysicsWorldState
 
@@ -434,6 +438,8 @@ def materialize_backend_runtime_execution(
     backend_binding_receipt: BackendExecutionBindingReceipt,
     *,
     output_dir: str | Path | None = None,
+    execute_external_launch: bool = False,
+    external_launch_cwd: str | Path | None = None,
 ) -> Optional[BackendRuntimeExecutionReceipt]:
     """Execute or bind a concrete backend runtime when possible."""
 
@@ -541,9 +547,51 @@ def materialize_backend_runtime_execution(
         launch_spec,
         require_policy=require_policy,
     )
+    launch_report_refs: list[str] = []
+    launch_receipt_payload: dict[str, Any] | None = None
     local_runtime_supported = _runtime_supports_execution(backend)
     if not local_runtime_supported:
+        launch_result: dict[str, Any] = dict(launch_plan)
+        launch_result.setdefault("executed", False)
+        if launch_plan["status"] == "ready_for_launch" and execute_external_launch:
+            launch_result = execute_backend_runtime_launch(
+                runtime_bundle,
+                launch_spec,
+                execute=True,
+                cwd=external_launch_cwd,
+                require_policy=require_policy,
+            )
+        launch_receipt = build_backend_runtime_launch_receipt(
+            runtime_bundle,
+            launch_spec,
+            launch_result,
+        )
+        launch_receipt_payload = launch_receipt.to_dict()
+        if output_root is not None:
+            report_path = output_root / "backend_runtime_launch_report.json"
+            receipt_path = output_root / "backend_runtime_launch_receipt.json"
+            _write_json(
+                report_path,
+                {
+                    "version": "backend_runtime_launch_report_v1",
+                    "backend": backend,
+                    "task_id": task_id,
+                    "launch_result": launch_result,
+                },
+            )
+            _write_json(receipt_path, launch_receipt_payload)
+            launch_report_refs.extend(
+                [str(report_path.resolve()), str(receipt_path.resolve())]
+            )
+            artifact_refs.extend(launch_report_refs)
         if launch_plan["status"] == "ready_for_launch":
+            execution_status = "runtime_launch_prepared"
+            if execute_external_launch:
+                execution_status = (
+                    "runtime_external_launch_completed"
+                    if str(launch_result.get("status", "")) == "launch_completed"
+                    else "runtime_external_launch_failed"
+                )
             return BackendRuntimeExecutionReceipt(
                 receipt_id=f"backend_runtime_execution_receipt_{world_state.state_id}",
                 backend=backend,
@@ -552,7 +600,7 @@ def materialize_backend_runtime_execution(
                     if backend == "holosoma" and can_train_holosoma and not policy_id
                     else f"{backend_name}_evaluate_policy"
                 ),
-                execution_status="runtime_launch_prepared",
+                execution_status=execution_status,
                 policy_id=policy_id,
                 artifact_refs=artifact_refs,
                 metadata={
@@ -567,12 +615,38 @@ def materialize_backend_runtime_execution(
                     "runtime_bundle": runtime_bundle,
                     "launch_spec": launch_spec,
                     "launch_plan": launch_plan,
+                    "launch_receipt": launch_receipt_payload,
+                    "launch_report_refs": list(launch_report_refs),
                     "missing_preconditions": list(missing_preconditions),
                 },
             )
         for item in strings(launch_plan.get("missing_preconditions")):
             if item not in missing_preconditions:
                 missing_preconditions.append(item)
+        if launch_receipt_payload is None:
+            launch_receipt = build_backend_runtime_launch_receipt(
+                runtime_bundle,
+                launch_spec,
+                launch_plan,
+            )
+            launch_receipt_payload = launch_receipt.to_dict()
+            if output_root is not None:
+                report_path = output_root / "backend_runtime_launch_report.json"
+                receipt_path = output_root / "backend_runtime_launch_receipt.json"
+                _write_json(
+                    report_path,
+                    {
+                        "version": "backend_runtime_launch_report_v1",
+                        "backend": backend,
+                        "task_id": task_id,
+                        "launch_result": launch_plan,
+                    },
+                )
+                _write_json(receipt_path, launch_receipt_payload)
+                launch_report_refs.extend(
+                    [str(report_path.resolve()), str(receipt_path.resolve())]
+                )
+                artifact_refs.extend(launch_report_refs)
         if "backend_runtime_module" not in missing_preconditions:
             missing_preconditions.append("backend_runtime_module")
 
@@ -606,6 +680,8 @@ def materialize_backend_runtime_execution(
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
                 "launch_plan": launch_plan,
+                "launch_receipt": launch_receipt_payload,
+                "launch_report_refs": list(launch_report_refs),
                 "missing_preconditions": missing_preconditions,
             },
         )
@@ -685,6 +761,8 @@ def materialize_backend_runtime_execution(
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
                 "launch_plan": launch_plan,
+                "launch_receipt": launch_receipt_payload,
+                "launch_report_refs": list(launch_report_refs),
                 "error": str(exc),
             },
         )
@@ -726,6 +804,8 @@ def materialize_backend_runtime_execution(
             "runtime_bundle": runtime_bundle,
             "launch_spec": launch_spec,
             "launch_plan": launch_plan,
+            "launch_receipt": launch_receipt_payload,
+            "launch_report_refs": list(launch_report_refs),
             "datapack_ids": list(datapack_ids),
             "datapack_config_ids": [cfg.id for cfg in datapack_configs],
             "raw_metrics": raw_metrics,

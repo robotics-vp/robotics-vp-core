@@ -103,9 +103,18 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
         "",
         "runtime_request_materialized_with_preconditions",
         "runtime_launch_prepared",
+        "runtime_external_launch_completed",
+        "runtime_external_launch_failed",
         "runtime_execution_completed",
         "runtime_training_completed",
         "runtime_execution_failed",
+    }
+    assert result["backend_runtime_launch_status"] in {
+        "",
+        "launch_blocked",
+        "launch_prepared",
+        "launch_completed",
+        "launch_failed",
     }
     assert result["backend_shadow_execution_status"] in {
         "",

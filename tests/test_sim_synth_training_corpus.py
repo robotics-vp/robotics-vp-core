@@ -161,6 +161,23 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_backend_runtime_launch_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "launch_1",
+                "backend": "isaac",
+                "launch_profile": "unitree_sim_isaaclab",
+                "launch_status": "launch_completed",
+                "executed": True,
+                "command": "python sim_main.py --task peg_in_hole",
+                "cwd": "/tmp/unitree_sim_isaaclab",
+                "version": "backend_runtime_launch_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_render_provider_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -205,6 +222,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["robot_asset_contract_receipt"]["receipt_id"] == "asset_1"
     assert bundles[0]["backend_runtime_bridge_receipt"]["receipt_id"] == "bridge_1"
     assert bundles[0]["backend_runtime_execution_receipt"]["receipt_id"] == "runtime_1"
+    assert bundles[0]["backend_runtime_launch_receipt"]["receipt_id"] == "launch_1"
     assert bundles[0]["backend_shadow_execution_receipt"]["receipt_id"] == "shadow_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
@@ -237,6 +255,9 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         backend_rows[0]["metadata"]["backend_runtime_execution_status"]
         == "runtime_execution_completed"
     )
+    assert backend_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
+    assert backend_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
+    assert backend_rows[0]["metadata"]["backend_runtime_launch_executed"] is True
 
     branch_rows = build_branch_planner_rows_from_receipts(bundles)
     assert branch_rows[0]["target_render_materialization_status"] == "scene_materialized"
@@ -245,6 +266,8 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["robot_asset_readiness_score"] == 0.25
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_receipt_id"] == "bridge_1"
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_status"] == "runtime_targets_missing"
+    assert branch_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
+    assert branch_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
     assert (
         branch_rows[0]["metadata"]["render_artifact_refs"]
         == ["/tmp/render_provider_1/lsd_vector_scene_config.json"]

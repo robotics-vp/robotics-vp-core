@@ -2,6 +2,19 @@
 
 ## 2026-03-27
 
+- Added canonical external-launch receipt handling to the Phase-1 backend runtime seam:
+  - `src/world_model/sim_synth_physics/receipts.py` now defines `backend_runtime_launch_receipt_v1`
+  - `src/world_model/sim_synth_physics/runtime_launch.py` now maps prepared or executed launch results into that receipt
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now attaches the launch receipt to runtime execution metadata and writes launch report / launch receipt artifacts whenever the lane stops at external runtime bring-up
+  - the runtime can now optionally execute that external launch path directly through `SimSynthPhysicsRuntime.execute_world_state(..., execute_external_runtime_launch=True)` / `run_planning_window(...)`
+- Preserved the new receipt end to end:
+  - `src/world_model/sim_synth_physics/runtime.py` now carries it through runtime evidence, feedback manifests, loop summaries, and artifact emission
+  - `scripts/run_phase1_runtime_launch.py` now exposes the receipt directly so standalone launch/preflight runs can still produce a canonical artifact
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the launch receipt and exposes launch status in backend-selector and branch-planner rows
+- Why this matters:
+  - Phase 1 is no longer limited to “runtime launch prepared” as an opaque side effect
+  - it can now record whether an upstream runtime launch was blocked, prepared, executed, or failed, which is much closer to the mechanics-first stopping condition we want before calling the remainder external-runtime/GPU constrained
+
 - Refined the roadmap doctrine for compute and battery as first-class allocatable resources:
   - `docs/economic_world_model/multi_wm_architecture_plan.md` now places inferential compute capacity / availability and concrete battery state earlier than the economic WM:
     - Phase 3 owns canonical embodiment/deployment-adjacent resource state

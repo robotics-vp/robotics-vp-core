@@ -751,6 +751,9 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
     assert result.backend_runtime_execution_receipt is not None
     assert result.backend_runtime_execution_receipt.backend == "isaac"
     assert result.backend_runtime_execution_receipt.execution_status == "runtime_launch_prepared"
+    assert result.backend_runtime_launch_receipt is not None
+    assert result.backend_runtime_launch_receipt.launch_status == "launch_prepared"
+    assert result.backend_runtime_launch_receipt.executed is False
     assert (
         result.backend_runtime_execution_receipt.metadata["launch_plan"]["status"]
         == "ready_for_launch"
@@ -759,6 +762,90 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
     assert any(
         "sim_main.py" in hint for hint in result.backend_runtime_work_orders[0].command_hints
     )
+
+
+def test_runtime_executes_external_launch_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from src.world_model.sim_synth_physics import backend_runtime_execution as runtime_exec_module
+    from src.world_model.sim_synth_physics import runtime_launch as runtime_launch_module
+
+    monkeypatch.setattr(runtime_launch_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(runtime_launch_module, "_cuda_ready", lambda: True)
+    monkeypatch.setattr(runtime_exec_module, "_runtime_supports_execution", lambda backend: False)
+
+    def _fake_launch(runtime_bundle, launch_spec, *, execute, cwd=None, require_policy=True):
+        assert execute is True
+        return {
+            "backend": runtime_bundle["backend"],
+            "preferred_profile": launch_spec["preferred_profile"],
+            "status": "launch_completed",
+            "command": launch_spec["command"],
+            "cwd": str(cwd or launch_spec["root"]),
+            "env_overrides": {},
+            "missing_preconditions": [],
+            "notes": ["test_launch"],
+            "executed": True,
+            "returncode": 0,
+            "stdout": "ok",
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(runtime_exec_module, "execute_backend_runtime_launch", _fake_launch)
+
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    unitree_sim_root = tmp_path / "unitree_sim_isaaclab"
+    unitree_sim_root.mkdir()
+    (unitree_sim_root / "sim_main.py").write_text("", encoding="utf-8")
+    (unitree_sim_root / "dds").mkdir()
+    (unitree_sim_root / "action_provider").mkdir()
+    unitree_sdk_root = tmp_path / "unitree_sdk2"
+    unitree_sdk_root.mkdir()
+    unitree_asset_root = tmp_path / "unitree_assets"
+    unitree_asset_root.mkdir()
+    policy_root = tmp_path / "policies"
+    policy_root.mkdir()
+    policy_path = policy_root / "g1_policy.onnx"
+    policy_path.write_text("x", encoding="utf-8")
+
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedBackendSelector(),
+        embodiment_context={
+            "unitree_sim_isaaclab_root": str(unitree_sim_root),
+            "unitree_sdk2_root": str(unitree_sdk_root),
+            "unitree_asset_root": str(unitree_asset_root),
+            "isaac_policy_root": str(policy_root),
+            "runtime_policy_id": str(policy_path),
+            "robot_asset_manifest": {
+                "unitree_usd": "/assets/unitree/g1.usd",
+                "joint_map_path": "/assets/unitree/joint_map.yaml",
+                "camera_extrinsics": "/assets/unitree/camera_extrinsics.json",
+                "imu_extrinsics": "/assets/unitree/imu_extrinsics.json",
+                "force_torque_calibration": "/assets/unitree/ft_calibration.json",
+                "actuator_latency_profile": "/assets/unitree/latency.yaml",
+                "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
+                "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
+            },
+        },
+    )
+
+    result = runtime.execute_world_state(
+        world_state,
+        output_dir=tmp_path,
+        execute_external_runtime_launch=True,
+    )
+
+    assert result.backend_runtime_execution_receipt is not None
+    assert result.backend_runtime_execution_receipt.execution_status == "runtime_external_launch_completed"
+    assert result.backend_runtime_launch_receipt is not None
+    assert result.backend_runtime_launch_receipt.launch_status == "launch_completed"
+    assert result.backend_runtime_launch_receipt.executed is True
+    assert result.backend_runtime_execution_receipt.metadata["launch_report_refs"]
+    assert (tmp_path / "backend_runtime_launch_receipt.json").exists()
 
 
 def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp_path: Path) -> None:
@@ -802,9 +889,18 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
         "",
         "runtime_request_materialized_with_preconditions",
         "runtime_launch_prepared",
+        "runtime_external_launch_completed",
+        "runtime_external_launch_failed",
         "runtime_execution_completed",
         "runtime_training_completed",
         "runtime_execution_failed",
+    }
+    assert feedback_manifest["backend_runtime_launch_status"] in {
+        "",
+        "launch_blocked",
+        "launch_prepared",
+        "launch_completed",
+        "launch_failed",
     }
     assert feedback_manifest["planned_branch_count"] >= 1
     assert feedback_manifest["materialized_render_provider_count"] >= 1
@@ -815,6 +911,13 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert loop_summary["materialized_render_provider_count"] >= 1
     assert loop_summary["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id
     assert loop_summary["backend_runtime_bridge_receipt_id"] == result.backend_runtime_bridge_receipt.receipt_id
+    assert loop_summary["backend_runtime_launch_status"] in {
+        "",
+        "launch_blocked",
+        "launch_prepared",
+        "launch_completed",
+        "launch_failed",
+    }
     assert loop_summary["backend_runtime_work_order_count"] >= 0
     assert result.world_state.input_context["economic"]["economic_urgency_score"] == 0.0
 

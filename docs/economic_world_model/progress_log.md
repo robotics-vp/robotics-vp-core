@@ -2,6 +2,21 @@
 
 ## 2026-03-27
 
+- Changed: pushed the Phase-1 backend lane past “launch spec only” and into canonical external-launch evidence:
+  - `src/world_model/sim_synth_physics/runtime_launch.py` now builds `backend_runtime_launch_receipt_v1` artifacts over prepared or executed upstream runtime launches
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now records those launch receipts whenever the Isaac/Unitree or Holosoma lane stops at an external launch path, and can optionally execute the launch command through the WM runtime instead of leaving that step entirely outside the loop
+  - `src/world_model/sim_synth_physics/runtime.py` now surfaces the launch receipt in the loop result, loop summary, training feedback manifest, runtime evidence, and artifact set
+  - `scripts/run_phase1_runtime_launch.py` now emits the launch receipt explicitly, including an optional pure receipt artifact
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the launch receipt so backend-selector and branch-planner corpora can distinguish:
+    - planning-only
+    - external launch attempted
+    - shadow runtime
+    - concrete runtime
+- Why this matters:
+  - the Phase-1 backend lane can now remember that an upstream Isaac/Unitree or Holosoma runtime was actually launched, not just that a command string existed
+  - that is another step toward the honest remainder we want: external roots/assets/policies/GPU become the blocker, not missing receipt wiring between WM planning and upstream runtime execution
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_phase1_runtime_launch.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_phase1_runtime_launch.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed.
+
 - Changed: refined the multi-WM roadmap so inferential compute capacity and concrete battery state are now treated as early lower-WM resource contracts rather than late economic-only abstractions:
   - `docs/economic_world_model/multi_wm_architecture_plan.md` now says compute / battery should enter first as canonical embodiment/deployment state, then become allocatable economic-WM budget objects, then only later become transport/meta-node governance inputs
   - Phase 3 now explicitly calls for `ComputeEnvelopeState` / `BatteryState`-style canonical state, resource forecasting, placement/QoS receipts, and resource-aware learned seams

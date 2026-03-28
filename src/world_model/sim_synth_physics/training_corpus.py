@@ -141,6 +141,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "robot_asset_contract_receipt",
             "backend_runtime_bridge_receipt",
             "backend_runtime_execution_receipt",
+            "backend_runtime_launch_receipt",
             "backend_shadow_execution_receipt",
             "physics_calibration_receipt",
             "render_provider_receipt",
@@ -158,6 +159,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_asset_contracts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_bridges: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_runtime: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_backend_launch: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_shadow: dict[Path, list[Dict[str, Any]]] = {}
     grouped_calibrations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_render_receipts: dict[Path, list[Dict[str, Any]]] = {}
@@ -197,6 +199,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_backend_bridges.setdefault(parent, []).append(dict(payload))
             elif version == "backend_runtime_execution_receipt_v1":
                 grouped_backend_runtime.setdefault(parent, []).append(dict(payload))
+            elif version == "backend_runtime_launch_receipt_v1":
+                grouped_backend_launch.setdefault(parent, []).append(dict(payload))
             elif version == "backend_shadow_execution_receipt_v1":
                 grouped_backend_shadow.setdefault(parent, []).append(dict(payload))
             elif version == "physics_calibration_receipt_v1":
@@ -214,6 +218,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         | set(grouped_asset_contracts)
         | set(grouped_backend_bridges)
         | set(grouped_backend_runtime)
+        | set(grouped_backend_launch)
         | set(grouped_backend_shadow)
         | set(grouped_calibrations)
         | set(grouped_render_receipts)
@@ -226,6 +231,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         asset_contracts = grouped_asset_contracts.get(directory, [])
         backend_bridge_receipts = grouped_backend_bridges.get(directory, [])
         backend_runtime_receipts = grouped_backend_runtime.get(directory, [])
+        backend_launch_receipts = grouped_backend_launch.get(directory, [])
         backend_shadow_receipts = grouped_backend_shadow.get(directory, [])
         calibrations = grouped_calibrations.get(directory, [])
         render_receipts = grouped_render_receipts.get(directory, [])
@@ -247,6 +253,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 bundle["backend_runtime_bridge_receipt"] = dict(backend_bridge_receipts[-1])
             if backend_runtime_receipts:
                 bundle["backend_runtime_execution_receipt"] = dict(backend_runtime_receipts[-1])
+            if backend_launch_receipts:
+                bundle["backend_runtime_launch_receipt"] = dict(backend_launch_receipts[-1])
             if backend_shadow_receipts:
                 bundle["backend_shadow_execution_receipt"] = dict(backend_shadow_receipts[-1])
             if calibrations:
@@ -303,6 +311,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "backend_runtime_execution_receipt_v1"
     ]
+    backend_launch_receipts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "backend_runtime_launch_receipt_v1"
+    ]
     backend_shadow_receipts = [
         dict(payload)
         for payload in rows
@@ -343,6 +357,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             bundle["backend_runtime_bridge_receipt"] = backend_bridge_receipts[-1]
         if backend_runtime_receipts:
             bundle["backend_runtime_execution_receipt"] = backend_runtime_receipts[-1]
+        if backend_launch_receipts:
+            bundle["backend_runtime_launch_receipt"] = backend_launch_receipts[-1]
         if backend_shadow_receipts:
             bundle["backend_shadow_execution_receipt"] = backend_shadow_receipts[-1]
         if calibrations:
@@ -379,6 +395,9 @@ def build_backend_selector_rows_from_receipts(
         backend_runtime_execution_receipt = _mapping(
             bundle_mapping.get("backend_runtime_execution_receipt")
         )
+        backend_runtime_launch_receipt = _mapping(
+            bundle_mapping.get("backend_runtime_launch_receipt")
+        )
         backend_shadow_execution_receipt = _mapping(
             bundle_mapping.get("backend_shadow_execution_receipt")
         )
@@ -388,6 +407,10 @@ def build_backend_selector_rows_from_receipts(
         )
         if calibration_receipt:
             target_source = "runtime_receipt"
+        elif backend_runtime_launch_receipt and str(
+            backend_runtime_launch_receipt.get("launch_status", "")
+        ) in {"launch_completed", "launch_failed"}:
+            target_source = "external_launch_receipt"
         elif backend_runtime_execution_receipt:
             target_source = "concrete_runtime_receipt"
         elif backend_shadow_execution_receipt:
@@ -481,6 +504,9 @@ def build_backend_selector_rows_from_receipts(
                     "backend_binding_status": backend_binding_receipt.get("binding_status"),
                     "backend_runtime_execution_receipt_id": backend_runtime_execution_receipt.get("receipt_id"),
                     "backend_runtime_execution_status": backend_runtime_execution_receipt.get("execution_status"),
+                    "backend_runtime_launch_receipt_id": backend_runtime_launch_receipt.get("receipt_id"),
+                    "backend_runtime_launch_status": backend_runtime_launch_receipt.get("launch_status"),
+                    "backend_runtime_launch_executed": backend_runtime_launch_receipt.get("executed"),
                     "backend_shadow_execution_receipt_id": backend_shadow_execution_receipt.get("receipt_id"),
                     "backend_shadow_execution_status": backend_shadow_execution_receipt.get("execution_status"),
                     "calibration_receipt_id": calibration_receipt.get("receipt_id"),
@@ -532,6 +558,9 @@ def build_branch_planner_rows_from_receipts(
         robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
         backend_runtime_bridge_receipt = _mapping(
             bundle_mapping.get("backend_runtime_bridge_receipt")
+        )
+        backend_runtime_launch_receipt = _mapping(
+            bundle_mapping.get("backend_runtime_launch_receipt")
         )
         for plan_index, plan in enumerate(_mapping_list(world_state.get("synthetic_branch_plans"))):
             plan_id = str(plan.get("plan_id", ""))
@@ -610,6 +639,15 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "bridge_transport_profile": backend_runtime_bridge_receipt.get(
                             "transport_profile"
+                        ),
+                        "backend_runtime_launch_receipt_id": backend_runtime_launch_receipt.get(
+                            "receipt_id"
+                        ),
+                        "backend_runtime_launch_status": backend_runtime_launch_receipt.get(
+                            "launch_status"
+                        ),
+                        "backend_runtime_launch_executed": backend_runtime_launch_receipt.get(
+                            "executed"
                         ),
                         "render_provider_receipt_id": render_receipt.get("receipt_id"),
                         "render_artifact_refs": list(render_receipt.get("artifact_refs") or []),
