@@ -121,6 +121,18 @@ def describe_isaac_runtime_targets(
         "unitree_policy_root",
         "isaac_policy_root",
     ) or _env_path("UNITREE_POLICY_ROOT", "ISAAC_POLICY_ROOT")
+    unitree_sdk2_python_root = _context_path(
+        embodiment,
+        "unitree_sdk2_python_root",
+    ) or _env_path("UNITREE_SDK2_PYTHON_ROOT")
+    teleimager_root = _context_path(
+        embodiment,
+        "teleimager_root",
+    ) or _env_path("TELEIMAGER_ROOT")
+    unitree_il_lerobot_root = _context_path(
+        embodiment,
+        "unitree_il_lerobot_root",
+    ) or _env_path("UNITREE_IL_LEROBOT_ROOT")
     records = [
         _target_record(
             target_id="isaaclab_root",
@@ -177,9 +189,27 @@ def describe_isaac_runtime_targets(
             source="embodiment_or_env",
         ),
         _target_record(
+            target_id="unitree_sdk2_python_root",
+            label="Unitree SDK2 Python root",
+            ref=unitree_sdk2_python_root,
+            source="embodiment_or_env",
+        ),
+        _target_record(
             target_id="humanoidverse_root",
             label="HumanoidVerse root",
             ref=humanoidverse_root,
+            source="embodiment_or_env",
+        ),
+        _target_record(
+            target_id="teleimager_root",
+            label="Teleimager root",
+            ref=teleimager_root,
+            source="embodiment_or_env",
+        ),
+        _target_record(
+            target_id="unitree_il_lerobot_root",
+            label="Unitree IL Lerobot root",
+            ref=unitree_il_lerobot_root,
             source="embodiment_or_env",
         ),
     ]
@@ -201,6 +231,9 @@ def describe_isaac_runtime_targets(
             "xr_teleoperate_root",
             "unitree_model_root",
             "unitree_policy_root",
+            "unitree_sdk2_python_root",
+            "teleimager_root",
+            "unitree_il_lerobot_root",
         )
         if target_id in summary["ready_target_ids"]
     ]

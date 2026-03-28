@@ -171,6 +171,34 @@ class BackendRuntimeLaunchReceipt:
 
 
 @dataclass(frozen=True)
+class BackendRuntimeOutcomeReceipt:
+    """Receipt for harvested outputs from an external backend runtime launch."""
+
+    receipt_id: str
+    backend: str
+    outcome_profile: str
+    outcome_status: str
+    executed: bool = False
+    harvested_output_count: int = 0
+    artifact_refs: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_runtime_outcome_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "backend": self.backend,
+            "outcome_profile": self.outcome_profile,
+            "outcome_status": self.outcome_status,
+            "executed": bool(self.executed),
+            "harvested_output_count": int(self.harvested_output_count),
+            "artifact_refs": strings(self.artifact_refs),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class BackendRuntimeBridgeReceipt:
     """Receipt for one WM-owned backend runtime bridge contract."""
 

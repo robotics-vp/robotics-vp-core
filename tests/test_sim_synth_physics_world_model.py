@@ -754,6 +754,9 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
     assert result.backend_runtime_launch_receipt is not None
     assert result.backend_runtime_launch_receipt.launch_status == "launch_prepared"
     assert result.backend_runtime_launch_receipt.executed is False
+    assert result.backend_runtime_outcome_receipt is not None
+    assert result.backend_runtime_outcome_receipt.outcome_status == "launch_not_executed"
+    assert result.backend_runtime_outcome_receipt.harvested_output_count == 0
     assert (
         result.backend_runtime_execution_receipt.metadata["launch_plan"]["status"]
         == "ready_for_launch"
@@ -777,6 +780,10 @@ def test_runtime_executes_external_launch_when_requested(
 
     def _fake_launch(runtime_bundle, launch_spec, *, execute, cwd=None, require_policy=True):
         assert execute is True
+        logs_dir = Path(str(cwd or launch_spec["root"])) / "logs" / "run_1"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        (logs_dir / "policy.onnx").write_text("x", encoding="utf-8")
+        (logs_dir / "metrics.json").write_text("{}", encoding="utf-8")
         return {
             "backend": runtime_bundle["backend"],
             "preferred_profile": launch_spec["preferred_profile"],
@@ -844,8 +851,14 @@ def test_runtime_executes_external_launch_when_requested(
     assert result.backend_runtime_launch_receipt is not None
     assert result.backend_runtime_launch_receipt.launch_status == "launch_completed"
     assert result.backend_runtime_launch_receipt.executed is True
+    assert result.backend_runtime_outcome_receipt is not None
+    assert result.backend_runtime_outcome_receipt.outcome_status == "runtime_outputs_harvested"
+    assert result.backend_runtime_outcome_receipt.harvested_output_count >= 2
     assert result.backend_runtime_execution_receipt.metadata["launch_report_refs"]
+    assert result.backend_runtime_execution_receipt.metadata["runtime_outcome_receipt"]
+    assert result.backend_runtime_work_orders[0].status == "satisfied_by_external_runtime_outcomes"
     assert (tmp_path / "backend_runtime_launch_receipt.json").exists()
+    assert (tmp_path / "backend_runtime_outcome_receipt.json").exists()
 
 
 def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp_path: Path) -> None:
@@ -902,6 +915,14 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
         "launch_completed",
         "launch_failed",
     }
+    assert feedback_manifest["backend_runtime_outcome_status"] in {
+        "",
+        "launch_not_executed",
+        "runtime_outputs_harvested",
+        "runtime_outputs_missing",
+        "outcome_sources_missing",
+    }
+    assert feedback_manifest["backend_runtime_output_count"] >= 0
     assert feedback_manifest["planned_branch_count"] >= 1
     assert feedback_manifest["materialized_render_provider_count"] >= 1
     assert feedback_manifest["robot_asset_readiness_score"] >= 0.0
@@ -918,6 +939,14 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
         "launch_completed",
         "launch_failed",
     }
+    assert loop_summary["backend_runtime_outcome_status"] in {
+        "",
+        "launch_not_executed",
+        "runtime_outputs_harvested",
+        "runtime_outputs_missing",
+        "outcome_sources_missing",
+    }
+    assert loop_summary["backend_runtime_output_count"] >= 0
     assert loop_summary["backend_runtime_work_order_count"] >= 0
     assert result.world_state.input_context["economic"]["economic_urgency_score"] == 0.0
 

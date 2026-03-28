@@ -198,3 +198,73 @@ def test_run_phase1_runtime_launch_script_writes_pure_receipt(tmp_path: Path, mo
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert receipt["version"] == "backend_runtime_launch_receipt_v1"
     assert receipt["launch_status"] == "launch_prepared"
+
+
+def test_run_phase1_runtime_launch_harvests_outcomes(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(runtime_launch_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(runtime_launch_module, "_cuda_ready", lambda: True)
+
+    runtime_root = tmp_path / "unitree_sim_isaaclab"
+    runtime_root.mkdir()
+    logs_dir = runtime_root / "logs" / "run_1"
+    logs_dir.mkdir(parents=True)
+    (logs_dir / "policy.onnx").write_text("x", encoding="utf-8")
+    (logs_dir / "metrics.json").write_text("{}", encoding="utf-8")
+    policy_root = tmp_path / "policies"
+    policy_root.mkdir()
+    policy_path = policy_root / "g1_policy.onnx"
+    policy_path.write_text("x", encoding="utf-8")
+    (runtime_root / "backend_runtime_bundle.json").write_text(
+        json.dumps(
+            {
+                "backend": "isaac",
+                "preferred_profile": "unitree_sim_isaaclab",
+                "runtime_target_contract": {
+                    "runtime_targets_ready": True,
+                    "missing_required_target_ids": [],
+                    "unresolved_one_of_groups": [],
+                    "targets": [
+                        {"target_id": "unitree_sim_isaaclab_root", "ref": str(runtime_root)},
+                        {"target_id": "unitree_sdk2_root", "ref": str(tmp_path / "sdk2")},
+                    ],
+                },
+                "policy_contract": {
+                    "policy_ready": True,
+                    "policy_root": str(policy_root),
+                    "policy_ref": str(policy_path),
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (runtime_root / "backend_launch_spec.json").write_text(
+        json.dumps(
+            {
+                "backend": "isaac",
+                "preferred_profile": "unitree_sim_isaaclab",
+                "policy_ready": True,
+                "command": "echo runtime_launch",
+                "root": str(runtime_root),
+                "policy_ref": str(policy_path),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    outcome_path = tmp_path / "runtime_outcome_receipt.json"
+
+    payload = runtime_launch_main(
+        [
+            "--runtime-root",
+            str(runtime_root),
+            "--harvest-outcomes",
+            "--outcome-output",
+            str(outcome_path),
+        ]
+    )
+
+    assert payload["outcome_receipt"]["outcome_status"] == "launch_not_executed"
+    assert payload["output_summary"]["harvested_output_count"] == 0
+    outcome_receipt = json.loads(outcome_path.read_text(encoding="utf-8"))
+    assert outcome_receipt["version"] == "backend_runtime_outcome_receipt_v1"

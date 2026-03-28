@@ -46,6 +46,9 @@ def _profile(
     root: str,
     expected_paths: list[str],
     preferred_entrypoints: list[str],
+    deploy_patterns: list[str] | None = None,
+    policy_patterns: list[str] | None = None,
+    data_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     matched_paths, missing_paths = _existing(root, expected_paths)
     return {
@@ -57,6 +60,9 @@ def _profile(
         "matched_paths": matched_paths,
         "missing_paths": missing_paths,
         "preferred_entrypoints": list(preferred_entrypoints),
+        "deploy_candidates": _candidate_files(root, deploy_patterns or []),
+        "policy_candidates": _candidate_files(root, policy_patterns or []),
+        "data_candidates": _candidate_files(root, data_patterns or []),
         "profile_ready": bool(root and Path(root).exists() and not missing_paths),
     }
 
@@ -105,6 +111,9 @@ def describe_isaac_runtime_layouts(
             root=isaaclab_root,
             expected_paths=["apps", "source", "pyproject.toml"],
             preferred_entrypoints=["source", "apps"],
+            deploy_patterns=["source/standalone/workflows/rl/play.py", "apps/**/*"],
+            policy_patterns=["logs/**/*.pt", "logs/**/*.onnx"],
+            data_patterns=["logs/**/*.json", "logs/**/*.yaml"],
         ),
         _profile(
             profile_id="unitree_sim_isaaclab",
@@ -112,6 +121,9 @@ def describe_isaac_runtime_layouts(
             root=unitree_sim_isaaclab_root,
             expected_paths=["sim_main.py", "dds", "action_provider"],
             preferred_entrypoints=["sim_main.py", "dds"],
+            deploy_patterns=["sim_main.py", "dds/**/*", "action_provider/**/*"],
+            policy_patterns=["logs/**/*.pt", "logs/**/*.onnx", "policies/**/*.onnx"],
+            data_patterns=["logs/**/*.json", "generated/**/*.json", "recordings/**/*"],
         ),
         _profile(
             profile_id="unitree_rl_gym",
@@ -119,6 +131,9 @@ def describe_isaac_runtime_layouts(
             root=unitree_rl_gym_root,
             expected_paths=["legged_gym", "resources", "deploy"],
             preferred_entrypoints=["deploy", "legged_gym"],
+            deploy_patterns=["deploy/**/*.py", "deploy_real/**/*"],
+            policy_patterns=["logs/**/*.pt", "logs/**/*.onnx", "exported/**/*"],
+            data_patterns=["logs/**/*.json", "logs/**/*.yaml", "logs/**/*.csv"],
         ),
         _profile(
             profile_id="humanoidverse",
@@ -126,6 +141,9 @@ def describe_isaac_runtime_layouts(
             root=humanoidverse_root,
             expected_paths=["humanoidverse", "assets"],
             preferred_entrypoints=["humanoidverse"],
+            deploy_patterns=["humanoidverse/run.py", "humanoidverse/**/*.py"],
+            policy_patterns=["logs/**/*.pt", "logs/**/*.onnx"],
+            data_patterns=["logs/**/*.json", "outputs/**/*"],
         ),
         _profile(
             profile_id="xr_teleoperate",
@@ -133,6 +151,9 @@ def describe_isaac_runtime_layouts(
             root=xr_teleoperate_root,
             expected_paths=["teleop"],
             preferred_entrypoints=["teleop"],
+            deploy_patterns=["teleop/teleop_hand_and_arm.py", "teleop/televuer/**/*"],
+            policy_patterns=["policies/**/*.onnx", "policies/**/*.pt"],
+            data_patterns=["teleop/utils/data/**/*", "teleop/**/*.json"],
         ),
         _profile(
             profile_id="unitree_model_assets",
@@ -140,6 +161,8 @@ def describe_isaac_runtime_layouts(
             root=unitree_model_root,
             expected_paths=["README.md"],
             preferred_entrypoints=["README.md"],
+            deploy_patterns=["**/*.usd", "**/*.urdf"],
+            data_patterns=["**/*.yaml", "**/*.json"],
         ),
     ]
     ready_profiles = [
@@ -173,6 +196,10 @@ def describe_isaac_policy_contract(
     ) or str(os.environ.get("ISAAC_POLICY_PATH", "") or "").strip()
     checkpoint_candidates = _candidate_files(policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
     deploy_config_candidates = _candidate_files(policy_root, ("*.yaml", "*.yml", "*.json"))
+    runtime_report_candidates = _candidate_files(
+        policy_root,
+        ("logs/**/*.json", "logs/**/*.yaml", "deploy/**/*.yaml", "deploy_real/**/*"),
+    )
     policy_ref_exists = bool(policy_ref and Path(policy_ref).exists())
     return {
         "version": "backend_policy_contract_v1",
@@ -183,6 +210,7 @@ def describe_isaac_policy_contract(
         "policy_ref_exists": policy_ref_exists,
         "checkpoint_candidates": checkpoint_candidates,
         "deploy_config_candidates": deploy_config_candidates,
+        "runtime_report_candidates": runtime_report_candidates,
         "policy_ready": bool(policy_ref_exists or checkpoint_candidates),
     }
 
@@ -210,6 +238,9 @@ def describe_holosoma_runtime_layouts(
             root=holosoma_root,
             expected_paths=["README.md"],
             preferred_entrypoints=["README.md"],
+            deploy_patterns=["**/*.py", "scripts/**/*"],
+            policy_patterns=["checkpoints/**/*", "**/*.onnx", "**/*.pt"],
+            data_patterns=["logs/**/*.json", "outputs/**/*", "runs/**/*"],
         ),
         _profile(
             profile_id="holosoma_motion_bank",
@@ -217,6 +248,7 @@ def describe_holosoma_runtime_layouts(
             root=motion_root,
             expected_paths=[],
             preferred_entrypoints=[],
+            data_patterns=["**/*.npz", "**/*.npy", "**/*.bvh", "**/*.pkl"],
         ),
         _profile(
             profile_id="holosoma_policy_bank",
@@ -224,6 +256,7 @@ def describe_holosoma_runtime_layouts(
             root=policy_root,
             expected_paths=[],
             preferred_entrypoints=[],
+            policy_patterns=["**/*.onnx", "**/*.pt", "**/*.pth", "**/*.ckpt", "**/*.yaml"],
         ),
         _profile(
             profile_id="retargeting_bundle",
@@ -231,6 +264,7 @@ def describe_holosoma_runtime_layouts(
             root=retargeting_root,
             expected_paths=[],
             preferred_entrypoints=[],
+            data_patterns=["**/*.yaml", "**/*.json", "**/*.npz"],
         ),
     ]
     ready_profiles = [
@@ -261,6 +295,7 @@ def describe_holosoma_policy_contract(
         embodiment, "holosoma_policy_id", "runtime_policy_id", "evaluation_policy_id", "policy_id"
     ) or str(os.environ.get("HOLOSOMA_POLICY_PATH", "") or "").strip()
     checkpoint_candidates = _candidate_files(policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
+    deploy_config_candidates = _candidate_files(policy_root, ("*.yaml", "*.yml", "*.json"))
     policy_ref_exists = bool(policy_ref and Path(policy_ref).exists())
     return {
         "version": "backend_policy_contract_v1",
@@ -270,6 +305,7 @@ def describe_holosoma_policy_contract(
         "policy_ref": policy_ref,
         "policy_ref_exists": policy_ref_exists,
         "checkpoint_candidates": checkpoint_candidates,
+        "deploy_config_candidates": deploy_config_candidates,
         "policy_ready": bool(policy_ref_exists or checkpoint_candidates),
     }
 

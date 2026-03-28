@@ -116,6 +116,14 @@ def test_run_sim_synth_physics_loop_writes_canonical_receipts(tmp_path: Path) ->
         "launch_completed",
         "launch_failed",
     }
+    assert result["backend_runtime_outcome_status"] in {
+        "",
+        "launch_not_executed",
+        "runtime_outputs_harvested",
+        "runtime_outputs_missing",
+        "outcome_sources_missing",
+    }
+    assert result["backend_runtime_output_count"] >= 0
     assert result["backend_shadow_execution_status"] in {
         "",
         "shadow_executed",

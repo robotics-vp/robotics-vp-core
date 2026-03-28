@@ -35,6 +35,7 @@ from .render_materialization import materialize_render_provider_receipts
 from .receipts import (
     BackendExecutionBindingReceipt,
     BackendRuntimeBridgeReceipt,
+    BackendRuntimeOutcomeReceipt,
     BackendShadowExecutionReceipt,
     BackendRuntimeWorkOrderReceipt,
     PhysicsAdaptationReceipt,
@@ -52,6 +53,11 @@ from .runtime_launch import (
     execute_backend_runtime_launch,
     load_runtime_artifacts,
     prepare_backend_runtime_launch,
+)
+from .runtime_outcomes import (
+    build_backend_runtime_outcome_receipt,
+    build_backend_runtime_output_contract,
+    harvest_backend_runtime_outcomes,
 )
 from .runtime_layouts import (
     describe_holosoma_policy_contract,
@@ -93,6 +99,7 @@ __all__ = [
     "BackendAdapterDescriptor",
     "BackendExecutionBindingReceipt",
     "BackendRuntimeBridgeReceipt",
+    "BackendRuntimeOutcomeReceipt",
     "BackendRuntimeWorkOrderReceipt",
     "BackendShadowExecutionReceipt",
     "BackendExecutionBindingState",
@@ -134,6 +141,8 @@ __all__ = [
     "summarize_runtime_evidence",
     "build_backend_runtime_bridge_receipt",
     "build_backend_runtime_bundle",
+    "build_backend_runtime_outcome_receipt",
+    "build_backend_runtime_output_contract",
     "build_backend_runtime_work_orders",
     "execute_backend_runtime_launch",
     "compile_backend_execution_binding",
@@ -159,6 +168,7 @@ __all__ = [
     "build_branch_planner_rows_from_receipts",
     "compile_gap_driven_diffusion_plans",
     "harvest_sim_synth_receipt_bundles",
+    "harvest_backend_runtime_outcomes",
 ]
 
 

@@ -56,6 +56,9 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
     assert launch_spec["preferred_profile"] == "unitree_sim_isaaclab"
     assert "sim_main.py" in launch_spec["command"]
     assert launch_spec["policy_ready"] is True
+    assert runtime_bundle["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
+    assert launch_spec["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
+    assert runtime_bundle["output_contract"]["sources"]
 
 
 def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> None:
@@ -94,3 +97,5 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
     assert launch_spec["preferred_profile"] == "holosoma_repo"
     assert "holosoma.eval" in launch_spec["command"]
     assert launch_spec["policy_ready"] is True
+    assert runtime_bundle["output_contract"]["profile_id"] == "holosoma_repo"
+    assert runtime_bundle["output_contract"]["sources"]

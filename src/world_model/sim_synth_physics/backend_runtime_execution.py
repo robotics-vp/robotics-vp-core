@@ -24,6 +24,11 @@ from .runtime_launch import (
     execute_backend_runtime_launch,
     prepare_backend_runtime_launch,
 )
+from .runtime_outcomes import (
+    build_backend_runtime_outcome_receipt,
+    build_backend_runtime_output_contract,
+    harvest_backend_runtime_outcomes,
+)
 from .runtime_targets import describe_holosoma_runtime_targets, describe_isaac_runtime_targets
 from .state import SimSynthPhysicsWorldState
 
@@ -547,8 +552,11 @@ def materialize_backend_runtime_execution(
         launch_spec,
         require_policy=require_policy,
     )
+    runtime_output_contract = build_backend_runtime_output_contract(runtime_bundle, launch_spec)
     launch_report_refs: list[str] = []
     launch_receipt_payload: dict[str, Any] | None = None
+    runtime_outcome_receipt_payload: dict[str, Any] | None = None
+    runtime_outcome_refs: list[str] = []
     local_runtime_supported = _runtime_supports_execution(backend)
     if not local_runtime_supported:
         launch_result: dict[str, Any] = dict(launch_plan)
@@ -567,9 +575,22 @@ def materialize_backend_runtime_execution(
             launch_result,
         )
         launch_receipt_payload = launch_receipt.to_dict()
+        output_summary = harvest_backend_runtime_outcomes(
+            runtime_output_contract,
+            executed=bool(launch_receipt.executed),
+        )
+        outcome_receipt = build_backend_runtime_outcome_receipt(
+            runtime_bundle=runtime_bundle,
+            launch_receipt=launch_receipt,
+            output_summary=output_summary,
+        )
+        runtime_outcome_receipt_payload = outcome_receipt.to_dict()
         if output_root is not None:
             report_path = output_root / "backend_runtime_launch_report.json"
             receipt_path = output_root / "backend_runtime_launch_receipt.json"
+            output_contract_path = output_root / "backend_runtime_output_contract.json"
+            output_summary_path = output_root / "backend_runtime_output_summary.json"
+            outcome_receipt_path = output_root / "backend_runtime_outcome_receipt.json"
             _write_json(
                 report_path,
                 {
@@ -580,10 +601,23 @@ def materialize_backend_runtime_execution(
                 },
             )
             _write_json(receipt_path, launch_receipt_payload)
+            _write_json(output_contract_path, runtime_output_contract)
+            _write_json(output_summary_path, output_summary)
+            _write_json(outcome_receipt_path, runtime_outcome_receipt_payload)
             launch_report_refs.extend(
-                [str(report_path.resolve()), str(receipt_path.resolve())]
+                [
+                    str(report_path.resolve()),
+                    str(receipt_path.resolve()),
+                    str(output_contract_path.resolve()),
+                    str(output_summary_path.resolve()),
+                    str(outcome_receipt_path.resolve()),
+                ]
             )
             artifact_refs.extend(launch_report_refs)
+        runtime_outcome_refs.extend(strings(output_summary.get("artifact_refs")))
+        artifact_refs.extend(
+            ref for ref in runtime_outcome_refs if ref and ref not in artifact_refs
+        )
         if launch_plan["status"] == "ready_for_launch":
             execution_status = "runtime_launch_prepared"
             if execute_external_launch:
@@ -614,9 +648,12 @@ def materialize_backend_runtime_execution(
                     "policy_contract": policy_contract,
                     "runtime_bundle": runtime_bundle,
                     "launch_spec": launch_spec,
+                    "runtime_output_contract": runtime_output_contract,
                     "launch_plan": launch_plan,
                     "launch_receipt": launch_receipt_payload,
                     "launch_report_refs": list(launch_report_refs),
+                    "runtime_outcome_receipt": runtime_outcome_receipt_payload,
+                    "runtime_outcome_refs": list(runtime_outcome_refs),
                     "missing_preconditions": list(missing_preconditions),
                 },
             )
@@ -633,6 +670,9 @@ def materialize_backend_runtime_execution(
             if output_root is not None:
                 report_path = output_root / "backend_runtime_launch_report.json"
                 receipt_path = output_root / "backend_runtime_launch_receipt.json"
+                output_contract_path = output_root / "backend_runtime_output_contract.json"
+                output_summary_path = output_root / "backend_runtime_output_summary.json"
+                outcome_receipt_path = output_root / "backend_runtime_outcome_receipt.json"
                 _write_json(
                     report_path,
                     {
@@ -643,8 +683,49 @@ def materialize_backend_runtime_execution(
                     },
                 )
                 _write_json(receipt_path, launch_receipt_payload)
+                _write_json(output_contract_path, runtime_output_contract)
+                _write_json(
+                    output_summary_path,
+                    {
+                        "version": "backend_runtime_output_summary_v1",
+                        "backend": backend,
+                        "profile_id": str(runtime_output_contract.get("profile_id", "") or ""),
+                        "executed": False,
+                        "outcome_status": "launch_not_executed",
+                        "harvested_output_count": 0,
+                        "artifact_kind_counts": {},
+                        "source_summaries": [],
+                        "artifact_refs": [],
+                        "output_contract": runtime_output_contract,
+                    },
+                )
+                _write_json(
+                    outcome_receipt_path,
+                    build_backend_runtime_outcome_receipt(
+                        runtime_bundle=runtime_bundle,
+                        launch_receipt=launch_receipt,
+                        output_summary={
+                            "version": "backend_runtime_output_summary_v1",
+                            "backend": backend,
+                            "profile_id": str(runtime_output_contract.get("profile_id", "") or ""),
+                            "executed": False,
+                            "outcome_status": "launch_not_executed",
+                            "harvested_output_count": 0,
+                            "artifact_kind_counts": {},
+                            "source_summaries": [],
+                            "artifact_refs": [],
+                            "output_contract": runtime_output_contract,
+                        },
+                    ).to_dict(),
+                )
                 launch_report_refs.extend(
-                    [str(report_path.resolve()), str(receipt_path.resolve())]
+                    [
+                        str(report_path.resolve()),
+                        str(receipt_path.resolve()),
+                        str(output_contract_path.resolve()),
+                        str(output_summary_path.resolve()),
+                        str(outcome_receipt_path.resolve()),
+                    ]
                 )
                 artifact_refs.extend(launch_report_refs)
         if "backend_runtime_module" not in missing_preconditions:
@@ -679,9 +760,12 @@ def materialize_backend_runtime_execution(
                 "policy_contract": policy_contract,
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
+                "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
                 "launch_receipt": launch_receipt_payload,
                 "launch_report_refs": list(launch_report_refs),
+                "runtime_outcome_receipt": runtime_outcome_receipt_payload,
+                "runtime_outcome_refs": list(runtime_outcome_refs),
                 "missing_preconditions": missing_preconditions,
             },
         )
@@ -760,9 +844,12 @@ def materialize_backend_runtime_execution(
                 "policy_contract": policy_contract,
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
+                "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
                 "launch_receipt": launch_receipt_payload,
                 "launch_report_refs": list(launch_report_refs),
+                "runtime_outcome_receipt": runtime_outcome_receipt_payload,
+                "runtime_outcome_refs": list(runtime_outcome_refs),
                 "error": str(exc),
             },
         )
@@ -803,9 +890,12 @@ def materialize_backend_runtime_execution(
             "policy_contract": policy_contract,
             "runtime_bundle": runtime_bundle,
             "launch_spec": launch_spec,
+            "runtime_output_contract": runtime_output_contract,
             "launch_plan": launch_plan,
             "launch_receipt": launch_receipt_payload,
             "launch_report_refs": list(launch_report_refs),
+            "runtime_outcome_receipt": runtime_outcome_receipt_payload,
+            "runtime_outcome_refs": list(runtime_outcome_refs),
             "datapack_ids": list(datapack_ids),
             "datapack_config_ids": [cfg.id for cfg in datapack_configs],
             "raw_metrics": raw_metrics,

@@ -8,6 +8,7 @@ from .common import mapping
 from .receipts import (
     BackendRuntimeExecutionReceipt,
     BackendRuntimeLaunchReceipt,
+    BackendRuntimeOutcomeReceipt,
     BackendShadowExecutionReceipt,
     RenderProviderReceipt,
     SimulationOutcomeReceipt,
@@ -33,6 +34,7 @@ def summarize_runtime_evidence(
     *,
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
     backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt],
+    backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
     render_provider_receipts: Sequence[RenderProviderReceipt],
     outcome_receipts: Sequence[SimulationOutcomeReceipt],
@@ -49,6 +51,11 @@ def summarize_runtime_evidence(
         if backend_runtime_launch_receipt is None
         else backend_runtime_launch_receipt.launch_status
     )
+    runtime_outcome_status = (
+        ""
+        if backend_runtime_outcome_receipt is None
+        else backend_runtime_outcome_receipt.outcome_status
+    )
     shadow_status = (
         "" if backend_shadow_execution_receipt is None else backend_shadow_execution_receipt.execution_status
     )
@@ -60,6 +67,13 @@ def summarize_runtime_evidence(
             if backend_runtime_launch_receipt is None
             else bool(backend_runtime_launch_receipt.executed)
         ),
+        "runtime_output_status": runtime_outcome_status,
+        "runtime_output_harvested": runtime_outcome_status == "runtime_outputs_harvested",
+        "runtime_output_executed": (
+            False
+            if backend_runtime_outcome_receipt is None
+            else bool(backend_runtime_outcome_receipt.executed)
+        ),
         "runtime_concrete_completed": _is_concrete_runtime_status(runtime_status),
         "runtime_artifact_count": (
             0
@@ -70,6 +84,18 @@ def summarize_runtime_evidence(
             0
             if backend_runtime_launch_receipt is None
             else len(backend_runtime_launch_receipt.artifact_refs)
+        ),
+        "runtime_output_artifact_count": (
+            0
+            if backend_runtime_outcome_receipt is None
+            else int(backend_runtime_outcome_receipt.harvested_output_count)
+        ),
+        "runtime_output_artifact_kinds": sorted(
+            mapping(
+                {}
+                if backend_runtime_outcome_receipt is None
+                else backend_runtime_outcome_receipt.metadata.get("artifact_kind_counts")
+            ).keys()
         ),
         "runtime_episode_count": (
             0

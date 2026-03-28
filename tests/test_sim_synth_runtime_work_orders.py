@@ -3,6 +3,7 @@ from __future__ import annotations
 from src.world_model.sim_synth_physics.receipts import (
     BackendRuntimeBridgeReceipt,
     BackendRuntimeExecutionReceipt,
+    BackendRuntimeOutcomeReceipt,
     RobotAssetContractReceipt,
 )
 from src.world_model.sim_synth_physics.runtime_work_orders import (
@@ -68,6 +69,7 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
     work_orders = build_backend_runtime_work_orders(
         bridge_receipt=bridge_receipt,
         runtime_receipt=runtime_receipt,
+        runtime_outcome_receipt=None,
         robot_asset_contract_receipt=robot_asset_receipt,
         world_state_id="world_state_1",
         physics_execution_contract_id="physics_contract_1",
@@ -102,6 +104,7 @@ def test_build_backend_runtime_work_orders_marks_concrete_runtime_complete() -> 
     work_orders = build_backend_runtime_work_orders(
         bridge_receipt=bridge_receipt,
         runtime_receipt=None,
+        runtime_outcome_receipt=None,
         robot_asset_contract_receipt=None,
         world_state_id="world_state_2",
         physics_execution_contract_id="physics_contract_2",
@@ -111,3 +114,57 @@ def test_build_backend_runtime_work_orders_marks_concrete_runtime_complete() -> 
     assert work_orders[0].backend == "holosoma"
     assert work_orders[0].status == "satisfied_by_concrete_runtime"
     assert "holosoma_runtime_eval_smoke" in work_orders[0].linked_backlog_ids
+
+
+def test_build_backend_runtime_work_orders_marks_external_runtime_outputs_complete() -> None:
+    bridge_receipt = BackendRuntimeBridgeReceipt(
+        receipt_id="bridge_receipt_3",
+        bridge_id="bridge_state_3",
+        backend="isaac",
+        bridge_status="runtime_bridge_ready",
+        execution_authority="shadow_runtime",
+        transport_profile="isaaclab_unitree_dds_bridge",
+        planner_rate_hz=10.0,
+        control_rate_hz=250.0,
+        observation_rate_hz=60.0,
+        action_decimation=4,
+        latency_budget_ms=8.0,
+        bridge_readiness_score=0.85,
+        metadata={
+            "runtime_target_contract": {"runtime_targets_ready": True},
+            "runtime_layout_contract": {"ready_profiles": ["unitree_sim_isaaclab"]},
+            "policy_contract": {"policy_ready": True},
+        },
+    )
+    runtime_receipt = BackendRuntimeExecutionReceipt(
+        receipt_id="runtime_receipt_3",
+        backend="isaac",
+        execution_mode="workcell_isaaclab_evaluate_policy",
+        execution_status="runtime_external_launch_completed",
+    )
+    runtime_outcome_receipt = BackendRuntimeOutcomeReceipt(
+        receipt_id="runtime_outcome_receipt_3",
+        backend="isaac",
+        outcome_profile="unitree_sim_isaaclab",
+        outcome_status="runtime_outputs_harvested",
+        executed=True,
+        harvested_output_count=3,
+        artifact_refs=["/tmp/unitree_sim_isaaclab/logs/run_1/policy.onnx"],
+    )
+
+    work_orders = build_backend_runtime_work_orders(
+        bridge_receipt=bridge_receipt,
+        runtime_receipt=runtime_receipt,
+        runtime_outcome_receipt=runtime_outcome_receipt,
+        robot_asset_contract_receipt=None,
+        world_state_id="world_state_3",
+        physics_execution_contract_id="physics_contract_3",
+    )
+
+    assert len(work_orders) == 1
+    assert work_orders[0].status == "satisfied_by_external_runtime_outcomes"
+    assert (
+        work_orders[0].metadata["backend_runtime_outcome_receipt_id"]
+        == "runtime_outcome_receipt_3"
+    )
+    assert work_orders[0].metadata["backend_runtime_output_count"] == 3

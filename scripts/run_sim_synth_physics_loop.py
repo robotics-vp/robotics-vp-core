@@ -131,6 +131,11 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
             if result.backend_runtime_launch_receipt is None
             else result.backend_runtime_launch_receipt.receipt_id
         ),
+        "backend_runtime_outcome_receipt_id": (
+            None
+            if result.backend_runtime_outcome_receipt is None
+            else result.backend_runtime_outcome_receipt.receipt_id
+        ),
         "backend_runtime_execution_status": (
             ""
             if result.backend_runtime_execution_receipt is None
@@ -140,6 +145,16 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
             ""
             if result.backend_runtime_launch_receipt is None
             else result.backend_runtime_launch_receipt.launch_status
+        ),
+        "backend_runtime_outcome_status": (
+            ""
+            if result.backend_runtime_outcome_receipt is None
+            else result.backend_runtime_outcome_receipt.outcome_status
+        ),
+        "backend_runtime_output_count": (
+            0
+            if result.backend_runtime_outcome_receipt is None
+            else result.backend_runtime_outcome_receipt.harvested_output_count
         ),
         "backend_shadow_execution_receipt_id": (
             None

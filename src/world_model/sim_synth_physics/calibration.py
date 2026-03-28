@@ -39,6 +39,8 @@ def build_physics_adaptation_receipt(
         readiness += 0.08
     if bool(runtime_evidence.get("runtime_concrete_completed", False)):
         readiness += 0.16
+    elif bool(runtime_evidence.get("runtime_output_harvested", False)):
+        readiness += 0.1
     if runtime_evidence.get("shadow_execution_status"):
         readiness += 0.08
     readiness += 0.04 * min(
@@ -138,6 +140,8 @@ def build_physics_calibration_receipt(
         base_quality += 0.05
     if bool(runtime_evidence.get("runtime_concrete_completed", False)):
         base_quality += 0.12
+    elif bool(runtime_evidence.get("runtime_output_harvested", False)):
+        base_quality += 0.08
     if adaptation_receipt is not None:
         base_quality += 0.12 * clip01(adaptation_receipt.readiness_score)
         if (
@@ -154,6 +158,10 @@ def build_physics_calibration_receipt(
     base_quality += 0.01 * min(
         6.0,
         safe_float(runtime_evidence.get("render_artifact_count", 0.0), 0.0),
+    )
+    base_quality += 0.01 * min(
+        8.0,
+        safe_float(runtime_evidence.get("runtime_output_artifact_count", 0.0), 0.0),
     )
     base_quality -= 0.02 * min(
         4.0,

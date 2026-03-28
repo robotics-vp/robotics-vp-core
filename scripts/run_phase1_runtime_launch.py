@@ -13,6 +13,11 @@ from src.world_model.sim_synth_physics.runtime_launch import (
     execute_backend_runtime_launch,
     load_runtime_artifacts,
 )
+from src.world_model.sim_synth_physics.runtime_outcomes import (
+    build_backend_runtime_outcome_receipt,
+    build_backend_runtime_output_contract,
+    harvest_backend_runtime_outcomes,
+)
 
 
 def _default_artifact_paths(runtime_root: Path) -> tuple[Path, Path]:
@@ -35,6 +40,16 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         type=Path,
         help="Optionally write a pure backend_runtime_launch_receipt_v1 artifact.",
     )
+    parser.add_argument(
+        "--outcome-output",
+        type=Path,
+        help="Optionally write a pure backend_runtime_outcome_receipt_v1 artifact.",
+    )
+    parser.add_argument(
+        "--harvest-outcomes",
+        action="store_true",
+        help="Harvest upstream runtime outputs using the launch bundle/spec conventions.",
+    )
     args = parser.parse_args(argv)
 
     runtime_bundle_path = args.runtime_bundle
@@ -56,11 +71,26 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         cwd=args.cwd,
     )
     receipt = build_backend_runtime_launch_receipt(runtime_bundle, launch_spec, result)
+    outcome_receipt = None
+    output_summary = None
+    if args.harvest_outcomes:
+        output_contract = build_backend_runtime_output_contract(runtime_bundle, launch_spec)
+        output_summary = harvest_backend_runtime_outcomes(
+            output_contract,
+            executed=bool(receipt.executed),
+        )
+        outcome_receipt = build_backend_runtime_outcome_receipt(
+            runtime_bundle=runtime_bundle,
+            launch_receipt=receipt,
+            output_summary=output_summary,
+        )
     payload = {
         "runtime_bundle_path": str(Path(runtime_bundle_path).resolve()),
         "launch_spec_path": str(Path(launch_spec_path).resolve()),
         "result": result,
         "receipt": receipt.to_dict(),
+        "outcome_receipt": None if outcome_receipt is None else outcome_receipt.to_dict(),
+        "output_summary": output_summary,
     }
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -69,6 +99,12 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         args.receipt_output.parent.mkdir(parents=True, exist_ok=True)
         args.receipt_output.write_text(
             json.dumps(receipt.to_dict(), indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+    if args.outcome_output is not None and outcome_receipt is not None:
+        args.outcome_output.parent.mkdir(parents=True, exist_ok=True)
+        args.outcome_output.write_text(
+            json.dumps(outcome_receipt.to_dict(), indent=2, sort_keys=True),
             encoding="utf-8",
         )
     if args.output is None:

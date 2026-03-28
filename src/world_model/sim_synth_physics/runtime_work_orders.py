@@ -10,6 +10,7 @@ from .common import mapping, stable_id, strings
 from .receipts import (
     BackendRuntimeBridgeReceipt,
     BackendRuntimeExecutionReceipt,
+    BackendRuntimeOutcomeReceipt,
     BackendRuntimeWorkOrderReceipt,
     RobotAssetContractReceipt,
 )
@@ -52,11 +53,13 @@ def _load_command_hints(loop_run_ids: list[str]) -> list[str]:
 def _artifact_refs(
     bridge_receipt: BackendRuntimeBridgeReceipt,
     runtime_receipt: Optional[BackendRuntimeExecutionReceipt],
+    runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
 ) -> list[str]:
     refs: list[str] = []
     for source in (
         list(bridge_receipt.artifact_refs),
         [] if runtime_receipt is None else list(runtime_receipt.artifact_refs),
+        [] if runtime_outcome_receipt is None else list(runtime_outcome_receipt.artifact_refs),
     ):
         for ref in source:
             if ref and ref not in refs:
@@ -68,12 +71,18 @@ def _work_order_status(
     *,
     bridge_receipt: BackendRuntimeBridgeReceipt,
     runtime_receipt: Optional[BackendRuntimeExecutionReceipt],
+    runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     missing_runtime_targets: list[str],
     missing_assets: list[str],
     missing_preconditions: list[str],
 ) -> str:
     if bridge_receipt.execution_authority == "concrete_runtime":
         return "satisfied_by_concrete_runtime"
+    if (
+        runtime_outcome_receipt is not None
+        and str(runtime_outcome_receipt.outcome_status) == "runtime_outputs_harvested"
+    ):
+        return "satisfied_by_external_runtime_outcomes"
     if missing_runtime_targets:
         return "blocked_by_runtime_targets"
     if missing_assets:
@@ -91,6 +100,7 @@ def build_backend_runtime_work_orders(
     *,
     bridge_receipt: BackendRuntimeBridgeReceipt,
     runtime_receipt: Optional[BackendRuntimeExecutionReceipt],
+    runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     robot_asset_contract_receipt: Optional[RobotAssetContractReceipt],
     world_state_id: str,
     physics_execution_contract_id: str,
@@ -128,6 +138,7 @@ def build_backend_runtime_work_orders(
     status = _work_order_status(
         bridge_receipt=bridge_receipt,
         runtime_receipt=runtime_receipt,
+        runtime_outcome_receipt=runtime_outcome_receipt,
         missing_runtime_targets=missing_runtime_targets,
         missing_assets=missing_assets,
         missing_preconditions=missing_preconditions,
@@ -151,13 +162,32 @@ def build_backend_runtime_work_orders(
             missing_runtime_targets=missing_runtime_targets,
             missing_assets=missing_assets,
             missing_preconditions=missing_preconditions,
-            artifact_refs=_artifact_refs(bridge_receipt, runtime_receipt),
+            artifact_refs=_artifact_refs(
+                bridge_receipt,
+                runtime_receipt,
+                runtime_outcome_receipt,
+            ),
             metadata={
                 "world_state_id": world_state_id,
                 "physics_execution_contract_id": physics_execution_contract_id,
                 "backend_runtime_bridge_receipt_id": bridge_receipt.receipt_id,
                 "backend_runtime_execution_receipt_id": (
                     "" if runtime_receipt is None else runtime_receipt.receipt_id
+                ),
+                "backend_runtime_outcome_receipt_id": (
+                    ""
+                    if runtime_outcome_receipt is None
+                    else runtime_outcome_receipt.receipt_id
+                ),
+                "backend_runtime_outcome_status": (
+                    ""
+                    if runtime_outcome_receipt is None
+                    else runtime_outcome_receipt.outcome_status
+                ),
+                "backend_runtime_output_count": (
+                    0
+                    if runtime_outcome_receipt is None
+                    else runtime_outcome_receipt.harvested_output_count
                 ),
                 "execution_authority": bridge_receipt.execution_authority,
                 "transport_profile": bridge_receipt.transport_profile,

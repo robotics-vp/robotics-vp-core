@@ -178,6 +178,26 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_backend_runtime_outcome_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "runtime_outcome_1",
+                "backend": "isaac",
+                "outcome_profile": "unitree_sim_isaaclab",
+                "outcome_status": "runtime_outputs_harvested",
+                "executed": True,
+                "harvested_output_count": 2,
+                "artifact_refs": [
+                    "/tmp/unitree_sim_isaaclab/logs/run_1/metrics.json",
+                    "/tmp/unitree_sim_isaaclab/logs/run_1/policy.onnx",
+                ],
+                "version": "backend_runtime_outcome_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_render_provider_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -223,6 +243,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["backend_runtime_bridge_receipt"]["receipt_id"] == "bridge_1"
     assert bundles[0]["backend_runtime_execution_receipt"]["receipt_id"] == "runtime_1"
     assert bundles[0]["backend_runtime_launch_receipt"]["receipt_id"] == "launch_1"
+    assert bundles[0]["backend_runtime_outcome_receipt"]["receipt_id"] == "runtime_outcome_1"
     assert bundles[0]["backend_shadow_execution_receipt"]["receipt_id"] == "shadow_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
@@ -258,6 +279,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_executed"] is True
+    assert (
+        backend_rows[0]["metadata"]["backend_runtime_outcome_receipt_id"]
+        == "runtime_outcome_1"
+    )
+    assert backend_rows[0]["metadata"]["backend_runtime_outcome_status"] == "runtime_outputs_harvested"
+    assert backend_rows[0]["metadata"]["backend_runtime_output_count"] == 2
 
     branch_rows = build_branch_planner_rows_from_receipts(bundles)
     assert branch_rows[0]["target_render_materialization_status"] == "scene_materialized"
@@ -268,6 +295,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_status"] == "runtime_targets_missing"
     assert branch_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
     assert branch_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
+    assert (
+        branch_rows[0]["metadata"]["backend_runtime_outcome_receipt_id"]
+        == "runtime_outcome_1"
+    )
+    assert branch_rows[0]["metadata"]["backend_runtime_outcome_status"] == "runtime_outputs_harvested"
+    assert branch_rows[0]["metadata"]["backend_runtime_output_count"] == 2
     assert (
         branch_rows[0]["metadata"]["render_artifact_refs"]
         == ["/tmp/render_provider_1/lsd_vector_scene_config.json"]
@@ -295,3 +328,51 @@ def test_harvest_sim_synth_receipt_bundles_ignores_incomplete_dirs(tmp_path: Pat
     bundles = harvest_sim_synth_receipt_bundles([incomplete_dir])
 
     assert bundles == []
+
+
+def test_backend_selector_rows_prefer_external_runtime_outcomes_when_no_concrete_runtime() -> None:
+    bundles = [
+        {
+            "bundle_id": "bundle_1",
+            "world_state": {
+                "state_id": "sim_state_2",
+                "simulation_agenda": {"jobs": [{"job_id": "job_1"}]},
+                "physics_context": {
+                    "backend": "isaac",
+                    "fidelity_tier": "high_fidelity",
+                    "domain_randomization_regime": "benchmark_focus",
+                    "metadata": {},
+                },
+            },
+            "backend_runtime_bridge_receipt": {
+                "receipt_id": "bridge_2",
+                "bridge_status": "runtime_bridge_ready",
+                "execution_authority": "shadow_runtime",
+                "transport_profile": "isaaclab_unitree_dds_bridge",
+                "bridge_readiness_score": 0.8,
+                "metadata": {
+                    "runtime_target_contract": {"missing_required_target_ids": []}
+                },
+            },
+            "backend_runtime_launch_receipt": {
+                "receipt_id": "launch_2",
+                "launch_status": "launch_completed",
+                "executed": True,
+            },
+            "backend_runtime_outcome_receipt": {
+                "receipt_id": "outcome_runtime_2",
+                "outcome_status": "runtime_outputs_harvested",
+                "harvested_output_count": 4,
+            },
+            "backend_shadow_execution_receipt": {
+                "receipt_id": "shadow_2",
+                "execution_status": "shadow_work_order_materialized",
+            },
+        }
+    ]
+
+    rows = build_backend_selector_rows_from_receipts(bundles)
+
+    assert rows[0]["target_source"] == "external_runtime_outcome_receipt"
+    assert rows[0]["metadata"]["backend_runtime_outcome_receipt_id"] == "outcome_runtime_2"
+    assert rows[0]["metadata"]["backend_runtime_output_count"] == 4
