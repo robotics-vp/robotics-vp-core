@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 from .common import mapping, stable_id, strings
 from .receipts import BackendRuntimeLaunchReceipt, BackendRuntimeOutcomeReceipt
+from .runtime_outcome_parsers import summarize_runtime_output_artifacts
 
 
 ISAAC_OUTPUT_SOURCES = {
@@ -364,6 +365,7 @@ def harvest_backend_runtime_outcomes(
         "artifact_kind_counts": kind_counts,
         "source_summaries": source_summaries,
         "artifact_refs": harvested_artifacts,
+        "structured_outputs": summarize_runtime_output_artifacts(harvested_artifacts),
         "output_contract": contract,
     }
 
@@ -398,6 +400,7 @@ def build_backend_runtime_outcome_receipt(
             "launch_status": launch_receipt.launch_status,
             "artifact_kind_counts": mapping(summary.get("artifact_kind_counts")),
             "source_summaries": list(summary.get("source_summaries", []) or []),
+            "structured_outputs": mapping(summary.get("structured_outputs")),
             "output_contract": mapping(summary.get("output_contract")),
         },
     )

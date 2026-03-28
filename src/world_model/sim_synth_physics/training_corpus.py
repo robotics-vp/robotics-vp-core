@@ -417,6 +417,12 @@ def build_backend_selector_rows_from_receipts(
         backend_runtime_outcome_receipt = _mapping(
             bundle_mapping.get("backend_runtime_outcome_receipt")
         )
+        backend_runtime_outcome_metadata = _mapping(
+            backend_runtime_outcome_receipt.get("metadata")
+        )
+        structured_outputs = _mapping(
+            backend_runtime_outcome_metadata.get("structured_outputs")
+        )
         backend_shadow_execution_receipt = _mapping(
             bundle_mapping.get("backend_shadow_execution_receipt")
         )
@@ -535,6 +541,15 @@ def build_backend_selector_rows_from_receipts(
                     "backend_runtime_output_count": backend_runtime_outcome_receipt.get(
                         "harvested_output_count"
                     ),
+                    "backend_runtime_ready_surfaces": list(
+                        structured_outputs.get("ready_surfaces") or []
+                    ),
+                    "backend_runtime_primary_policy_ref": structured_outputs.get(
+                        "primary_policy_ref"
+                    ),
+                    "backend_runtime_metric_keys": list(
+                        structured_outputs.get("metric_keys") or []
+                    ),
                     "backend_shadow_execution_receipt_id": backend_shadow_execution_receipt.get("receipt_id"),
                     "backend_shadow_execution_status": backend_shadow_execution_receipt.get("execution_status"),
                     "calibration_receipt_id": calibration_receipt.get("receipt_id"),
@@ -592,6 +607,12 @@ def build_branch_planner_rows_from_receipts(
         )
         backend_runtime_outcome_receipt = _mapping(
             bundle_mapping.get("backend_runtime_outcome_receipt")
+        )
+        backend_runtime_outcome_metadata = _mapping(
+            backend_runtime_outcome_receipt.get("metadata")
+        )
+        structured_outputs = _mapping(
+            backend_runtime_outcome_metadata.get("structured_outputs")
         )
         for plan_index, plan in enumerate(_mapping_list(world_state.get("synthetic_branch_plans"))):
             plan_id = str(plan.get("plan_id", ""))
@@ -688,6 +709,15 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_output_count": backend_runtime_outcome_receipt.get(
                             "harvested_output_count"
+                        ),
+                        "backend_runtime_ready_surfaces": list(
+                            structured_outputs.get("ready_surfaces") or []
+                        ),
+                        "backend_runtime_primary_policy_ref": structured_outputs.get(
+                            "primary_policy_ref"
+                        ),
+                        "backend_runtime_metric_keys": list(
+                            structured_outputs.get("metric_keys") or []
                         ),
                         "render_provider_receipt_id": render_receipt.get("receipt_id"),
                         "render_artifact_refs": list(render_receipt.get("artifact_refs") or []),

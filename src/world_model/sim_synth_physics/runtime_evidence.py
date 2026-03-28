@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, Sequence
 
-from .common import mapping
+from .common import mapping, strings
 from .receipts import (
     BackendRuntimeExecutionReceipt,
     BackendRuntimeLaunchReceipt,
@@ -56,6 +56,12 @@ def summarize_runtime_evidence(
         if backend_runtime_outcome_receipt is None
         else backend_runtime_outcome_receipt.outcome_status
     )
+    structured_outputs = mapping(
+        {}
+        if backend_runtime_outcome_receipt is None
+        else backend_runtime_outcome_receipt.metadata.get("structured_outputs")
+    )
+    surface_ready = mapping(structured_outputs.get("surface_ready"))
     shadow_status = (
         "" if backend_shadow_execution_receipt is None else backend_shadow_execution_receipt.execution_status
     )
@@ -97,6 +103,11 @@ def summarize_runtime_evidence(
                 else backend_runtime_outcome_receipt.metadata.get("artifact_kind_counts")
             ).keys()
         ),
+        "runtime_output_ready_surfaces": strings(structured_outputs.get("ready_surfaces")),
+        "runtime_output_metric_keys": strings(structured_outputs.get("metric_keys")),
+        "runtime_policy_surface_ready": bool(surface_ready.get("policy_surface_ready", False)),
+        "runtime_dataset_surface_ready": bool(surface_ready.get("dataset_surface_ready", False)),
+        "runtime_deploy_surface_ready": bool(surface_ready.get("deploy_surface_ready", False)),
         "runtime_episode_count": (
             0
             if backend_runtime_execution_receipt is None

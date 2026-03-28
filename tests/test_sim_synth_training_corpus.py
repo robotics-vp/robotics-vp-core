@@ -191,6 +191,16 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                     "/tmp/unitree_sim_isaaclab/logs/run_1/metrics.json",
                     "/tmp/unitree_sim_isaaclab/logs/run_1/policy.onnx",
                 ],
+                "metadata": {
+                    "structured_outputs": {
+                        "ready_surfaces": [
+                            "metrics_surface_ready",
+                            "policy_surface_ready",
+                        ],
+                        "metric_keys": ["metrics.score"],
+                        "primary_policy_ref": "/tmp/unitree_sim_isaaclab/logs/run_1/policy.onnx",
+                    }
+                },
                 "version": "backend_runtime_outcome_receipt_v1",
             },
             indent=2,
@@ -285,6 +295,14 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     )
     assert backend_rows[0]["metadata"]["backend_runtime_outcome_status"] == "runtime_outputs_harvested"
     assert backend_rows[0]["metadata"]["backend_runtime_output_count"] == 2
+    assert backend_rows[0]["metadata"]["backend_runtime_ready_surfaces"] == [
+        "metrics_surface_ready",
+        "policy_surface_ready",
+    ]
+    assert backend_rows[0]["metadata"]["backend_runtime_primary_policy_ref"].endswith(
+        "policy.onnx"
+    )
+    assert backend_rows[0]["metadata"]["backend_runtime_metric_keys"] == ["metrics.score"]
 
     branch_rows = build_branch_planner_rows_from_receipts(bundles)
     assert branch_rows[0]["target_render_materialization_status"] == "scene_materialized"
@@ -301,6 +319,10 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     )
     assert branch_rows[0]["metadata"]["backend_runtime_outcome_status"] == "runtime_outputs_harvested"
     assert branch_rows[0]["metadata"]["backend_runtime_output_count"] == 2
+    assert branch_rows[0]["metadata"]["backend_runtime_ready_surfaces"] == [
+        "metrics_surface_ready",
+        "policy_surface_ready",
+    ]
     assert (
         branch_rows[0]["metadata"]["render_artifact_refs"]
         == ["/tmp/render_provider_1/lsd_vector_scene_config.json"]
@@ -363,6 +385,13 @@ def test_backend_selector_rows_prefer_external_runtime_outcomes_when_no_concrete
                 "receipt_id": "outcome_runtime_2",
                 "outcome_status": "runtime_outputs_harvested",
                 "harvested_output_count": 4,
+                "metadata": {
+                    "structured_outputs": {
+                        "ready_surfaces": ["dataset_surface_ready"],
+                        "metric_keys": [],
+                        "primary_policy_ref": "",
+                    }
+                },
             },
             "backend_shadow_execution_receipt": {
                 "receipt_id": "shadow_2",
@@ -376,3 +405,6 @@ def test_backend_selector_rows_prefer_external_runtime_outcomes_when_no_concrete
     assert rows[0]["target_source"] == "external_runtime_outcome_receipt"
     assert rows[0]["metadata"]["backend_runtime_outcome_receipt_id"] == "outcome_runtime_2"
     assert rows[0]["metadata"]["backend_runtime_output_count"] == 4
+    assert rows[0]["metadata"]["backend_runtime_ready_surfaces"] == [
+        "dataset_surface_ready"
+    ]

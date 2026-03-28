@@ -72,6 +72,18 @@ def test_runtime_outcomes_harvest_unitree_sim_outputs(tmp_path: Path) -> None:
     assert output_contract["profile_id"] == "unitree_sim_isaaclab"
     assert output_summary["outcome_status"] == "runtime_outputs_harvested"
     assert output_summary["harvested_output_count"] >= 3
+    assert (
+        output_summary["structured_outputs"]["surface_ready"]["policy_surface_ready"] is True
+    )
+    assert (
+        output_summary["structured_outputs"]["surface_ready"]["metrics_surface_ready"] is True
+    )
+    assert output_summary["structured_outputs"]["primary_policy_ref"].endswith("policy.onnx")
+    assert output_summary["structured_outputs"]["runtime_metrics_refs"]
     assert outcome_receipt.outcome_status == "runtime_outputs_harvested"
     assert outcome_receipt.harvested_output_count >= 3
     assert any(ref.endswith("metrics.json") for ref in outcome_receipt.artifact_refs)
+    assert (
+        outcome_receipt.metadata["structured_outputs"]["surface_ready"]["policy_surface_ready"]
+        is True
+    )

@@ -150,6 +150,13 @@ def test_build_backend_runtime_work_orders_marks_external_runtime_outputs_comple
         executed=True,
         harvested_output_count=3,
         artifact_refs=["/tmp/unitree_sim_isaaclab/logs/run_1/policy.onnx"],
+        metadata={
+            "structured_outputs": {
+                "ready_surfaces": ["policy_surface_ready"],
+                "metric_keys": [],
+                "primary_policy_ref": "/tmp/unitree_sim_isaaclab/logs/run_1/policy.onnx",
+            }
+        },
     )
 
     work_orders = build_backend_runtime_work_orders(
@@ -168,3 +175,6 @@ def test_build_backend_runtime_work_orders_marks_external_runtime_outputs_comple
         == "runtime_outcome_receipt_3"
     )
     assert work_orders[0].metadata["backend_runtime_output_count"] == 3
+    assert work_orders[0].metadata["backend_runtime_ready_surfaces"] == [
+        "policy_surface_ready"
+    ]

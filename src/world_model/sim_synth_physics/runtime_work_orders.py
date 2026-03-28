@@ -78,9 +78,16 @@ def _work_order_status(
 ) -> str:
     if bridge_receipt.execution_authority == "concrete_runtime":
         return "satisfied_by_concrete_runtime"
+    structured_outputs = mapping(
+        {}
+        if runtime_outcome_receipt is None
+        else runtime_outcome_receipt.metadata.get("structured_outputs")
+    )
+    ready_surfaces = strings(structured_outputs.get("ready_surfaces"))
     if (
         runtime_outcome_receipt is not None
         and str(runtime_outcome_receipt.outcome_status) == "runtime_outputs_harvested"
+        and ready_surfaces
     ):
         return "satisfied_by_external_runtime_outcomes"
     if missing_runtime_targets:
@@ -128,6 +135,10 @@ def build_backend_runtime_work_orders(
         else mapping(runtime_receipt.metadata).get("missing_preconditions")
     )
     runtime_metadata = {} if runtime_receipt is None else mapping(runtime_receipt.metadata)
+    outcome_metadata = (
+        {} if runtime_outcome_receipt is None else mapping(runtime_outcome_receipt.metadata)
+    )
+    structured_outputs = mapping(outcome_metadata.get("structured_outputs"))
     linked_backlog_ids = list(BACKEND_BACKLOG_IDS.get(backend, []))
     command_hints = _load_command_hints(linked_backlog_ids)
     launch_spec = mapping(runtime_metadata.get("launch_spec"))
@@ -189,6 +200,11 @@ def build_backend_runtime_work_orders(
                     if runtime_outcome_receipt is None
                     else runtime_outcome_receipt.harvested_output_count
                 ),
+                "backend_runtime_ready_surfaces": strings(structured_outputs.get("ready_surfaces")),
+                "backend_runtime_primary_policy_ref": str(
+                    structured_outputs.get("primary_policy_ref", "") or ""
+                ),
+                "backend_runtime_metric_keys": strings(structured_outputs.get("metric_keys")),
                 "execution_authority": bridge_receipt.execution_authority,
                 "transport_profile": bridge_receipt.transport_profile,
                 "bridge_readiness_score": bridge_receipt.bridge_readiness_score,
