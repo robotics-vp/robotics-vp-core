@@ -153,6 +153,8 @@ Status key:
 | Semantic state substrate | typed semantic state and meta-node context | `src/world_model/semantic_world_model.py` | `present` | still not a humanoid embodiment model |
 | Embodiment normalization | capability profiles, action/observation schema refs | `src/embodiment/registry.py`, `src/runtime/observation_adapter_v2.py`, `src/runtime/action_adapter_v2.py` | `partial` | fixed-base assumptions still dominate |
 | Whole-body embodiment state | torso, limbs, balance, contact, gait, dexterity | none canonical yet | `missing` | no G1/R1-class body state model |
+| Compute envelope / placement budgeting | onboard/companion compute headroom, reserve, placement class, QoS | none canonical yet | `missing` | compute is not yet canonical allocatable state |
+| Battery / power resource state | state of charge, reserve, discharge ceiling, allocatable spend, thermal coupling | none canonical yet | `missing` | current “energy” is not yet concrete battery-state truth |
 | Humanoid sim env integration | Unitree-class sim lane under typed backend contract | `src/envs/physics/isaac_backend.py`, `src/motor_backend/*` | `missing` | no real G1/R1 sim integration |
 | Perception / grounding for humanoids | egocentric + depth + 3D grounding + body-aware scene state | `src/vision/scene_ir_tracker/io/scene_tracks_runner.py`, `src/vision/reconstruction/four_d_reconstruction.py` | `partial` | GPU/SAM3D and canonical perception WM still pending |
 | Sensor fusion | IMU, proprio, camera, depth, force/torque fusion | `src/ingestion/x_humanoid_adapter.py`, `src/runtime/observation_adapter_v2.py` | `partial` | no real fusion stack yet |
@@ -180,6 +182,7 @@ The repo eventually needs benchmark classes beyond current workcell/manipulation
 | Human-proximate safety | robot must remain safe around people | sim with human model + later hardware | safety envelope refs, override traces | `missing` |
 | Sensor-dropout robustness | real sensing is imperfect | sim and later hardware | degraded-sensing flags, recovery traces | `missing` |
 | Companion-link degradation | onboard/offboard split must fail safely | hardware-in-loop or middleware emulation | comms QoS receipts, watchdog events | `missing` |
+| Compute-pressure / placement degradation | inferential and perception load must degrade safely under on-device limits | middleware emulation, sim, or later hardware | compute-envelope refs, placement receipts, degraded-mode traces | `missing` |
 | Battery / thermal degraded mode | long-horizon field behavior depends on resources | later hardware or hardware emulation | compute/battery telemetry refs, planning reactions | `missing` |
 | Workcell manipulation continuity | still useful as lower-tier manipulation check | current workcell envs | current replay + benchmark artifacts | `partial` |
 
@@ -190,6 +193,7 @@ Not every model needs to be large. The question is where scale is structurally r
 ### Modules likely to need materially more capacity
 
 - future embodiment / actuation WM encoders
+- compute-envelope / battery-forecast / placement models that must reason about real on-device resource pressure rather than abstract scalar budgets
 - whole-body control-conditioned policy heads
 - perception / grounding WM modules that fuse:
   - egocentric vision
@@ -218,6 +222,7 @@ Every lower-WM/submodule review should answer:
 2. Is the action space still implicitly gripper-scale?
 3. Does this model need to represent contact, balance, locomotion, and dexterity directly?
 4. Would increasing capacity here reduce real bottlenecks, or merely compensate for a missing lower-WM contract?
+5. Does this module assume onboard, companion, or offline/GPU compute that will not actually be available on the target robot?
 
 ## Environment Refit Requirements
 
@@ -263,6 +268,11 @@ Current contracts will need to grow to include:
 - spatial-state refs
 - comms/degradation status refs
 - battery/thermal/compute-pressure refs
+- compute-envelope refs
+- allocatable compute headroom
+- placement-class refs
+- battery reserve and discharge-budget refs
+- thermal-headroom refs
 
 ## Robot Asset And Calibration Checklist
 
@@ -284,11 +294,13 @@ Without this, runtime packets may be typed but still not anchored to a real robo
 Humanoid readiness requires explicit answers to:
 
 - what runs on-robot versus on companion compute
+- what inferential compute remains allocatable after servo, perception, and safety reservations
 - what latency budget each layer assumes
 - how ROS2 / DDS / Unitree SDK2 messages become canonical WM state
 - what happens on packet loss or stale perception
 - how watchdog events are emitted
 - how degraded-link mode enters replay and governance traces
+- how battery reserve and compute availability constrain placement and runtime policy
 
 ## Teleop And Recovery Checklist
 

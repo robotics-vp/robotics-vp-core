@@ -18,6 +18,7 @@
 - Treat each WM as a complete subsystem target: push canonical state, learned-package lanes, replay/receipt wiring, and production-loop integration until the honest remaining blockers are data, GPU budget, calibration assets, Unitree-class sim/hardware assets, or benchmark evidence.
 - For multi-WM work, explicitly rerun the deterministic-prior / heuristic audit inside each WM boundary; do not assume the earlier global heuristic purge already finished that job for every later WM module.
 - Treat V-JEPA 2 as an external/provider lane that belongs in both the Phase-1 sim/synth/physics WM and the later Phase-2 perception/grounding WM; prefer upstream `facebookresearch/vjepa2` integration where it beats local reimplementation, but keep it behind typed provider/runtime contracts and receipts.
+- Treat on-device inferential compute capacity and concrete battery state as lower-WM canonical resource contracts first; let the economic WM allocate them later and the meta-node layers govern them only after those lower contracts are real.
 - For the next cross-WM expansion beyond the current semantic/economic readiness work, see `docs/economic_world_model/multi_wm_architecture_plan.md`.
 
 ## Ontology Layering Rule
@@ -122,6 +123,29 @@ Mechanics-first advancement rule:
 - neuralization remains part of scalable mechanics rather than a separate luxury layer; learned control, prediction, adaptation, and routing should be made load-bearing as soon as the surrounding subsystem can carry them honestly
 - keep the scalable mechanics substrate ahead of non-load-bearing learned claims; if a phase is still missing executors, adapters, safety gates, replay exports, or live downstream consumers, that phase is still structurally incomplete even if training code already exists
 - do not let a higher WM treat a lower WM as canonical until the lower WM has crossed bounded runtime authority and is affecting the relevant downstream loop rather than merely being logged
+
+Compute and battery sequencing rule:
+
+- Phase 3 should emit canonical body-adjacent compute / battery / thermal / placement state and receipts
+- Phase 3.5 should audit whether those contracts and the submodule capacities behind them are realistic for G1/R1-class onboard and companion deployment
+- Phase 4A and 4E should make the runtime consequences real:
+  - control-rate changes
+  - offload decisions
+  - communication QoS
+  - degraded-mode behavior
+- Phase 5 should turn those lower-WM resource receipts into allocatable economic budget objects
+- only later should transport and meta-node layers learn over those allocations as higher-order governance objects
+
+Suggested RL staging for those resources:
+
+1. lower-WM prediction and calibration of compute availability, battery depletion, thermal posture, latency impact, and action feasibility
+2. bounded helper allocation under local constraints:
+   - backend choice
+   - fidelity choice
+   - simulation / diffusion spend
+   - defer versus execute
+3. economic-WM cross-resource tradeoffs
+4. later meta-node Pareto policy over economic allocation receipts
 
 Suggested weekly WM order for the first training season:
 

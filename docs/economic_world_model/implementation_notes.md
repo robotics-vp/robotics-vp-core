@@ -2,6 +2,27 @@
 
 ## 2026-03-27
 
+- Refined the roadmap doctrine for compute and battery as first-class allocatable resources:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now places inferential compute capacity / availability and concrete battery state earlier than the economic WM:
+    - Phase 3 owns canonical embodiment/deployment-adjacent resource state
+    - Phase 3.5 audits G1/R1-capacity realism for those contracts
+    - Phase 4A / 4E make their runtime and communication consequences real
+    - Phase 5 later turns them into allocatable economic objects
+    - transport and meta-node layers only learn over those receipts later
+  - the plan now explicitly names the kinds of state and behavior to instantiate:
+    - compute envelope
+    - battery / reserve / thermal posture
+    - placement class
+    - allocatable headroom
+    - QoS / degraded-mode receipts
+    - resource-aware backend / fidelity / inference decisions
+- Updated the related planning artifacts:
+  - `docs/economic_world_model/roadmap.md` now includes an explicit sequencing and staged-RL rule for compute/battery resource handling
+  - `docs/economic_world_model/humanoid_target_readiness.md` now includes compute-envelope / placement readiness, concrete battery-state readiness, and compute-pressure degradation as explicit humanoid-target checklist items
+- Why this matters:
+  - it keeps the roadmap aligned with the branch’s core doctrine that lower WMs own replayable typed state first, while the economic WM later governs over those contracts instead of inventing them
+  - it also makes “energy” concrete in a way that will matter later for Unitree-class deployment, offload decisions, and bounded inferential spend
+
 - Added OSS-shaped runtime-layout and policy contracts inside Phase 1:
   - `src/world_model/sim_synth_physics/runtime_layouts.py` now scans for backend runtime layouts and policy banks rather than only generic root existence
   - for Isaac/Unitree it recognizes `IsaacLab`, `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, `xr_teleoperate`, and Unitree asset/policy roots

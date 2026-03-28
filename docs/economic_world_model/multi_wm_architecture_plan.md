@@ -570,6 +570,50 @@ That means the architecture must eventually make explicit:
 - how ROS2 / DDS / Unitree SDK2 or equivalent middleware is bridged into canonical WM state
 - how battery, thermal, and compute-pressure receipts feed back into planning and economics
 
+### Compute and battery resource doctrine
+
+For humanoid-target readiness, inferential compute capacity / availability and concrete battery availability should become first-class lower-WM resource state before they become economic-WM or meta-node allocation variables.
+
+Sequencing rule:
+
+- Phase 3 should own canonical `ComputeEnvelopeState` / `BatteryState`-style state plus associated thermal, reserve, placement, and QoS receipts
+- Phase 3.5 should audit whether those schemas and model-capacity assumptions are actually plausible for G1/R1-class onboard and companion compute
+- Phase 4A and Phase 4E should make the timing, placement, communication, and degraded-mode consequences real in the runtime loop
+- Phase 5 should turn those lower-WM contracts into allocatable economic budget objects for inference, routing, simulation, diffusion, data collection, training, and conservation
+- Phase 6 and later phases should preserve and govern those resource receipts, not invent raw compute or battery state at the top of the stack
+
+Behavior should be staged across three levels:
+
+- lower-WM state:
+  - availability
+  - reserve
+  - thermal / health posture
+  - allocatable headroom
+  - placement class
+  - timing / QoS assumptions
+- bounded helper behavior:
+  - backend selection
+  - fidelity selection
+  - diffusion ordering
+  - synthetic-branch admission
+  - runtime launch planning
+  - inferential work-order formation
+- later economic / meta behavior:
+  - cross-resource allocation
+  - conservation versus spend
+  - tradeoffs between battery spend, compute spend, expected yield, safety, and governance satisfaction
+
+The RL structure should also be staged rather than monolithic:
+
+- lower-WM learning should predict and calibrate compute headroom, battery depletion, latency impact, thermal posture, and action feasibility under resource pressure
+- bounded helper seams should learn local allocation under those constraints:
+  - which branches to simulate
+  - which backend or fidelity to choose
+  - when to defer expensive inference
+  - when to conserve battery or stay companion-heavy
+- the economic WM should later learn cross-resource tradeoffs over those lower-WM contracts
+- only after those layers are stable should the later meta-node/superposition layers learn higher-order Pareto policy over those resource receipts
+
 ### Asset and calibration implication
 
 Humanoid-target readiness also requires a named robot-asset and calibration discipline.
@@ -1126,11 +1170,40 @@ Why needed:
 
 Phase outcome:
 
-- action feasibility, embodiment capability, latency, and control envelopes become first-class typed state
+- action feasibility, embodiment capability, latency, control envelopes, and body-adjacent compute / battery / thermal resource state become first-class typed state
+
+Canonical state additions for this phase:
+
+- `ComputeEnvelopeState`-style contracts for:
+  - onboard compute availability
+  - companion compute availability
+  - allocatable headroom
+  - placement class
+  - latency / QoS envelope
+  - thermal pressure
+- `BatteryState`-style contracts for:
+  - state of charge
+  - reserve policy
+  - discharge ceiling
+  - recharge / recovery posture
+  - battery-health posture
+  - allocatable spend budget
+- typed resource receipts tying those states back to:
+  - action feasibility
+  - control-rate feasibility
+  - adapter/backend choice
+  - degraded-mode posture
+
+Recommended additive module targets:
+
+- embodiment-side compute-envelope and battery-state modules
+- thermal / resource-forecasting modules
+- placement / QoS receipt modules
+- resource-aware capability and action-feasibility helpers
 
 Neuralization rule from tranche 1:
 
-- embodiment WM should expose bounded learned seams for capability estimation, action-feasibility scoring, latency-envelope prediction, and backend/robot adapter selection immediately
+- embodiment WM should expose bounded learned seams for capability estimation, action-feasibility scoring, latency-envelope prediction, compute-headroom prediction, battery / thermal forecasting, and backend/robot adapter selection immediately
 - fallback heuristics may remain only as explicit priors with helper traces and promotion posture
 
 Complete-subsystem rule:
@@ -1167,9 +1240,14 @@ What this phase should deliver:
 
 - a model-capacity review across lower WMs and submodule models
 - an explicit list of modules that can stay compact versus modules that must scale
+- explicit compute-envelope and battery-budget assumptions for G1/R1-class onboard and companion deployments
 - revised humanoid-facing observation/action/schema requirements
 - an environment roadmap that reclassifies current workcell/tabletop envs as partial domains rather than full humanoid proxies
 - a named plan for integrating Unitree G1/R1 simulation environments into the sim/synth/physics stack through typed backend adapters rather than ad hoc env forks
+- a resource-placement review for which modules can plausibly run:
+  - on-robot
+  - on companion compute
+  - only in offline or scheduled GPU windows
 - named future envs or env families for:
   - locomotion + manipulation
   - balance-constrained reaching
@@ -1183,7 +1261,14 @@ Minimum outputs:
 
 - `humanoid_target_readiness.md`-style architecture note or equivalent roadmap artifact
 - capacity budgets or scaling bands for key lower-WM modules
+- capacity budgets or scaling bands under explicit onboard-compute, companion-compute, and battery-discharge assumptions
 - canonical schema deltas needed for proprioception, IMU, force/torque, safety, and spatial state
+- canonical schema deltas needed for:
+  - compute envelope
+  - placement class
+  - allocatable compute headroom
+  - battery reserve
+  - discharge / thermal posture
 - a concrete Unitree sim-env integration target:
   - backend choice
   - robot description source
@@ -1201,6 +1286,7 @@ Preconditions:
 - initial embodiment WM contract draft
 - initial perception WM contract draft
 - identified target hardware assumptions for Unitree-class robots
+- initial onboard / companion compute and battery assumptions for the target Unitree-class robots
 
 Reference artifact:
 
@@ -1236,6 +1322,12 @@ Preconditions:
 
 - Embodiment / actuation WM with typed action semantics
 - target robot control interface
+
+Concrete resource behavior to instantiate:
+
+- servo / reflex rates must respond honestly to compute headroom, battery reserve, and thermal posture rather than assuming a fixed always-on budget
+- degraded-rate, conservative-mode, or offload decisions should emit typed receipts rather than remain hidden controller behavior
+- the real-time lane should preserve which control work must remain on-robot versus what can be delayed, offloaded, or skipped under resource pressure
 
 ### Phase 4B - Sensor Fusion Shim
 
@@ -1328,6 +1420,17 @@ Preconditions:
 - timing metadata must be part of canonical state
 - deployment targets must be explicit about onboard vs companion compute
 
+Concrete resource behavior to instantiate:
+
+- middleware should transport canonical compute-envelope and battery-state receipts rather than just opaque health bits
+- placement decisions should become replayable artifacts:
+  - what ran on robot
+  - what ran on companion
+  - what was skipped or deferred
+  - why
+- communication QoS and stale-data consequences should feed back into resource allocation posture rather than being tracked as a separate operational concern
+- inferential work orders, simulation requests, and expensive provider calls should be checked against live compute and battery availability before they are treated as executable
+
 ### Phase 4F - Operator / Teleop / Recovery Fallback Layer
 
 Objective:
@@ -1358,6 +1461,22 @@ Key changes in this phase:
 - consume `SimSynthPhysicsWorldState`, perception state, and embodiment state directly
 - train on lower-WM receipts and cross-WM counterfactuals
 - condition meta-transformer and higher planners on lower-WM canonical contracts instead of only derived summary vectors
+- consume lower-WM compute-envelope, battery, thermal, reserve, and placement receipts directly instead of treating them as vague “energy” side notes
+- turn compute and battery into allocatable budget objects that can shape:
+  - inference spend
+  - routing
+  - simulation
+  - diffusion
+  - data collection
+  - conservation
+  - inferential work orders
+
+Recommended module families in this phase:
+
+- economic resource-budgeting and allocation modules
+- compute-allocation critics and spend/conserve helpers
+- battery-allocation and reserve-policy helpers
+- cross-resource tradeoff models conditioned on lower-WM receipts
 
 Neuralization rule from tranche 1:
 
@@ -1414,6 +1533,7 @@ Examples:
 - `SemanticWorldModelState` -> `SimSynthPhysicsWorldState`
 - lower WMs -> economic WM state
 - economic WM state -> meta-node control WM state
+- embodiment WM compute/battery state -> economic WM allocation state
 
 ### Recommended module posture
 
@@ -1529,6 +1649,7 @@ What it should learn over:
 
 - economic WM receipts
 - lower-WM readiness and uncertainty
+- lower-WM compute-allocation and battery-allocation receipts
 - counterfactual governance outcomes
 - meta-node action histories
 - cross-WM transport quality

@@ -2,6 +2,24 @@
 
 ## 2026-03-27
 
+- Changed: refined the multi-WM roadmap so inferential compute capacity and concrete battery state are now treated as early lower-WM resource contracts rather than late economic-only abstractions:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now says compute / battery should enter first as canonical embodiment/deployment state, then become allocatable economic-WM budget objects, then only later become transport/meta-node governance inputs
+  - Phase 3 now explicitly calls for `ComputeEnvelopeState` / `BatteryState`-style canonical state, resource forecasting, placement/QoS receipts, and resource-aware learned seams
+  - Phase 3.5 now explicitly requires onboard/companion compute and battery-budget assumptions in the G1/R1 capacity audit
+  - Phase 4A / 4E now explicitly make control-rate, offload, placement, and degraded-mode consequences real instead of treating compute and battery as background commentary
+  - Phase 5 now explicitly turns compute and battery into allocatable economic budget objects for inference, routing, simulation, diffusion, data collection, and conservation
+- Changed: updated `docs/economic_world_model/roadmap.md` and `docs/economic_world_model/humanoid_target_readiness.md` to match:
+  - the roadmap now carries a staged RL doctrine for these resources:
+    - lower-WM prediction / calibration
+    - bounded local allocation
+    - economic cross-resource tradeoffs
+    - only later meta-node Pareto policy
+  - the humanoid-readiness checklist and benchmark matrix now include compute-envelope / placement budgeting, concrete battery-state contracts, and compute-pressure degradation as explicit readiness surfaces
+- Why this matters:
+  - it keeps compute and battery from showing up first as vague “energy” or “econ tensor” concerns
+  - it also gives the roadmap a better anti-fake-standup rule: lower WMs and deployment layers must make these constraints real before higher layers are allowed to optimize over them
+- Verification: `git diff --check` passed. This was a docs-only refinement.
+
 - Changed: made the remaining Phase-1 runtime-root / policy gap more operational by teaching the WM to recognize OSS-shaped runtime layouts and policy banks:
   - added `src/world_model/sim_synth_physics/runtime_layouts.py` plus `scripts/scan_phase1_runtime_layouts.py`
   - Isaac/Unitree lanes now detect layout and policy posture for `IsaacLab`, `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, `xr_teleoperate`, and Unitree asset/policy roots instead of flattening everything into a generic runtime-target bit
