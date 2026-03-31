@@ -423,6 +423,37 @@ The sequencing remains:
 
 That sequencing should not be inverted by introducing a premature ontology mother-layer.
 
+### 3. Datapack Mereotopology / Experience Composition Layer
+
+Alongside operational ontology and WM-transport ontology, the stack also needs an explicit way to represent **experience composition** as a structured object.
+
+This layer defines:
+- source slices
+- transformed descendants
+- part-whole relations
+- temporal insertion order
+- lineage across WMs
+- validation and admission history
+- replay/training/deployment touch history
+- functional role tags such as:
+  - grounding
+  - semantic prior
+  - robustness expansion
+  - calibration evidence
+  - embodiment relevance
+  - deployment realism
+  - counterfactual branch value
+  - economic-yield relevance
+
+Epiplexity should help shape this layer by providing architectural and functional learnings around:
+- structure under bounded compute
+- useful compression versus dead accumulation
+- what kinds of artifact slices actually support later learning or control
+- how to distinguish high-volume but low-yield data from compact but high-yield structured evidence
+- how source slices differ not just by origin but by the degree to which they preserve action-relevant structure across transformations
+
+If typed canonical surfaces prevent collapse into one uninterpretable mother latent, this new layer should prevent collapse into an uninterpretable **bag of experience**.
+
 ## Topology
 
 ```mermaid
@@ -973,6 +1004,13 @@ The WM should emit:
 - simulation agenda
 - diffusion conditioning plan
 - synthetic branch plan
+- composition-aware receipts for synthetic artifacts
+- source-slice receipts for synthetic branches
+- lineage from seed artifacts to transformed branches
+- branch role tags (robustness expansion, counterfactual exploration, physics stress test, rare-event coverage, policy-refinement candidate)
+- branch-level epiplexity-style estimates of structured informational yield
+- branch-level estimates of whether the synthetic artifact contributes usable structure or merely volume
+- functional contribution estimates (robustness yield, coverage gain, policy-improvement likelihood, deployment realism confidence, embodiment transfer plausibility)
 - backend/fidelity choice receipt
 - physics adaptation receipt
 - backend execution binding receipt
@@ -1015,7 +1053,11 @@ Do start with bounded learned helper seams in Phase 1A / 1B itself rather than a
 - branch-value / branch-yield prediction
 - physics-calibration confidence prediction
 
-For this phase, heuristics are only acceptable as explicit priors with fallback semantics and receipt traces.
+For this phase, heuristics are only acceptable as explicit priors with fallback semantics and receipt traces. 
+
+Epiplexity should be used here both architecturally and functionally:
+- architecturally, to inform how synthetic branch structure is represented and ranked
+- functionally, to help estimate whether a branch is actually likely to improve future control, replay value, or data utility
 
 Only after the receipt density is real should the WM expand into:
 
@@ -1127,6 +1169,18 @@ Why after Phase 1:
 Phase outcome:
 
 - one canonical scene/grounding state surface feeding semantic, embodiment, and sim WMs
+- emitted contribution estimates including:
+  - grounding weight
+  - semantic yield
+  - calibration confidence
+  - action-relevance prior
+  - novelty versus redundancy
+  - whether a perception slice is actually preserving actionable structure through temporal grounding and uncertainty estimates
+
+Epiplexity should be invoked here as a way to reason about:
+- how much structured usable information the grounded scene representation is preserving
+- whether a representation is compressing the right invariants for later action, rather than just accumulating descriptive detail
+- how temporal grounding and future-predictive state contribute to learnable structure under bounded compute
 
 Neuralization rule from tranche 1:
 
@@ -1173,6 +1227,18 @@ Why needed:
 Phase outcome:
 
 - action feasibility, embodiment capability, latency, control envelopes, and body-adjacent compute / battery / thermal resource state become first-class typed state
+- emitted contribution estimates including:
+  - embodiment relevance
+  - action-feasibility contribution
+  - latency-feasibility contribution
+  - deployment-legibility contribution
+  - resource-feasibility adjusted value
+  - hardware-transfer likelihood
+
+Epiplexity should be brought in here too:
+- the stack should prefer source slices and trajectories that preserve actionable structure for embodied control rather than generic descriptive richness
+- source parts should be judged partly by whether they compress the right structure for execution under compute, battery, thermal, and latency limits
+- this is where epiplexity should help separate data that is interesting to observe from data that is actually usable for bodily control
 
 Canonical state additions for this phase:
 
@@ -1460,7 +1526,11 @@ This phase is where the current economic-WM work graduates from “strong middle
 
 Key changes in this phase:
 
-- consume `SimSynthPhysicsWorldState`, perception state, and embodiment state directly
+- explicitly consume **mereotopological datapack objects**, not only flat summary fields or ordinary receipts
+- consume `SimSynthPhysicsWorldState`, perception state, and embodiment state directly, preserving provenance and functional contribution compositions
+- allocate not only over datapacks, but over **compositions of datapacks**, learning which source mixtures are favorable under the active multi-variate economic criterion
+- score marginal utility of candidate mixtures under throughput, safety, energy, error, labor, compute, battery, and deployment constraints
+- use epiplexity-informed estimates of structured usable information as part of the allocator and critic logic
 - train on lower-WM receipts and cross-WM counterfactuals
 - condition meta-transformer and higher planners on lower-WM canonical contracts instead of only derived summary vectors
 - consume lower-WM compute-envelope, battery, thermal, reserve, and placement receipts directly instead of treating them as vague “energy” side notes
@@ -1735,6 +1805,59 @@ Preconditions:
 - lower WMs, economic WM, and the meta-node stack are structurally real enough that weekly execution burns down real learning/deployment debt rather than discovering missing architecture every week
 - recurring replay/corpus/training/promotion paths already exist in canonical form
 - the remaining important external/provider/training/run backlogs are visible and enumerable
+
+## Neural / RL Architecture for Datapacks
+
+This mereotopological treatment requires an explicit neural and RL architecture, not just schema definitions.
+
+### Lower-WM Local Contribution Encoders
+
+Each lower WM owns bounded learned modules that predict local contribution, because each understands the local meaning of its own source slices better than the Economic WM can reconstruct later. These encoders use epiplexity-inspired features (e.g., structured informational yield, learnability under bounded compute, and preservation of action-relevant invariants) to predict marginal increases in usable structure rather than raw data mass.
+
+- **Perception / Grounding Contribution Encoder**: predicts grounding contribution, semantic yield, calibration value, action relevance, and novelty/redundancy.
+- **Sim / Synth / Physics Branch Contribution Encoder**: predicts robustness contribution, counterfactual utility, coverage gain, policy-improvement likelihood, and plausibility confidence.
+- **Embodiment Contribution Encoder**: predicts embodiment relevance, real-control utility, transfer-to-hardware likelihood, and resource-feasibility adjusted value.
+
+### Cross-WM Datapack Composition Network
+
+A dedicated **Datapack Composition Network** (or Mereotopological Datapack Encoder) aggregates source slices, transformation lineage, temporal order, WM crossing history, validation/admission history, lower-WM contribution vectors, and active objective context. 
+
+This must be a **heterogeneous graph / set / temporal structure**, not a flat MLP:
+- Graph for part-whole and lineage edges (e.g., derived-from, temporally-precedes, emitted-by-WM, validated-by, admitted-to, contributed-to-datapack, consumed-by-training-run).
+- Temporal positional structure for 4D order.
+- Attention or set-style pooling for variable datapack size.
+- Objective-conditioning so the active objective changes how the datapack is read.
+
+Outputs include the datapack embedding, provenance composition, functional contribution composition, predicted marginal utility under the active objective tensor, confidence, and recommended use class (e.g., replay only, benchmark only, train now, hold for calibration, use for sim expansion, use for policy refinement, reject/archive). Epiplexity helps this composition network learn which substructures within a datapack are high-yield, compressible, actionable, and worth preserving or amplifying.
+
+### Economic WM Utility Critics and Allocators
+
+The Economic WM learns three families of critics/allocators over these compositions:
+
+1. **Datapack Utility Critic**: predicts expected marginal gain under the active economic objective.
+2. **Source-Mixture Allocator**: chooses among candidate datapack mixtures or target composition profiles under constraints.
+3. **Counterfactual Composition Critic**: estimates what would happen if a mixture were reweighted toward real grounding, toward synthetic robustness, toward embodiment-heavy traces, etc.
+
+Epiplexity is a major conditioning signal here to estimate how much structured usable information a candidate composition makes available for learning, control, and deployment.
+
+### Feedback Loops
+
+The idea is not real unless it closes loops:
+1. Lower-WM receipts update the mereotopological datapack composition object.
+2. The Economic WM allocates over those composed datapacks.
+3. Economic WM decisions request future source-mixture acquisition, simulation, or generation (biasing branch generation toward compositions likely to increase structured usable information).
+4. Training and deployment outcomes recalibrate lower-WM contribution estimates. Training results feed back into whether prior epiplexity estimates were actually predictive of downstream value.
+5. Real deployment corrects overvalued simulated or semantic-heavy compositions, refining which kinds of structured complexity were genuinely useful versus decorative.
+6. Counterfactual comparisons between chosen and unchosen compositions supervise the allocator and critic stack.
+
+### Sequencing
+
+This mereotopological treatment is introduced **now** as a Phase-1-through-Phase-5 doctrine, not a late-stage conceptual embellishment:
+- **Phase 1** reserves the schema and first receipts for branch composition.
+- **Phase 2** deepens grounding-side contribution modeling.
+- **Phase 3** deepens embodiment and resource-conditioned contribution modeling.
+- **Phase 5** culminates this structural work, where full economic allocation over composed datapacks becomes load-bearing.
+- Later transport and meta-node layers must preserve these structures rather than flattening them away.
 
 ## OSS Dependency Map
 

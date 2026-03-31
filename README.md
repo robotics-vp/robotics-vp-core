@@ -78,6 +78,8 @@ In this stack, **"typed"** is the primary defense against the "mother-latent" tr
 
 **These contracts are the typed surfaces that keep perception, simulation, control, economics, and governance legible to one another as the robot learns and deploys.** This ensures that critical metadata—like geometry, uncertainty, and safety boundaries—survive translation across models, allowing the Economic WM and governance nodes to audit and allocate resources based on legible reality rather than black-box approximations.
 
+Additionally, datapacks are treated as structured composite objects whose source parts, transformation lineage, and functional contributions are tracked across WMs and later allocated under economic objectives. Epiplexity helps govern which compositions preserve the most actionable structure under constrained compute, training, and deployment conditions.
+
 Each WM serves a concrete function in making the robot ready for deployment:
 
 1. **Perception / grounding WM**: turns raw sensor/video streams into stable scene state the robot can actually act on.

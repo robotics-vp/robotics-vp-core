@@ -21,6 +21,18 @@
 - Treat on-device inferential compute capacity and concrete battery state as lower-WM canonical resource contracts first; let the economic WM allocate them later and the meta-node layers govern them only after those lower contracts are real.
 - For the next cross-WM expansion beyond the current semantic/economic readiness work, see `docs/economic_world_model/multi_wm_architecture_plan.md`.
 
+## Mereotopological Datapack Rule
+
+Treat every datapack as a structured composite object, not a flat bag of trajectories or simple source buckets like "real / sim / video." This requires preserving source lineage, transformation lineage, WM-touch history, and temporal insertion order. Preserve two distinct decompositions:
+1. **Material provenance composition**: what percentage of the datapack materially came from real data, sim, video priors, synthetic branches, or transformed artifacts.
+2. **Functional contribution composition**: what percentage of the datapack’s useful effect came from grounding, semantic compression, robustness expansion, counterfactual exploration, or embodiment relevance.
+
+Evaluate datapacks under the currently active objective/economic manifold. Do not overfit the stack to arbitrary source categories; the question is not "how much sim?" or "how much real?" in isolation, but what each part contributed to the loop under current constraints. 
+
+Epiplexity should be used as a major input for this reasoning: datapacks should be judged partly by the structured usable information they contain under bounded compute, bounded embodiment, bounded time, and bounded deployment constraints. Epiplexity is not just an auxiliary ranking trick, but one of the main ways the stack estimates structured informational yield, marginal learnability, compression of actionable structure, and whether a candidate branch genuinely increases usable order versus just adding volume or noise. 
+
+This is a standing doctrine from Phase 1 onward, integrating directly into the logic of lower-WM state ownership, bounded seams, and later economic ingestion.
+
 ## Ontology Layering Rule
 
 Keep two ontology layers explicit throughout roadmap work.
