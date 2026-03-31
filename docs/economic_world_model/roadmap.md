@@ -59,6 +59,43 @@ Current honest state:
 - it does not yet have a full WM-transport ontology implementation
 - keep the current sequencing: lower WMs first, then economic WM consolidation, then ontology-mediated WM transport
 
+## Open-Vocabulary Segmentation / Concept-Tracking Provider Rule
+
+- the stack should reserve explicit provider/runtime contracts for open-vocabulary segmentation and concept-conditioned video tracking
+- SAM 3 / 3.1 is the preferred initial provider lane for this capability
+- these capabilities should not remain implicit inside ad hoc labeling code, weak placeholder analyzers, or opaque teacher-sidecars
+- concept-conditioned segmentation and tracking should become typed, replayable, provider-truthed artifacts
+- those artifacts should be consumable by:
+  - Perception / Grounding WM
+  - Sim / Synth / Physics WM branch evaluation
+  - rollout labeling / annotation
+  - semantic evidence
+  - later embodiment-facing object memory and humanoid egocentric perception
+- the doctrine should remain consistent with the repo’s anti-stub posture:
+  - prefer **real-or-unavailable**
+  - use explicit `stub` posture only for smoke/scaffolding
+  - record provider truth honestly
+  - do not let weak placeholders silently masquerade as semantic capability
+
+SAM 3 / 3.1 should be treated as part of **provider bring-up / OSS backlog discipline**:
+- if weights, runtime environment, GPU, or packaging are not yet available, this should be recorded explicitly in provider-backlog form (e.g. image vs video predictor paths, memory/multiplex mode readiness)
+- but the contracts and roadmap placement should still be real now
+- do not leave this in an unowned “we’ll figure it out later” state
+
+## Semantic Analysis Anti-Stub Rule
+
+- `SemanticVLA` should either become a real provider-backed semantic-analysis layer or be explicitly demoted to scaffolding-only status
+- the stack should not continue to pretend a semantic-analysis capability exists when the current implementation is only placeholder extraction
+- semantic interpretation should be decomposed into real surfaces such as:
+  - open-vocabulary concept segmentation / tracking
+  - teacher/runtime action semantics
+  - scene/object canonicalization
+  - affordance / object-role inference
+  - primitive/action segmentation
+  - annotation and semantic evidence fusion
+
+In roadmap/backlog terms, this means **real semantic-analysis replacement / successor to `SemanticVLA`** must be treated as a provider bring-up item. Possible sources could include stronger teacher/runtime analyzers, object-centric grounding plus affordance extraction over canonical state, or future VLM/VLA proposal providers. If the best provider is not yet settled, the docs should state that honestly, keeping `SemanticVLA` as an explicit weak link and roadmap replacement target until resolved. The future posture is a composition of specific layers, not one monolithic "semantic VLA".
+
 ## Program Calendar
 
 Assumed dates for this roadmap:

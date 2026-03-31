@@ -1160,6 +1160,53 @@ The WM should own:
 Objective:
 
 - turn the current vision, scene-tracks, map-first, teacher-runtime, and grounding path into one canonical perception/grounding WM
+- explicitly bring up SAM 3 / 3.1 as an external/provider lane for open-vocabulary concept segmentation and video tracking
+
+#### Open-Vocabulary Concept Segmentation and Video Tracking
+
+The future Perception / Grounding WM should own canonical state for:
+- concept-conditioned object masks
+- prompt-conditioned instance sets (text/exemplar/box/point/mask)
+- object identity persistence over video and concept-track memory
+- uncertainty / confidence for concept-conditioned object grounding
+- object-presence / object-absence evidence and prompt satisfaction confidence
+- fused object-node state once SAM outputs are merged with geometry and scene-tracks
+
+**SAM 3 / 3.1** is the initial named provider for this lane. Its object-multiplex story is uniquely relevant for high-object-count, longer-horizon video memory (cluttered real scenes, synthetic branch evaluation, and humanoid-facing egocentric perception). However, it belongs *under* the Perception / Grounding WM rather than as a free-floating utility.
+
+#### Provider Ownership Boundaries
+
+- SAM 3 / 3.1 remains an **external provider**.
+- The Perception / Grounding WM owns the **canonical downstream object state**.
+- Raw SAM outputs are not the final semantic truth surface. The WM fuses those outputs with SceneTracks, object refs, semantic catalogs, geometry/depth, temporal continuity, and later embodiment-facing relevance.
+- This prevents collapse into a new unowned "mask blob" layer. Concept segmentation enters via typed provider contracts and becomes canonical Perception-WM state.
+
+#### SAM 3 / 3.1 vs. SIMA-2
+
+These are not the same function.
+- **SAM 3 / 3.1**: visual/concept segmentation, promptable instance discovery, video object tracking/memory, mask-level object evidence.
+- **SIMA-2-style logic (current repo)**: action/primitive segmentation, robot-state/event-driven phase extraction, behavioral manipulation primitive structure.
+
+SAM supersedes weak visual semantic segmentation placeholders, but it **does not** replace action/primitive segmentation wholesale. Future stack work will crosswire them: visual object state informs primitive labeling, and primitive segmentation defines behavioral events.
+
+#### Annotation, Semantic Evidence, and Rollout Labeling
+
+SAM-backed concept segmentation and tracking should feed:
+- rollout labeling
+- semantic evidence sidecars and object refs
+- affordance hints and scene object catalogs
+- annotation bundles and later training/export paths
+
+These systems must consume canonicalized or provider-truthed outputs, not define semantic truth by themselves.
+
+#### Impact on Sim / Synth / Physics WM (Phase 1)
+
+Phase 1 cross-dependency: The Sim/Synth WM explicitly **consumes** (but does not own canonically) concept-conditioned segmentation and tracking results for:
+- synthetic branch evaluation, admissibility, and quality scoring
+- object-preservation checks and real-vs-sim object-topology comparisons
+- prompt-conditioned synthetic annotation and branch outcome labeling
+
+Phase 1 reserves typed contracts for these receipts, evaluating synthetic outputs through a shared concept-segmentation vocabulary where possible.
 
 Why after Phase 1:
 
@@ -1323,6 +1370,7 @@ What this phase should deliver:
   - dexterous hand tasks
   - mobile navigation + task execution
   - contact disturbance and recovery
+- SAM 3 / 3.1 is explicitly treated as a major egocentric visual provider for object-centric perception in cluttered/mobile scenes. While useful for high-object-count tracking, it is not sufficient by itself for humanoid readiness; it must be fused with depth, proprioception, IMU / body state, contact state, spatial mapping, latency limits, and compute ceilings.
 - do not advance beyond this refit until the remaining uncertainty is genuinely about assets, datasets, and benchmark evidence rather than carrying forward wrong environment assumptions
 
 Minimum outputs:
@@ -1530,6 +1578,7 @@ Key changes in this phase:
 - consume `SimSynthPhysicsWorldState`, perception state, and embodiment state directly, preserving provenance and functional contribution compositions
 - allocate not only over datapacks, but over **compositions of datapacks**, learning which source mixtures are favorable under the active multi-variate economic criterion
 - score marginal utility of candidate mixtures under throughput, safety, energy, error, labor, compute, battery, and deployment constraints
+- consume additional economic receipts from the SAM/Perception lane: segmentation quality, tracking continuity, object-presence confidence, prompt-grounding confidence, concept-persistence quality, synthetic-vs-real alignment signals based on concept segmentation, and related calibration/runtime costs
 - use epiplexity-informed estimates of structured usable information as part of the allocator and critic logic
 - train on lower-WM receipts and cross-WM counterfactuals
 - condition meta-transformer and higher planners on lower-WM canonical contracts instead of only derived summary vectors
@@ -1858,6 +1907,50 @@ This mereotopological treatment is introduced **now** as a Phase-1-through-Phase
 - **Phase 3** deepens embodiment and resource-conditioned contribution modeling.
 - **Phase 5** culminates this structural work, where full economic allocation over composed datapacks becomes load-bearing.
 - Later transport and meta-node layers must preserve these structures rather than flattening them away.
+
+### Provider / Runtime Layer Contracts
+
+A new provider/runtime family for SAM 3 / 3.1 is required:
+- `src/vision/sam3_runtime.py`
+- `src/vision/sam3_provider.py`
+- `src/vision/sam3_contracts.py`
+- `src/vision/sam3_truth.py`
+
+Explicit typed contracts must include:
+- `ConceptSegmentationRequest`
+- `ConceptSegmentationResult`
+- `ConceptTrackState`
+- `ConceptTrackReceipt`
+- `SegmentationProviderTruth`
+
+Fields should cover: prompt modality (text, exemplar, box, point, mask), prompt payload refs, frame/clip refs, masks, boxes, instance IDs, per-object confidence, persistence confidence, object-presence/absence signals, runtime latency, backend selected, checkpoint version, model posture / fallback truth, memory mode or multiplex mode, calibration/readiness/artifact refs.
+
+### Explicit Tests, Receipts, and Provider Truth
+
+This integration must emit honest receipts and tests:
+- **Receipts**: segmentation provider truth, backend selected, checkpoint/version, latency, prompt mode, object count, tracking continuity, identity persistence, fallback mode, synthetic-vs-real object alignment signals, prompt-grounding confidence, canonical object-state export refs, rollout-labeling enrichment refs.
+- **Tests/Smokes**: image prediction smoke, video prediction/tracking smoke, text-prompt segmentation smoke, provider unavailable truth smoke, synthetic-branch evaluation smoke using concept segmentation, rollout-labeling enrichment smoke, canonical object-node export smoke.
+
+If the provider is unavailable, emit unavailability truth; the contracts and WM ownership remain real.
+
+### Perception-WM Fusion Modules & Neural Heads
+
+To prevent raw SAM outputs from being treated as a monolithic semantic world model, bounded learned layers around typed state must sit above the provider:
+
+1. **Concept-to-Object Grounding Fusion Head**: Consumes SAM outputs, SceneTracks/SceneIR state, semantic catalogs, optional depth/calibration, prompt embeddings. Outputs canonical object nodes, object identity confidence, grounding confidence, prompt satisfaction confidence, uncertainty, and semantic tag proposals.
+2. **Track-Concept Memory Integrator**: Consumes video-tracked object masks/IDs, temporal memory, prompt history, track continuity. Outputs stable concept-conditioned object memory, re-identification confidence, prompt drift/ambiguity signals, and continuity quality.
+3. **Affordance / Interaction Head**: Consumes canonical object state, segmentation/tracking state, motion, scene context. Outputs graspability, support/containment/movability priors, likely task relevance, risk hints, and later embodiment relevance.
+4. **Annotation / Primitive Crosswalk**: A bridge consuming canonical object/track state, event spine traces, primitive/action segmentation, and contact/force context. Outputs object-linked primitive annotations and semantic alignment between visual objects and behavioral segments (e.g., which object a primitive acted on, when a failure coincided with occlusion).
+
+### Semantic Analysis Anti-Stub Rule
+
+The current `SemanticVLA` placeholder must **not** remain the long-term semantic-analysis posture. It is structurally insufficient as the semantic interpretation layer.
+
+- `SemanticVLA` should either become a real provider-backed semantic-analysis layer or be explicitly demoted to scaffolding-only status.
+- The stack must not continue to pretend a semantic-analysis capability exists when current implementation is only placeholder extraction.
+- Semantic interpretation is decomposed into real surfaces: open-vocabulary concept segmentation/tracking, teacher/runtime action semantics, scene/object canonicalization, affordance/object-role inference, primitive/action segmentation, and annotation/semantic evidence fusion.
+
+**Provider Bring-up Item**: Replace `SemanticVLA` with a real semantic-analysis successor. This may involve combining multiple provider lanes (e.g., stronger teacher analyzers, object-centric grounding + affordance extraction, future VLM/VLA providers). If the best provider choice is unsettled, state that honestly while reserving contracts and roadmap position now. Maintain the exact same real-or-unavailable doctrine: no silent fake capability, no indefinite unowned stub.
 
 ## OSS Dependency Map
 
