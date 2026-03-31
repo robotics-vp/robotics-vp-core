@@ -1,31 +1,84 @@
-# robotics-vp-core: Economics-First Robotics Stack
+# Ixion: Precondition Engine and Robotics Control Stack
 
-> Robots priced like labor, not software.
+> A multi-WM, economics-aware robotics stack built to train, control, and deploy real robots.
 
-This repository is building a closed cybernetic loop where economics is a first-class control signal, not an afterthought.
+This repository contains the software, learning, simulation, control, and coordination substrate being built **before** the acquisition of operating assets. It is a concrete **robotics control stack** built to stand up perception, simulation, control, training, and coordination for real robot deployment, with an embedded and learned economic logic shaping simulation, training, and actuation—beginning with workcell environments and later scaling outward.
+
+This stack is the technical foundation of **Ixion**—understood as the intelligence and control side of a broader future organism, where **Industrial Cybernetica** will serve as the acquisition, industrial-allocation, and operating-asset side.
 
 ## Why This Exists
-Most robotics programs fail commercially for the same reason:
-- Unit economics are weak at deployment time.
-- Pricing is static even when performance and risk are dynamic.
-- Customers are not economically incentivized to share data.
-- Data generation is decoupled from marginal business value.
 
-This project targets those failures directly.
+Ixion exists to stand up the learning and control loop before any operating business is acquired. The capabilities being accumulated here are not abstract priors—they are the concrete ingredients needed to train, control, and improve robots in real workcell settings before broader deployment:
 
-The target loop is:
+- Technical ontology and state representation
+- Data pipelines and evaluation loops
+- Simulation priors and synthetic generation
+- Embodiment-aware control logic for hardware
+- Transferable task primitives
+- Multi-robot coordination capabilities
 
-`real video -> representation + semantics -> constrained generation -> physics/geometric sim -> policy improvement + datapacks -> economic telemetry + pricing -> customer-programmable objectives -> better data decisions`
+The point is to de-risk the future industrial system by developing these robotics capabilities in embryo first. Future acquired businesses are intended to become deployment surfaces, learning surfaces, and cash-generating nodes governed by this control stack.
+
+## Robotics Control and Deployment Path
+
+This program is fundamentally a robotics control stack driven by continuous simulation and training. We are explicitly building:
+
+- **Perception + semantic grounding** for stable, robot-relevant state
+- **Simulation + synthetic branch generation** for rigorous policy and data improvement
+- **Embodiment-aware control logic** for integration with real hardware
+- **Replay, evaluation, and training loops** that iteratively improve robot behavior over time
+- **Coordination logic** that becomes critical once the system scales to multiple robots and sites
+
+The intended programmatic progression is:
+**software-first standup &rarr; workcell training loop &rarr; first hardware integration &rarr; autonomous micro-workcell operation &rarr; richer loop and broader deployment**
+
+## The Target Loop
+
+`real video -> representation + semantics -> constrained generation -> physics/geometric sim -> policy improvement + datapacks -> economic telemetry + constraint evaluation -> programmable objectives -> better data decisions`
+
+Economics sits inside the loop, acting as a first-class control signal. It exists to inform and prioritize our training runs, simulation decisions, and deployment behavior, rather than functioning merely as an abstract thesis.
 
 ## Two Failure Modes We Must Prevent
+
 1. `Gen->Sim garbage`
-- Pretty synthetic outputs that are not trainable, transferable, or physically/plausibly valid.
+- Pretty synthetic outputs that are not trainable, transferable, or physically/plausibly valid for real robot behavior.
 
 2. `Premature scalarization`
-- Collapsing multi-objective tradeoffs too early, which destroys Pareto structure and breaks programmable customer contracts.
+- Collapsing multi-objective tradeoffs too early, which destroys Pareto structure and breaks programmable governance contracts.
 
-## Current Reality (Important)
-There is not yet a complete roboeconomic layer in production in this repo.
+## Canonical Multi-WM Topology
+
+The stack is a series of multiple adjacent canonical World Models (WMs) with typed, replayable state surfaces. Each WM serves a concrete function in making the robot ready for deployment:
+
+1. **Perception / grounding WM**: turns raw sensor/video streams into stable scene state the robot can actually act on.
+2. **Embodiment / actuation WM**: turns task intent into body/action/capability-aware control state for real robot embodiments.
+3. **Sim / synth / physics WM**: decides what to simulate, what to synthesize, what backend/fidelity to use, and what synthetic branches are worth feeding back into training.
+4. **Economic WM**: decides what tasks, environments, data, and training runs matter most under throughput, error, energy, and labor constraints.
+5. **Meta-node superposition / control WM**: the later cross-WM policy and governance layer for multi-objective Pareto optimization.
+
+Lower WMs own typed canonical state, the economic WM sits above them to allocate resources logically, and cross-WM transport acts as middleware. The next high-leverage priority is the **sim / synth / physics WM**.
+
+## Roadmap
+
+### Architecture Sequence
+- Sim / synth / physics WM
+- Perception / grounding WM
+- Embodiment / actuation WM
+- Economic WM consolidation over lower-WM receipts
+- Local meta-node neuralization
+- Cross-WM transport
+- Meta-node superposition / control WM
+
+### Program Timing
+- **Mar–Aug 2026**: Software-first loop standup and structural plumbing.
+- **Sep 2026 onward**: Workcell training/eval rhythm, provider bring-up, and continuous replay accumulation.
+- **2027**: First Unitree/G1 hardware integration window.
+- **By Sep 30, 2027**: Target of an autonomous micro-workcell regime.
+- **Longer-horizon**: Later broader loop maturity, multi-robot coordination, and expansion into acquisition-facing deployment surfaces.
+
+## Current Subsystem Maturity
+
+There is not yet a complete economic control layer in production.
 
 What exists today:
 - Economics-aware training and logging scaffolding (`MPL`, error, energy, wage-parity style signals).
@@ -37,96 +90,33 @@ What does not yet exist as a fully unified runtime layer:
 - ObjectiveTensor-first training/inference contracts end-to-end.
 - EconTensor-first accounting end-to-end.
 - Meta-regal governance nodes as the default control plane.
-- Real-time pricing sentinel integrated across deployment + learning loops.
+- Real-time deployment-legibility sentinel integrated across learning loops.
 
 Additive shadow implementation available now:
-- [`docs/shadow_economic_control_plane.md`](/Users/amarmurray/robotics-vp-core/docs/shadow_economic_control_plane.md)
-- [`scripts/run_shadow_econ_control_plane.py`](/Users/amarmurray/robotics-vp-core/scripts/run_shadow_econ_control_plane.py)
-- [`scripts/run_shadow_econ_ablations.py`](/Users/amarmurray/robotics-vp-core/scripts/run_shadow_econ_ablations.py)
+- [`docs/shadow_economic_control_plane.md`](docs/shadow_economic_control_plane.md)
+- [`scripts/run_shadow_econ_control_plane.py`](scripts/run_shadow_econ_control_plane.py)
+- [`scripts/run_shadow_econ_ablations.py`](scripts/run_shadow_econ_ablations.py)
 
-This README defines that direction concretely.
+## Ixion and Industrial Cybernetica
 
-## Economic Thesis
-Robotics will not scale if pricing assumes static software margins.
+Ixion is one half of a planned organismal relationship:
+- **Industrial Cybernetica** = future acquisition / asset-governance / industrial-allocation side.
+- **Ixion** = learning / simulation / control / coordination / primitive-transfer side.
 
-For many deployments, hardware economics force a different model:
-- A robot at `$20k-$30k` per unit cannot be monetized reliably with flat pricing.
-- Price must follow realized task-hour value under constraints (error, safety, energy, uptime).
-- Data sharing must have explicit rebates/credits tied to marginal frontier gain.
-
-That implies:
-- Real-time economic telemetry must be in the loop.
-- Inferential training at deployment must be economically gated.
-- Sim generation must be conditioned on expected economic value for the specific `task x env x trajectory`.
-
-## Concrete Economics Layer (Current vs Target)
-Current (implemented today, partial):
-- Episode-level economics: `MPL`, error, energy, wage-parity style metrics.
-- Advisory valuation and sampling infrastructure tied to datapacks.
-- Seeded deterministic loops for replay/sampling and orchestration overlays.
-
-Target (explicitly staged in this repo):
-- `ObjectiveTensor` stays intact across real/diffusion/sim/training until contract compile.
-- `ObjectiveCompiler` performs explicit scalarization at run/contract boundary.
-- `ConstraintSet` carries VLA + geometry manifold bounds into generation requests.
-- `ObjectiveEconFunctor` maps objective outcomes + violations + uncertainty into econ deltas.
-- `PricingSentinel` emits high-frequency task-hour pricing ticks; `ValueLedger` keeps sparse, auditable receipts.
-
-This is the shift from \"economics as logging\" to \"economics as control and accounting\".
-
-## What "Economics-First" Means Here
-Economics-first means we optimize and price against deployment outcomes:
-- Throughput / MPL
-- Error and safety risk
-- Energy cost under real grid conditions
-- Reliability and uncertainty
-- Marginal data value (frontier expansion per unit compute)
-
-Not all customers optimize the same objective.
-Objective programmability is required to map customer contracts into policy behavior.
-
-## Concrete Program Roadmap
-The roadmap below is ordered as execution layers and capital-efficiency milestones.
-
-| Stage | Goal | Concrete Output | Economic Impact |
-|---|---|---|---|
-| 1 | Synthetic data engine loop | Real video -> diffusion -> sim -> policy updates/datapacks | Faster capability iteration |
-| 2 | Economic telemetry in-loop | Per-episode/per-task telemetry streams (`MPL`, error, safety, energy, uncertainty) | Sim/training focus shifts to value-relevant regimes |
-| 3 | Real-time pricing + data sharing credits | Task-hour dynamic pricing + rebate/credit primitives for shared data | Makes deployment and contribution economically rational |
-| 4 | Fleet coordination by economics | Assignment/routing/scheduling uses marginal value and risk | Improves blended fleet ROI |
-| 5 | Objective programmability | Customer objective contracts compiled into scalarization profiles | Honest, programmable contracts across verticals |
-| 6 | Inferential training economics | Deployment-time adaptation spend admitted only when expected gain > cost/risk | Prevents compute burn and pricing distortion |
-| 7 | Securitization + insurance pricing | Risk-adjusted productivity/reliability curves | Enables financing and risk transfer products |
-| 8 | Automated GTM + leasing + cross-customer coordination | Transfer playbooks + lease-aware shared-capacity optimization | Faster rollout, higher utilization |
-| 9 | Lifecycle fleet management | Productivity decay as repair/replacement trigger | Better uptime and lifecycle economics |
-
-## Deployment-Time Inferential Training (Planned)
-As inference compute share increases, deployment-time adaptation must be economically bounded.
-
-Target behavior:
-- Inferential updates are admitted only when expected value exceeds cost/risk threshold.
-- Objective profile and contract constraints define acceptable adaptation directions.
-- Economic telemetry decides whether to spend compute on adaptation, data collection, or no-op.
-
-## Pricing and Data-Sharing Contract (Concrete)
-Planned deployment contract primitives:
-- `task_hour_price_tick`: real-time estimate of value-backed task-hour price.
-- `constraint_adjustment`: discount when constraints or uncertainty degrade trust.
-- `data_share_credit`: explicit credit tied to measured marginal frontier gain.
-- `net_customer_rate`: tick minus credits plus any risk/insurance adjustment.
-
-This is designed to avoid dishonest pricing claims from metric gaming or constraint violations.
+Ixion is the precondition engine that lets future acquisitions become more than conventional EBITDA streams. Without Ixion, Industrial Cybernetica collapses toward a conventional holdco. Without Industrial Cybernetica, Ixion risks becoming merely robotics software.
 
 ## Intended Architectural Contracts
-The stack is moving toward these first-class artifacts:
+
+The stack relies on these internal architecture, control, and governance contracts:
 - `ObjectiveTensor`: portable multi-objective representation that remains intact until explicit compile/scalarization.
 - `ObjectiveCompiler`: explicit scalarization by contract/profile, never implicit upstream collapse.
 - `ConstraintSet`: VLA + geometry manifold constraints used to condition generation/simulation.
 - `EconTensor`: accounting representation coupled to objective outcomes and constraints.
 - `PricingSentinel`: high-frequency pricing stream with auditable aggregated ledger writes.
-- `Regal* nodes`: policy/governance gates for objective integrity, reward safety, plausibility, pricing truth, and data value.
+- `Regal* nodes`: policy/governance gates for objective integrity, reward safety, plausibility, deployment-truth, and data value.
 
 ## Existing Build and Verification Commands
+
 ```bash
 # Install
 python3 -m pip install -r requirements-dev.txt
@@ -145,6 +135,7 @@ python3 -m compileall src/ && pytest tests/ -v
 ```
 
 ## Key Smoke Tests
+
 ```bash
 # Feature extractor sanity
 python3 scripts/test_episode_features.py
@@ -160,8 +151,8 @@ python3 scripts/smoke_workcell_env.py
 ```
 
 ## Golden Path Demo (5 Minutes)
-Run one deterministic end-to-end proof that emits ObjectiveTensor, compiler scalar reward,
-Objective->Econ deltas, governance pass/fail reasons, and plots:
+
+Run one deterministic end-to-end proof that emits ObjectiveTensor, compiler scalar reward, Objective->Econ deltas, governance pass/fail reasons, and plots:
 
 ```bash
 python3 scripts/run_golden_path.py --env workcell --episodes 10 --seed 0 --emit artifacts/golden_path
@@ -181,6 +172,7 @@ Whitepaper and architecture notes:
 - `docs/whitepaper_objective_tensor_stack.md`
 
 ## Quality Ratchet (Ruff + Mypy)
+
 The repo carries legacy lint/type debt. CI is configured to block regressions while cleanup proceeds.
 
 Ratchet baselines:
@@ -196,6 +188,7 @@ Cleanup sequencing reference:
 - `docs/quality_ratcheting.md`
 
 ## Frozen and Additive Zones
+
 Phase B now has a split posture:
 - the stable baseline remains frozen
 - additive successor modules beside that baseline are allowed
@@ -216,6 +209,7 @@ Additive-only zones:
 - Phase C scaffolding (`HRL/VLA/SIMA`)
 
 ## Repository Map (Economics and Loop-Relevant)
+
 - `src/rl/reward_shaping.py`: shared scalar reward shaping contract (current)
 - `src/economics/reward_engine.py`: advisory reward decomposition and econ aggregation
 - `src/ontology/models.py`: `EconVector` and core ontology dataclasses
@@ -229,4 +223,5 @@ Additive-only zones:
 - `src/orchestrator/diffusion_requests.py`: diffusion prompt/request bridge (current conditioning seam)
 
 ## Program Teleology in One Line
-Build a robotics platform where policy improvement, simulation generation, customer objective programming, and pricing are all governed by the same economic truth at deployment time.
+
+Build the precondition engine through which simulation, control, transfer, coordination, and economic allocation can be accumulated before live industrial deployment.
