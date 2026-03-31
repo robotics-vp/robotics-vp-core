@@ -48,7 +48,11 @@ Economics sits inside the loop, acting as a first-class control signal. It exist
 
 ## Canonical Multi-WM Topology
 
-The stack is a series of multiple adjacent canonical World Models (WMs) with typed, replayable state surfaces. Each WM serves a concrete function in making the robot ready for deployment:
+The stack is a series of multiple adjacent canonical World Models (WMs) communicating via **typed, replayable state surfaces**.
+
+In this stack, **"typed"** is the primary defense against the "mother-latent" trap—the failure mode where all perception, control, and physics are collapsed into one uninterpretable vector embedding. Instead of passing opaque floats, WMs pass explicit, schema-backed contracts (e.g., `BeliefState`, `ObjectiveTensor`, `ConstraintSet`). This ensures that critical metadata—like geometry, uncertainty, and safety boundaries—survive translation across models, allowing the Economic WM and governance nodes to audit and allocate resources based on legible reality rather than black-box approximations.
+
+Each WM serves a concrete function in making the robot ready for deployment:
 
 1. **Perception / grounding WM**: turns raw sensor/video streams into stable scene state the robot can actually act on.
 2. **Embodiment / actuation WM**: turns task intent into body/action/capability-aware control state for real robot embodiments.
