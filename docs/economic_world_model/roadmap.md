@@ -77,24 +77,35 @@ Current honest state:
   - record provider truth honestly
   - do not let weak placeholders silently masquerade as semantic capability
 
-SAM 3 / 3.1 should be treated as part of **provider bring-up / OSS backlog discipline**:
-- if weights, runtime environment, GPU, or packaging are not yet available, this should be recorded explicitly in provider-backlog form (e.g. image vs video predictor paths, memory/multiplex mode readiness)
-- but the contracts and roadmap placement should still be real now
-- do not leave this in an unowned “we’ll figure it out later” state
+SAM 3 / 3.1 should be treated as part of **provider bring-up / OSS backlog discipline**. A named provider bring-up item must cover:
+- image predictor bring-up
+- video predictor / tracking bring-up
+- memory / multiplex mode evaluation
+- weights / checkpoint access
+- runtime packaging
+- GPU/runtime host requirements
+- provider truth and unavailable-mode semantics
+- benchmark / smoke expectations
+- real vs planning-only posture on hosts where the environment is not yet available
 
-## Semantic Analysis Anti-Stub Rule
+This must be treated like a real external-provider lane that needs to be burned down through bring-up work, not just a “future good idea.”
 
-- `SemanticVLA` should either become a real provider-backed semantic-analysis layer or be explicitly demoted to scaffolding-only status
-- the stack should not continue to pretend a semantic-analysis capability exists when the current implementation is only placeholder extraction
-- semantic interpretation should be decomposed into real surfaces such as:
-  - open-vocabulary concept segmentation / tracking
-  - teacher/runtime action semantics
-  - scene/object canonicalization
-  - affordance / object-role inference
-  - primitive/action segmentation
-  - annotation and semantic evidence fusion
+## Semantic Analysis Successor Posture
 
-In roadmap/backlog terms, this means **real semantic-analysis replacement / successor to `SemanticVLA`** must be treated as a provider bring-up item. Possible sources could include stronger teacher/runtime analyzers, object-centric grounding plus affordance extraction over canonical state, or future VLM/VLA proposal providers. If the best provider is not yet settled, the docs should state that honestly, keeping `SemanticVLA` as an explicit weak link and roadmap replacement target until resolved. The future posture is a composition of specific layers, not one monolithic "semantic VLA".
+- `SemanticVLA` should either become a real provider-backed semantic-analysis layer or be explicitly demoted to scaffolding-only status.
+- The likely successor to `SemanticVLA` is **not** one monolithic semantic-analysis model. It is a composed semantic layer built from:
+  1. Perception-WM canonical object/track state
+  2. teacher/runtime semantic proposals
+  3. affordance / role inference over canonical objects
+  4. primitive/action segmentation
+  5. semantic-evidence fusion / annotation crosswalk
+- This successor should be treated as a **provider-backed and fusion-backed semantic stack**, not a one-model replacement fantasy.
+
+The repo must track a parallel backlog / provider bring-up item stating the stack should either:
+- identify a real semantic proposal provider or family of providers for this role, or
+- keep `SemanticVLA` explicitly scaffolding-only until that provider stack is named and brought up honestly.
+- unsettled provider choice is acceptable.
+- unowned placeholder status is not acceptable.
 
 ## Program Calendar
 

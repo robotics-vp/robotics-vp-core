@@ -1191,11 +1191,13 @@ SAM supersedes weak visual semantic segmentation placeholders, but it **does not
 
 #### Annotation, Semantic Evidence, and Rollout Labeling
 
-SAM-backed concept segmentation and tracking should feed:
-- rollout labeling
-- semantic evidence sidecars and object refs
-- affordance hints and scene object catalogs
-- annotation bundles and later training/export paths
+SAM-backed concept segmentation and tracking should feed rollout labeling, semantic evidence, and annotation. The point is not merely "more semantic tags," but:
+- object-linked primitive annotations
+- object-instance refs tied to behavioral segments
+- better affordance hints
+- better scene object catalogs
+- richer failure / recovery interpretation when an object is lost, occluded, or mis-grounded
+- better alignment between visual object evidence and behavioral/action segmentation
 
 These systems must consume canonicalized or provider-truthed outputs, not define semantic truth by themselves.
 
@@ -1942,15 +1944,24 @@ To prevent raw SAM outputs from being treated as a monolithic semantic world mod
 3. **Affordance / Interaction Head**: Consumes canonical object state, segmentation/tracking state, motion, scene context. Outputs graspability, support/containment/movability priors, likely task relevance, risk hints, and later embodiment relevance.
 4. **Annotation / Primitive Crosswalk**: A bridge consuming canonical object/track state, event spine traces, primitive/action segmentation, and contact/force context. Outputs object-linked primitive annotations and semantic alignment between visual objects and behavioral segments (e.g., which object a primitive acted on, when a failure coincided with occlusion).
 
-### Semantic Analysis Anti-Stub Rule
+### Semantic Analysis Successor Posture
 
 The current `SemanticVLA` placeholder must **not** remain the long-term semantic-analysis posture. It is structurally insufficient as the semantic interpretation layer.
 
 - `SemanticVLA` should either become a real provider-backed semantic-analysis layer or be explicitly demoted to scaffolding-only status.
-- The stack must not continue to pretend a semantic-analysis capability exists when current implementation is only placeholder extraction.
-- Semantic interpretation is decomposed into real surfaces: open-vocabulary concept segmentation/tracking, teacher/runtime action semantics, scene/object canonicalization, affordance/object-role inference, primitive/action segmentation, and annotation/semantic evidence fusion.
+- The likely successor to `SemanticVLA` is **not** one monolithic semantic-analysis model. It is a composed semantic layer built from:
+  1. Perception-WM canonical object/track state
+  2. teacher/runtime semantic proposals
+  3. affordance / role inference over canonical objects
+  4. primitive/action segmentation
+  5. semantic-evidence fusion / annotation crosswalk
+- This successor should be treated as a **provider-backed and fusion-backed semantic stack**, not a one-model replacement fantasy.
 
-**Provider Bring-up Item**: Replace `SemanticVLA` with a real semantic-analysis successor. This may involve combining multiple provider lanes (e.g., stronger teacher analyzers, object-centric grounding + affordance extraction, future VLM/VLA providers). If the best provider choice is unsettled, state that honestly while reserving contracts and roadmap position now. Maintain the exact same real-or-unavailable doctrine: no silent fake capability, no indefinite unowned stub.
+**Provider Bring-up Item**: Replace `SemanticVLA` with a real semantic-analysis successor. The repo must either:
+- identify a real semantic proposal provider or family of providers for this role, or
+- keep `SemanticVLA` explicitly scaffolding-only until that provider stack is named and brought up honestly.
+- unsettled provider choice is acceptable.
+- unowned placeholder status is not acceptable.
 
 ## OSS Dependency Map
 
