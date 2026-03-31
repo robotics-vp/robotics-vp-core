@@ -2,13 +2,20 @@
 
 > A multi-WM, economics-aware robotics stack built to train, control, and deploy real robots.
 
-This repository contains the software, learning, simulation, control, and coordination substrate being built **before** the acquisition of operating assets. It is a concrete **robotics control stack** built to stand up perception, simulation, control, training, and coordination for real robot deployment, with an embedded and learned economic logic shaping simulation, training, and actuation—beginning with workcell environments and later scaling outward.
+This repository contains the software, learning, simulation, control, and coordination substrate being built **before** the acquisition of operating assets. **This is a real robotics control stack.** It is being built to stand up perception, simulation, control, training, and coordination for real robot deployment. 
 
-This stack is the technical foundation of **Ixion**—understood as the intelligence and control side of a broader future organism, where **Industrial Cybernetica** will serve as the acquisition, industrial-allocation, and operating-asset side.
+The explicit progression is:
+**software-first standup &rarr; workcell training loop &rarr; first hardware integration &rarr; autonomous micro-workcell operation &rarr; richer loop &rarr; multi-robot coordination &rarr; future deployment across operating assets.**
+
+This stack is the precondition engine for that future humanoid deployment and fleet coordination. It holds an embedded, learned economic logic that directly shapes simulation, training, and actuation.
+
+## Bridging Economics and Deployment
+
+Economics in this stack is a first-class control signal used to decide what to train on, what to simulate, what to prioritize, and how to allocate constrained compute and battery. Those choices are meant to eventually shape real workcell behavior, multi-robot coordination, and fleet management across future operating assets. This is why Ixion is the technical half of a broader organism—providing the actionable intelligence that **Industrial Cybernetica** will physically deploy.
 
 ## Why This Exists
 
-Ixion exists to stand up the learning and control loop before any operating business is acquired. The capabilities being accumulated here are not abstract priors—they are the concrete ingredients needed to train, control, and improve robots in real workcell settings before broader deployment:
+Ixion exists to stand up the learning and control loop before any operating business is acquired. The capabilities being accumulated here are the concrete ingredients needed to train, control, and improve robots in real workcell settings before broader deployment:
 
 - Technical ontology and state representation
 - Data pipelines and evaluation loops
@@ -29,14 +36,11 @@ This program is fundamentally a robotics control stack driven by continuous simu
 - **Replay, evaluation, and training loops** that iteratively improve robot behavior over time
 - **Coordination logic** that becomes critical once the system scales to multiple robots and sites
 
-The intended programmatic progression is:
-**software-first standup &rarr; workcell training loop &rarr; first hardware integration &rarr; autonomous micro-workcell operation &rarr; richer loop and broader deployment**
-
 ## The Target Loop
 
 `real video -> representation + semantics -> constrained generation -> physics/geometric sim -> policy improvement + datapacks -> economic telemetry + constraint evaluation -> programmable objectives -> better data decisions`
 
-Economics sits inside the loop, acting as a first-class control signal. It exists to inform and prioritize our training runs, simulation decisions, and deployment behavior, rather than functioning merely as an abstract thesis.
+Economics sits inside the loop, acting as a first-class control signal. It exists to inform and prioritize our training runs, simulation decisions, and deployment behavior.
 
 ## Two Failure Modes We Must Prevent
 
@@ -46,11 +50,33 @@ Economics sits inside the loop, acting as a first-class control signal. It exist
 2. `Premature scalarization`
 - Collapsing multi-objective tradeoffs too early, which destroys Pareto structure and breaks programmable governance contracts.
 
+## Current Subsystem Maturity
+
+There is already real technical substance functioning in the loop today, though the stack is not yet fully unified end-to-end.
+
+**What is already concretely working and scaffolded:**
+- Economics-aware training and logging infrastructure (`MPL`, error, energy, wage-parity style signals).
+- Datapack valuation scaffolding and advisory orchestrator components.
+- SceneIR / map-first / VLA evidence artifact boundaries.
+- Seeded, deterministic sampling and curriculum infrastructure for reproducible learning.
+
+**What is additive and available now (Shadow Implementation):**
+- A functioning shadow economic control plane (`docs/shadow_economic_control_plane.md`).
+- Execution scripts for shadow control and ablations (`scripts/run_shadow_econ_control_plane.py`, `scripts/run_shadow_econ_ablations.py`).
+
+**What is not yet unified end-to-end:**
+- `ObjectiveTensor`-first training/inference contracts natively across all layers.
+- `EconTensor`-first accounting as the strict system of record.
+- Meta-regal governance nodes as the default control plane.
+- Real-time deployment-legibility sentinel fully integrated across learning loops.
+
 ## Canonical Multi-WM Topology
 
 The stack is a series of multiple adjacent canonical World Models (WMs) communicating via **typed, replayable state surfaces**.
 
-In this stack, **"typed"** is the primary defense against the "mother-latent" trap—the failure mode where all perception, control, and physics are collapsed into one uninterpretable vector embedding. Instead of passing opaque floats, WMs pass explicit, schema-backed contracts (e.g., `BeliefState`, `ObjectiveTensor`, `ConstraintSet`). This ensures that critical metadata—like geometry, uncertainty, and safety boundaries—survive translation across models, allowing the Economic WM and governance nodes to audit and allocate resources based on legible reality rather than black-box approximations.
+In this stack, **"typed"** is the primary defense against the "mother-latent" trap—the failure mode where all perception, control, and physics are collapsed into one uninterpretable vector embedding. Instead of passing opaque floats, WMs pass explicit, schema-backed contracts (e.g., `BeliefState`, `ObjectiveTensor`, `ConstraintSet`).
+
+**These contracts are the typed surfaces that keep perception, simulation, control, economics, and governance legible to one another as the robot learns and deploys.** This ensures that critical metadata—like geometry, uncertainty, and safety boundaries—survive translation across models, allowing the Economic WM and governance nodes to audit and allocate resources based on legible reality rather than black-box approximations.
 
 Each WM serves a concrete function in making the robot ready for deployment:
 
@@ -74,38 +100,19 @@ Lower WMs own typed canonical state, the economic WM sits above them to allocate
 - Meta-node superposition / control WM
 
 ### Program Timing
-- **Mar–Aug 2026**: Software-first loop standup and structural plumbing.
-- **Sep 2026 onward**: Workcell training/eval rhythm, provider bring-up, and continuous replay accumulation.
-- **2027**: First Unitree/G1 hardware integration window.
-- **By Sep 30, 2027**: Target of an autonomous micro-workcell regime.
-- **Longer-horizon**: Later broader loop maturity, multi-robot coordination, and expansion into acquisition-facing deployment surfaces.
+The sequence is programmatic and cumulative, building toward live deployment:
 
-## Current Subsystem Maturity
-
-There is not yet a complete economic control layer in production.
-
-What exists today:
-- Economics-aware training and logging scaffolding (`MPL`, error, energy, wage-parity style signals).
-- Datapack valuation scaffolding and advisory orchestrator components.
-- SceneIR / map-first / VLA evidence artifact boundaries.
-- Seeded, deterministic sampling and curriculum infrastructure.
-
-What does not yet exist as a fully unified runtime layer:
-- ObjectiveTensor-first training/inference contracts end-to-end.
-- EconTensor-first accounting end-to-end.
-- Meta-regal governance nodes as the default control plane.
-- Real-time deployment-legibility sentinel integrated across learning loops.
-
-Additive shadow implementation available now:
-- [`docs/shadow_economic_control_plane.md`](docs/shadow_economic_control_plane.md)
-- [`scripts/run_shadow_econ_control_plane.py`](scripts/run_shadow_econ_control_plane.py)
-- [`scripts/run_shadow_econ_ablations.py`](scripts/run_shadow_econ_ablations.py)
+- **Mar–Aug 2026**: Software-first loop standup and structural plumbing. Establish the deterministic data engine.
+- **Sep 2026 onward**: Rhythmic workcell training and evaluation. Provider bring-up and continuous replay accumulation driven by economic constraints.
+- **2027**: First Unitree/G1 hardware integration window. Ground the control loop on real embodiments.
+- **By Sep 30, 2027**: Autonomous micro-workcell regime. Demonstrate a closed cybernetic loop running locally and safely.
+- **Longer-horizon**: Broader loop maturity, multi-robot coordination, and expansion into acquisition-facing deployment surfaces across an industrial fleet.
 
 ## Ixion and Industrial Cybernetica
 
 Ixion is one half of a planned organismal relationship:
-- **Industrial Cybernetica** = future acquisition / asset-governance / industrial-allocation side.
-- **Ixion** = learning / simulation / control / coordination / primitive-transfer side.
+- **Industrial Cybernetica**: The acquisition, asset-governance, and industrial-allocation side. This is intended to be tied directly to physical deployment surfaces, fleet deployment, and industrial coordination—not just a financial wrapper around the repo.
+- **Ixion**: The learning, simulation, control, coordination, and primitive-transfer side.
 
 Ixion is the precondition engine that lets future acquisitions become more than conventional EBITDA streams. Without Ixion, Industrial Cybernetica collapses toward a conventional holdco. Without Industrial Cybernetica, Ixion risks becoming merely robotics software.
 
