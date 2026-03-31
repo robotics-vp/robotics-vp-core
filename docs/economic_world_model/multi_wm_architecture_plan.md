@@ -1957,6 +1957,15 @@ The current `SemanticVLA` placeholder must **not** remain the long-term semantic
   5. semantic-evidence fusion / annotation crosswalk
 - This successor should be treated as a **provider-backed and fusion-backed semantic stack**, not a one-model replacement fantasy.
 
+The successor must be a **real neural semantic subsystem** with enough relational and temporal capacity to bind canonical object/track state to action, affordance, and task structure.
+- It sits **downstream of Perception / Grounding WM canonical state** and **upstream of Sim/Synth/Physics WM, Embodiment/Actuation WM, annotation/semantic-evidence surfaces, and later Economic WM consumption**.
+- It must be treated as a **load-bearing semantic state layer**, not just a thin semantic wrapper or lightly neural tagger.
+
+Do not starve the semantic successor into a tiny helper head. Give it enough structured neural capacity to be genuinely useful, but keep that capacity **topologically distributed and WM-shaped**. Its neural capacity and hyperparameter posture should be governed by the relevant WM that owns or consumes the semantics:
+- **Perception / Grounding WM** should shape the object-token, relational, and temporal semantic layers because it owns canonical grounded object/track state.
+- **Embodiment / Actuation WM** should shape the affordance- and action-relevance-facing layers because semantic compression must remain usable for bodily control.
+- **Sim / Synth / Physics WM** should shape the branch-comparison / object-preservation-facing semantic layers because synthetic evaluation needs stable semantic comparability across real and generated branches.
+
 **Provider Bring-up Item**: Replace `SemanticVLA` with a real semantic-analysis successor. The repo must either:
 - identify a real semantic proposal provider or family of providers for this role, or
 - keep `SemanticVLA` explicitly scaffolding-only until that provider stack is named and brought up honestly.

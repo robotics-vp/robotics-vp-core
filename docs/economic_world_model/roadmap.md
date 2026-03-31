@@ -101,6 +101,14 @@ This must be treated like a real external-provider lane that needs to be burned 
   5. semantic-evidence fusion / annotation crosswalk
 - This successor should be treated as a **provider-backed and fusion-backed semantic stack**, not a one-model replacement fantasy.
 
+The successor must be a **real neural semantic subsystem**, not a thin wrapper or lightly neural tagger:
+- It sits **downstream of Perception / Grounding WM canonical state** and **upstream of Sim/Synth/Physics WM, Embodiment/Actuation WM, annotation/semantic-evidence surfaces, and Economic WM consumption**.
+- It is a **load-bearing semantic state layer** that must be given enough structured neural capacity to bind objects/tracks to action, affordance, and task structure.
+- Do not starve it into a tiny helper head, but keep its capacity **topologically distributed and WM-shaped** rather than collapsing it into one monolithic model. Neural capacity and hyperparameter posture should be governed by the relevant WM that owns or consumes the semantics:
+  - **Perception/Grounding WM** shapes the object-token, relational, and temporal layers.
+  - **Embodiment/Actuation WM** shapes the affordance- and action-relevance layers for bodily control.
+  - **Sim/Synth/Physics WM** shapes the branch-comparison and object-preservation layers for synthetic evaluation.
+
 The repo must track a parallel backlog / provider bring-up item stating the stack should either:
 - identify a real semantic proposal provider or family of providers for this role, or
 - keep `SemanticVLA` explicitly scaffolding-only until that provider stack is named and brought up honestly.
