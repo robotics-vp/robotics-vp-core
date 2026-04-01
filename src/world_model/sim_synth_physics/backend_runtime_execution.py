@@ -14,10 +14,18 @@ from src.objectives.economic_objective import EconomicObjectiveSpec
 from src.ontology.models import Robot, Task
 from src.ontology.store import OntologyStore
 
+from .adapters.isaac_unitree_adapter_execution import (
+    build_isaac_unitree_adapter_receipt,
+    finalize_isaac_unitree_adapter_execution,
+    prepare_isaac_unitree_adapter_execution,
+)
 from .asset_manifest import extract_robot_asset_manifest, normalize_robot_asset_manifest
 from .common import mapping, safe_float, strings
 from .physics_contracts import PhysicsExecutionContract
-from .receipts import BackendExecutionBindingReceipt, BackendRuntimeExecutionReceipt
+from .receipts import (
+    BackendExecutionBindingReceipt,
+    BackendRuntimeExecutionReceipt,
+)
 from .runtime_bundles import build_backend_runtime_bundle
 from .runtime_launch import (
     build_backend_runtime_launch_receipt,
@@ -565,16 +573,33 @@ def materialize_backend_runtime_execution(
         launch_spec,
         require_policy=require_policy,
     )
+    executable_adapter_request = _mapping(
+        launch_spec.get("executable_adapter_request")
+        or runtime_bundle.get("executable_adapter_request")
+    )
     executable_adapter_consumer = _mapping(
         launch_spec.get("executable_adapter_consumer")
         or runtime_bundle.get("executable_adapter_consumer")
     )
     runtime_output_contract = build_backend_runtime_output_contract(runtime_bundle, launch_spec)
     launch_report_refs: list[str] = []
+    adapter_refs: list[str] = []
     launch_receipt_payload: dict[str, Any] | None = None
+    adapter_receipt_payload: dict[str, Any] | None = None
     runtime_outcome_receipt_payload: dict[str, Any] | None = None
     runtime_outcome_refs: list[str] = []
     local_runtime_supported = _runtime_supports_execution(backend)
+    adapter_execution: dict[str, Any] = {}
+    if backend == "isaac" and executable_adapter_request and executable_adapter_consumer:
+        adapter_execution = prepare_isaac_unitree_adapter_execution(
+            executable_adapter_request,
+            executable_adapter_consumer,
+        )
+        if output_root is not None:
+            adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+            _write_json(adapter_execution_path, adapter_execution)
+            adapter_refs.append(str(adapter_execution_path.resolve()))
+            artifact_refs.extend(adapter_refs)
     if not local_runtime_supported:
         launch_result: dict[str, Any] = dict(launch_plan)
         launch_result.setdefault("executed", False)
@@ -586,6 +611,16 @@ def materialize_backend_runtime_execution(
                 cwd=external_launch_cwd,
                 require_policy=require_policy,
             )
+        if adapter_execution:
+            adapter_execution = finalize_isaac_unitree_adapter_execution(
+                adapter_execution,
+                launch_result=launch_result,
+            )
+            adapter_receipt = build_isaac_unitree_adapter_receipt(
+                adapter_execution,
+                artifact_refs=adapter_refs,
+            )
+            adapter_receipt_payload = adapter_receipt.to_dict()
         launch_receipt = build_backend_runtime_launch_receipt(
             runtime_bundle,
             launch_spec,
@@ -604,6 +639,8 @@ def materialize_backend_runtime_execution(
         runtime_outcome_receipt_payload = outcome_receipt.to_dict()
         if output_root is not None:
             report_path = output_root / "backend_runtime_launch_report.json"
+            adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+            adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
             receipt_path = output_root / "backend_runtime_launch_receipt.json"
             consumer_path = output_root / "backend_executable_adapter_consumer.json"
             output_contract_path = output_root / "backend_runtime_output_contract.json"
@@ -618,6 +655,10 @@ def materialize_backend_runtime_execution(
                     "launch_result": launch_result,
                 },
             )
+            if adapter_execution:
+                _write_json(adapter_execution_path, adapter_execution)
+            if adapter_receipt_payload is not None:
+                _write_json(adapter_receipt_path, adapter_receipt_payload)
             _write_json(receipt_path, launch_receipt_payload)
             _write_json(consumer_path, executable_adapter_consumer)
             _write_json(output_contract_path, runtime_output_contract)
@@ -626,6 +667,8 @@ def materialize_backend_runtime_execution(
             launch_report_refs.extend(
                 [
                     str(report_path.resolve()),
+                    str(adapter_execution_path.resolve()) if adapter_execution else "",
+                    str(adapter_receipt_path.resolve()) if adapter_receipt_payload else "",
                     str(receipt_path.resolve()),
                     str(consumer_path.resolve()),
                     str(output_contract_path.resolve()),
@@ -633,6 +676,7 @@ def materialize_backend_runtime_execution(
                     str(outcome_receipt_path.resolve()),
                 ]
             )
+            launch_report_refs = [ref for ref in launch_report_refs if ref]
             artifact_refs.extend(launch_report_refs)
         runtime_outcome_refs.extend(strings(output_summary.get("artifact_refs")))
         artifact_refs.extend(
@@ -668,7 +712,10 @@ def materialize_backend_runtime_execution(
                     "policy_contract": policy_contract,
                     "runtime_bundle": runtime_bundle,
                     "launch_spec": launch_spec,
+                    "executable_adapter_request": executable_adapter_request,
                     "executable_adapter_consumer": executable_adapter_consumer,
+                    "adapter_execution": adapter_execution,
+                    "adapter_receipt": adapter_receipt_payload,
                     "runtime_output_contract": runtime_output_contract,
                     "launch_plan": launch_plan,
                     "launch_receipt": launch_receipt_payload,
@@ -682,6 +729,16 @@ def materialize_backend_runtime_execution(
             if item not in missing_preconditions:
                 missing_preconditions.append(item)
         if launch_receipt_payload is None:
+            if adapter_execution:
+                adapter_execution = finalize_isaac_unitree_adapter_execution(
+                    adapter_execution,
+                    launch_result=launch_plan,
+                )
+                adapter_receipt = build_isaac_unitree_adapter_receipt(
+                    adapter_execution,
+                    artifact_refs=adapter_refs,
+                )
+                adapter_receipt_payload = adapter_receipt.to_dict()
             launch_receipt = build_backend_runtime_launch_receipt(
                 runtime_bundle,
                 launch_spec,
@@ -690,6 +747,8 @@ def materialize_backend_runtime_execution(
             launch_receipt_payload = launch_receipt.to_dict()
             if output_root is not None:
                 report_path = output_root / "backend_runtime_launch_report.json"
+                adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+                adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
                 receipt_path = output_root / "backend_runtime_launch_receipt.json"
                 consumer_path = output_root / "backend_executable_adapter_consumer.json"
                 output_contract_path = output_root / "backend_runtime_output_contract.json"
@@ -704,6 +763,10 @@ def materialize_backend_runtime_execution(
                         "launch_result": launch_plan,
                     },
                 )
+                if adapter_execution:
+                    _write_json(adapter_execution_path, adapter_execution)
+                if adapter_receipt_payload is not None:
+                    _write_json(adapter_receipt_path, adapter_receipt_payload)
                 _write_json(receipt_path, launch_receipt_payload)
                 _write_json(consumer_path, executable_adapter_consumer)
                 _write_json(output_contract_path, runtime_output_contract)
@@ -744,6 +807,8 @@ def materialize_backend_runtime_execution(
                 launch_report_refs.extend(
                     [
                         str(report_path.resolve()),
+                        str(adapter_execution_path.resolve()) if adapter_execution else "",
+                        str(adapter_receipt_path.resolve()) if adapter_receipt_payload else "",
                         str(receipt_path.resolve()),
                         str(consumer_path.resolve()),
                         str(output_contract_path.resolve()),
@@ -751,6 +816,7 @@ def materialize_backend_runtime_execution(
                         str(outcome_receipt_path.resolve()),
                     ]
                 )
+                launch_report_refs = [ref for ref in launch_report_refs if ref]
                 artifact_refs.extend(launch_report_refs)
         if "backend_runtime_module" not in missing_preconditions:
             missing_preconditions.append("backend_runtime_module")
@@ -784,7 +850,10 @@ def materialize_backend_runtime_execution(
                 "policy_contract": policy_contract,
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
+                "executable_adapter_request": executable_adapter_request,
                 "executable_adapter_consumer": executable_adapter_consumer,
+                "adapter_execution": adapter_execution,
+                "adapter_receipt": adapter_receipt_payload,
                 "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
                 "launch_receipt": launch_receipt_payload,
@@ -797,6 +866,27 @@ def materialize_backend_runtime_execution(
 
     execution_mode = f"{backend_name}_evaluate_policy"
     execution_status = "runtime_execution_failed"
+    if adapter_execution and backend == "isaac":
+        adapter_execution = finalize_isaac_unitree_adapter_execution(
+            adapter_execution,
+            local_runtime_handoff=True,
+        )
+        adapter_receipt = build_isaac_unitree_adapter_receipt(
+            adapter_execution,
+            artifact_refs=adapter_refs,
+        )
+        adapter_receipt_payload = adapter_receipt.to_dict()
+        if output_root is not None:
+            adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+            adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
+            _write_json(adapter_execution_path, adapter_execution)
+            _write_json(adapter_receipt_path, adapter_receipt_payload)
+            for ref in (
+                str(adapter_execution_path.resolve()),
+                str(adapter_receipt_path.resolve()),
+            ):
+                if ref not in artifact_refs:
+                    artifact_refs.append(ref)
     try:
         backend_instance = make_motor_backend(
             backend_name,
@@ -869,7 +959,10 @@ def materialize_backend_runtime_execution(
                 "policy_contract": policy_contract,
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
+                "executable_adapter_request": executable_adapter_request,
                 "executable_adapter_consumer": executable_adapter_consumer,
+                "adapter_execution": adapter_execution,
+                "adapter_receipt": adapter_receipt_payload,
                 "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
                 "launch_receipt": launch_receipt_payload,
@@ -916,7 +1009,10 @@ def materialize_backend_runtime_execution(
             "policy_contract": policy_contract,
             "runtime_bundle": runtime_bundle,
             "launch_spec": launch_spec,
+            "executable_adapter_request": executable_adapter_request,
             "executable_adapter_consumer": executable_adapter_consumer,
+            "adapter_execution": adapter_execution,
+            "adapter_receipt": adapter_receipt_payload,
             "runtime_output_contract": runtime_output_contract,
             "launch_plan": launch_plan,
             "launch_receipt": launch_receipt_payload,

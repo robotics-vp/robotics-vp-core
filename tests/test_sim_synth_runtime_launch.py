@@ -5,6 +5,9 @@ from pathlib import Path
 
 from scripts.run_phase1_runtime_launch import main as runtime_launch_main
 from src.world_model.sim_synth_physics import runtime_launch as runtime_launch_module
+from src.world_model.sim_synth_physics.adapters.isaac_unitree_adapter_execution import (
+    LOCAL_BRIDGE_MODULE,
+)
 from src.world_model.sim_synth_physics.runtime_launch import (
     build_backend_runtime_launch_receipt,
     execute_backend_runtime_launch,
@@ -269,6 +272,11 @@ def test_run_isaac_unitree_executable_adapter_script_writes_adapter_request(
     assert output_path.exists()
     assert payload["executable_adapter_request"]["deployment_mode"] == "sim_eval"
     assert payload["executable_adapter_consumer"]["consumer_mode"] == "external_sim_launch"
+    assert payload["adapter_execution"]["execution_path"] == "external_launch"
+    assert payload["adapter_execution"]["adapter_status"] == "external_launch_ready"
+    assert payload["adapter_execution"]["local_bridge_module"] == LOCAL_BRIDGE_MODULE
+    assert payload["adapter_receipt"]["version"] == "backend_runtime_adapter_receipt_v1"
+    assert payload["adapter_receipt"]["adapter_status"] == "external_launch_ready"
     assert payload["receipt"]["launch_status"] == "launch_prepared"
 
 

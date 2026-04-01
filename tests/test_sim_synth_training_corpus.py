@@ -161,6 +161,24 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_backend_runtime_adapter_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "adapter_1",
+                "backend": "isaac",
+                "adapter_family": "isaac_unitree",
+                "adapter_entrypoint": "isaaclab_unitree_sim",
+                "consumer_mode": "external_sim_launch",
+                "adapter_status": "external_launch_completed",
+                "execution_path": "external_launch",
+                "executed": True,
+                "version": "backend_runtime_adapter_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_backend_runtime_launch_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -252,6 +270,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["robot_asset_contract_receipt"]["receipt_id"] == "asset_1"
     assert bundles[0]["backend_runtime_bridge_receipt"]["receipt_id"] == "bridge_1"
     assert bundles[0]["backend_runtime_execution_receipt"]["receipt_id"] == "runtime_1"
+    assert bundles[0]["backend_runtime_adapter_receipt"]["receipt_id"] == "adapter_1"
     assert bundles[0]["backend_runtime_launch_receipt"]["receipt_id"] == "launch_1"
     assert bundles[0]["backend_runtime_outcome_receipt"]["receipt_id"] == "runtime_outcome_1"
     assert bundles[0]["backend_shadow_execution_receipt"]["receipt_id"] == "shadow_1"
@@ -286,6 +305,9 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         backend_rows[0]["metadata"]["backend_runtime_execution_status"]
         == "runtime_execution_completed"
     )
+    assert backend_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
+    assert backend_rows[0]["metadata"]["backend_runtime_adapter_status"] == "external_launch_completed"
+    assert backend_rows[0]["metadata"]["backend_runtime_adapter_execution_path"] == "external_launch"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_executed"] is True
@@ -311,6 +333,9 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["robot_asset_readiness_score"] == 0.25
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_receipt_id"] == "bridge_1"
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_status"] == "runtime_targets_missing"
+    assert branch_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
+    assert branch_rows[0]["metadata"]["backend_runtime_adapter_status"] == "external_launch_completed"
+    assert branch_rows[0]["metadata"]["backend_runtime_adapter_execution_path"] == "external_launch"
     assert branch_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
     assert branch_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
     assert (

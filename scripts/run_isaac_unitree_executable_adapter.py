@@ -8,6 +8,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from src.world_model.sim_synth_physics.adapters import (
+    build_isaac_unitree_adapter_receipt,
+    finalize_isaac_unitree_adapter_execution,
+    prepare_isaac_unitree_adapter_execution,
+)
 from src.world_model.sim_synth_physics.runtime_launch import (
     build_backend_runtime_launch_receipt,
     execute_backend_runtime_launch,
@@ -60,18 +65,29 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     if not executable_adapter_consumer:
         raise SystemExit("Runtime artifacts do not include an executable_adapter_consumer.")
 
+    adapter_execution = prepare_isaac_unitree_adapter_execution(
+        executable_adapter_request,
+        executable_adapter_consumer,
+    )
     result = execute_backend_runtime_launch(
         runtime_bundle,
         launch_spec,
         execute=bool(args.execute),
         cwd=args.cwd,
     )
+    adapter_execution = finalize_isaac_unitree_adapter_execution(
+        adapter_execution,
+        launch_result=result,
+    )
+    adapter_receipt = build_isaac_unitree_adapter_receipt(adapter_execution)
     receipt = build_backend_runtime_launch_receipt(runtime_bundle, launch_spec, result)
     payload = {
         "runtime_bundle_path": str(Path(runtime_bundle_path).resolve()),
         "launch_spec_path": str(Path(launch_spec_path).resolve()),
         "executable_adapter_request": executable_adapter_request,
         "executable_adapter_consumer": executable_adapter_consumer,
+        "adapter_execution": adapter_execution,
+        "adapter_receipt": adapter_receipt.to_dict(),
         "result": result,
         "receipt": receipt.to_dict(),
     }

@@ -171,6 +171,38 @@ class BackendRuntimeLaunchReceipt:
 
 
 @dataclass(frozen=True)
+class BackendRuntimeAdapterReceipt:
+    """Receipt for executable-adapter mediation over a backend runtime lane."""
+
+    receipt_id: str
+    backend: str
+    adapter_family: str
+    adapter_entrypoint: str
+    consumer_mode: str
+    adapter_status: str
+    execution_path: str
+    executed: bool = False
+    artifact_refs: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_runtime_adapter_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "backend": self.backend,
+            "adapter_family": self.adapter_family,
+            "adapter_entrypoint": self.adapter_entrypoint,
+            "consumer_mode": self.consumer_mode,
+            "adapter_status": self.adapter_status,
+            "execution_path": self.execution_path,
+            "executed": bool(self.executed),
+            "artifact_refs": strings(self.artifact_refs),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class BackendRuntimeOutcomeReceipt:
     """Receipt for harvested outputs from an external backend runtime launch."""
 

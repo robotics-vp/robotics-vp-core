@@ -21,6 +21,7 @@ from .promotion import HelperMode
 from .render_materialization import materialize_render_provider_receipts
 from .receipts import (
     BackendExecutionBindingReceipt,
+    BackendRuntimeAdapterReceipt,
     BackendRuntimeBridgeReceipt,
     BackendRuntimeExecutionReceipt,
     BackendRuntimeLaunchReceipt,
@@ -69,6 +70,7 @@ class SimSynthPhysicsLoopResult:
     physics_calibration_receipt: PhysicsCalibrationReceipt
     backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt] = field(default_factory=list)
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt] = None
+    backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt] = None
     backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt] = None
     backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt] = None
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt] = None
@@ -93,6 +95,11 @@ class SimSynthPhysicsLoopResult:
                 None
                 if self.backend_runtime_execution_receipt is None
                 else self.backend_runtime_execution_receipt.to_dict()
+            ),
+            "backend_runtime_adapter_receipt": (
+                None
+                if self.backend_runtime_adapter_receipt is None
+                else self.backend_runtime_adapter_receipt.to_dict()
             ),
             "backend_runtime_launch_receipt": (
                 None
@@ -136,6 +143,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "backend_runtime_bridge_receipt": root / "backend_runtime_bridge_receipt.json",
         "backend_runtime_work_orders": root / "backend_runtime_work_orders.json",
         "backend_runtime_execution_receipt": root / "backend_runtime_execution_receipt.json",
+        "backend_runtime_adapter_receipt": root / "backend_runtime_adapter_receipt.json",
         "backend_runtime_launch_receipt": root / "backend_runtime_launch_receipt.json",
         "backend_runtime_outcome_receipt": root / "backend_runtime_outcome_receipt.json",
         "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
@@ -190,6 +198,28 @@ def _build_backend_runtime_launch_receipt(
     )
 
 
+def _build_backend_runtime_adapter_receipt(
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+) -> Optional[BackendRuntimeAdapterReceipt]:
+    if backend_runtime_execution_receipt is None:
+        return None
+    payload = mapping(backend_runtime_execution_receipt.metadata.get("adapter_receipt"))
+    if not payload:
+        return None
+    return BackendRuntimeAdapterReceipt(
+        receipt_id=str(payload.get("receipt_id", "") or ""),
+        backend=str(payload.get("backend", "") or ""),
+        adapter_family=str(payload.get("adapter_family", "") or ""),
+        adapter_entrypoint=str(payload.get("adapter_entrypoint", "") or ""),
+        consumer_mode=str(payload.get("consumer_mode", "") or ""),
+        adapter_status=str(payload.get("adapter_status", "") or ""),
+        execution_path=str(payload.get("execution_path", "") or ""),
+        executed=bool(payload.get("executed", False)),
+        artifact_refs=list(payload.get("artifact_refs", []) or []),
+        metadata=mapping(payload.get("metadata")),
+    )
+
+
 def _build_backend_runtime_outcome_receipt(
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
 ) -> Optional[BackendRuntimeOutcomeReceipt]:
@@ -234,6 +264,7 @@ def _build_outcome_receipts(
     backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt,
     backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt],
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+    backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt],
     calibration_receipt: PhysicsCalibrationReceipt,
     *,
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt] = None,
@@ -345,6 +376,21 @@ def _build_outcome_receipts(
                         if backend_runtime_execution_receipt is None
                         else str(backend_runtime_execution_receipt.execution_status)
                     ),
+                    "backend_runtime_adapter_receipt_id": (
+                        ""
+                        if backend_runtime_adapter_receipt is None
+                        else str(backend_runtime_adapter_receipt.receipt_id)
+                    ),
+                    "backend_runtime_adapter_status": (
+                        ""
+                        if backend_runtime_adapter_receipt is None
+                        else str(backend_runtime_adapter_receipt.adapter_status)
+                    ),
+                    "backend_runtime_adapter_execution_path": (
+                        ""
+                        if backend_runtime_adapter_receipt is None
+                        else str(backend_runtime_adapter_receipt.execution_path)
+                    ),
                     "backend_runtime_bridge_receipt_id": (
                         backend_runtime_bridge_receipt.receipt_id
                     ),
@@ -388,6 +434,7 @@ def _build_training_feedback_manifest(
     backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt,
     backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt],
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+    backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt],
     backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt],
     backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
@@ -440,6 +487,11 @@ def _build_training_feedback_manifest(
             if backend_runtime_execution_receipt is None
             else backend_runtime_execution_receipt.receipt_id
         ),
+        "backend_runtime_adapter_receipt_id": (
+            None
+            if backend_runtime_adapter_receipt is None
+            else backend_runtime_adapter_receipt.receipt_id
+        ),
         "backend_runtime_launch_receipt_id": (
             None
             if backend_runtime_launch_receipt is None
@@ -466,6 +518,16 @@ def _build_training_feedback_manifest(
             ""
             if backend_runtime_execution_receipt is None
             else backend_runtime_execution_receipt.execution_status
+        ),
+        "backend_runtime_adapter_status": (
+            ""
+            if backend_runtime_adapter_receipt is None
+            else backend_runtime_adapter_receipt.adapter_status
+        ),
+        "backend_runtime_adapter_execution_path": (
+            ""
+            if backend_runtime_adapter_receipt is None
+            else backend_runtime_adapter_receipt.execution_path
         ),
         "backend_runtime_launch_status": (
             ""
@@ -739,6 +801,9 @@ class SimSynthPhysicsRuntime:
             execute_external_launch=execute_external_runtime_launch,
             external_launch_cwd=external_launch_cwd,
         )
+        backend_runtime_adapter_receipt = _build_backend_runtime_adapter_receipt(
+            backend_runtime_execution_receipt
+        )
         backend_runtime_launch_receipt = _build_backend_runtime_launch_receipt(
             backend_runtime_execution_receipt
         )
@@ -830,6 +895,7 @@ class SimSynthPhysicsRuntime:
             backend_runtime_bridge_receipt,
             backend_runtime_work_orders,
             backend_runtime_execution_receipt,
+            backend_runtime_adapter_receipt,
             calibration_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             render_provider_receipts=render_provider_receipts,
@@ -873,6 +939,7 @@ class SimSynthPhysicsRuntime:
             backend_runtime_bridge_receipt,
             backend_runtime_work_orders,
             backend_runtime_execution_receipt,
+            backend_runtime_adapter_receipt,
             backend_runtime_launch_receipt,
             backend_runtime_outcome_receipt,
             backend_shadow_execution_receipt,
@@ -889,6 +956,7 @@ class SimSynthPhysicsRuntime:
             backend_runtime_bridge_receipt=backend_runtime_bridge_receipt,
             backend_runtime_work_orders=backend_runtime_work_orders,
             backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_adapter_receipt=backend_runtime_adapter_receipt,
             backend_runtime_launch_receipt=backend_runtime_launch_receipt,
             backend_runtime_outcome_receipt=backend_runtime_outcome_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
@@ -933,6 +1001,11 @@ class SimSynthPhysicsRuntime:
                 _write_json(
                     artifact_paths["backend_runtime_execution_receipt"],
                     backend_runtime_execution_receipt.to_dict(),
+                )
+            if backend_runtime_adapter_receipt is not None:
+                _write_json(
+                    artifact_paths["backend_runtime_adapter_receipt"],
+                    backend_runtime_adapter_receipt.to_dict(),
                 )
             if backend_runtime_launch_receipt is not None:
                 _write_json(
@@ -986,6 +1059,11 @@ class SimSynthPhysicsRuntime:
                         if backend_runtime_execution_receipt is None
                         else backend_runtime_execution_receipt.receipt_id
                     ),
+                    "backend_runtime_adapter_receipt_id": (
+                        None
+                        if backend_runtime_adapter_receipt is None
+                        else backend_runtime_adapter_receipt.receipt_id
+                    ),
                     "backend_runtime_launch_receipt_id": (
                         None
                         if backend_runtime_launch_receipt is None
@@ -1027,6 +1105,16 @@ class SimSynthPhysicsRuntime:
                         ""
                         if backend_runtime_execution_receipt is None
                         else backend_runtime_execution_receipt.execution_status
+                    ),
+                    "backend_runtime_adapter_status": (
+                        ""
+                        if backend_runtime_adapter_receipt is None
+                        else backend_runtime_adapter_receipt.adapter_status
+                    ),
+                    "backend_runtime_adapter_execution_path": (
+                        ""
+                        if backend_runtime_adapter_receipt is None
+                        else backend_runtime_adapter_receipt.execution_path
                     ),
                     "backend_runtime_launch_status": (
                         ""
