@@ -5,4 +5,5 @@
 @.agent/auth.md
 @.agent/mcp.md
 @.agent/codex.md
+@.agent/claude_copilot.md
 @.agent/inference_speed.md
