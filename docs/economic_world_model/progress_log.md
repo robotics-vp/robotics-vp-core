@@ -982,6 +982,23 @@
   - actual GGDS / video-diffusion materialization on GPU
 ## 2026-04-01
 
+- Changed: pushed the next concrete Isaac/Unitree runtime-execution mediation cut so the WM now owns not just the executable-adapter request but the consumer over that request:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_consumer.py`
+  - `runtime_bundles.py` now emits `backend_executable_adapter_consumer_v1` beside `backend_executable_adapter_request_v1`
+  - the consumer names:
+    - consumer mode
+    - consumer status
+    - local-python-bridge vs external-launch responsibility
+    - remaining preconditions
+  - `runtime_launch.py` now consumes that consumer surface during launch preparation instead of flattening the adapter mediation into generic launch metadata
+  - `backend_runtime_execution.py` now writes and preserves the consumer artifact/metadata inside the live Phase-1 runtime path
+  - `scripts/run_isaac_unitree_executable_adapter.py` now exposes both request and consumer
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_consumer.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/backend_runtime_execution.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_executable_consumer.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_consumer.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/backend_runtime_execution.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_executable_consumer.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_isaac_unitree_executable_consumer.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: this is a meaningful Phase-1 closure step, but it is still consumer mediation, not full execution realization:
+  - a concrete Isaac Lab / Isaac Sim / Unitree adapter still needs to consume this consumer surface against real upstream runtime/assets
+  - Holosoma still needs an equivalent runtime-execution deepening
+  - GPU-backed GGDS / video materialization remains outstanding
+
 - Changed: pushed the next concrete Phase 1 Isaac/Unitree executable-adapter cut so the WM does more than emit generic launch commands:
   - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py`
   - `runtime_bundles.py` now emits `backend_executable_adapter_request_v1` for Isaac/Unitree bundles and launch specs, carrying:

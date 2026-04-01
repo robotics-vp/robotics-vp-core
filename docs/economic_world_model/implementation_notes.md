@@ -1845,6 +1845,32 @@
   - that means the remaining backend gap is increasingly about actual external runtime/assets/GPU availability rather than missing canonical WM receipt plumbing
 ## 2026-04-01
 
+- The Isaac/Unitree executable-adapter lane now has an explicit consumer surface, not just a request surface:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_consumer.py`
+  - the consumer tells the WM whether the request is being handed to:
+    - a local python bridge
+    - an external sim launch consumer
+    - an external teleop bridge
+    - an external LeRobot eval consumer
+  - it also preserves remaining preconditions instead of letting the request look “consumed” by default
+
+- The important topology gain is:
+  - request and consumer are now separate typed artifacts
+  - that means the WM can say:
+    - “here is the executable-adapter request”
+    - “here is the consumer currently responsible for that request”
+    - without pretending that either one is already the final real Unitree runtime adapter
+
+- The runtime path now uses that distinction:
+  - `runtime_bundles.py` emits both request and consumer
+  - `runtime_launch.py` uses the consumer to drive launch mediation
+  - `backend_runtime_execution.py` now writes the consumer into runtime artifacts and receipt metadata
+  - `scripts/run_isaac_unitree_executable_adapter.py` exposes the pair end to end
+
+- Why this matters:
+  - it removes another place where execution mediation could hide behind generic launch semantics
+  - it also makes the next Phase-1 cut clearer: the remaining missing piece is a real adapter implementation over this surface, not a lack of typed consumer structure
+
 - The next concrete Isaac/Unitree executable-adapter surface is now inside the WM runtime path, not just implied by launch strings:
   - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py`
   - `build_backend_runtime_bundle(...)` now emits `backend_executable_adapter_request_v1` for Isaac/Unitree runtime artifacts
