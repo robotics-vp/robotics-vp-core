@@ -565,6 +565,10 @@ def materialize_backend_runtime_execution(
         launch_spec,
         require_policy=require_policy,
     )
+    executable_adapter_consumer = _mapping(
+        launch_spec.get("executable_adapter_consumer")
+        or runtime_bundle.get("executable_adapter_consumer")
+    )
     runtime_output_contract = build_backend_runtime_output_contract(runtime_bundle, launch_spec)
     launch_report_refs: list[str] = []
     launch_receipt_payload: dict[str, Any] | None = None
@@ -601,6 +605,7 @@ def materialize_backend_runtime_execution(
         if output_root is not None:
             report_path = output_root / "backend_runtime_launch_report.json"
             receipt_path = output_root / "backend_runtime_launch_receipt.json"
+            consumer_path = output_root / "backend_executable_adapter_consumer.json"
             output_contract_path = output_root / "backend_runtime_output_contract.json"
             output_summary_path = output_root / "backend_runtime_output_summary.json"
             outcome_receipt_path = output_root / "backend_runtime_outcome_receipt.json"
@@ -614,6 +619,7 @@ def materialize_backend_runtime_execution(
                 },
             )
             _write_json(receipt_path, launch_receipt_payload)
+            _write_json(consumer_path, executable_adapter_consumer)
             _write_json(output_contract_path, runtime_output_contract)
             _write_json(output_summary_path, output_summary)
             _write_json(outcome_receipt_path, runtime_outcome_receipt_payload)
@@ -621,6 +627,7 @@ def materialize_backend_runtime_execution(
                 [
                     str(report_path.resolve()),
                     str(receipt_path.resolve()),
+                    str(consumer_path.resolve()),
                     str(output_contract_path.resolve()),
                     str(output_summary_path.resolve()),
                     str(outcome_receipt_path.resolve()),
@@ -661,6 +668,7 @@ def materialize_backend_runtime_execution(
                     "policy_contract": policy_contract,
                     "runtime_bundle": runtime_bundle,
                     "launch_spec": launch_spec,
+                    "executable_adapter_consumer": executable_adapter_consumer,
                     "runtime_output_contract": runtime_output_contract,
                     "launch_plan": launch_plan,
                     "launch_receipt": launch_receipt_payload,
@@ -683,6 +691,7 @@ def materialize_backend_runtime_execution(
             if output_root is not None:
                 report_path = output_root / "backend_runtime_launch_report.json"
                 receipt_path = output_root / "backend_runtime_launch_receipt.json"
+                consumer_path = output_root / "backend_executable_adapter_consumer.json"
                 output_contract_path = output_root / "backend_runtime_output_contract.json"
                 output_summary_path = output_root / "backend_runtime_output_summary.json"
                 outcome_receipt_path = output_root / "backend_runtime_outcome_receipt.json"
@@ -696,6 +705,7 @@ def materialize_backend_runtime_execution(
                     },
                 )
                 _write_json(receipt_path, launch_receipt_payload)
+                _write_json(consumer_path, executable_adapter_consumer)
                 _write_json(output_contract_path, runtime_output_contract)
                 _write_json(
                     output_summary_path,
@@ -735,6 +745,7 @@ def materialize_backend_runtime_execution(
                     [
                         str(report_path.resolve()),
                         str(receipt_path.resolve()),
+                        str(consumer_path.resolve()),
                         str(output_contract_path.resolve()),
                         str(output_summary_path.resolve()),
                         str(outcome_receipt_path.resolve()),
@@ -773,6 +784,7 @@ def materialize_backend_runtime_execution(
                 "policy_contract": policy_contract,
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
+                "executable_adapter_consumer": executable_adapter_consumer,
                 "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
                 "launch_receipt": launch_receipt_payload,
@@ -857,6 +869,7 @@ def materialize_backend_runtime_execution(
                 "policy_contract": policy_contract,
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
+                "executable_adapter_consumer": executable_adapter_consumer,
                 "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
                 "launch_receipt": launch_receipt_payload,
@@ -903,6 +916,7 @@ def materialize_backend_runtime_execution(
             "policy_contract": policy_contract,
             "runtime_bundle": runtime_bundle,
             "launch_spec": launch_spec,
+            "executable_adapter_consumer": executable_adapter_consumer,
             "runtime_output_contract": runtime_output_contract,
             "launch_plan": launch_plan,
             "launch_receipt": launch_receipt_payload,

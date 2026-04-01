@@ -40,6 +40,15 @@ def _isaac_bundle() -> dict[str, object]:
             "missing_preconditions": [],
             "notes": ["Executable adapter request present."],
         },
+        "executable_adapter_consumer": {
+            "consumer_mode": "external_sim_launch",
+            "consumer_status": "external_launch_consumer_ready",
+            "command": "python ${UNITREE_SIM_ISAACLAB_ROOT}/sim_main.py --task peg_in_hole --policy /tmp/g1.onnx --headless",
+            "cwd": "/tmp/unitree_sim_isaaclab",
+            "env_overrides": {"UNITREE_CONSUMER_MODE": "external_sim_launch"},
+            "missing_preconditions": [],
+            "notes": ["Executable adapter consumer present."],
+        },
     }
 
 
@@ -63,7 +72,9 @@ def test_prepare_backend_runtime_launch_ready(monkeypatch) -> None:
     assert plan["env_overrides"]["UNITREE_SIM_ISAACLAB_ROOT"] == "/tmp/unitree_sim_isaaclab"
     assert plan["env_overrides"]["UNITREE_SDK2_ROOT"] == "/tmp/unitree_sdk2"
     assert plan["env_overrides"]["UNITREE_DEPLOYMENT_MODE"] == "sim_eval"
+    assert plan["env_overrides"]["UNITREE_CONSUMER_MODE"] == "external_sim_launch"
     assert plan["executable_adapter_request"]["adapter_entrypoint"] == "isaaclab_unitree_sim"
+    assert plan["executable_adapter_consumer"]["consumer_mode"] == "external_sim_launch"
 
 
 def test_prepare_backend_runtime_launch_blocks_when_policy_and_gpu_missing(monkeypatch) -> None:
@@ -168,8 +179,9 @@ def test_build_backend_runtime_launch_receipt_maps_ready_status() -> None:
             "status": "ready_for_launch",
             "command": "echo hello",
             "cwd": "/tmp/unitree_sim_isaaclab",
-            "executed": False,
-        },
+        "executed": False,
+        "executable_adapter_consumer": {"consumer_mode": "external_sim_launch"},
+    },
     )
 
     assert receipt.launch_status == "launch_prepared"
@@ -256,6 +268,7 @@ def test_run_isaac_unitree_executable_adapter_script_writes_adapter_request(
 
     assert output_path.exists()
     assert payload["executable_adapter_request"]["deployment_mode"] == "sim_eval"
+    assert payload["executable_adapter_consumer"]["consumer_mode"] == "external_sim_launch"
     assert payload["receipt"]["launch_status"] == "launch_prepared"
 
 

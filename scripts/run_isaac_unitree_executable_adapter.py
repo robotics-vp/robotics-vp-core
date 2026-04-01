@@ -50,8 +50,15 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         or runtime_bundle.get("executable_adapter_request")
         or {}
     )
+    executable_adapter_consumer = (
+        launch_spec.get("executable_adapter_consumer")
+        or runtime_bundle.get("executable_adapter_consumer")
+        or {}
+    )
     if not executable_adapter_request:
         raise SystemExit("Runtime artifacts do not include an executable_adapter_request.")
+    if not executable_adapter_consumer:
+        raise SystemExit("Runtime artifacts do not include an executable_adapter_consumer.")
 
     result = execute_backend_runtime_launch(
         runtime_bundle,
@@ -64,6 +71,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         "runtime_bundle_path": str(Path(runtime_bundle_path).resolve()),
         "launch_spec_path": str(Path(launch_spec_path).resolve()),
         "executable_adapter_request": executable_adapter_request,
+        "executable_adapter_consumer": executable_adapter_consumer,
         "result": result,
         "receipt": receipt.to_dict(),
     }

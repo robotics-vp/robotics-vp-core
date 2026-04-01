@@ -83,6 +83,10 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
         launch_spec["executable_adapter_request"]["adapter_entrypoint"]
         == "isaaclab_unitree_sim"
     )
+    assert (
+        runtime_bundle["executable_adapter_consumer"]["consumer_mode"]
+        == "external_sim_launch"
+    )
     assert runtime_bundle["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert launch_spec["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert runtime_bundle["output_contract"]["sources"]
@@ -151,6 +155,10 @@ def test_build_isaac_runtime_bundle_can_prefer_lerobot_profile(tmp_path: Path) -
     assert (
         launch_spec["executable_adapter_request"]["adapter_entrypoint"]
         == "unitree_lerobot_eval"
+    )
+    assert (
+        launch_spec["executable_adapter_consumer"]["consumer_mode"]
+        == "external_lerobot_eval"
     )
 
 

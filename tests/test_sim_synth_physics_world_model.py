@@ -833,6 +833,12 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
         result.backend_runtime_execution_receipt.metadata["launch_plan"]["status"]
         == "ready_for_launch"
     )
+    assert (
+        result.backend_runtime_execution_receipt.metadata["executable_adapter_consumer"][
+            "consumer_mode"
+        ]
+        == "external_sim_launch"
+    )
     assert "sim_main.py" in result.backend_runtime_execution_receipt.metadata["launch_spec"]["command"]
     assert any(
         "sim_main.py" in hint for hint in result.backend_runtime_work_orders[0].command_hints
