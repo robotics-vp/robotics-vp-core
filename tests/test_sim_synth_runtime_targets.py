@@ -33,6 +33,26 @@ def test_isaac_runtime_targets_include_context_roots(tmp_path) -> None:
     assert contract["runtime_targets_ready"] is True
 
 
+def test_isaac_runtime_targets_accept_lerobot_alias(tmp_path) -> None:
+    sdk_root = tmp_path / "unitree_sdk2"
+    asset_root = tmp_path / "unitree_assets"
+    lerobot_root = tmp_path / "unitree_lerobot"
+    sdk_root.mkdir()
+    asset_root.mkdir()
+    lerobot_root.mkdir()
+
+    contract = describe_isaac_runtime_targets(
+        {
+            "unitree_sdk2_root": str(sdk_root),
+            "unitree_asset_root": str(asset_root),
+            "unitree_lerobot_root": str(lerobot_root),
+        }
+    )
+
+    assert "unitree_il_lerobot_root" in contract["ready_target_ids"]
+    assert "unitree_il_lerobot_root" in contract["preferred_runtime_roots"]
+
+
 def test_holosoma_runtime_targets_require_motion_root(tmp_path) -> None:
     holosoma_root = tmp_path / "holosoma"
     holosoma_root.mkdir()

@@ -45,6 +45,28 @@ def test_isaac_runtime_layouts_detect_oss_repo_shapes(tmp_path) -> None:
     assert policy_contract["runtime_report_candidates"] == []
 
 
+def test_isaac_runtime_layouts_detect_lerobot_profile(tmp_path) -> None:
+    lerobot_root = tmp_path / "unitree_lerobot"
+    lerobot_root.mkdir()
+    (lerobot_root / "examples").mkdir()
+    outputs_dir = lerobot_root / "outputs" / "run_1"
+    outputs_dir.mkdir(parents=True)
+    (outputs_dir / "policy.onnx").write_text("x", encoding="utf-8")
+
+    contract = describe_isaac_runtime_layouts(
+        {
+            "unitree_lerobot_root": str(lerobot_root),
+        }
+    )
+
+    assert "unitree_lerobot" in contract["ready_profiles"]
+    profile = next(
+        profile for profile in contract["profiles"] if profile["profile_id"] == "unitree_lerobot"
+    )
+    assert profile["policy_candidates"]
+    assert profile["deploy_candidates"] == []
+
+
 def test_holosoma_runtime_layouts_and_policy_contracts_detect_roots(tmp_path) -> None:
     holosoma_root = tmp_path / "holosoma"
     holosoma_root.mkdir()

@@ -248,6 +248,78 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
     assert result.backend_runtime_bridge_receipt.metadata["runtime_layout_ready_profiles"]
 
 
+def test_world_state_marks_isaac_external_launch_ready_for_lerobot_and_teleop(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from src.world_model.sim_synth_physics import backend_adapters as adapter_module
+    from src.world_model.sim_synth_physics.adapters import backend_isaac as binding_module
+    from src.world_model.sim_synth_physics import runtime_targets as runtime_targets_module
+
+    monkeypatch.setattr(adapter_module, "_has_module", lambda name: False)
+    monkeypatch.setattr(binding_module, "_has_module", lambda name: False)
+    monkeypatch.setattr(runtime_targets_module, "_has_module", lambda name: False)
+
+    xr_root = tmp_path / "xr_teleoperate"
+    sdk_root = tmp_path / "unitree_sdk2"
+    sdk2_python_root = tmp_path / "unitree_sdk2_python"
+    teleimager_root = tmp_path / "teleimager"
+    asset_root = tmp_path / "unitree_assets"
+    lerobot_root = tmp_path / "unitree_lerobot"
+    policy_root = tmp_path / "policies"
+    for root in (
+        xr_root,
+        sdk_root,
+        sdk2_python_root,
+        teleimager_root,
+        asset_root,
+        lerobot_root,
+        policy_root,
+    ):
+        root.mkdir()
+    (xr_root / "teleop").mkdir()
+    (lerobot_root / "examples").mkdir()
+    (policy_root / "g1_policy.onnx").write_text("x", encoding="utf-8")
+
+    world_state = compile_sim_synth_physics_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedBackendSelector(),
+        embodiment_context={
+            "xr_teleoperate_root": str(xr_root),
+            "unitree_sdk2_root": str(sdk_root),
+            "unitree_sdk2_python_root": str(sdk2_python_root),
+            "teleimager_root": str(teleimager_root),
+            "unitree_asset_root": str(asset_root),
+            "unitree_lerobot_root": str(lerobot_root),
+            "unitree_policy_root": str(policy_root),
+            "runtime_policy_id": str(policy_root / "g1_policy.onnx"),
+            "active_embodiments": ["unitree_g1"],
+            "robot_asset_manifest": {
+                "unitree_usd": "/assets/unitree/g1.usd",
+                "joint_map_path": "/assets/unitree/joint_map.yaml",
+                "camera_extrinsics": "/assets/unitree/camera_extrinsics.json",
+                "imu_extrinsics": "/assets/unitree/imu_extrinsics.json",
+                "force_torque_calibration": "/assets/unitree/ft_calibration.json",
+                "actuator_latency_profile": "/assets/unitree/latency.yaml",
+                "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
+                "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
+            },
+        },
+    )
+
+    assert world_state.backend_execution_binding is not None
+    assert world_state.backend_execution_binding.binding_status == "external_launch_ready"
+    deployment_contract = world_state.backend_execution_binding.metadata["deployment_contract"]
+    assert deployment_contract["teleop_launch_ready"] is True
+    assert deployment_contract["lerobot_eval_ready"] is True
+    assert world_state.backend_runtime_bridge is not None
+    assert world_state.backend_runtime_bridge.bridge_status == "runtime_bridge_ready"
+    assert world_state.backend_runtime_bridge.transport_profile == "unitree_xr_teleop_bridge"
+    assert "sdk2_python" in world_state.backend_runtime_bridge.transport_stack
+    assert "teleimager" in world_state.backend_runtime_bridge.transport_stack
+    assert "webrtc" in world_state.backend_runtime_bridge.transport_stack
+
+
 def test_world_state_normalizes_unitree_asset_aliases_into_robot_contract() -> None:
     world_state = compile_sim_synth_physics_world_state(
         _make_test_graph(),

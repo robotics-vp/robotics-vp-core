@@ -131,8 +131,9 @@ def describe_isaac_runtime_targets(
     ) or _env_path("TELEIMAGER_ROOT")
     unitree_il_lerobot_root = _context_path(
         embodiment,
+        "unitree_lerobot_root",
         "unitree_il_lerobot_root",
-    ) or _env_path("UNITREE_IL_LEROBOT_ROOT")
+    ) or _env_path("UNITREE_IL_LEROBOT_ROOT", "UNITREE_LEROBOT_ROOT")
     records = [
         _target_record(
             target_id="isaaclab_root",
@@ -218,13 +219,24 @@ def describe_isaac_runtime_targets(
         records=records,
         python_bridge_available=_has_module("src.motor_backend.workcell_isaaclab_backend"),
         required_target_ids=["unitree_sdk2_root", "unitree_asset_root"],
-        one_of_groups=[["isaaclab_root", "isaacsim_root", "unitree_sim_isaaclab_root", "unitree_rl_gym_root", "humanoidverse_root"]],
+        one_of_groups=[
+            [
+                "isaaclab_root",
+                "isaacsim_root",
+                "unitree_sim_isaaclab_root",
+                "unitree_rl_gym_root",
+                "unitree_il_lerobot_root",
+                "humanoidverse_root",
+                "xr_teleoperate_root",
+            ]
+        ],
     )
     summary["preferred_runtime_roots"] = [
         target_id
         for target_id in (
             "unitree_sim_isaaclab_root",
             "unitree_rl_gym_root",
+            "unitree_il_lerobot_root",
             "humanoidverse_root",
             "isaaclab_root",
             "isaacsim_root",

@@ -499,6 +499,10 @@ def materialize_backend_runtime_execution(
         binding_metadata.get("policy_contract")
         or binding_metadata_nested.get("policy_contract")
     )
+    deployment_contract = _mapping(
+        binding_metadata.get("deployment_contract")
+        or binding_metadata_nested.get("deployment_contract")
+    )
     runtime_bundle_refs, runtime_bundle, launch_spec = build_backend_runtime_bundle(
         backend=backend,
         task_id=task_id,
@@ -510,6 +514,7 @@ def materialize_backend_runtime_execution(
         normalized_robot_asset_manifest=_mapping(
             binding_payload.get("normalized_robot_asset_manifest")
         ),
+        deployment_contract=deployment_contract,
         output_root=output_root,
     )
     artifact_refs.extend(runtime_bundle_refs)

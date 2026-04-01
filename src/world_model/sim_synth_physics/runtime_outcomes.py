@@ -67,6 +67,37 @@ ISAAC_OUTPUT_SOURCES = {
             "upstream_hint": "Policy-bank checkpoints and deploy configs.",
         },
     ],
+    "unitree_lerobot": [
+        {
+            "source_id": "runtime_root",
+            "artifact_kind": "runtime_outputs",
+            "root_kind": "launch_root",
+            "patterns": [
+                "outputs/**/*",
+                "episodes/**/*",
+                "replay/**/*",
+                "metrics/**/*.json",
+                "logs/**/*.json",
+                "logs/**/*.yaml",
+            ],
+            "upstream_hint": "Unitree LeRobot eval outputs, replay captures, and metrics.",
+        },
+        {
+            "source_id": "policy_bank",
+            "artifact_kind": "policy_bank",
+            "root_kind": "policy_root",
+            "patterns": ["**/*.onnx", "**/*.pt", "**/*.pth", "**/*.ckpt", "**/*.yaml", "**/*.json"],
+            "upstream_hint": "LeRobot checkpoints and deploy configs.",
+        },
+        {
+            "source_id": "robot_assets",
+            "artifact_kind": "robot_assets",
+            "root_kind": "target_ids",
+            "target_ids": ["unitree_asset_root", "unitree_model_root"],
+            "patterns": ["**/*.usd", "**/*.usda", "**/*.urdf", "**/*.yaml", "**/*.json"],
+            "upstream_hint": "Unitree robot descriptions and calibration manifests for LeRobot eval.",
+        },
+    ],
     "humanoidverse": [
         {
             "source_id": "runtime_root",

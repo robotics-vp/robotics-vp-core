@@ -101,6 +101,9 @@ def describe_isaac_runtime_layouts(
     xr_teleoperate_root = _context_path(
         embodiment, "xr_teleoperate_root"
     ) or _env_path("XR_TELEOPERATE_ROOT")
+    unitree_lerobot_root = _context_path(
+        embodiment, "unitree_lerobot_root", "unitree_il_lerobot_root"
+    ) or _env_path("UNITREE_LEROBOT_ROOT", "UNITREE_IL_LEROBOT_ROOT")
     unitree_model_root = _context_path(
         embodiment, "unitree_model_root"
     ) or _env_path("UNITREE_MODEL_ROOT")
@@ -156,6 +159,27 @@ def describe_isaac_runtime_layouts(
             data_patterns=["teleop/utils/data/**/*", "teleop/**/*.json"],
         ),
         _profile(
+            profile_id="unitree_lerobot",
+            label="Unitree LeRobot repo",
+            root=unitree_lerobot_root,
+            expected_paths=[],
+            preferred_entrypoints=["examples", "scripts", "lerobot"],
+            deploy_patterns=["examples/**/*.py", "scripts/**/*.py", "lerobot/**/*.py"],
+            policy_patterns=[
+                "outputs/**/*.onnx",
+                "outputs/**/*.pt",
+                "checkpoints/**/*",
+                "logs/**/*.onnx",
+                "logs/**/*.pt",
+            ],
+            data_patterns=[
+                "data/**/*",
+                "episodes/**/*",
+                "replay/**/*",
+                "metrics/**/*.json",
+            ],
+        ),
+        _profile(
             profile_id="unitree_model_assets",
             label="Unitree model/assets repo",
             root=unitree_model_root,
@@ -176,6 +200,7 @@ def describe_isaac_runtime_layouts(
         "preferred_profile_order": [
             "unitree_sim_isaaclab",
             "unitree_rl_gym",
+            "unitree_lerobot",
             "humanoidverse",
             "isaaclab_core",
             "xr_teleoperate",

@@ -13,7 +13,8 @@ from .runtime_outcomes import build_backend_runtime_output_contract
 ISAAC_PROFILE_TO_TARGET_IDS = {
     "isaaclab_core": ["isaaclab_root", "isaacsim_root"],
     "unitree_sim_isaaclab": ["unitree_sim_isaaclab_root"],
-    "unitree_rl_gym": ["unitree_rl_gym_root", "unitree_policy_root"],
+    "unitree_rl_gym": ["unitree_rl_gym_root"],
+    "unitree_lerobot": ["unitree_il_lerobot_root"],
     "humanoidverse": ["humanoidverse_root"],
     "xr_teleoperate": ["xr_teleoperate_root"],
     "unitree_model_assets": ["unitree_model_root", "unitree_asset_root"],
@@ -32,6 +33,10 @@ ISAAC_PROFILE_COMMANDS = {
     "unitree_rl_gym": (
         "python ${UNITREE_RL_GYM_ROOT}/deploy/deploy.py "
         "--task {task_id} --checkpoint {policy_ref}"
+    ),
+    "unitree_lerobot": (
+        "python ${UNITREE_IL_LEROBOT_ROOT}/examples/eval_policy.py "
+        "--task {task_id} --policy {policy_ref}"
     ),
     "humanoidverse": (
         "python ${HUMANOIDVERSE_ROOT}/humanoidverse/run.py "
@@ -102,13 +107,16 @@ def _preferred_profile(
     runtime_target_contract: Mapping[str, Any],
     runtime_layout_contract: Mapping[str, Any],
     target_profile_map: Mapping[str, list[str]],
+    deployment_contract: Mapping[str, Any] | None = None,
 ) -> str:
     ready_profiles = _ready_profiles(
         runtime_target_contract=runtime_target_contract,
         runtime_layout_contract=runtime_layout_contract,
         target_profile_map=target_profile_map,
     )
-    preferred_order = strings(runtime_layout_contract.get("preferred_profile_order"))
+    preferred_order = strings(
+        mapping(deployment_contract).get("preferred_profile_order")
+    ) or strings(runtime_layout_contract.get("preferred_profile_order"))
     for profile_id in preferred_order:
         if profile_id in ready_profiles:
             return profile_id
@@ -127,6 +135,7 @@ def _launch_specs_for_backend(
     policy_ref: str,
     runtime_target_contract: Mapping[str, Any],
     runtime_layout_contract: Mapping[str, Any],
+    deployment_contract: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if backend == "isaac":
         target_profile_map = ISAAC_PROFILE_TO_TARGET_IDS
@@ -139,6 +148,10 @@ def _launch_specs_for_backend(
             "unitree_rl_gym": {
                 "repo": "unitree_rl_gym",
                 "url": "https://github.com/unitreerobotics/unitree_rl_gym",
+            },
+            "unitree_lerobot": {
+                "repo": "unitree_IL_lerobot",
+                "url": "https://github.com/unitreerobotics/unitree_IL_lerobot",
             },
             "humanoidverse": {
                 "repo": "HumanoidVerse",
@@ -164,8 +177,14 @@ def _launch_specs_for_backend(
         runtime_layout_contract=runtime_layout_contract,
         target_profile_map=target_profile_map,
     )
+    preferred_order = strings(
+        mapping(deployment_contract).get("preferred_profile_order")
+    ) or strings(runtime_layout_contract.get("preferred_profile_order"))
+    ordered_profiles = [
+        profile_id for profile_id in preferred_order if profile_id in ready_profiles
+    ] + [profile_id for profile_id in ready_profiles if profile_id not in preferred_order]
     specs: list[dict[str, Any]] = []
-    for profile_id in ready_profiles:
+    for profile_id in ordered_profiles:
         command_template = command_templates.get(profile_id, "")
         if not command_template:
             continue
@@ -198,6 +217,7 @@ def build_backend_runtime_bundle(
     policy_contract: Mapping[str, Any],
     robot_asset_manifest: Mapping[str, Any],
     normalized_robot_asset_manifest: Mapping[str, Any],
+    deployment_contract: Mapping[str, Any] | None = None,
     output_root: Optional[Path],
 ) -> tuple[list[str], dict[str, Any], dict[str, Any]]:
     target_profile_map = (
@@ -207,6 +227,7 @@ def build_backend_runtime_bundle(
         runtime_target_contract=runtime_target_contract,
         runtime_layout_contract=runtime_layout_contract,
         target_profile_map=target_profile_map,
+        deployment_contract=deployment_contract,
     )
     launch_specs = _launch_specs_for_backend(
         backend=backend,
@@ -214,6 +235,7 @@ def build_backend_runtime_bundle(
         policy_ref=policy_ref,
         runtime_target_contract=runtime_target_contract,
         runtime_layout_contract=runtime_layout_contract,
+        deployment_contract=deployment_contract,
     )
     preferred_launch_spec = next(
         (spec for spec in launch_specs if spec.get("profile_id") == preferred_profile),
@@ -232,6 +254,7 @@ def build_backend_runtime_bundle(
         "runtime_target_contract": mapping(runtime_target_contract),
         "runtime_layout_contract": mapping(runtime_layout_contract),
         "policy_contract": mapping(policy_contract),
+        "deployment_contract": mapping(deployment_contract),
         "robot_asset_manifest": mapping(robot_asset_manifest),
         "normalized_robot_asset_manifest": mapping(normalized_robot_asset_manifest),
         "launch_specs": list(launch_specs),
@@ -246,6 +269,7 @@ def build_backend_runtime_bundle(
         "policy_ref": policy_ref,
         "policy_ready": bool(policy_contract.get("policy_ready", False)),
         "runtime_targets_ready": bool(runtime_target_contract.get("runtime_targets_ready", False)),
+        "deployment_contract": mapping(deployment_contract),
         "command": str(mapping(preferred_launch_spec).get("command", "") or ""),
         "root": str(mapping(preferred_launch_spec).get("root", "") or ""),
         "upstream_profile": mapping(

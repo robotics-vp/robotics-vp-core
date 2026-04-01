@@ -74,6 +74,14 @@ def _transport_profile(
 ) -> str:
     ready_targets = set(strings(runtime_target_contract.get("ready_target_ids")))
     if backend == "isaac":
+        if {
+            "xr_teleoperate_root",
+            "unitree_sdk2_python_root",
+            "teleimager_root",
+        }.issubset(ready_targets):
+            return "unitree_xr_teleop_bridge"
+        if "unitree_il_lerobot_root" in ready_targets:
+            return "unitree_lerobot_eval_bridge"
         if "unitree_sdk2_root" in ready_targets:
             return "isaaclab_unitree_dds_bridge"
         if "isaaclab_root" in ready_targets or "isaacsim_root" in ready_targets:
@@ -95,6 +103,14 @@ def _transport_stack(
         stack.append("python_bridge")
     stack.extend(strings(binding.target_runtime_stack))
     if backend == "isaac":
+        if "unitree_sdk2_python_root" in ready_targets:
+            stack.append("sdk2_python")
+        if "teleimager_root" in ready_targets:
+            stack.append("teleimager")
+        if "xr_teleoperate_root" in ready_targets:
+            stack.append("webrtc")
+        if "unitree_il_lerobot_root" in ready_targets:
+            stack.append("lerobot_eval")
         if "unitree_sdk2_root" in ready_targets:
             stack.append("dds")
         if "isaaclab_root" in ready_targets or "isaacsim_root" in ready_targets:
@@ -123,11 +139,11 @@ def _layout_ready_profiles(binding: BackendExecutionBindingState) -> list[str]:
             "isaacsim_root": "isaaclab_core",
             "unitree_sim_isaaclab_root": "unitree_sim_isaaclab",
             "unitree_rl_gym_root": "unitree_rl_gym",
+            "unitree_il_lerobot_root": "unitree_lerobot",
             "humanoidverse_root": "humanoidverse",
             "xr_teleoperate_root": "xr_teleoperate",
             "unitree_model_root": "unitree_model_assets",
             "unitree_asset_root": "unitree_model_assets",
-            "unitree_policy_root": "unitree_rl_gym",
         },
         "holosoma": {
             "holosoma_root": "holosoma_repo",
@@ -199,8 +215,12 @@ def _safety_channels(
 def _binding_status_score(binding_status: str) -> float:
     if binding_status in {"runtime_ready", "ready"}:
         return 1.0
+    if binding_status == "external_launch_ready":
+        return 0.85
     if binding_status in {"shadow_ready", "runtime_assets_missing"}:
         return 0.65
+    if binding_status == "external_launch_assets_missing":
+        return 0.55
     if binding_status in {"assets_missing", "integration_pending"}:
         return 0.35
     return 0.15
@@ -218,13 +238,24 @@ def _bridge_status(
     runtime_targets_ready = bool(runtime_target_contract.get("runtime_targets_ready", False))
     missing_target_ids = strings(runtime_target_contract.get("missing_required_target_ids"))
     unresolved_groups = list(runtime_target_contract.get("unresolved_one_of_groups", []) or [])
-    if binding_status in {"runtime_ready", "ready"} and runtime_targets_ready and not missing_assets:
+    if (
+        binding_status in {"runtime_ready", "ready", "external_launch_ready"}
+        and runtime_targets_ready
+        and not missing_assets
+    ):
         return "runtime_bridge_ready"
+    if binding_status == "external_launch_assets_missing" and runtime_targets_ready:
+        return "runtime_assets_missing"
     if missing_assets and runtime_targets_ready:
         return "runtime_assets_missing"
     if missing_target_ids or unresolved_groups:
         return "runtime_targets_missing"
-    if binding_status in {"shadow_ready", "runtime_assets_missing", "assets_missing"} or bool(
+    if binding_status in {
+        "shadow_ready",
+        "runtime_assets_missing",
+        "assets_missing",
+        "external_launch_assets_missing",
+    } or bool(
         runtime_target_contract.get("python_bridge_available", False)
     ):
         return "shadow_bridge_only"
@@ -387,6 +418,9 @@ def compile_backend_runtime_bridge(
             "policy_contract": mapping(
                 backend_execution_binding.metadata.get("policy_contract")
             ),
+            "deployment_contract": mapping(
+                backend_execution_binding.metadata.get("deployment_contract")
+            ),
             "target_hardware_class": target_hardware_class,
             "missing_assets": missing_assets,
             "calibration_contracts": (
@@ -519,6 +553,9 @@ def build_backend_runtime_bridge_receipt(
                 "runtime_layout_contract", {}
             ),
             "policy_contract": mapping(bridge_state.metadata).get("policy_contract", {}),
+            "deployment_contract": mapping(bridge_state.metadata).get(
+                "deployment_contract", {}
+            ),
             "missing_assets": mapping(bridge_state.metadata).get("missing_assets", []),
             "runtime_targets_ready": mapping(bridge_state.metadata).get("runtime_targets_ready", False),
             "runtime_layout_ready_profiles": mapping(bridge_state.metadata).get(

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.world_model.sim_synth_physics.adapters.isaac_unitree_deployment import (
+    build_isaac_unitree_deployment_contract,
+)
 from src.world_model.sim_synth_physics.runtime_bundles import build_backend_runtime_bundle
 from src.world_model.sim_synth_physics.runtime_layouts import (
     describe_holosoma_policy_contract,
@@ -47,6 +50,22 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
         normalized_robot_asset_manifest={
             "unitree_robot_description": {"present": True, "value": "/assets/g1.usd"}
         },
+        deployment_contract=build_isaac_unitree_deployment_contract(
+            embodiment_context=embodiment_context,
+            runtime_target_contract=describe_isaac_runtime_targets(embodiment_context),
+            runtime_layout_contract=describe_isaac_runtime_layouts(embodiment_context),
+            policy_contract=describe_isaac_policy_contract(embodiment_context),
+            normalized_asset_manifest={
+                "unitree_robot_description": {"present": True},
+                "whole_body_joint_map": {"present": True},
+                "camera_extrinsics": {"present": True},
+                "imu_extrinsics": {"present": True},
+                "force_torque_calibration": {"present": True},
+                "actuator_latency_profile": {"present": True},
+                "joint_limit_profile": {"present": True},
+                "safety_watchdog_profile": {"present": True},
+            },
+        ),
         output_root=tmp_path / "bundle",
     )
 
@@ -56,9 +75,69 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
     assert launch_spec["preferred_profile"] == "unitree_sim_isaaclab"
     assert "sim_main.py" in launch_spec["command"]
     assert launch_spec["policy_ready"] is True
+    assert launch_spec["deployment_contract"]["sim_launch_ready"] is True
     assert runtime_bundle["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert launch_spec["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert runtime_bundle["output_contract"]["sources"]
+
+
+def test_build_isaac_runtime_bundle_can_prefer_lerobot_profile(tmp_path: Path) -> None:
+    lerobot_root = tmp_path / "unitree_lerobot"
+    lerobot_root.mkdir()
+    (lerobot_root / "examples").mkdir()
+    policy_root = tmp_path / "policies"
+    policy_root.mkdir()
+    policy_path = policy_root / "g1_policy.onnx"
+    policy_path.write_text("x", encoding="utf-8")
+    asset_root = tmp_path / "assets"
+    asset_root.mkdir()
+    sdk_root = tmp_path / "sdk2"
+    sdk_root.mkdir()
+
+    embodiment_context = {
+        "unitree_lerobot_root": str(lerobot_root),
+        "unitree_sdk2_root": str(sdk_root),
+        "unitree_asset_root": str(asset_root),
+        "unitree_policy_root": str(policy_root),
+    }
+    runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
+    runtime_layout_contract = describe_isaac_runtime_layouts(embodiment_context)
+    policy_contract = describe_isaac_policy_contract(embodiment_context)
+    deployment_contract = build_isaac_unitree_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        normalized_asset_manifest={
+            "unitree_robot_description": {"present": True},
+            "whole_body_joint_map": {"present": True},
+            "camera_extrinsics": {"present": True},
+            "imu_extrinsics": {"present": True},
+            "force_torque_calibration": {"present": True},
+            "actuator_latency_profile": {"present": True},
+            "joint_limit_profile": {"present": True},
+            "safety_watchdog_profile": {"present": True},
+        },
+    )
+
+    _, runtime_bundle, launch_spec = build_backend_runtime_bundle(
+        backend="isaac",
+        task_id="walk_forward",
+        policy_ref=str(policy_path),
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        robot_asset_manifest={"unitree_usd": "/assets/g1.usd"},
+        normalized_robot_asset_manifest={
+            "unitree_robot_description": {"present": True, "value": "/assets/g1.usd"}
+        },
+        deployment_contract=deployment_contract,
+        output_root=tmp_path / "bundle",
+    )
+
+    assert runtime_bundle["preferred_profile"] == "unitree_lerobot"
+    assert launch_spec["preferred_profile"] == "unitree_lerobot"
+    assert "eval_policy.py" in launch_spec["command"]
 
 
 def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> None:

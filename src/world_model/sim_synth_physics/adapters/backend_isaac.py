@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 from typing import Any, Dict, Mapping
 
+from .isaac_unitree_deployment import build_isaac_unitree_deployment_contract
 from ..asset_manifest import (
     available_assets_for_hardware_class,
     extract_robot_asset_manifest,
@@ -52,15 +53,32 @@ def build_isaac_backend_binding(
     runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
     runtime_layout_contract = describe_isaac_runtime_layouts(embodiment_context)
     policy_contract = describe_isaac_policy_contract(embodiment_context)
+    deployment_contract = build_isaac_unitree_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        normalized_asset_manifest=normalized_manifest,
+    )
     adapter_ready = (
         shadow_backend_available
         or isaaclab_backend_available
         or isaacsim_available
         or isaacgym_available
     )
+    external_launch_ready = bool(
+        deployment_contract.get("sim_launch_ready", False)
+        or deployment_contract.get("teleop_launch_ready", False)
+        or deployment_contract.get("lerobot_eval_ready", False)
+        or deployment_contract.get("physical_deploy_ready", False)
+    )
     binding_status = "integration_pending"
     if isaaclab_backend_available and not missing_assets:
         binding_status = "runtime_ready"
+    elif external_launch_ready and not missing_assets:
+        binding_status = "external_launch_ready"
+    elif external_launch_ready:
+        binding_status = "external_launch_assets_missing"
     elif isaaclab_backend_available:
         binding_status = "runtime_assets_missing"
     elif adapter_ready and not missing_assets:
@@ -103,6 +121,7 @@ def build_isaac_backend_binding(
             "concrete_runtime_available": bool(
                 isaaclab_backend_available or isaacsim_available or isaacgym_available
             ),
+            "external_launch_ready": external_launch_ready,
             "runtime_backend_name": "workcell_isaaclab" if isaaclab_backend_available else "",
             "required_asset_contracts": required_assets,
             "recommended_asset_contracts": recommended_assets_for_hardware_class(
@@ -111,6 +130,7 @@ def build_isaac_backend_binding(
             "runtime_target_contract": runtime_target_contract,
             "runtime_layout_contract": runtime_layout_contract,
             "policy_contract": policy_contract,
+            "deployment_contract": deployment_contract,
             "normalized_asset_manifest": normalized_manifest,
             "raw_asset_manifest": manifest,
             "embodiment_context": mapping(embodiment_context),
