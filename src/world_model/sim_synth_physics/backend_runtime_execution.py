@@ -514,6 +514,14 @@ def materialize_backend_runtime_execution(
         normalized_robot_asset_manifest=_mapping(
             binding_payload.get("normalized_robot_asset_manifest")
         ),
+        robot_contract_context={
+            "robot_asset_contract_id": str(
+                binding_payload.get("robot_asset_contract_id", "") or ""
+            ),
+            "calibration_contracts": _strings(binding_payload.get("calibration_contracts")),
+            "observation_contracts": _strings(binding_payload.get("observation_contracts")),
+            "action_contracts": _strings(binding_payload.get("action_contracts")),
+        },
         deployment_contract=deployment_contract,
         output_root=output_root,
     )

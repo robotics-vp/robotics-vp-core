@@ -65,6 +65,9 @@ def prepare_backend_runtime_launch(
 ) -> dict[str, Any]:
     bundle = mapping(runtime_bundle)
     spec = mapping(launch_spec)
+    executable_adapter_request = mapping(
+        spec.get("executable_adapter_request") or bundle.get("executable_adapter_request")
+    )
     backend = str(bundle.get("backend", spec.get("backend", "")) or "")
     runtime_target_contract = mapping(bundle.get("runtime_target_contract"))
     policy_contract = mapping(bundle.get("policy_contract"))
@@ -86,21 +89,40 @@ def prepare_backend_runtime_launch(
         spec.get("policy_ready", policy_contract.get("policy_ready", False))
     ):
         missing_preconditions.append("policy_checkpoint")
+    for item in strings(executable_adapter_request.get("missing_preconditions")):
+        if item not in missing_preconditions:
+            missing_preconditions.append(item)
     if backend == "isaac":
         notes.append("Prefer Unitree/IsaacLab-style launch profiles when available.")
     elif backend == "holosoma":
         notes.append("Prefer Holosoma repo plus motion/policy/retargeting roots when available.")
+    notes.extend(
+        item
+        for item in strings(executable_adapter_request.get("notes"))
+        if item not in notes
+    )
+    env_overrides = _target_env_overrides(runtime_target_contract)
+    env_overrides.update(
+        {
+            str(key): str(value)
+            for key, value in mapping(executable_adapter_request.get("env_overrides")).items()
+            if str(key) and str(value)
+        }
+    )
     status = "ready_for_launch" if not missing_preconditions else "blocked"
     payload = {
         "backend": backend,
         "preferred_profile": str(spec.get("preferred_profile", "") or ""),
         "status": status,
-        "command": str(spec.get("command", "") or ""),
-        "cwd": str(spec.get("root", "") or ""),
+        "command": str(
+            executable_adapter_request.get("command", spec.get("command", "")) or ""
+        ),
+        "cwd": str(executable_adapter_request.get("cwd", spec.get("root", "")) or ""),
         "policy_ref": str(spec.get("policy_ref", "") or ""),
-        "env_overrides": _target_env_overrides(runtime_target_contract),
+        "env_overrides": env_overrides,
         "missing_preconditions": missing_preconditions,
         "notes": notes,
+        "executable_adapter_request": executable_adapter_request,
     }
     return {
         "launch_id": stable_id("backend_runtime_launch", payload),
@@ -199,6 +221,7 @@ def build_backend_runtime_launch_receipt(
             "missing_preconditions": strings(result.get("missing_preconditions")),
             "notes": strings(result.get("notes")),
             "env_overrides": mapping(result.get("env_overrides")),
+            "executable_adapter_request": mapping(result.get("executable_adapter_request")),
             "returncode": result.get("returncode"),
             "stdout": result.get("stdout", ""),
             "stderr": result.get("stderr", ""),

@@ -76,6 +76,13 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
     assert "sim_main.py" in launch_spec["command"]
     assert launch_spec["policy_ready"] is True
     assert launch_spec["deployment_contract"]["sim_launch_ready"] is True
+    assert (
+        launch_spec["executable_adapter_request"]["deployment_mode"] == "sim_eval"
+    )
+    assert (
+        launch_spec["executable_adapter_request"]["adapter_entrypoint"]
+        == "isaaclab_unitree_sim"
+    )
     assert runtime_bundle["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert launch_spec["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert runtime_bundle["output_contract"]["sources"]
@@ -138,6 +145,13 @@ def test_build_isaac_runtime_bundle_can_prefer_lerobot_profile(tmp_path: Path) -
     assert runtime_bundle["preferred_profile"] == "unitree_lerobot"
     assert launch_spec["preferred_profile"] == "unitree_lerobot"
     assert "eval_policy.py" in launch_spec["command"]
+    assert (
+        launch_spec["executable_adapter_request"]["deployment_mode"] == "lerobot_eval"
+    )
+    assert (
+        launch_spec["executable_adapter_request"]["adapter_entrypoint"]
+        == "unitree_lerobot_eval"
+    )
 
 
 def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> None:

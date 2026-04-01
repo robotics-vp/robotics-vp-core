@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
+from .adapters.isaac_unitree_executable_adapter import (
+    build_isaac_unitree_executable_adapter_request,
+)
 from .common import mapping, strings
 from .runtime_outcomes import build_backend_runtime_output_contract
 
@@ -217,6 +220,7 @@ def build_backend_runtime_bundle(
     policy_contract: Mapping[str, Any],
     robot_asset_manifest: Mapping[str, Any],
     normalized_robot_asset_manifest: Mapping[str, Any],
+    robot_contract_context: Mapping[str, Any] | None = None,
     deployment_contract: Mapping[str, Any] | None = None,
     output_root: Optional[Path],
 ) -> tuple[list[str], dict[str, Any], dict[str, Any]]:
@@ -257,10 +261,25 @@ def build_backend_runtime_bundle(
         "deployment_contract": mapping(deployment_contract),
         "robot_asset_manifest": mapping(robot_asset_manifest),
         "normalized_robot_asset_manifest": mapping(normalized_robot_asset_manifest),
+        "robot_contract_context": mapping(robot_contract_context),
         "launch_specs": list(launch_specs),
     }
     output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
     runtime_bundle["output_contract"] = output_contract
+    executable_adapter_request: dict[str, Any] = {}
+    if backend == "isaac":
+        executable_adapter_request = build_isaac_unitree_executable_adapter_request(
+            task_id=task_id,
+            policy_ref=policy_ref,
+            preferred_profile=preferred_profile,
+            launch_spec=preferred_launch_spec,
+            runtime_target_contract=runtime_target_contract,
+            deployment_contract=mapping(deployment_contract),
+            normalized_robot_asset_manifest=normalized_robot_asset_manifest,
+            robot_contract_context=mapping(robot_contract_context),
+            output_contract=output_contract,
+        )
+        runtime_bundle["executable_adapter_request"] = executable_adapter_request
     launch_spec = {
         "version": "backend_launch_spec_v1",
         "backend": backend,
@@ -275,6 +294,7 @@ def build_backend_runtime_bundle(
         "upstream_profile": mapping(
             mapping(preferred_launch_spec).get("upstream_profile")
         ),
+        "executable_adapter_request": executable_adapter_request,
         "alternative_launch_specs": list(launch_specs),
         "output_contract": output_contract,
     }

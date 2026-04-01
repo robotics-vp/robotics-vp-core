@@ -10,6 +10,9 @@ from src.world_model.sim_synth_physics.runtime_launch import (
     execute_backend_runtime_launch,
     prepare_backend_runtime_launch,
 )
+from scripts.run_isaac_unitree_executable_adapter import (
+    main as run_isaac_unitree_executable_adapter_main,
+)
 
 
 def _isaac_bundle() -> dict[str, object]:
@@ -25,6 +28,18 @@ def _isaac_bundle() -> dict[str, object]:
             ],
         },
         "policy_contract": {"policy_ready": True},
+        "executable_adapter_request": {
+            "deployment_mode": "sim_eval",
+            "adapter_entrypoint": "isaaclab_unitree_sim",
+            "command": "python ${UNITREE_SIM_ISAACLAB_ROOT}/sim_main.py --task peg_in_hole --policy /tmp/g1.onnx --headless",
+            "cwd": "/tmp/unitree_sim_isaaclab",
+            "env_overrides": {
+                "UNITREE_DEPLOYMENT_MODE": "sim_eval",
+                "UNITREE_ROBOT_VARIANT": "unitree_g1",
+            },
+            "missing_preconditions": [],
+            "notes": ["Executable adapter request present."],
+        },
     }
 
 
@@ -47,6 +62,8 @@ def test_prepare_backend_runtime_launch_ready(monkeypatch) -> None:
     assert plan["status"] == "ready_for_launch"
     assert plan["env_overrides"]["UNITREE_SIM_ISAACLAB_ROOT"] == "/tmp/unitree_sim_isaaclab"
     assert plan["env_overrides"]["UNITREE_SDK2_ROOT"] == "/tmp/unitree_sdk2"
+    assert plan["env_overrides"]["UNITREE_DEPLOYMENT_MODE"] == "sim_eval"
+    assert plan["executable_adapter_request"]["adapter_entrypoint"] == "isaaclab_unitree_sim"
 
 
 def test_prepare_backend_runtime_launch_blocks_when_policy_and_gpu_missing(monkeypatch) -> None:
@@ -198,6 +215,48 @@ def test_run_phase1_runtime_launch_script_writes_pure_receipt(tmp_path: Path, mo
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert receipt["version"] == "backend_runtime_launch_receipt_v1"
     assert receipt["launch_status"] == "launch_prepared"
+
+
+def test_run_isaac_unitree_executable_adapter_script_writes_adapter_request(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(runtime_launch_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(runtime_launch_module, "_cuda_ready", lambda: True)
+
+    runtime_root = tmp_path / "runtime"
+    runtime_root.mkdir()
+    bundle = _isaac_bundle()
+    launch_spec = {
+        "backend": "isaac",
+        "preferred_profile": "unitree_sim_isaaclab",
+        "policy_ready": True,
+        "command": "python ${UNITREE_SIM_ISAACLAB_ROOT}/sim_main.py --task peg_in_hole --policy /tmp/g1.onnx --headless",
+        "root": "/tmp/unitree_sim_isaaclab",
+        "policy_ref": "/tmp/g1.onnx",
+        "executable_adapter_request": bundle["executable_adapter_request"],
+    }
+    (runtime_root / "backend_runtime_bundle.json").write_text(
+        json.dumps(bundle, indent=2),
+        encoding="utf-8",
+    )
+    (runtime_root / "backend_launch_spec.json").write_text(
+        json.dumps(launch_spec, indent=2),
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "adapter_report.json"
+
+    payload = run_isaac_unitree_executable_adapter_main(
+        [
+            "--runtime-root",
+            str(runtime_root),
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    assert output_path.exists()
+    assert payload["executable_adapter_request"]["deployment_mode"] == "sim_eval"
+    assert payload["receipt"]["launch_status"] == "launch_prepared"
 
 
 def test_run_phase1_runtime_launch_harvests_outcomes(tmp_path: Path, monkeypatch) -> None:
