@@ -418,6 +418,7 @@ Suggested weekly WM order for the first training season:
   - Real 4D reconstruction, real SceneTracks adapters, and non-stub teacher models still remain future work.
   - Real video diffusion materialization and GGDS/LDM bring-up now sit in `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`; those are no longer hidden behind stub-default posture.
   - Non-training GPU runtime/materialization smokes now sit in `scripts/NON_TRAINING_GPU_RUN_BACKLOG.json`, and the Phase-1 sim/synth WM now emits runtime bundles and launch specs so runtime bring-up can be burned down separately from trainer migration or fine-tuning work.
+  - The Isaac/Unitree lane now also expects WM-owned executable-adapter requests over those launch specs, so deployment mode, robot variant, asset/calibration posture, and output expectations remain typed loop artifacts instead of living only in shell commands.
   - No training loop lands here; the service is advisory and structural.
 - Do not touch:
   - `checkpoints/world_model_stable_canonical.pt`

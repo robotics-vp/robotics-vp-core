@@ -1845,6 +1845,29 @@
   - that means the remaining backend gap is increasingly about actual external runtime/assets/GPU availability rather than missing canonical WM receipt plumbing
 ## 2026-04-01
 
+- The next concrete Isaac/Unitree executable-adapter surface is now inside the WM runtime path, not just implied by launch strings:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py`
+  - `build_backend_runtime_bundle(...)` now emits `backend_executable_adapter_request_v1` for Isaac/Unitree runtime artifacts
+  - the request includes:
+    - deployment mode and adapter entrypoint
+    - robot variant / placement class
+    - required target ids and required asset ids
+    - normalized asset refs
+    - calibration / observation / action contracts
+    - output expectations
+    - environment overrides and remaining preconditions
+  - this is a real Phase-1 improvement because the executable lane is now a typed subsystem surface rather than just a command template
+
+- The launch layer now actually consumes that adapter request:
+  - `runtime_launch.py` merges executable-adapter env overrides, preconditions, and notes into launch preparation
+  - launch receipts now preserve `executable_adapter_request` in metadata
+  - `scripts/run_isaac_unitree_executable_adapter.py` gives the lane a dedicated runnable surface over the WM artifacts without inventing a separate orchestration path
+
+- Why this matters:
+  - it removes another “looks real but only in strings” boundary
+  - it keeps the remaining Unitree gap honest: the missing piece is increasingly the real upstream runtime/assets/GPU path, not a lack of typed executable-adapter structure in the repo
+  - it also gives the future concrete adapter a clear contract to consume once the upstream runtime is present
+
 - Branch-truth reconciliation for the multi-WM program is now explicit:
   - the master committed docs (`multi_wm_architecture_plan.md`, `roadmap.md`) were already the main source of truth
   - this pass landed the previously local-only supporting doctrine/spec/collaboration files so the branch now explicitly carries:

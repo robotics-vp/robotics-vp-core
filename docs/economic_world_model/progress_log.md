@@ -982,6 +982,29 @@
   - actual GGDS / video-diffusion materialization on GPU
 ## 2026-04-01
 
+- Changed: pushed the next concrete Phase 1 Isaac/Unitree executable-adapter cut so the WM does more than emit generic launch commands:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py`
+  - `runtime_bundles.py` now emits `backend_executable_adapter_request_v1` for Isaac/Unitree bundles and launch specs, carrying:
+    - deployment mode
+    - adapter entrypoint
+    - robot variant / placement class
+    - required target ids and required asset ids
+    - normalized asset refs
+    - calibration / observation / action contract ids
+    - output expectations
+    - environment overrides for the executable lane
+  - `runtime_launch.py` now treats that executable-adapter request as a load-bearing part of launch preparation instead of leaving the Unitree specifics implied only by command strings
+  - added `scripts/run_isaac_unitree_executable_adapter.py` as a dedicated WM-facing runner over the existing launch artifacts
+  - the result is that the Isaac/Unitree lane now has a concrete executable-adapter surface even when the remaining blocker is still the upstream runtime/assets/GPU rather than local repo logic
+- Changed: updated the Phase-1 master docs so the executable-adapter request is now an explicit part of the acceptance posture for the external-runtime lane:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md`
+  - `docs/economic_world_model/roadmap.md`
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/backend_runtime_execution.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_executable_adapter.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/backend_runtime_execution.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_executable_adapter.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py`, `python3 -m pytest -q tests/test_isaac_unitree_executable_adapter.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: this is another structural closure step, but Phase 1 still honestly needs:
+  - a concrete Isaac Lab / Isaac Sim / Unitree executable adapter that can consume these requests against real upstream runtime/assets
+  - deeper Holosoma runtime execution under the same contract quality
+  - GPU-backed GGDS / video materialization
+
 - Changed: reconciled branch-truth doctrine for the active multi-WM implementation arc:
   - landed the previously local-only tranche/doctrine/collaboration artifacts:
     - `docs/economic_world_model/neuralization_bridge_doctrine.md`
