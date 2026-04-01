@@ -1067,3 +1067,20 @@
   - a concrete Isaac Lab / Isaac Sim / Unitree adapter still needs to consume the new request/consumer/adapter-execution chain against real upstream runtime/assets
   - Holosoma still needs equivalent runtime-execution mediation and receipt depth
   - GGDS / video-diffusion still need GPU-backed materialization
+
+- Changed: pushed the next concrete Isaac/Unitree realization cut so the local runtime lane no longer relies on an implicit backend-factory jump:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_realization.py`
+  - the Isaac/Unitree lane now emits `backend_executable_adapter_realization_v1`, which distinguishes:
+    - `local_backend_factory`
+    - `external_launch_delegate`
+    - blocked realization
+  - this is intentionally not the final hardware adapter; it is the typed surface that says how the current branch concretely realizes the adapter chain today
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now rebuilds that realization after adapter-execution finalization, preserves it in runtime metadata, and writes `backend_runtime_adapter_realization.json`
+  - `src/world_model/sim_synth_physics/runtime.py` now promotes that realization to a root-level loop artifact instead of leaving it nested only inside metadata
+  - `src/world_model/sim_synth_physics/training_corpus.py` now preserves realization path/status into backend-selector and branch-planner rows, so downstream training surfaces can tell “external delegate” from “local backend factory” rather than inferring from launch state alone
+  - `scripts/run_isaac_unitree_executable_adapter.py` now emits the same realization surface alongside request / consumer / execution / launch artifacts
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_isaac_unitree_adapter_execution.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: the honest remainder is narrower again, but still real:
+  - a final concrete Isaac Lab / Isaac Sim / Unitree adapter implementation still needs to consume the new request / consumer / execution / realization chain against real upstream runtime/assets
+  - Holosoma still needs the same realization depth
+  - GGDS / video-diffusion still need GPU-backed materialization

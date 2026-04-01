@@ -421,6 +421,7 @@ Suggested weekly WM order for the first training season:
   - The Isaac/Unitree lane now also expects WM-owned executable-adapter requests over those launch specs, so deployment mode, robot variant, asset/calibration posture, and output expectations remain typed loop artifacts instead of living only in shell commands.
   - The next maturity rung after that request is now explicit too: the WM carries a typed executable-adapter consumer so it can name whether a request is being handed to a local bridge or only an external launch consumer, without overstating actual hardware/runtime execution.
   - The next rung after the consumer is now explicit as well: the WM emits typed adapter-execution mediation and an adapter receipt, so request, consumer, execution mediation, launch, and harvested outcome remain distinct runtime truths rather than collapsing into one launch-status bit.
+  - The next rung after execution mediation is now explicit too: the WM emits a typed adapter-realization surface, so it can say whether the lane is concretely realized through a local backend-factory handoff or only through an external launch delegate before any actual runtime success claim.
   - No training loop lands here; the service is advisory and structural.
 - Do not touch:
   - `checkpoints/world_model_stable_canonical.pt`

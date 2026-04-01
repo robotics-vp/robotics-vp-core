@@ -2,7 +2,7 @@
 
 ## Current Status
 
-- **Tranche**: Sim / Synth / Physics WM closure, Phase 1 Isaac/Unitree adapter-execution mediation tranche
+- **Tranche**: Sim / Synth / Physics WM closure, Phase 1 Isaac/Unitree adapter-realization tranche
 - **Date**: 2026-04-01
 - **Branch**: `codex/multi-wm-architecture-plan`
 - **Active tranche spec**: `docs/economic_world_model/codex_tranche_sim_synth_closure.md`
@@ -10,88 +10,77 @@
 
 ## What Was Implemented
 
-- Added `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_execution.py`.
-- The Isaac/Unitree runtime lane now has a typed adapter-execution mediation layer over the already-landed:
+- Added `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_realization.py`.
+- The Isaac/Unitree lane now has a typed realization surface over:
   - executable-adapter request
   - executable-adapter consumer
-- `src/world_model/sim_synth_physics/backend_runtime_execution.py` now:
-  - prepares adapter execution from request + consumer
-  - finalizes that mediation against either:
-    - external launch results
-    - local bridge handoff
-  - emits both:
-    - `backend_executable_adapter_execution_v1`
-    - `backend_runtime_adapter_receipt_v1`
-- `src/world_model/sim_synth_physics/runtime.py` now surfaces the adapter receipt as a first-class loop artifact and carries it into:
-  - loop result serialization
-  - loop summary output
-  - training-feedback manifests
-  - outcome metadata
-- `src/world_model/sim_synth_physics/training_corpus.py` now harvests the adapter receipt and preserves it in backend-selector and branch-planner row metadata.
-- `scripts/run_isaac_unitree_executable_adapter.py` now emits:
-  - `adapter_execution`
-  - `adapter_receipt`
-  in addition to the existing request / consumer / launch report surfaces.
+  - adapter-execution mediation
+- `backend_runtime_execution.py` now rebuilds that realization after execution mediation is finalized and preserves it in live runtime artifacts and metadata.
+- `runtime.py` now writes `backend_runtime_adapter_realization.json` as a root-level loop artifact.
+- `training_corpus.py` now carries adapter realization path/status into backend-selector and branch-planner rows.
+- `scripts/run_isaac_unitree_executable_adapter.py` now emits `adapter_realization` alongside the existing request / consumer / execution / launch payloads.
 
 ## What Changed Topologically
 
 - No new WM boundary was introduced.
-- The Sim / Synth / Physics WM gained a new explicit maturity rung inside the Isaac/Unitree runtime lane.
-- The lane is now:
-  - canonical world-state compilation
-  - backend binding
-  - deployment contract
-  - runtime bridge
-  - runtime bundle / launch spec
+- The Isaac/Unitree runtime lane now has the following explicit maturity chain:
   - executable-adapter request
   - executable-adapter consumer
-  - executable-adapter execution mediation
+  - adapter-execution mediation
+  - adapter realization
   - launch preparation / execution
   - harvested runtime outcomes
 
-This matters because the lane no longer collapses “who is responsible for execution” and “what actually happened at execution time” into the same launch-shaped artifact.
+This matters because the branch can now distinguish:
+- who is asking for execution
+- who is currently responsible for it
+- how execution is mediated
+- and how that lane is concretely realized today
+
+instead of flattening the last two steps into generic launch state.
+
+## What Topological Surface Became More Real
+
+- The local Isaac/Unitree route is no longer just “backend factory happens later.”
+- The branch now says concretely whether the lane is realized as:
+  - `local_backend_factory`
+  - `external_launch_delegate`
+  - or blocked realization
+
+That is a real Phase 1 improvement because it turns the local-runtime seam from an implicit implementation detail into a typed, replayable, auditable subsystem surface.
 
 ## What Fake Readiness Was Removed
 
-- Previously, once the request and consumer existed, the next visible truth in many places was just launch status.
-- That could make the lane look flatter and more executable than it really was.
-- This tranche removed that compression by introducing explicit adapter-execution statuses such as:
-  - `local_bridge_ready`
-  - `local_bridge_missing`
-  - `local_bridge_handed_off`
-  - `external_launch_ready`
-  - `external_launch_completed`
-  - `external_launch_failed`
+- Previously, the branch could know:
+  - request
+  - consumer
+  - execution mediation
+  - launch status
 
-So the branch can now say:
-- the request exists
-- a consumer exists
-- the execution mediation exists
-- but the final real adapter is still missing
+but still leave the actual realization method implicit.
 
-without pretending those are the same thing.
+- This tranche removes that implicitness.
+- The branch no longer has to pretend that a ready adapter-execution path and a concretely realized local adapter are the same thing.
 
 ## What Is Still Only Contract-Shaped
 
-- The final concrete Isaac Lab / Isaac Sim / Unitree adapter realization is still missing.
-- The new adapter-execution layer is honest mediation, not the final low-latency runtime bridge.
-- The local bridge path is still real-or-unavailable:
-  - if `src.motor_backend.workcell_isaaclab_backend` is absent, the lane says so explicitly
-  - it does not pretend local execution exists just because the request/consumer chain is typed
+- The final concrete Isaac Lab / Isaac Sim / Unitree adapter implementation is still missing.
+- The new realization surface is not that final adapter; it is the explicit bridge between current runtime truth and that future adapter.
+- The local bridge remains real-or-unavailable.
 
-## Contracts and Receipts Added or Altered
+## Contracts and Artifacts Added or Altered
 
-| Contract / Receipt | File | Classification | Notes |
-|-------------------|------|----------------|-------|
-| `backend_executable_adapter_execution_v1` | `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_execution.py` | WM-native execution-mediation contract | Sits between executable request/consumer and launch/outcome. |
-| `backend_runtime_adapter_receipt_v1` | `src/world_model/sim_synth_physics/receipts.py` | Canonical loop receipt | Preserves adapter status, execution path, and whether execution was actually attempted. |
-| adapter receipt in loop result | `src/world_model/sim_synth_physics/runtime.py` | Loop-result extension | Makes adapter mediation a first-class runtime artifact instead of metadata-only. |
-| adapter receipt in harvested corpora | `src/world_model/sim_synth_physics/training_corpus.py` | Downstream training/export extension | Keeps adapter truth visible to backend-selector / branch-planner rows. |
+| Surface | File | Classification | Notes |
+|--------|------|----------------|-------|
+| `backend_executable_adapter_realization_v1` | `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_realization.py` | WM-native realization contract | Names whether the adapter is realized through local backend-factory handoff or external delegate. |
+| `backend_runtime_adapter_realization.json` | `src/world_model/sim_synth_physics/runtime.py` | Root-level loop artifact | Promotes realization out of nested metadata into a first-class artifact. |
+| realization metadata inside adapter receipt | `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_execution.py` | Receipt metadata extension | Keeps realization topology attached to adapter receipt truth. |
+| realization fields in harvested corpora | `src/world_model/sim_synth_physics/training_corpus.py` | Training/export extension | Preserves realization path/status for backend-selector and branch-planner rows. |
 
 ## Tests and Verification
 
 New focused test:
-- `tests/test_isaac_unitree_adapter_execution.py`
+- `tests/test_isaac_unitree_adapter_realization.py`
 
 Updated tests:
 - `tests/test_sim_synth_runtime_launch.py`
@@ -101,32 +90,32 @@ Updated tests:
 Targeted verification run:
 
 ```text
-python3 -m compileall src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q
-python3 -m ruff check src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py
-python3 -m pytest -q tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py
+python3 -m compileall src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q
+python3 -m ruff check src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py
+python3 -m pytest -q tests/test_isaac_unitree_adapter_execution.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py
 git diff --check
 ```
 
 Result:
-- `39 passed`
+- `41 passed`
 
 ## What Remains Missing
 
-- The active tranche is still not done.
-- The honest remaining Phase 1 blockers are still:
-  - a concrete Isaac Lab / Isaac Sim / Unitree adapter that consumes the request / consumer / adapter-execution chain against real upstream runtime/assets
-  - equivalent Holosoma runtime-execution deepening to the same standard
+- The active Phase 1 tranche is still not done.
+- The honest remaining blockers are:
+  - the final concrete Isaac Lab / Isaac Sim / Unitree adapter implementation over the request / consumer / execution / realization chain
+  - equivalent Holosoma realization depth
   - GPU-backed GGDS / video materialization
 
 ## Open Doctrinal Questions
 
-- Should the final concrete Isaac/Unitree adapter remain fully owned by the Sim / Synth / Physics WM, or should part of that executable-adapter realization later be shared with the Embodiment / Actuation WM once low-level control becomes real?
-- When the real adapter lands, should the adapter receipt stay profile-shaped, or should there also be a more normalized robot-operation receipt above the profile-specific adapter surfaces?
+- Once the final concrete Isaac/Unitree adapter lands, should the realization surface remain inside Sim / Synth / Physics only, or should part of it become shared with the later Embodiment / Actuation WM?
+- Should there be a later normalized robot-operation receipt above profile-specific adapter realizations, or should that wait until real low-level control and Phase 4 timing/safety seams exist?
 
 ## Recommendation to Claude
 
 - Keep Sim / Synth / Physics as the implementation center of gravity.
-- Do not promote Perception implementation yet.
-- Treat the next highest-leverage code target as:
-  - the final concrete Isaac/Unitree adapter realization over this new request / consumer / adapter-execution chain
-  - then equivalent Holosoma runtime-execution deepening
+- Do not move upward in the roadmap yet.
+- The next highest-leverage code target is:
+  - the final concrete Isaac/Unitree adapter implementation over this now-explicit request / consumer / execution / realization chain
+  - then equivalent Holosoma realization / runtime-execution deepening

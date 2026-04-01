@@ -2002,3 +2002,32 @@
     - `tests/test_sim_synth_runtime_launch.py`
     - `tests/test_sim_synth_physics_world_model.py`
     - `tests/test_sim_synth_training_corpus.py`
+
+- The next concrete local-runtime cut is now landed too:
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_realization.py` now defines how the current branch concretely realizes the Isaac/Unitree lane after execution mediation
+  - it deliberately names the current real options instead of pretending a finished hardware adapter already exists:
+    - `local_backend_factory`
+    - `external_launch_delegate`
+    - blocked realization
+  - that means the branch can now say not just “the adapter is ready” but “the adapter is realized today through local backend-factory handoff” or “it is only realized through an external delegate path”
+
+- The live runtime path now preserves that realization explicitly:
+  - `backend_runtime_execution.py` rebuilds the realization after adapter-execution finalization so the realization follows the latest mediation truth
+  - `runtime.py` writes `backend_runtime_adapter_realization.json` as a root-level loop artifact
+  - the training-feedback and loop-summary path now carry adapter realization status/path in addition to adapter execution status/path
+
+- Downstream trainer/export rows now preserve the new truth:
+  - `training_corpus.py` now emits:
+    - `backend_runtime_adapter_realization_path`
+    - `backend_runtime_adapter_realization_status`
+  - this matters because “external delegate” and “local backend factory” are both more concrete than generic launch readiness, but they are still meaningfully different readiness states
+
+- The standalone WM-facing runner now emits the realization surface too:
+  - `scripts/run_isaac_unitree_executable_adapter.py` now includes `adapter_realization` beside request / consumer / execution / receipt / launch result
+
+- New focused tests for this realization tranche:
+  - `tests/test_isaac_unitree_adapter_realization.py`
+  - additions in:
+    - `tests/test_sim_synth_runtime_launch.py`
+    - `tests/test_sim_synth_physics_world_model.py`
+    - `tests/test_sim_synth_training_corpus.py`
