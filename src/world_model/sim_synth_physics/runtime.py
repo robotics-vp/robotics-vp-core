@@ -144,6 +144,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "backend_runtime_work_orders": root / "backend_runtime_work_orders.json",
         "backend_runtime_execution_receipt": root / "backend_runtime_execution_receipt.json",
         "backend_runtime_adapter_receipt": root / "backend_runtime_adapter_receipt.json",
+        "backend_runtime_adapter_realization": root / "backend_runtime_adapter_realization.json",
         "backend_runtime_launch_receipt": root / "backend_runtime_launch_receipt.json",
         "backend_runtime_outcome_receipt": root / "backend_runtime_outcome_receipt.json",
         "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
@@ -299,6 +300,11 @@ def _build_outcome_receipts(
             plan_id=plan.plan_id,
         )
         render_provider = plan.render_provider
+        adapter_realization = (
+            {}
+            if backend_runtime_adapter_receipt is None
+            else mapping(backend_runtime_adapter_receipt.metadata.get("realization"))
+        )
         receipts.append(
             SimulationOutcomeReceipt(
                 receipt_id=f"simulation_outcome_receipt_{world_state.state_id}_{index + 1:03d}",
@@ -391,6 +397,12 @@ def _build_outcome_receipts(
                         if backend_runtime_adapter_receipt is None
                         else str(backend_runtime_adapter_receipt.execution_path)
                     ),
+                    "backend_runtime_adapter_realization_path": str(
+                        adapter_realization.get("realization_path", "") or ""
+                    ),
+                    "backend_runtime_adapter_realization_status": str(
+                        adapter_realization.get("realization_status", "") or ""
+                    ),
                     "backend_runtime_bridge_receipt_id": (
                         backend_runtime_bridge_receipt.receipt_id
                     ),
@@ -445,6 +457,11 @@ def _build_training_feedback_manifest(
     render_receipts_by_plan = {
         str(receipt.branch_plan_id): receipt for receipt in render_provider_receipts
     }
+    adapter_realization = (
+        {}
+        if backend_runtime_adapter_receipt is None
+        else mapping(backend_runtime_adapter_receipt.metadata.get("realization"))
+    )
     rows: list[dict[str, Any]] = []
     for receipt in outcome_receipts:
         render_receipt = render_receipts_by_plan.get(str(receipt.branch_plan_id))
@@ -528,6 +545,12 @@ def _build_training_feedback_manifest(
             ""
             if backend_runtime_adapter_receipt is None
             else backend_runtime_adapter_receipt.execution_path
+        ),
+        "backend_runtime_adapter_realization_path": str(
+            adapter_realization.get("realization_path", "") or ""
+        ),
+        "backend_runtime_adapter_realization_status": str(
+            adapter_realization.get("realization_status", "") or ""
         ),
         "backend_runtime_launch_status": (
             ""
@@ -1007,6 +1030,10 @@ class SimSynthPhysicsRuntime:
                     artifact_paths["backend_runtime_adapter_receipt"],
                     backend_runtime_adapter_receipt.to_dict(),
                 )
+                _write_json(
+                    artifact_paths["backend_runtime_adapter_realization"],
+                    mapping(backend_runtime_adapter_receipt.metadata.get("realization")),
+                )
             if backend_runtime_launch_receipt is not None:
                 _write_json(
                     artifact_paths["backend_runtime_launch_receipt"],
@@ -1115,6 +1142,22 @@ class SimSynthPhysicsRuntime:
                         ""
                         if backend_runtime_adapter_receipt is None
                         else backend_runtime_adapter_receipt.execution_path
+                    ),
+                    "backend_runtime_adapter_realization_path": str(
+                        mapping(
+                            {}
+                            if backend_runtime_adapter_receipt is None
+                            else backend_runtime_adapter_receipt.metadata.get("realization")
+                        ).get("realization_path", "")
+                        or ""
+                    ),
+                    "backend_runtime_adapter_realization_status": str(
+                        mapping(
+                            {}
+                            if backend_runtime_adapter_receipt is None
+                            else backend_runtime_adapter_receipt.metadata.get("realization")
+                        ).get("realization_status", "")
+                        or ""
                     ),
                     "backend_runtime_launch_status": (
                         ""

@@ -10,6 +10,7 @@ from typing import Any
 
 from src.world_model.sim_synth_physics.adapters import (
     build_isaac_unitree_adapter_receipt,
+    build_isaac_unitree_adapter_realization,
     finalize_isaac_unitree_adapter_execution,
     prepare_isaac_unitree_adapter_execution,
 )
@@ -69,6 +70,13 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         executable_adapter_request,
         executable_adapter_consumer,
     )
+    adapter_realization = build_isaac_unitree_adapter_realization(
+        executable_adapter_request=executable_adapter_request,
+        executable_adapter_consumer=executable_adapter_consumer,
+        adapter_execution=adapter_execution,
+        runtime_bundle=runtime_bundle,
+        launch_spec=launch_spec,
+    )
     result = execute_backend_runtime_launch(
         runtime_bundle,
         launch_spec,
@@ -79,7 +87,17 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         adapter_execution,
         launch_result=result,
     )
-    adapter_receipt = build_isaac_unitree_adapter_receipt(adapter_execution)
+    adapter_realization = build_isaac_unitree_adapter_realization(
+        executable_adapter_request=executable_adapter_request,
+        executable_adapter_consumer=executable_adapter_consumer,
+        adapter_execution=adapter_execution,
+        runtime_bundle=runtime_bundle,
+        launch_spec=launch_spec,
+    )
+    adapter_receipt = build_isaac_unitree_adapter_receipt(
+        adapter_execution,
+        realization=adapter_realization,
+    )
     receipt = build_backend_runtime_launch_receipt(runtime_bundle, launch_spec, result)
     payload = {
         "runtime_bundle_path": str(Path(runtime_bundle_path).resolve()),
@@ -87,6 +105,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         "executable_adapter_request": executable_adapter_request,
         "executable_adapter_consumer": executable_adapter_consumer,
         "adapter_execution": adapter_execution,
+        "adapter_realization": adapter_realization,
         "adapter_receipt": adapter_receipt.to_dict(),
         "result": result,
         "receipt": receipt.to_dict(),

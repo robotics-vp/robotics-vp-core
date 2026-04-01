@@ -108,8 +108,10 @@ def build_isaac_unitree_adapter_receipt(
     adapter_execution: Mapping[str, Any],
     *,
     artifact_refs: list[str] | None = None,
+    realization: Mapping[str, Any] | None = None,
 ) -> BackendRuntimeAdapterReceipt:
     payload = mapping(adapter_execution)
+    realization_payload = mapping(realization)
     receipt_payload = {
         "backend": "isaac",
         "adapter_family": str(payload.get("adapter_family", "") or "isaac_unitree"),
@@ -148,6 +150,7 @@ def build_isaac_unitree_adapter_receipt(
             "launch_status": str(payload.get("launch_status", "") or ""),
             "returncode": payload.get("returncode"),
             "notes": strings(payload.get("notes")),
+            "realization": realization_payload,
         },
     )
 

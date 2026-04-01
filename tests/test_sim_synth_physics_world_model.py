@@ -826,6 +826,10 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
     assert result.backend_runtime_adapter_receipt is not None
     assert result.backend_runtime_adapter_receipt.adapter_status == "external_launch_ready"
     assert result.backend_runtime_adapter_receipt.execution_path == "external_launch"
+    assert (
+        result.backend_runtime_adapter_receipt.metadata["realization"]["realization_path"]
+        == "external_launch_delegate"
+    )
     assert result.backend_runtime_launch_receipt is not None
     assert result.backend_runtime_launch_receipt.launch_status == "launch_prepared"
     assert result.backend_runtime_launch_receipt.executed is False
@@ -845,6 +849,12 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
     assert (
         result.backend_runtime_execution_receipt.metadata["adapter_receipt"]["adapter_status"]
         == "external_launch_ready"
+    )
+    assert (
+        result.backend_runtime_execution_receipt.metadata["adapter_realization"][
+            "realization_status"
+        ]
+        == "external_launch_delegate_ready"
     )
     assert "sim_main.py" in result.backend_runtime_execution_receipt.metadata["launch_spec"]["command"]
     assert any(
@@ -935,6 +945,10 @@ def test_runtime_executes_external_launch_when_requested(
     assert result.backend_runtime_execution_receipt.execution_status == "runtime_external_launch_completed"
     assert result.backend_runtime_adapter_receipt is not None
     assert result.backend_runtime_adapter_receipt.adapter_status == "external_launch_completed"
+    assert (
+        result.backend_runtime_adapter_receipt.metadata["realization"]["realization_status"]
+        == "external_launch_delegate_ready"
+    )
     assert result.backend_runtime_launch_receipt is not None
     assert result.backend_runtime_launch_receipt.launch_status == "launch_completed"
     assert result.backend_runtime_launch_receipt.executed is True
@@ -944,8 +958,10 @@ def test_runtime_executes_external_launch_when_requested(
     assert result.backend_runtime_execution_receipt.metadata["launch_report_refs"]
     assert result.backend_runtime_execution_receipt.metadata["runtime_outcome_receipt"]
     assert result.backend_runtime_execution_receipt.metadata["adapter_receipt"]
+    assert result.backend_runtime_execution_receipt.metadata["adapter_realization"]
     assert result.backend_runtime_work_orders[0].status == "satisfied_by_external_runtime_outcomes"
     assert (tmp_path / "backend_runtime_adapter_receipt.json").exists()
+    assert (tmp_path / "backend_runtime_adapter_realization.json").exists()
     assert (tmp_path / "backend_runtime_launch_receipt.json").exists()
     assert (tmp_path / "backend_runtime_outcome_receipt.json").exists()
 

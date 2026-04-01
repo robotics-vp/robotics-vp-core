@@ -10,6 +10,7 @@ from .isaac_unitree_adapter_execution import (
     finalize_isaac_unitree_adapter_execution,
     prepare_isaac_unitree_adapter_execution,
 )
+from .isaac_unitree_adapter_realization import build_isaac_unitree_adapter_realization
 from .isaac_unitree_executable_consumer import (
     build_isaac_unitree_executable_adapter_consumer,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "build_economic_input_context",
     "build_embodiment_input_context",
     "build_isaac_unitree_adapter_receipt",
+    "build_isaac_unitree_adapter_realization",
     "build_isaac_unitree_executable_adapter_consumer",
     "build_isaac_unitree_deployment_contract",
     "build_isaac_unitree_executable_adapter_request",

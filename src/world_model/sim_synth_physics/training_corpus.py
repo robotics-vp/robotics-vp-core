@@ -430,6 +430,10 @@ def build_backend_selector_rows_from_receipts(
         backend_runtime_adapter_receipt = _mapping(
             bundle_mapping.get("backend_runtime_adapter_receipt")
         )
+        backend_runtime_adapter_metadata = _mapping(backend_runtime_adapter_receipt.get("metadata"))
+        backend_runtime_adapter_realization = _mapping(
+            backend_runtime_adapter_metadata.get("realization")
+        )
         backend_runtime_launch_receipt = _mapping(
             bundle_mapping.get("backend_runtime_launch_receipt")
         )
@@ -555,6 +559,12 @@ def build_backend_selector_rows_from_receipts(
                     "backend_runtime_adapter_receipt_id": backend_runtime_adapter_receipt.get("receipt_id"),
                     "backend_runtime_adapter_status": backend_runtime_adapter_receipt.get("adapter_status"),
                     "backend_runtime_adapter_execution_path": backend_runtime_adapter_receipt.get("execution_path"),
+                    "backend_runtime_adapter_realization_path": backend_runtime_adapter_realization.get(
+                        "realization_path"
+                    ),
+                    "backend_runtime_adapter_realization_status": backend_runtime_adapter_realization.get(
+                        "realization_status"
+                    ),
                     "backend_runtime_launch_receipt_id": backend_runtime_launch_receipt.get("receipt_id"),
                     "backend_runtime_launch_status": backend_runtime_launch_receipt.get("launch_status"),
                     "backend_runtime_launch_executed": backend_runtime_launch_receipt.get("executed"),
@@ -629,6 +639,10 @@ def build_branch_planner_rows_from_receipts(
         )
         backend_runtime_adapter_receipt = _mapping(
             bundle_mapping.get("backend_runtime_adapter_receipt")
+        )
+        backend_runtime_adapter_metadata = _mapping(backend_runtime_adapter_receipt.get("metadata"))
+        backend_runtime_adapter_realization = _mapping(
+            backend_runtime_adapter_metadata.get("realization")
         )
         backend_runtime_outcome_receipt = _mapping(
             bundle_mapping.get("backend_runtime_outcome_receipt")
@@ -728,6 +742,12 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_adapter_execution_path": backend_runtime_adapter_receipt.get(
                             "execution_path"
+                        ),
+                        "backend_runtime_adapter_realization_path": backend_runtime_adapter_realization.get(
+                            "realization_path"
+                        ),
+                        "backend_runtime_adapter_realization_status": backend_runtime_adapter_realization.get(
+                            "realization_status"
                         ),
                         "backend_runtime_launch_status": backend_runtime_launch_receipt.get(
                             "launch_status"

@@ -171,6 +171,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                 "consumer_mode": "external_sim_launch",
                 "adapter_status": "external_launch_completed",
                 "execution_path": "external_launch",
+                "metadata": {
+                    "realization": {
+                        "realization_path": "external_launch_delegate",
+                        "realization_status": "external_launch_delegate_ready",
+                    }
+                },
                 "executed": True,
                 "version": "backend_runtime_adapter_receipt_v1",
             },
@@ -308,6 +314,8 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_status"] == "external_launch_completed"
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_execution_path"] == "external_launch"
+    assert backend_rows[0]["metadata"]["backend_runtime_adapter_realization_path"] == "external_launch_delegate"
+    assert backend_rows[0]["metadata"]["backend_runtime_adapter_realization_status"] == "external_launch_delegate_ready"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_executed"] is True
@@ -336,6 +344,8 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_status"] == "external_launch_completed"
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_execution_path"] == "external_launch"
+    assert branch_rows[0]["metadata"]["backend_runtime_adapter_realization_path"] == "external_launch_delegate"
+    assert branch_rows[0]["metadata"]["backend_runtime_adapter_realization_status"] == "external_launch_delegate_ready"
     assert branch_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
     assert branch_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
     assert (

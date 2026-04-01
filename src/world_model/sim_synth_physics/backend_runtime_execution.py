@@ -19,6 +19,9 @@ from .adapters.isaac_unitree_adapter_execution import (
     finalize_isaac_unitree_adapter_execution,
     prepare_isaac_unitree_adapter_execution,
 )
+from .adapters.isaac_unitree_adapter_realization import (
+    build_isaac_unitree_adapter_realization,
+)
 from .asset_manifest import extract_robot_asset_manifest, normalize_robot_asset_manifest
 from .common import mapping, safe_float, strings
 from .physics_contracts import PhysicsExecutionContract
@@ -586,6 +589,7 @@ def materialize_backend_runtime_execution(
     adapter_refs: list[str] = []
     launch_receipt_payload: dict[str, Any] | None = None
     adapter_receipt_payload: dict[str, Any] | None = None
+    adapter_realization_payload: dict[str, Any] | None = None
     runtime_outcome_receipt_payload: dict[str, Any] | None = None
     runtime_outcome_refs: list[str] = []
     local_runtime_supported = _runtime_supports_execution(backend)
@@ -595,10 +599,25 @@ def materialize_backend_runtime_execution(
             executable_adapter_request,
             executable_adapter_consumer,
         )
+        adapter_realization = build_isaac_unitree_adapter_realization(
+            executable_adapter_request=executable_adapter_request,
+            executable_adapter_consumer=executable_adapter_consumer,
+            adapter_execution=adapter_execution,
+            runtime_bundle=runtime_bundle,
+            launch_spec=launch_spec,
+            binding_payload={
+                "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                "binding_status": backend_binding_receipt.binding_status,
+            },
+        )
+        adapter_realization_payload = dict(adapter_realization)
         if output_root is not None:
             adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+            adapter_realization_path = output_root / "backend_runtime_adapter_realization.json"
             _write_json(adapter_execution_path, adapter_execution)
+            _write_json(adapter_realization_path, adapter_realization_payload)
             adapter_refs.append(str(adapter_execution_path.resolve()))
+            adapter_refs.append(str(adapter_realization_path.resolve()))
             artifact_refs.extend(adapter_refs)
     if not local_runtime_supported:
         launch_result: dict[str, Any] = dict(launch_plan)
@@ -616,9 +635,21 @@ def materialize_backend_runtime_execution(
                 adapter_execution,
                 launch_result=launch_result,
             )
+            adapter_realization_payload = build_isaac_unitree_adapter_realization(
+                executable_adapter_request=executable_adapter_request,
+                executable_adapter_consumer=executable_adapter_consumer,
+                adapter_execution=adapter_execution,
+                runtime_bundle=runtime_bundle,
+                launch_spec=launch_spec,
+                binding_payload={
+                    "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                    "binding_status": backend_binding_receipt.binding_status,
+                },
+            )
             adapter_receipt = build_isaac_unitree_adapter_receipt(
                 adapter_execution,
                 artifact_refs=adapter_refs,
+                realization=adapter_realization_payload,
             )
             adapter_receipt_payload = adapter_receipt.to_dict()
         launch_receipt = build_backend_runtime_launch_receipt(
@@ -640,6 +671,7 @@ def materialize_backend_runtime_execution(
         if output_root is not None:
             report_path = output_root / "backend_runtime_launch_report.json"
             adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+            adapter_realization_path = output_root / "backend_runtime_adapter_realization.json"
             adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
             receipt_path = output_root / "backend_runtime_launch_receipt.json"
             consumer_path = output_root / "backend_executable_adapter_consumer.json"
@@ -657,6 +689,8 @@ def materialize_backend_runtime_execution(
             )
             if adapter_execution:
                 _write_json(adapter_execution_path, adapter_execution)
+            if adapter_realization_payload is not None:
+                _write_json(adapter_realization_path, adapter_realization_payload)
             if adapter_receipt_payload is not None:
                 _write_json(adapter_receipt_path, adapter_receipt_payload)
             _write_json(receipt_path, launch_receipt_payload)
@@ -668,6 +702,7 @@ def materialize_backend_runtime_execution(
                 [
                     str(report_path.resolve()),
                     str(adapter_execution_path.resolve()) if adapter_execution else "",
+                    str(adapter_realization_path.resolve()) if adapter_realization_payload else "",
                     str(adapter_receipt_path.resolve()) if adapter_receipt_payload else "",
                     str(receipt_path.resolve()),
                     str(consumer_path.resolve()),
@@ -715,6 +750,7 @@ def materialize_backend_runtime_execution(
                     "executable_adapter_request": executable_adapter_request,
                     "executable_adapter_consumer": executable_adapter_consumer,
                     "adapter_execution": adapter_execution,
+                    "adapter_realization": adapter_realization_payload,
                     "adapter_receipt": adapter_receipt_payload,
                     "runtime_output_contract": runtime_output_contract,
                     "launch_plan": launch_plan,
@@ -734,9 +770,21 @@ def materialize_backend_runtime_execution(
                     adapter_execution,
                     launch_result=launch_plan,
                 )
+                adapter_realization_payload = build_isaac_unitree_adapter_realization(
+                    executable_adapter_request=executable_adapter_request,
+                    executable_adapter_consumer=executable_adapter_consumer,
+                    adapter_execution=adapter_execution,
+                    runtime_bundle=runtime_bundle,
+                    launch_spec=launch_spec,
+                    binding_payload={
+                        "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                        "binding_status": backend_binding_receipt.binding_status,
+                    },
+                )
                 adapter_receipt = build_isaac_unitree_adapter_receipt(
                     adapter_execution,
                     artifact_refs=adapter_refs,
+                    realization=adapter_realization_payload,
                 )
                 adapter_receipt_payload = adapter_receipt.to_dict()
             launch_receipt = build_backend_runtime_launch_receipt(
@@ -748,6 +796,7 @@ def materialize_backend_runtime_execution(
             if output_root is not None:
                 report_path = output_root / "backend_runtime_launch_report.json"
                 adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+                adapter_realization_path = output_root / "backend_runtime_adapter_realization.json"
                 adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
                 receipt_path = output_root / "backend_runtime_launch_receipt.json"
                 consumer_path = output_root / "backend_executable_adapter_consumer.json"
@@ -765,6 +814,8 @@ def materialize_backend_runtime_execution(
                 )
                 if adapter_execution:
                     _write_json(adapter_execution_path, adapter_execution)
+                if adapter_realization_payload is not None:
+                    _write_json(adapter_realization_path, adapter_realization_payload)
                 if adapter_receipt_payload is not None:
                     _write_json(adapter_receipt_path, adapter_receipt_payload)
                 _write_json(receipt_path, launch_receipt_payload)
@@ -808,6 +859,7 @@ def materialize_backend_runtime_execution(
                     [
                         str(report_path.resolve()),
                         str(adapter_execution_path.resolve()) if adapter_execution else "",
+                        str(adapter_realization_path.resolve()) if adapter_realization_payload else "",
                         str(adapter_receipt_path.resolve()) if adapter_receipt_payload else "",
                         str(receipt_path.resolve()),
                         str(consumer_path.resolve()),
@@ -853,6 +905,7 @@ def materialize_backend_runtime_execution(
                 "executable_adapter_request": executable_adapter_request,
                 "executable_adapter_consumer": executable_adapter_consumer,
                 "adapter_execution": adapter_execution,
+                "adapter_realization": adapter_realization_payload,
                 "adapter_receipt": adapter_receipt_payload,
                 "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
@@ -871,18 +924,33 @@ def materialize_backend_runtime_execution(
             adapter_execution,
             local_runtime_handoff=True,
         )
+        adapter_realization_payload = build_isaac_unitree_adapter_realization(
+            executable_adapter_request=executable_adapter_request,
+            executable_adapter_consumer=executable_adapter_consumer,
+            adapter_execution=adapter_execution,
+            runtime_bundle=runtime_bundle,
+            launch_spec=launch_spec,
+            binding_payload={
+                "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                "binding_status": backend_binding_receipt.binding_status,
+            },
+        )
         adapter_receipt = build_isaac_unitree_adapter_receipt(
             adapter_execution,
             artifact_refs=adapter_refs,
+            realization=adapter_realization_payload,
         )
         adapter_receipt_payload = adapter_receipt.to_dict()
         if output_root is not None:
             adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+            adapter_realization_path = output_root / "backend_runtime_adapter_realization.json"
             adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
             _write_json(adapter_execution_path, adapter_execution)
+            _write_json(adapter_realization_path, adapter_realization_payload)
             _write_json(adapter_receipt_path, adapter_receipt_payload)
             for ref in (
                 str(adapter_execution_path.resolve()),
+                str(adapter_realization_path.resolve()),
                 str(adapter_receipt_path.resolve()),
             ):
                 if ref not in artifact_refs:
@@ -962,6 +1030,7 @@ def materialize_backend_runtime_execution(
                 "executable_adapter_request": executable_adapter_request,
                 "executable_adapter_consumer": executable_adapter_consumer,
                 "adapter_execution": adapter_execution,
+                "adapter_realization": adapter_realization_payload,
                 "adapter_receipt": adapter_receipt_payload,
                 "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
@@ -1012,6 +1081,7 @@ def materialize_backend_runtime_execution(
             "executable_adapter_request": executable_adapter_request,
             "executable_adapter_consumer": executable_adapter_consumer,
             "adapter_execution": adapter_execution,
+            "adapter_realization": adapter_realization_payload,
             "adapter_receipt": adapter_receipt_payload,
             "runtime_output_contract": runtime_output_contract,
             "launch_plan": launch_plan,

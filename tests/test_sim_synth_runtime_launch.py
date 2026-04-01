@@ -274,9 +274,15 @@ def test_run_isaac_unitree_executable_adapter_script_writes_adapter_request(
     assert payload["executable_adapter_consumer"]["consumer_mode"] == "external_sim_launch"
     assert payload["adapter_execution"]["execution_path"] == "external_launch"
     assert payload["adapter_execution"]["adapter_status"] == "external_launch_ready"
+    assert payload["adapter_realization"]["realization_path"] == "external_launch_delegate"
+    assert payload["adapter_realization"]["realization_status"] == "external_launch_delegate_ready"
     assert payload["adapter_execution"]["local_bridge_module"] == LOCAL_BRIDGE_MODULE
     assert payload["adapter_receipt"]["version"] == "backend_runtime_adapter_receipt_v1"
     assert payload["adapter_receipt"]["adapter_status"] == "external_launch_ready"
+    assert (
+        payload["adapter_receipt"]["metadata"]["realization"]["realization_path"]
+        == "external_launch_delegate"
+    )
     assert payload["receipt"]["launch_status"] == "launch_prepared"
 
 
