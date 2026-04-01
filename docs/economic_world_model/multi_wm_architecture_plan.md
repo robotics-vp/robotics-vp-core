@@ -1109,6 +1109,7 @@ Phase 1 should count as landed only when:
 - backend runtime bundles and launch specs are emitted as WM-owned artifacts, so work orders can point at concrete upstream-shaped launch paths rather than only generic backlog commands
 - Isaac/Unitree backend runtime artifacts include a typed executable-adapter request carrying deployment mode, robot variant, asset/calibration posture, and output expectations, so the external-runtime lane is concrete before a full in-process adapter exists
 - Isaac/Unitree backend runtime artifacts also include a typed executable-adapter consumer over that request, so the WM can say which consumer path is actually taking responsibility for the request instead of collapsing request and execution mediation together
+- Isaac/Unitree backend runtime artifacts also include typed adapter-execution mediation and an adapter receipt over that request/consumer pair, so the WM can distinguish request, consumer, executable mediation, launch, and harvested outcome as separate maturity rungs instead of collapsing them into generic launch status
 - the backend runtime receipt can distinguish `runtime_launch_prepared` from truly missing runtime prerequisites, so “host is ready but local adapter is absent” remains an honest intermediate state instead of collapsing back into generic module-missing logic
 - backend runtime output contracts and outcome receipts are emitted explicitly, so upstream runtime launches can be judged by harvested outputs rather than only `launch_completed` / `launch_failed`
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
@@ -1125,6 +1126,7 @@ Named gaps that should remain explicit in this phase:
 - real Isaac Sim / Isaac Gym backend implementation with typed adapter ownership
 - Unitree-class humanoid sim-env integration behind a typed backend contract
 - concrete runtime launch/bundle execution behind the new WM-owned layout and launch-spec contracts
+- concrete Isaac/Unitree executable-adapter realization behind the new request/consumer/adapter-execution receipt chain
 - concrete Holosoma runtime execution and datapack/asset binding beyond the new runtime-request / optional train-or-eval receipt
 - concrete Isaac/Unitree robot assets, calibration sidecars, and simulator bindings behind the new adapter contracts
 - concrete GGDS/LDM execution at scale under the new WM-owned render-provider contracts

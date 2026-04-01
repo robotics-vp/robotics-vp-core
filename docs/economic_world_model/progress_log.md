@@ -1048,3 +1048,22 @@
   - real Isaac Lab / Isaac Sim / Unitree executable adapters and assets
   - real Holosoma host/runtime + motion/policy/retargeting assets
   - GGDS / video-diffusion GPU materialization
+
+- Changed: completed the next Phase 1 Isaac/Unitree execution-mediation cut so the runtime lane no longer jumps straight from consumer selection to generic launch status:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_execution.py`
+  - the new layer emits `backend_executable_adapter_execution_v1` over the existing request/consumer pair and distinguishes:
+    - `local_bridge_ready`
+    - `local_bridge_missing`
+    - `local_bridge_handed_off`
+    - `external_launch_ready`
+    - `external_launch_completed`
+    - `external_launch_failed`
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now writes and preserves that mediation artifact plus a new `backend_runtime_adapter_receipt_v1` inside the live Phase 1 runtime path
+  - `src/world_model/sim_synth_physics/runtime.py` now surfaces the adapter receipt as a first-class loop artifact, carries it into loop summaries and training feedback, and preserves the distinction between executable mediation, launch, and harvested outcomes
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the adapter receipt into backend-selector and branch-planner rows, so downstream training surfaces can see adapter readiness/execution-path truth instead of inferring everything from launch status
+  - `scripts/run_isaac_unitree_executable_adapter.py` now emits adapter execution plus adapter receipt alongside the existing launch report
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: this is another real Phase-1 closure step, but the remaining honest gap is still the final executable realization, not more contract naming:
+  - a concrete Isaac Lab / Isaac Sim / Unitree adapter still needs to consume the new request/consumer/adapter-execution chain against real upstream runtime/assets
+  - Holosoma still needs equivalent runtime-execution mediation and receipt depth
+  - GGDS / video-diffusion still need GPU-backed materialization

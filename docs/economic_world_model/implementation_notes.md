@@ -1952,3 +1952,53 @@
     - physical deployment missing-precondition logic
     - deployment-driven profile preference
     - XR teleop / sdk2_python / teleimager transport-bridge posture
+
+- The next concrete Isaac/Unitree runtime-execution layer is now in place:
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_execution.py` now sits between the executable-adapter consumer and the launch/outcome path
+  - that layer deliberately does not pretend to be the final adapter; instead it makes the next maturity rung explicit by distinguishing:
+    - request
+    - consumer
+    - adapter execution mediation
+    - launch
+    - harvested runtime outcome
+  - the main statuses it names are:
+    - `local_bridge_ready`
+    - `local_bridge_missing`
+    - `local_bridge_handed_off`
+    - `external_launch_ready`
+    - `external_launch_completed`
+    - `external_launch_failed`
+
+- The live Phase-1 runtime path now preserves that mediation explicitly:
+  - `backend_runtime_execution.py` now writes:
+    - `backend_runtime_adapter_execution.json`
+    - `backend_runtime_adapter_receipt.json`
+  - the runtime metadata now carries `executable_adapter_request`, `executable_adapter_consumer`, `adapter_execution`, and `adapter_receipt` together so the lane no longer jumps directly from consumer choice to generic launch status
+  - `runtime.py` now surfaces `backend_runtime_adapter_receipt` as a first-class loop artifact and carries its id/status/execution-path into:
+    - loop summaries
+    - training feedback
+    - outcome metadata
+
+- The downstream training/export path now sees the new truth as well:
+  - `training_corpus.py` now harvests `backend_runtime_adapter_receipt_v1`
+  - backend-selector and branch-planner rows now preserve:
+    - adapter receipt id
+    - adapter status
+    - adapter execution path
+  - this matters because launch completion alone is not enough to tell whether the lane merely prepared an external launch, really executed one, or tried to hand off to a missing local bridge
+
+- The standalone WM-facing runner now exposes the same maturity split:
+  - `scripts/run_isaac_unitree_executable_adapter.py` now emits:
+    - `executable_adapter_request`
+    - `executable_adapter_consumer`
+    - `adapter_execution`
+    - `adapter_receipt`
+    - the existing launch `result` and `receipt`
+  - that keeps the standalone Isaac/Unitree lane topology-consistent with the live runtime path
+
+- New focused tests for this sub-tranche:
+  - `tests/test_isaac_unitree_adapter_execution.py`
+  - additions in:
+    - `tests/test_sim_synth_runtime_launch.py`
+    - `tests/test_sim_synth_physics_world_model.py`
+    - `tests/test_sim_synth_training_corpus.py`
