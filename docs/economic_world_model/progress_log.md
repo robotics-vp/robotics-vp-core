@@ -980,3 +980,31 @@
   - actual Isaac Lab / Isaac Sim / Unitree execution adapters and assets
   - actual Holosoma host/runtime/policy/motion/retargeting assets
   - actual GGDS / video-diffusion materialization on GPU
+## 2026-04-01
+
+- Changed: reconciled branch-truth doctrine for the active multi-WM implementation arc:
+  - landed the previously local-only tranche/doctrine/collaboration artifacts:
+    - `docs/economic_world_model/neuralization_bridge_doctrine.md`
+    - `docs/economic_world_model/codex_tranche_sim_synth_closure.md`
+    - `docs/economic_world_model/codex_tranche_perception_wm_schema.md`
+    - `.agent/claude_copilot.md`
+    - `CLAUDE.md` now includes the Claude copilot doctrine entrypoint
+  - this makes the branch’s effective operating posture explicit in git rather than leaving the active/held tranche split and Codex/Claude collaboration doctrine as local-only state
+- Changed: completed the next highest-leverage Phase 1 Isaac/Unitree contract cut:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py`
+  - `backend_isaac.py` now emits a real `deployment_contract` and can distinguish:
+    - `runtime_ready`
+    - `external_launch_ready`
+    - `external_launch_assets_missing`
+    - older shadow/assets-missing states
+  - `runtime_targets.py`, `runtime_layouts.py`, `runtime_bundles.py`, `runtime_bridge.py`, `runtime_launch.py`, `runtime_outcomes.py`, and `backend_runtime_execution.py` now understand:
+    - `unitree_lerobot`
+    - XR teleop + `sdk2_python` / `teleimager`
+    - deployment-contract-aware preferred-profile selection
+    - richer external-launch transport profiles and output harvesting
+  - the main practical fix is that the WM now treats Unitree teleop / LeRobot / external launch posture as explicit runtime reality instead of flattening everything into generic Isaac shadow status
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py src/world_model/sim_synth_physics/adapters/backend_isaac.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_bridge.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/runtime_outcomes.py src/world_model/sim_synth_physics/backend_runtime_execution.py tests/test_isaac_unitree_deployment.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py src/world_model/sim_synth_physics/adapters/backend_isaac.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_bridge.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/runtime_outcomes.py src/world_model/sim_synth_physics/backend_runtime_execution.py tests/test_isaac_unitree_deployment.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_isaac_unitree_deployment.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: Phase 1 remains the active implementation center of gravity. The honest remainder is still external runtime, assets, GPU, and provider maturity:
+  - real Isaac Lab / Isaac Sim / Unitree executable adapters and assets
+  - real Holosoma host/runtime + motion/policy/retargeting assets
+  - GGDS / video-diffusion GPU materialization

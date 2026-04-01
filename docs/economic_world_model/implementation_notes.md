@@ -1843,3 +1843,63 @@
     - launch executed with no outputs harvested
     - launch executed with outputs harvested
   - that means the remaining backend gap is increasingly about actual external runtime/assets/GPU availability rather than missing canonical WM receipt plumbing
+## 2026-04-01
+
+- Branch-truth reconciliation for the multi-WM program is now explicit:
+  - the master committed docs (`multi_wm_architecture_plan.md`, `roadmap.md`) were already the main source of truth
+  - this pass landed the previously local-only supporting doctrine/spec/collaboration files so the branch now explicitly carries:
+    - a neuralization/semantic-bridge doctrine
+    - an active Sim/Synth/Physics closure tranche spec
+    - a held Perception/Grounding schema tranche spec
+    - a Codex/Claude collaboration doctrine
+  - `CLAUDE.md` now references `.agent/claude_copilot.md`, which means the collaboration posture is no longer merely implied by local state
+  - `docs/economic_world_model/claude_to_comment_on.md` should now be treated as a real per-tranche handoff artifact, not a dormant template
+
+- The next concrete Isaac/Unitree Phase 1 improvement is now landed:
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py` defines a Unitree-aware deployment contract over:
+    - runtime profiles
+    - sim/teleop/lerobot/physical deployment modes
+    - policy readiness
+    - robot-asset readiness
+    - missing preconditions per mode
+  - `backend_isaac.py` now emits this contract in binding metadata and uses it to distinguish:
+    - `runtime_ready`
+    - `external_launch_ready`
+    - `external_launch_assets_missing`
+    - legacy shadow/asset-gap states
+  - this is materially better than the old posture where Isaac could only be “runtime-ready” or some generic shadow state; the WM can now express the intermediate but important truth that external launch is structurally ready even if in-process local execution is not
+
+- The runtime/bundle/bridge path now consumes that deployment contract:
+  - `runtime_targets.py` now accepts the `unitree_lerobot_root` alias and treats `unitree_il_lerobot_root` and `xr_teleoperate_root` as valid members of the external-runtime root family
+  - `runtime_layouts.py` now understands a `unitree_lerobot` runtime profile
+  - `runtime_bundles.py` now:
+    - supports `unitree_lerobot` launch specs
+    - uses deployment-contract preferred-profile ordering instead of relying only on generic runtime-layout ordering
+    - preserves the deployment contract inside runtime bundles and launch specs
+  - `runtime_bridge.py` now:
+    - recognizes `unitree_xr_teleop_bridge` and `unitree_lerobot_eval_bridge`
+    - preserves deployment-contract metadata in the bridge receipt path
+    - treats `external_launch_ready` / `external_launch_assets_missing` as first-class binding states instead of collapsing them into the older shadow/runtime buckets
+  - `runtime_launch.py` now exports the corresponding environment variables for `UNITREE_SDK2_PYTHON_ROOT`, `TELEIMAGER_ROOT`, and `UNITREE_IL_LEROBOT_ROOT`
+  - `runtime_outcomes.py` now has an explicit `unitree_lerobot` upstream output family, so harvested outputs are no longer hard-coded to IsaacLab / RL Gym / HumanoidVerse / XR Teleoperate only
+  - `backend_runtime_execution.py` now passes the deployment contract into runtime-bundle construction, making the runtime-launch path topology-consistent with the binding metadata
+
+- A real bug was fixed while landing the deployment contract:
+  - `unitree_policy_root` was incorrectly making the runtime layer treat `unitree_rl_gym` as “profile-ready” even when only a policy bank was present
+  - this was removed from the runtime-root → profile mapping, so policy-bank availability no longer masquerades as runtime-root availability
+  - this is exactly the sort of subtle truthiness bug we want these contracts to prevent
+
+- New focused test coverage now exists for this tranche:
+  - `tests/test_isaac_unitree_deployment.py`
+  - additions in:
+    - `tests/test_sim_synth_runtime_targets.py`
+    - `tests/test_sim_synth_runtime_layouts.py`
+    - `tests/test_sim_synth_runtime_bundles.py`
+    - `tests/test_sim_synth_physics_world_model.py`
+  - the tests now explicitly exercise:
+    - sim launch readiness
+    - teleop readiness
+    - lerobot-eval readiness
+    - physical deployment missing-precondition logic
+    - deployment-driven profile preference
+    - XR teleop / sdk2_python / teleimager transport-bridge posture
