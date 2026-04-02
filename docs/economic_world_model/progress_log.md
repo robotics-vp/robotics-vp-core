@@ -1127,3 +1127,25 @@
   - real Isaac Lab / Isaac Sim / Unitree runtime packs still need the actual upstream repos/assets/policies behind them
   - real Holosoma runtime packs still need actual host/runtime/motion/policy/retargeting assets
   - GPU-backed GGDS / video materialization still remains external-runtime / checkpoint / host work
+
+- Changed: pushed the next Phase 1 closure rung so upstream runtime packs now feed a typed runtime-binding layer instead of being consumed as loose pack metadata:
+  - added:
+    - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py`
+  - `runtime_bundles.py` now emits `runtime_binding` and writes `backend_runtime_binding.json`
+  - `runtime_launch.py`, `runtime_work_orders.py`, `runtime.py`, `training_corpus.py`, `scripts/scan_phase1_runtime_layouts.py`, and `scripts/run_isaac_unitree_executable_adapter.py` now preserve runtime-binding status, selected surfaces, and mode-relevant missing components
+  - this removes a real fake-readiness seam: pack-level gaps are no longer blindly inherited as execution blockers when the selected local mode is already satisfied by explicit policy refs or motion datapacks
+- Changed: fixed the Holosoma local concrete-runtime path so `motion_train` no longer mutates a stale `sim_eval` request in place:
+  - `backend_runtime_execution.py` now rebuilds the Holosoma executable-adapter request from the patched runtime binding when train-from-motion is the honest local mode
+  - local Holosoma eval can now run with an explicit policy ref even when external repo/launch roots are absent
+  - local Holosoma train-from-motion can now run with datapacks / inline clips without inheriting irrelevant `policy_surface` blockers
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py`
+  - `python3 -m pytest -q tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py`
+  - result: `44 passed`
+  - `git diff --check`
+- Blocked: the remaining honest Phase 1 gap is now even more external:
+  - real Isaac/Unitree upstream runtime, assets, checkpoints, and host setup still need to sit behind the new runtime-pack -> runtime-binding -> adapter ladder
+  - real Holosoma host/runtime/motion/retargeting assets still need to sit behind the same ladder
+  - GPU-backed GGDS / video materialization is still outside the current host

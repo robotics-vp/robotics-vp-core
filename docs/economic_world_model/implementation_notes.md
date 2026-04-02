@@ -2066,3 +2066,58 @@
 - Honest remainder after this tranche:
   - the repo now knows how to describe backend-specific upstream runtime packs, but those packs are still provider-owned/external reality
   - the next concrete work is still real runtime/assets/policies/hosts, not another speculative abstraction layer
+
+- The next concrete Phase-1 closure rung is now explicit:
+  - `isaac_unitree_runtime_binding.py` and `holosoma_runtime_binding.py` sit between upstream runtime packs and executable-adapter requests
+  - that layer deliberately chooses mode-relevant policy / motion / retargeting / launch / target surfaces instead of inheriting every pack-level missing component indiscriminately
+  - the runtime lane can now say:
+    - which selected surfaces are actually bound for this mode
+    - which missing components are still relevant for this mode
+    - whether the lane is `binding_ready`, `binding_partial`, or `binding_blocked`
+
+- This matters topologically because the backend path is now:
+  - backend binding
+  - deployment contract
+  - upstream runtime pack
+  - runtime binding
+  - executable-adapter request
+  - executable-adapter consumer
+  - adapter execution
+  - adapter realization
+  - local materialization / external launch
+  - harvested runtime outcomes
+
+- The most important bug fixed in this tranche was not cosmetic:
+  - local Holosoma concrete execution was still inheriting pack-level `sim_eval` blockers even when the branch had enough to do honest local eval or train-from-motion
+  - specifically, the `motion_train` patch path in `backend_runtime_execution.py` was mutating a stale `sim_eval` request in place, which left irrelevant `policy_surface` / `policy_checkpoint` blockers alive
+  - the branch now rebuilds the Holosoma executable-adapter request from the patched runtime binding when `motion_train` is the honest local mode
+
+- Consequences of the fix:
+  - local Holosoma eval can proceed when the branch has:
+    - a real local runtime bridge
+    - an explicit policy ref
+  - local Holosoma train-from-motion can proceed when the branch has:
+    - a real local runtime bridge
+    - motion datapacks and/or inline clips
+  - absent external repo roots or launch surfaces no longer masquerade as local-runtime blockers in those two cases
+
+- The runtime-binding layer is now preserved end to end:
+  - `runtime_bundles.py` writes `backend_runtime_binding.json`
+  - `runtime_launch.py` uses runtime-binding-selected launch/root/command surfaces and missing components
+  - `runtime_work_orders.py` now reports `runtime_binding_status` plus binding-selected profile/policy/root state
+  - `runtime.py` now carries runtime-binding refs/status into loop summaries and training feedback
+  - `training_corpus.py` now exports runtime-binding status and selected surfaces into backend-selector / branch-planner rows
+  - `scan_phase1_runtime_layouts.py` now emits runtime bindings for both Isaac/Unitree and Holosoma scans
+
+- Focused verification for this tranche:
+  - `python3 -m compileall src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py`
+  - `python3 -m pytest -q tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py`
+  - result: `44 passed`
+
+- Honest remainder after this tranche:
+  - the new binding layer is real, but it is still binding against provider-owned/external runtime packs
+  - the next high-leverage work remains:
+    - real Isaac/Unitree runtime/assets/policies behind the ladder
+    - real Holosoma host/runtime/motion/retargeting assets behind the same ladder
+    - GPU-backed GGDS / video materialization
