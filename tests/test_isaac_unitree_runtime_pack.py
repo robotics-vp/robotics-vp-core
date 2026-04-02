@@ -169,3 +169,56 @@ def test_isaac_unitree_runtime_pack_uses_verified_targets_for_runtime_surface(tm
         "unitree_asset_root",
         "unitree_sdk2_root",
     ]
+
+
+def test_isaac_unitree_runtime_pack_prefers_verified_local_refs(tmp_path) -> None:
+    policy_ref = tmp_path / "policies" / "g1_policy.onnx"
+    policy_ref.parent.mkdir()
+    policy_ref.write_text("x", encoding="utf-8")
+    deploy_ref = tmp_path / "unitree_sim_isaaclab" / "sim_main.py"
+    deploy_ref.parent.mkdir()
+    deploy_ref.write_text("", encoding="utf-8")
+    report_ref = tmp_path / "logs" / "eval.json"
+    report_ref.parent.mkdir()
+    report_ref.write_text("{}", encoding="utf-8")
+
+    pack = build_isaac_unitree_runtime_pack(
+        runtime_target_contract={
+            "verified_target_ids": ["unitree_sim_isaaclab_root", "unitree_sdk2_root"],
+            "runtime_target_preflight_status": "preflight_ready",
+        },
+        runtime_layout_contract={
+            "preferred_profile_order": ["unitree_sim_isaaclab"],
+            "profiles": [
+                {
+                    "profile_id": "unitree_sim_isaaclab",
+                    "root": str(deploy_ref.parent),
+                    "root_exists": True,
+                    "install_preflight_status": "install_ready",
+                    "primary_entrypoint_ref": str(deploy_ref),
+                    "policy_candidates": ["/missing/policy.onnx", str(policy_ref)],
+                    "deploy_candidates": ["/missing/sim_main.py", str(deploy_ref)],
+                    "data_candidates": ["/missing/eval.json", str(report_ref)],
+                }
+            ],
+        },
+        policy_contract={
+            "checkpoint_candidates": ["/also/missing/policy.onnx", str(policy_ref)],
+            "deploy_config_candidates": ["/also/missing/sim_main.py", str(deploy_ref)],
+            "runtime_report_candidates": ["/also/missing/eval.json", str(report_ref)],
+        },
+        deployment_contract={
+            "preferred_profile": "unitree_sim_isaaclab",
+            "ready_modes": ["sim_eval"],
+            "robot_variant": "unitree_g1",
+        },
+        normalized_robot_asset_manifest={"unitree_robot_description": {"present": True}},
+    )
+
+    assert pack["primary_policy_ref"] == str(policy_ref)
+    assert pack["primary_policy_ref_source"] == "profile.policy_candidates[1]"
+    assert pack["policy_candidate_evidence_summary"]["verified_candidate_count"] == 1
+    assert pack["primary_deploy_config_ref"] == str(deploy_ref)
+    assert pack["primary_deploy_config_ref_source"] == "profile.deploy_candidates[1]"
+    assert pack["runtime_report_candidate_evidence_summary"]["verified_candidate_count"] == 1
+    assert pack["primary_runtime_report_ref"] == str(report_ref)

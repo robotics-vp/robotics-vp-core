@@ -276,11 +276,29 @@ def build_backend_runtime_work_orders(
                 "upstream_runtime_primary_policy_ref": str(
                     upstream_runtime_pack.get("primary_policy_ref", "") or ""
                 ),
+                "upstream_runtime_primary_policy_ref_source": str(
+                    upstream_runtime_pack.get("primary_policy_ref_source", "") or ""
+                ),
+                "upstream_runtime_policy_candidate_evidence_summary": mapping(
+                    upstream_runtime_pack.get("policy_candidate_evidence_summary")
+                ),
                 "upstream_runtime_primary_deploy_config_ref": str(
                     upstream_runtime_pack.get("primary_deploy_config_ref", "") or ""
                 ),
+                "upstream_runtime_primary_deploy_config_ref_source": str(
+                    upstream_runtime_pack.get("primary_deploy_config_ref_source", "") or ""
+                ),
+                "upstream_runtime_deploy_candidate_evidence_summary": mapping(
+                    upstream_runtime_pack.get("deploy_candidate_evidence_summary")
+                ),
                 "upstream_runtime_primary_runtime_report_ref": str(
                     upstream_runtime_pack.get("primary_runtime_report_ref", "") or ""
+                ),
+                "upstream_runtime_primary_runtime_report_ref_source": str(
+                    upstream_runtime_pack.get("primary_runtime_report_ref_source", "") or ""
+                ),
+                "upstream_runtime_runtime_report_candidate_evidence_summary": mapping(
+                    upstream_runtime_pack.get("runtime_report_candidate_evidence_summary")
                 ),
                 "upstream_runtime_verified_asset_ids": strings(
                     upstream_runtime_pack.get("verified_asset_ids")
@@ -299,11 +317,20 @@ def build_backend_runtime_work_orders(
                 "runtime_binding_selected_policy_ref": str(
                     runtime_binding.get("selected_policy_ref", "") or ""
                 ),
+                "runtime_binding_selected_policy_ref_source": str(
+                    runtime_binding.get("selected_policy_ref_source", "") or ""
+                ),
                 "runtime_binding_selected_deploy_config": str(
                     runtime_binding.get("selected_deploy_config", "") or ""
                 ),
+                "runtime_binding_selected_deploy_config_source": str(
+                    runtime_binding.get("selected_deploy_config_source", "") or ""
+                ),
                 "runtime_binding_selected_runtime_report": str(
                     runtime_binding.get("selected_runtime_report", "") or ""
+                ),
+                "runtime_binding_selected_runtime_report_source": str(
+                    runtime_binding.get("selected_runtime_report_source", "") or ""
                 ),
                 "runtime_binding_selected_launch_root": str(
                     runtime_binding.get("selected_launch_root", "") or ""

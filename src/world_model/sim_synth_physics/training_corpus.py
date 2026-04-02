@@ -679,11 +679,29 @@ def build_backend_selector_rows_from_receipts(
                     "backend_upstream_runtime_primary_policy_ref": upstream_runtime_pack.get(
                         "primary_policy_ref"
                     ),
+                    "backend_upstream_runtime_primary_policy_ref_source": upstream_runtime_pack.get(
+                        "primary_policy_ref_source"
+                    ),
+                    "backend_upstream_runtime_policy_candidate_evidence_summary": _mapping(
+                        upstream_runtime_pack.get("policy_candidate_evidence_summary")
+                    ),
                     "backend_upstream_runtime_primary_deploy_config_ref": upstream_runtime_pack.get(
                         "primary_deploy_config_ref"
                     ),
+                    "backend_upstream_runtime_primary_deploy_config_ref_source": upstream_runtime_pack.get(
+                        "primary_deploy_config_ref_source"
+                    ),
+                    "backend_upstream_runtime_deploy_candidate_evidence_summary": _mapping(
+                        upstream_runtime_pack.get("deploy_candidate_evidence_summary")
+                    ),
                     "backend_upstream_runtime_primary_runtime_report_ref": upstream_runtime_pack.get(
                         "primary_runtime_report_ref"
+                    ),
+                    "backend_upstream_runtime_primary_runtime_report_ref_source": upstream_runtime_pack.get(
+                        "primary_runtime_report_ref_source"
+                    ),
+                    "backend_upstream_runtime_runtime_report_candidate_evidence_summary": _mapping(
+                        upstream_runtime_pack.get("runtime_report_candidate_evidence_summary")
                     ),
                     "backend_upstream_runtime_verified_asset_ids": list(
                         upstream_runtime_pack.get("verified_asset_ids") or []
@@ -709,11 +727,20 @@ def build_backend_selector_rows_from_receipts(
                     "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
                         "selected_policy_ref"
                     ),
+                    "backend_runtime_binding_selected_policy_ref_source": backend_runtime_binding.get(
+                        "selected_policy_ref_source"
+                    ),
                     "backend_runtime_binding_selected_deploy_config": backend_runtime_binding.get(
                         "selected_deploy_config"
                     ),
+                    "backend_runtime_binding_selected_deploy_config_source": backend_runtime_binding.get(
+                        "selected_deploy_config_source"
+                    ),
                     "backend_runtime_binding_selected_runtime_report": backend_runtime_binding.get(
                         "selected_runtime_report"
+                    ),
+                    "backend_runtime_binding_selected_runtime_report_source": backend_runtime_binding.get(
+                        "selected_runtime_report_source"
                     ),
                     "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
                         "selected_launch_root"
@@ -1064,11 +1091,29 @@ def build_branch_planner_rows_from_receipts(
                         "backend_upstream_runtime_primary_policy_ref": upstream_runtime_pack.get(
                             "primary_policy_ref"
                         ),
+                        "backend_upstream_runtime_primary_policy_ref_source": upstream_runtime_pack.get(
+                            "primary_policy_ref_source"
+                        ),
+                        "backend_upstream_runtime_policy_candidate_evidence_summary": _mapping(
+                            upstream_runtime_pack.get("policy_candidate_evidence_summary")
+                        ),
                         "backend_upstream_runtime_primary_deploy_config_ref": upstream_runtime_pack.get(
                             "primary_deploy_config_ref"
                         ),
+                        "backend_upstream_runtime_primary_deploy_config_ref_source": upstream_runtime_pack.get(
+                            "primary_deploy_config_ref_source"
+                        ),
+                        "backend_upstream_runtime_deploy_candidate_evidence_summary": _mapping(
+                            upstream_runtime_pack.get("deploy_candidate_evidence_summary")
+                        ),
                         "backend_upstream_runtime_primary_runtime_report_ref": upstream_runtime_pack.get(
                             "primary_runtime_report_ref"
+                        ),
+                        "backend_upstream_runtime_primary_runtime_report_ref_source": upstream_runtime_pack.get(
+                            "primary_runtime_report_ref_source"
+                        ),
+                        "backend_upstream_runtime_runtime_report_candidate_evidence_summary": _mapping(
+                            upstream_runtime_pack.get("runtime_report_candidate_evidence_summary")
                         ),
                         "backend_upstream_runtime_verified_asset_ids": list(
                             upstream_runtime_pack.get("verified_asset_ids") or []
@@ -1094,11 +1139,20 @@ def build_branch_planner_rows_from_receipts(
                         "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
                             "selected_policy_ref"
                         ),
+                        "backend_runtime_binding_selected_policy_ref_source": backend_runtime_binding.get(
+                            "selected_policy_ref_source"
+                        ),
                         "backend_runtime_binding_selected_deploy_config": backend_runtime_binding.get(
                             "selected_deploy_config"
                         ),
+                        "backend_runtime_binding_selected_deploy_config_source": backend_runtime_binding.get(
+                            "selected_deploy_config_source"
+                        ),
                         "backend_runtime_binding_selected_runtime_report": backend_runtime_binding.get(
                             "selected_runtime_report"
+                        ),
+                        "backend_runtime_binding_selected_runtime_report_source": backend_runtime_binding.get(
+                            "selected_runtime_report_source"
                         ),
                         "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
                             "selected_launch_root"

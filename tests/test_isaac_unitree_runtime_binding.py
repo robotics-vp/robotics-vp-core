@@ -86,6 +86,7 @@ def test_isaac_runtime_binding_selects_policy_and_launch_root(tmp_path) -> None:
     assert binding["binding_status"] == "binding_ready"
     assert binding["selected_profile"] == "unitree_sim_isaaclab"
     assert binding["selected_policy_ref"].endswith("g1_policy.onnx")
+    assert binding["selected_policy_ref_source"] == "pack.primary_policy_ref"
     assert binding["selected_launch_root"] == str(sim_root)
     assert binding["selected_profile_install_preflight_status"] == "install_ready"
     assert binding["selected_profile_primary_entrypoint_ref"].endswith("sim_main.py")

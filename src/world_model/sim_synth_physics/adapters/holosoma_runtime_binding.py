@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from ..common import mapping, stable_id, strings
-from ..ref_evidence import describe_ref_evidence, summarize_preflight_evidence
+from ..ref_evidence import (
+    describe_ref_evidence,
+    select_best_named_ref,
+    summarize_preflight_evidence,
+)
 
 
 def _mode_contract(deployment_contract: Mapping[str, Any], deployment_mode: str) -> dict[str, Any]:
@@ -157,6 +161,10 @@ def _required_target_ids(
     return list(local_by_mode.get(deployment_mode, []))
 
 
+def _named_candidates(prefix: str, refs: Sequence[str]) -> list[tuple[str, str]]:
+    return [(f"{prefix}[{index}]", ref) for index, ref in enumerate(refs) if str(ref)]
+
+
 def build_holosoma_runtime_binding(
     *,
     task_id: str,
@@ -187,19 +195,41 @@ def build_holosoma_runtime_binding(
         or ("motion_train" if selected_profile == "holosoma_motion_bank" else "sim_eval")
         or "sim_eval"
     )
-    selected_policy_ref = str(
-        explicit_policy_ref
-        or policy_contract.get("policy_ref")
-        or (strings(pack.get("policy_candidates")) or strings(pack.get("checkpoint_candidates")) or [""])[0]
-        or ""
-    )
+    if explicit_policy_ref:
+        policy_selection = {
+            "ref": str(explicit_policy_ref),
+            "source": "explicit_policy_ref",
+            "evidence": describe_ref_evidence(explicit_policy_ref),
+        }
+    else:
+        policy_selection = select_best_named_ref(
+            [
+                ("policy_contract.policy_ref", policy_contract.get("policy_ref")),
+                ("pack.primary_policy_ref", pack.get("primary_policy_ref")),
+                *_named_candidates("pack.policy_candidates", strings(pack.get("policy_candidates"))),
+                *_named_candidates(
+                    "pack.checkpoint_candidates",
+                    strings(pack.get("checkpoint_candidates")),
+                ),
+            ]
+        )
+    selected_policy_ref = str(policy_selection.get("ref", "") or "")
+    selected_policy_ref_source = str(policy_selection.get("source", "") or "")
     selected_motion_sources = strings(pack.get("existing_motion_sources")) or strings(
         pack.get("motion_sources")
     )
-    selected_runtime_report = str(
-        (strings(pack.get("runtime_report_candidates")) or strings(pack.get("data_candidates")) or [""])[0]
-        or ""
+    runtime_report_selection = select_best_named_ref(
+        [
+            ("pack.primary_runtime_report_ref", pack.get("primary_runtime_report_ref")),
+            *_named_candidates(
+                "pack.runtime_report_candidates",
+                strings(pack.get("runtime_report_candidates")),
+            ),
+            *_named_candidates("pack.data_candidates", strings(pack.get("data_candidates"))),
+        ]
     )
+    selected_runtime_report = str(runtime_report_selection.get("ref", "") or "")
+    selected_runtime_report_source = str(runtime_report_selection.get("source", "") or "")
     selected_launch_root = str(
         selected_launch_spec.get("root")
         or pack.get("profile_root")
@@ -246,10 +276,10 @@ def build_holosoma_runtime_binding(
     target_rows = _target_rows_by_id(runtime_target_contract)
     selected_retargeting_root = str(selected_target_refs.get("retargeting_root", "") or "")
     selected_ref_evidence = {
-        "policy_ref": describe_ref_evidence(selected_policy_ref),
+        "policy_ref": mapping(policy_selection.get("evidence")),
         "launch_root": describe_ref_evidence(selected_launch_root),
         "profile_entrypoint": describe_ref_evidence(selected_profile_primary_entrypoint_ref),
-        "runtime_report_ref": describe_ref_evidence(selected_runtime_report),
+        "runtime_report_ref": mapping(runtime_report_selection.get("evidence")),
         "retargeting_root": describe_ref_evidence(selected_retargeting_root),
     }
     selected_target_ref_evidence = {
@@ -387,6 +417,7 @@ def build_holosoma_runtime_binding(
         "selected_launch_spec": selected_launch_spec,
         "selected_command": selected_command,
         "selected_runtime_report": selected_runtime_report,
+        "selected_runtime_report_source": selected_runtime_report_source,
         "selected_target_refs": selected_target_refs,
         "selected_verified_target_ids": selected_verified_target_ids,
         "selected_partial_target_ids": selected_partial_target_ids,
@@ -396,6 +427,7 @@ def build_holosoma_runtime_binding(
         "selected_profile_install_preflight_status": selected_profile_install_preflight_status,
         "selected_profile_install_missing_components": selected_profile_install_missing_components,
         "selected_profile_primary_entrypoint_ref": selected_profile_primary_entrypoint_ref,
+        "selected_policy_ref_source": selected_policy_ref_source,
         "selected_ref_evidence": selected_ref_evidence,
         "selected_target_ref_evidence": selected_target_ref_evidence,
         "selected_motion_source_evidence": selected_motion_source_evidence,

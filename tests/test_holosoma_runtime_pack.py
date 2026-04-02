@@ -139,3 +139,55 @@ def test_holosoma_runtime_pack_falls_back_to_motion_bank_when_repo_install_block
         "holosoma_motion_root",
         "holosoma_root",
     ]
+
+
+def test_holosoma_runtime_pack_prefers_verified_local_refs(tmp_path) -> None:
+    policy_ref = tmp_path / "policies" / "policy.ckpt"
+    policy_ref.parent.mkdir()
+    policy_ref.write_text("x", encoding="utf-8")
+    report_ref = tmp_path / "outputs" / "eval.json"
+    report_ref.parent.mkdir()
+    report_ref.write_text("{}", encoding="utf-8")
+    deploy_ref = tmp_path / "holosoma" / "holosoma"
+    deploy_ref.parent.mkdir(parents=True)
+    deploy_ref.write_text("", encoding="utf-8")
+
+    pack = build_holosoma_runtime_pack(
+        runtime_target_contract={
+            "verified_target_ids": ["holosoma_root"],
+            "runtime_target_preflight_status": "preflight_ready",
+        },
+        runtime_layout_contract={
+            "preferred_profile_order": ["holosoma_repo"],
+            "profiles": [
+                {
+                    "profile_id": "holosoma_repo",
+                    "root": str(deploy_ref.parent.parent),
+                    "root_exists": True,
+                    "install_preflight_status": "install_ready",
+                    "primary_entrypoint_ref": str(deploy_ref),
+                    "policy_candidates": ["/missing/policy.ckpt", str(policy_ref)],
+                    "deploy_candidates": ["/missing/holosoma", str(deploy_ref)],
+                    "data_candidates": ["/missing/eval.json", str(report_ref)],
+                }
+            ],
+        },
+        policy_contract={
+            "checkpoint_candidates": ["/also/missing/policy.ckpt", str(policy_ref)],
+            "deploy_config_candidates": ["/also/missing/holosoma", str(deploy_ref)],
+            "runtime_report_candidates": ["/also/missing/eval.json", str(report_ref)],
+        },
+        deployment_contract={
+            "preferred_profile": "holosoma_repo",
+            "ready_modes": ["sim_eval"],
+        },
+        embodiment_context={"motion_clip_paths": []},
+    )
+
+    assert pack["primary_policy_ref"] == str(policy_ref)
+    assert pack["primary_policy_ref_source"] == "profile.policy_candidates[1]"
+    assert pack["policy_candidate_evidence_summary"]["verified_candidate_count"] == 1
+    assert pack["primary_deploy_config_ref"] == str(deploy_ref)
+    assert pack["primary_deploy_config_ref_source"] == "profile.deploy_candidates[1]"
+    assert pack["primary_runtime_report_ref"] == str(report_ref)
+    assert pack["runtime_report_candidate_evidence_summary"]["verified_candidate_count"] == 1

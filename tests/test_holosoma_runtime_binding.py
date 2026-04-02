@@ -206,3 +206,4 @@ def test_holosoma_runtime_binding_selects_existing_motion_sources_only(tmp_path)
         binding["selected_ref_evidence"]["policy_ref"]["verification_status"]
         == "local_path_exists"
     )
+    assert binding["selected_policy_ref_source"] == "pack.primary_policy_ref"

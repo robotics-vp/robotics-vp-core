@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from ..common import mapping, stable_id, strings
+from ..ref_evidence import select_best_named_ref
 
 
 def _profile_row(runtime_layout_contract: Mapping[str, Any], profile_id: str) -> dict[str, Any]:
@@ -57,6 +58,10 @@ def _profile_install_by_id(runtime_layout_contract: Mapping[str, Any]) -> dict[s
     return payload
 
 
+def _named_candidates(prefix: str, refs: list[str]) -> list[tuple[str, str]]:
+    return [(f"{prefix}[{index}]", ref) for index, ref in enumerate(refs) if str(ref)]
+
+
 def _asset_rows(
     normalized_robot_asset_manifest: Mapping[str, Any],
 ) -> tuple[dict[str, str], list[str], list[str], list[str]]:
@@ -102,12 +107,55 @@ def build_isaac_unitree_runtime_pack(
     ready_targets = strings(runtime_target_contract.get("verified_target_ids")) or strings(
         runtime_target_contract.get("ready_target_ids")
     )
-    policy_candidates = strings(policy_contract.get("checkpoint_candidates"))
-    deploy_config_candidates = strings(policy_contract.get("deploy_config_candidates"))
-    runtime_report_candidates = strings(policy_contract.get("runtime_report_candidates"))
-    primary_checkpoint_ref = str(policy_contract.get("primary_checkpoint_ref", "") or "")
-    primary_deploy_config_ref = str(policy_contract.get("primary_deploy_config_ref", "") or "")
-    primary_runtime_report_ref = str(policy_contract.get("primary_runtime_report_ref", "") or "")
+    profile_policy_candidates = strings(profile.get("policy_candidates"))
+    profile_deploy_candidates = strings(profile.get("deploy_candidates"))
+    profile_data_candidates = strings(profile.get("data_candidates"))
+    policy_candidates = list(
+        dict.fromkeys(profile_policy_candidates + strings(policy_contract.get("checkpoint_candidates")))
+    )
+    deploy_config_candidates = list(
+        dict.fromkeys(
+            profile_deploy_candidates + strings(policy_contract.get("deploy_config_candidates"))
+        )
+    )
+    runtime_report_candidates = list(
+        dict.fromkeys(
+            profile_data_candidates + strings(policy_contract.get("runtime_report_candidates"))
+        )
+    )
+    checkpoint_selection = select_best_named_ref(
+        [
+            ("policy_contract.primary_checkpoint_ref", policy_contract.get("primary_checkpoint_ref")),
+            *_named_candidates("profile.policy_candidates", profile_policy_candidates),
+            *_named_candidates(
+                "policy_contract.checkpoint_candidates",
+                strings(policy_contract.get("checkpoint_candidates")),
+            ),
+        ]
+    )
+    deploy_selection = select_best_named_ref(
+        [
+            ("policy_contract.primary_deploy_config_ref", policy_contract.get("primary_deploy_config_ref")),
+            *_named_candidates("profile.deploy_candidates", profile_deploy_candidates),
+            *_named_candidates(
+                "policy_contract.deploy_config_candidates",
+                strings(policy_contract.get("deploy_config_candidates")),
+            ),
+        ]
+    )
+    runtime_report_selection = select_best_named_ref(
+        [
+            ("policy_contract.primary_runtime_report_ref", policy_contract.get("primary_runtime_report_ref")),
+            *_named_candidates("profile.data_candidates", profile_data_candidates),
+            *_named_candidates(
+                "policy_contract.runtime_report_candidates",
+                strings(policy_contract.get("runtime_report_candidates")),
+            ),
+        ]
+    )
+    primary_checkpoint_ref = str(checkpoint_selection.get("ref", "") or "")
+    primary_deploy_config_ref = str(deploy_selection.get("ref", "") or "")
+    primary_runtime_report_ref = str(runtime_report_selection.get("ref", "") or "")
 
     ready_surfaces: list[str] = []
     profile_install_preflight_status = str(profile.get("install_preflight_status", "") or "")
@@ -185,13 +233,23 @@ def build_isaac_unitree_runtime_pack(
         "primary_profile_data_ref": str(profile.get("primary_data_candidate", "") or ""),
         "profile_matched_paths": strings(profile.get("matched_paths")),
         "deploy_candidates": strings(profile.get("deploy_candidates")) or deploy_config_candidates,
-        "policy_candidates": strings(profile.get("policy_candidates")) or policy_candidates,
-        "data_candidates": strings(profile.get("data_candidates")) or runtime_report_candidates,
+        "policy_candidates": policy_candidates,
+        "data_candidates": runtime_report_candidates,
         "checkpoint_candidates": policy_candidates,
         "runtime_report_candidates": runtime_report_candidates,
         "primary_policy_ref": primary_checkpoint_ref,
+        "primary_policy_ref_source": str(checkpoint_selection.get("source", "") or ""),
+        "policy_candidate_evidence_summary": mapping(checkpoint_selection.get("summary")),
         "primary_deploy_config_ref": primary_deploy_config_ref,
+        "primary_deploy_config_ref_source": str(deploy_selection.get("source", "") or ""),
+        "deploy_candidate_evidence_summary": mapping(deploy_selection.get("summary")),
         "primary_runtime_report_ref": primary_runtime_report_ref,
+        "primary_runtime_report_ref_source": str(
+            runtime_report_selection.get("source", "") or ""
+        ),
+        "runtime_report_candidate_evidence_summary": mapping(
+            runtime_report_selection.get("summary")
+        ),
         "asset_refs": asset_refs,
         "ready_asset_ids": ready_assets,
         "verified_asset_ids": verified_assets,
