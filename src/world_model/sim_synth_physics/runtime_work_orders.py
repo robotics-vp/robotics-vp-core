@@ -257,6 +257,15 @@ def build_backend_runtime_work_orders(
                 "upstream_runtime_profile_candidate_counts": mapping(
                     upstream_runtime_pack.get("profile_candidate_counts")
                 ),
+                "upstream_runtime_profile_install_preflight_status": str(
+                    upstream_runtime_pack.get("profile_install_preflight_status", "") or ""
+                ),
+                "upstream_runtime_profile_install_missing_components": strings(
+                    upstream_runtime_pack.get("profile_install_missing_components")
+                ),
+                "upstream_runtime_profile_primary_entrypoint_ref": str(
+                    upstream_runtime_pack.get("profile_primary_entrypoint_ref", "") or ""
+                ),
                 "upstream_runtime_pack_ready_surfaces": strings(
                     upstream_runtime_pack.get("ready_surfaces")
                 ),
@@ -294,6 +303,15 @@ def build_backend_runtime_work_orders(
                 ),
                 "runtime_binding_selected_launch_root": str(
                     runtime_binding.get("selected_launch_root", "") or ""
+                ),
+                "runtime_binding_selected_profile_install_preflight_status": str(
+                    runtime_binding.get("selected_profile_install_preflight_status", "") or ""
+                ),
+                "runtime_binding_selected_profile_install_missing_components": strings(
+                    runtime_binding.get("selected_profile_install_missing_components")
+                ),
+                "runtime_binding_selected_profile_primary_entrypoint_ref": str(
+                    runtime_binding.get("selected_profile_primary_entrypoint_ref", "") or ""
                 ),
                 "runtime_binding_host_preflight_status": str(
                     runtime_binding.get("host_preflight_status", "") or ""

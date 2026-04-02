@@ -83,6 +83,12 @@ def _relevant_pack_missing_components(
     for item in list(pack_missing_components):
         if item == "deployment_mode":
             continue
+        if item in {"profile_root", "profile_entrypoint"} or str(item).startswith(
+            "expected_path::"
+        ):
+            continue
+        if local_runtime_binding and item in {"preferred_runtime_profile", "runtime_targets"}:
+            continue
         if item == "preferred_runtime_profile" and local_runtime_binding:
             continue
         if item == "runtime_targets" and local_runtime_binding:
@@ -157,7 +163,6 @@ def build_isaac_unitree_runtime_binding(
         if local_runtime_binding
         else _required_surfaces(deployment_mode)
     )
-    surface_gaps = [surface for surface in required_surfaces if surface not in pack_ready_surfaces]
 
     selected_policy_ref = str(
         explicit_policy_ref
@@ -179,6 +184,38 @@ def build_isaac_unitree_runtime_binding(
         or ""
     )
     selected_command = str(selected_launch_spec.get("command", "") or "")
+    selected_profile_install = mapping(
+        mapping(pack.get("profile_install_by_id")).get(selected_profile, {})
+    )
+    selected_profile_install_preflight_status = str(
+        selected_profile_install.get(
+            "install_preflight_status",
+            pack.get("profile_install_preflight_status", ""),
+        )
+        or ""
+    )
+    selected_profile_install_missing_components = strings(
+        selected_profile_install.get(
+            "install_missing_components",
+            pack.get("profile_install_missing_components"),
+        )
+    )
+    selected_profile_primary_entrypoint_ref = str(
+        selected_profile_install.get(
+            "primary_entrypoint_ref",
+            pack.get("profile_primary_entrypoint_ref", ""),
+        )
+        or ""
+    )
+    surface_gaps = [
+        surface
+        for surface in required_surfaces
+        if surface not in pack_ready_surfaces
+        and not (
+            surface == "runtime_profile_surface"
+            and selected_profile_install_preflight_status != "install_blocked"
+        )
+    ]
     required_target_ids = _required_target_ids(
         deployment_mode=deployment_mode,
         mode_contract=mode_contract,
@@ -190,6 +227,7 @@ def build_isaac_unitree_runtime_binding(
     selected_ref_evidence = {
         "policy_ref": describe_ref_evidence(selected_policy_ref),
         "launch_root": describe_ref_evidence(selected_launch_root),
+        "profile_entrypoint": describe_ref_evidence(selected_profile_primary_entrypoint_ref),
         "deploy_config_ref": describe_ref_evidence(selected_deploy_config),
         "runtime_report_ref": describe_ref_evidence(selected_runtime_report),
     }
@@ -229,12 +267,18 @@ def build_isaac_unitree_runtime_binding(
         missing_components.append("launch_root")
     if not local_runtime_binding and not selected_command and "launch_command" not in missing_components:
         missing_components.append("launch_command")
+    if not local_runtime_binding:
+        for item in selected_profile_install_missing_components:
+            if item not in missing_components:
+                missing_components.append(item)
 
     preflight_required_components: list[str] = []
     if "policy_surface" in required_surfaces:
         preflight_required_components.append("policy_ref")
     if not local_runtime_binding:
         preflight_required_components.append("launch_root")
+        if selected_profile_primary_entrypoint_ref or "profile_entrypoint" in selected_profile_install_missing_components:
+            preflight_required_components.append("profile_entrypoint")
     for target_id in required_target_ids:
         preflight_required_components.append(f"target::{target_id}")
     for asset_id in strings(mode_contract.get("required_asset_ids")):
@@ -285,6 +329,9 @@ def build_isaac_unitree_runtime_binding(
         "selected_target_refs": selected_target_refs,
         "selected_asset_refs": selected_asset_refs,
         "selected_asset_ids": strings(pack.get("ready_asset_ids")),
+        "selected_profile_install_preflight_status": selected_profile_install_preflight_status,
+        "selected_profile_install_missing_components": selected_profile_install_missing_components,
+        "selected_profile_primary_entrypoint_ref": selected_profile_primary_entrypoint_ref,
         "selected_ref_evidence": selected_ref_evidence,
         "selected_target_ref_evidence": selected_target_ref_evidence,
         "selected_asset_ref_evidence": selected_asset_ref_evidence,

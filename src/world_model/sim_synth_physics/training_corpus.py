@@ -661,6 +661,15 @@ def build_backend_selector_rows_from_receipts(
                     "backend_upstream_runtime_profile_candidate_counts": _mapping(
                         upstream_runtime_pack.get("profile_candidate_counts")
                     ),
+                    "backend_upstream_runtime_profile_install_preflight_status": upstream_runtime_pack.get(
+                        "profile_install_preflight_status"
+                    ),
+                    "backend_upstream_runtime_profile_install_missing_components": list(
+                        upstream_runtime_pack.get("profile_install_missing_components") or []
+                    ),
+                    "backend_upstream_runtime_profile_primary_entrypoint_ref": upstream_runtime_pack.get(
+                        "profile_primary_entrypoint_ref"
+                    ),
                     "backend_upstream_runtime_ready_surfaces": list(
                         upstream_runtime_pack.get("ready_surfaces") or []
                     ),
@@ -702,6 +711,16 @@ def build_backend_selector_rows_from_receipts(
                     ),
                     "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
                         "selected_launch_root"
+                    ),
+                    "backend_runtime_binding_selected_profile_install_preflight_status": backend_runtime_binding.get(
+                        "selected_profile_install_preflight_status"
+                    ),
+                    "backend_runtime_binding_selected_profile_install_missing_components": list(
+                        backend_runtime_binding.get("selected_profile_install_missing_components")
+                        or []
+                    ),
+                    "backend_runtime_binding_selected_profile_primary_entrypoint_ref": backend_runtime_binding.get(
+                        "selected_profile_primary_entrypoint_ref"
                     ),
                     "backend_runtime_binding_host_preflight_status": backend_runtime_binding.get(
                         "host_preflight_status"
@@ -994,6 +1013,16 @@ def build_branch_planner_rows_from_receipts(
                         "backend_upstream_runtime_profile_candidate_counts": _mapping(
                             upstream_runtime_pack.get("profile_candidate_counts")
                         ),
+                        "backend_upstream_runtime_profile_install_preflight_status": upstream_runtime_pack.get(
+                            "profile_install_preflight_status"
+                        ),
+                        "backend_upstream_runtime_profile_install_missing_components": list(
+                            upstream_runtime_pack.get("profile_install_missing_components")
+                            or []
+                        ),
+                        "backend_upstream_runtime_profile_primary_entrypoint_ref": upstream_runtime_pack.get(
+                            "profile_primary_entrypoint_ref"
+                        ),
                         "backend_upstream_runtime_ready_surfaces": list(
                             upstream_runtime_pack.get("ready_surfaces") or []
                         ),
@@ -1035,6 +1064,18 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
                             "selected_launch_root"
+                        ),
+                        "backend_runtime_binding_selected_profile_install_preflight_status": backend_runtime_binding.get(
+                            "selected_profile_install_preflight_status"
+                        ),
+                        "backend_runtime_binding_selected_profile_install_missing_components": list(
+                            backend_runtime_binding.get(
+                                "selected_profile_install_missing_components"
+                            )
+                            or []
+                        ),
+                        "backend_runtime_binding_selected_profile_primary_entrypoint_ref": backend_runtime_binding.get(
+                            "selected_profile_primary_entrypoint_ref"
                         ),
                         "backend_runtime_binding_host_preflight_status": backend_runtime_binding.get(
                             "host_preflight_status"

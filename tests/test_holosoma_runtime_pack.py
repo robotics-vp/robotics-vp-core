@@ -17,6 +17,8 @@ def test_holosoma_runtime_pack_tracks_motion_and_retargeting_surfaces(tmp_path) 
     holosoma_root = tmp_path / "holosoma"
     holosoma_root.mkdir()
     (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "holosoma").mkdir()
+    (holosoma_root / "holosoma" / "__init__.py").write_text("", encoding="utf-8")
     motion_root = tmp_path / "motions"
     motion_root.mkdir()
     motion_clip = motion_root / "g1_walk.npz"
@@ -57,6 +59,8 @@ def test_holosoma_runtime_pack_tracks_motion_and_retargeting_surfaces(tmp_path) 
     assert "motion_surface" in pack["ready_surfaces"]
     assert "retargeting_surface" in pack["ready_surfaces"]
     assert pack["preferred_profile"] == "holosoma_repo"
+    assert pack["profile_install_preflight_status"] == "install_ready"
+    assert pack["profile_primary_entrypoint_ref"].endswith("holosoma")
 
 
 def test_holosoma_runtime_pack_allows_motion_train_without_policy(tmp_path) -> None:
@@ -93,3 +97,4 @@ def test_holosoma_runtime_pack_allows_motion_train_without_policy(tmp_path) -> N
     assert pack["pack_status"] in {"pack_ready", "pack_partial"}
     assert "motion_train" in pack["ready_modes"]
     assert "policy_checkpoint" not in pack["missing_components"]
+    assert pack["profile_install_preflight_status"] == "install_blocked"

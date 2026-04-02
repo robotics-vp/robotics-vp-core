@@ -117,9 +117,18 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
     assert runtime_bundle["upstream_runtime_pack"]["pack_status"] == "pack_ready"
     assert runtime_bundle["upstream_runtime_pack"]["primary_policy_ref"] == str(policy_path)
     assert runtime_bundle["upstream_runtime_pack"]["profile_candidate_counts"]["deploy"] >= 1
+    assert (
+        runtime_bundle["upstream_runtime_pack"]["profile_install_preflight_status"]
+        == "install_ready"
+    )
     assert runtime_bundle["runtime_binding"]["binding_status"] == "binding_ready"
     assert runtime_bundle["runtime_binding"]["selected_policy_ref"] == str(policy_path)
     assert runtime_bundle["runtime_binding"]["selected_deploy_config"].endswith("sim_main.py")
+    assert (
+        runtime_bundle["runtime_binding"]["selected_profile_primary_entrypoint_ref"].endswith(
+            "sim_main.py"
+        )
+    )
     assert launch_spec["upstream_runtime_pack"]["ready_surfaces"]
     assert launch_spec["runtime_binding"]["selected_profile"] == "unitree_sim_isaaclab"
 
@@ -210,6 +219,8 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
     holosoma_root = tmp_path / "holosoma"
     holosoma_root.mkdir()
     (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "holosoma").mkdir()
+    (holosoma_root / "holosoma" / "__init__.py").write_text("", encoding="utf-8")
     motion_root = tmp_path / "motions"
     motion_root.mkdir()
     policy_root = tmp_path / "policies"
@@ -271,5 +282,14 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
     assert "policy_surface" in runtime_bundle["upstream_runtime_pack"]["ready_surfaces"]
     assert runtime_bundle["upstream_runtime_pack"]["primary_policy_ref"] == str(policy_path)
     assert runtime_bundle["upstream_runtime_pack"]["existing_motion_sources"] == []
+    assert (
+        runtime_bundle["upstream_runtime_pack"]["profile_install_preflight_status"]
+        == "install_ready"
+    )
     assert runtime_bundle["runtime_binding"]["binding_status"] == "binding_ready"
     assert runtime_bundle["runtime_binding"]["selected_profile"] == "holosoma_repo"
+    assert (
+        runtime_bundle["runtime_binding"]["selected_profile_primary_entrypoint_ref"].endswith(
+            "holosoma"
+        )
+    )

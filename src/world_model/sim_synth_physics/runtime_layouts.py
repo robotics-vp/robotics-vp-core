@@ -93,24 +93,68 @@ def _profile(
     root: str,
     expected_paths: list[str],
     preferred_entrypoints: list[str],
+    install_entrypoint_paths: list[str] | None = None,
     deploy_patterns: list[str] | None = None,
     policy_patterns: list[str] | None = None,
     data_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
+    root_exists = bool(root and Path(root).exists())
     matched_paths, missing_paths = _existing(root, expected_paths)
     deploy_candidate_records = _candidate_records(root, deploy_patterns or [])
     policy_candidate_records = _candidate_records(root, policy_patterns or [])
     data_candidate_records = _candidate_records(root, data_patterns or [])
+    entrypoint_paths = list(
+        preferred_entrypoints if install_entrypoint_paths is None else install_entrypoint_paths
+    )
+    matched_entrypoints, missing_entrypoints = _existing(root, entrypoint_paths)
+    primary_entrypoint_ref = ""
+    if root_exists:
+        base = Path(root)
+        for rel_path in matched_entrypoints:
+            primary_entrypoint_ref = str((base / rel_path).resolve())
+            break
+    install_missing_components: list[str] = []
+    install_verified_components: list[str] = []
+    if not root_exists:
+        install_missing_components.append("profile_root")
+    else:
+        install_verified_components.append("profile_root")
+        install_verified_components.extend(
+            f"expected_path::{rel_path}" for rel_path in matched_paths
+        )
+    if entrypoint_paths:
+        if primary_entrypoint_ref:
+            install_verified_components.append("profile_entrypoint")
+        else:
+            install_missing_components.append("profile_entrypoint")
+    install_missing_components.extend(
+        f"expected_path::{rel_path}" for rel_path in missing_paths
+    )
+    install_preflight_status = "install_ready"
+    if any(
+        component in install_missing_components
+        for component in ("profile_root", "profile_entrypoint")
+    ):
+        install_preflight_status = "install_blocked"
+    elif missing_paths:
+        install_preflight_status = "install_partial"
     return {
         "profile_id": profile_id,
         "label": label,
         "root": root,
-        "root_exists": bool(root and Path(root).exists()),
+        "root_exists": root_exists,
         "root_git_metadata": _git_metadata(root),
         "expected_paths": list(expected_paths),
         "matched_paths": matched_paths,
         "missing_paths": missing_paths,
         "preferred_entrypoints": list(preferred_entrypoints),
+        "install_entrypoint_paths": entrypoint_paths,
+        "matched_entrypoints": matched_entrypoints,
+        "missing_entrypoints": missing_entrypoints,
+        "primary_entrypoint_ref": primary_entrypoint_ref,
+        "install_preflight_status": install_preflight_status,
+        "install_missing_components": install_missing_components,
+        "install_verified_components": install_verified_components,
         "deploy_candidates": [str(row["ref"]) for row in deploy_candidate_records],
         "policy_candidates": [str(row["ref"]) for row in policy_candidate_records],
         "data_candidates": [str(row["ref"]) for row in data_candidate_records],
@@ -227,6 +271,7 @@ def describe_isaac_runtime_layouts(
             root=isaaclab_root,
             expected_paths=["apps", "source", "pyproject.toml"],
             preferred_entrypoints=["source", "apps"],
+            install_entrypoint_paths=["source", "apps"],
             deploy_patterns=["source/standalone/workflows/rl/play.py", "apps/**/*"],
             policy_patterns=["logs/**/*.pt", "logs/**/*.onnx"],
             data_patterns=["logs/**/*.json", "logs/**/*.yaml"],
@@ -237,6 +282,7 @@ def describe_isaac_runtime_layouts(
             root=unitree_sim_isaaclab_root,
             expected_paths=["sim_main.py", "dds", "action_provider"],
             preferred_entrypoints=["sim_main.py", "dds"],
+            install_entrypoint_paths=["sim_main.py", "dds", "action_provider"],
             deploy_patterns=["sim_main.py", "dds/**/*", "action_provider/**/*"],
             policy_patterns=["logs/**/*.pt", "logs/**/*.onnx", "policies/**/*.onnx"],
             data_patterns=["logs/**/*.json", "generated/**/*.json", "recordings/**/*"],
@@ -247,6 +293,7 @@ def describe_isaac_runtime_layouts(
             root=unitree_rl_gym_root,
             expected_paths=["legged_gym", "resources", "deploy"],
             preferred_entrypoints=["deploy", "legged_gym"],
+            install_entrypoint_paths=["deploy", "deploy_real", "legged_gym"],
             deploy_patterns=["deploy/**/*.py", "deploy_real/**/*"],
             policy_patterns=["logs/**/*.pt", "logs/**/*.onnx", "exported/**/*"],
             data_patterns=["logs/**/*.json", "logs/**/*.yaml", "logs/**/*.csv"],
@@ -257,6 +304,7 @@ def describe_isaac_runtime_layouts(
             root=humanoidverse_root,
             expected_paths=["humanoidverse", "assets"],
             preferred_entrypoints=["humanoidverse"],
+            install_entrypoint_paths=["humanoidverse/run.py", "humanoidverse"],
             deploy_patterns=["humanoidverse/run.py", "humanoidverse/**/*.py"],
             policy_patterns=["logs/**/*.pt", "logs/**/*.onnx"],
             data_patterns=["logs/**/*.json", "outputs/**/*"],
@@ -267,6 +315,7 @@ def describe_isaac_runtime_layouts(
             root=xr_teleoperate_root,
             expected_paths=["teleop"],
             preferred_entrypoints=["teleop"],
+            install_entrypoint_paths=["teleop/teleop_hand_and_arm.py", "teleop"],
             deploy_patterns=["teleop/teleop_hand_and_arm.py", "teleop/televuer/**/*"],
             policy_patterns=["policies/**/*.onnx", "policies/**/*.pt"],
             data_patterns=["teleop/utils/data/**/*", "teleop/**/*.json"],
@@ -277,6 +326,7 @@ def describe_isaac_runtime_layouts(
             root=unitree_lerobot_root,
             expected_paths=[],
             preferred_entrypoints=["examples", "scripts", "lerobot"],
+            install_entrypoint_paths=["examples", "scripts", "lerobot"],
             deploy_patterns=["examples/**/*.py", "scripts/**/*.py", "lerobot/**/*.py"],
             policy_patterns=[
                 "outputs/**/*.onnx",
@@ -298,6 +348,7 @@ def describe_isaac_runtime_layouts(
             root=unitree_model_root,
             expected_paths=["README.md"],
             preferred_entrypoints=["README.md"],
+            install_entrypoint_paths=[],
             deploy_patterns=["**/*.usd", "**/*.urdf"],
             data_patterns=["**/*.yaml", "**/*.json"],
         ),
@@ -448,6 +499,7 @@ def describe_holosoma_runtime_layouts(
             root=holosoma_root,
             expected_paths=["README.md"],
             preferred_entrypoints=["README.md"],
+            install_entrypoint_paths=["scripts", "holosoma"],
             deploy_patterns=["**/*.py", "scripts/**/*"],
             policy_patterns=["checkpoints/**/*", "**/*.onnx", "**/*.pt"],
             data_patterns=["logs/**/*.json", "outputs/**/*", "runs/**/*"],
@@ -458,6 +510,7 @@ def describe_holosoma_runtime_layouts(
             root=motion_root,
             expected_paths=[],
             preferred_entrypoints=[],
+            install_entrypoint_paths=[],
             data_patterns=["**/*.npz", "**/*.npy", "**/*.bvh", "**/*.pkl"],
         ),
         _profile(
@@ -466,6 +519,7 @@ def describe_holosoma_runtime_layouts(
             root=policy_root,
             expected_paths=[],
             preferred_entrypoints=[],
+            install_entrypoint_paths=[],
             policy_patterns=["**/*.onnx", "**/*.pt", "**/*.pth", "**/*.ckpt", "**/*.yaml"],
         ),
         _profile(
@@ -474,6 +528,7 @@ def describe_holosoma_runtime_layouts(
             root=retargeting_root,
             expected_paths=[],
             preferred_entrypoints=[],
+            install_entrypoint_paths=[],
             data_patterns=["**/*.yaml", "**/*.json", "**/*.npz"],
         ),
     ]

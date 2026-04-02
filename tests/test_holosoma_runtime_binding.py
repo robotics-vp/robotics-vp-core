@@ -72,6 +72,10 @@ def test_holosoma_runtime_binding_prefers_motion_bank_when_policy_missing(tmp_pa
     assert binding["deployment_mode"] == "motion_train"
     assert binding["binding_status"] == "binding_ready"
     assert binding["selected_motion_sources"]
+    assert binding["selected_profile_install_preflight_status"] in {
+        "install_ready",
+        "install_partial",
+    }
 
 
 def test_holosoma_runtime_binding_requires_retargeting_for_retarget_eval(tmp_path) -> None:
@@ -134,6 +138,8 @@ def test_holosoma_runtime_binding_selects_existing_motion_sources_only(tmp_path)
     holosoma_root = tmp_path / "holosoma"
     holosoma_root.mkdir()
     (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "holosoma").mkdir()
+    (holosoma_root / "holosoma" / "__init__.py").write_text("", encoding="utf-8")
     motion_root = tmp_path / "motions"
     motion_root.mkdir()
     motion_clip = motion_root / "g1_walk.npz"
@@ -188,6 +194,8 @@ def test_holosoma_runtime_binding_selects_existing_motion_sources_only(tmp_path)
     assert binding["selected_motion_sources"] == [str(motion_clip)]
     assert binding["missing_motion_sources"] == [str(motion_root / "missing_clip.npz")]
     assert binding["host_preflight_status"] == "preflight_ready"
+    assert binding["selected_profile_install_preflight_status"] == "install_ready"
+    assert binding["selected_profile_primary_entrypoint_ref"].endswith("holosoma")
     assert (
         binding["selected_motion_source_evidence"][str(motion_clip)]["verification_status"]
         == "local_path_exists"

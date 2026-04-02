@@ -70,6 +70,8 @@ def test_isaac_unitree_runtime_pack_tracks_ready_surfaces(tmp_path) -> None:
     assert "asset_surface" in pack["ready_surfaces"]
     assert pack["preferred_profile"] == "unitree_sim_isaaclab"
     assert pack["profile_candidate_counts"]["deploy"] >= 1
+    assert pack["profile_install_preflight_status"] == "install_ready"
+    assert pack["profile_primary_entrypoint_ref"].endswith("sim_main.py")
     assert pack["primary_profile_deploy_ref"].endswith("sim_main.py")
     assert pack["primary_policy_ref"].endswith("g1_policy.onnx")
     assert pack["asset_evidence_summary"]["declared_asset_count"] == 2
@@ -113,5 +115,6 @@ def test_isaac_unitree_runtime_pack_stays_partial_when_policy_missing(tmp_path) 
     )
 
     assert pack["pack_status"] == "pack_partial"
+    assert pack["profile_install_preflight_status"] == "install_partial"
     assert "policy_checkpoint" in pack["missing_components"]
     assert pack["primary_policy_ref"] == ""

@@ -43,6 +43,8 @@ def test_isaac_runtime_layouts_detect_oss_repo_shapes(tmp_path) -> None:
     assert profile["deploy_candidate_count"] >= 1
     assert profile["policy_candidate_count"] >= 1
     assert profile["primary_deploy_candidate"].endswith("sim_main.py")
+    assert profile["install_preflight_status"] == "install_ready"
+    assert profile["primary_entrypoint_ref"].endswith("sim_main.py")
     assert profile["primary_policy_candidate"].endswith("policy.onnx")
     assert policy_contract["policy_ready"] is True
     assert policy_contract["checkpoint_candidates"]
@@ -72,12 +74,16 @@ def test_isaac_runtime_layouts_detect_lerobot_profile(tmp_path) -> None:
     assert profile["policy_candidates"]
     assert profile["policy_candidate_count"] >= 1
     assert profile["deploy_candidates"] == []
+    assert profile["install_preflight_status"] == "install_ready"
+    assert profile["primary_entrypoint_ref"].endswith("examples")
 
 
 def test_holosoma_runtime_layouts_and_policy_contracts_detect_roots(tmp_path) -> None:
     holosoma_root = tmp_path / "holosoma"
     holosoma_root.mkdir()
     (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "holosoma").mkdir()
+    (holosoma_root / "holosoma" / "__init__.py").write_text("", encoding="utf-8")
     motion_root = tmp_path / "motions"
     motion_root.mkdir()
     (motion_root / "g1_walk.npz").write_text("x", encoding="utf-8")
@@ -108,8 +114,13 @@ def test_holosoma_runtime_layouts_and_policy_contracts_detect_roots(tmp_path) ->
     motion_profile = next(
         profile for profile in contract["profiles"] if profile["profile_id"] == "holosoma_motion_bank"
     )
+    repo_profile = next(
+        profile for profile in contract["profiles"] if profile["profile_id"] == "holosoma_repo"
+    )
     assert motion_profile["data_candidates"]
     assert motion_profile["data_candidate_count"] >= 1
+    assert repo_profile["install_preflight_status"] == "install_ready"
+    assert repo_profile["primary_entrypoint_ref"].endswith("holosoma")
     assert policy_contract["policy_ready"] is True
     assert policy_contract["deploy_config_candidates"]
     assert policy_contract["checkpoint_candidate_count"] >= 1

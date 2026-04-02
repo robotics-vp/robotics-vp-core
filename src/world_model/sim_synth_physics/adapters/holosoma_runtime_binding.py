@@ -90,6 +90,12 @@ def _relevant_pack_missing_components(
     for item in list(pack_missing_components):
         if item == "deployment_mode":
             continue
+        if item in {"profile_root", "profile_entrypoint"} or str(item).startswith(
+            "expected_path::"
+        ):
+            continue
+        if local_runtime_binding and item in {"preferred_runtime_profile", "runtime_targets"}:
+            continue
         if item == "preferred_runtime_profile" and local_runtime_binding:
             continue
         if item == "runtime_targets" and local_runtime_binding:
@@ -173,6 +179,29 @@ def build_holosoma_runtime_binding(
         or ""
     )
     selected_command = str(selected_launch_spec.get("command", "") or "")
+    selected_profile_install = mapping(
+        mapping(pack.get("profile_install_by_id")).get(selected_profile, {})
+    )
+    selected_profile_install_preflight_status = str(
+        selected_profile_install.get(
+            "install_preflight_status",
+            pack.get("profile_install_preflight_status", ""),
+        )
+        or ""
+    )
+    selected_profile_install_missing_components = strings(
+        selected_profile_install.get(
+            "install_missing_components",
+            pack.get("profile_install_missing_components"),
+        )
+    )
+    selected_profile_primary_entrypoint_ref = str(
+        selected_profile_install.get(
+            "primary_entrypoint_ref",
+            pack.get("profile_primary_entrypoint_ref", ""),
+        )
+        or ""
+    )
     mode_contract = _mode_contract(deployment_contract, deployment_mode)
     pack_ready_surfaces = strings(pack.get("ready_surfaces"))
     local_runtime_binding = bool(runtime_target_contract.get("python_bridge_available", False))
@@ -191,6 +220,7 @@ def build_holosoma_runtime_binding(
     selected_ref_evidence = {
         "policy_ref": describe_ref_evidence(selected_policy_ref),
         "launch_root": describe_ref_evidence(selected_launch_root),
+        "profile_entrypoint": describe_ref_evidence(selected_profile_primary_entrypoint_ref),
         "runtime_report_ref": describe_ref_evidence(selected_runtime_report),
         "retargeting_root": describe_ref_evidence(selected_retargeting_root),
     }
@@ -204,6 +234,11 @@ def build_holosoma_runtime_binding(
     surface_gaps: list[str] = []
     for surface in required_surfaces:
         if surface in pack_ready_surfaces:
+            continue
+        if (
+            surface == "runtime_profile_surface"
+            and selected_profile_install_preflight_status != "install_blocked"
+        ):
             continue
         if surface == "policy_surface" and selected_policy_ref:
             continue
@@ -256,12 +291,18 @@ def build_holosoma_runtime_binding(
         missing_components.append("launch_root")
     if not local_runtime_binding and not selected_command and "launch_command" not in missing_components:
         missing_components.append("launch_command")
+    if not local_runtime_binding:
+        for item in selected_profile_install_missing_components:
+            if item not in missing_components:
+                missing_components.append(item)
 
     preflight_required_components: list[str] = []
     if "policy_surface" in required_surfaces:
         preflight_required_components.append("policy_ref")
     if not local_runtime_binding:
         preflight_required_components.append("launch_root")
+        if selected_profile_primary_entrypoint_ref or "profile_entrypoint" in selected_profile_install_missing_components:
+            preflight_required_components.append("profile_entrypoint")
     for target_id in required_target_ids:
         preflight_required_components.append(f"target::{target_id}")
     if "retargeting_surface" in required_surfaces:
@@ -312,6 +353,9 @@ def build_holosoma_runtime_binding(
         "selected_motion_sources": selected_motion_sources,
         "missing_motion_sources": strings(pack.get("missing_motion_sources")),
         "selected_retargeting_root": selected_retargeting_root,
+        "selected_profile_install_preflight_status": selected_profile_install_preflight_status,
+        "selected_profile_install_missing_components": selected_profile_install_missing_components,
+        "selected_profile_primary_entrypoint_ref": selected_profile_primary_entrypoint_ref,
         "selected_ref_evidence": selected_ref_evidence,
         "selected_target_ref_evidence": selected_target_ref_evidence,
         "selected_motion_source_evidence": selected_motion_source_evidence,

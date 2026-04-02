@@ -85,6 +85,8 @@ def test_isaac_runtime_binding_selects_policy_and_launch_root(tmp_path) -> None:
     assert binding["selected_profile"] == "unitree_sim_isaaclab"
     assert binding["selected_policy_ref"].endswith("g1_policy.onnx")
     assert binding["selected_launch_root"] == str(sim_root)
+    assert binding["selected_profile_install_preflight_status"] == "install_ready"
+    assert binding["selected_profile_primary_entrypoint_ref"].endswith("sim_main.py")
 
 
 def test_isaac_runtime_binding_blocks_when_launch_command_missing(tmp_path) -> None:
@@ -131,6 +133,7 @@ def test_isaac_runtime_binding_blocks_when_launch_command_missing(tmp_path) -> N
 
     assert binding["binding_status"] in {"binding_partial", "binding_blocked"}
     assert "launch_command" in binding["missing_components"]
+    assert binding["selected_profile_install_preflight_status"] == "install_partial"
 
 
 def test_isaac_runtime_binding_surfaces_declared_only_asset_preflight_truth(tmp_path) -> None:
@@ -232,6 +235,7 @@ def test_isaac_runtime_binding_surfaces_declared_only_asset_preflight_truth(tmp_
     )
 
     assert binding["binding_status"] == "binding_ready"
+    assert binding["selected_profile_install_preflight_status"] == "install_ready"
     assert binding["host_preflight_status"] == "preflight_blocked"
     assert "asset::unitree_robot_description" in binding["host_preflight_missing_components"]
     assert (

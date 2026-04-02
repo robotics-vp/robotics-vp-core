@@ -22,6 +22,8 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     holosoma_root = tmp_path / "holosoma"
     holosoma_root.mkdir()
     (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "holosoma").mkdir()
+    (holosoma_root / "holosoma" / "__init__.py").write_text("", encoding="utf-8")
     motion_root = tmp_path / "motions"
     motion_root.mkdir()
     (motion_root / "g1_walk.npz").write_text("x", encoding="utf-8")
@@ -73,6 +75,10 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     assert summary["isaac_upstream_runtime_pack"]["pack_status"] == "pack_ready"
     assert summary["isaac_upstream_runtime_pack"]["primary_policy_ref"].endswith("g1_policy.onnx")
     assert summary["isaac_upstream_runtime_pack"]["profile_candidate_counts"]["deploy"] >= 1
+    assert (
+        summary["isaac_upstream_runtime_pack"]["profile_install_preflight_status"]
+        == "install_ready"
+    )
     assert summary["isaac_runtime_binding"]["binding_status"] == "binding_ready"
     assert summary["isaac_runtime_binding"]["host_preflight_status"] == "preflight_blocked"
     assert "asset::unitree_robot_description" in summary["isaac_runtime_binding"][
@@ -81,5 +87,9 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     assert summary["holosoma_deployment_contract"]["motion_train_ready"] is True
     assert summary["holosoma_upstream_runtime_pack"]["pack_status"] == "pack_ready"
     assert summary["holosoma_upstream_runtime_pack"]["existing_motion_sources"]
+    assert (
+        summary["holosoma_upstream_runtime_pack"]["profile_install_preflight_status"]
+        == "install_ready"
+    )
     assert summary["holosoma_runtime_binding"]["binding_status"] == "binding_ready"
     assert summary["holosoma_runtime_binding"]["host_preflight_status"] == "preflight_ready"

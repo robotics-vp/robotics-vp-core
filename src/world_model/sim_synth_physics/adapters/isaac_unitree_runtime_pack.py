@@ -15,6 +15,46 @@ def _profile_row(runtime_layout_contract: Mapping[str, Any], profile_id: str) ->
     return {}
 
 
+def _fallback_preferred_profile(runtime_layout_contract: Mapping[str, Any]) -> str:
+    profiles = [
+        mapping(row) for row in list(runtime_layout_contract.get("profiles", []) or [])
+    ]
+    by_id = {
+        str(row.get("profile_id", "") or ""): row
+        for row in profiles
+        if str(row.get("profile_id", "") or "")
+    }
+    for profile_id in strings(runtime_layout_contract.get("preferred_profile_order")):
+        row = by_id.get(profile_id, {})
+        if bool(row.get("root_exists", False)):
+            return str(profile_id)
+    return ""
+
+
+def _profile_install_by_id(runtime_layout_contract: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    payload: dict[str, dict[str, Any]] = {}
+    for row in list(runtime_layout_contract.get("profiles", []) or []):
+        row_mapping = mapping(row)
+        profile_id = str(row_mapping.get("profile_id", "") or "")
+        if not profile_id:
+            continue
+        payload[profile_id] = {
+            "install_preflight_status": str(
+                row_mapping.get("install_preflight_status", "") or ""
+            ),
+            "install_missing_components": strings(
+                row_mapping.get("install_missing_components")
+            ),
+            "install_verified_components": strings(
+                row_mapping.get("install_verified_components")
+            ),
+            "primary_entrypoint_ref": str(
+                row_mapping.get("primary_entrypoint_ref", "") or ""
+            ),
+        }
+    return payload
+
+
 def _asset_rows(
     normalized_robot_asset_manifest: Mapping[str, Any],
 ) -> tuple[dict[str, str], list[str], list[str], list[str]]:
@@ -48,9 +88,11 @@ def build_isaac_unitree_runtime_pack(
     preferred_profile = str(
         deployment.get("preferred_profile")
         or runtime_layout_contract.get("preferred_profile")
+        or _fallback_preferred_profile(runtime_layout_contract)
         or ""
     )
     profile = _profile_row(runtime_layout_contract, preferred_profile)
+    profile_install_by_id = _profile_install_by_id(runtime_layout_contract)
     asset_refs, ready_assets, verified_assets, declared_only_assets = _asset_rows(
         normalized_robot_asset_manifest
     )
@@ -64,7 +106,10 @@ def build_isaac_unitree_runtime_pack(
     primary_runtime_report_ref = str(policy_contract.get("primary_runtime_report_ref", "") or "")
 
     ready_surfaces: list[str] = []
-    if preferred_profile:
+    profile_install_preflight_status = str(profile.get("install_preflight_status", "") or "")
+    profile_install_missing_components = strings(profile.get("install_missing_components"))
+    profile_primary_entrypoint_ref = str(profile.get("primary_entrypoint_ref", "") or "")
+    if preferred_profile and profile_install_preflight_status != "install_blocked":
         ready_surfaces.append("runtime_profile_surface")
     if ready_targets:
         ready_surfaces.append("runtime_target_surface")
@@ -80,6 +125,8 @@ def build_isaac_unitree_runtime_pack(
     missing_components: list[str] = []
     if not preferred_profile:
         missing_components.append("preferred_runtime_profile")
+    if profile_install_preflight_status == "install_blocked":
+        missing_components.extend(profile_install_missing_components)
     if not ready_modes:
         missing_components.append("deployment_mode")
     if not ready_targets:
@@ -101,6 +148,7 @@ def build_isaac_unitree_runtime_pack(
         "pack_status": pack_status,
         "ready_modes": ready_modes,
         "ready_surfaces": ready_surfaces,
+        "profile_install_by_id": profile_install_by_id,
     }
     return {
         "version": "backend_upstream_runtime_pack_v1",
@@ -116,6 +164,12 @@ def build_isaac_unitree_runtime_pack(
             "policy": int(profile.get("policy_candidate_count", 0) or 0),
             "data": int(profile.get("data_candidate_count", 0) or 0),
         },
+        "profile_install_preflight_status": profile_install_preflight_status,
+        "profile_install_missing_components": profile_install_missing_components,
+        "profile_install_verified_components": strings(
+            profile.get("install_verified_components")
+        ),
+        "profile_primary_entrypoint_ref": profile_primary_entrypoint_ref,
         "primary_profile_deploy_ref": str(profile.get("primary_deploy_candidate", "") or ""),
         "primary_profile_policy_ref": str(profile.get("primary_policy_candidate", "") or ""),
         "primary_profile_data_ref": str(profile.get("primary_data_candidate", "") or ""),
