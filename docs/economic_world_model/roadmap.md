@@ -437,9 +437,11 @@ Suggested weekly WM order for the first training season:
     - Isaac selected launch/policy/target/asset refs now emit explicit verification status
     - Holosoma selected policy/retargeting refs and selected existing motion sources now emit explicit verification status
     - launch/work-order/training surfaces preserve that host-preflight truth instead of flattening it back into pack-level readiness
+  - Shadow execution now consumes those selected runtime-binding surfaces directly when building Isaac shadow env-configs and Holosoma shadow work orders, so Phase 1 no longer leaves the shadow lane as a context-shaped bypass around the deeper runtime ladder.
   - Runtime layouts and upstream packs now also need profile-level install/preflight evidence, and the binding layer must resolve that evidence against the actually selected profile rather than the pack’s preferred profile alone; otherwise local motion-train or local bridge lanes inherit false repo/install blockers from the wrong profile.
   - The runtime target/layout/policy path can now also autodiscover common local upstream repo roots and fall back to those roots when looking for policy/checkpoint banks, so a host with real local clones does not need every env var pre-wired before Phase 1 can consume that evidence honestly.
   - Those runtime bindings now survive into runtime bundles, launch specs, work orders, loop summaries, and trainer-facing corpus rows, so downstream consumers no longer have to infer “why this lane is still blocked” from pack metadata or launch status alone.
+  - Branch-planner traces now also carry explicit control truth through planning and trainer exports, so a learned branch payload can remain visible without pretending it actually controlled branch generation when the heuristic path retained authority.
   - Holosoma now follows the same request -> consumer -> execution -> realization ladder as Isaac/Unitree, so one backend is not allowed to remain a structurally looser special case while the other gets typed runtime truth.
   - No training loop lands here; the service is advisory and structural.
 - Do not touch:

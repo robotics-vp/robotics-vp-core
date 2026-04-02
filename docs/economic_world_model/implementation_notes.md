@@ -2,6 +2,33 @@
 
 ## 2026-04-02
 
+- Closed the active Tier 3 shadow/fallback honesty gap without adding a new runtime rung:
+  - `src/world_model/sim_synth_physics/shadow_execution.py` now derives binding-aware Isaac env-config and Holosoma work-order fields from the already-emitted `BackendRuntimeExecutionReceipt` metadata instead of only carrying the deeper runtime ladder as receipt-side metadata
+  - the shadow layer now consumes:
+    - selected profile
+    - selected policy ref
+    - selected launch root
+    - selected target refs
+    - selected motion sources / retargeting root (Holosoma)
+    - host-preflight and selected-profile install status
+  - Holosoma shadow preconditions now merge selected binding preflight/install blockers into the work-order truth instead of relying only on missing-asset lists
+  - shadow receipt metadata now includes `shadow_runtime_binding_consumed`
+- Tightened branch-planner fallback honesty:
+  - `src/world_model/sim_synth_physics/synthetic_branches.py` now computes:
+    - `branch_helper_resolution`
+    - `branch_helper_resolution_reason`
+    - `branch_helper_payload_applied`
+  - these fields explicitly distinguish:
+    - learned payload applied
+    - heuristic retained because helper is shadow-candidate
+    - heuristic retained because helper was demoted
+    - heuristic retained because helper is unavailable
+  - `src/world_model/sim_synth_physics/training_corpus.py` now preserves those fields plus learned-trace generation/yield hints in branch-planner training rows
+- Why this matters:
+  - previously the branch could carry a learned helper trace while still forcing downstream consumers to infer whether that trace actually controlled the plan
+  - now the control authority split between heuristic and learned helper is explicit in both canonical planning metadata and trainer exports
+  - combined with the shadow binding change, this closes another Phase-1-local honesty gap while keeping the current ladder structure intact
+
 - Implemented Tier 3.2 promotion/demotion machinery (Claude-authored):
   - Added `_check_demotion(benchmark_gate, evidence_signals)` to `promotion.py`
   - Three demotion triggers:

@@ -1119,6 +1119,7 @@ Phase 1 should count as landed only when:
   - contract-ready but only declared/unverified asset or motion refs
   - locally verified launch/policy/target surfaces
   - genuinely external remaining blockers
+- shadow execution must consume those selected runtime-binding surfaces when building backend shadow env/work-order artifacts, so the Tier 3 shadow lane does not bypass the deeper Phase 1 runtime ladder while only echoing it in receipt metadata
 - runtime layouts and upstream packs must also carry profile-level install/preflight evidence, and runtime bindings must resolve that evidence against the actually selected profile rather than blindly inheriting the pack’s preferred-profile gaps; otherwise local motion-train or local bridge lanes will look blocked by the wrong repo/install surface
 - runtime target/layout/policy scans should also be able to consume actual local clone/install roots and checkpoint banks without requiring every host to pre-wire env vars first; targeted autodiscovery of known upstream repo roots is acceptable as long as missing roots remain explicit and do not silently mark a lane ready
 - the backend runtime receipt can distinguish `runtime_launch_prepared` from truly missing runtime prerequisites, so “host is ready but local adapter is absent” remains an honest intermediate state instead of collapsing back into generic module-missing logic
@@ -1126,6 +1127,7 @@ Phase 1 should count as landed only when:
 - backend runtime outcome receipts can also distinguish `external_launch` from `local_runtime_execution`, so concrete local Isaac/Unitree and Holosoma execution does not get flattened back into launch-shaped truth and trainer/replay consumers can preserve policy / dataset / metrics surface readiness honestly
 - upstream runtime packs and policy/layout contracts carry concrete evidence, not only root/candidate names: selected primary checkpoint / deploy / runtime-report refs, profile candidate counts, repo-git metadata when available, and Isaac declared-vs-verified asset truth are all canonical WM surfaces before Phase 1 can claim the remaining blocker is “just external runtime/assets”
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
+- branch-planner fallback truth must remain explicit in canonical plan metadata and trainer exports, so a learned payload can remain visible as a trace without masquerading as active authority when the heuristic path retains control
 - replay/training consume WM receipts without bespoke joins
 - Isaac remains an explicit fallback until a real adapter exists, but it is no longer hidden behind a generic backend name
 - the target posture is real Isaac Sim / Isaac Gym / Unitree-class backend functionality behind typed backend routing, not a permanent pybullet-only fallback loop
