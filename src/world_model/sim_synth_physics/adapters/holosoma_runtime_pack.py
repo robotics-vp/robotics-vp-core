@@ -68,6 +68,14 @@ def _motion_source_exists(ref: str) -> bool:
     return "/" not in ref and "\\" not in ref and not path.suffix
 
 
+def _target_row(runtime_target_contract: Mapping[str, Any], target_id: str) -> dict[str, Any]:
+    for row in list(runtime_target_contract.get("targets", []) or []):
+        row_mapping = mapping(row)
+        if str(row_mapping.get("target_id", "") or "") == target_id:
+            return row_mapping
+    return {}
+
+
 def _named_candidates(prefix: str, refs: list[str]) -> list[tuple[str, str]]:
     return [(f"{prefix}[{index}]", ref) for index, ref in enumerate(refs) if str(ref)]
 
@@ -148,11 +156,24 @@ def build_holosoma_runtime_pack(
     )
     if embodiment.get("motion_clips"):
         motion_sources.append("inline_motion_clips")
+    motion_profile = _profile_row(runtime_layout_contract, "holosoma_motion_bank")
+    motion_target_row = _target_row(runtime_target_contract, "holosoma_motion_root")
+    if not motion_sources:
+        motion_sources.extend(strings(motion_profile.get("data_candidates")))
+    if not motion_sources:
+        motion_target_ref = str(motion_target_row.get("ref", "") or "")
+        if motion_target_ref:
+            motion_sources.append(motion_target_ref)
+    motion_sources = list(dict.fromkeys(ref for ref in motion_sources if str(ref)))
     existing_motion_sources = [ref for ref in motion_sources if _motion_source_exists(ref)]
+    retargeting_profile = _profile_row(runtime_layout_contract, "retargeting_bundle")
+    retargeting_target_row = _target_row(runtime_target_contract, "retargeting_root")
     retargeting_present = bool(
         embodiment.get("retargeting_contract")
         or embodiment.get("whole_body_retargeting")
         or embodiment.get("retargeting_root")
+        or str(retargeting_target_row.get("ref", "") or "")
+        or strings(retargeting_profile.get("data_candidates"))
     )
     reward_overlay_present = bool(embodiment.get("whole_body_reward_overlay"))
     profile_install_preflight_status = str(profile.get("install_preflight_status", "") or "")

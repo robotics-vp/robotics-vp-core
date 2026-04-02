@@ -71,6 +71,29 @@ def _verified_targets(runtime_target_contract: Mapping[str, Any]) -> set[str]:
     return set(strings(runtime_target_contract.get("ready_target_ids")))
 
 
+def _preferred_profile_from_context(
+    embodiment_context: Mapping[str, Any],
+    ready_profiles: list[str],
+) -> str:
+    embodiment = mapping(embodiment_context)
+    explicit_profile_keys = [
+        ("unitree_sim_isaaclab", ("unitree_sim_isaaclab_root",)),
+        ("unitree_rl_gym", ("unitree_rl_gym_root", "unitree_runtime_repo_root")),
+        ("unitree_lerobot", ("unitree_lerobot_root", "unitree_il_lerobot_root")),
+        ("humanoidverse", ("humanoidverse_root",)),
+        ("isaaclab_core", ("isaaclab_root", "isaac_lab_root", "isaac_repo_root")),
+        ("xr_teleoperate", ("xr_teleoperate_root",)),
+        ("unitree_model_assets", ("unitree_model_root", "unitree_asset_root", "robot_asset_root")),
+    ]
+    for profile_id, keys in explicit_profile_keys:
+        if profile_id not in ready_profiles:
+            continue
+        for key in keys:
+            if str(embodiment.get(key, "") or "").strip():
+                return profile_id
+    return ""
+
+
 def _mode_contract(
     *,
     mode_id: str,
@@ -215,7 +238,10 @@ def build_isaac_unitree_deployment_contract(
         "xr_teleoperate",
         "unitree_model_assets",
     ]
-    preferred_profile = next(
+    preferred_profile = _preferred_profile_from_context(
+        embodiment_context,
+        ready_profiles,
+    ) or next(
         (profile_id for profile_id in preferred_profile_order if profile_id in ready_profiles),
         (ready_profiles[0] if ready_profiles else ""),
     )

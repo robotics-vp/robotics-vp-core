@@ -191,3 +191,40 @@ def test_holosoma_runtime_pack_prefers_verified_local_refs(tmp_path) -> None:
     assert pack["primary_deploy_config_ref_source"] == "profile.deploy_candidates[1]"
     assert pack["primary_runtime_report_ref"] == str(report_ref)
     assert pack["runtime_report_candidate_evidence_summary"]["verified_candidate_count"] == 1
+
+
+def test_holosoma_runtime_pack_derives_motion_sources_from_repo_layout(tmp_path) -> None:
+    holosoma_root = tmp_path / "holosoma"
+    motion_root = holosoma_root / "src" / "holosoma" / "holosoma" / "data" / "motions"
+    policy_root = holosoma_root / "src" / "holosoma_inference" / "holosoma_inference" / "models"
+    motion_root.mkdir(parents=True)
+    policy_root.mkdir(parents=True)
+    (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "scripts").mkdir()
+    motion_clip = motion_root / "g1_walk.npz"
+    motion_clip.write_text("x", encoding="utf-8")
+    (policy_root / "g1_policy.onnx").write_text("x", encoding="utf-8")
+
+    embodiment_context = {
+        "holosoma_root": str(holosoma_root),
+    }
+    runtime_target_contract = describe_holosoma_runtime_targets(embodiment_context)
+    runtime_layout_contract = describe_holosoma_runtime_layouts(embodiment_context)
+    policy_contract = describe_holosoma_policy_contract(embodiment_context)
+    deployment_contract = build_holosoma_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+    )
+    pack = build_holosoma_runtime_pack(
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        deployment_contract=deployment_contract,
+        embodiment_context=embodiment_context,
+    )
+
+    assert str(motion_clip) in pack["motion_sources"]
+    assert str(motion_clip) in pack["existing_motion_sources"]
+    assert pack["primary_policy_ref"].endswith("g1_policy.onnx")

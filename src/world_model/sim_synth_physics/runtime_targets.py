@@ -52,6 +52,24 @@ def _resolved_path_with_source(
     )
 
 
+def _fallback_child_path_with_source(
+    *,
+    parent_ref: str,
+    source_prefix: str,
+    relative_candidates: tuple[str, ...],
+) -> tuple[str, str, list[str]]:
+    parent = Path(str(parent_ref or "").strip())
+    checked_paths: list[str] = []
+    if not parent:
+        return "", "", checked_paths
+    for rel_path in relative_candidates:
+        candidate = (parent / rel_path).resolve()
+        checked_paths.append(str(candidate))
+        if candidate.exists():
+            return str(candidate), f"{source_prefix}_subpath", checked_paths
+    return "", "", checked_paths
+
+
 def _target_record(
     *,
     target_id: str,
@@ -417,6 +435,21 @@ def describe_holosoma_runtime_targets(
     ) or _env_path("HOLOSOMA_MOTION_ROOT"),
         discover_names=("holosoma_motion", "motions"),
     )
+    if not holosoma_motion_root and holosoma_root:
+        (
+            holosoma_motion_root,
+            holosoma_motion_source,
+            fallback_checked,
+        ) = _fallback_child_path_with_source(
+            parent_ref=holosoma_root,
+            source_prefix=holosoma_source or "holosoma_root",
+            relative_candidates=(
+                "src/holosoma/holosoma/data/motions",
+                "src/holosoma/data/motions",
+                "data/motions",
+            ),
+        )
+        holosoma_motion_checked = list(holosoma_motion_checked) + fallback_checked
     holosoma_policy_root, holosoma_policy_source, holosoma_policy_checked = _resolved_path_with_source(
         explicit_ref=_context_path(
         embodiment,
@@ -424,6 +457,22 @@ def describe_holosoma_runtime_targets(
         "policy_root",
     ) or _env_path("HOLOSOMA_POLICY_ROOT"),
     )
+    if not holosoma_policy_root and holosoma_root:
+        (
+            holosoma_policy_root,
+            holosoma_policy_source,
+            fallback_checked,
+        ) = _fallback_child_path_with_source(
+            parent_ref=holosoma_root,
+            source_prefix=holosoma_source or "holosoma_root",
+            relative_candidates=(
+                "src/holosoma_inference/holosoma_inference/models",
+                "src/holosoma_inference/models",
+                "models",
+                "checkpoints",
+            ),
+        )
+        holosoma_policy_checked = list(holosoma_policy_checked) + fallback_checked
     retargeting_root, retarget_source, retarget_checked = _resolved_path_with_source(
         explicit_ref=_context_path(
         embodiment,
@@ -432,6 +481,17 @@ def describe_holosoma_runtime_targets(
     ) or _env_path("RETARGETING_ROOT"),
         discover_names=("retargeting",),
     )
+    if not retargeting_root and holosoma_root:
+        retargeting_root, retarget_source, fallback_checked = _fallback_child_path_with_source(
+            parent_ref=holosoma_root,
+            source_prefix=holosoma_source or "holosoma_root",
+            relative_candidates=(
+                "src/holosoma_retargeting",
+                "src/holosoma_retargeting/holosoma_retargeting",
+                "retargeting",
+            ),
+        )
+        retarget_checked = list(retarget_checked) + fallback_checked
     records = [
         _target_record(
             target_id="holosoma_root",
@@ -439,7 +499,7 @@ def describe_holosoma_runtime_targets(
             ref=holosoma_root,
             source=holosoma_source,
             checked_paths=holosoma_checked,
-            exact_markers=("README.md", "holosoma", "scripts"),
+            exact_markers=("README.md", "src", "scripts"),
         ),
         _target_record(
             target_id="holosoma_motion_root",

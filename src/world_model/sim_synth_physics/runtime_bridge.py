@@ -71,16 +71,24 @@ def _planner_rate_hz(control_constraints: Mapping[str, Any], control_rate_hz: fl
 def _transport_profile(
     backend: str,
     runtime_target_contract: Mapping[str, Any],
+    deployment_contract: Mapping[str, Any],
+    preferred_profile: str = "",
 ) -> str:
     ready_targets = set(strings(runtime_target_contract.get("ready_target_ids")))
     if backend == "isaac":
-        if {
+        teleop_ready = bool(mapping(deployment_contract).get("teleop_launch_ready", False))
+        lerobot_ready = bool(mapping(deployment_contract).get("lerobot_eval_ready", False))
+        if teleop_ready and {
             "xr_teleoperate_root",
             "unitree_sdk2_python_root",
             "teleimager_root",
         }.issubset(ready_targets):
             return "unitree_xr_teleop_bridge"
-        if "unitree_il_lerobot_root" in ready_targets:
+        if (
+            (preferred_profile == "unitree_lerobot" or lerobot_ready)
+            and not teleop_ready
+            and "unitree_il_lerobot_root" in ready_targets
+        ):
             return "unitree_lerobot_eval_bridge"
         if "unitree_sdk2_root" in ready_targets:
             return "isaaclab_unitree_dds_bridge"
@@ -96,6 +104,8 @@ def _transport_stack(
     backend: str,
     binding: BackendExecutionBindingState,
     runtime_target_contract: Mapping[str, Any],
+    deployment_contract: Mapping[str, Any],
+    preferred_profile: str = "",
 ) -> list[str]:
     ready_targets = set(strings(runtime_target_contract.get("ready_target_ids")))
     stack: list[str] = []
@@ -103,13 +113,19 @@ def _transport_stack(
         stack.append("python_bridge")
     stack.extend(strings(binding.target_runtime_stack))
     if backend == "isaac":
-        if "unitree_sdk2_python_root" in ready_targets:
+        teleop_ready = bool(mapping(deployment_contract).get("teleop_launch_ready", False))
+        lerobot_ready = bool(mapping(deployment_contract).get("lerobot_eval_ready", False))
+        if teleop_ready and "unitree_sdk2_python_root" in ready_targets:
             stack.append("sdk2_python")
-        if "teleimager_root" in ready_targets:
+        if teleop_ready and "teleimager_root" in ready_targets:
             stack.append("teleimager")
-        if "xr_teleoperate_root" in ready_targets:
+        if teleop_ready and "xr_teleoperate_root" in ready_targets:
             stack.append("webrtc")
-        if "unitree_il_lerobot_root" in ready_targets:
+        if (
+            (preferred_profile == "unitree_lerobot" or lerobot_ready)
+            and not teleop_ready
+            and "unitree_il_lerobot_root" in ready_targets
+        ):
             stack.append("lerobot_eval")
         if "unitree_sdk2_root" in ready_targets:
             stack.append("dds")
@@ -198,6 +214,14 @@ def _policy_ready(binding: BackendExecutionBindingState) -> bool:
     return bool(
         mapping(binding.metadata.get("policy_contract")).get("policy_ready", False)
     )
+
+
+def _preferred_runtime_profile(binding: BackendExecutionBindingState) -> str:
+    deployment_contract = mapping(binding.metadata.get("deployment_contract"))
+    if str(deployment_contract.get("preferred_profile", "") or ""):
+        return str(deployment_contract.get("preferred_profile", "") or "")
+    upstream_runtime_pack = mapping(binding.metadata.get("upstream_runtime_pack"))
+    return str(upstream_runtime_pack.get("preferred_profile", "") or "")
 
 
 def _telemetry_contracts(
@@ -400,6 +424,8 @@ def compile_backend_runtime_bridge(
         "transport_profile": _transport_profile(
             backend_execution_binding.backend,
             runtime_target_contract,
+            mapping(backend_execution_binding.metadata.get("deployment_contract")),
+            _preferred_runtime_profile(backend_execution_binding),
         ),
         "binding_id": backend_execution_binding.binding_id,
         "contract_id": "" if robot_asset_contract is None else robot_asset_contract.contract_id,
@@ -414,11 +440,15 @@ def compile_backend_runtime_bridge(
         transport_profile=_transport_profile(
             backend_execution_binding.backend,
             runtime_target_contract,
+            mapping(backend_execution_binding.metadata.get("deployment_contract")),
+            _preferred_runtime_profile(backend_execution_binding),
         ),
         transport_stack=_transport_stack(
             backend_execution_binding.backend,
             backend_execution_binding,
             runtime_target_contract,
+            mapping(backend_execution_binding.metadata.get("deployment_contract")),
+            _preferred_runtime_profile(backend_execution_binding),
         ),
         required_runtime_targets=required_targets,
         ready_runtime_targets=ready_targets,

@@ -36,6 +36,20 @@ def _resolved_path(explicit_ref: str, *, discover_names: tuple[str, ...] = ()) -
     return str(discover_named_root(discover_names).get("ref", "") or "")
 
 
+def _existing_subpath(root: str, relative_candidates: Iterable[str]) -> str:
+    cleaned = str(root or "").strip()
+    if not cleaned:
+        return ""
+    base = Path(cleaned)
+    if not base.exists():
+        return ""
+    for rel_path in relative_candidates:
+        candidate = (base / rel_path).resolve()
+        if candidate.exists():
+            return str(candidate)
+    return ""
+
+
 def _existing(root: str, rel_paths: Iterable[str]) -> tuple[list[str], list[str]]:
     if not root:
         return [], list(rel_paths)
@@ -248,6 +262,55 @@ def _profile_groups(profiles: Iterable[Mapping[str, Any]]) -> dict[str, list[str
         "install_partial_profiles": install_partial_profiles,
         "install_blocked_profiles": install_blocked_profiles,
     }
+
+
+def _resolve_holosoma_roots(embodiment_context: Mapping[str, Any]) -> tuple[str, str, str, str]:
+    holosoma_root = _resolved_path(
+        _context_path(
+        embodiment_context, "holosoma_root", "holosoma_repo_root"
+    ) or _env_path("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
+        discover_names=("holosoma",),
+    )
+    motion_root = _resolved_path(
+        _context_path(
+        embodiment_context, "holosoma_motion_root", "motion_data_root"
+    ) or _env_path("HOLOSOMA_MOTION_ROOT"),
+        discover_names=("holosoma_motion", "motions"),
+    ) or _existing_subpath(
+        holosoma_root,
+        (
+            "src/holosoma/holosoma/data/motions",
+            "src/holosoma/data/motions",
+            "data/motions",
+        ),
+    )
+    policy_root = _resolved_path(
+        _context_path(
+        embodiment_context, "holosoma_policy_root", "policy_root"
+    ) or _env_path("HOLOSOMA_POLICY_ROOT"),
+    ) or _existing_subpath(
+        holosoma_root,
+        (
+            "src/holosoma_inference/holosoma_inference/models",
+            "src/holosoma_inference/models",
+            "models",
+            "checkpoints",
+        ),
+    )
+    retargeting_root = _resolved_path(
+        _context_path(
+        embodiment_context, "retargeting_root", "whole_body_retargeting_root"
+    ) or _env_path("RETARGETING_ROOT"),
+        discover_names=("retargeting",),
+    ) or _existing_subpath(
+        holosoma_root,
+        (
+            "src/holosoma_retargeting",
+            "src/holosoma_retargeting/holosoma_retargeting",
+            "retargeting",
+        ),
+    )
+    return holosoma_root, motion_root, policy_root, retargeting_root
 
 
 def _policy_root_rows(
@@ -589,28 +652,8 @@ def describe_holosoma_runtime_layouts(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     embodiment = mapping(embodiment_context)
-    holosoma_root = _resolved_path(
-        _context_path(
-        embodiment, "holosoma_root", "holosoma_repo_root"
-    ) or _env_path("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
-        discover_names=("holosoma",),
-    )
-    motion_root = _resolved_path(
-        _context_path(
-        embodiment, "holosoma_motion_root", "motion_data_root"
-    ) or _env_path("HOLOSOMA_MOTION_ROOT"),
-        discover_names=("holosoma_motion", "motions"),
-    )
-    policy_root = _resolved_path(
-        _context_path(
-        embodiment, "holosoma_policy_root", "policy_root"
-    ) or _env_path("HOLOSOMA_POLICY_ROOT"),
-    )
-    retargeting_root = _resolved_path(
-        _context_path(
-        embodiment, "retargeting_root", "whole_body_retargeting_root"
-    ) or _env_path("RETARGETING_ROOT"),
-        discover_names=("retargeting",),
+    holosoma_root, motion_root, policy_root, retargeting_root = _resolve_holosoma_roots(
+        embodiment
     )
     profiles = [
         _profile(
@@ -671,18 +714,16 @@ def describe_holosoma_policy_contract(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     embodiment = mapping(embodiment_context)
+    holosoma_root, _, derived_policy_root, _ = _resolve_holosoma_roots(embodiment)
     explicit_policy_root = _context_path(
         embodiment, "holosoma_policy_root", "policy_root"
     ) or _env_path("HOLOSOMA_POLICY_ROOT")
     candidate_policy_roots = [
         ("explicit_policy_root", explicit_policy_root),
+        ("derived_policy_root", derived_policy_root),
         (
             "holosoma_root",
-            _resolved_path(
-            _context_path(embodiment, "holosoma_root", "holosoma_repo_root")
-            or _env_path("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
-            discover_names=("holosoma",),
-            ),
+            holosoma_root,
         ),
     ]
     policy_ref = _context_path(
@@ -690,7 +731,20 @@ def describe_holosoma_policy_contract(
     ) or str(os.environ.get("HOLOSOMA_POLICY_PATH", "") or "").strip()
     policy_root_rows = _policy_root_rows(
         candidate_policy_roots,
-        checkpoint_patterns=("*.pt", "*.pth", "*.onnx", "*.ckpt"),
+        checkpoint_patterns=(
+            "**/models/**/*.onnx",
+            "**/models/**/*.pt",
+            "**/models/**/*.pth",
+            "**/models/**/*.ckpt",
+            "**/checkpoints/**/*.onnx",
+            "**/checkpoints/**/*.pt",
+            "**/checkpoints/**/*.pth",
+            "**/checkpoints/**/*.ckpt",
+            "**/*policy*.onnx",
+            "**/*policy*.pt",
+            "**/*policy*.pth",
+            "**/*policy*.ckpt",
+        ),
         deploy_patterns=("*.yaml", "*.yml", "*.json"),
         runtime_report_patterns=("logs/**/*.json", "metrics/**/*.json", "outputs/**/*.json"),
     )

@@ -145,6 +145,47 @@ def test_holosoma_runtime_targets_autodiscover_repo_root(tmp_path, monkeypatch) 
     assert holosoma_row["source"] == "autodiscovery"
 
 
+def test_holosoma_runtime_targets_derive_subroots_from_repo(tmp_path) -> None:
+    holosoma_root = tmp_path / "holosoma"
+    (holosoma_root / "src" / "holosoma" / "holosoma" / "data" / "motions").mkdir(
+        parents=True
+    )
+    (holosoma_root / "src" / "holosoma_inference" / "holosoma_inference" / "models").mkdir(
+        parents=True
+    )
+    (holosoma_root / "src" / "holosoma_retargeting").mkdir(parents=True)
+    (holosoma_root / "scripts").mkdir()
+    (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (
+        holosoma_root / "src" / "holosoma" / "holosoma" / "data" / "motions" / "g1_walk.npz"
+    ).write_text("x", encoding="utf-8")
+    (
+        holosoma_root
+        / "src"
+        / "holosoma_inference"
+        / "holosoma_inference"
+        / "models"
+        / "g1_policy.onnx"
+    ).write_text("x", encoding="utf-8")
+    (
+        holosoma_root / "src" / "holosoma_retargeting" / "g1_retarget.json"
+    ).write_text("{}", encoding="utf-8")
+
+    contract = describe_holosoma_runtime_targets({"holosoma_root": str(holosoma_root)})
+
+    motion_row = next(row for row in contract["targets"] if row["target_id"] == "holosoma_motion_root")
+    policy_row = next(row for row in contract["targets"] if row["target_id"] == "holosoma_policy_root")
+    retarget_row = next(row for row in contract["targets"] if row["target_id"] == "retargeting_root")
+
+    assert motion_row["source"].endswith("_subpath")
+    assert motion_row["verification_status"] == "install_shape_ready"
+    assert policy_row["source"].endswith("_subpath")
+    assert policy_row["verification_status"] == "install_shape_ready"
+    assert retarget_row["source"].endswith("_subpath")
+    assert retarget_row["verification_status"] == "install_shape_ready"
+    assert "holosoma_motion_root" in contract["verified_target_ids"]
+
+
 def test_holosoma_runtime_targets_surface_motion_and_retargeting_verification(tmp_path) -> None:
     holosoma_root = tmp_path / "holosoma"
     holosoma_root.mkdir()

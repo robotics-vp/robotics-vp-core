@@ -147,6 +147,9 @@ def _preferred_profile(
         runtime_layout_contract=runtime_layout_contract,
         target_profile_map=target_profile_map,
     )
+    explicit_preferred = str(mapping(deployment_contract).get("preferred_profile", "") or "")
+    if explicit_preferred and explicit_preferred in ready_profiles:
+        return explicit_preferred
     preferred_order = strings(
         mapping(deployment_contract).get("preferred_profile_order")
     ) or strings(runtime_layout_contract.get("preferred_profile_order"))

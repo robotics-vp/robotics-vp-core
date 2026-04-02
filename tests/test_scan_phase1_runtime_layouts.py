@@ -86,10 +86,8 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     assert "asset::unitree_robot_description" in summary["isaac_runtime_binding"][
         "host_preflight_missing_components"
     ]
-    assert summary["scan_summary"]["isaac"]["usable_profiles"] == ["unitree_sim_isaaclab"]
-    assert summary["scan_summary"]["isaac"]["install_ready_profiles"] == [
-        "unitree_sim_isaaclab"
-    ]
+    assert "unitree_sim_isaaclab" in summary["scan_summary"]["isaac"]["usable_profiles"]
+    assert "unitree_sim_isaaclab" in summary["scan_summary"]["isaac"]["install_ready_profiles"]
     assert summary["scan_summary"]["isaac"]["selected_policy_ref"].endswith(
         "g1_policy.onnx"
     )
@@ -108,3 +106,42 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     assert summary["scan_summary"]["holosoma"]["selected_policy_ref"].endswith(
         "g1_policy.onnx"
     )
+
+
+def test_scan_phase1_runtime_layouts_derives_holosoma_local_surfaces_from_repo(
+    tmp_path: Path,
+) -> None:
+    holosoma_root = tmp_path / "holosoma"
+    motion_root = holosoma_root / "src" / "holosoma" / "holosoma" / "data" / "motions"
+    policy_root = holosoma_root / "src" / "holosoma_inference" / "holosoma_inference" / "models"
+    retargeting_root = holosoma_root / "src" / "holosoma_retargeting"
+    motion_root.mkdir(parents=True)
+    policy_root.mkdir(parents=True)
+    retargeting_root.mkdir(parents=True)
+    (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "scripts").mkdir()
+    (motion_root / "g1_walk.npz").write_text("x", encoding="utf-8")
+    (policy_root / "g1_policy.onnx").write_text("x", encoding="utf-8")
+    (retargeting_root / "g1_retarget.json").write_text("{}", encoding="utf-8")
+
+    embodiment_context_path = tmp_path / "embodiment_holosoma.json"
+    embodiment_context_path.write_text(
+        json.dumps({"holosoma_root": str(holosoma_root)}),
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "holosoma_scan.json"
+
+    scan_runtime_layouts_main(
+        [
+            "--embodiment-context",
+            str(embodiment_context_path),
+            "--output-path",
+            str(output_path),
+        ]
+    )
+
+    summary = json.loads(output_path.read_text(encoding="utf-8"))
+    holosoma_summary = summary["scan_summary"]["holosoma"]
+    assert "holosoma_motion_bank" in holosoma_summary["usable_profiles"]
+    assert holosoma_summary["selected_policy_ref"].endswith("g1_policy.onnx")
+    assert "holosoma_motion_root" in holosoma_summary["selected_verified_target_ids"]

@@ -92,3 +92,27 @@ def test_holosoma_deployment_contract_ignores_install_blocked_repo_when_motion_b
 
     assert contract["motion_train_ready"] is True
     assert contract["preferred_profile"] == "holosoma_motion_bank"
+
+
+def test_holosoma_deployment_contract_uses_repo_derived_motion_root(tmp_path) -> None:
+    holosoma_root = tmp_path / "holosoma"
+    motion_root = holosoma_root / "src" / "holosoma" / "holosoma" / "data" / "motions"
+    motion_root.mkdir(parents=True)
+    (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "scripts").mkdir()
+    (motion_root / "g1_walk.npz").write_text("x", encoding="utf-8")
+
+    embodiment_context = {
+        "holosoma_root": str(holosoma_root),
+    }
+    runtime_target_contract = describe_holosoma_runtime_targets(embodiment_context)
+    runtime_layout_contract = describe_holosoma_runtime_layouts(embodiment_context)
+    contract = build_holosoma_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=describe_holosoma_policy_contract(embodiment_context),
+    )
+
+    assert "holosoma_motion_root" in contract["verified_target_ids"]
+    assert contract["motion_train_ready"] is True

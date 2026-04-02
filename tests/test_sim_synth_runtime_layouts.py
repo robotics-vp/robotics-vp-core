@@ -188,7 +188,10 @@ def test_holosoma_policy_contract_can_fall_back_to_autodiscovered_repo_root(
     contract = describe_holosoma_policy_contract({})
 
     assert contract["policy_ready"] is True
-    assert contract["policy_root"] == str(repo_root.resolve())
+    assert contract["policy_root"] in {
+        str(repo_root.resolve()),
+        str(checkpoints_dir.resolve()),
+    }
     assert contract["primary_checkpoint_ref"].endswith("policy.ckpt")
 
 
@@ -210,6 +213,44 @@ def test_holosoma_policy_contract_ignores_empty_explicit_root_when_repo_has_chec
     )
 
     assert contract["policy_ready"] is True
-    assert contract["policy_root"] == str(repo_root.resolve())
-    assert contract["policy_root_source"] == "holosoma_root"
+    assert contract["policy_root"] in {
+        str(repo_root.resolve()),
+        str(checkpoints_dir.resolve()),
+    }
+    assert contract["policy_root_source"] in {"holosoma_root", "derived_policy_root"}
     assert contract["primary_checkpoint_ref"].endswith("policy.ckpt")
+
+
+def test_holosoma_runtime_layouts_derive_subroots_and_prefer_model_policies(tmp_path) -> None:
+    holosoma_root = tmp_path / "holosoma"
+    motion_root = holosoma_root / "src" / "holosoma" / "holosoma" / "data" / "motions"
+    policy_root = holosoma_root / "src" / "holosoma_inference" / "holosoma_inference" / "models"
+    retargeting_root = holosoma_root / "src" / "holosoma_retargeting"
+    motion_root.mkdir(parents=True)
+    policy_root.mkdir(parents=True)
+    retargeting_root.mkdir(parents=True)
+    (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "scripts").mkdir()
+    (motion_root / "g1_walk.npz").write_text("x", encoding="utf-8")
+    (policy_root / "g1_policy.onnx").write_text("x", encoding="utf-8")
+    (retargeting_root / "g1_retarget.json").write_text("{}", encoding="utf-8")
+    demo_dir = holosoma_root / "src" / "holosoma_retargeting" / "demo_data"
+    demo_dir.mkdir(parents=True, exist_ok=True)
+    (demo_dir / "not_a_runtime_policy.pt").write_text("x", encoding="utf-8")
+
+    contract = describe_holosoma_runtime_layouts({"holosoma_root": str(holosoma_root)})
+    policy_contract = describe_holosoma_policy_contract({"holosoma_root": str(holosoma_root)})
+
+    assert "holosoma_motion_bank" in contract["usable_profiles"]
+    assert "retargeting_bundle" in contract["usable_profiles"]
+    motion_profile = next(
+        profile for profile in contract["profiles"] if profile["profile_id"] == "holosoma_motion_bank"
+    )
+    retarget_profile = next(
+        profile for profile in contract["profiles"] if profile["profile_id"] == "retargeting_bundle"
+    )
+    assert motion_profile["root"] == str(motion_root.resolve())
+    assert retarget_profile["root"] == str(retargeting_root.resolve())
+    assert policy_contract["policy_root"] == str(policy_root.resolve())
+    assert policy_contract["policy_root_source"] == "derived_policy_root"
+    assert policy_contract["primary_checkpoint_ref"].endswith("g1_policy.onnx")

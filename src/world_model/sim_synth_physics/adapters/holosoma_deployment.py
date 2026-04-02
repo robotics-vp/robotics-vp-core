@@ -7,22 +7,60 @@ from typing import Any, Mapping
 from ..common import mapping, strings
 
 
-def _has_motion_sources(embodiment_context: Mapping[str, Any]) -> bool:
+def _verified_targets(runtime_target_contract: Mapping[str, Any]) -> set[str]:
+    verified = strings(runtime_target_contract.get("verified_target_ids"))
+    if verified:
+        return set(verified)
+    return set(strings(runtime_target_contract.get("ready_target_ids")))
+
+
+def _profile_by_id(
+    runtime_layout_contract: Mapping[str, Any],
+    profile_id: str,
+) -> dict[str, Any]:
+    for row in list(runtime_layout_contract.get("profiles", []) or []):
+        row_mapping = mapping(row)
+        if str(row_mapping.get("profile_id", "") or "") == profile_id:
+            return row_mapping
+    return {}
+
+
+def _has_motion_sources(
+    embodiment_context: Mapping[str, Any],
+    *,
+    runtime_target_contract: Mapping[str, Any],
+    runtime_layout_contract: Mapping[str, Any],
+) -> bool:
     embodiment = mapping(embodiment_context)
-    return bool(
+    if bool(
         embodiment.get("motion_clip_datapacks")
         or embodiment.get("motion_clips")
         or embodiment.get("motion_clip_paths")
-    )
+    ):
+        return True
+    if "holosoma_motion_root" in _verified_targets(runtime_target_contract):
+        return True
+    motion_profile = _profile_by_id(runtime_layout_contract, "holosoma_motion_bank")
+    return bool(strings(motion_profile.get("data_candidates")))
 
 
-def _has_retargeting_contract(embodiment_context: Mapping[str, Any]) -> bool:
+def _has_retargeting_contract(
+    embodiment_context: Mapping[str, Any],
+    *,
+    runtime_target_contract: Mapping[str, Any],
+    runtime_layout_contract: Mapping[str, Any],
+) -> bool:
     embodiment = mapping(embodiment_context)
-    return bool(
+    if bool(
         embodiment.get("retargeting_contract")
         or embodiment.get("whole_body_retargeting")
         or embodiment.get("retargeting_root")
-    )
+    ):
+        return True
+    if "retargeting_root" in _verified_targets(runtime_target_contract):
+        return True
+    retarget_profile = _profile_by_id(runtime_layout_contract, "retargeting_bundle")
+    return bool(strings(retarget_profile.get("data_candidates")))
 
 
 def _has_reward_overlay(embodiment_context: Mapping[str, Any]) -> bool:
@@ -45,13 +83,6 @@ def _usable_profiles(runtime_layout_contract: Mapping[str, Any]) -> list[str]:
     return usable
 
 
-def _verified_targets(runtime_target_contract: Mapping[str, Any]) -> set[str]:
-    verified = strings(runtime_target_contract.get("verified_target_ids"))
-    if verified:
-        return set(verified)
-    return set(strings(runtime_target_contract.get("ready_target_ids")))
-
-
 def _mode_contract(
     *,
     mode_id: str,
@@ -66,6 +97,7 @@ def _mode_contract(
     ready_targets: set[str],
     policy_ready: bool,
     embodiment_context: Mapping[str, Any],
+    runtime_layout_contract: Mapping[str, Any],
 ) -> dict[str, Any]:
     missing_preconditions: list[str] = []
     if not any(profile in ready_profiles for profile in profile_candidates):
@@ -75,9 +107,17 @@ def _mode_contract(
     )
     if policy_required and not policy_ready:
         missing_preconditions.append("policy_checkpoint")
-    if motion_required and not _has_motion_sources(embodiment_context):
+    if motion_required and not _has_motion_sources(
+        embodiment_context,
+        runtime_target_contract={"verified_target_ids": sorted(ready_targets)},
+        runtime_layout_contract=runtime_layout_contract,
+    ):
         missing_preconditions.append("motion_source_bundle")
-    if retargeting_required and not _has_retargeting_contract(embodiment_context):
+    if retargeting_required and not _has_retargeting_contract(
+        embodiment_context,
+        runtime_target_contract={"verified_target_ids": sorted(ready_targets)},
+        runtime_layout_contract=runtime_layout_contract,
+    ):
         missing_preconditions.append("whole_body_retargeting_contract")
     if reward_overlay_required and not _has_reward_overlay(embodiment_context):
         missing_preconditions.append("whole_body_reward_overlay")
@@ -115,6 +155,7 @@ def build_holosoma_deployment_contract(
             ready_targets=ready_targets,
             policy_ready=policy_ready,
             embodiment_context=embodiment_context,
+            runtime_layout_contract=runtime_layout_contract,
         ),
         _mode_contract(
             mode_id="motion_train",
@@ -129,6 +170,7 @@ def build_holosoma_deployment_contract(
             ready_targets=ready_targets,
             policy_ready=policy_ready,
             embodiment_context=embodiment_context,
+            runtime_layout_contract=runtime_layout_contract,
         ),
         _mode_contract(
             mode_id="retarget_eval",
@@ -143,6 +185,7 @@ def build_holosoma_deployment_contract(
             ready_targets=ready_targets,
             policy_ready=policy_ready,
             embodiment_context=embodiment_context,
+            runtime_layout_contract=runtime_layout_contract,
         ),
     ]
     ready_modes = [row["mode_id"] for row in deployment_modes if bool(row.get("ready", False))]
