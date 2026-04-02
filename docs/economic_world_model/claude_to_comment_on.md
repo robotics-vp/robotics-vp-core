@@ -219,3 +219,95 @@ Category B count: 3
 - **Phase 1 remains the active implementation center.**
 - **Parallel Perception prep is allowed but secondary.**
 - Phase 1 is approaching real closure on the internal runtime-ladder / receipt-honesty side; the next highest-leverage cuts should keep pushing real upstream runtime/assets/checkpoints into the now-honest local/runtime evidence path rather than inventing a new layer.
+
+## Follow-On Phase 1 Closure Assessment
+
+### Tranche Spec Coverage
+
+This pass directly targeted the two next Phase-1 closure goals from the prior handoff:
+
+1. make the Isaac / Unitree lane bind against more concrete upstream runtime / asset / checkpoint evidence
+2. do the same for Holosoma host/runtime/motion/policy evidence
+
+Result:
+
+- runtime/profile/policy surfaces now carry explicit primary refs and evidence density instead of only root/candidate presence
+- Isaac asset truth now distinguishes declared refs from locally verified refs
+- Holosoma motion truth now distinguishes locally existing motion sources from only named motion sources
+- work orders and trainer rows now preserve those more concrete upstream surfaces end to end
+
+### What Was Not Changed
+
+This tranche intentionally did **not** change:
+
+- `src/world_model/sim_synth_physics/render_providers.py`
+- `src/world_model/sim_synth_physics/gen2sim_admission.py`
+- `src/world_model/sim_synth_physics/promotion.py`
+- any Perception / Grounding implementation surface
+- any frozen Phase B math or controller logic
+
+### What Changed Topologically
+
+- runtime profiles are now evidence-bearing WM surfaces:
+  - primary deploy/policy/data refs
+  - candidate counts
+  - repo git metadata when the root is a real local clone
+- policy contracts are now evidence-bearing WM surfaces:
+  - primary checkpoint ref
+  - primary deploy-config ref
+  - primary runtime-report ref
+- Isaac upstream runtime packs now distinguish:
+  - declared asset ids
+  - locally verified asset ids
+  - declared-only asset ids
+- Holosoma upstream runtime packs now distinguish:
+  - existing motion sources
+  - missing motion sources
+
+### What Fake Readiness Was Removed
+
+- “runtime pack ready” no longer means only “some root exists and there are some candidates somewhere under it”
+- “asset present” for Isaac no longer means only “a manifest key was present”
+- “motion source available” for Holosoma no longer means only “a name was provided”
+
+### Phase 1 Closure Assessment
+
+| Finding | Category | Rationale |
+|---------|----------|-----------|
+| Upstream runtime roots/checkpoints were still too candidate-shaped | **resolved A** | Closed on the audited path by primary-ref and evidence-density surfaces in profiles and policy contracts. |
+| Isaac asset readiness still trusted declared manifest refs too easily | **resolved A** | Closed on the audited path by declared-vs-verified asset truth in the runtime pack and downstream consumers. |
+| Holosoma motion readiness still trusted named sources too easily | **resolved A** | Closed on the audited path by existing-vs-missing motion-source truth in the runtime pack and downstream consumers. |
+| Real upstream Isaac / Unitree runtime/assets/checkpoints are still absent | **B** | The branch now names this much more specifically; the blocker is external host/runtime reality. |
+| Real upstream Holosoma host/runtime/motion/retargeting assets are still absent | **B** | The branch now names this much more specifically; the blocker is external provider/runtime reality. |
+| GPU-backed GGDS / LDM / video materialization is still absent | **B** | Wiring and evidence surfaces exist; execution still depends on external host/model availability. |
+
+Category A count after this pass: 0 on the upstream-evidence cluster
+Category B count: 3
+
+### Explicit Internal vs External Statement
+
+#### Internal incompleteness fixed today
+
+- upstream runtime/profile evidence density
+- upstream policy/deploy/report primary-ref selection
+- Isaac declared-vs-verified asset truth
+- Holosoma existing-vs-missing motion-source truth
+
+#### What remains internal
+
+- no obvious new Category A gap was found in the audited upstream-evidence cluster
+- remaining internal work is now mostly evidence-density accumulation and concrete host/runtime consumption rather than a missing typed surface
+
+#### What is now honestly externalized
+
+- real Isaac / Unitree upstream runtime/assets/checkpoints/host install
+- real Holosoma host/runtime/motion/policy/retargeting assets
+- GPU-backed GGDS / LDM / video materialization
+
+### Recommendation to Claude
+
+- **Phase 1 remains the active implementation center.**
+- **Parallel Perception prep is allowed but secondary.**
+- The next highest-leverage cut should keep moving in the same direction:
+  1. consume the richer upstream evidence surfaces against real Isaac / Unitree host/runtime/assets/checkpoints
+  2. consume the richer upstream evidence surfaces against real Holosoma host/runtime/motion/policy/retargeting assets

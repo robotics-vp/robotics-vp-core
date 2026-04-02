@@ -2259,3 +2259,45 @@
     - real upstream runtime/assets/checkpoints
     - real host/runtime installs
     - GPU-backed model/materialization availability
+
+- The next closure step stayed in that same Phase-1 lane and made the upstream runtime/assets/checkpoints more concrete without inventing a new layer:
+  - `runtime_layouts.py` now exposes profile-level evidence:
+    - candidate counts
+    - primary refs
+    - git metadata when the runtime root is a real local clone
+  - Isaac and Holosoma policy contracts now expose:
+    - `primary_checkpoint_ref`
+    - `primary_deploy_config_ref`
+    - `primary_runtime_report_ref`
+    - candidate-record inventories and counts
+
+- This matters because “root exists” and “there are some candidates somewhere under it” are not enough for Phase 1 closure:
+  - the WM can now point at the specific checkpoint / deploy-config / runtime-report surface it intends to use
+  - work orders and trainer rows can now say what the selected upstream evidence actually was
+  - the branch no longer needs to rediscover those refs downstream from raw candidate lists
+
+- Isaac also now carries a more honest asset posture:
+  - `asset_manifest.py` still preserves declared manifest presence, but it now records local verification status for path-like asset refs
+  - `isaac_unitree_runtime_pack.py` distinguishes:
+    - declared asset ids
+    - locally verified asset ids
+    - declared-only asset ids
+  - this is important because a manifest key alone should not be the only signal of hardware/sim readiness
+
+- Holosoma now does the analogous thing for motion inputs:
+  - the runtime pack distinguishes motion sources that actually exist locally from motion sources that are only named
+  - that makes the motion-train lane more honest in the same way the Isaac asset lane is becoming more honest
+
+- Those evidence surfaces are now load-bearing downstream:
+  - `runtime_work_orders.py` preserves selected primary refs plus profile evidence
+  - `training_corpus.py` preserves:
+    - upstream profile root
+    - upstream profile git metadata
+    - candidate counts
+    - selected primary policy/deploy/report refs
+    - verified-vs-declared Isaac asset truth
+    - existing Holosoma motion-source truth
+
+- The practical effect is that the remaining blocker is more decisively external:
+  - the branch now knows much more specifically which runtime roots/checkpoints/assets it would use
+  - if the next step still fails, it is increasingly because those upstream repos/assets/checkpoints are not actually present or usable, not because Phase 1 lacked a typed way to name them

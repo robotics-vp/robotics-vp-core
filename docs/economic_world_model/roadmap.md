@@ -428,6 +428,11 @@ Suggested weekly WM order for the first training season:
   - Local Holosoma concrete execution now uses that runtime-binding layer to clear irrelevant external-pack blockers when the selected local mode is already satisfied by explicit policy refs or motion datapacks, so local train/eval paths are no longer falsely blocked by missing repo-root or launch-surface state.
   - Local concrete runtime execution is now judged by explicit runtime-output harvest rather than only launch receipts: Isaac/Unitree and Holosoma concrete runtime paths emit outcome receipts with `harvest_mode=local_runtime_execution`, and those receipts preserve policy / dataset / metrics surface readiness instead of collapsing back into launch-shaped status.
   - The local Isaac/Unitree bridge path also now filters out stale external-pack blockers when a real local runtime bridge, policy ref, SDK root, and asset root are already present, so Phase 1 no longer overstates “blocked” status on a concretely executable local lane.
+  - Upstream runtime roots/checkpoints/assets are now also represented with more concrete evidence:
+    - runtime profiles carry candidate counts plus repo git metadata when locally available
+    - policy contracts carry primary checkpoint / deploy-config / runtime-report refs rather than only candidate lists
+    - Isaac runtime packs now distinguish declared asset refs from locally verified asset refs, so “manifest says it exists” is no longer the only asset readiness signal
+    - Holosoma runtime packs now preserve which motion sources actually exist locally versus which are only named
   - Those runtime bindings now survive into runtime bundles, launch specs, work orders, loop summaries, and trainer-facing corpus rows, so downstream consumers no longer have to infer “why this lane is still blocked” from pack metadata or launch status alone.
   - Holosoma now follows the same request -> consumer -> execution -> realization ladder as Isaac/Unitree, so one backend is not allowed to remain a structurally looser special case while the other gets typed runtime truth.
   - No training loop lands here; the service is advisory and structural.

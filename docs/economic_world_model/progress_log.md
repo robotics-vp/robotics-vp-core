@@ -1228,3 +1228,37 @@
   - real Isaac/Unitree upstream runtime/assets/checkpoints still need to sit behind the now-honest local concrete evidence path
   - real Holosoma host/runtime/motion/policy/retargeting assets still need to sit behind the same path
   - GPU-backed GGDS / video materialization remains external host/model work
+
+- Changed: pushed the next “real upstream evidence” Phase-1 closure tranche across both backend lanes:
+  - `runtime_layouts.py` now emits profile-level evidence instead of only root/candidate names:
+    - repo git metadata when a runtime root is a real local clone
+    - deploy / policy / data candidate counts
+    - primary deploy / policy / data refs
+  - `describe_isaac_policy_contract(...)` and `describe_holosoma_policy_contract(...)` now emit:
+    - primary checkpoint ref
+    - primary deploy-config ref
+    - primary runtime-report ref
+    - candidate-record inventories and counts
+  - `isaac_unitree_runtime_pack.py` now carries selected profile evidence plus declared-vs-verified asset truth:
+    - `verified_asset_ids`
+    - `declared_only_asset_ids`
+    - `asset_evidence_summary`
+  - `holosoma_runtime_pack.py` now carries selected profile evidence plus motion-source existence truth:
+    - `existing_motion_sources`
+    - `missing_motion_sources`
+  - `runtime_work_orders.py` and `training_corpus.py` now preserve that evidence into work-order metadata and trainer rows, so downstream consumers no longer see only `pack_ready/partial` but also the exact primary refs and evidence density behind that status
+- Changed: this removes another Phase-1 pseudo-readiness seam:
+  - “runtime pack ready” no longer only means root/candidate presence
+  - “asset present” for Isaac no longer means only “manifest key existed”
+  - local/runtime consumers now preserve which upstream surfaces are concrete and which are only declared
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_scan_phase1_runtime_layouts.py`
+  - `python3 -m pytest -q tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_launch.py tests/test_isaac_unitree_executable_adapter.py tests/test_holosoma_executable_adapter.py`
+  - `git diff --check`
+- Blocked: the honest remainder is narrower again:
+  - the branch now has richer evidence about upstream runtime roots/checkpoints/assets, but it still needs the actual upstream runtimes/assets/checkpoints on host
+  - Holosoma still needs actual host/runtime/motion/retargeting/provider assets behind those evidence surfaces
+  - GPU-backed materialization still remains external
