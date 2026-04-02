@@ -2,6 +2,18 @@
 
 ## 2026-04-02
 
+- Changed: pushed the active Phase-1 Category B edge further toward real local host/runtime evidence:
+  - added `src/world_model/sim_synth_physics/local_runtime_discovery.py`
+  - `runtime_targets.py` now supports targeted autodiscovery of common local upstream repo roots for Isaac/Unitree and Holosoma lanes when embodiment/env roots are not explicitly wired
+  - `runtime_layouts.py` now uses the same targeted autodiscovery and allows policy-contract fallback to discovered runtime roots when those roots contain real checkpoints/configs/reports
+- Why this matters:
+  - hosts with real local clones/checkpoints can now be consumed more honestly without requiring every relevant env var to be pre-wired first
+  - the branch stays real-or-unavailable because missing roots still remain explicit; autodiscovery only closes the “real clone exists locally but the WM cannot see it yet” gap
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_launch.py`, and `git diff --check` passed (result: `30 passed`).
+- Status summary:
+  - the branch is better at consuming actual local clone/install/checkpoint reality
+  - the dominant remainder is now even more clearly the presence or absence of real installs/assets/checkpoints/GPU, not a missing host-discovery seam
+
 - Changed: consumed the richer Phase-1 upstream runtime evidence against more concrete local host/runtime reality without adding a new ladder rung:
   - added `src/world_model/sim_synth_physics/ref_evidence.py`
   - Isaac and Holosoma runtime bindings now emit selected-surface evidence plus `host_preflight_status`

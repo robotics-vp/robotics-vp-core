@@ -2,6 +2,22 @@
 
 ## 2026-04-02
 
+- Pushed the Phase-1 Category B edge further into actual local host/runtime consumption:
+  - added `src/world_model/sim_synth_physics/local_runtime_discovery.py`
+  - targeted autodiscovery now checks common local roots such as:
+    - `$HOME/code`
+    - `$HOME/src`
+    - `$HOME/repos`
+    - workspace-adjacent roots
+  - this is deliberately narrow and exact-name based; it does not mark a lane ready unless the discovered path actually exists
+- Preserved that discovery inside the existing runtime path rather than inventing a new layer:
+  - `runtime_targets.py` now exposes autodiscovered upstream roots as normal runtime-target refs with `source=autodiscovery`
+  - `runtime_layouts.py` now uses the same discovery path for runtime layouts and policy-contract fallback
+  - Isaac/Holosoma policy contracts can now consume real checkpoints/configs/reports from discovered upstream runtime roots when no explicit policy root is wired
+- Why this matters:
+  - this closes another real internal gap between “host has a real clone/checkpoint locally” and “Phase 1 can actually see and use that evidence”
+  - the remaining blocker is increasingly whether those real installs/assets/checkpoints exist at all, not whether the WM can notice them once they do
+
 - Consumed the richer upstream runtime evidence against more concrete local host/runtime truth:
   - added `src/world_model/sim_synth_physics/ref_evidence.py` for selected-ref verification
   - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` now emits:

@@ -1119,6 +1119,7 @@ Phase 1 should count as landed only when:
   - contract-ready but only declared/unverified asset or motion refs
   - locally verified launch/policy/target surfaces
   - genuinely external remaining blockers
+- runtime target/layout/policy scans should also be able to consume actual local clone/install roots and checkpoint banks without requiring every host to pre-wire env vars first; targeted autodiscovery of known upstream repo roots is acceptable as long as missing roots remain explicit and do not silently mark a lane ready
 - the backend runtime receipt can distinguish `runtime_launch_prepared` from truly missing runtime prerequisites, so “host is ready but local adapter is absent” remains an honest intermediate state instead of collapsing back into generic module-missing logic
 - backend runtime output contracts and outcome receipts are emitted explicitly, so upstream runtime launches can be judged by harvested outputs rather than only `launch_completed` / `launch_failed`
 - backend runtime outcome receipts can also distinguish `external_launch` from `local_runtime_execution`, so concrete local Isaac/Unitree and Holosoma execution does not get flattened back into launch-shaped truth and trainer/replay consumers can preserve policy / dataset / metrics surface readiness honestly
