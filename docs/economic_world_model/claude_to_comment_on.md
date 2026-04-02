@@ -2,124 +2,147 @@
 
 ## Current Status
 
-- **Tranche**: Sim / Synth / Physics WM closure, Phase 1 runtime-binding + concrete Holosoma local-runtime correction
-- **Date**: 2026-04-01
+- **Tranche**: Phase 1 Sim / Synth / Physics WM Tier 1 / Tier 3 verification pass
+- **Date**: 2026-04-02
 - **Branch**: `codex/multi-wm-architecture-plan`
-- **Active tranche spec**: `docs/economic_world_model/codex_tranche_sim_synth_closure.md`
-- **Held tranche spec**: `docs/economic_world_model/codex_tranche_perception_wm_schema.md`
+- **Implementation center of gravity**: Phase 1 Sim / Synth / Physics WM closure
+- **Active specs**:
+  - `docs/economic_world_model/codex_tranche_sim_synth_closure.md`
+  - `docs/economic_world_model/codex_tranche_tier1_tier3_verification.md`
+  - `docs/economic_world_model/phase1_closure_standard.md`
 
 ## What Was Implemented
 
-- Added:
-  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py`
-  - `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py`
-- Threaded runtime binding through:
-  - `src/world_model/sim_synth_physics/runtime_bundles.py`
-  - `src/world_model/sim_synth_physics/runtime_launch.py`
-  - `src/world_model/sim_synth_physics/runtime_work_orders.py`
+- Added a typed `Gen2SimAdmissionReceipt` and threaded it through the Phase 1 runtime/export path:
+  - `src/world_model/sim_synth_physics/receipts.py`
+  - `src/world_model/sim_synth_physics/gen2sim_admission.py`
   - `src/world_model/sim_synth_physics/runtime.py`
   - `src/world_model/sim_synth_physics/training_corpus.py`
-  - `scripts/scan_phase1_runtime_layouts.py`
-  - `scripts/run_isaac_unitree_executable_adapter.py`
-- Fixed the Holosoma train-from-motion patch path in:
-  - `src/world_model/sim_synth_physics/backend_runtime_execution.py`
-  - the branch now rebuilds the Holosoma executable-adapter request from the patched runtime binding instead of mutating a stale `sim_eval` request in place
+- Updated shadow execution so it now carries the deeper runtime-ladder truth instead of jumping directly from `PhysicsExecutionContract` to shadow materialization:
+  - `src/world_model/sim_synth_physics/shadow_execution.py`
+  - shadow receipts now preserve runtime execution / adapter / launch / outcome ids and statuses plus `shadow_harvest_mode`
+- Tightened training-corpus preservation for the branch-planner lane:
+  - branch rows now keep gen2sim, adaptation, calibration, and shadow receipt truth instead of flattening to render/runtime only
+- Added focused verification coverage:
+  - `tests/test_sim_synth_branch_helpers.py`
+  - `tests/test_sim_synth_training_corpus.py`
+  - `tests/test_sim_synth_physics_world_model.py`
 
 ## What Changed Topologically
 
-- No new WM was introduced.
-- Phase 1 backend closure now has an explicit runtime-binding rung between upstream runtime packs and executable-adapter requests:
-  - backend binding
-  - deployment contract
-  - upstream runtime pack
-  - runtime binding
-  - executable-adapter request
-  - executable-adapter consumer
-  - adapter execution
-  - adapter realization
-  - local materialization / external launch
-  - harvested runtime outcomes
-
-## What Topological Surface Became More Real
-
-- The backend lanes no longer jump straight from upstream runtime-pack posture to executable-adapter requests.
-- The WM now binds concrete mode-relevant surfaces first:
-  - selected policy surface
-  - selected motion surface
-  - selected retargeting surface
-  - selected launch root / command
-  - selected target refs
-- Those selections and their missing components are now canonical loop artifacts rather than implicit recomputation from pack metadata or launch status.
+- `gen2sim` admission is no longer only a state object inside the compiled WM state. It now has a typed receipt that survives runtime execution, artifact emission, and trainer-facing harvest.
+- Shadow execution is no longer a side path that ignores the deeper runtime ladder. It now carries forward:
+  - runtime execution posture
+  - adapter mediation posture
+  - adapter realization posture
+  - launch posture
+  - outcome harvest posture
+- Branch-planner export is no longer the “flattened” receipt consumer compared with backend-selector export. It now carries the same lower-WM honesty for:
+  - gen2sim admission
+  - adaptation
+  - calibration
+  - shadow execution
 
 ## What Fake Readiness Was Removed
 
-- Pack-level missing components are no longer treated as universally relevant to every execution mode.
-- Local Holosoma eval is no longer falsely blocked by missing external repo/launch surfaces when the branch already has:
-  - a local runtime bridge
-  - an explicit policy ref
-- Local Holosoma train-from-motion is no longer falsely blocked by stale `policy_surface` / `policy_checkpoint` gaps when the branch already has:
-  - a local runtime bridge
-  - motion datapacks and/or inline motion clips
+- `gen2sim` admission no longer terminates at state-only truth with no typed receipt chain.
+- Shadow execution no longer looks like an independent backend preview that can ignore the deeper runtime lane.
+- Branch-planner trainer rows no longer look more complete than they are by omitting calibration / adaptation / shadow / gen2sim context while still consuming deeper runtime artifacts.
 
 ## What Is Still Only Contract-Shaped
 
-- The actual Isaac Lab / Isaac Sim / Unitree upstream repos, assets, checkpoints, and host bring-up remain external reality.
-- The actual Holosoma host/runtime, motion corpora, retargeting assets, and policy assets remain external reality.
-- The new runtime-binding layer is a real canonical WM surface, but it still binds against provider-owned runtime packs rather than replacing them.
+- Real Isaac / Isaac Lab / Unitree runtime, assets, checkpoints, and host bring-up remain external.
+- Real Holosoma host/runtime, motion corpora, retargeting assets, and policies remain external.
+- Real GGDS / LDM / GPU-backed materialization remains external.
+- Compiler-side runtime depth is still not fully reflected as canonical compiled state; the deeper runtime-binding truth still becomes explicit mainly in runtime artifacts rather than in the compiled world state itself.
 
-## Contracts and Artifacts Added or Altered
+## Tranche Spec Coverage
 
-| Surface | File | Classification | Notes |
-|--------|------|----------------|-------|
-| `backend_runtime_binding_v1` for Isaac/Unitree | `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` | WM-native binding contract | Selects deployment-mode-relevant policy / launch / target / asset surfaces from the upstream pack before adapter request build. |
-| `backend_runtime_binding_v1` for Holosoma | `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py` | WM-native binding contract | Selects policy / motion / retargeting / launch surfaces per mode and stops irrelevant external-pack gaps from blocking valid local modes. |
-| `backend_runtime_binding.json` | `src/world_model/sim_synth_physics/runtime_bundles.py` | Runtime artifact | Writes the canonical binding artifact beside runtime bundles and launch specs. |
-| Runtime-binding metadata in launch/work-order/corpus paths | `runtime_launch.py`, `runtime_work_orders.py`, `runtime.py`, `training_corpus.py` | Downstream consumption | Preserves binding status plus selected profile/policy/root/missing-component truth across the live loop. |
-| Rebuilt Holosoma motion-train request | `backend_runtime_execution.py` | Behavioral correction | Rebuilds a motion-train request from the patched binding instead of mutating a stale `sim_eval` request. |
+| Item | Result | Notes |
+|------|--------|-------|
+| 1.1 Compiler full-artifact assembly audit | **partial** | Compiler assembles the documented Phase 1 state objects, but compiled state still stops short of carrying `PhysicsExecutionContract` and deeper runtime-binding depth as canonical compiled artifacts. |
+| 1.2 Physics contracts execution binding completeness | **gap found** | `PhysicsExecutionContract` is still built at runtime rather than carried inside `SimSynthPhysicsWorldState`. |
+| 1.3 Gen2Sim admission explicit receipt emission | **fixed today** | Added `Gen2SimAdmissionReceipt`; runtime, artifacts, and training-corpus harvest now preserve it. |
+| 1.4 Training corpus receipt consumption | **fixed on audited gap** | Branch-planner rows now preserve gen2sim / adaptation / calibration / shadow truth; backend-selector rows already carried most of this. |
+| 3.1 Render provider contract chains | **passed on audited scope** | `RenderProviderReceipt` already exists via materialization; no additional provider-specific receipt rung was required. |
+| 3.2 Promotion / demotion machinery | **partial but not blocking in this pass** | Current helper resolution still returns `shadow_candidate` whenever benchmark readiness is absent; no separate historical demotion receipt was added today. |
+| 3.3 Branch planner routing completeness | **passed on audited scope** | Heuristic fallback posture remains visible through branch metadata and generation mode; no new gap found today. |
+| 3.4 Inferential yield scoring | **passed on audited scope** | No new internal receipt/contract gap found in this pass. |
+| 3.5 Randomization / calibration reaction to evidence | **partial / mostly external remainder** | Calibration already reacts to runtime evidence; remaining realism depends on concrete runtime evidence and assets. |
+| 3.6 Shadow execution receipt completeness | **fixed today** | Shadow receipts now thread the deeper runtime lane and distinguish preview vs harvested posture. |
+| 4.2 Compiler round-trip test | **added partial coverage** | Added a world-state `to_dict()` round-trip test for the core Phase 1 state surface. |
+
+## What Was Not Changed
+
+These audited files were intentionally not changed in this tranche:
+
+- `src/world_model/sim_synth_physics/render_providers.py`
+- `src/world_model/sim_synth_physics/promotion.py`
+- `src/world_model/sim_synth_physics/branch_planner.py`
+- `src/world_model/sim_synth_physics/inferential.py`
+- `src/world_model/sim_synth_physics/randomization.py`
+- `src/world_model/sim_synth_physics/calibration.py`
+- `src/world_model/sim_synth_physics/runtime_outcome_parsers.py`
+
+## Phase 1 Closure Assessment
+
+| Finding | Category | Rationale |
+|---------|----------|-----------|
+| `gen2sim` admission had no typed receipt chain | **resolved A** | This was internal incompleteness and is now closed by `Gen2SimAdmissionReceipt` plus runtime/export wiring. |
+| Shadow execution bypassed deeper runtime-ladder truth | **resolved A** | This was internal inconsistency between Tier 2 and Tier 3 and is now closed on the audited path. |
+| Branch-planner corpus rows flattened the deeper receipt chain | **resolved A** | This was internal trainer/export incompleteness and is now closed on the audited path. |
+| Compiler does not carry `PhysicsExecutionContract` as canonical compiled state | **A** | Still internal; no external dependency blocks adding or threading this artifact. |
+| Compiler-side state does not yet reflect the deeper runtime-binding depth directly | **A** | Still internal; runtime artifacts are honest, but compiled-state closure is not fully complete. |
+| Render providers lack a separate provider-module-local receipt | **C→B** | Existing `RenderProviderReceipt` emitted by materialization appears sufficient; no internal receipt break was found on the audited path. |
+| Promotion lacks a separate historical demotion receipt | **C→B** | Current helper resolution already demotes back to `shadow_candidate` when benchmark readiness is absent; the remaining gap is more about explicit history than structural honesty. |
+| Concrete Isaac / Holosoma runtime, assets, checkpoints, and GPU-backed render execution are absent | **B** | These are now honestly externalized provider/runtime/asset blockers. |
+
+Category A count: 2
+Category B count: 3
+Category C unresolved: 0
+
+Closure recommendation: **not closed yet; parallel Perception prep is allowed but secondary**
+
+## Explicit Internal vs External Statement
+
+### Internal incompleteness fixed today
+
+- `gen2sim` receipt-chain completeness
+- shadow-execution receipt-chain honesty relative to the deeper runtime ladder
+- branch-planner receipt preservation for gen2sim / adaptation / calibration / shadow truth
+
+### What remains internal
+
+- compiler-side canonicalization of `PhysicsExecutionContract`
+- compiler-side propagation of deeper runtime-binding truth as compiled canonical state rather than only runtime artifacts
+
+### What is now honestly externalized
+
+- real Isaac / Unitree runtime bring-up, assets, and checkpoints
+- real Holosoma host/runtime, motion/retargeting assets, and policies
+- real GGDS / LDM / GPU materialization
+- benchmark density that depends on actual backend execution evidence
 
 ## Tests and Verification
-
-New focused tests:
-- `tests/test_isaac_unitree_runtime_binding.py`
-- `tests/test_holosoma_runtime_binding.py`
-
-Updated tests:
-- `tests/test_scan_phase1_runtime_layouts.py`
-- `tests/test_sim_synth_runtime_bundles.py`
-- `tests/test_sim_synth_runtime_launch.py`
-- `tests/test_sim_synth_physics_world_model.py`
-- `tests/test_sim_synth_training_corpus.py`
-- `tests/test_sim_synth_runtime_work_orders.py`
 
 Targeted verification run:
 
 ```text
-python3 -m compileall src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py -q
-python3 -m ruff check src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py
-python3 -m pytest -q tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py
+python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py -q
+python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py
+python3 -m pytest -q tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py
+python3 -m pytest -q tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_runtime_launch.py
 git diff --check
 ```
 
 Result:
-- `44 passed`
-
-## What Remains Missing
-
-- The active Phase 1 tranche is still not done.
-- The honest remaining blockers are now narrower and more external:
-  - real Isaac/Unitree runtime, assets, checkpoints, and host bring-up behind the new runtime-pack -> runtime-binding -> adapter ladder
-  - real Holosoma host/runtime, motion/retargeting assets, and policy assets behind the same ladder
-  - GPU-backed GGDS / video materialization
-
-## Open Doctrinal Questions
-
-- Once both backend lanes have real upstream runtime packs and real runtime bindings, should later embodiment/deployment layers normalize them into a shared runtime-binding ontology, or keep them backend-local until the Embodiment / Actuation WM is active?
-- When compute/battery canonical state becomes live in later lower WMs, should runtime-binding compilation consume those resource receipts directly, or should that wait until the Phase 4 real-time / companion-compute layers make placement and QoS consequences fully real?
+- `30 passed`
+- `10 passed`
 
 ## Recommendation to Claude
 
-- Keep Sim / Synth / Physics as the implementation center of gravity.
-- Do not move upward in the roadmap yet.
-- The next highest-leverage code target is:
-  - bind the Isaac/Unitree runtime-binding ladder to real upstream runtime / asset / checkpoint hosts
-  - then do the same for Holosoma runtime binding and deployment modes
+- **Phase 1 remains the active implementation center.**
+- **Parallel Perception prep is allowed but secondary** because Category A count is down to a narrow compiler-side cluster.
+- The next highest-leverage Phase 1 cut is:
+  1. make `PhysicsExecutionContract` a canonical compiled-state artifact or equivalent compiler-owned receipt surface
+  2. thread deeper runtime-binding truth into the compiled state / compiler-facing receipt inventory rather than only the runtime result

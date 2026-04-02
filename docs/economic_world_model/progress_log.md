@@ -1,5 +1,42 @@
 # Economic World Model Progress Log
 
+## 2026-04-02
+
+- Changed: hardened `scripts/economic_world_model/nightly_audit.py` task selection so verification failures are prioritized over scaffold discovery:
+  - added `_verification_repair_task(...)` and made `_next_task(...)` consume verification results before evaluating additive candidates
+  - when `agent_verify` fails, the audit now recommends `agent_verify_regression` (targeting `CLAUDE.md`, `scripts/agent/verify.sh`, and `AGENTS.md`) instead of incorrectly reporting “No missing additive step detected”
+  - for non-`agent_verify` failures, the audit now emits a generic `verification_regression` remediation task
+- Changed: expanded `tests/test_economic_world_model_nightly_audit.py` with verification-priority coverage:
+  - added tests proving `agent_verify` failure outranks scaffold tasks
+  - added tests proving generic verification failure still outranks scaffold tasks
+  - updated existing `_next_task(...)` tests for the new verification-aware signature
+- Verification: `python3 -m pytest -q tests/test_economic_world_model_nightly_audit.py`, `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md`, `python3 -m compileall src/`, and `python3 -m pytest tests/ -v` (result: 1329 passed, 3 skipped).
+- Status summary: nightly audit now correctly reports verification remediation as the top next step under failing gates, improving autonomous task selection honesty.
+- Next recommended task: resolve the `agent_verify` failure (`CLAUDE.md` shim mismatch) before attempting additional roadmap wiring.
+
+- Changed: ran the Phase 1 Sim / Synth / Physics Tier 1 / Tier 3 verification pass and closed the biggest remaining internal receipt-chain gaps without adding new runtime-ladder rungs:
+  - added `gen2sim_admission_receipt_v1` and threaded it through the runtime result, artifact emission, and training-corpus harvest path
+  - updated `shadow_execution.py` so backend shadow receipts now carry the deeper runtime-ladder truth already compiled in Tier 2:
+    - runtime execution
+    - adapter mediation
+    - adapter realization
+    - launch status
+    - harvested outcome status
+    - `shadow_harvest_mode`
+  - updated `training_corpus.py` so branch-planner rows now preserve:
+    - gen2sim receipt ids/counts
+    - adaptation receipt ids
+    - calibration receipt ids/scores
+    - shadow execution ids/status
+- Why this matters:
+  - Phase 1 is more honest now: `gen2sim` is no longer state-only, shadow execution no longer bypasses the deeper runtime lane, and branch-planner export is no longer flatter than backend-selector export
+  - the remaining open Phase 1 gaps are narrower and more clearly split between internal compiler work and honestly external runtime/assets/GPU blockers
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_runtime_launch.py`, and `git diff --check` passed (results: `30 passed`, `10 passed`).
+- Status summary: Tier 1 / Tier 3 verification reduced Phase 1 Category A findings to a narrow compiler-side cluster:
+  - `PhysicsExecutionContract` is still not a canonical compiled-state artifact
+  - deeper runtime-binding truth is still clearer in runtime artifacts than in the compiled world state
+- Next recommended task: keep Phase 1 as the implementation center and close that remaining compiler-side cluster before claiming structural closure; Perception prep is now allowed only as a secondary parallel activity.
+
 ## 2026-03-27
 
 - Changed: pushed the Phase-1 backend lane past “launch spec only” and into canonical external-launch evidence:

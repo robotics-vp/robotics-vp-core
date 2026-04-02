@@ -1,5 +1,76 @@
 # Economic World Model Implementation Notes
 
+## 2026-04-02
+
+- Nightly audit selector now treats failed verification as first-class scheduling input:
+  - `scripts/economic_world_model/nightly_audit.py` adds `_verification_repair_task(verification)` and routes `_next_task(...)` through it before scanning additive scaffolding candidates
+  - explicit `agent_verify` handling now emits:
+    - `id`: `agent_verify_regression`
+    - `classification`: `verification_hardening`
+    - rationale and target files aligned with current failure posture
+  - non-agent verification failures now emit a generic `verification_regression` task
+- Why this matters:
+  - prior behavior could claim “No missing additive step detected” even with failing baseline checks, which undermined nightly autonomy quality
+  - the updated behavior keeps nightly execution aligned with “green baseline first, additive roadmap second”
+- Test coverage:
+  - `tests/test_economic_world_model_nightly_audit.py` now asserts:
+    - `agent_verify` failure takes precedence over scaffold candidates
+    - generic verification failure also takes precedence
+  - existing `_next_task()` tests were updated to pass explicit verification context
+- Validation run:
+  - `python3 -m pytest -q tests/test_economic_world_model_nightly_audit.py`
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md`
+  - `python3 -m compileall src/`
+  - `python3 -m pytest tests/ -v` (1329 passed, 3 skipped)
+
+- Ran the active Tier 1 / Tier 3 Phase-1 verification tranche and closed three real internal incompleteness items:
+  - `src/world_model/sim_synth_physics/gen2sim_admission.py` now builds a typed `Gen2SimAdmissionReceipt`
+  - `src/world_model/sim_synth_physics/runtime.py` now emits and writes that receipt beside the existing adaptation / binding / bridge / runtime / shadow / render / outcome artifacts
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the gen2sim receipt and preserves it in backend-selector and branch-planner rows
+- Deepened shadow-execution honesty without adding a new ladder rung:
+  - `src/world_model/sim_synth_physics/shadow_execution.py` now threads the already-existing runtime-ladder truth into `BackendShadowExecutionReceipt` metadata:
+    - runtime execution receipt id / status
+    - adapter receipt id / status / execution path
+    - adapter realization posture
+    - launch receipt id / status
+    - outcome receipt id / status
+    - runtime-binding selected profile / policy / launch root
+    - `shadow_harvest_mode`
+  - this closes the earlier mismatch where Tier 2 runtime bring-up surfaces existed but the Tier 3 shadow lane could still jump around them
+- Tightened trainer/export completeness on the branch-planner lane:
+  - branch-planner rows now preserve:
+    - adaptation receipt id
+    - calibration receipt id / score
+    - shadow execution receipt id / status
+    - gen2sim receipt id / admissible/blocked counts
+  - backend-selector rows now also preserve `backend_shadow_harvest_mode`
+- Added focused coverage:
+  - `tests/test_sim_synth_branch_helpers.py` now covers typed gen2sim receipt generation
+  - `tests/test_sim_synth_physics_world_model.py` now checks:
+    - gen2sim receipt emission
+    - shadow receipt runtime-ladder threading
+    - `shadow_harvest_mode`
+    - world-state `to_dict()` round-trip for core Phase-1 state
+  - `tests/test_sim_synth_training_corpus.py` now checks that harvested bundles preserve gen2sim / adaptation / calibration / shadow truth in trainer rows
+- Current closure judgment after this tranche:
+  - resolved internal gaps:
+    - gen2sim state-only termination
+    - shadow path bypassing deeper runtime truth
+    - branch-planner receipt-chain flattening
+  - remaining Category A cluster:
+    - `PhysicsExecutionContract` still lives at runtime rather than as canonical compiled state
+    - compiler-side state still does not carry the deeper runtime-binding depth as explicitly as the runtime artifact chain does
+  - honestly externalized remainder:
+    - real Isaac / Unitree runtime, assets, checkpoints
+    - real Holosoma host/runtime, motion/retargeting assets, policies
+    - real GPU-backed GGDS / LDM materialization
+- Focused validation run:
+  - `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_runtime_launch.py`
+  - `git diff --check`
+
 ## 2026-03-27
 
 - Added canonical external-launch receipt handling to the Phase-1 backend runtime seam:
