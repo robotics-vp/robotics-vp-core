@@ -56,7 +56,7 @@ def test_next_task_falls_back_to_audit_only_when_candidates_are_complete(monkeyp
     monkeypatch.setattr(module, "_dataset_bridge_scaffold_pending", lambda: False)
     monkeypatch.setattr(module, "_future_training_evidence_pending", lambda: False)
 
-    next_task = module._next_task()
+    next_task = module._next_task([])
     assert next_task["id"] == "audit_only"
 
 
@@ -68,7 +68,7 @@ def test_next_task_picks_dataset_bridge_when_missing(monkeypatch) -> None:
     monkeypatch.setattr(module, "_dataset_bridge_scaffold_pending", lambda: True)
     monkeypatch.setattr(module, "_future_training_evidence_pending", lambda: False)
 
-    next_task = module._next_task()
+    next_task = module._next_task([])
     assert next_task["id"] == "dataset_bridge_scaffold"
 
 
@@ -80,5 +80,23 @@ def test_next_task_picks_future_training_evidence_when_shell_backlog_is_pending(
     monkeypatch.setattr(module, "_dataset_bridge_scaffold_pending", lambda: False)
     monkeypatch.setattr(module, "_future_training_evidence_pending", lambda: True)
 
-    next_task = module._next_task()
+    next_task = module._next_task([])
     assert next_task["id"] == "future_training_evidence_wiring"
+
+
+def test_next_task_prioritizes_agent_verify_failure_over_scaffolds() -> None:
+    module = _load_audit_module()
+    verification = [{"name": "agent_verify", "passed": False, "exit_code": 1}]
+
+    next_task = module._next_task(verification)
+    assert next_task["id"] == "agent_verify_regression"
+    assert next_task["classification"] == "verification_hardening"
+
+
+def test_next_task_prioritizes_generic_verification_failure_when_agent_verify_passes() -> None:
+    module = _load_audit_module()
+    verification = [{"name": "compileall", "passed": False, "exit_code": 1}]
+
+    next_task = module._next_task(verification)
+    assert next_task["id"] == "verification_regression"
+    assert next_task["classification"] == "verification_hardening"

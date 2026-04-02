@@ -271,7 +271,47 @@ def _task_candidates() -> List[Dict[str, Any]]:
     ]
 
 
-def _next_task() -> Dict[str, Any]:
+def _verification_repair_task(verification: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    failed_checks = [row for row in verification if not row.get("passed", False)]
+    if not failed_checks:
+        return None
+
+    failed_names = {row.get("name", "") for row in failed_checks}
+    if "agent_verify" in failed_names:
+        return {
+            "id": "agent_verify_regression",
+            "title": "Resolve agent verify regression before additive roadmap work",
+            "classification": "verification_hardening",
+            "rationale": (
+                "The `agent_verify` gate is failing, so the nightly pass should prioritize restoring "
+                "baseline repo compliance before selecting additional roadmap wiring."
+            ),
+            "target_files": [
+                "CLAUDE.md",
+                "scripts/agent/verify.sh",
+                "AGENTS.md",
+            ],
+            "execute_now": True,
+        }
+
+    return {
+        "id": "verification_regression",
+        "title": "Resolve nightly verification failures before selecting new roadmap tasks",
+        "classification": "verification_hardening",
+        "rationale": (
+            "One or more nightly verification checks failed, so roadmap task selection should defer "
+            "until the baseline checks are green again."
+        ),
+        "target_files": [],
+        "execute_now": True,
+    }
+
+
+def _next_task(verification: List[Dict[str, Any]]) -> Dict[str, Any]:
+    verification_task = _verification_repair_task(verification)
+    if verification_task is not None:
+        return verification_task
+
     for candidate in _task_candidates():
         if candidate["pending"]:
             return {
@@ -414,7 +454,7 @@ def build_summary(skip_checks: bool = False) -> Dict[str, Any]:
     scaffold_status = _scaffold_status()
     verification = [] if skip_checks else [_run_check(name, cmd) for name, cmd in DEFAULT_CHECKS]
     drift_signals = _drift_signals(docs_status, scaffold_status)
-    next_task = _next_task()
+    next_task = _next_task(verification)
     execution_paths = _execution_paths()
 
     status = "ok"
