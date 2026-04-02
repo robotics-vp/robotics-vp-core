@@ -2,6 +2,23 @@
 
 ## 2026-04-02
 
+- Changed: promoted `usable_profiles` into the Phase-1 runtime-layout contract and threaded that stronger profile truth through downstream artifacts:
+  - `src/world_model/sim_synth_physics/runtime_layouts.py` now emits:
+    - `usable_profiles`
+    - `install_ready_profiles`
+    - `install_partial_profiles`
+    - `install_blocked_profiles`
+  - `src/world_model/sim_synth_physics/runtime_bundles.py` now prefers `usable_profiles` for profile selection/ordering while still preserving the broader `ready_profiles` surface
+  - `src/world_model/sim_synth_physics/runtime_bridge.py`, `runtime_work_orders.py`, `compiler.py`, and `training_corpus.py` now preserve `runtime_layout_usable_profiles` so downstream execution/training surfaces do not need to reconstruct “usable” from weaker root-exists semantics
+- Why this matters:
+  - the branch previously had the stronger profile truth, but only implicitly in deployment/runtime-pack logic
+  - now the layout contract itself exposes that truth, and the rest of the Phase-1 runtime path can consume it honestly
+  - this removes another pseudo-readiness seam without adding a new runtime rung
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_bridge.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/compiler.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_bridge.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/compiler.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check` passed (result: `56 passed`).
+- Status summary:
+  - the audited usable-profile propagation cluster has no new Category A gap
+  - Category B is now even more clearly about real local installs/assets/checkpoints/GPU/provider reality rather than internal profile-truth reconstruction
+
 - Changed: tightened Phase-1 profile/target/policy selection so deployment/runtime-pack readiness is now driven by usable profiles, verified targets, and real local checkpoint-bearing roots instead of raw existing roots:
   - `src/world_model/sim_synth_physics/runtime_layouts.py` now selects policy roots across multiple candidates more honestly, so an explicit-but-empty policy root no longer outranks a discovered runtime root that actually contains checkpoints
   - `src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py` and `src/world_model/sim_synth_physics/adapters/holosoma_deployment.py` now use usable profiles plus verified targets rather than `ready_profiles`/`ready_target_ids` path-existence posture

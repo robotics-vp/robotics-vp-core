@@ -24,6 +24,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Selected-profile install/preflight truth | closed on the audited path |
 | Selected-target install-shape truth | materially closed on the audited path |
 | Policy-root/profile selection against real local installs | materially closed on the audited path |
+| Runtime-layout usable-profile propagation | materially closed on the audited path |
 | Promotion/demotion machinery (Tier 3.2) | Category A gap closed |
 | Shadow execution ladder threading (Tier 3.6) | Category A gap closed on audited path |
 | Branch planner fallback honesty (Tier 3.3) | materially closed on audited path |
@@ -44,6 +45,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
   - install-blocked profiles no longer count as runtime-ready just because the repo root exists
   - verified targets, not just existing target paths, now drive deployment/runtime-pack readiness
   - empty explicit policy roots no longer outrank discovered runtime roots that actually contain checkpoints
+- Runtime-layout contracts now expose `usable_profiles` directly, and bundle/bridge/work-order/trainer paths preserve that stronger truth instead of forcing downstream consumers to reconstruct it from weaker `ready_profiles` semantics.
 - Shadow execution consumes selected runtime-binding truth instead of only carrying runtime-ladder metadata in the receipt.
 - Branch plans and trainer rows explicitly distinguish:
   - learned payload applied
@@ -72,6 +74,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
   - verified targets
   - merely existing targets
   rather than collapsing all of that into root-exists posture.
+- Runtime bundles, bridge receipts, work orders, and trainer rows now also preserve `runtime_layout_usable_profiles`, so the stronger profile truth survives into execution-facing and training-facing artifacts.
 
 ## What Fake Readiness Was Removed
 
@@ -80,6 +83,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 - Holosoma and Isaac selected-target rows no longer collapse verified and merely declared targets into one readiness class inside work orders or trainer exports.
 - Explicit-but-empty policy roots no longer make a lane look more real than a discovered runtime root with actual checkpoints.
 - Install-blocked runtime profiles no longer count as deployable just because the repo root exists.
+- Downstream Phase 1 consumers no longer have to treat `ready_profiles` as if it already meant “usable profile”; that distinction is now explicit and replayable.
 
 ## What Was Not Changed
 
@@ -98,6 +102,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Branch planner fallback was traceable but not explicit | A -> closed on audited path | Branch plans and trainer rows now state whether learned payloads were applied or only traced |
 | Selected-target runtime roots could look ready from path existence alone | A -> closed on audited path | bindings/preflight now consume install-shape verification instead of path existence alone |
 | Install-blocked profiles and empty explicit policy roots could still overstate readiness | A -> closed on audited path | deployment/runtime-pack selection now uses usable profiles, verified targets, and real checkpoint-bearing roots |
+| Usable-profile truth was still being reconstructed ad hoc downstream | A -> closed on audited path | runtime-layout contracts, bundles, bridge receipts, work orders, and trainer exports now preserve it explicitly |
 | Real Isaac / Unitree installs, assets, checkpoints | B | Remaining blocker is external host/runtime/asset reality |
 | Real Holosoma runtime, motion/policy/retargeting assets | B | Remaining blocker is external host/runtime/asset reality |
 | GPU-backed GGDS / LDM / video materialization | B | Remaining blocker is GPU/model/runtime availability |

@@ -2,6 +2,22 @@
 
 ## 2026-04-02
 
+- Promoted usable-profile truth into the runtime-layout contract itself:
+  - `src/world_model/sim_synth_physics/runtime_layouts.py` now emits:
+    - `usable_profiles`
+    - `install_ready_profiles`
+    - `install_partial_profiles`
+    - `install_blocked_profiles`
+  - this keeps `ready_profiles` available for the broader “root exists” view while making the stronger profile truth first-class and replayable
+- Threaded that usable-profile truth through the downstream Phase-1 path:
+  - `src/world_model/sim_synth_physics/runtime_bundles.py` now uses `usable_profiles` when choosing/ordering profiles
+  - `src/world_model/sim_synth_physics/runtime_bridge.py` now emits `runtime_layout_usable_profiles`
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py`, `compiler.py`, and `training_corpus.py` now preserve that field in execution-facing and trainer-facing artifacts
+- Why this matters:
+  - after the previous tranche, deployment/runtime-pack logic already knew the stronger truth, but downstream consumers still had to reconstruct it or silently assume `ready_profiles` meant “usable”
+  - this tranche closes that internal mismatch on the audited path
+  - the remaining ambiguity is pushed further out toward actual host/runtime/install/assets/checkpoints/GPU reality
+
 - Tightened the Phase-1 profile/policy selection seam against real local runtime reality:
   - `src/world_model/sim_synth_physics/runtime_layouts.py` now evaluates multiple candidate policy roots and chooses the root that actually carries checkpoint evidence instead of letting an explicit-but-empty policy root win by position alone
   - the policy contracts now preserve `policy_root_source` and the candidate-root rows used for that decision
