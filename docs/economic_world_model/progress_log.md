@@ -2,6 +2,19 @@
 
 ## 2026-04-02
 
+- Changed: made selected-ref validation operational in Phase-1 downstream consumers instead of leaving it as receipt-only metadata:
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now refuses to mark `satisfied_by_external_runtime_outcomes` when `selected_ref_validation` reports mismatched or missing selected refs
+  - mismatched/missing selected-runtime components now become explicit runtime preconditions on the work order path
+  - `src/world_model/sim_synth_physics/training_corpus.py` now stops preferring `external_runtime_outcome_receipt` as the backend-selector target source when the harvested outputs fail selected-ref validation
+- Why this matters:
+  - before this tranche, the branch could correctly record a selected-ref mismatch and still operationally treat the outcome as satisfactory
+  - now the mismatch truth actually changes completion posture and trainer-source selection
+  - this removes another pseudo-readiness seam without adding a new ladder rung
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed (result: `8 passed`).
+- Status summary:
+  - the audited selected-ref validation consumer path has no new Category A gap
+  - Category B is again narrowed toward actual external-runtime/install/GPU blockers rather than internal misuse of harvested outputs
+
 - Changed: explicitly closed the lingering Tier 3.4 / 3.5 verification ambiguity on the audited Phase-1 path:
   - added `tests/test_sim_synth_phase1_verification.py`
   - Tier 3.4 coverage now directly checks:
