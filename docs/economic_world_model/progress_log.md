@@ -2,6 +2,24 @@
 
 ## 2026-04-02
 
+- Changed: closed the remaining compiler-side Category A cluster from the active Phase-1 Tier 1 / Tier 3 verification pass:
+  - `src/world_model/sim_synth_physics/state.py` now carries `physics_execution_contract` inside `SimSynthPhysicsWorldState`
+  - `src/world_model/sim_synth_physics/compiler.py` now compiles that contract with the configured fallback backend and emits a compiler-owned receipt inventory / runtime-depth projection
+  - `src/world_model/sim_synth_physics/runtime.py` now reuses the compiled execution contract instead of rebuilding it on the happy path
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the compiled execution contract and compiler-owned receipt inventory into backend-selector and branch-planner rows
+- Why this matters:
+  - backend routing is now canonical compiled state, not only runtime reconstruction
+  - the compiler now exposes what it already knows about the deeper runtime ladder instead of leaving that truth implicit until runtime artifacts appear
+  - trainer/export rows no longer flatten away the new compiler-side closure
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed (result: `26 passed`).
+- Status summary:
+  - audited compiler-side Category A count for the active closure spec is now `0`
+  - the dominant remainder is now increasingly honest Category B:
+    - real Isaac / Unitree runtime, assets, checkpoints
+    - real Holosoma host/runtime, motion/retargeting assets, policies
+    - real GPU-backed GGDS / LDM materialization
+- Next recommended task: keep Phase 1 as the implementation center and use the now-compiled closure surfaces to harden concrete Isaac/Unitree and Holosoma evidence lanes rather than pivoting upward prematurely.
+
 - Changed: hardened `scripts/economic_world_model/nightly_audit.py` task selection so verification failures are prioritized over scaffold discovery:
   - added `_verification_repair_task(...)` and made `_next_task(...)` consume verification results before evaluating additive candidates
   - when `agent_verify` fails, the audit now recommends `agent_verify_regression` (targeting `CLAUDE.md`, `scripts/agent/verify.sh`, and `AGENTS.md`) instead of incorrectly reporting “No missing additive step detected”

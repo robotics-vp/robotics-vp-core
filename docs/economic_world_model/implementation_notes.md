@@ -2,6 +2,34 @@
 
 ## 2026-04-02
 
+- Closed the last explicit compiler-side incompleteness items from the active Phase-1 verification tranche:
+  - `src/world_model/sim_synth_physics/state.py` now treats `PhysicsExecutionContract` as canonical world-state, not only a runtime byproduct
+  - `src/world_model/sim_synth_physics/compiler.py` now compiles that contract with the active fallback-backend posture and emits `compiled_receipt_inventory` plus `runtime_depth_projection` metadata
+  - `src/world_model/sim_synth_physics/runtime.py` now trusts the compiled execution contract on the normal path
+- Preserved that closure into downstream data surfaces:
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests `physics_execution_contract`
+  - backend-selector and branch-planner rows now preserve:
+    - `physics_execution_contract_id`
+    - compiled route status
+    - requested/resolved backend
+    - compiler-owned receipt inventory id
+    - projected binding / bridge / upstream-pack status
+- Test coverage now checks the new compiler-owned closure directly:
+  - `tests/test_sim_synth_physics_world_model.py` verifies:
+    - compiled execution-contract presence
+    - artifact refs carry the execution-contract id
+    - compiled receipt inventory round-trips through `to_dict()`
+  - `tests/test_sim_synth_training_corpus.py` verifies:
+    - harvested bundles preserve `physics_execution_contract`
+    - trainer rows preserve the new compiler-side metadata
+- Why this matters:
+  - the active Phase-1 closure argument is now much stronger
+  - the compiler/runtime boundary is no longer hiding one of its most load-bearing backend-routing truths
+  - downstream training/export paths now carry both runtime receipts and the pre-runtime compiler closure that produced them
+- Current judgment:
+  - audited Category A cluster: closed
+  - remaining work is increasingly external-runtime / asset / GPU constrained, though Phase 1 should still stay active until those lanes are exercised more concretely
+
 - Nightly audit selector now treats failed verification as first-class scheduling input:
   - `scripts/economic_world_model/nightly_audit.py` adds `_verification_repair_task(verification)` and routes `_next_task(...)` through it before scanning additive scaffolding candidates
   - explicit `agent_verify` handling now emits:
