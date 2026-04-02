@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Mapping
 
 from ..common import mapping, stable_id, strings
@@ -13,6 +14,15 @@ def _profile_row(runtime_layout_contract: Mapping[str, Any], profile_id: str) ->
         if str(row_mapping.get("profile_id", "") or "") == profile_id:
             return row_mapping
     return {}
+
+
+def _motion_source_exists(ref: str) -> bool:
+    if ref == "inline_motion_clips":
+        return True
+    path = Path(ref)
+    if path.exists():
+        return True
+    return "/" not in ref and "\\" not in ref and not path.suffix
 
 
 def build_holosoma_runtime_pack(
@@ -35,12 +45,16 @@ def build_holosoma_runtime_pack(
     checkpoint_candidates = strings(policy_contract.get("checkpoint_candidates"))
     deploy_config_candidates = strings(policy_contract.get("deploy_config_candidates"))
     runtime_report_candidates = strings(policy_contract.get("runtime_report_candidates"))
+    primary_checkpoint_ref = str(policy_contract.get("primary_checkpoint_ref", "") or "")
+    primary_deploy_config_ref = str(policy_contract.get("primary_deploy_config_ref", "") or "")
+    primary_runtime_report_ref = str(policy_contract.get("primary_runtime_report_ref", "") or "")
     embodiment = mapping(embodiment_context)
     motion_sources = strings(embodiment.get("motion_clip_datapacks")) + strings(
         embodiment.get("motion_clip_paths")
     )
     if embodiment.get("motion_clips"):
         motion_sources.append("inline_motion_clips")
+    existing_motion_sources = [ref for ref in motion_sources if _motion_source_exists(ref)]
     retargeting_present = bool(
         embodiment.get("retargeting_contract")
         or embodiment.get("whole_body_retargeting")
@@ -95,13 +109,29 @@ def build_holosoma_runtime_pack(
         **payload,
         "runtime_target_ids": ready_targets,
         "profile_root": str(profile.get("root", "") or ""),
+        "profile_git_metadata": mapping(profile.get("root_git_metadata")),
+        "profile_candidate_counts": {
+            "deploy": int(profile.get("deploy_candidate_count", 0) or 0),
+            "policy": int(profile.get("policy_candidate_count", 0) or 0),
+            "data": int(profile.get("data_candidate_count", 0) or 0),
+        },
+        "primary_profile_deploy_ref": str(profile.get("primary_deploy_candidate", "") or ""),
+        "primary_profile_policy_ref": str(profile.get("primary_policy_candidate", "") or ""),
+        "primary_profile_data_ref": str(profile.get("primary_data_candidate", "") or ""),
         "profile_matched_paths": strings(profile.get("matched_paths")),
         "deploy_candidates": strings(profile.get("deploy_candidates")) or deploy_config_candidates,
         "policy_candidates": strings(profile.get("policy_candidates")) or checkpoint_candidates,
         "data_candidates": strings(profile.get("data_candidates")) or runtime_report_candidates,
         "checkpoint_candidates": checkpoint_candidates,
         "runtime_report_candidates": runtime_report_candidates,
+        "primary_policy_ref": primary_checkpoint_ref,
+        "primary_deploy_config_ref": primary_deploy_config_ref,
+        "primary_runtime_report_ref": primary_runtime_report_ref,
         "motion_sources": motion_sources,
+        "existing_motion_sources": existing_motion_sources,
+        "missing_motion_sources": [
+            ref for ref in motion_sources if ref not in existing_motion_sources
+        ],
         "retargeting_present": retargeting_present,
         "reward_overlay_present": reward_overlay_present,
         "missing_components": missing_components,

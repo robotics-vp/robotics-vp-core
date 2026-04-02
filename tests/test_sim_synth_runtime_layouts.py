@@ -40,8 +40,14 @@ def test_isaac_runtime_layouts_detect_oss_repo_shapes(tmp_path) -> None:
     assert profile["deploy_candidates"]
     assert profile["policy_candidates"]
     assert profile["data_candidates"]
+    assert profile["deploy_candidate_count"] >= 1
+    assert profile["policy_candidate_count"] >= 1
+    assert profile["primary_deploy_candidate"].endswith("sim_main.py")
+    assert profile["primary_policy_candidate"].endswith("policy.onnx")
     assert policy_contract["policy_ready"] is True
     assert policy_contract["checkpoint_candidates"]
+    assert policy_contract["checkpoint_candidate_count"] >= 1
+    assert policy_contract["primary_checkpoint_ref"].endswith("policy.onnx")
     assert policy_contract["runtime_report_candidates"] == []
 
 
@@ -64,6 +70,7 @@ def test_isaac_runtime_layouts_detect_lerobot_profile(tmp_path) -> None:
         profile for profile in contract["profiles"] if profile["profile_id"] == "unitree_lerobot"
     )
     assert profile["policy_candidates"]
+    assert profile["policy_candidate_count"] >= 1
     assert profile["deploy_candidates"] == []
 
 
@@ -102,5 +109,9 @@ def test_holosoma_runtime_layouts_and_policy_contracts_detect_roots(tmp_path) ->
         profile for profile in contract["profiles"] if profile["profile_id"] == "holosoma_motion_bank"
     )
     assert motion_profile["data_candidates"]
+    assert motion_profile["data_candidate_count"] >= 1
     assert policy_contract["policy_ready"] is True
     assert policy_contract["deploy_config_candidates"]
+    assert policy_contract["checkpoint_candidate_count"] >= 1
+    assert policy_contract["primary_checkpoint_ref"].endswith("policy.ckpt")
+    assert policy_contract["primary_deploy_config_ref"].endswith("deploy.yaml")

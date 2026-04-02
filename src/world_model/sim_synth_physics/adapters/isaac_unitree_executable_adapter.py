@@ -123,6 +123,7 @@ def build_isaac_unitree_executable_adapter_request(
     selected_command = str(binding.get("selected_command", "") or mapping(launch_spec).get("command", "") or "")
     selected_launch_root = str(binding.get("selected_launch_root", "") or mapping(launch_spec).get("root", "") or "")
     selected_deploy_config = str(binding.get("selected_deploy_config", "") or "")
+    selected_runtime_report = str(binding.get("selected_runtime_report", "") or "")
     if binding:
         missing_preconditions = strings(binding.get("missing_components"))
     else:
@@ -151,6 +152,8 @@ def build_isaac_unitree_executable_adapter_request(
     )
     if selected_deploy_config:
         env_overrides["UNITREE_DEPLOY_CONFIG_REF"] = selected_deploy_config
+    if selected_runtime_report:
+        env_overrides["UNITREE_RUNTIME_REPORT_REF"] = selected_runtime_report
     for asset_id, ref in asset_refs.items():
         env_overrides[f"UNITREE_ASSET_{asset_id.upper()}"] = ref
 
@@ -165,6 +168,8 @@ def build_isaac_unitree_executable_adapter_request(
         "task_id": task_id,
         "policy_ref": selected_policy_ref,
         "policy_required": policy_required,
+        "runtime_report_ref": selected_runtime_report,
+        "deploy_config_ref": selected_deploy_config,
         "cwd": selected_launch_root,
         "command": selected_command,
         "required_target_ids": strings(mode_contract.get("required_target_ids")),

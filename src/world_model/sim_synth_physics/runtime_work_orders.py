@@ -245,8 +245,35 @@ def build_backend_runtime_work_orders(
                 "upstream_runtime_pack_status": str(
                     upstream_runtime_pack.get("pack_status", "") or ""
                 ),
+                "upstream_runtime_profile_root": str(
+                    upstream_runtime_pack.get("profile_root", "") or ""
+                ),
+                "upstream_runtime_profile_git_metadata": mapping(
+                    upstream_runtime_pack.get("profile_git_metadata")
+                ),
+                "upstream_runtime_profile_candidate_counts": mapping(
+                    upstream_runtime_pack.get("profile_candidate_counts")
+                ),
                 "upstream_runtime_pack_ready_surfaces": strings(
                     upstream_runtime_pack.get("ready_surfaces")
+                ),
+                "upstream_runtime_primary_policy_ref": str(
+                    upstream_runtime_pack.get("primary_policy_ref", "") or ""
+                ),
+                "upstream_runtime_primary_deploy_config_ref": str(
+                    upstream_runtime_pack.get("primary_deploy_config_ref", "") or ""
+                ),
+                "upstream_runtime_primary_runtime_report_ref": str(
+                    upstream_runtime_pack.get("primary_runtime_report_ref", "") or ""
+                ),
+                "upstream_runtime_verified_asset_ids": strings(
+                    upstream_runtime_pack.get("verified_asset_ids")
+                ),
+                "upstream_runtime_declared_only_asset_ids": strings(
+                    upstream_runtime_pack.get("declared_only_asset_ids")
+                ),
+                "upstream_runtime_existing_motion_sources": strings(
+                    upstream_runtime_pack.get("existing_motion_sources")
                 ),
                 "runtime_binding": runtime_binding,
                 "runtime_binding_status": str(runtime_binding.get("binding_status", "") or ""),
@@ -255,6 +282,12 @@ def build_backend_runtime_work_orders(
                 ),
                 "runtime_binding_selected_policy_ref": str(
                     runtime_binding.get("selected_policy_ref", "") or ""
+                ),
+                "runtime_binding_selected_deploy_config": str(
+                    runtime_binding.get("selected_deploy_config", "") or ""
+                ),
+                "runtime_binding_selected_runtime_report": str(
+                    runtime_binding.get("selected_runtime_report", "") or ""
                 ),
                 "runtime_binding_selected_launch_root": str(
                     runtime_binding.get("selected_launch_root", "") or ""

@@ -115,8 +115,11 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
     assert launch_spec["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert runtime_bundle["output_contract"]["sources"]
     assert runtime_bundle["upstream_runtime_pack"]["pack_status"] == "pack_ready"
+    assert runtime_bundle["upstream_runtime_pack"]["primary_policy_ref"] == str(policy_path)
+    assert runtime_bundle["upstream_runtime_pack"]["profile_candidate_counts"]["deploy"] >= 1
     assert runtime_bundle["runtime_binding"]["binding_status"] == "binding_ready"
     assert runtime_bundle["runtime_binding"]["selected_policy_ref"] == str(policy_path)
+    assert runtime_bundle["runtime_binding"]["selected_deploy_config"].endswith("sim_main.py")
     assert launch_spec["upstream_runtime_pack"]["ready_surfaces"]
     assert launch_spec["runtime_binding"]["selected_profile"] == "unitree_sim_isaaclab"
 
@@ -199,6 +202,7 @@ def test_build_isaac_runtime_bundle_can_prefer_lerobot_profile(tmp_path: Path) -
         == "external_lerobot_eval"
     )
     assert runtime_bundle["upstream_runtime_pack"]["preferred_profile"] == "unitree_lerobot"
+    assert runtime_bundle["upstream_runtime_pack"]["primary_policy_ref"] == str(policy_path)
     assert runtime_bundle["runtime_binding"]["selected_profile"] == "unitree_lerobot"
 
 
@@ -265,5 +269,7 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
     assert runtime_bundle["output_contract"]["sources"]
     assert runtime_bundle["upstream_runtime_pack"]["pack_status"] == "pack_partial"
     assert "policy_surface" in runtime_bundle["upstream_runtime_pack"]["ready_surfaces"]
+    assert runtime_bundle["upstream_runtime_pack"]["primary_policy_ref"] == str(policy_path)
+    assert runtime_bundle["upstream_runtime_pack"]["existing_motion_sources"] == []
     assert runtime_bundle["runtime_binding"]["binding_status"] == "binding_ready"
     assert runtime_bundle["runtime_binding"]["selected_profile"] == "holosoma_repo"

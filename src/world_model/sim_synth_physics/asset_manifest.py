@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Mapping
 
 from .common import mapping
@@ -75,6 +76,29 @@ def extract_robot_asset_manifest(
     )
 
 
+def _asset_verification(value: Any) -> dict[str, Any]:
+    if value in (None, "", False, 0, [], {}):
+        return {
+            "value_is_path": False,
+            "local_path_exists": False,
+            "verification_status": "missing",
+        }
+    text = str(value).strip()
+    is_path_like = bool(text) and not text.startswith(("http://", "https://", "s3://"))
+    local_path_exists = bool(is_path_like and Path(text).exists())
+    if not is_path_like:
+        status = "declared_non_path"
+    elif local_path_exists:
+        status = "declared_local_exists"
+    else:
+        status = "declared_local_missing"
+    return {
+        "value_is_path": bool(is_path_like),
+        "local_path_exists": bool(local_path_exists),
+        "verification_status": status,
+    }
+
+
 def normalize_robot_asset_manifest(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, dict[str, Any]]:
@@ -97,6 +121,9 @@ def normalize_robot_asset_manifest(
                 if not matched_aliases
                 else manifest.get(matched_aliases[0])
             ),
+            **_asset_verification(
+                None if not matched_aliases else manifest.get(matched_aliases[0])
+            ),
         }
     passthrough = {
         str(key): value
@@ -112,6 +139,9 @@ def normalize_robot_asset_manifest(
             "present": True,
             "matched_aliases": sorted(passthrough.keys()),
             "value": passthrough,
+            "value_is_path": False,
+            "local_path_exists": False,
+            "verification_status": "additional_mapping",
         }
     return normalized
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -39,6 +40,42 @@ def _existing(root: str, rel_paths: Iterable[str]) -> tuple[list[str], list[str]
     return matched, missing
 
 
+def _git_metadata(root: str) -> dict[str, Any]:
+    if not root:
+        return {}
+    base = Path(root)
+    if not base.exists():
+        return {}
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(base), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if head.returncode != 0:
+            return {}
+        remote = subprocess.run(
+            ["git", "-C", str(base), "config", "--get", "remote.origin.url"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        dirty = subprocess.run(
+            ["git", "-C", str(base), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return {
+            "repo_head": head.stdout.strip(),
+            "remote_origin": remote.stdout.strip(),
+            "dirty": bool(dirty.stdout.strip()),
+        }
+    except Exception:
+        return {}
+
+
 def _profile(
     *,
     profile_id: str,
@@ -51,18 +88,37 @@ def _profile(
     data_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     matched_paths, missing_paths = _existing(root, expected_paths)
+    deploy_candidate_records = _candidate_records(root, deploy_patterns or [])
+    policy_candidate_records = _candidate_records(root, policy_patterns or [])
+    data_candidate_records = _candidate_records(root, data_patterns or [])
     return {
         "profile_id": profile_id,
         "label": label,
         "root": root,
         "root_exists": bool(root and Path(root).exists()),
+        "root_git_metadata": _git_metadata(root),
         "expected_paths": list(expected_paths),
         "matched_paths": matched_paths,
         "missing_paths": missing_paths,
         "preferred_entrypoints": list(preferred_entrypoints),
-        "deploy_candidates": _candidate_files(root, deploy_patterns or []),
-        "policy_candidates": _candidate_files(root, policy_patterns or []),
-        "data_candidates": _candidate_files(root, data_patterns or []),
+        "deploy_candidates": [str(row["ref"]) for row in deploy_candidate_records],
+        "policy_candidates": [str(row["ref"]) for row in policy_candidate_records],
+        "data_candidates": [str(row["ref"]) for row in data_candidate_records],
+        "deploy_candidate_records": deploy_candidate_records,
+        "policy_candidate_records": policy_candidate_records,
+        "data_candidate_records": data_candidate_records,
+        "deploy_candidate_count": len(deploy_candidate_records),
+        "policy_candidate_count": len(policy_candidate_records),
+        "data_candidate_count": len(data_candidate_records),
+        "primary_deploy_candidate": (
+            "" if not deploy_candidate_records else str(deploy_candidate_records[0]["ref"])
+        ),
+        "primary_policy_candidate": (
+            "" if not policy_candidate_records else str(policy_candidate_records[0]["ref"])
+        ),
+        "primary_data_candidate": (
+            "" if not data_candidate_records else str(data_candidate_records[0]["ref"])
+        ),
         "profile_ready": bool(root and Path(root).exists() and not missing_paths),
     }
 
@@ -77,6 +133,32 @@ def _candidate_files(root: str, patterns: Iterable[str], limit: int = 6) -> list
     for pattern in patterns:
         for path in sorted(base.rglob(pattern)):
             matches.append(str(path.resolve()))
+            if len(matches) >= limit:
+                return matches
+    return matches
+
+
+def _candidate_record(path: Path) -> dict[str, Any]:
+    stat = path.stat()
+    return {
+        "ref": str(path.resolve()),
+        "name": path.name,
+        "suffix": path.suffix.lower(),
+        "bytes": int(stat.st_size),
+        "mtime_s": float(stat.st_mtime),
+    }
+
+
+def _candidate_records(root: str, patterns: Iterable[str], limit: int = 6) -> list[dict[str, Any]]:
+    if not root:
+        return []
+    base = Path(root)
+    if not base.exists():
+        return []
+    matches: list[dict[str, Any]] = []
+    for pattern in patterns:
+        for path in sorted(base.rglob(pattern)):
+            matches.append(_candidate_record(path))
             if len(matches) >= limit:
                 return matches
     return matches
@@ -225,6 +307,16 @@ def describe_isaac_policy_contract(
         policy_root,
         ("logs/**/*.json", "logs/**/*.yaml", "deploy/**/*.yaml", "deploy_real/**/*"),
     )
+    checkpoint_candidate_records = _candidate_records(
+        policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt")
+    )
+    deploy_config_candidate_records = _candidate_records(
+        policy_root, ("*.yaml", "*.yml", "*.json")
+    )
+    runtime_report_candidate_records = _candidate_records(
+        policy_root,
+        ("logs/**/*.json", "logs/**/*.yaml", "deploy/**/*.yaml", "deploy_real/**/*"),
+    )
     policy_ref_exists = bool(policy_ref and Path(policy_ref).exists())
     return {
         "version": "backend_policy_contract_v1",
@@ -234,8 +326,23 @@ def describe_isaac_policy_contract(
         "policy_ref": policy_ref,
         "policy_ref_exists": policy_ref_exists,
         "checkpoint_candidates": checkpoint_candidates,
+        "checkpoint_candidate_records": checkpoint_candidate_records,
+        "checkpoint_candidate_count": len(checkpoint_candidate_records),
+        "primary_checkpoint_ref": (
+            policy_ref if policy_ref_exists else (checkpoint_candidates[0] if checkpoint_candidates else "")
+        ),
         "deploy_config_candidates": deploy_config_candidates,
+        "deploy_config_candidate_records": deploy_config_candidate_records,
+        "deploy_config_candidate_count": len(deploy_config_candidate_records),
+        "primary_deploy_config_ref": (
+            "" if not deploy_config_candidates else deploy_config_candidates[0]
+        ),
         "runtime_report_candidates": runtime_report_candidates,
+        "runtime_report_candidate_records": runtime_report_candidate_records,
+        "runtime_report_candidate_count": len(runtime_report_candidate_records),
+        "primary_runtime_report_ref": (
+            "" if not runtime_report_candidates else runtime_report_candidates[0]
+        ),
         "policy_ready": bool(policy_ref_exists or checkpoint_candidates),
     }
 
@@ -321,6 +428,18 @@ def describe_holosoma_policy_contract(
     ) or str(os.environ.get("HOLOSOMA_POLICY_PATH", "") or "").strip()
     checkpoint_candidates = _candidate_files(policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
     deploy_config_candidates = _candidate_files(policy_root, ("*.yaml", "*.yml", "*.json"))
+    runtime_report_candidates = _candidate_files(
+        policy_root, ("logs/**/*.json", "metrics/**/*.json", "outputs/**/*.json")
+    )
+    checkpoint_candidate_records = _candidate_records(
+        policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt")
+    )
+    deploy_config_candidate_records = _candidate_records(
+        policy_root, ("*.yaml", "*.yml", "*.json")
+    )
+    runtime_report_candidate_records = _candidate_records(
+        policy_root, ("logs/**/*.json", "metrics/**/*.json", "outputs/**/*.json")
+    )
     policy_ref_exists = bool(policy_ref and Path(policy_ref).exists())
     return {
         "version": "backend_policy_contract_v1",
@@ -330,7 +449,23 @@ def describe_holosoma_policy_contract(
         "policy_ref": policy_ref,
         "policy_ref_exists": policy_ref_exists,
         "checkpoint_candidates": checkpoint_candidates,
+        "checkpoint_candidate_records": checkpoint_candidate_records,
+        "checkpoint_candidate_count": len(checkpoint_candidate_records),
+        "primary_checkpoint_ref": (
+            policy_ref if policy_ref_exists else (checkpoint_candidates[0] if checkpoint_candidates else "")
+        ),
         "deploy_config_candidates": deploy_config_candidates,
+        "deploy_config_candidate_records": deploy_config_candidate_records,
+        "deploy_config_candidate_count": len(deploy_config_candidate_records),
+        "primary_deploy_config_ref": (
+            "" if not deploy_config_candidates else deploy_config_candidates[0]
+        ),
+        "runtime_report_candidates": runtime_report_candidates,
+        "runtime_report_candidate_records": runtime_report_candidate_records,
+        "runtime_report_candidate_count": len(runtime_report_candidate_records),
+        "primary_runtime_report_ref": (
+            "" if not runtime_report_candidates else runtime_report_candidates[0]
+        ),
         "policy_ready": bool(policy_ref_exists or checkpoint_candidates),
     }
 

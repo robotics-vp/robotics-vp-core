@@ -82,6 +82,8 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
     assert work_orders[0].metadata["runtime_layout_ready_profiles"] == ["unitree_sim_isaaclab"]
     assert any("sim_main.py" in hint for hint in work_orders[0].command_hints)
     assert work_orders[0].metadata["policy_ready"] is False
+    assert work_orders[0].metadata["runtime_binding_selected_deploy_config"] == ""
+    assert work_orders[0].metadata["upstream_runtime_primary_policy_ref"] == ""
 
 
 def test_build_backend_runtime_work_orders_marks_concrete_runtime_complete() -> None:
@@ -178,3 +180,4 @@ def test_build_backend_runtime_work_orders_marks_external_runtime_outputs_comple
     assert work_orders[0].metadata["backend_runtime_ready_surfaces"] == [
         "policy_surface_ready"
     ]
+    assert work_orders[0].metadata["upstream_runtime_primary_runtime_report_ref"] == ""

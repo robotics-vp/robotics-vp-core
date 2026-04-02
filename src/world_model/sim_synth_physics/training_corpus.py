@@ -652,11 +652,38 @@ def build_backend_selector_rows_from_receipts(
                     "backend_upstream_runtime_pack_status": upstream_runtime_pack.get(
                         "pack_status"
                     ),
+                    "backend_upstream_runtime_profile_root": upstream_runtime_pack.get(
+                        "profile_root"
+                    ),
+                    "backend_upstream_runtime_profile_git_metadata": _mapping(
+                        upstream_runtime_pack.get("profile_git_metadata")
+                    ),
+                    "backend_upstream_runtime_profile_candidate_counts": _mapping(
+                        upstream_runtime_pack.get("profile_candidate_counts")
+                    ),
                     "backend_upstream_runtime_ready_surfaces": list(
                         upstream_runtime_pack.get("ready_surfaces") or []
                     ),
                     "backend_upstream_runtime_missing_components": list(
                         upstream_runtime_pack.get("missing_components") or []
+                    ),
+                    "backend_upstream_runtime_primary_policy_ref": upstream_runtime_pack.get(
+                        "primary_policy_ref"
+                    ),
+                    "backend_upstream_runtime_primary_deploy_config_ref": upstream_runtime_pack.get(
+                        "primary_deploy_config_ref"
+                    ),
+                    "backend_upstream_runtime_primary_runtime_report_ref": upstream_runtime_pack.get(
+                        "primary_runtime_report_ref"
+                    ),
+                    "backend_upstream_runtime_verified_asset_ids": list(
+                        upstream_runtime_pack.get("verified_asset_ids") or []
+                    ),
+                    "backend_upstream_runtime_declared_only_asset_ids": list(
+                        upstream_runtime_pack.get("declared_only_asset_ids") or []
+                    ),
+                    "backend_upstream_runtime_existing_motion_sources": list(
+                        upstream_runtime_pack.get("existing_motion_sources") or []
                     ),
                     "backend_runtime_binding_status": backend_runtime_binding.get(
                         "binding_status"
@@ -666,6 +693,12 @@ def build_backend_selector_rows_from_receipts(
                     ),
                     "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
                         "selected_policy_ref"
+                    ),
+                    "backend_runtime_binding_selected_deploy_config": backend_runtime_binding.get(
+                        "selected_deploy_config"
+                    ),
+                    "backend_runtime_binding_selected_runtime_report": backend_runtime_binding.get(
+                        "selected_runtime_report"
                     ),
                     "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
                         "selected_launch_root"
@@ -940,11 +973,38 @@ def build_branch_planner_rows_from_receipts(
                         "backend_upstream_runtime_pack_status": upstream_runtime_pack.get(
                             "pack_status"
                         ),
+                        "backend_upstream_runtime_profile_root": upstream_runtime_pack.get(
+                            "profile_root"
+                        ),
+                        "backend_upstream_runtime_profile_git_metadata": _mapping(
+                            upstream_runtime_pack.get("profile_git_metadata")
+                        ),
+                        "backend_upstream_runtime_profile_candidate_counts": _mapping(
+                            upstream_runtime_pack.get("profile_candidate_counts")
+                        ),
                         "backend_upstream_runtime_ready_surfaces": list(
                             upstream_runtime_pack.get("ready_surfaces") or []
                         ),
                         "backend_upstream_runtime_missing_components": list(
                             upstream_runtime_pack.get("missing_components") or []
+                        ),
+                        "backend_upstream_runtime_primary_policy_ref": upstream_runtime_pack.get(
+                            "primary_policy_ref"
+                        ),
+                        "backend_upstream_runtime_primary_deploy_config_ref": upstream_runtime_pack.get(
+                            "primary_deploy_config_ref"
+                        ),
+                        "backend_upstream_runtime_primary_runtime_report_ref": upstream_runtime_pack.get(
+                            "primary_runtime_report_ref"
+                        ),
+                        "backend_upstream_runtime_verified_asset_ids": list(
+                            upstream_runtime_pack.get("verified_asset_ids") or []
+                        ),
+                        "backend_upstream_runtime_declared_only_asset_ids": list(
+                            upstream_runtime_pack.get("declared_only_asset_ids") or []
+                        ),
+                        "backend_upstream_runtime_existing_motion_sources": list(
+                            upstream_runtime_pack.get("existing_motion_sources") or []
                         ),
                         "backend_runtime_binding_status": backend_runtime_binding.get(
                             "binding_status"
@@ -954,6 +1014,12 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
                             "selected_policy_ref"
+                        ),
+                        "backend_runtime_binding_selected_deploy_config": backend_runtime_binding.get(
+                            "selected_deploy_config"
+                        ),
+                        "backend_runtime_binding_selected_runtime_report": backend_runtime_binding.get(
+                            "selected_runtime_report"
                         ),
                         "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
                             "selected_launch_root"
