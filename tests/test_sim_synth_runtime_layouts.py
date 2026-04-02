@@ -36,6 +36,7 @@ def test_isaac_runtime_layouts_detect_oss_repo_shapes(tmp_path) -> None:
     )
 
     assert "unitree_sim_isaaclab" in contract["ready_profiles"]
+    assert "unitree_sim_isaaclab" in contract["usable_profiles"]
     profile = next(
         profile for profile in contract["profiles"] if profile["profile_id"] == "unitree_sim_isaaclab"
     )
@@ -70,6 +71,7 @@ def test_isaac_runtime_layouts_detect_lerobot_profile(tmp_path) -> None:
     )
 
     assert "unitree_lerobot" in contract["ready_profiles"]
+    assert "unitree_lerobot" in contract["usable_profiles"]
     profile = next(
         profile for profile in contract["profiles"] if profile["profile_id"] == "unitree_lerobot"
     )
@@ -113,6 +115,7 @@ def test_holosoma_runtime_layouts_and_policy_contracts_detect_roots(tmp_path) ->
 
     assert "holosoma_repo" in contract["ready_profiles"]
     assert "holosoma_motion_bank" in contract["ready_profiles"]
+    assert "holosoma_motion_bank" in contract["usable_profiles"]
     motion_profile = next(
         profile for profile in contract["profiles"] if profile["profile_id"] == "holosoma_motion_bank"
     )

@@ -325,6 +325,10 @@ def test_world_state_marks_isaac_external_launch_ready_for_lerobot_and_teleop(
     ):
         root.mkdir()
     (xr_root / "teleop").mkdir()
+    (sdk_root / "include").mkdir()
+    (sdk2_python_root / "setup.py").write_text("", encoding="utf-8")
+    (teleimager_root / "README.md").write_text("teleimager", encoding="utf-8")
+    (asset_root / "g1.usd").write_text("x", encoding="utf-8")
     (lerobot_root / "examples").mkdir()
     (policy_root / "g1_policy.onnx").write_text("x", encoding="utf-8")
 
@@ -1287,8 +1291,10 @@ def test_runtime_executes_concrete_isaac_backend_when_local_bridge_exists(
     policy_path.write_text("x", encoding="utf-8")
     sdk_root = tmp_path / "unitree_sdk2"
     sdk_root.mkdir()
+    (sdk_root / "include").mkdir()
     asset_root = tmp_path / "assets"
     asset_root.mkdir()
+    (asset_root / "g1.usd").write_text("x", encoding="utf-8")
 
     runtime = SimSynthPhysicsRuntime(
         SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")

@@ -36,6 +36,7 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
             },
             "runtime_layout_contract": {
                 "ready_profiles": ["unitree_sim_isaaclab"],
+                "usable_profiles": ["unitree_sim_isaaclab"],
             },
             "policy_contract": {
                 "policy_ready": False,
@@ -89,6 +90,9 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
     assert work_orders[0].status == "blocked_by_runtime_targets"
     assert "isaac_unitree_runtime_smoke" in work_orders[0].linked_backlog_ids
     assert work_orders[0].metadata["runtime_layout_ready_profiles"] == ["unitree_sim_isaaclab"]
+    assert work_orders[0].metadata["runtime_layout_usable_profiles"] == [
+        "unitree_sim_isaaclab"
+    ]
     assert any("sim_main.py" in hint for hint in work_orders[0].command_hints)
     assert work_orders[0].metadata["policy_ready"] is False
     assert work_orders[0].metadata["runtime_binding_selected_deploy_config"] == ""

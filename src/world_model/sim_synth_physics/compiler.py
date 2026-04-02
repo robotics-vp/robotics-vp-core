@@ -466,6 +466,15 @@ def _compile_runtime_depth_projection(
         )
         if str(profile)
     ]
+    usable_profiles = [
+        str(profile)
+        for profile in list(
+            bridge_metadata.get("runtime_layout_usable_profiles")
+            or runtime_layout_contract.get("usable_profiles")
+            or []
+        )
+        if str(profile)
+    ]
     ready_target_ids = [
         str(target_id)
         for target_id in list(runtime_target_contract.get("ready_target_ids") or [])
@@ -499,6 +508,7 @@ def _compile_runtime_depth_projection(
         "ready_runtime_target_ids": ready_target_ids,
         "missing_runtime_target_ids": missing_target_ids,
         "runtime_layout_ready_profiles": ready_profiles,
+        "runtime_layout_usable_profiles": usable_profiles,
         "policy_ready": bool(
             bridge_metadata.get("policy_ready", policy_contract.get("policy_ready", False))
         ),

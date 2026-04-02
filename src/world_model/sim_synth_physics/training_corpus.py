@@ -700,6 +700,12 @@ def build_backend_selector_rows_from_receipts(
                     "backend_runtime_binding_selected_profile": backend_runtime_binding.get(
                         "selected_profile"
                     ),
+                    "backend_runtime_layout_usable_profiles": list(
+                        _mapping(backend_runtime_bridge_receipt.get("metadata")).get(
+                            "runtime_layout_usable_profiles", []
+                        )
+                        or []
+                    ),
                     "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
                         "selected_policy_ref"
                     ),
@@ -1078,6 +1084,12 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_binding_selected_profile": backend_runtime_binding.get(
                             "selected_profile"
+                        ),
+                        "backend_runtime_layout_usable_profiles": list(
+                            _mapping(backend_runtime_bridge_receipt.get("metadata")).get(
+                                "runtime_layout_usable_profiles", []
+                            )
+                            or []
                         ),
                         "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
                             "selected_policy_ref"

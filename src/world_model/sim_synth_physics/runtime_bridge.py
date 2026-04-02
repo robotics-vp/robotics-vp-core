@@ -159,6 +159,41 @@ def _layout_ready_profiles(binding: BackendExecutionBindingState) -> list[str]:
     return ready_profiles
 
 
+def _layout_usable_profiles(binding: BackendExecutionBindingState) -> list[str]:
+    layout_contract = mapping(binding.metadata.get("runtime_layout_contract"))
+    runtime_target_contract = mapping(binding.metadata.get("runtime_target_contract"))
+    usable_profiles = strings(layout_contract.get("usable_profiles")) or strings(
+        layout_contract.get("ready_profiles")
+    )
+    ready_targets = set(strings(runtime_target_contract.get("verified_target_ids"))) or set(
+        strings(runtime_target_contract.get("ready_target_ids"))
+    )
+    target_profile_map = {
+        "isaac": {
+            "isaaclab_root": "isaaclab_core",
+            "isaacsim_root": "isaaclab_core",
+            "unitree_sim_isaaclab_root": "unitree_sim_isaaclab",
+            "unitree_rl_gym_root": "unitree_rl_gym",
+            "unitree_il_lerobot_root": "unitree_lerobot",
+            "humanoidverse_root": "humanoidverse",
+            "xr_teleoperate_root": "xr_teleoperate",
+            "unitree_model_root": "unitree_model_assets",
+            "unitree_asset_root": "unitree_model_assets",
+        },
+        "holosoma": {
+            "holosoma_root": "holosoma_repo",
+            "holosoma_motion_root": "holosoma_motion_bank",
+            "holosoma_policy_root": "holosoma_policy_bank",
+            "retargeting_root": "retargeting_bundle",
+        },
+    }
+    for target_id in ready_targets:
+        profile_id = target_profile_map.get(binding.backend, {}).get(target_id, "")
+        if profile_id and profile_id not in usable_profiles:
+            usable_profiles.append(profile_id)
+    return usable_profiles
+
+
 def _policy_ready(binding: BackendExecutionBindingState) -> bool:
     return bool(
         mapping(binding.metadata.get("policy_contract")).get("policy_ready", False)
@@ -436,6 +471,7 @@ def compile_backend_runtime_bridge(
             "runtime_targets_ready": bool(runtime_target_contract.get("runtime_targets_ready", False)),
             "unresolved_one_of_groups": unresolved_groups,
             "runtime_layout_ready_profiles": _layout_ready_profiles(backend_execution_binding),
+            "runtime_layout_usable_profiles": _layout_usable_profiles(backend_execution_binding),
             "policy_ready": _policy_ready(backend_execution_binding),
         },
     )
@@ -566,6 +602,9 @@ def build_backend_runtime_bridge_receipt(
             "runtime_targets_ready": mapping(bridge_state.metadata).get("runtime_targets_ready", False),
             "runtime_layout_ready_profiles": mapping(bridge_state.metadata).get(
                 "runtime_layout_ready_profiles", []
+            ),
+            "runtime_layout_usable_profiles": mapping(bridge_state.metadata).get(
+                "runtime_layout_usable_profiles", []
             ),
             "policy_ready": mapping(bridge_state.metadata).get("policy_ready", False),
         },

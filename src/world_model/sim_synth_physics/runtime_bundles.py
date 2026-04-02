@@ -116,6 +116,25 @@ def _ready_profiles(
     return profiles
 
 
+def _usable_profiles(
+    *,
+    runtime_target_contract: Mapping[str, Any],
+    runtime_layout_contract: Mapping[str, Any],
+    target_profile_map: Mapping[str, list[str]],
+) -> list[str]:
+    profiles = strings(runtime_layout_contract.get("usable_profiles")) or strings(
+        runtime_layout_contract.get("ready_profiles")
+    )
+    ready_targets = set(strings(runtime_target_contract.get("verified_target_ids"))) or set(
+        strings(runtime_target_contract.get("ready_target_ids"))
+    )
+    for profile_id, target_ids in target_profile_map.items():
+        if any(target_id in ready_targets for target_id in target_ids):
+            if profile_id not in profiles:
+                profiles.append(profile_id)
+    return profiles
+
+
 def _preferred_profile(
     *,
     runtime_target_contract: Mapping[str, Any],
@@ -123,7 +142,7 @@ def _preferred_profile(
     target_profile_map: Mapping[str, list[str]],
     deployment_contract: Mapping[str, Any] | None = None,
 ) -> str:
-    ready_profiles = _ready_profiles(
+    ready_profiles = _usable_profiles(
         runtime_target_contract=runtime_target_contract,
         runtime_layout_contract=runtime_layout_contract,
         target_profile_map=target_profile_map,
@@ -186,7 +205,7 @@ def _launch_specs_for_backend(
         upstream_profiles = {
             "holosoma_repo": {"repo": "holosoma", "url": "https://pypi.org/project/holosoma/"},
         }
-    ready_profiles = _ready_profiles(
+    ready_profiles = _usable_profiles(
         runtime_target_contract=runtime_target_contract,
         runtime_layout_contract=runtime_layout_contract,
         target_profile_map=target_profile_map,
@@ -263,6 +282,11 @@ def build_backend_runtime_bundle(
         "task_id": task_id,
         "preferred_profile": preferred_profile,
         "ready_profiles": _ready_profiles(
+            runtime_target_contract=runtime_target_contract,
+            runtime_layout_contract=runtime_layout_contract,
+            target_profile_map=target_profile_map,
+        ),
+        "usable_profiles": _usable_profiles(
             runtime_target_contract=runtime_target_contract,
             runtime_layout_contract=runtime_layout_contract,
             target_profile_map=target_profile_map,

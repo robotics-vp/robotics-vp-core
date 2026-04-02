@@ -218,6 +218,38 @@ def _candidate_records(root: str, patterns: Iterable[str], limit: int = 6) -> li
     return matches
 
 
+def _profile_groups(profiles: Iterable[Mapping[str, Any]]) -> dict[str, list[str]]:
+    ready_profiles: list[str] = []
+    usable_profiles: list[str] = []
+    install_ready_profiles: list[str] = []
+    install_partial_profiles: list[str] = []
+    install_blocked_profiles: list[str] = []
+    for row in profiles:
+        row_mapping = mapping(row)
+        profile_id = str(row_mapping.get("profile_id", "") or "")
+        if not profile_id:
+            continue
+        root_exists = bool(row_mapping.get("root_exists", False))
+        install_status = str(row_mapping.get("install_preflight_status", "") or "")
+        if root_exists:
+            ready_profiles.append(profile_id)
+        if root_exists and install_status != "install_blocked":
+            usable_profiles.append(profile_id)
+        if install_status == "install_ready":
+            install_ready_profiles.append(profile_id)
+        elif install_status == "install_partial":
+            install_partial_profiles.append(profile_id)
+        elif install_status == "install_blocked":
+            install_blocked_profiles.append(profile_id)
+    return {
+        "ready_profiles": ready_profiles,
+        "usable_profiles": usable_profiles,
+        "install_ready_profiles": install_ready_profiles,
+        "install_partial_profiles": install_partial_profiles,
+        "install_blocked_profiles": install_blocked_profiles,
+    }
+
+
 def _policy_root_rows(
     candidate_policy_roots: Iterable[tuple[str, str]],
     *,
@@ -421,14 +453,12 @@ def describe_isaac_runtime_layouts(
             data_patterns=["**/*.yaml", "**/*.json"],
         ),
     ]
-    ready_profiles = [
-        profile["profile_id"] for profile in profiles if bool(profile.get("profile_ready", False))
-    ]
+    profile_groups = _profile_groups(profiles)
     return {
         "version": "backend_runtime_layout_contract_v1",
         "backend": "isaac",
         "profiles": profiles,
-        "ready_profiles": ready_profiles,
+        **profile_groups,
         "preferred_profile_order": [
             "unitree_sim_isaaclab",
             "unitree_rl_gym",
@@ -622,14 +652,12 @@ def describe_holosoma_runtime_layouts(
             data_patterns=["**/*.yaml", "**/*.json", "**/*.npz"],
         ),
     ]
-    ready_profiles = [
-        profile["profile_id"] for profile in profiles if bool(profile.get("root_exists", False))
-    ]
+    profile_groups = _profile_groups(profiles)
     return {
         "version": "backend_runtime_layout_contract_v1",
         "backend": "holosoma",
         "profiles": profiles,
-        "ready_profiles": ready_profiles,
+        **profile_groups,
         "preferred_profile_order": [
             "holosoma_repo",
             "holosoma_motion_bank",

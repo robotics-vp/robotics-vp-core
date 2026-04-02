@@ -128,6 +128,9 @@ def build_backend_runtime_work_orders(
     runtime_layout_ready_profiles = strings(
         bridge_metadata.get("runtime_layout_ready_profiles")
     ) or strings(runtime_layout_contract.get("ready_profiles"))
+    runtime_layout_usable_profiles = strings(
+        bridge_metadata.get("runtime_layout_usable_profiles")
+    ) or strings(runtime_layout_contract.get("usable_profiles"))
     runtime_metadata = {} if runtime_receipt is None else mapping(runtime_receipt.metadata)
     upstream_runtime_pack = mapping(
         runtime_metadata.get("upstream_runtime_pack")
@@ -241,6 +244,7 @@ def build_backend_runtime_work_orders(
                     "runtime_targets_ready", False
                 ),
                 "runtime_layout_ready_profiles": runtime_layout_ready_profiles,
+                "runtime_layout_usable_profiles": runtime_layout_usable_profiles,
                 "runtime_layout_contract": runtime_layout_contract,
                 "policy_contract": policy_contract,
                 "policy_ready": bool(bridge_metadata.get("policy_ready", False)),
