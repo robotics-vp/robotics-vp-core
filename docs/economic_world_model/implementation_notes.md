@@ -2,6 +2,22 @@
 
 ## 2026-04-02
 
+- Explicitly re-audited and closed the lingering Tier 3.4 / 3.5 verification ambiguity:
+  - added `tests/test_sim_synth_phase1_verification.py`
+  - Tier 3.4 now has direct assertions around:
+    - inferential frontier gain / epiplexity / transfer behavior
+    - provenance-quality influence on confidence
+    - agenda score uplift from inferential priors
+    - branch-contract confidence reaction to backend provenance flags
+  - Tier 3.5 now has direct assertions around:
+    - humanoid-target domain-randomization and system-ID policy compilation
+    - unitree-target randomization axes and calibration targets
+    - adaptation/calibration receipt reaction to route status and runtime evidence
+- Why this matters:
+  - these items were functioning, but they were still sitting in the closure sheet as “not yet explicitly re-audited”
+  - this tranche turns them into explicitly verified surfaces instead of informal confidence
+  - the closure conversation can now focus more narrowly on the remaining external-runtime/GPU blocker set
+
 - Tightened Phase-1 runtime-outcome truth against selected runtime refs:
   - `src/world_model/sim_synth_physics/runtime_bundles.py` now ensures output-contract construction can see the already-selected runtime binding
   - `src/world_model/sim_synth_physics/runtime_outcomes.py` now carries expected selected policy / deploy-config / runtime-report refs inside the output contract, includes them as exact refs when locally present, and emits `selected_ref_validation` in the output summary / outcome receipt

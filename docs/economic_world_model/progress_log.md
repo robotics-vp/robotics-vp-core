@@ -2,6 +2,29 @@
 
 ## 2026-04-02
 
+- Changed: explicitly closed the lingering Tier 3.4 / 3.5 verification ambiguity on the audited Phase-1 path:
+  - added `tests/test_sim_synth_phase1_verification.py`
+  - Tier 3.4 coverage now directly checks:
+    - `build_simulation_job_inferential_contract()`
+    - `benchmark_provenance_quality()`
+    - `agenda_score_with_inferential_prior()`
+    - `build_branch_plan_inferential_contract()`
+  - Tier 3.5 coverage now directly checks:
+    - `compile_physics_adaptation_policy()`
+    - humanoid randomization axes and calibration targets
+    - `build_physics_adaptation_receipt()`
+    - `build_physics_calibration_receipt()`
+    - reaction to route status and runtime evidence
+- Why this matters:
+  - those items were no longer substantively mysterious, but they were still being carried as unresolved Category C because they had not been directly re-audited
+  - the explicit audit now shows the current path is structurally sound there
+  - the honest remainder is even more clearly external runtime/install/assets/GPU reality rather than unclassified Phase-1-local behavior
+- Verification: `python3 -m compileall tests/test_sim_synth_phase1_verification.py -q`, `python3 -m ruff check tests/test_sim_synth_phase1_verification.py`, and `python3 -m pytest -q tests/test_sim_synth_phase1_verification.py` passed (result: `4 passed`).
+- Status summary:
+  - Tier 3.4 is closed on the audited path
+  - Tier 3.5 is closed on the audited path
+  - Category C unresolved count is now `0` on the current closure sheet
+
 - Changed: tightened Phase-1 runtime-outcome honesty so harvested outputs are now checked against the selected runtime refs instead of only being counted/classified:
   - `src/world_model/sim_synth_physics/runtime_bundles.py` now passes runtime-binding truth into the output-contract build path
   - `src/world_model/sim_synth_physics/runtime_outcomes.py` now:

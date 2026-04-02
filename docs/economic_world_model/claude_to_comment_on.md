@@ -27,6 +27,8 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Runtime-layout usable-profile propagation | materially closed on the audited path |
 | Checkpoint/report/deploy ref evidence selection | materially closed on the audited path |
 | Selected-output validation against chosen runtime refs | materially closed on the audited path |
+| Inferential yield scoring vs provenance/backend quality (Tier 3.4) | closed on the audited path |
+| Randomization/calibration humanoid-axis completeness (Tier 3.5) | closed on the audited path |
 | Promotion/demotion machinery (Tier 3.2) | Category A gap closed |
 | Shadow execution ladder threading (Tier 3.6) | Category A gap closed on audited path |
 | Branch planner fallback honesty (Tier 3.3) | materially closed on audited path |
@@ -116,14 +118,14 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Real Isaac / Unitree installs, assets, checkpoints | B | Remaining blocker is external host/runtime/asset reality |
 | Real Holosoma runtime, motion/policy/retargeting assets | B | Remaining blocker is external host/runtime/asset reality |
 | GPU-backed GGDS / LDM / video materialization | B | Remaining blocker is GPU/model/runtime availability |
-| Inferential yield scoring vs backend fidelity (Tier 3.4) | C | Interface exists, but this item has not been explicitly re-audited in the current closure pass |
-| Randomization/calibration humanoid-axis completeness (Tier 3.5) | C | Existing surfaces are present, but this item has not been explicitly re-audited in the current closure pass |
+| Inferential yield scoring vs backend fidelity (Tier 3.4) | A -> closed on audited path | direct verification now covers priority/provenance weighting, agenda score uplift, and branch confidence reaction to backend provenance flags |
+| Randomization/calibration humanoid-axis completeness (Tier 3.5) | A -> closed on audited path | direct verification now covers humanoid randomization axes, adaptation policy derivation, and calibration/adaptation reaction to route status plus runtime evidence |
 
 Category A count: 0 (on audited items)
 Category B count: 3
-Category C unresolved: 2
+Category C unresolved: 0
 
-Closure recommendation: **not yet closed**. The audited install/preflight cluster is now materially more honest, but Tier 3.4 and 3.5 still need explicit classification and the practical remainder is still being burned down against real external runtime/asset/GPU reality.
+Closure recommendation: **not yet closed**. The explicit Tier 3.4 / 3.5 verification gap is now closed on the audited path, and the practical remainder is increasingly the real external runtime/asset/GPU blocker set rather than internal Phase-1-local ambiguity.
 
 ## Recommendation to Claude
 
@@ -132,7 +134,7 @@ Closure recommendation: **not yet closed**. The audited install/preflight cluste
 - The next highest-leverage Phase 1 work is still Category B burn-down through honest external consumption:
   1. keep consuming real Isaac/Unitree local install/asset/checkpoint reality
   2. keep doing the same for Holosoma runtime/motion/policy/retargeting assets
-  3. explicitly classify Tier 3.4 and 3.5 once the runtime reality is less ambiguous
+  3. keep converting remaining “ready in contract only” external-runtime claims into concrete host/runtime/asset evidence or explicit blocked truth
 
 ## Procedural Note
 
