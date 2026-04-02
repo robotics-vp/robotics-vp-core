@@ -1135,6 +1135,7 @@ Phase 1 should count as landed only when:
 - backend runtime output contracts and outcome receipts are emitted explicitly, so upstream runtime launches can be judged by harvested outputs rather than only `launch_completed` / `launch_failed`
 - backend runtime outcome receipts can also distinguish `external_launch` from `local_runtime_execution`, so concrete local Isaac/Unitree and Holosoma execution does not get flattened back into launch-shaped truth and trainer/replay consumers can preserve policy / dataset / metrics surface readiness honestly
 - upstream runtime packs and policy/layout contracts carry concrete evidence, not only root/candidate names: selected primary checkpoint / deploy / runtime-report refs, profile candidate counts, repo-git metadata when available, and Isaac declared-vs-verified asset truth are all canonical WM surfaces before Phase 1 can claim the remaining blocker is “just external runtime/assets”
+- once public local Unitree roots are present, Phase 1 should also squeeze the remaining non-GPU asset normalization out of them before calling the remainder external; on the current branch that now covers robot description, whole-body joint-map, and joint-limit truth, leaving whole-body latency and watchdog profiles as the explicit remaining non-GPU asset blockers
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
 - branch-planner fallback truth must remain explicit in canonical plan metadata and trainer exports, so a learned payload can remain visible as a trace without masquerading as active authority when the heuristic path retains control
 - replay/training consume WM receipts without bespoke joins
@@ -1155,6 +1156,7 @@ Named gaps that should remain explicit in this phase:
 - concrete Holosoma local adapter implementation and real host/runtime assets behind the new request/consumer/execution/realization chain
 - concrete Holosoma runtime execution and datapack/asset binding beyond the new request/consumer/execution/realization ladder
 - concrete Isaac/Unitree robot assets, calibration sidecars, and simulator bindings behind the new adapter contracts
+- concrete Unitree whole-body latency and watchdog contracts behind the now-derived robot-description / joint-map / joint-limit surfaces
 - concrete GGDS/LDM execution at scale under the new WM-owned render-provider contracts
 - concrete NAG/LSD counterfactual execution at scale beyond the new conditional execution seam
 - real GPU-backed grounded video state for perception-conditioned sim

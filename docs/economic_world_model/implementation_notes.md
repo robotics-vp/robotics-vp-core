@@ -2560,3 +2560,33 @@
     - Isaac/Unitree: real runtime roots, real target roots, real policy/runtime-report refs, still blocked on concrete asset-manifest/calibration/watchdog surfaces
     - Holosoma: repo-local runtime/model/motion/retargeting surfaces now materially visible and `host_preflight_ready`
   - This means Phase 1 can still progress without a GPU whenever real runtime roots/assets/checkpoints arrive; the GPU is now more clearly the bottleneck for actual execution/materialization, not for local evidence consumption.
+
+- Additional late Phase-1 Unitree asset derivation:
+  - `asset_manifest.py` now accepts the existing Isaac runtime-target contract so asset normalization can reuse already-selected/discovered roots instead of doing ambient host discovery.
+  - That keeps the new behavior topology-conscious:
+    - the Phase-1 scan benefits from public local roots immediately
+    - backend binding / asset contracts / runtime materialization see the same truth
+    - unrelated code paths do not silently become host-dependent
+  - Derived asset selection currently prefers:
+    - robot description:
+      - `unitree_models` USD
+      - then `unitree_rl_gym` / `HumanoidVerse` / `xr_teleoperate` robot descriptions
+    - whole-body joint map:
+      - `HumanoidVerse` `g1_29dof.yaml`
+      - then `unitree_sim_isaaclab/robots/unitree.py`
+      - then URDF fallback
+    - joint limits:
+      - `HumanoidVerse` `g1_29dof.yaml`
+      - then public URDF limit surfaces
+    - recommended contracts:
+      - `control_frequency_profile` from `unitree_sim_isaaclab/sim_main.py`
+      - `teleop_recovery_contract` from `xr_teleoperate` emergency-stop/damping surfaces
+  - Explicit manifest entries still win when they are real, but missing local-path placeholders no longer outrank verified derived local files.
+  - After rerunning the live host scan on this machine, the Isaac missing/preflight set dropped from five asset blockers to two:
+    - remaining:
+      - `asset::actuator_latency_profile`
+      - `asset::safety_watchdog_profile`
+  - I searched the local public repos specifically for latency/watchdog/safety artifacts after this pass:
+    - there are public control-frequency and soft-emergency-stop signals
+    - there is still no clean whole-body latency-contract or safety-watchdog artifact I would count as those required surfaces without overclaiming
+  - That makes the remaining non-GPU Isaac asset gap much narrower and much more honestly external.

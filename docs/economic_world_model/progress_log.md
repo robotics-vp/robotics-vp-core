@@ -1539,3 +1539,22 @@
   - `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_scan_phase1_runtime_layouts.py`
   - `python3 scripts/scan_phase1_runtime_layouts.py --output-path /tmp/phase1_runtime_scan_post_holosoma_fix.json`
   - result: `80 passed`
+
+- Additional non-GPU Unitree asset-normalization pass:
+  - `src/world_model/sim_synth_physics/asset_manifest.py` now derives verified local Unitree asset surfaces from already-discovered public roots rather than waiting for a hand-authored manifest.
+  - Verified/derived surfaces now include:
+    - `unitree_robot_description`
+    - `whole_body_joint_map`
+    - `joint_limit_profile`
+    - recommended:
+      - `control_frequency_profile`
+      - `teleop_recovery_contract`
+  - The derivation is intentionally conservative:
+    - it uses real local files from `unitree_models`, `unitree_rl_gym`, `HumanoidVerse`, `unitree_sim_isaaclab`, and `xr_teleoperate`
+    - it does not count loose README prose or generic control-loop mentions as `actuator_latency_profile` or `safety_watchdog_profile`
+  - The live host scan after this pass now reports:
+    - `verified_asset_count = 5` on the Isaac/Unitree runtime pack
+    - remaining Isaac host-preflight blockers:
+      - `asset::actuator_latency_profile`
+      - `asset::safety_watchdog_profile`
+  - This narrowed the useful non-GPU Phase-1 remainder again: public repos helped materially, and the remaining Isaac asset blockers are now the two contract surfaces that still lack clean public artifacts.
