@@ -29,6 +29,10 @@ The branch is still moving in the right direction.
   - profile surfaces now carry primary refs and evidence density
   - Isaac asset truth distinguishes declared vs verified
   - Holosoma motion truth distinguishes existing vs missing motion sources
+- The newest binding pass now consumes that richer evidence instead of leaving it pack-local:
+  - Isaac runtime bindings emit selected-surface evidence plus host-preflight truth
+  - Holosoma runtime bindings emit selected existing-motion evidence plus host-preflight truth
+  - launch/work-order/training paths preserve that host-preflight truth instead of flattening it away
 
 ## What Changed Topologically
 
@@ -40,6 +44,10 @@ The branch is still moving in the right direction.
   - primary runtime-report refs
   - candidate counts
   - git metadata where a real local clone exists
+- Runtime bindings now distinguish selected surfaces that are:
+  - locally verified
+  - only symbolically named
+  - declared but locally missing
 - Training/export rows now preserve that upstream evidence instead of collapsing it into vague readiness bits.
 
 ## What Fake Readiness Was Removed
@@ -47,10 +55,14 @@ The branch is still moving in the right direction.
 - Compiler closure no longer depended on runtime-only reconstruction of backend routing.
 - Isaac upstream readiness no longer treats declared assets as equivalent to verified assets.
 - Holosoma motion readiness no longer treats named motion sources as equivalent to locally present motion sources.
+- Runtime binding no longer treats selected surfaces as equally ready once the pack is chosen:
+  - declared-only Isaac asset refs are now exposed as host-preflight blockers
+  - Holosoma selected motion sources now prefer the locally existing subset
 - The branch is more explicit now about the difference between:
   - compiled posture
   - runtime posture
   - upstream evidence posture
+  - host-preflight posture
   - genuinely externalized runtime / asset / GPU blockers
 
 ## Tranche Spec Coverage
@@ -62,6 +74,7 @@ The branch is still moving in the right direction.
 | Upstream runtime/profile/policy evidence specificity | **materially improved** |
 | Isaac declared-vs-verified asset truth | **materially improved** |
 | Holosoma existing-vs-missing motion truth | **materially improved** |
+| Runtime-binding host-preflight truth | **materially improved** |
 | Render/provider receipt chain | **not reworked in the latest pass** |
 | Promotion/demotion history surface | **still secondary / not the latest target** |
 
@@ -104,6 +117,7 @@ That does **not** mean global Phase 1 closure. It means the latest audited clust
 - richer upstream runtime/profile/policy evidence preservation
 - declared-vs-verified Isaac asset truth
 - existing-vs-missing Holosoma motion-source truth
+- selected-surface host-preflight truth across binding, launch, work-order, and training surfaces
 
 ### What remains internal
 
@@ -123,8 +137,8 @@ That does **not** mean global Phase 1 closure. It means the latest audited clust
 - **Parallel Perception prep is allowed but secondary.**
 - Do **not** treat the current audited-cluster closure as total Phase 1 closure.
 - The next highest-leverage Phase 1 work should keep consuming the richer upstream evidence surfaces against real local/runtime/asset reality for:
-  1. Isaac / Unitree
-  2. Holosoma
+  1. actual local Isaac / Unitree clones/assets/checkpoints and stronger host-install truth
+  2. actual local Holosoma host/runtime/motion/policy/retargeting assets
 
 ## Procedural Note
 

@@ -2,6 +2,23 @@
 
 ## 2026-04-02
 
+- Changed: consumed the richer Phase-1 upstream runtime evidence against more concrete local host/runtime reality without adding a new ladder rung:
+  - added `src/world_model/sim_synth_physics/ref_evidence.py`
+  - Isaac and Holosoma runtime bindings now emit selected-surface evidence plus `host_preflight_status`
+  - Isaac host preflight now distinguishes declared-only asset refs from locally verified asset refs at the binding level rather than only inside the upstream runtime pack
+  - Holosoma bindings now prefer locally existing motion sources when selecting motion-train/runtime surfaces instead of carrying missing motion refs forward as if they were equally selected
+  - `runtime_launch.py` now consumes non-asset host-preflight gaps, while work orders and training rows preserve the fuller host-preflight truth
+- Why this matters:
+  - the branch can now distinguish:
+    - contract-ready
+    - locally verified enough to launch
+    - still blocked by local host/runtime/install reality
+  - this removes another pseudo-readiness seam without inventing a new runtime rung
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py`, `python3 -m pytest -q tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check` passed (result: `46 passed`).
+- Status summary:
+  - another internal honesty gap is closed on the active Phase-1 runtime-binding cluster
+  - the remainder is increasingly actual host/runtime/assets/checkpoints/GPU reality rather than missing local evidence classification
+
 - Changed: normalized `docs/economic_world_model/claude_to_comment_on.md` back into a single current-state handoff artifact instead of an accreted stack of tranche notes.
 - Why this matters:
   - the collaboration artifact is easier to read as current branch truth

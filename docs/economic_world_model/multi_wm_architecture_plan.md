@@ -1115,6 +1115,10 @@ Phase 1 should count as landed only when:
 - backend runtime artifacts also include a typed local backend-factory invocation/result surface over that realization, so explicit local adapter materialization is no longer hidden inside a direct backend-factory jump
 - Holosoma backend runtime artifacts now carry the same request -> consumer -> adapter-execution -> adapter-realization ladder as Isaac/Unitree, so Phase 1 does not leave one backend on typed runtime truth while the other stays special-cased
 - backend runtime artifacts also include a typed runtime-binding surface between upstream runtime packs and executable-adapter requests, so selected policy / motion / retargeting / launch surfaces and mode-relevant missing components are canonical loop truth instead of being re-inferred from pack-level gaps or launch metadata
+- runtime bindings must also carry selected-surface evidence and host-preflight truth, so Phase 1 can distinguish:
+  - contract-ready but only declared/unverified asset or motion refs
+  - locally verified launch/policy/target surfaces
+  - genuinely external remaining blockers
 - the backend runtime receipt can distinguish `runtime_launch_prepared` from truly missing runtime prerequisites, so “host is ready but local adapter is absent” remains an honest intermediate state instead of collapsing back into generic module-missing logic
 - backend runtime output contracts and outcome receipts are emitted explicitly, so upstream runtime launches can be judged by harvested outputs rather than only `launch_completed` / `launch_failed`
 - backend runtime outcome receipts can also distinguish `external_launch` from `local_runtime_execution`, so concrete local Isaac/Unitree and Holosoma execution does not get flattened back into launch-shaped truth and trainer/replay consumers can preserve policy / dataset / metrics surface readiness honestly

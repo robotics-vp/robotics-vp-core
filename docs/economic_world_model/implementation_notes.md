@@ -2,6 +2,27 @@
 
 ## 2026-04-02
 
+- Consumed the richer upstream runtime evidence against more concrete local host/runtime truth:
+  - added `src/world_model/sim_synth_physics/ref_evidence.py` for selected-ref verification
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` now emits:
+    - `selected_ref_evidence`
+    - `selected_target_ref_evidence`
+    - `selected_asset_ref_evidence`
+    - `host_preflight_status`
+  - `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py` now emits:
+    - selected policy / launch / retargeting evidence
+    - selected existing motion-source evidence
+    - `missing_motion_sources`
+    - `host_preflight_status`
+- Preserved that truth downstream:
+  - `src/world_model/sim_synth_physics/runtime_launch.py` now consumes non-asset host-preflight blockers and exposes host-preflight status in launch plans/receipts
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now preserves host-preflight state in work-order metadata
+  - `src/world_model/sim_synth_physics/training_corpus.py` now preserves host-preflight fields in backend-selector and branch-planner rows
+- Why this matters:
+  - upstream runtime packs already knew “declared vs verified” and “existing vs missing”
+  - this tranche made the selected runtime-binding surfaces consume that truth instead of flattening it during mode-specific selection
+  - Phase 1 can now be more explicit about the distinction between contract-readiness and locally verified launch/runtime readiness
+
 - Normalized the Claude handoff artifact discipline:
   - `docs/economic_world_model/claude_to_comment_on.md` is now reset to a single current-state artifact
   - historical tranche detail should stay in:

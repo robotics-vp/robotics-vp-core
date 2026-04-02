@@ -433,6 +433,10 @@ Suggested weekly WM order for the first training season:
     - policy contracts carry primary checkpoint / deploy-config / runtime-report refs rather than only candidate lists
     - Isaac runtime packs now distinguish declared asset refs from locally verified asset refs, so “manifest says it exists” is no longer the only asset readiness signal
     - Holosoma runtime packs now preserve which motion sources actually exist locally versus which are only named
+  - Runtime bindings now also carry selected-surface host-preflight truth, so the branch can distinguish contract-ready lanes from locally verified lanes without inventing a new runtime rung:
+    - Isaac selected launch/policy/target/asset refs now emit explicit verification status
+    - Holosoma selected policy/retargeting refs and selected existing motion sources now emit explicit verification status
+    - launch/work-order/training surfaces preserve that host-preflight truth instead of flattening it back into pack-level readiness
   - Those runtime bindings now survive into runtime bundles, launch specs, work orders, loop summaries, and trainer-facing corpus rows, so downstream consumers no longer have to infer “why this lane is still blocked” from pack metadata or launch status alone.
   - Holosoma now follows the same request -> consumer -> execution -> realization ladder as Isaac/Unitree, so one backend is not allowed to remain a structurally looser special case while the other gets typed runtime truth.
   - No training loop lands here; the service is advisory and structural.
