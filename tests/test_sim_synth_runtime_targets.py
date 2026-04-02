@@ -33,6 +33,41 @@ def test_isaac_runtime_targets_include_context_roots(tmp_path) -> None:
     assert contract["runtime_targets_ready"] is True
 
 
+def test_isaac_runtime_targets_surface_install_shape_truth(tmp_path) -> None:
+    sdk_root = tmp_path / "unitree_sdk2"
+    asset_root = tmp_path / "unitree_assets"
+    sim_root = tmp_path / "unitree_sim_isaaclab"
+    sdk_root.mkdir()
+    asset_root.mkdir()
+    sim_root.mkdir()
+    (sim_root / "sim_main.py").write_text("", encoding="utf-8")
+    (sim_root / "dds").mkdir()
+
+    contract = describe_isaac_runtime_targets(
+        {
+            "unitree_sdk2_root": str(sdk_root),
+            "unitree_asset_root": str(asset_root),
+            "unitree_sim_isaaclab_root": str(sim_root),
+        }
+    )
+
+    sdk_row = next(row for row in contract["targets"] if row["target_id"] == "unitree_sdk2_root")
+    asset_row = next(row for row in contract["targets"] if row["target_id"] == "unitree_asset_root")
+    sim_row = next(
+        row for row in contract["targets"] if row["target_id"] == "unitree_sim_isaaclab_root"
+    )
+
+    assert sdk_row["exists"] is True
+    assert sdk_row["verification_status"] == "install_shape_missing"
+    assert sdk_row["verified"] is False
+    assert asset_row["verification_status"] == "install_shape_missing"
+    assert asset_row["verified"] is False
+    assert sim_row["verification_status"] == "install_shape_ready"
+    assert "unitree_sim_isaaclab_root" in contract["verified_target_ids"]
+    assert "unitree_sdk2_root" in contract["unverified_required_target_ids"]
+    assert contract["runtime_target_preflight_status"] == "preflight_partial"
+
+
 def test_isaac_runtime_targets_accept_lerobot_alias(tmp_path) -> None:
     sdk_root = tmp_path / "unitree_sdk2"
     asset_root = tmp_path / "unitree_assets"
@@ -108,3 +143,32 @@ def test_holosoma_runtime_targets_autodiscover_repo_root(tmp_path, monkeypatch) 
     holosoma_row = next(row for row in contract["targets"] if row["target_id"] == "holosoma_root")
     assert holosoma_row["ref"] == str(holosoma_root.resolve())
     assert holosoma_row["source"] == "autodiscovery"
+
+
+def test_holosoma_runtime_targets_surface_motion_and_retargeting_verification(tmp_path) -> None:
+    holosoma_root = tmp_path / "holosoma"
+    holosoma_root.mkdir()
+    (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    (holosoma_root / "holosoma").mkdir()
+    motion_root = tmp_path / "motions"
+    motion_root.mkdir()
+    (motion_root / "g1_walk.npz").write_text("x", encoding="utf-8")
+    retargeting_root = tmp_path / "retargeting"
+    retargeting_root.mkdir()
+    (retargeting_root / "g1_retarget.yaml").write_text("{}", encoding="utf-8")
+
+    contract = describe_holosoma_runtime_targets(
+        {
+            "holosoma_root": str(holosoma_root),
+            "holosoma_motion_root": str(motion_root),
+            "retargeting_root": str(retargeting_root),
+        }
+    )
+
+    motion_row = next(row for row in contract["targets"] if row["target_id"] == "holosoma_motion_root")
+    retarget_row = next(row for row in contract["targets"] if row["target_id"] == "retargeting_root")
+
+    assert motion_row["verification_status"] == "install_shape_ready"
+    assert motion_row["primary_marker_ref"].endswith("g1_walk.npz")
+    assert retarget_row["verification_status"] == "install_shape_ready"
+    assert "holosoma_motion_root" in contract["verified_target_ids"]

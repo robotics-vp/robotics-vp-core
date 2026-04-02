@@ -313,6 +313,12 @@ def build_backend_runtime_work_orders(
                 "runtime_binding_selected_profile_primary_entrypoint_ref": str(
                     runtime_binding.get("selected_profile_primary_entrypoint_ref", "") or ""
                 ),
+                "runtime_binding_selected_verified_target_ids": strings(
+                    runtime_binding.get("selected_verified_target_ids")
+                ),
+                "runtime_binding_selected_partial_target_ids": strings(
+                    runtime_binding.get("selected_partial_target_ids")
+                ),
                 "runtime_binding_host_preflight_status": str(
                     runtime_binding.get("host_preflight_status", "") or ""
                 ),

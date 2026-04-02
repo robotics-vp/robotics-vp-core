@@ -1010,8 +1010,10 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
     (unitree_sim_root / "action_provider").mkdir()
     unitree_sdk_root = tmp_path / "unitree_sdk2"
     unitree_sdk_root.mkdir()
+    (unitree_sdk_root / "include").mkdir()
     unitree_asset_root = tmp_path / "unitree_assets"
     unitree_asset_root.mkdir()
+    (unitree_asset_root / "g1.usd").write_text("x", encoding="utf-8")
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     policy_path = policy_root / "g1_policy.onnx"
@@ -1127,8 +1129,10 @@ def test_runtime_executes_external_launch_when_requested(
     (unitree_sim_root / "action_provider").mkdir()
     unitree_sdk_root = tmp_path / "unitree_sdk2"
     unitree_sdk_root.mkdir()
+    (unitree_sdk_root / "include").mkdir()
     unitree_asset_root = tmp_path / "unitree_assets"
     unitree_asset_root.mkdir()
+    (unitree_asset_root / "g1.usd").write_text("x", encoding="utf-8")
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     policy_path = policy_root / "g1_policy.onnx"

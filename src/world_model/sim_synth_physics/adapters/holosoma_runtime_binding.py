@@ -16,6 +16,16 @@ def _mode_contract(deployment_contract: Mapping[str, Any], deployment_mode: str)
     return {}
 
 
+def _target_rows_by_id(runtime_target_contract: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    payload: dict[str, dict[str, Any]] = {}
+    for row in list(runtime_target_contract.get("targets", []) or []):
+        row_mapping = mapping(row)
+        target_id = str(row_mapping.get("target_id", "") or "")
+        if target_id:
+            payload[target_id] = row_mapping
+    return payload
+
+
 def _target_refs(
     runtime_target_contract: Mapping[str, Any],
     required_target_ids: list[str],
@@ -35,6 +45,23 @@ def _target_refs(
         if not ref:
             missing.append(target_id)
     return refs, missing
+
+
+def _target_ref_evidence(row: Mapping[str, Any]) -> dict[str, Any]:
+    ref = str(row.get("ref", "") or "")
+    fallback = describe_ref_evidence(ref)
+    return {
+        **fallback,
+        "verification_status": str(
+            row.get("verification_status", fallback.get("verification_status", "")) or ""
+        ),
+        "ready": bool(row.get("verified", fallback.get("ready", False))),
+        "verified": bool(row.get("verified", fallback.get("verified", False))),
+        "path_kind": str(row.get("path_kind", "") or ""),
+        "matched_markers": strings(row.get("matched_markers")),
+        "missing_markers": strings(row.get("missing_markers")),
+        "primary_marker_ref": str(row.get("primary_marker_ref", "") or ""),
+    }
 
 
 def _required_surfaces(deployment_mode: str) -> list[str]:
@@ -216,6 +243,7 @@ def build_holosoma_runtime_binding(
         local_runtime_binding=local_runtime_binding,
     )
     selected_target_refs, missing_targets = _target_refs(runtime_target_contract, required_target_ids)
+    target_rows = _target_rows_by_id(runtime_target_contract)
     selected_retargeting_root = str(selected_target_refs.get("retargeting_root", "") or "")
     selected_ref_evidence = {
         "policy_ref": describe_ref_evidence(selected_policy_ref),
@@ -225,12 +253,22 @@ def build_holosoma_runtime_binding(
         "retargeting_root": describe_ref_evidence(selected_retargeting_root),
     }
     selected_target_ref_evidence = {
-        target_id: describe_ref_evidence(ref)
+        target_id: _target_ref_evidence(target_rows.get(target_id, {"ref": ref}))
         for target_id, ref in selected_target_refs.items()
     }
     selected_motion_source_evidence = {
         source: describe_ref_evidence(source) for source in selected_motion_sources
     }
+    selected_verified_target_ids = [
+        target_id
+        for target_id, evidence in selected_target_ref_evidence.items()
+        if bool(evidence.get("verified", False))
+    ]
+    selected_partial_target_ids = [
+        target_id
+        for target_id, evidence in selected_target_ref_evidence.items()
+        if not bool(evidence.get("ready", False))
+    ]
     surface_gaps: list[str] = []
     for surface in required_surfaces:
         if surface in pack_ready_surfaces:
@@ -350,6 +388,8 @@ def build_holosoma_runtime_binding(
         "selected_command": selected_command,
         "selected_runtime_report": selected_runtime_report,
         "selected_target_refs": selected_target_refs,
+        "selected_verified_target_ids": selected_verified_target_ids,
+        "selected_partial_target_ids": selected_partial_target_ids,
         "selected_motion_sources": selected_motion_sources,
         "missing_motion_sources": strings(pack.get("missing_motion_sources")),
         "selected_retargeting_root": selected_retargeting_root,

@@ -60,6 +60,7 @@ def summarize_preflight_evidence(
     evidence_by_component: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     missing: list[str] = []
+    unready: list[str] = []
     symbolic: list[str] = []
     verified: list[str] = []
     ready: list[str] = []
@@ -68,6 +69,10 @@ def summarize_preflight_evidence(
         status = str(evidence.get("verification_status", "") or "")
         if status in {"missing", "local_path_missing"}:
             missing.append(component)
+            continue
+        if not bool(evidence.get("ready", False)):
+            missing.append(component)
+            unready.append(component)
             continue
         if bool(evidence.get("ready", False)):
             ready.append(component)
@@ -86,6 +91,7 @@ def summarize_preflight_evidence(
         "symbolic_components": symbolic,
         "verified_components": verified,
         "ready_components": ready,
+        "unready_components": unready,
         "required_components": list(required_components),
     }
 

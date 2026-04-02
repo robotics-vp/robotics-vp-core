@@ -59,14 +59,70 @@ def _target_record(
     ref: str,
     source: str,
     checked_paths: list[str] | None = None,
+    exact_markers: tuple[str, ...] = (),
+    glob_markers: tuple[str, ...] = (),
+    marker_policy: str = "any",
 ) -> dict[str, Any]:
+    path = Path(ref) if ref else None
+    exists = bool(ref and path is not None and path.exists())
+    matched_markers: list[str] = []
+    missing_markers: list[str] = []
+    marker_refs: list[str] = []
+    if exists and path is not None:
+        for marker in exact_markers:
+            marker_path = (path / marker).resolve()
+            if marker_path.exists():
+                matched_markers.append(marker)
+                marker_refs.append(str(marker_path))
+            else:
+                missing_markers.append(marker)
+        for pattern in glob_markers:
+            pattern_matches = sorted(path.rglob(pattern))
+            if pattern_matches:
+                matched_markers.append(pattern)
+                marker_refs.append(str(pattern_matches[0].resolve()))
+            else:
+                missing_markers.append(pattern)
+    marker_expected = list(exact_markers) + list(glob_markers)
+    marker_verified = True
+    if marker_expected:
+        if marker_policy == "all":
+            marker_verified = not missing_markers
+        else:
+            marker_verified = bool(matched_markers)
+    verification_status = "missing"
+    if exists:
+        if not marker_expected:
+            verification_status = "local_path_exists"
+        elif marker_verified:
+            verification_status = "install_shape_ready"
+        elif matched_markers:
+            verification_status = "install_shape_partial"
+        else:
+            verification_status = "install_shape_missing"
     return {
         "target_id": target_id,
         "label": label,
         "ref": ref,
-        "exists": bool(ref and Path(ref).exists()),
+        "exists": exists,
         "source": source,
         "checked_paths": list(checked_paths or []),
+        "path_kind": (
+            "missing"
+            if not exists or path is None
+            else "directory"
+            if path.is_dir()
+            else "file"
+            if path.is_file()
+            else "other"
+        ),
+        "expected_markers": marker_expected,
+        "matched_markers": matched_markers,
+        "missing_markers": missing_markers,
+        "primary_marker_ref": "" if not marker_refs else marker_refs[0],
+        "marker_policy": marker_policy,
+        "verified": bool(exists and marker_verified),
+        "verification_status": verification_status,
     }
 
 
@@ -79,11 +135,24 @@ def _runtime_stack_summary(
     one_of_groups: list[list[str]] | None = None,
 ) -> dict[str, Any]:
     by_id = {str(record["target_id"]): bool(record.get("exists", False)) for record in records}
+    verified_by_id = {
+        str(record["target_id"]): bool(record.get("verified", False)) for record in records
+    }
     missing_required = [target_id for target_id in required_target_ids if not by_id.get(target_id, False)]
+    unverified_required = [
+        target_id
+        for target_id in required_target_ids
+        if by_id.get(target_id, False) and not verified_by_id.get(target_id, False)
+    ]
     unresolved_groups: list[list[str]] = []
     for group in list(one_of_groups or []):
         if not any(by_id.get(target_id, False) for target_id in group):
             unresolved_groups.append(list(group))
+    target_preflight_status = "preflight_ready"
+    if missing_required or unresolved_groups:
+        target_preflight_status = "preflight_blocked"
+    elif unverified_required:
+        target_preflight_status = "preflight_partial"
     return {
         "version": "backend_runtime_target_contract_v1",
         "backend": backend,
@@ -91,10 +160,15 @@ def _runtime_stack_summary(
         "targets": records,
         "required_target_ids": list(required_target_ids),
         "missing_required_target_ids": missing_required,
+        "unverified_required_target_ids": unverified_required,
         "one_of_target_groups": list(one_of_groups or []),
         "unresolved_one_of_groups": unresolved_groups,
         "runtime_targets_ready": not missing_required and not unresolved_groups,
+        "runtime_target_preflight_status": target_preflight_status,
         "ready_target_ids": [target_id for target_id, present in by_id.items() if present],
+        "verified_target_ids": [
+            target_id for target_id, present in verified_by_id.items() if present
+        ],
     }
 
 
@@ -189,6 +263,7 @@ def describe_isaac_runtime_targets(
             ref=isaaclab_root,
             source=isaaclab_source,
             checked_paths=isaaclab_checked,
+            exact_markers=("source", "apps"),
         ),
         _target_record(
             target_id="isaacsim_root",
@@ -196,6 +271,7 @@ def describe_isaac_runtime_targets(
             ref=isaacsim_root,
             source=isaacsim_source,
             checked_paths=isaacsim_checked,
+            exact_markers=("apps",),
         ),
         _target_record(
             target_id="unitree_sdk2_root",
@@ -203,6 +279,7 @@ def describe_isaac_runtime_targets(
             ref=unitree_sdk2_root,
             source=unitree_sdk2_source,
             checked_paths=unitree_sdk2_checked,
+            exact_markers=("include", "lib", "python", "README.md"),
         ),
         _target_record(
             target_id="unitree_asset_root",
@@ -210,6 +287,7 @@ def describe_isaac_runtime_targets(
             ref=unitree_asset_root,
             source=unitree_asset_source,
             checked_paths=unitree_asset_checked,
+            glob_markers=("**/*.usd", "**/*.urdf", "**/*.xml", "**/*.yaml", "**/*.json"),
         ),
         _target_record(
             target_id="unitree_sim_isaaclab_root",
@@ -217,6 +295,7 @@ def describe_isaac_runtime_targets(
             ref=unitree_sim_isaaclab_root,
             source=unitree_sim_source,
             checked_paths=unitree_sim_checked,
+            exact_markers=("sim_main.py", "dds"),
         ),
         _target_record(
             target_id="unitree_rl_gym_root",
@@ -224,6 +303,7 @@ def describe_isaac_runtime_targets(
             ref=unitree_rl_gym_root,
             source=unitree_rl_source,
             checked_paths=unitree_rl_checked,
+            exact_markers=("deploy", "legged_gym"),
         ),
         _target_record(
             target_id="xr_teleoperate_root",
@@ -231,6 +311,7 @@ def describe_isaac_runtime_targets(
             ref=xr_teleoperate_root,
             source=xr_source,
             checked_paths=xr_checked,
+            exact_markers=("teleop",),
         ),
         _target_record(
             target_id="unitree_model_root",
@@ -238,6 +319,7 @@ def describe_isaac_runtime_targets(
             ref=unitree_model_root,
             source=unitree_model_source,
             checked_paths=unitree_model_checked,
+            glob_markers=("**/*.usd", "**/*.urdf"),
         ),
         _target_record(
             target_id="unitree_policy_root",
@@ -245,6 +327,7 @@ def describe_isaac_runtime_targets(
             ref=unitree_policy_root,
             source=unitree_policy_source,
             checked_paths=unitree_policy_checked,
+            glob_markers=("**/*.onnx", "**/*.pt", "**/*.pth", "**/*.ckpt"),
         ),
         _target_record(
             target_id="unitree_sdk2_python_root",
@@ -252,6 +335,7 @@ def describe_isaac_runtime_targets(
             ref=unitree_sdk2_python_root,
             source=unitree_sdk2_python_source,
             checked_paths=unitree_sdk2_python_checked,
+            exact_markers=("setup.py", "pyproject.toml"),
         ),
         _target_record(
             target_id="humanoidverse_root",
@@ -259,6 +343,7 @@ def describe_isaac_runtime_targets(
             ref=humanoidverse_root,
             source=humanoidverse_source,
             checked_paths=humanoidverse_checked,
+            exact_markers=("humanoidverse", "assets"),
         ),
         _target_record(
             target_id="teleimager_root",
@@ -266,6 +351,7 @@ def describe_isaac_runtime_targets(
             ref=teleimager_root,
             source=teleimager_source,
             checked_paths=teleimager_checked,
+            exact_markers=("README.md", "scripts"),
         ),
         _target_record(
             target_id="unitree_il_lerobot_root",
@@ -273,6 +359,7 @@ def describe_isaac_runtime_targets(
             ref=unitree_il_lerobot_root,
             source=lerobot_source,
             checked_paths=lerobot_checked,
+            exact_markers=("examples", "scripts", "lerobot"),
         ),
     ]
     summary = _runtime_stack_summary(
@@ -352,6 +439,7 @@ def describe_holosoma_runtime_targets(
             ref=holosoma_root,
             source=holosoma_source,
             checked_paths=holosoma_checked,
+            exact_markers=("README.md", "holosoma", "scripts"),
         ),
         _target_record(
             target_id="holosoma_motion_root",
@@ -359,6 +447,7 @@ def describe_holosoma_runtime_targets(
             ref=holosoma_motion_root,
             source=holosoma_motion_source,
             checked_paths=holosoma_motion_checked,
+            glob_markers=("**/*.npz", "**/*.npy", "**/*.bvh", "**/*.pkl"),
         ),
         _target_record(
             target_id="holosoma_policy_root",
@@ -366,6 +455,7 @@ def describe_holosoma_runtime_targets(
             ref=holosoma_policy_root,
             source=holosoma_policy_source,
             checked_paths=holosoma_policy_checked,
+            glob_markers=("**/*.onnx", "**/*.pt", "**/*.pth", "**/*.ckpt", "**/*.yaml", "**/*.yml"),
         ),
         _target_record(
             target_id="retargeting_root",
@@ -373,6 +463,7 @@ def describe_holosoma_runtime_targets(
             ref=retargeting_root,
             source=retarget_source,
             checked_paths=retarget_checked,
+            glob_markers=("**/*.yaml", "**/*.json", "**/*.npz"),
         ),
     ]
     summary = _runtime_stack_summary(

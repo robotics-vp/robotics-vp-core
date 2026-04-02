@@ -238,9 +238,26 @@ def test_isaac_runtime_binding_surfaces_declared_only_asset_preflight_truth(tmp_
     assert binding["selected_profile_install_preflight_status"] == "install_ready"
     assert binding["host_preflight_status"] == "preflight_blocked"
     assert "asset::unitree_robot_description" in binding["host_preflight_missing_components"]
+    assert binding["selected_verified_target_ids"] == []
+    assert sorted(binding["selected_partial_target_ids"]) == [
+        "unitree_asset_root",
+        "unitree_sdk2_root",
+    ]
     assert (
         binding["selected_ref_evidence"]["policy_ref"]["verification_status"]
         == "local_path_exists"
+    )
+    assert (
+        binding["selected_target_ref_evidence"]["unitree_sdk2_root"][
+            "verification_status"
+        ]
+        == "install_shape_missing"
+    )
+    assert (
+        binding["selected_target_ref_evidence"]["unitree_asset_root"][
+            "verification_status"
+        ]
+        == "install_shape_missing"
     )
     assert (
         binding["selected_asset_ref_evidence"]["unitree_robot_description"][

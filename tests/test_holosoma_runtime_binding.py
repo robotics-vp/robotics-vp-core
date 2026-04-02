@@ -196,6 +196,8 @@ def test_holosoma_runtime_binding_selects_existing_motion_sources_only(tmp_path)
     assert binding["host_preflight_status"] == "preflight_ready"
     assert binding["selected_profile_install_preflight_status"] == "install_ready"
     assert binding["selected_profile_primary_entrypoint_ref"].endswith("holosoma")
+    assert binding["selected_verified_target_ids"] == ["holosoma_motion_root"]
+    assert binding["selected_partial_target_ids"] == []
     assert (
         binding["selected_motion_source_evidence"][str(motion_clip)]["verification_status"]
         == "local_path_exists"
