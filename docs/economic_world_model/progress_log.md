@@ -2,6 +2,19 @@
 
 ## 2026-04-02
 
+- Changed: tightened Phase-1 profile/target/policy selection so deployment/runtime-pack readiness is now driven by usable profiles, verified targets, and real local checkpoint-bearing roots instead of raw existing roots:
+  - `src/world_model/sim_synth_physics/runtime_layouts.py` now selects policy roots across multiple candidates more honestly, so an explicit-but-empty policy root no longer outranks a discovered runtime root that actually contains checkpoints
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py` and `src/world_model/sim_synth_physics/adapters/holosoma_deployment.py` now use usable profiles plus verified targets rather than `ready_profiles`/`ready_target_ids` path-existence posture
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py` now preserve `runtime_target_preflight_status`, verified target ids, and usable-profile preference instead of treating raw target existence as enough runtime-pack evidence
+- Why this matters:
+  - install-blocked runtime profiles no longer count as deployable just because the repo root exists
+  - empty explicit policy roots no longer hide discovered local checkpoint banks
+  - the remaining blocker is pushed further toward real local runtime/install/assets/checkpoints/GPU reality rather than internal profile-selection optimism
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py src/world_model/sim_synth_physics/adapters/holosoma_deployment.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_deployment.py tests/test_holosoma_deployment.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_isaac_unitree_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py src/world_model/sim_synth_physics/adapters/holosoma_deployment.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_deployment.py tests/test_holosoma_deployment.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_isaac_unitree_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_deployment.py tests/test_holosoma_deployment.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py`, and `git diff --check` passed (result: `39 passed`).
+- Status summary:
+  - the audited profile/target/policy selection cluster has no new Category A gap
+  - Category B is now narrower and more concrete: real local installs/assets/checkpoints and GPU-backed provider/runtime reality
+
 - Changed: tightened Phase-1 target-preflight truth so runtime-target existence is no longer treated as enough on the selected-target binding path:
   - `src/world_model/sim_synth_physics/runtime_targets.py` now emits install-shape verification metadata for runtime targets:
     - `verification_status`

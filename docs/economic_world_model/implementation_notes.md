@@ -2,6 +2,19 @@
 
 ## 2026-04-02
 
+- Tightened the Phase-1 profile/policy selection seam against real local runtime reality:
+  - `src/world_model/sim_synth_physics/runtime_layouts.py` now evaluates multiple candidate policy roots and chooses the root that actually carries checkpoint evidence instead of letting an explicit-but-empty policy root win by position alone
+  - the policy contracts now preserve `policy_root_source` and the candidate-root rows used for that decision
+- Tightened deployment/runtime-pack readiness without adding a new ladder rung:
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py` and `src/world_model/sim_synth_physics/adapters/holosoma_deployment.py` now treat install-blocked profiles as unusable and use verified targets instead of raw target existence
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py` now prefer usable profiles and preserve `runtime_target_preflight_status` plus verified/unverified target truth
+- Why this matters:
+  - before this tranche, the branch could still overstate readiness in two ways:
+    - an explicit but empty policy root could mask a discovered runtime root with real checkpoints
+    - an install-blocked repo root could still count as a usable runtime profile downstream
+  - this tranche removes both pseudo-readiness seams on the audited path
+  - the remaining blocker is more honestly “real install/assets/checkpoints/GPU existence” rather than internal selection optimism
+
 - Tightened the Phase-1 target-preflight path without adding a new ladder rung:
   - `src/world_model/sim_synth_physics/runtime_targets.py` now computes install-shape verification for runtime targets instead of stopping at `Path.exists()`
   - the verification is additive and marker-based:
