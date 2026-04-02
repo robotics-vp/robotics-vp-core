@@ -155,6 +155,7 @@ That changes the near-term job of this plan:
 For this plan, "all plumbing laid by August 31, 2026" means:
 
 - the sim / synth / physics WM has canonical state, receipts, replay/training exports, runtime-package seams, and real-or-unavailable provider lanes for simulation, diffusion, render, predictive-state, and backend routing
+- for Phase 1 backend closure specifically, "canonical state and runtime-package seams" now includes backend-specific deployment contracts plus upstream runtime-pack contracts, so Isaac/Unitree and Holosoma readiness can be represented as typed pack-ready / pack-partial / pack-blocked state rather than vague backend labels
 - the perception / grounding WM has canonical scene/grounding state, evidence-routing ownership, temporal-state seams including V-JEPA 2, calibration/provider truth, and replay/training exports
 - the embodiment / actuation WM has canonical body/action/observation state, latency and calibration receipts, safety-adjacent runtime contracts, and Unitree-facing adapter insertion points even if real assets and hardware are still pending
 - the economic WM can consume lower-WM typed receipts directly rather than reconstructing them from sidecars

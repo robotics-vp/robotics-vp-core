@@ -423,6 +423,7 @@ Suggested weekly WM order for the first training season:
   - The next rung after the consumer is now explicit as well: the WM emits typed adapter-execution mediation and an adapter receipt, so request, consumer, execution mediation, launch, and harvested outcome remain distinct runtime truths rather than collapsing into one launch-status bit.
   - The next rung after execution mediation is now explicit too: the WM emits a typed adapter-realization surface, so it can say whether the lane is concretely realized through a local backend-factory handoff or only through an external launch delegate before any actual runtime success claim.
   - The next rung after realization is now explicit too: the WM emits a typed local backend-factory invocation/result surface, so explicit local adapter materialization is no longer hidden inside a direct backend-factory jump.
+  - The next closure rung after local materialization is now explicit too: the WM carries backend-specific deployment contracts and upstream runtime packs, so runtime profile / policy-bank / asset-pack / telemetry-pack readiness is canonical WM state rather than an implicit reading of repo roots.
   - Holosoma now follows the same request -> consumer -> execution -> realization ladder as Isaac/Unitree, so one backend is not allowed to remain a structurally looser special case while the other gets typed runtime truth.
   - No training loop lands here; the service is advisory and structural.
 - Do not touch:

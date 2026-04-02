@@ -1104,3 +1104,26 @@
   - actual Isaac Lab / Isaac Sim / Unitree upstream runtime/assets/policies
   - actual Holosoma host/runtime/motion/policy/retargeting assets
   - GPU-backed GGDS / video materialization
+
+- Changed: pushed the next backend-specific closure tranche so upstream runtime surfaces stop living only as implicit repo roots and start becoming canonical runtime-pack truth inside the Phase 1 WM:
+  - added:
+    - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_deployment.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py`
+  - `backend_isaac.py` now emits an explicit Isaac/Unitree upstream runtime pack over runtime targets, runtime layouts, deployment modes, policy-bank surfaces, telemetry surfaces, and normalized robot-asset refs
+  - `backend_holosoma.py` now emits both a Holosoma deployment contract and a Holosoma upstream runtime pack, and it no longer treats retargeting / reward-overlay / policy surfaces as universally required for all Holosoma modes
+  - `runtime_bundles.py`, `runtime_bridge.py`, `runtime.py`, `runtime_work_orders.py`, and `training_corpus.py` now preserve upstream runtime-pack truth as load-bearing metadata rather than leaving it stranded beside bindings
+  - `scripts/scan_phase1_runtime_layouts.py` now exports deployment contracts plus upstream runtime packs for both backends, so Phase 1 runtime scanning can name pack-ready vs pack-partial vs pack-blocked posture directly
+- Changed: this removes another fake-readiness seam:
+  - the WM can now say whether the Isaac/Unitree or Holosoma lane has a real upstream runtime/profile/policy/asset pack available
+  - Holosoma can now distinguish `sim_eval`, `motion_train`, and `retarget_eval` instead of pretending one universal asset posture
+  - downstream corpus/work-order surfaces now preserve pack status and missing components, so later training or GPU bring-up does not need to rediscover them from scattered roots
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_runtime_launch.py`
+- Blocked: the honest Phase 1 remainder is narrower again and increasingly external:
+  - real Isaac Lab / Isaac Sim / Unitree runtime packs still need the actual upstream repos/assets/policies behind them
+  - real Holosoma runtime packs still need actual host/runtime/motion/policy/retargeting assets
+  - GPU-backed GGDS / video materialization still remains external-runtime / checkpoint / host work

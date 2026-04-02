@@ -2045,3 +2045,24 @@
   - Isaac/Unitree still needs the actual upstream runtime/assets/policies behind the new materialization surfaces
   - Holosoma still needs the actual host/runtime/motion/policy/retargeting assets behind the same surfaces
   - the remaining blockers are increasingly external runtime, asset, GPU, and benchmark-density issues rather than missing typed loop plumbing
+
+- The next backend-specific closure tranche is now landed:
+  - Isaac/Unitree has an explicit `upstream_runtime_pack` surface over runtime profiles, ready targets, policy-bank surfaces, deploy surfaces, telemetry surfaces, and asset refs
+  - Holosoma now has:
+    - a real deployment contract (`sim_eval`, `motion_train`, `retarget_eval`)
+    - an explicit upstream runtime pack over runtime roots, motion surfaces, retargeting surfaces, reward-overlay posture, and telemetry surfaces
+- This matters because the branch can now distinguish:
+  - backend binding readiness
+  - deployment-mode readiness
+  - upstream runtime-pack readiness
+  - executable-adapter request / consumer / execution / realization / launch / outcome
+  without collapsing those into one backend status bit
+- Downstream Phase 1 consumers now preserve that truth:
+  - runtime bundles carry `upstream_runtime_pack`
+  - runtime-bridge receipts preserve it
+  - runtime work orders now inherit pack status and missing components
+  - backend-selector / branch-planner corpus rows now preserve pack status, ready surfaces, and missing components
+- The `scan_phase1_runtime_layouts.py` script now emits the same deployment and runtime-pack view, so Phase 1 scanning no longer stops at “roots/layouts/policy contract”
+- Honest remainder after this tranche:
+  - the repo now knows how to describe backend-specific upstream runtime packs, but those packs are still provider-owned/external reality
+  - the next concrete work is still real runtime/assets/policies/hosts, not another speculative abstraction layer
