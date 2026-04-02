@@ -53,6 +53,10 @@ This file is the single current-state handoff. Historical tranche detail belongs
 - Runtime packs and bindings now prefer verified local checkpoint / deploy-config / runtime-report refs over earlier missing candidates, and they preserve both the chosen ref source and candidate-evidence summaries instead of flattening selection back into first-candidate ordering.
 - Runtime output contracts and outcome receipts now validate harvested outputs against the selected policy / deploy-config / runtime-report refs, so “runtime outputs harvested” also says whether the outputs actually align with the chosen runtime artifacts.
 - Work-order completion and backend-selector target-source selection now also consume that validation truth, so mismatched harvested outputs no longer masquerade as satisfactory external-runtime evidence just because files were harvested.
+- `scripts/scan_phase1_runtime_layouts.py` now runs correctly from repo root and emits a compact `scan_summary` instead of requiring pytest-style import context to work.
+- On the current host, that summary makes Category B concrete rather than vague:
+  - Isaac/Unitree currently has zero usable profiles and is blocked on missing SDK, asset, robot-description, joint-map, latency, joint-limit, watchdog, and policy surfaces.
+  - Holosoma currently has zero usable profiles and is blocked on missing motion-root, policy, and launch-root surfaces.
 - Shadow execution consumes selected runtime-binding truth instead of only carrying runtime-ladder metadata in the receipt.
 - Branch plans and trainer rows explicitly distinguish:
   - learned payload applied
@@ -85,6 +89,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 - Upstream runtime packs now also preserve candidate-evidence summaries plus the source of the chosen primary policy / deploy / runtime-report ref, and runtime bindings preserve the selected ref source, so “why this exact ref was chosen” is replayable instead of implicit.
 - Runtime outcome receipts now also preserve `selected_ref_validation`, and work-order / trainer surfaces keep that status so selected-runtime mismatch truth survives beyond the raw harvested artifact list.
 - Runtime work orders now refuse to mark external-runtime satisfaction when selected refs mismatched, and backend-selector rows now fall back to launch/concrete/shadow truth instead of preferring mismatched runtime outcomes as if they were valid targets.
+- The Phase-1 host scan is now a reliable CLI surface and emits a lane summary containing usable/install-blocked profiles, selected refs, selected verified/partial targets, and host-preflight blockers.
 
 ## What Fake Readiness Was Removed
 
@@ -119,6 +124,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Checkpoint/report selection still depended on first-candidate ordering in runtime packs and bindings | A -> closed on audited path | primary refs now prefer verified local artifacts and preserve candidate-evidence/source truth |
 | Harvested runtime outputs did not say whether they matched the selected runtime refs | A -> closed on audited path | output contracts/outcome receipts now validate selected policy/deploy/report refs against harvested artifacts |
 | Mismatched harvested outputs could still satisfy work orders or drive trainer target-source selection | A -> closed on audited path | work-order status and backend-selector target-source selection now consume selected-ref validation truth |
+| Phase-1 host scan was not a trustworthy repo-root CLI and did not compress current local backend reality | A -> closed on audited path | the scan now runs from repo root and emits `scan_summary`; on this host both lanes are explicitly blocked with zero usable profiles |
 | Real Isaac / Unitree installs, assets, checkpoints | B | Remaining blocker is external host/runtime/asset reality |
 | Real Holosoma runtime, motion/policy/retargeting assets | B | Remaining blocker is external host/runtime/asset reality |
 | GPU-backed GGDS / LDM / video materialization | B | Remaining blocker is GPU/model/runtime availability |
@@ -136,7 +142,7 @@ Closure recommendation: **not yet closed**. The explicit Tier 3.4 / 3.5 verifica
 - **Phase 1 remains the active implementation center.**
 - Parallel Perception prep is allowed but secondary.
 - The next highest-leverage Phase 1 work is still Category B burn-down through honest external consumption:
-  1. keep consuming real Isaac/Unitree local install/asset/checkpoint reality
+  1. keep consuming real Isaac/Unitree local install/asset/checkpoint reality, using the now-runnable host scan as the explicit local blocked/verified report
   2. keep doing the same for Holosoma runtime/motion/policy/retargeting assets
   3. keep converting remaining “ready in contract only” external-runtime claims into concrete host/runtime/asset evidence or explicit blocked truth
 

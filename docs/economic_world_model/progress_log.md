@@ -2,6 +2,22 @@
 
 ## 2026-04-02
 
+- Changed: made `scripts/scan_phase1_runtime_layouts.py` a real repo-root Phase-1 host-reality probe instead of a scan that only worked cleanly under pytest import conditions:
+  - the script now inserts repo root into `sys.path` before importing `src.*`
+  - it now emits `scan_summary` for both Isaac/Unitree and Holosoma lanes, including:
+    - usable / install-ready / install-partial / install-blocked profiles
+    - selected policy / deploy / runtime-report refs and sources
+    - selected verified / partial target ids
+    - host-preflight blockers
+- Why this matters:
+  - Phase 1 is now close enough to the external-runtime frontier that the host-reality scan itself needs to be a trustworthy CLI surface, not just a test-import helper
+  - this tranche converts another vague Category B statement into an explicit local report
+  - on the current host, the scan now says both lanes are blocked with zero usable profiles rather than leaving that truth implicit across many receipts
+- Verification: `python3 -m compileall scripts/scan_phase1_runtime_layouts.py tests/test_scan_phase1_runtime_layouts.py -q`, `python3 -m ruff check scripts/scan_phase1_runtime_layouts.py tests/test_scan_phase1_runtime_layouts.py`, `python3 -m pytest -q tests/test_scan_phase1_runtime_layouts.py`, `python3 scripts/scan_phase1_runtime_layouts.py --output-path /tmp/phase1_runtime_scan_20260402.json`, and `git diff --check` passed (result: `1 passed`).
+- Status summary:
+  - the Phase-1 host scan is now closed as an internal tooling honesty gap
+  - Category B is now easier to read directly from a local host report instead of inferring it from dispersed runtime-pack/binding artifacts
+
 - Changed: made selected-ref validation operational in Phase-1 downstream consumers instead of leaving it as receipt-only metadata:
   - `src/world_model/sim_synth_physics/runtime_work_orders.py` now refuses to mark `satisfied_by_external_runtime_outcomes` when `selected_ref_validation` reports mismatched or missing selected refs
   - mismatched/missing selected-runtime components now become explicit runtime preconditions on the work order path

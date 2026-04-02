@@ -5,8 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from src.world_model.sim_synth_physics.adapters.holosoma_deployment import (
     build_holosoma_deployment_contract,
@@ -39,6 +44,66 @@ from src.world_model.sim_synth_physics.runtime_targets import (
     describe_holosoma_runtime_targets,
     describe_isaac_runtime_targets,
 )
+
+
+def _lane_scan_summary(
+    *,
+    runtime_layout_contract: Mapping[str, Any],
+    deployment_contract: Mapping[str, Any],
+    runtime_pack: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any],
+) -> dict[str, Any]:
+    runtime_layout = dict(runtime_layout_contract)
+    deployment = dict(deployment_contract)
+    pack = dict(runtime_pack)
+    binding = dict(runtime_binding)
+    ready_modes = sorted(
+        mode
+        for mode, enabled in deployment.items()
+        if mode.endswith("_ready") and bool(enabled)
+    )
+    return {
+        "usable_profiles": list(runtime_layout.get("usable_profiles") or []),
+        "install_ready_profiles": list(runtime_layout.get("install_ready_profiles") or []),
+        "install_partial_profiles": list(runtime_layout.get("install_partial_profiles") or []),
+        "install_blocked_profiles": list(runtime_layout.get("install_blocked_profiles") or []),
+        "ready_mode_flags": ready_modes,
+        "pack_status": str(pack.get("pack_status", "") or ""),
+        "pack_ready_surfaces": list(pack.get("ready_surfaces") or []),
+        "pack_missing_components": list(pack.get("missing_components") or []),
+        "binding_status": str(binding.get("binding_status", "") or ""),
+        "binding_missing_components": list(binding.get("missing_components") or []),
+        "host_preflight_status": str(binding.get("host_preflight_status", "") or ""),
+        "host_preflight_missing_components": list(
+            binding.get("host_preflight_missing_components") or []
+        ),
+        "host_preflight_symbolic_components": list(
+            binding.get("host_preflight_symbolic_components") or []
+        ),
+        "selected_profile": str(binding.get("selected_profile", "") or ""),
+        "selected_policy_ref": str(binding.get("selected_policy_ref", "") or ""),
+        "selected_policy_ref_source": str(
+            binding.get("selected_policy_ref_source", "") or ""
+        ),
+        "selected_deploy_config_ref": str(
+            binding.get("selected_deploy_config_ref", "") or ""
+        ),
+        "selected_deploy_config_ref_source": str(
+            binding.get("selected_deploy_config_ref_source", "") or ""
+        ),
+        "selected_runtime_report": str(
+            binding.get("selected_runtime_report", "") or ""
+        ),
+        "selected_runtime_report_source": str(
+            binding.get("selected_runtime_report_source", "") or ""
+        ),
+        "selected_verified_target_ids": list(
+            binding.get("selected_verified_target_ids") or []
+        ),
+        "selected_partial_target_ids": list(
+            binding.get("selected_partial_target_ids") or []
+        ),
+    }
 
 
 def _load_mapping(path: str | None) -> Optional[Mapping[str, Any]]:
@@ -154,6 +219,20 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
         "holosoma_deployment_contract": holosoma_deployment_contract,
         "holosoma_upstream_runtime_pack": holosoma_runtime_pack,
         "holosoma_runtime_binding": holosoma_runtime_binding,
+        "scan_summary": {
+            "isaac": _lane_scan_summary(
+                runtime_layout_contract=isaac_runtime_layouts,
+                deployment_contract=isaac_deployment_contract,
+                runtime_pack=isaac_runtime_pack,
+                runtime_binding=isaac_runtime_binding,
+            ),
+            "holosoma": _lane_scan_summary(
+                runtime_layout_contract=holosoma_runtime_layouts,
+                deployment_contract=holosoma_deployment_contract,
+                runtime_pack=holosoma_runtime_pack,
+                runtime_binding=holosoma_runtime_binding,
+            ),
+        },
     }
     output_path = Path(args.output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -2,6 +2,23 @@
 
 ## 2026-04-02
 
+- Made `scripts/scan_phase1_runtime_layouts.py` a real repo-root CLI and host-reality summary surface:
+  - inserted repo root into `sys.path` before `src.*` imports so the script now runs directly from the workspace root
+  - added `scan_summary` compression for both backend lanes
+  - the summary now preserves:
+    - `usable_profiles`
+    - `install_ready_profiles`
+    - `install_partial_profiles`
+    - `install_blocked_profiles`
+    - selected policy / deploy / runtime-report refs and sources
+    - selected verified / partial target ids
+    - host-preflight blockers
+- Why this matters:
+  - Phase 1 is now at the point where the remaining blocker set is mostly external-runtime/asset/GPU reality, so the scan itself has to express that local truth clearly
+  - on the current host, the script now reports both Isaac/Unitree and Holosoma as blocked with zero usable profiles, which is the right honest local read rather than a silent failure to inspect those lanes
+  - this is another additive closure step that improves practical Category B observability without adding a new runtime ladder
+
+
 - Made selected-ref validation operational in the downstream Phase-1 path:
   - `src/world_model/sim_synth_physics/runtime_work_orders.py` now treats mismatched/missing selected-runtime outputs as explicit runtime preconditions instead of still allowing `satisfied_by_external_runtime_outcomes`
   - `src/world_model/sim_synth_physics/training_corpus.py` now only prefers `external_runtime_outcome_receipt` as the backend-selector target source when selected-ref validation says the harvested outputs are actually acceptable

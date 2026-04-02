@@ -86,6 +86,14 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     assert "asset::unitree_robot_description" in summary["isaac_runtime_binding"][
         "host_preflight_missing_components"
     ]
+    assert summary["scan_summary"]["isaac"]["usable_profiles"] == ["unitree_sim_isaaclab"]
+    assert summary["scan_summary"]["isaac"]["install_ready_profiles"] == [
+        "unitree_sim_isaaclab"
+    ]
+    assert summary["scan_summary"]["isaac"]["selected_policy_ref"].endswith(
+        "g1_policy.onnx"
+    )
+    assert summary["scan_summary"]["isaac"]["selected_deploy_config_ref"] == ""
     assert summary["holosoma_deployment_contract"]["motion_train_ready"] is True
     assert summary["holosoma_upstream_runtime_pack"]["pack_status"] == "pack_ready"
     assert summary["holosoma_upstream_runtime_pack"]["existing_motion_sources"]
@@ -95,3 +103,8 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     )
     assert summary["holosoma_runtime_binding"]["binding_status"] == "binding_ready"
     assert summary["holosoma_runtime_binding"]["host_preflight_status"] == "preflight_ready"
+    assert "holosoma_repo" in summary["scan_summary"]["holosoma"]["usable_profiles"]
+    assert "holosoma_motion_bank" in summary["scan_summary"]["holosoma"]["usable_profiles"]
+    assert summary["scan_summary"]["holosoma"]["selected_policy_ref"].endswith(
+        "g1_policy.onnx"
+    )
