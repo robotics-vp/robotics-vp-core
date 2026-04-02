@@ -26,6 +26,11 @@ BACKEND_WORK_ORDER_KINDS = {
     "isaac": "isaac_unitree_runtime_bringup",
     "holosoma": "holosoma_runtime_bringup",
 }
+VALIDATED_RUNTIME_OUTCOME_STATUSES = {
+    "selected_refs_matched",
+    "no_expected_selected_refs",
+    "legacy_unchecked",
+}
 
 
 def _load_command_hints(loop_run_ids: list[str]) -> list[str]:
@@ -72,6 +77,7 @@ def _work_order_status(
     bridge_receipt: BackendRuntimeBridgeReceipt,
     runtime_receipt: Optional[BackendRuntimeExecutionReceipt],
     runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
+    selected_ref_validation_status: str,
     missing_runtime_targets: list[str],
     missing_assets: list[str],
     missing_preconditions: list[str],
@@ -90,6 +96,7 @@ def _work_order_status(
         runtime_outcome_receipt is not None
         and str(runtime_outcome_receipt.outcome_status) == "runtime_outputs_harvested"
         and ready_surfaces
+        and selected_ref_validation_status in VALIDATED_RUNTIME_OUTCOME_STATUSES
     ):
         return "satisfied_by_external_runtime_outcomes"
     if missing_runtime_targets:
@@ -169,6 +176,20 @@ def build_backend_runtime_work_orders(
     )
     structured_outputs = mapping(outcome_metadata.get("structured_outputs"))
     selected_ref_validation = mapping(outcome_metadata.get("selected_ref_validation"))
+    selected_ref_validation_status = str(
+        selected_ref_validation.get("status", "legacy_unchecked")
+        if runtime_outcome_receipt is not None
+        else ""
+    )
+    if selected_ref_validation_status not in VALIDATED_RUNTIME_OUTCOME_STATUSES:
+        for component in strings(selected_ref_validation.get("mismatched_components")):
+            precondition = f"selected_runtime_output::{component}"
+            if precondition not in missing_preconditions:
+                missing_preconditions.append(precondition)
+        for component in strings(selected_ref_validation.get("missing_components")):
+            precondition = f"selected_runtime_output::{component}"
+            if precondition not in missing_preconditions:
+                missing_preconditions.append(precondition)
     linked_backlog_ids = list(BACKEND_BACKLOG_IDS.get(backend, []))
     command_hints = _load_command_hints(linked_backlog_ids)
     launch_spec = mapping(runtime_metadata.get("launch_spec"))
@@ -180,6 +201,7 @@ def build_backend_runtime_work_orders(
         bridge_receipt=bridge_receipt,
         runtime_receipt=runtime_receipt,
         runtime_outcome_receipt=runtime_outcome_receipt,
+        selected_ref_validation_status=selected_ref_validation_status,
         missing_runtime_targets=missing_runtime_targets,
         missing_assets=missing_assets,
         missing_preconditions=missing_preconditions,

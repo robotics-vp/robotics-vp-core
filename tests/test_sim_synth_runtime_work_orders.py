@@ -207,3 +207,63 @@ def test_build_backend_runtime_work_orders_marks_external_runtime_outputs_comple
         == "selected_refs_matched"
     )
     assert work_orders[0].metadata["upstream_runtime_primary_runtime_report_ref"] == ""
+
+
+def test_build_backend_runtime_work_orders_blocks_on_selected_ref_mismatch() -> None:
+    bridge_receipt = BackendRuntimeBridgeReceipt(
+        receipt_id="bridge_receipt_4",
+        bridge_id="bridge_state_4",
+        backend="isaac",
+        bridge_status="runtime_bridge_ready",
+        execution_authority="shadow_runtime",
+        transport_profile="isaaclab_unitree_dds_bridge",
+        planner_rate_hz=10.0,
+        control_rate_hz=250.0,
+        observation_rate_hz=60.0,
+        action_decimation=4,
+        latency_budget_ms=8.0,
+        bridge_readiness_score=0.85,
+        metadata={
+            "runtime_target_contract": {"runtime_targets_ready": True},
+            "runtime_layout_contract": {"ready_profiles": ["unitree_sim_isaaclab"]},
+            "policy_contract": {"policy_ready": True},
+        },
+    )
+    runtime_outcome_receipt = BackendRuntimeOutcomeReceipt(
+        receipt_id="runtime_outcome_receipt_4",
+        backend="isaac",
+        outcome_profile="unitree_sim_isaaclab",
+        outcome_status="runtime_outputs_harvested",
+        executed=True,
+        harvested_output_count=2,
+        artifact_refs=["/tmp/unitree_sim_isaaclab/logs/run_2/policy.onnx"],
+        metadata={
+            "structured_outputs": {
+                "ready_surfaces": ["policy_surface_ready"],
+                "metric_keys": [],
+                "primary_policy_ref": "/tmp/unitree_sim_isaaclab/logs/run_2/policy.onnx",
+            },
+            "selected_ref_validation": {
+                "status": "selected_refs_mismatched",
+                "mismatched_components": ["policy_ref"],
+                "missing_components": [],
+            },
+        },
+    )
+
+    work_orders = build_backend_runtime_work_orders(
+        bridge_receipt=bridge_receipt,
+        runtime_receipt=None,
+        runtime_outcome_receipt=runtime_outcome_receipt,
+        robot_asset_contract_receipt=None,
+        world_state_id="world_state_4",
+        physics_execution_contract_id="physics_contract_4",
+    )
+
+    assert len(work_orders) == 1
+    assert work_orders[0].status == "blocked_by_runtime_preconditions"
+    assert "selected_runtime_output::policy_ref" in work_orders[0].missing_preconditions
+    assert (
+        work_orders[0].metadata["backend_runtime_selected_ref_validation_status"]
+        == "selected_refs_mismatched"
+    )

@@ -598,7 +598,12 @@ def test_backend_selector_rows_prefer_external_runtime_outcomes_when_no_concrete
                         "ready_surfaces": ["dataset_surface_ready"],
                         "metric_keys": [],
                         "primary_policy_ref": "",
-                    }
+                    },
+                    "selected_ref_validation": {
+                        "status": "no_expected_selected_refs",
+                        "mismatched_components": [],
+                        "missing_components": [],
+                    },
                 },
             },
             "backend_shadow_execution_receipt": {
@@ -616,3 +621,61 @@ def test_backend_selector_rows_prefer_external_runtime_outcomes_when_no_concrete
     assert rows[0]["metadata"]["backend_runtime_ready_surfaces"] == [
         "dataset_surface_ready"
     ]
+
+
+def test_backend_selector_rows_do_not_prefer_mismatched_runtime_outcomes() -> None:
+    bundles = [
+        {
+            "bundle_id": "bundle_mismatch",
+            "world_state": {
+                "state_id": "sim_state_mismatch",
+                "simulation_agenda": {"jobs": [{"job_id": "job_1"}]},
+                "physics_context": {
+                    "backend": "isaac",
+                    "fidelity_tier": "high_fidelity",
+                    "domain_randomization_regime": "benchmark_focus",
+                    "metadata": {},
+                },
+            },
+            "backend_runtime_bridge_receipt": {
+                "receipt_id": "bridge_mismatch",
+                "bridge_status": "runtime_bridge_ready",
+                "execution_authority": "shadow_runtime",
+                "transport_profile": "isaaclab_unitree_dds_bridge",
+                "bridge_readiness_score": 0.8,
+                "metadata": {
+                    "runtime_target_contract": {"missing_required_target_ids": []}
+                },
+            },
+            "backend_runtime_launch_receipt": {
+                "receipt_id": "launch_mismatch",
+                "launch_status": "launch_completed",
+                "executed": True,
+            },
+            "backend_runtime_outcome_receipt": {
+                "receipt_id": "outcome_runtime_mismatch",
+                "outcome_status": "runtime_outputs_harvested",
+                "harvested_output_count": 2,
+                "metadata": {
+                    "structured_outputs": {
+                        "ready_surfaces": ["policy_surface_ready"],
+                        "metric_keys": [],
+                        "primary_policy_ref": "/tmp/run/policy.onnx",
+                    },
+                    "selected_ref_validation": {
+                        "status": "selected_refs_mismatched",
+                        "mismatched_components": ["policy_ref"],
+                        "missing_components": [],
+                    },
+                },
+            },
+        }
+    ]
+
+    rows = build_backend_selector_rows_from_receipts(bundles)
+
+    assert rows[0]["target_source"] == "external_launch_receipt"
+    assert (
+        rows[0]["metadata"]["backend_runtime_selected_ref_validation_status"]
+        == "selected_refs_mismatched"
+    )

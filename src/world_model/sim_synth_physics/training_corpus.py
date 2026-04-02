@@ -35,6 +35,21 @@ def _status_yield_score(status: str, fallback: float) -> float:
     return _clip01(fallback)
 
 
+def _runtime_outcome_can_drive_target_source(
+    outcome_receipt: Mapping[str, Any],
+    outcome_metadata: Mapping[str, Any],
+) -> bool:
+    if str(outcome_receipt.get("outcome_status", "") or "") != "runtime_outputs_harvested":
+        return False
+    selected_ref_validation = _mapping(outcome_metadata.get("selected_ref_validation"))
+    validation_status = str(selected_ref_validation.get("status", "legacy_unchecked") or "")
+    return validation_status in {
+        "selected_refs_matched",
+        "no_expected_selected_refs",
+        "legacy_unchecked",
+    }
+
+
 def _json_mappings(path: Path) -> list[Dict[str, Any]]:
     if path.suffix == ".jsonl":
         rows: list[Dict[str, Any]] = []
@@ -531,9 +546,10 @@ def build_backend_selector_rows_from_receipts(
         )
         if calibration_receipt:
             target_source = "runtime_receipt"
-        elif backend_runtime_outcome_receipt and str(
-            backend_runtime_outcome_receipt.get("outcome_status", "")
-        ) == "runtime_outputs_harvested":
+        elif backend_runtime_outcome_receipt and _runtime_outcome_can_drive_target_source(
+            backend_runtime_outcome_receipt,
+            backend_runtime_outcome_metadata,
+        ):
             target_source = "external_runtime_outcome_receipt"
         elif backend_runtime_launch_receipt and str(
             backend_runtime_launch_receipt.get("launch_status", "")
