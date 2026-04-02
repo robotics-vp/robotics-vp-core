@@ -2,6 +2,30 @@
 
 ## 2026-04-02
 
+- Changed: tightened Phase-1 target-preflight truth so runtime-target existence is no longer treated as enough on the selected-target binding path:
+  - `src/world_model/sim_synth_physics/runtime_targets.py` now emits install-shape verification metadata for runtime targets:
+    - `verification_status`
+    - `verified`
+    - `matched_markers`
+    - `missing_markers`
+    - `primary_marker_ref`
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py` now consume that selected-target evidence directly and emit:
+    - `selected_verified_target_ids`
+    - `selected_partial_target_ids`
+    - selected-target evidence that can block host preflight even when a target root exists
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `src/world_model/sim_synth_physics/training_corpus.py` now preserve that selected-target truth instead of flattening it back into pack-level readiness
+- Why this matters:
+  - empty SDK, asset, motion, or retargeting roots no longer look launch-ready just because the path exists
+  - the branch can now distinguish:
+    - selected target exists and is install-shaped
+    - selected target exists but is only partial
+    - selected target is still missing
+  - this removes another fake-readiness seam without changing the broader runtime ladder or forcing churn through `ready_target_ids`
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/ref_evidence.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_targets.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/ref_evidence.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_targets.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_scan_phase1_runtime_layouts.py`, and `git diff --check` passed (results: `46 passed`, `22 passed`).
+- Status summary:
+  - the audited target-preflight cluster has no new Category A gap
+  - the remaining blocker is even more clearly real local runtime/install/assets/checkpoints/GPU reality rather than missing internal verification surfaces
+
 - Changed: closed the Tier 3.6 shadow-execution honesty gap and tightened Tier 3.3 branch-planner fallback truth on the active Phase-1 verification path:
   - `src/world_model/sim_synth_physics/shadow_execution.py` now consumes selected runtime-binding surfaces when deriving Isaac shadow env-configs and Holosoma shadow work orders
   - shadow receipts now explicitly record `shadow_runtime_binding_consumed` and preserve selected profile / launch root / policy ref / motion-source truth inside the materialized artifacts themselves rather than only sibling receipt metadata

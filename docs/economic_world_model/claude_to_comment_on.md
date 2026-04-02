@@ -22,6 +22,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Runtime layout/profile evidence | materially improved |
 | Upstream runtime-pack evidence | materially improved |
 | Selected-profile install/preflight truth | closed on the audited path |
+| Selected-target install-shape truth | materially closed on the audited path |
 | Promotion/demotion machinery (Tier 3.2) | Category A gap closed |
 | Shadow execution ladder threading (Tier 3.6) | Category A gap closed on audited path |
 | Branch planner fallback honesty (Tier 3.3) | materially closed on audited path |
@@ -34,28 +35,37 @@ This file is the single current-state handoff. Historical tranche detail belongs
 
 - Phase 1 Sim / Synth / Physics remains the active implementation center.
 - The branch has not drifted upward into Perception / Grounding implementation.
-- Shadow execution now consumes selected runtime-binding truth instead of only carrying runtime-ladder metadata in the receipt.
-- Branch plans and trainer rows now explicitly distinguish:
+- Runtime targets no longer stop at `path exists` on the selected-target path:
+  - bindings now distinguish verified selected targets from partial selected targets
+  - host preflight can fail on install-shape truth even when a root exists
+  - work orders and trainer rows preserve that distinction instead of flattening it
+- Shadow execution consumes selected runtime-binding truth instead of only carrying runtime-ladder metadata in the receipt.
+- Branch plans and trainer rows explicitly distinguish:
   - learned payload applied
   - learned trace present but heuristic retained
   - heuristic retained because of demotion or helper unavailability
-- Promotion now also has a real demotion path, so a once-promoted helper cannot stay promoted forever when evidence degrades.
+- Promotion now has a real demotion path, so a once-promoted helper cannot stay promoted forever when evidence degrades.
 
 ## What Changed Topologically
 
 - No new WM, runtime rung, or speculative abstraction was introduced.
-- `BackendShadowExecutionReceipt` now reflects selected runtime-binding surfaces in the actual Isaac env-config and Holosoma work-order artifacts, not just in sibling metadata fields.
-- `SyntheticBranchPlan.metadata` now carries explicit branch-helper control truth:
-  - `branch_helper_resolution`
-  - `branch_helper_resolution_reason`
-  - `branch_helper_payload_applied`
-- Training-corpus branch-planner rows now preserve that branch-helper control truth instead of forcing downstream consumers to infer it from mixed `generation_mode` and `branch_helper_trace` fields.
+- Runtime-target contracts now carry install-shape verification metadata:
+  - `verification_status`
+  - `verified`
+  - `matched_markers`
+  - `missing_markers`
+  - `primary_marker_ref`
+- Isaac and Holosoma runtime bindings now preserve:
+  - `selected_verified_target_ids`
+  - `selected_partial_target_ids`
+  - selected-target evidence with install-shape truth
+- Runtime work orders and trainer exports now keep that selected-target truth, so downstream consumers no longer need to infer whether a root was merely named or actually install-shaped enough to trust.
 
 ## What Fake Readiness Was Removed
 
-- Shadow materialization no longer looks like it is fully grounded by the deeper runtime ladder while still deriving its execution inputs mostly from generic input context.
-- Branch-planner traces no longer make a shadow-candidate or demoted helper look like it actually controlled the branch plan just because a learned payload existed.
-- Promoted helpers no longer keep authoritative status forever once benchmark/evidence posture degrades.
+- Empty SDK, asset, motion, and retargeting roots no longer look launch-ready just because the directory exists.
+- Selected-target preflight no longer quietly inherits a weaker “path exists” notion when the stronger install-shape evidence says the target is still partial.
+- Holosoma and Isaac selected-target rows no longer collapse verified and merely declared targets into one readiness class inside work orders or trainer exports.
 
 ## What Was Not Changed
 
@@ -72,6 +82,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Promotion had no demotion path | A -> closed | Evidence-based demotion is implemented in all helper resolvers |
 | Shadow execution bypassed the deeper runtime-binding ladder | A -> closed | Shadow env/work-order artifacts now consume selected runtime-binding truth |
 | Branch planner fallback was traceable but not explicit | A -> closed on audited path | Branch plans and trainer rows now state whether learned payloads were applied or only traced |
+| Selected-target runtime roots could look ready from path existence alone | A -> closed on audited path | bindings/preflight now consume install-shape verification instead of path existence alone |
 | Real Isaac / Unitree installs, assets, checkpoints | B | Remaining blocker is external host/runtime/asset reality |
 | Real Holosoma runtime, motion/policy/retargeting assets | B | Remaining blocker is external host/runtime/asset reality |
 | GPU-backed GGDS / LDM / video materialization | B | Remaining blocker is GPU/model/runtime availability |
@@ -82,7 +93,7 @@ Category A count: 0 (on audited items)
 Category B count: 3
 Category C unresolved: 2
 
-Closure recommendation: **not yet closed** — no new Category A remains on the audited cluster, but Tier 3.4 and 3.5 still need explicit classification and the practical remainder is still being burned down against real external runtime/asset/GPU reality.
+Closure recommendation: **not yet closed**. The audited install/preflight cluster is now materially more honest, but Tier 3.4 and 3.5 still need explicit classification and the practical remainder is still being burned down against real external runtime/asset/GPU reality.
 
 ## Recommendation to Claude
 
@@ -91,7 +102,7 @@ Closure recommendation: **not yet closed** — no new Category A remains on the 
 - The next highest-leverage Phase 1 work is still Category B burn-down through honest external consumption:
   1. keep consuming real Isaac/Unitree local install/asset/checkpoint reality
   2. keep doing the same for Holosoma runtime/motion/policy/retargeting assets
-  3. only after that, explicitly classify Tier 3.4 and 3.5
+  3. explicitly classify Tier 3.4 and 3.5 once the runtime reality is less ambiguous
 
 ## Procedural Note
 

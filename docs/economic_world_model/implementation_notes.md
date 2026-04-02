@@ -2,6 +2,28 @@
 
 ## 2026-04-02
 
+- Tightened the Phase-1 target-preflight path without adding a new ladder rung:
+  - `src/world_model/sim_synth_physics/runtime_targets.py` now computes install-shape verification for runtime targets instead of stopping at `Path.exists()`
+  - the verification is additive and marker-based:
+    - exact markers for repo/install shapes
+    - glob markers for assets, checkpoints, motion clips, and retargeting bundles
+    - `verification_status` reflects `missing`, `local_path_exists`, `install_shape_ready`, `install_shape_partial`, or `install_shape_missing`
+  - `ready_target_ids` semantics were intentionally left unchanged to avoid broad churn; the stronger truth is consumed at the binding/preflight/export layer instead
+- Consumed that stronger truth where it matters:
+  - `src/world_model/sim_synth_physics/ref_evidence.py` now treats selected evidence with `ready == False` as unready/missing for host-preflight summarization
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py` now build selected-target evidence from runtime-target rows instead of plain `describe_ref_evidence(ref)`
+  - those bindings now emit:
+    - `selected_verified_target_ids`
+    - `selected_partial_target_ids`
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `src/world_model/sim_synth_physics/training_corpus.py` now preserve those fields plus selected-target evidence in executor-facing and trainer-facing artifacts
+- Why this matters:
+  - the branch previously had a quiet mismatch between:
+    - richer pack/layout/install truth
+    - weaker selected-target truth at the binding layer
+  - this tranche closes that mismatch on the audited path
+  - empty SDK/assets/motion/retargeting directories no longer look equivalent to install-shaped targets once a binding is actually selected
+  - this is another Phase-1-local removal of fake readiness while keeping the current runtime ladder stable
+
 - Closed the active Tier 3 shadow/fallback honesty gap without adding a new runtime rung:
   - `src/world_model/sim_synth_physics/shadow_execution.py` now derives binding-aware Isaac env-config and Holosoma work-order fields from the already-emitted `BackendRuntimeExecutionReceipt` metadata instead of only carrying the deeper runtime ladder as receipt-side metadata
   - the shadow layer now consumes:
