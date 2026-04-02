@@ -71,5 +71,7 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     summary = json.loads(output_path.read_text(encoding="utf-8"))
     assert summary["isaac_deployment_contract"]["sim_launch_ready"] is True
     assert summary["isaac_upstream_runtime_pack"]["pack_status"] == "pack_ready"
+    assert summary["isaac_runtime_binding"]["binding_status"] == "binding_ready"
     assert summary["holosoma_deployment_contract"]["motion_train_ready"] is True
     assert summary["holosoma_upstream_runtime_pack"]["pack_status"] == "pack_ready"
+    assert summary["holosoma_runtime_binding"]["binding_status"] == "binding_ready"

@@ -71,6 +71,7 @@ def prepare_backend_runtime_launch(
     executable_adapter_consumer = mapping(
         spec.get("executable_adapter_consumer") or bundle.get("executable_adapter_consumer")
     )
+    runtime_binding = mapping(spec.get("runtime_binding") or bundle.get("runtime_binding"))
     backend = str(bundle.get("backend", spec.get("backend", "")) or "")
     runtime_target_contract = mapping(bundle.get("runtime_target_contract"))
     policy_contract = mapping(bundle.get("policy_contract"))
@@ -98,6 +99,9 @@ def prepare_backend_runtime_launch(
     for item in strings(executable_adapter_consumer.get("missing_preconditions")):
         if item not in missing_preconditions:
             missing_preconditions.append(item)
+    for item in strings(runtime_binding.get("missing_components")):
+        if item not in missing_preconditions:
+            missing_preconditions.append(item)
     if backend == "isaac":
         notes.append("Prefer Unitree/IsaacLab-style launch profiles when available.")
     elif backend == "holosoma":
@@ -112,6 +116,7 @@ def prepare_backend_runtime_launch(
         for item in strings(executable_adapter_consumer.get("notes"))
         if item not in notes
     )
+    notes.extend(item for item in strings(runtime_binding.get("notes")) if item not in notes)
     env_overrides = _target_env_overrides(runtime_target_contract)
     env_overrides.update(
         {
@@ -135,14 +140,20 @@ def prepare_backend_runtime_launch(
         "command": str(
             executable_adapter_consumer.get(
                 "command",
-                executable_adapter_request.get("command", spec.get("command", "")),
+                executable_adapter_request.get(
+                    "command",
+                    runtime_binding.get("selected_command", spec.get("command", "")),
+                ),
             )
             or ""
         ),
         "cwd": str(
             executable_adapter_consumer.get(
                 "cwd",
-                executable_adapter_request.get("cwd", spec.get("root", "")),
+                executable_adapter_request.get(
+                    "cwd",
+                    runtime_binding.get("selected_launch_root", spec.get("root", "")),
+                ),
             )
             or ""
         ),
@@ -152,6 +163,7 @@ def prepare_backend_runtime_launch(
         "notes": notes,
         "executable_adapter_request": executable_adapter_request,
         "executable_adapter_consumer": executable_adapter_consumer,
+        "runtime_binding": runtime_binding,
     }
     return {
         "launch_id": stable_id("backend_runtime_launch", payload),
@@ -252,6 +264,7 @@ def build_backend_runtime_launch_receipt(
             "env_overrides": mapping(result.get("env_overrides")),
             "executable_adapter_request": mapping(result.get("executable_adapter_request")),
             "executable_adapter_consumer": mapping(result.get("executable_adapter_consumer")),
+            "runtime_binding": mapping(result.get("runtime_binding")),
             "returncode": result.get("returncode"),
             "stdout": result.get("stdout", ""),
             "stderr": result.get("stderr", ""),

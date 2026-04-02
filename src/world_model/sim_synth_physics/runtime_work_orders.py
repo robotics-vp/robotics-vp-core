@@ -76,6 +76,7 @@ def _work_order_status(
     missing_assets: list[str],
     missing_preconditions: list[str],
     upstream_runtime_pack: dict[str, object],
+    runtime_binding: dict[str, object],
 ) -> str:
     if bridge_receipt.execution_authority == "concrete_runtime":
         return "satisfied_by_concrete_runtime"
@@ -95,6 +96,8 @@ def _work_order_status(
         return "blocked_by_runtime_targets"
     if missing_assets:
         return "blocked_by_assets"
+    if str(runtime_binding.get("binding_status", "") or "") == "binding_blocked":
+        return "blocked_by_runtime_binding"
     if str(upstream_runtime_pack.get("pack_status", "") or "") == "pack_blocked":
         return "blocked_by_runtime_pack"
     if missing_preconditions:
@@ -129,6 +132,13 @@ def build_backend_runtime_work_orders(
     upstream_runtime_pack = mapping(
         runtime_metadata.get("upstream_runtime_pack")
     ) or mapping(bridge_metadata.get("upstream_runtime_pack"))
+    runtime_binding = mapping(
+        runtime_metadata.get("runtime_binding")
+    ) or mapping(
+        mapping(runtime_metadata.get("runtime_bundle")).get("runtime_binding")
+    ) or mapping(
+        mapping(runtime_metadata.get("launch_spec")).get("runtime_binding")
+    )
     missing_runtime_targets = strings(
         runtime_target_contract.get("missing_required_target_ids")
     )
@@ -143,6 +153,9 @@ def build_backend_runtime_work_orders(
     )
     pack_missing_components = strings(upstream_runtime_pack.get("missing_components"))
     for item in pack_missing_components:
+        if item not in missing_preconditions:
+            missing_preconditions.append(item)
+    for item in strings(runtime_binding.get("missing_components")):
         if item not in missing_preconditions:
             missing_preconditions.append(item)
     outcome_metadata = (
@@ -164,6 +177,7 @@ def build_backend_runtime_work_orders(
         missing_assets=missing_assets,
         missing_preconditions=missing_preconditions,
         upstream_runtime_pack=upstream_runtime_pack,
+        runtime_binding=runtime_binding,
     )
     payload = {
         "backend": backend,
@@ -233,6 +247,17 @@ def build_backend_runtime_work_orders(
                 ),
                 "upstream_runtime_pack_ready_surfaces": strings(
                     upstream_runtime_pack.get("ready_surfaces")
+                ),
+                "runtime_binding": runtime_binding,
+                "runtime_binding_status": str(runtime_binding.get("binding_status", "") or ""),
+                "runtime_binding_selected_profile": str(
+                    runtime_binding.get("selected_profile", "") or ""
+                ),
+                "runtime_binding_selected_policy_ref": str(
+                    runtime_binding.get("selected_policy_ref", "") or ""
+                ),
+                "runtime_binding_selected_launch_root": str(
+                    runtime_binding.get("selected_launch_root", "") or ""
                 ),
                 "runtime_bundle": runtime_metadata.get("runtime_bundle", {}),
                 "launch_spec": launch_spec,

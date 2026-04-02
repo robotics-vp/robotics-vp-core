@@ -105,10 +105,12 @@ def build_isaac_unitree_executable_adapter_request(
     launch_spec: Mapping[str, Any],
     runtime_target_contract: Mapping[str, Any],
     deployment_contract: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any] | None = None,
     normalized_robot_asset_manifest: Mapping[str, Any],
     robot_contract_context: Mapping[str, Any] | None = None,
     output_contract: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    binding = mapping(runtime_binding)
     deployment_mode = PROFILE_TO_MODE.get(preferred_profile, "sim_eval")
     mode_contract = _mode_contract(deployment_contract, deployment_mode)
     env_overrides = _target_env_overrides(runtime_target_contract)
@@ -116,17 +118,24 @@ def build_isaac_unitree_executable_adapter_request(
     placement_class = str(deployment_contract.get("placement_class", "") or "")
     asset_refs, available_asset_ids = _asset_rows(normalized_robot_asset_manifest)
     robot_context = mapping(robot_contract_context)
-    missing_preconditions = strings(mode_contract.get("missing_preconditions"))
+    missing_preconditions = strings(mode_contract.get("missing_preconditions")) + strings(
+        binding.get("missing_components")
+    )
     policy_required = deployment_mode != "teleop_bridge"
+    selected_policy_ref = str(binding.get("selected_policy_ref", "") or policy_ref)
+    selected_command = str(binding.get("selected_command", "") or mapping(launch_spec).get("command", "") or "")
+    selected_launch_root = str(binding.get("selected_launch_root", "") or mapping(launch_spec).get("root", "") or "")
+    selected_deploy_config = str(binding.get("selected_deploy_config", "") or "")
 
     env_overrides.update(
         {
             "UNITREE_ROBOT_VARIANT": robot_variant,
             "UNITREE_DEPLOYMENT_MODE": deployment_mode,
             "UNITREE_TASK_ID": task_id,
-            "UNITREE_POLICY_REF": policy_ref,
+            "UNITREE_POLICY_REF": selected_policy_ref,
             "UNITREE_PREFERRED_PROFILE": preferred_profile,
             "UNITREE_PLACEMENT_CLASS": placement_class,
+            "UNITREE_RUNTIME_BINDING_STATUS": str(binding.get("binding_status", "") or ""),
             "UNITREE_TELEOP_ENABLED": "1" if deployment_mode == "teleop_bridge" else "0",
             "UNITREE_LEROBOT_EVAL_ENABLED": "1" if deployment_mode == "lerobot_eval" else "0",
             "UNITREE_PHYSICAL_DEPLOY_READY": (
@@ -134,6 +143,8 @@ def build_isaac_unitree_executable_adapter_request(
             ),
         }
     )
+    if selected_deploy_config:
+        env_overrides["UNITREE_DEPLOY_CONFIG_REF"] = selected_deploy_config
     for asset_id, ref in asset_refs.items():
         env_overrides[f"UNITREE_ASSET_{asset_id.upper()}"] = ref
 
@@ -146,10 +157,10 @@ def build_isaac_unitree_executable_adapter_request(
         "robot_variant": robot_variant,
         "placement_class": placement_class,
         "task_id": task_id,
-        "policy_ref": policy_ref,
+        "policy_ref": selected_policy_ref,
         "policy_required": policy_required,
-        "cwd": str(mapping(launch_spec).get("root", "") or ""),
-        "command": str(mapping(launch_spec).get("command", "") or ""),
+        "cwd": selected_launch_root,
+        "command": selected_command,
         "required_target_ids": strings(mode_contract.get("required_target_ids")),
         "required_asset_ids": strings(mode_contract.get("required_asset_ids")),
         "available_asset_ids": available_asset_ids,
@@ -163,7 +174,10 @@ def build_isaac_unitree_executable_adapter_request(
         "supports_local_python_bridge": bool(
             runtime_target_contract.get("python_bridge_available", False)
         ),
-        "missing_preconditions": missing_preconditions,
+        "runtime_binding_id": str(binding.get("binding_id", "") or ""),
+        "runtime_binding_status": str(binding.get("binding_status", "") or ""),
+        "runtime_binding": binding,
+        "missing_preconditions": list(dict.fromkeys(missing_preconditions)),
         "env_overrides": env_overrides,
         "notes": [
             "This request is the WM-owned executable adapter surface for Isaac/Unitree runtime launch.",

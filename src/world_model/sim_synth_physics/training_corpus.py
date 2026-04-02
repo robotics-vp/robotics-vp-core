@@ -431,6 +431,10 @@ def build_backend_selector_rows_from_receipts(
             backend_runtime_execution_receipt.get("metadata")
         )
         backend_runtime_bundle = _mapping(backend_runtime_execution_metadata.get("runtime_bundle"))
+        backend_runtime_binding = _mapping(
+            backend_runtime_execution_metadata.get("runtime_binding")
+            or backend_runtime_bundle.get("runtime_binding")
+        )
         backend_runtime_adapter_receipt = _mapping(
             bundle_mapping.get("backend_runtime_adapter_receipt")
         )
@@ -581,6 +585,21 @@ def build_backend_selector_rows_from_receipts(
                     "backend_upstream_runtime_missing_components": list(
                         upstream_runtime_pack.get("missing_components") or []
                     ),
+                    "backend_runtime_binding_status": backend_runtime_binding.get(
+                        "binding_status"
+                    ),
+                    "backend_runtime_binding_selected_profile": backend_runtime_binding.get(
+                        "selected_profile"
+                    ),
+                    "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
+                        "selected_policy_ref"
+                    ),
+                    "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
+                        "selected_launch_root"
+                    ),
+                    "backend_runtime_binding_missing_components": list(
+                        backend_runtime_binding.get("missing_components") or []
+                    ),
                     "backend_runtime_adapter_receipt_id": backend_runtime_adapter_receipt.get("receipt_id"),
                     "backend_runtime_adapter_status": backend_runtime_adapter_receipt.get("adapter_status"),
                     "backend_runtime_adapter_execution_path": backend_runtime_adapter_receipt.get("execution_path"),
@@ -675,6 +694,10 @@ def build_branch_planner_rows_from_receipts(
             backend_runtime_execution_receipt.get("metadata")
         )
         backend_runtime_bundle = _mapping(backend_runtime_execution_metadata.get("runtime_bundle"))
+        backend_runtime_binding = _mapping(
+            backend_runtime_execution_metadata.get("runtime_binding")
+            or backend_runtime_bundle.get("runtime_binding")
+        )
         backend_runtime_adapter_receipt = _mapping(
             bundle_mapping.get("backend_runtime_adapter_receipt")
         )
@@ -792,6 +815,21 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_upstream_runtime_missing_components": list(
                             upstream_runtime_pack.get("missing_components") or []
+                        ),
+                        "backend_runtime_binding_status": backend_runtime_binding.get(
+                            "binding_status"
+                        ),
+                        "backend_runtime_binding_selected_profile": backend_runtime_binding.get(
+                            "selected_profile"
+                        ),
+                        "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
+                            "selected_policy_ref"
+                        ),
+                        "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
+                            "selected_launch_root"
+                        ),
+                        "backend_runtime_binding_missing_components": list(
+                            backend_runtime_binding.get("missing_components") or []
                         ),
                         "backend_runtime_adapter_receipt_id": backend_runtime_adapter_receipt.get(
                             "receipt_id"

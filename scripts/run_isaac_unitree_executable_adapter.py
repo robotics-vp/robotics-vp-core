@@ -102,6 +102,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     payload = {
         "runtime_bundle_path": str(Path(runtime_bundle_path).resolve()),
         "launch_spec_path": str(Path(launch_spec_path).resolve()),
+        "runtime_binding": launch_spec.get("runtime_binding") or runtime_bundle.get("runtime_binding") or {},
         "executable_adapter_request": executable_adapter_request,
         "executable_adapter_consumer": executable_adapter_consumer,
         "adapter_execution": adapter_execution,

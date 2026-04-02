@@ -25,6 +25,10 @@ from .adapters.holosoma_adapter_realization import (
 from .adapters.holosoma_executable_consumer import (
     build_holosoma_executable_adapter_consumer,
 )
+from .adapters.holosoma_executable_adapter import (
+    build_holosoma_executable_adapter_request,
+)
+from .adapters.holosoma_runtime_binding import build_holosoma_runtime_binding
 from .adapters.isaac_unitree_adapter_execution import (
     build_isaac_unitree_adapter_receipt,
     finalize_isaac_unitree_adapter_execution,
@@ -597,26 +601,48 @@ def materialize_backend_runtime_execution(
             or runtime_bundle.get("executable_adapter_request")
         )
         if patched_request:
-            patched_request["deployment_mode"] = "motion_train"
-            patched_request["policy_required"] = False
-            patched_request["adapter_entrypoint"] = "holosoma_motion_train"
-            patched_request["preferred_profile"] = str(
-                patched_request.get("preferred_profile") or "holosoma_motion_bank"
+            patched_binding = build_holosoma_runtime_binding(
+                task_id=task_id,
+                explicit_policy_ref="",
+                preferred_profile=str(
+                    patched_request.get("preferred_profile") or "holosoma_motion_bank"
+                ),
+                launch_specs=list(runtime_bundle.get("launch_specs") or [launch_spec]),
+                runtime_target_contract=runtime_target_contract,
+                policy_contract=policy_contract,
+                deployment_contract=deployment_contract,
+                upstream_runtime_pack=mapping(runtime_bundle.get("upstream_runtime_pack")),
             )
-            patched_missing = [
-                item
-                for item in _strings(patched_request.get("missing_preconditions"))
-                if item != "policy_checkpoint"
-            ]
-            patched_request["missing_preconditions"] = patched_missing
-            patched_env = _mapping(patched_request.get("env_overrides"))
-            patched_env["HOLOSOMA_MOTION_TRAIN_ENABLED"] = "1"
-            patched_request["env_overrides"] = patched_env
+            patched_request = build_holosoma_executable_adapter_request(
+                task_id=task_id,
+                policy_ref="",
+                preferred_profile=str(
+                    patched_request.get("preferred_profile") or "holosoma_motion_bank"
+                ),
+                launch_spec=launch_spec,
+                runtime_target_contract=runtime_target_contract,
+                policy_contract=policy_contract,
+                runtime_binding=patched_binding,
+                normalized_robot_asset_manifest=_mapping(
+                    binding_payload.get("normalized_robot_asset_manifest")
+                ),
+                robot_contract_context={
+                    "robot_asset_contract_id": str(
+                        binding_payload.get("robot_asset_contract_id", "") or ""
+                    ),
+                    "calibration_contracts": _strings(binding_payload.get("calibration_contracts")),
+                    "observation_contracts": _strings(binding_payload.get("observation_contracts")),
+                    "action_contracts": _strings(binding_payload.get("action_contracts")),
+                },
+                output_contract=_mapping(runtime_bundle.get("output_contract")),
+            )
             patched_consumer = build_holosoma_executable_adapter_consumer(patched_request)
             runtime_bundle["executable_adapter_request"] = patched_request
             runtime_bundle["executable_adapter_consumer"] = patched_consumer
+            runtime_bundle["runtime_binding"] = patched_binding
             launch_spec["executable_adapter_request"] = patched_request
             launch_spec["executable_adapter_consumer"] = patched_consumer
+            launch_spec["runtime_binding"] = patched_binding
             if not str(launch_spec.get("preferred_profile", "") or ""):
                 launch_spec["preferred_profile"] = str(
                     patched_request.get("preferred_profile") or "holosoma_motion_bank"
@@ -637,6 +663,9 @@ def materialize_backend_runtime_execution(
     executable_adapter_consumer = _mapping(
         launch_spec.get("executable_adapter_consumer")
         or runtime_bundle.get("executable_adapter_consumer")
+    )
+    runtime_binding = _mapping(
+        launch_spec.get("runtime_binding") or runtime_bundle.get("runtime_binding")
     )
     runtime_output_contract = build_backend_runtime_output_contract(runtime_bundle, launch_spec)
     launch_report_refs: list[str] = []
@@ -883,6 +912,7 @@ def materialize_backend_runtime_execution(
                     "policy_contract": policy_contract,
                     "runtime_bundle": runtime_bundle,
                     "launch_spec": launch_spec,
+                    "runtime_binding": runtime_binding,
                     "executable_adapter_request": executable_adapter_request,
                     "executable_adapter_consumer": executable_adapter_consumer,
                     "adapter_execution": adapter_execution,
@@ -1076,6 +1106,7 @@ def materialize_backend_runtime_execution(
                 "policy_contract": policy_contract,
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
+                "runtime_binding": runtime_binding,
                 "executable_adapter_request": executable_adapter_request,
                 "executable_adapter_consumer": executable_adapter_consumer,
                 "adapter_execution": adapter_execution,
@@ -1270,6 +1301,7 @@ def materialize_backend_runtime_execution(
                 "policy_contract": policy_contract,
                 "runtime_bundle": runtime_bundle,
                 "launch_spec": launch_spec,
+                "runtime_binding": runtime_binding,
                 "executable_adapter_request": executable_adapter_request,
                 "executable_adapter_consumer": executable_adapter_consumer,
                 "adapter_execution": adapter_execution,
@@ -1323,6 +1355,7 @@ def materialize_backend_runtime_execution(
             "policy_contract": policy_contract,
             "runtime_bundle": runtime_bundle,
             "launch_spec": launch_spec,
+            "runtime_binding": runtime_binding,
             "executable_adapter_request": executable_adapter_request,
             "executable_adapter_consumer": executable_adapter_consumer,
             "adapter_execution": adapter_execution,

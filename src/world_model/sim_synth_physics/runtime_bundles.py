@@ -12,12 +12,14 @@ from .adapters.holosoma_executable_adapter import (
 from .adapters.holosoma_executable_consumer import (
     build_holosoma_executable_adapter_consumer,
 )
+from .adapters.holosoma_runtime_binding import build_holosoma_runtime_binding
 from .adapters.isaac_unitree_executable_adapter import (
     build_isaac_unitree_executable_adapter_request,
 )
 from .adapters.isaac_unitree_executable_consumer import (
     build_isaac_unitree_executable_adapter_consumer,
 )
+from .adapters.isaac_unitree_runtime_binding import build_isaac_unitree_runtime_binding
 from .common import mapping, strings
 from .runtime_outcomes import build_backend_runtime_output_contract
 
@@ -275,11 +277,30 @@ def build_backend_runtime_bundle(
         "robot_contract_context": mapping(robot_contract_context),
         "launch_specs": list(launch_specs),
     }
-    output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
-    runtime_bundle["output_contract"] = output_contract
+    runtime_binding: dict[str, Any] = {}
     executable_adapter_request: dict[str, Any] = {}
     executable_adapter_consumer: dict[str, Any] = {}
     if backend == "isaac":
+        runtime_binding = build_isaac_unitree_runtime_binding(
+            task_id=task_id,
+            explicit_policy_ref=policy_ref,
+            preferred_profile=preferred_profile,
+            launch_specs=launch_specs,
+            runtime_target_contract=runtime_target_contract,
+            policy_contract=policy_contract,
+            deployment_contract=mapping(deployment_contract),
+            upstream_runtime_pack=mapping(upstream_runtime_pack),
+        )
+        selected_profile = str(runtime_binding.get("selected_profile", "") or preferred_profile)
+        if selected_profile and selected_profile != preferred_profile:
+            preferred_profile = selected_profile
+            preferred_launch_spec = next(
+                (spec for spec in launch_specs if spec.get("profile_id") == preferred_profile),
+                preferred_launch_spec,
+            )
+        runtime_bundle["preferred_profile"] = preferred_profile
+        output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
+        runtime_bundle["output_contract"] = output_contract
         executable_adapter_request = build_isaac_unitree_executable_adapter_request(
             task_id=task_id,
             policy_ref=policy_ref,
@@ -287,6 +308,7 @@ def build_backend_runtime_bundle(
             launch_spec=preferred_launch_spec,
             runtime_target_contract=runtime_target_contract,
             deployment_contract=mapping(deployment_contract),
+            runtime_binding=runtime_binding,
             normalized_robot_asset_manifest=normalized_robot_asset_manifest,
             robot_contract_context=mapping(robot_contract_context),
             output_contract=output_contract,
@@ -297,6 +319,26 @@ def build_backend_runtime_bundle(
         runtime_bundle["executable_adapter_request"] = executable_adapter_request
         runtime_bundle["executable_adapter_consumer"] = executable_adapter_consumer
     elif backend == "holosoma":
+        runtime_binding = build_holosoma_runtime_binding(
+            task_id=task_id,
+            explicit_policy_ref=policy_ref,
+            preferred_profile=preferred_profile,
+            launch_specs=launch_specs,
+            runtime_target_contract=runtime_target_contract,
+            policy_contract=policy_contract,
+            deployment_contract=mapping(deployment_contract),
+            upstream_runtime_pack=mapping(upstream_runtime_pack),
+        )
+        selected_profile = str(runtime_binding.get("selected_profile", "") or preferred_profile)
+        if selected_profile and selected_profile != preferred_profile:
+            preferred_profile = selected_profile
+            preferred_launch_spec = next(
+                (spec for spec in launch_specs if spec.get("profile_id") == preferred_profile),
+                preferred_launch_spec,
+            )
+        runtime_bundle["preferred_profile"] = preferred_profile
+        output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
+        runtime_bundle["output_contract"] = output_contract
         executable_adapter_request = build_holosoma_executable_adapter_request(
             task_id=task_id,
             policy_ref=policy_ref,
@@ -304,6 +346,7 @@ def build_backend_runtime_bundle(
             launch_spec=preferred_launch_spec,
             runtime_target_contract=runtime_target_contract,
             policy_contract=policy_contract,
+            runtime_binding=runtime_binding,
             normalized_robot_asset_manifest=normalized_robot_asset_manifest,
             robot_contract_context=mapping(robot_contract_context),
             output_contract=output_contract,
@@ -313,6 +356,12 @@ def build_backend_runtime_bundle(
         )
         runtime_bundle["executable_adapter_request"] = executable_adapter_request
         runtime_bundle["executable_adapter_consumer"] = executable_adapter_consumer
+    runtime_bundle["preferred_profile"] = preferred_profile
+    output_contract = mapping(runtime_bundle.get("output_contract"))
+    if not output_contract:
+        output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
+        runtime_bundle["output_contract"] = output_contract
+    runtime_bundle["runtime_binding"] = runtime_binding
     launch_spec = {
         "version": "backend_launch_spec_v1",
         "backend": backend,
@@ -323,6 +372,7 @@ def build_backend_runtime_bundle(
         "runtime_targets_ready": bool(runtime_target_contract.get("runtime_targets_ready", False)),
         "deployment_contract": mapping(deployment_contract),
         "upstream_runtime_pack": mapping(upstream_runtime_pack),
+        "runtime_binding": runtime_binding,
         "command": str(mapping(preferred_launch_spec).get("command", "") or ""),
         "root": str(mapping(preferred_launch_spec).get("root", "") or ""),
         "upstream_profile": mapping(
@@ -338,11 +388,15 @@ def build_backend_runtime_bundle(
         bundle_path = output_root / "backend_runtime_bundle.json"
         launch_spec_path = output_root / "backend_launch_spec.json"
         runtime_pack_path = output_root / "backend_upstream_runtime_pack.json"
+        runtime_binding_path = output_root / "backend_runtime_binding.json"
         _write_json(bundle_path, runtime_bundle)
         _write_json(launch_spec_path, launch_spec)
         if upstream_runtime_pack:
             _write_json(runtime_pack_path, mapping(upstream_runtime_pack))
             refs.append(str(runtime_pack_path.resolve()))
+        if runtime_binding:
+            _write_json(runtime_binding_path, runtime_binding)
+            refs.append(str(runtime_binding_path.resolve()))
         refs.extend([str(bundle_path.resolve()), str(launch_spec_path.resolve())])
     return refs, runtime_bundle, launch_spec
 

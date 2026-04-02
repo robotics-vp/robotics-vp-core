@@ -146,6 +146,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "backend_runtime_adapter_receipt": root / "backend_runtime_adapter_receipt.json",
         "backend_runtime_adapter_realization": root / "backend_runtime_adapter_realization.json",
         "backend_upstream_runtime_pack": root / "backend_upstream_runtime_pack.json",
+        "backend_runtime_binding": root / "backend_runtime_binding.json",
         "backend_runtime_launch_receipt": root / "backend_runtime_launch_receipt.json",
         "backend_runtime_outcome_receipt": root / "backend_runtime_outcome_receipt.json",
         "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
@@ -463,6 +464,16 @@ def _build_training_feedback_manifest(
         if backend_runtime_adapter_receipt is None
         else mapping(backend_runtime_adapter_receipt.metadata.get("realization"))
     )
+    runtime_binding = (
+        {}
+        if backend_runtime_execution_receipt is None
+        else mapping(
+            mapping(backend_runtime_execution_receipt.metadata).get("runtime_binding")
+            or mapping(backend_runtime_execution_receipt.metadata).get("runtime_bundle", {}).get(
+                "runtime_binding"
+            )
+        )
+    )
     rows: list[dict[str, Any]] = []
     for receipt in outcome_receipts:
         render_receipt = render_receipts_by_plan.get(str(receipt.branch_plan_id))
@@ -546,6 +557,13 @@ def _build_training_feedback_manifest(
             ""
             if backend_runtime_adapter_receipt is None
             else backend_runtime_adapter_receipt.execution_path
+        ),
+        "backend_runtime_binding_status": str(runtime_binding.get("binding_status", "") or ""),
+        "backend_runtime_binding_selected_profile": str(
+            runtime_binding.get("selected_profile", "") or ""
+        ),
+        "backend_runtime_binding_selected_policy_ref": str(
+            runtime_binding.get("selected_policy_ref", "") or ""
         ),
         "backend_runtime_adapter_realization_path": str(
             adapter_realization.get("realization_path", "") or ""
@@ -1058,6 +1076,20 @@ class SimSynthPhysicsRuntime:
                     artifact_paths["backend_upstream_runtime_pack"],
                     upstream_runtime_pack,
                 )
+            runtime_binding = mapping(
+                {}
+                if backend_runtime_execution_receipt is None
+                else mapping(backend_runtime_execution_receipt.metadata).get("runtime_binding")
+            ) or mapping(
+                {}
+                if backend_runtime_execution_receipt is None
+                else mapping(backend_runtime_execution_receipt.metadata).get("runtime_bundle", {})
+            ).get("runtime_binding", {})
+            if runtime_binding:
+                _write_json(
+                    artifact_paths["backend_runtime_binding"],
+                    runtime_binding,
+                )
             if backend_runtime_launch_receipt is not None:
                 _write_json(
                     artifact_paths["backend_runtime_launch_receipt"],
@@ -1198,6 +1230,26 @@ class SimSynthPhysicsRuntime:
                             )
                         ).get("ready_surfaces", [])
                         or []
+                    ),
+                    "backend_runtime_binding_status": str(
+                        mapping(
+                            {}
+                            if backend_runtime_execution_receipt is None
+                            else mapping(backend_runtime_execution_receipt.metadata).get(
+                                "runtime_binding"
+                            )
+                        ).get("binding_status", "")
+                        or ""
+                    ),
+                    "backend_runtime_binding_selected_profile": str(
+                        mapping(
+                            {}
+                            if backend_runtime_execution_receipt is None
+                            else mapping(backend_runtime_execution_receipt.metadata).get(
+                                "runtime_binding"
+                            )
+                        ).get("selected_profile", "")
+                        or ""
                     ),
                     "backend_runtime_launch_status": (
                         ""

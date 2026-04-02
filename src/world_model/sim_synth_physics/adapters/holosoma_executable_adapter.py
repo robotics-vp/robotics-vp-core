@@ -82,27 +82,37 @@ def build_holosoma_executable_adapter_request(
     launch_spec: Mapping[str, Any],
     runtime_target_contract: Mapping[str, Any],
     policy_contract: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any] | None = None,
     normalized_robot_asset_manifest: Mapping[str, Any],
     robot_contract_context: Mapping[str, Any] | None = None,
     output_contract: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    binding = mapping(runtime_binding)
     deployment_mode = PROFILE_TO_MODE.get(preferred_profile, "sim_eval")
     policy_required = deployment_mode != "motion_train"
     asset_refs, available_asset_ids = _asset_rows(normalized_robot_asset_manifest)
     robot_context = mapping(robot_contract_context)
-    missing_preconditions: list[str] = []
-    if policy_required and not (policy_ref or bool(policy_contract.get("policy_ready", False))):
+    selected_policy_ref = str(binding.get("selected_policy_ref", "") or policy_ref)
+    selected_command = str(binding.get("selected_command", "") or mapping(launch_spec).get("command", "") or "")
+    selected_launch_root = str(binding.get("selected_launch_root", "") or mapping(launch_spec).get("root", "") or "")
+    selected_motion_sources = strings(binding.get("selected_motion_sources"))
+    selected_retargeting_root = str(binding.get("selected_retargeting_root", "") or "")
+    missing_preconditions: list[str] = strings(binding.get("missing_components"))
+    if policy_required and not (selected_policy_ref or bool(policy_contract.get("policy_ready", False))):
         missing_preconditions.append("policy_checkpoint")
     env_overrides = _target_env_overrides(runtime_target_contract)
     env_overrides.update(
         {
             "HOLOSOMA_TASK_ID": task_id,
-            "HOLOSOMA_POLICY_REF": policy_ref,
+            "HOLOSOMA_POLICY_REF": selected_policy_ref,
             "HOLOSOMA_DEPLOYMENT_MODE": deployment_mode,
             "HOLOSOMA_PREFERRED_PROFILE": preferred_profile,
+            "HOLOSOMA_RUNTIME_BINDING_STATUS": str(binding.get("binding_status", "") or ""),
             "HOLOSOMA_MOTION_TRAIN_ENABLED": "1" if deployment_mode == "motion_train" else "0",
         }
     )
+    if selected_retargeting_root:
+        env_overrides["HOLOSOMA_RETARGETING_REF"] = selected_retargeting_root
     for asset_id, ref in asset_refs.items():
         env_overrides[f"HOLOSOMA_ASSET_{asset_id.upper()}"] = ref
 
@@ -113,10 +123,10 @@ def build_holosoma_executable_adapter_request(
         "adapter_entrypoint": PROFILE_TO_ENTRYPOINT.get(preferred_profile, "holosoma_runtime"),
         "deployment_mode": deployment_mode,
         "task_id": task_id,
-        "policy_ref": policy_ref,
+        "policy_ref": selected_policy_ref,
         "policy_required": policy_required,
-        "cwd": str(mapping(launch_spec).get("root", "") or ""),
-        "command": str(mapping(launch_spec).get("command", "") or ""),
+        "cwd": selected_launch_root,
+        "command": selected_command,
         "required_target_ids": strings(runtime_target_contract.get("required_target_ids")),
         "required_asset_ids": [],
         "available_asset_ids": available_asset_ids,
@@ -130,7 +140,12 @@ def build_holosoma_executable_adapter_request(
         "supports_local_runtime_binding": bool(
             runtime_target_contract.get("python_bridge_available", False)
         ),
-        "missing_preconditions": missing_preconditions,
+        "runtime_binding_id": str(binding.get("binding_id", "") or ""),
+        "runtime_binding_status": str(binding.get("binding_status", "") or ""),
+        "runtime_binding": binding,
+        "selected_motion_sources": selected_motion_sources,
+        "selected_retargeting_root": selected_retargeting_root,
+        "missing_preconditions": list(dict.fromkeys(missing_preconditions)),
         "env_overrides": env_overrides,
         "notes": [
             "This request is the WM-owned executable adapter surface for Holosoma runtime launch.",
