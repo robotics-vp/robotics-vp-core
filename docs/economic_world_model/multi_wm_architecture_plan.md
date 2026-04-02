@@ -1111,6 +1111,8 @@ Phase 1 should count as landed only when:
 - Isaac/Unitree backend runtime artifacts also include a typed executable-adapter consumer over that request, so the WM can say which consumer path is actually taking responsibility for the request instead of collapsing request and execution mediation together
 - Isaac/Unitree backend runtime artifacts also include typed adapter-execution mediation and an adapter receipt over that request/consumer pair, so the WM can distinguish request, consumer, executable mediation, launch, and harvested outcome as separate maturity rungs instead of collapsing them into generic launch status
 - Isaac/Unitree backend runtime artifacts also include a typed adapter-realization surface over the execution mediation, so the WM can say whether the lane is concretely realized through a local backend-factory handoff or only through an external launch delegate before any final hardware/runtime success claim is made
+- backend runtime artifacts also include a typed local backend-factory invocation/result surface over that realization, so explicit local adapter materialization is no longer hidden inside a direct backend-factory jump
+- Holosoma backend runtime artifacts now carry the same request -> consumer -> adapter-execution -> adapter-realization ladder as Isaac/Unitree, so Phase 1 does not leave one backend on typed runtime truth while the other stays special-cased
 - the backend runtime receipt can distinguish `runtime_launch_prepared` from truly missing runtime prerequisites, so “host is ready but local adapter is absent” remains an honest intermediate state instead of collapsing back into generic module-missing logic
 - backend runtime output contracts and outcome receipts are emitted explicitly, so upstream runtime launches can be judged by harvested outputs rather than only `launch_completed` / `launch_failed`
 - NAG / LSD / GGDS branch/render routing is emitted as WM-owned provider contracts, receipts, and materialization artifacts, not left as free-standing provider code paths
@@ -1129,7 +1131,8 @@ Named gaps that should remain explicit in this phase:
 - concrete runtime launch/bundle execution behind the new WM-owned layout and launch-spec contracts
 - concrete Isaac/Unitree executable-adapter realization behind the new request/consumer/adapter-execution receipt chain
 - concrete local Isaac/Unitree adapter implementation behind the new realization surface rather than only a backend-factory/delegate contract
-- concrete Holosoma runtime execution and datapack/asset binding beyond the new runtime-request / optional train-or-eval receipt
+- concrete Holosoma local adapter implementation and real host/runtime assets behind the new request/consumer/execution/realization chain
+- concrete Holosoma runtime execution and datapack/asset binding beyond the new request/consumer/execution/realization ladder
 - concrete Isaac/Unitree robot assets, calibration sidecars, and simulator bindings behind the new adapter contracts
 - concrete GGDS/LDM execution at scale under the new WM-owned render-provider contracts
 - concrete NAG/LSD counterfactual execution at scale beyond the new conditional execution seam

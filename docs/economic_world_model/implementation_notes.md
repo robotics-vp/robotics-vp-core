@@ -2031,3 +2031,17 @@
     - `tests/test_sim_synth_runtime_launch.py`
     - `tests/test_sim_synth_physics_world_model.py`
     - `tests/test_sim_synth_training_corpus.py`
+
+- The next Phase 1 runtime-materialization cut now closes one more fake seam:
+  - `local_backend_factory_adapter.py` makes explicit local adapter materialization a typed invocation/result surface instead of letting it hide inside a direct backend-factory jump
+  - this matters because “realized locally” and “still only contract-shaped” are no longer collapsed together once the executable-adapter ladder reaches realization
+
+- Holosoma is now much closer to structural parity with Isaac/Unitree:
+  - it now has request / consumer / adapter-execution / adapter-realization surfaces
+  - those surfaces are emitted in runtime bundles and preserved into backend runtime execution receipts
+  - local train-from-motion now correctly clears `policy_checkpoint` when no policy is the honest bounded mode
+
+- The remaining Phase 1 gap is therefore narrower and more honest:
+  - Isaac/Unitree still needs the actual upstream runtime/assets/policies behind the new materialization surfaces
+  - Holosoma still needs the actual host/runtime/motion/policy/retargeting assets behind the same surfaces
+  - the remaining blockers are increasingly external runtime, asset, GPU, and benchmark-density issues rather than missing typed loop plumbing

@@ -1084,3 +1084,23 @@
   - a final concrete Isaac Lab / Isaac Sim / Unitree adapter implementation still needs to consume the new request / consumer / execution / realization chain against real upstream runtime/assets
   - Holosoma still needs the same realization depth
   - GGDS / video-diffusion still need GPU-backed materialization
+
+- Changed: pushed the next Phase 1 runtime-materialization tranche across both backend lanes so the local-runtime seam is explicit instead of being partly implicit and partly backend-specific:
+  - added `src/world_model/sim_synth_physics/adapters/local_backend_factory_adapter.py`
+  - the branch now emits a typed local backend-factory invocation/result surface over executable-adapter realization, so explicit local adapter materialization is no longer hidden inside a direct `make_motor_backend(...)` jump
+  - `backend_runtime_execution.py` now uses that explicit invocation/result surface before concrete runtime evaluation/training for both Isaac/Unitree and Holosoma
+  - local materialization truth is now preserved into adapter receipt metadata and downstream corpus rows, so replay/training surfaces can tell “local adapter was attempted and materialized” from “local path was only contract-shaped”
+- Changed: brought Holosoma up one major structural rung so it no longer lags Isaac/Unitree as a special-case runtime lane:
+  - added:
+    - `src/world_model/sim_synth_physics/adapters/holosoma_executable_adapter.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_executable_consumer.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_adapter_execution.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_adapter_realization.py`
+  - `runtime_bundles.py` now emits executable-adapter request/consumer surfaces for Holosoma too
+  - `backend_runtime_execution.py` now emits Holosoma adapter execution / realization / receipt metadata instead of leaving Holosoma as a concrete-runtime special case beside the typed lane
+  - the Holosoma motion-train path now explicitly drops `policy_checkpoint` when train-from-motion is the real bounded mode, so the adapter ladder stays honest instead of blocking a valid local training lane
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_local_backend_factory_adapter.py tests/test_holosoma_executable_adapter.py tests/test_holosoma_adapter_execution.py tests/test_holosoma_adapter_realization.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_local_backend_factory_adapter.py tests/test_holosoma_executable_adapter.py tests/test_holosoma_adapter_execution.py tests/test_holosoma_adapter_realization.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_local_backend_factory_adapter.py tests/test_holosoma_executable_adapter.py tests/test_holosoma_adapter_execution.py tests/test_holosoma_adapter_realization.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, and `git diff --check`.
+- Blocked: Phase 1 is now closer to the right honest remainder:
+  - actual Isaac Lab / Isaac Sim / Unitree upstream runtime/assets/policies
+  - actual Holosoma host/runtime/motion/policy/retargeting assets
+  - GPU-backed GGDS / video materialization
