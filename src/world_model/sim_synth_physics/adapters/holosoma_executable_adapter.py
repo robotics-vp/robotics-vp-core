@@ -110,6 +110,9 @@ def build_holosoma_executable_adapter_request(
             "HOLOSOMA_DEPLOYMENT_MODE": deployment_mode,
             "HOLOSOMA_PREFERRED_PROFILE": preferred_profile,
             "HOLOSOMA_RUNTIME_BINDING_STATUS": str(binding.get("binding_status", "") or ""),
+            "HOLOSOMA_HOST_PREFLIGHT_STATUS": str(
+                binding.get("host_preflight_status", "") or ""
+            ),
             "HOLOSOMA_MOTION_TRAIN_ENABLED": "1" if deployment_mode == "motion_train" else "0",
         }
     )
@@ -150,6 +153,9 @@ def build_holosoma_executable_adapter_request(
         ),
         "runtime_binding_id": str(binding.get("binding_id", "") or ""),
         "runtime_binding_status": str(binding.get("binding_status", "") or ""),
+        "runtime_binding_host_preflight_status": str(
+            binding.get("host_preflight_status", "") or ""
+        ),
         "runtime_binding": binding,
         "selected_motion_sources": selected_motion_sources,
         "selected_retargeting_root": selected_retargeting_root,

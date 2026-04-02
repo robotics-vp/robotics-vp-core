@@ -216,6 +216,20 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                 "execution_status": "runtime_execution_completed",
                 "policy_id": "policy_isaac_1",
                 "artifact_refs": ["/tmp/runtime_episode_1/trajectory.npz"],
+                "metadata": {
+                    "runtime_binding": {
+                        "host_preflight_status": "preflight_blocked",
+                        "host_preflight_missing_components": [
+                            "asset::unitree_robot_description"
+                        ],
+                        "host_preflight_symbolic_components": ["policy_ref"],
+                        "selected_ref_evidence": {
+                            "policy_ref": {
+                                "verification_status": "symbolic_ref",
+                            }
+                        },
+                    }
+                },
                 "version": "backend_runtime_execution_receipt_v1",
             },
             indent=2,
@@ -385,6 +399,18 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         backend_rows[0]["metadata"]["backend_runtime_execution_status"]
         == "runtime_execution_completed"
     )
+    assert (
+        backend_rows[0]["metadata"]["backend_runtime_binding_host_preflight_status"]
+        == "preflight_blocked"
+    )
+    assert (
+        backend_rows[0]["metadata"]["backend_runtime_binding_host_preflight_missing_components"]
+        == ["asset::unitree_robot_description"]
+    )
+    assert (
+        backend_rows[0]["metadata"]["backend_runtime_binding_host_preflight_symbolic_components"]
+        == ["policy_ref"]
+    )
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_status"] == "external_launch_completed"
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_execution_path"] == "external_launch"
@@ -426,6 +452,18 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["gen2sim_admissible_branch_count"] == 1
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_receipt_id"] == "bridge_1"
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_status"] == "runtime_targets_missing"
+    assert (
+        branch_rows[0]["metadata"]["backend_runtime_binding_host_preflight_status"]
+        == "preflight_blocked"
+    )
+    assert (
+        branch_rows[0]["metadata"]["backend_runtime_binding_host_preflight_missing_components"]
+        == ["asset::unitree_robot_description"]
+    )
+    assert (
+        branch_rows[0]["metadata"]["backend_runtime_binding_host_preflight_symbolic_components"]
+        == ["policy_ref"]
+    )
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_status"] == "external_launch_completed"
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_execution_path"] == "external_launch"

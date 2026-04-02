@@ -143,6 +143,9 @@ def build_isaac_unitree_executable_adapter_request(
             "UNITREE_PREFERRED_PROFILE": preferred_profile,
             "UNITREE_PLACEMENT_CLASS": placement_class,
             "UNITREE_RUNTIME_BINDING_STATUS": str(binding.get("binding_status", "") or ""),
+            "UNITREE_HOST_PREFLIGHT_STATUS": str(
+                binding.get("host_preflight_status", "") or ""
+            ),
             "UNITREE_TELEOP_ENABLED": "1" if deployment_mode == "teleop_bridge" else "0",
             "UNITREE_LEROBOT_EVAL_ENABLED": "1" if deployment_mode == "lerobot_eval" else "0",
             "UNITREE_PHYSICAL_DEPLOY_READY": (
@@ -187,6 +190,9 @@ def build_isaac_unitree_executable_adapter_request(
         ),
         "runtime_binding_id": str(binding.get("binding_id", "") or ""),
         "runtime_binding_status": str(binding.get("binding_status", "") or ""),
+        "runtime_binding_host_preflight_status": str(
+            binding.get("host_preflight_status", "") or ""
+        ),
         "runtime_binding": binding,
         "missing_preconditions": list(dict.fromkeys(missing_preconditions)),
         "env_overrides": env_overrides,

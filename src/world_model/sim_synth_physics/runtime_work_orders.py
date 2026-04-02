@@ -158,6 +158,9 @@ def build_backend_runtime_work_orders(
     for item in strings(runtime_binding.get("missing_components")):
         if item not in missing_preconditions:
             missing_preconditions.append(item)
+    for item in strings(runtime_binding.get("host_preflight_missing_components")):
+        if item not in missing_preconditions:
+            missing_preconditions.append(item)
     outcome_metadata = (
         {} if runtime_outcome_receipt is None else mapping(runtime_outcome_receipt.metadata)
     )
@@ -291,6 +294,18 @@ def build_backend_runtime_work_orders(
                 ),
                 "runtime_binding_selected_launch_root": str(
                     runtime_binding.get("selected_launch_root", "") or ""
+                ),
+                "runtime_binding_host_preflight_status": str(
+                    runtime_binding.get("host_preflight_status", "") or ""
+                ),
+                "runtime_binding_host_preflight_missing_components": strings(
+                    runtime_binding.get("host_preflight_missing_components")
+                ),
+                "runtime_binding_host_preflight_symbolic_components": strings(
+                    runtime_binding.get("host_preflight_symbolic_components")
+                ),
+                "runtime_binding_selected_ref_evidence": mapping(
+                    runtime_binding.get("selected_ref_evidence")
                 ),
                 "runtime_bundle": runtime_metadata.get("runtime_bundle", {}),
                 "launch_spec": launch_spec,

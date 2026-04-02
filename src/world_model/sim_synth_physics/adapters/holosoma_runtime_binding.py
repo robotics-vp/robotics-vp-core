@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from ..common import mapping, stable_id, strings
+from ..ref_evidence import describe_ref_evidence, summarize_preflight_evidence
 
 
 def _mode_contract(deployment_contract: Mapping[str, Any], deployment_mode: str) -> dict[str, Any]:
@@ -159,7 +160,9 @@ def build_holosoma_runtime_binding(
         or (strings(pack.get("policy_candidates")) or strings(pack.get("checkpoint_candidates")) or [""])[0]
         or ""
     )
-    selected_motion_sources = strings(pack.get("motion_sources"))
+    selected_motion_sources = strings(pack.get("existing_motion_sources")) or strings(
+        pack.get("motion_sources")
+    )
     selected_runtime_report = str(
         (strings(pack.get("runtime_report_candidates")) or strings(pack.get("data_candidates")) or [""])[0]
         or ""
@@ -185,6 +188,19 @@ def build_holosoma_runtime_binding(
     )
     selected_target_refs, missing_targets = _target_refs(runtime_target_contract, required_target_ids)
     selected_retargeting_root = str(selected_target_refs.get("retargeting_root", "") or "")
+    selected_ref_evidence = {
+        "policy_ref": describe_ref_evidence(selected_policy_ref),
+        "launch_root": describe_ref_evidence(selected_launch_root),
+        "runtime_report_ref": describe_ref_evidence(selected_runtime_report),
+        "retargeting_root": describe_ref_evidence(selected_retargeting_root),
+    }
+    selected_target_ref_evidence = {
+        target_id: describe_ref_evidence(ref)
+        for target_id, ref in selected_target_refs.items()
+    }
+    selected_motion_source_evidence = {
+        source: describe_ref_evidence(source) for source in selected_motion_sources
+    }
     surface_gaps: list[str] = []
     for surface in required_surfaces:
         if surface in pack_ready_surfaces:
@@ -241,6 +257,31 @@ def build_holosoma_runtime_binding(
     if not local_runtime_binding and not selected_command and "launch_command" not in missing_components:
         missing_components.append("launch_command")
 
+    preflight_required_components: list[str] = []
+    if "policy_surface" in required_surfaces:
+        preflight_required_components.append("policy_ref")
+    if not local_runtime_binding:
+        preflight_required_components.append("launch_root")
+    for target_id in required_target_ids:
+        preflight_required_components.append(f"target::{target_id}")
+    if "retargeting_surface" in required_surfaces:
+        preflight_required_components.append("retargeting_root")
+    preflight_evidence = {
+        **selected_ref_evidence,
+        **{
+            f"target::{target_id}": evidence
+            for target_id, evidence in selected_target_ref_evidence.items()
+        },
+    }
+    host_preflight = summarize_preflight_evidence(
+        preflight_required_components,
+        preflight_evidence,
+    )
+    if "motion_surface" in required_surfaces and not selected_motion_sources:
+        host_preflight["status"] = "preflight_blocked"
+        if "motion_sources" not in host_preflight["missing_components"]:
+            host_preflight["missing_components"].append("motion_sources")
+
     binding_status = "binding_ready"
     if missing_components and pack_ready_surfaces:
         binding_status = "binding_partial"
@@ -269,7 +310,16 @@ def build_holosoma_runtime_binding(
         "selected_runtime_report": selected_runtime_report,
         "selected_target_refs": selected_target_refs,
         "selected_motion_sources": selected_motion_sources,
+        "missing_motion_sources": strings(pack.get("missing_motion_sources")),
         "selected_retargeting_root": selected_retargeting_root,
+        "selected_ref_evidence": selected_ref_evidence,
+        "selected_target_ref_evidence": selected_target_ref_evidence,
+        "selected_motion_source_evidence": selected_motion_source_evidence,
+        "host_preflight_status": host_preflight["status"],
+        "host_preflight_missing_components": host_preflight["missing_components"],
+        "host_preflight_symbolic_components": host_preflight["symbolic_components"],
+        "host_preflight_verified_components": host_preflight["verified_components"],
+        "host_preflight_ready_components": host_preflight["ready_components"],
         "missing_components": list(dict.fromkeys(missing_components)),
         "pack_status": str(pack.get("pack_status", "") or ""),
         "pack_id": str(pack.get("pack_id", "") or ""),

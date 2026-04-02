@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from ..common import mapping, stable_id, strings
+from ..ref_evidence import describe_ref_evidence, summarize_preflight_evidence
 
 
 def _mode_contract(deployment_contract: Mapping[str, Any], deployment_mode: str) -> dict[str, Any]:
@@ -186,6 +187,20 @@ def build_isaac_unitree_runtime_binding(
     selected_target_refs, missing_targets = _target_refs(runtime_target_contract, required_target_ids)
 
     selected_asset_refs = mapping(pack.get("asset_refs"))
+    selected_ref_evidence = {
+        "policy_ref": describe_ref_evidence(selected_policy_ref),
+        "launch_root": describe_ref_evidence(selected_launch_root),
+        "deploy_config_ref": describe_ref_evidence(selected_deploy_config),
+        "runtime_report_ref": describe_ref_evidence(selected_runtime_report),
+    }
+    selected_target_ref_evidence = {
+        target_id: describe_ref_evidence(ref)
+        for target_id, ref in selected_target_refs.items()
+    }
+    selected_asset_ref_evidence = {
+        asset_id: describe_ref_evidence(ref)
+        for asset_id, ref in selected_asset_refs.items()
+    }
     missing_components = _relevant_pack_missing_components(
         pack_missing_components=strings(pack.get("missing_components")),
         required_surfaces=required_surfaces,
@@ -214,6 +229,31 @@ def build_isaac_unitree_runtime_binding(
         missing_components.append("launch_root")
     if not local_runtime_binding and not selected_command and "launch_command" not in missing_components:
         missing_components.append("launch_command")
+
+    preflight_required_components: list[str] = []
+    if "policy_surface" in required_surfaces:
+        preflight_required_components.append("policy_ref")
+    if not local_runtime_binding:
+        preflight_required_components.append("launch_root")
+    for target_id in required_target_ids:
+        preflight_required_components.append(f"target::{target_id}")
+    for asset_id in strings(mode_contract.get("required_asset_ids")):
+        preflight_required_components.append(f"asset::{asset_id}")
+    preflight_evidence = {
+        **selected_ref_evidence,
+        **{
+            f"target::{target_id}": evidence
+            for target_id, evidence in selected_target_ref_evidence.items()
+        },
+        **{
+            f"asset::{asset_id}": evidence
+            for asset_id, evidence in selected_asset_ref_evidence.items()
+        },
+    }
+    host_preflight = summarize_preflight_evidence(
+        preflight_required_components,
+        preflight_evidence,
+    )
 
     binding_status = "binding_ready"
     if missing_components and pack_ready_surfaces:
@@ -245,6 +285,14 @@ def build_isaac_unitree_runtime_binding(
         "selected_target_refs": selected_target_refs,
         "selected_asset_refs": selected_asset_refs,
         "selected_asset_ids": strings(pack.get("ready_asset_ids")),
+        "selected_ref_evidence": selected_ref_evidence,
+        "selected_target_ref_evidence": selected_target_ref_evidence,
+        "selected_asset_ref_evidence": selected_asset_ref_evidence,
+        "host_preflight_status": host_preflight["status"],
+        "host_preflight_missing_components": host_preflight["missing_components"],
+        "host_preflight_symbolic_components": host_preflight["symbolic_components"],
+        "host_preflight_verified_components": host_preflight["verified_components"],
+        "host_preflight_ready_components": host_preflight["ready_components"],
         "missing_components": list(dict.fromkeys(missing_components)),
         "pack_status": str(pack.get("pack_status", "") or ""),
         "pack_id": str(pack.get("pack_id", "") or ""),

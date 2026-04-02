@@ -104,6 +104,41 @@ def test_prepare_backend_runtime_launch_blocks_when_policy_and_gpu_missing(monke
     assert "policy_checkpoint" in plan["missing_preconditions"]
 
 
+def test_prepare_backend_runtime_launch_consumes_non_asset_host_preflight_truth(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(runtime_launch_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(runtime_launch_module, "_cuda_ready", lambda: True)
+
+    bundle = _isaac_bundle()
+    bundle["runtime_binding"] = {
+        "host_preflight_status": "preflight_blocked",
+        "host_preflight_missing_components": [
+            "target::unitree_sdk2_root",
+            "asset::unitree_robot_description",
+        ],
+        "missing_components": [],
+    }
+
+    plan = prepare_backend_runtime_launch(
+        bundle,
+        {
+            "backend": "isaac",
+            "preferred_profile": "unitree_sim_isaaclab",
+            "policy_ready": True,
+            "command": "python ${UNITREE_SIM_ISAACLAB_ROOT}/sim_main.py --task peg_in_hole --policy /tmp/g1.onnx --headless",
+            "root": "/tmp/unitree_sim_isaaclab",
+            "policy_ref": "/tmp/g1.onnx",
+            "runtime_binding": bundle["runtime_binding"],
+        },
+    )
+
+    assert plan["status"] == "blocked"
+    assert "target::unitree_sdk2_root" in plan["missing_preconditions"]
+    assert "asset::unitree_robot_description" not in plan["missing_preconditions"]
+    assert plan["host_preflight_status"] == "preflight_blocked"
+
+
 def test_run_phase1_runtime_launch_script_dry_run(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(runtime_launch_module.platform, "system", lambda: "Linux")
     monkeypatch.setattr(runtime_launch_module, "_cuda_ready", lambda: True)

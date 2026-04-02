@@ -74,7 +74,12 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     assert summary["isaac_upstream_runtime_pack"]["primary_policy_ref"].endswith("g1_policy.onnx")
     assert summary["isaac_upstream_runtime_pack"]["profile_candidate_counts"]["deploy"] >= 1
     assert summary["isaac_runtime_binding"]["binding_status"] == "binding_ready"
+    assert summary["isaac_runtime_binding"]["host_preflight_status"] == "preflight_blocked"
+    assert "asset::unitree_robot_description" in summary["isaac_runtime_binding"][
+        "host_preflight_missing_components"
+    ]
     assert summary["holosoma_deployment_contract"]["motion_train_ready"] is True
     assert summary["holosoma_upstream_runtime_pack"]["pack_status"] == "pack_ready"
     assert summary["holosoma_upstream_runtime_pack"]["existing_motion_sources"]
     assert summary["holosoma_runtime_binding"]["binding_status"] == "binding_ready"
+    assert summary["holosoma_runtime_binding"]["host_preflight_status"] == "preflight_ready"

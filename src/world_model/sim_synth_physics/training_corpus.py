@@ -703,6 +703,18 @@ def build_backend_selector_rows_from_receipts(
                     "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
                         "selected_launch_root"
                     ),
+                    "backend_runtime_binding_host_preflight_status": backend_runtime_binding.get(
+                        "host_preflight_status"
+                    ),
+                    "backend_runtime_binding_host_preflight_missing_components": list(
+                        backend_runtime_binding.get("host_preflight_missing_components") or []
+                    ),
+                    "backend_runtime_binding_host_preflight_symbolic_components": list(
+                        backend_runtime_binding.get("host_preflight_symbolic_components") or []
+                    ),
+                    "backend_runtime_binding_selected_ref_evidence": _mapping(
+                        backend_runtime_binding.get("selected_ref_evidence")
+                    ),
                     "backend_runtime_binding_missing_components": list(
                         backend_runtime_binding.get("missing_components") or []
                     ),
@@ -1023,6 +1035,20 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_binding_selected_launch_root": backend_runtime_binding.get(
                             "selected_launch_root"
+                        ),
+                        "backend_runtime_binding_host_preflight_status": backend_runtime_binding.get(
+                            "host_preflight_status"
+                        ),
+                        "backend_runtime_binding_host_preflight_missing_components": list(
+                            backend_runtime_binding.get("host_preflight_missing_components")
+                            or []
+                        ),
+                        "backend_runtime_binding_host_preflight_symbolic_components": list(
+                            backend_runtime_binding.get("host_preflight_symbolic_components")
+                            or []
+                        ),
+                        "backend_runtime_binding_selected_ref_evidence": _mapping(
+                            backend_runtime_binding.get("selected_ref_evidence")
                         ),
                         "backend_runtime_binding_missing_components": list(
                             backend_runtime_binding.get("missing_components") or []

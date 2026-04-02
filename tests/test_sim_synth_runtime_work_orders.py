@@ -60,6 +60,15 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
         execution_status="runtime_request_materialized_with_preconditions",
         metadata={
             "missing_preconditions": ["runtime_policy_id"],
+            "runtime_binding": {
+                "host_preflight_status": "preflight_blocked",
+                "host_preflight_missing_components": ["asset::unitree_robot_description"],
+                "selected_ref_evidence": {
+                    "policy_ref": {
+                        "verification_status": "symbolic_ref",
+                    }
+                },
+            },
             "launch_spec": {
                 "command": "python ${UNITREE_SIM_ISAACLAB_ROOT}/sim_main.py --task peg_in_hole --policy ${POLICY_REF} --headless"
             },
@@ -83,6 +92,10 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
     assert any("sim_main.py" in hint for hint in work_orders[0].command_hints)
     assert work_orders[0].metadata["policy_ready"] is False
     assert work_orders[0].metadata["runtime_binding_selected_deploy_config"] == ""
+    assert work_orders[0].metadata["runtime_binding_host_preflight_status"] == "preflight_blocked"
+    assert work_orders[0].metadata["runtime_binding_host_preflight_missing_components"] == [
+        "asset::unitree_robot_description"
+    ]
     assert work_orders[0].metadata["upstream_runtime_primary_policy_ref"] == ""
 
 

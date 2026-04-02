@@ -102,6 +102,16 @@ def prepare_backend_runtime_launch(
     for item in strings(runtime_binding.get("missing_components")):
         if item not in missing_preconditions:
             missing_preconditions.append(item)
+    for item in strings(runtime_binding.get("host_preflight_missing_components")):
+        if str(item).startswith("asset::"):
+            continue
+        if item not in missing_preconditions:
+            missing_preconditions.append(item)
+    host_preflight_status = str(runtime_binding.get("host_preflight_status", "") or "")
+    if host_preflight_status and host_preflight_status not in {"preflight_ready", "ready"}:
+        notes.append(
+            f"Runtime binding host preflight is {host_preflight_status}."
+        )
     if backend == "isaac":
         notes.append("Prefer Unitree/IsaacLab-style launch profiles when available.")
     elif backend == "holosoma":
@@ -164,6 +174,7 @@ def prepare_backend_runtime_launch(
         "executable_adapter_request": executable_adapter_request,
         "executable_adapter_consumer": executable_adapter_consumer,
         "runtime_binding": runtime_binding,
+        "host_preflight_status": host_preflight_status,
     }
     return {
         "launch_id": stable_id("backend_runtime_launch", payload),
@@ -265,6 +276,7 @@ def build_backend_runtime_launch_receipt(
             "executable_adapter_request": mapping(result.get("executable_adapter_request")),
             "executable_adapter_consumer": mapping(result.get("executable_adapter_consumer")),
             "runtime_binding": mapping(result.get("runtime_binding")),
+            "host_preflight_status": str(result.get("host_preflight_status", "") or ""),
             "returncode": result.get("returncode"),
             "stdout": result.get("stdout", ""),
             "stderr": result.get("stderr", ""),
