@@ -2,6 +2,15 @@
 
 ## 2026-04-02
 
+- Normalized the Claude handoff artifact discipline:
+  - `docs/economic_world_model/claude_to_comment_on.md` is now reset to a single current-state artifact
+  - historical tranche detail should stay in:
+    - `docs/economic_world_model/progress_log.md`
+    - `docs/economic_world_model/implementation_notes.md`
+- Why this matters:
+  - the old accretive pattern made it harder to tell current branch truth from stacked historical context
+  - the new pattern is better aligned with the repo doctrine that Codex should leave a clean handoff after meaningful implementation steps
+
 - Closed the last explicit compiler-side incompleteness items from the active Phase-1 verification tranche:
   - `src/world_model/sim_synth_physics/state.py` now treats `PhysicsExecutionContract` as canonical world-state, not only a runtime byproduct
   - `src/world_model/sim_synth_physics/compiler.py` now compiles that contract with the active fallback-backend posture and emits `compiled_receipt_inventory` plus `runtime_depth_projection` metadata

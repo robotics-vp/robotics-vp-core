@@ -2,6 +2,15 @@
 
 ## 2026-04-02
 
+- Changed: normalized `docs/economic_world_model/claude_to_comment_on.md` back into a single current-state handoff artifact instead of an accreted stack of tranche notes.
+- Why this matters:
+  - the collaboration artifact is easier to read as current branch truth
+  - historical tranche detail now stays where it belongs:
+    - `docs/economic_world_model/progress_log.md`
+    - `docs/economic_world_model/implementation_notes.md`
+  - this makes it harder to confuse audited-cluster closure with total Phase-1 closure
+- Verification: `git diff --check` passed. This was a docs-only cleanup pass.
+
 - Changed: closed the remaining compiler-side Category A cluster from the active Phase-1 Tier 1 / Tier 3 verification pass:
   - `src/world_model/sim_synth_physics/state.py` now carries `physics_execution_contract` inside `SimSynthPhysicsWorldState`
   - `src/world_model/sim_synth_physics/compiler.py` now compiles that contract with the configured fallback backend and emits a compiler-owned receipt inventory / runtime-depth projection
