@@ -2347,3 +2347,29 @@
 - The practical effect is that the remaining blocker is more decisively external:
   - the branch now knows much more specifically which runtime roots/checkpoints/assets it would use
   - if the next step still fails, it is increasingly because those upstream repos/assets/checkpoints are not actually present or usable, not because Phase 1 lacked a typed way to name them
+
+- Phase 1 install/preflight evidence now sits one level deeper in the same runtime lane rather than creating a new rung:
+  - `runtime_layouts.py` now distinguishes root/candidate truth from install-shape truth on each runtime profile
+  - that install-shape truth is profile-local and includes:
+    - entrypoint-path expectations
+    - primary entrypoint ref
+    - install-preflight status
+    - verified vs missing install components
+- The important topology correction in this tranche was selected-profile resolution:
+  - upstream runtime packs can still prefer one profile while a binding honestly selects another
+  - because of that, install-preflight truth cannot stay only at the pack-preferred profile
+  - both Isaac/Unitree and Holosoma packs now carry `profile_install_by_id`
+  - bindings now resolve install-preflight against the actual selected profile before computing `runtime_profile_surface`, missing components, and host-preflight
+- That fixed a real false-readiness / false-blocker pair:
+  - partially discovered Isaac profiles can still be selected as the best local upstream profile even when deployment-level `preferred_profile` stays empty
+  - Holosoma `motion_train` no longer inherits `holosoma_repo` install blockers when the selected local mode is `holosoma_motion_bank`
+- Downstream preservation was kept aligned:
+  - `runtime_work_orders.py` now carries profile install status, selected primary entrypoint refs, and selected install missing-components
+  - `training_corpus.py` now exports the same install/preflight truth into backend-selector and branch-planner rows
+- Closure interpretation after this tranche:
+  - no new internal ladder was added
+  - no new fake readiness was introduced
+  - the remaining honest blocker stays external:
+    - real local Isaac/Unitree installs/assets/checkpoints
+    - real local Holosoma runtime/motion/policy/retargeting assets
+    - real GPU-backed materialization

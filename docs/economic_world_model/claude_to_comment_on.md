@@ -11,143 +11,113 @@
   - `docs/economic_world_model/phase1_closure_standard.md`
   - `docs/economic_world_model/doctrine_runtime_ladder_reuse.md`
 
-This file is the **current-state handoff only**. Historical tranche detail belongs in:
+This file is the single current-state handoff. Historical tranche detail belongs in:
 - `docs/economic_world_model/progress_log.md`
 - `docs/economic_world_model/implementation_notes.md`
-
-## Current Branch Truth
-
-The branch is still moving in the right direction.
-
-- Phase 1 Sim / Synth / Physics remains the active implementation center.
-- The branch has not drifted into premature Perception / Grounding implementation.
-- The latest meaningful closure work has made the Phase 1 runtime/compiler surfaces more mechanically honest:
-  - `PhysicsExecutionContract` is now canonical compiled state inside `SimSynthPhysicsWorldState`
-  - the compiler emits a WM-owned `compiled_receipt_inventory` and `runtime_depth_projection`
-  - training-corpus consumers preserve compiled contract and compiled ladder truth instead of flattening it away
-- The latest runtime-evidence hardening pass made upstream runtime/profile/policy surfaces more concrete:
-  - profile surfaces now carry primary refs and evidence density
-  - Isaac asset truth distinguishes declared vs verified
-  - Holosoma motion truth distinguishes existing vs missing motion sources
-- The newest binding pass now consumes that richer evidence instead of leaving it pack-local:
-  - Isaac runtime bindings emit selected-surface evidence plus host-preflight truth
-  - Holosoma runtime bindings emit selected existing-motion evidence plus host-preflight truth
-  - launch/work-order/training paths preserve that host-preflight truth instead of flattening it away
-- The newest host-install pass now lets the runtime path consume real local clones/checkpoints more directly:
-  - runtime targets can autodiscover common local upstream repo roots
-  - runtime layouts and policy contracts can fall back to those discovered roots
-  - a host with real local clones no longer needs every env var hand-wired before Phase 1 can see that evidence
-
-## What Changed Topologically
-
-- Compiler-side backend routing is no longer only a runtime byproduct.
-- The runtime ladder is now visible in both compiled-state truth and runtime evidence truth.
-- Upstream runtime packs are no longer just root/candidate shaped; they now preserve:
-  - primary deploy refs
-  - primary policy refs
-  - primary runtime-report refs
-  - candidate counts
-  - git metadata where a real local clone exists
-- Runtime bindings now distinguish selected surfaces that are:
-  - locally verified
-  - only symbolically named
-  - declared but locally missing
-- Training/export rows now preserve that upstream evidence instead of collapsing it into vague readiness bits.
-- The runtime target/layout path is now better at consuming actual local install reality, not just explicit env wiring.
-
-## What Fake Readiness Was Removed
-
-- Compiler closure no longer depended on runtime-only reconstruction of backend routing.
-- Isaac upstream readiness no longer treats declared assets as equivalent to verified assets.
-- Holosoma motion readiness no longer treats named motion sources as equivalent to locally present motion sources.
-- Runtime binding no longer treats selected surfaces as equally ready once the pack is chosen:
-  - declared-only Isaac asset refs are now exposed as host-preflight blockers
-  - Holosoma selected motion sources now prefer the locally existing subset
-- Runtime discovery no longer assumes “unset env var” means “no local runtime exists”:
-  - targeted autodiscovery now closes the gap where a real local clone/checkpoint bank exists but the WM could not see it yet
-- The branch is more explicit now about the difference between:
-  - compiled posture
-  - runtime posture
-  - upstream evidence posture
-  - host-preflight posture
-  - genuinely externalized runtime / asset / GPU blockers
 
 ## Tranche Spec Coverage
 
 | Area | Current state |
 |------|---------------|
-| Tier 1 / Tier 3 compiler-side closure | **closed on the audited path** |
-| Training-corpus preservation of compiled/runtime truth | **materially closed on the audited path** |
-| Upstream runtime/profile/policy evidence specificity | **materially improved** |
-| Isaac declared-vs-verified asset truth | **materially improved** |
-| Holosoma existing-vs-missing motion truth | **materially improved** |
-| Runtime-binding host-preflight truth | **materially improved** |
-| Local clone/install/checkpoint discovery | **materially improved** |
-| Render/provider receipt chain | **not reworked in the latest pass** |
-| Promotion/demotion history surface | **still secondary / not the latest target** |
+| Runtime layout/profile evidence | **materially improved** |
+| Upstream runtime-pack evidence | **materially improved** |
+| Selected-profile install/preflight truth | **closed on the audited path** |
+| Training/work-order preservation of install truth | **materially improved** |
+| Holosoma selected-profile false blocker | **fixed** |
+| Isaac partially discovered preferred-profile fallback | **fixed** |
+| Promotion/demotion history surface | **unchanged / secondary** |
+| Render/provider lane | **unchanged in this tranche** |
+
+## Current Branch Truth
+
+- Phase 1 Sim / Synth / Physics remains the active implementation center.
+- The branch has not drifted upward into Perception / Grounding implementation.
+- The latest meaningful closure work did **not** add a new runtime rung. It tightened the existing runtime layout -> runtime pack -> runtime binding path.
+- Runtime profiles now carry explicit install/preflight truth, not only root/candidate truth:
+  - selected install entrypoint paths
+  - matched/missing entrypoints
+  - primary entrypoint ref
+  - install-preflight status
+  - install missing/verified components
+- Isaac/Unitree and Holosoma upstream runtime packs now preserve that profile-local install truth and expose it by profile id.
+- Runtime bindings now resolve install/preflight truth against the **actually selected profile**, not just the pack’s preferred profile.
+- Training-corpus rows and runtime work orders now preserve that install/preflight truth instead of flattening it away.
+
+## What Changed Topologically
+
+- Runtime layouts are no longer only “root exists + candidate refs” surfaces.
+- Upstream runtime packs are no longer only preferred-profile summaries; they now carry reusable per-profile install truth.
+- Runtime bindings no longer inherit profile-install blockers from the wrong profile when the selected mode changes.
+- The Holosoma motion-train lane can now honestly select `holosoma_motion_bank` without inheriting `holosoma_repo` install gaps like `profile_entrypoint`.
+- Partially discovered Isaac/Unitree upstream profiles can now still be selected as the best local upstream profile instead of collapsing to an empty preferred profile when deployment-level readiness stays strict.
+
+## What Fake Readiness Was Removed
+
+- “Repo root exists” is no longer treated as enough install truth for a selected runtime profile.
+- “Pack preferred profile is blocked” no longer automatically means “selected binding profile is blocked.”
+- Holosoma local motion-train no longer looks blocked by repo-entrypoint gaps that belong only to a different selected profile.
+- Training/work-order consumers no longer have to infer selected-profile install truth from pack status alone.
 
 ## What Was Not Changed
 
-This handoff does **not** claim new closure in:
+This tranche did **not** claim new closure in:
 
 - `src/world_model/sim_synth_physics/render_providers.py`
 - `src/world_model/sim_synth_physics/promotion.py`
 - any Perception / Grounding implementation surface
-- any frozen Phase B math or controller logic
+- frozen Phase B math or controller logic
 
 ## Phase 1 Closure Assessment
 
 ### Category A: internal incompleteness that should still be fixable in-repo
 
-No obvious Category A break is currently claimed in the latest audited compiler/runtime/evidence cluster.
+No fresh Category A gap is being claimed on the audited runtime layout/pack/binding/install cluster.
 
-That does **not** mean global Phase 1 closure. It means the latest audited cluster is no longer blocked by an obvious missing receipt/state/contract gap.
+That does **not** mean total Phase 1 closure. It means this specific install/preflight cluster is now structurally honest on the audited path.
 
 ### Category B: honest externalized remainder
 
-- real Isaac / Unitree upstream runtime, assets, checkpoints, and host install
+- real Isaac / Unitree installs, assets, checkpoints, and host setup
 - real Holosoma host/runtime, motion corpora, retargeting assets, and policies
 - real GPU-backed GGDS / LDM / video materialization
-- benchmark density from actual backend execution against those real substrates
+- benchmark density from actual backend execution on those real substrates
 
 ### Category C: non-blocking secondary refinement
 
-- additional promotion/demotion provenance depth
-- more outcome-density / benchmark-density once Category B substrates are present
+- deeper promotion/demotion provenance
+- denser benchmark and outcome evidence once Category B substrates are real
 
 ## Explicit Internal vs External Statement
 
-### Internal incompleteness fixed in the latest meaningful passes
+### Internal incompleteness fixed today
 
-- compiler-side canonicalization of `PhysicsExecutionContract`
-- compiler-side projection of deeper runtime-ladder truth
-- training/export preservation of compiled closure
-- richer upstream runtime/profile/policy evidence preservation
-- declared-vs-verified Isaac asset truth
-- existing-vs-missing Holosoma motion-source truth
-- selected-surface host-preflight truth across binding, launch, work-order, and training surfaces
-- targeted local clone/install/checkpoint autodiscovery and policy-root fallback
+- profile-level install/preflight evidence was added to runtime layouts
+- upstream runtime packs now preserve profile-local install truth rather than only preferred-profile truth
+- bindings now resolve install truth against the actually selected profile
+- runtime work orders and trainer rows now preserve that selected-profile install truth
+- the Holosoma motion-train selected-profile blocker leak was removed
+- the Isaac partially discovered preferred-profile collapse was removed
 
 ### What remains internal
 
-- no fresh Category A gap is being claimed from the latest audited cluster
-- there is still room for more density and stronger evidence, but not an obvious missing canonical surface in the latest reviewed path
+- no fresh obvious Category A gap is being claimed in the audited install/preflight cluster
+- there is still room for more density, but not an obvious missing canonical install/preflight surface on this path
 
 ### What is now honestly externalized
 
-- actual upstream runtime availability
-- actual host installs and assets
-- actual checkpoints/policies/runtime reports
-- actual GPU/model availability for GGDS / LDM / video materialization
+- whether real local Isaac/Unitree upstream repos/assets/checkpoints are present and usable
+- whether real local Holosoma runtime/motion/policy/retargeting assets are present and usable
+- whether GPU/model runtime is available for GGDS / LDM / video materialization
 
 ## Recommendation to Claude
 
 - **Phase 1 remains the active implementation center.**
 - **Parallel Perception prep is allowed but secondary.**
-- Do **not** treat the current audited-cluster closure as total Phase 1 closure.
-- The next highest-leverage Phase 1 work should keep consuming the richer upstream evidence surfaces against real local/runtime/asset reality for:
-  1. actual local Isaac / Unitree installs/assets/checkpoints and stronger host-install/preflight truth
-  2. actual local Holosoma host/runtime/motion/policy/retargeting assets once present
+- Do **not** treat this audited-cluster closure as total Phase 1 closure.
+- The next highest-leverage Phase 1 work should keep pushing Category B reality:
+  1. strengthen local install/preflight evidence against actual discovered Isaac/Unitree clones/assets/checkpoints
+  2. do the same for real Holosoma host/runtime/motion/policy/retargeting assets
+  3. keep preserving that truth through launch/work-order/training surfaces without inventing a new ladder
 
 ## Procedural Note
 

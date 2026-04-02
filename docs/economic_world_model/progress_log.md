@@ -1300,3 +1300,28 @@
   - the branch now has richer evidence about upstream runtime roots/checkpoints/assets, but it still needs the actual upstream runtimes/assets/checkpoints on host
   - Holosoma still needs actual host/runtime/motion/retargeting/provider assets behind those evidence surfaces
   - GPU-backed materialization still remains external
+
+- Changed: pushed the next Category-B Phase 1 install-evidence tranche so runtime profiles now carry explicit install/preflight truth rather than only root/candidate truth:
+  - `runtime_layouts.py` now emits per-profile install evidence:
+    - selected install entrypoint paths
+    - matched/missing entrypoints
+    - primary entrypoint ref
+    - install preflight status
+    - install missing/verified components
+  - Isaac/Unitree and Holosoma upstream runtime packs now preserve that profile-level install truth, including a `profile_install_by_id` map so downstream consumers can reason about whichever profile is actually selected rather than only the pack’s preferred profile
+  - Isaac/Unitree and Holosoma runtime bindings now use the selected profile’s install truth when computing:
+    - `runtime_profile_surface`
+    - selected-profile missing components
+    - host-preflight requirements
+  - this removed a real false-blocker seam on the Holosoma motion-train lane: when the branch selects `holosoma_motion_bank`, it no longer inherits `holosoma_repo` install gaps like `profile_entrypoint`
+- Changed: trainer/work-order surfaces now preserve the stronger install truth:
+  - `training_corpus.py` now exports upstream/runtime-binding profile install status, selected primary entrypoint refs, and selected profile install-missing components
+  - `runtime_work_orders.py` now preserves the same fields so runtime bring-up tasks can distinguish:
+    - root discovered but install-blocked
+    - selected profile install-ready
+    - host-preflight blocked for an actually selected surface
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_runtime_layouts.py tests/test_scan_phase1_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_scan_phase1_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`
+  - result: `34 passed`
