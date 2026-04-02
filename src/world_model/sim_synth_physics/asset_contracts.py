@@ -65,16 +65,34 @@ def compile_robot_asset_contract(
         if adaptation_policy is None
         else str(adaptation_policy.target_hardware_class)
     )
-    normalized_manifest = normalize_robot_asset_manifest(embodiment_context)
+    runtime_target_contract = mapping(backend_execution_binding.metadata).get(
+        "runtime_target_contract"
+    )
+    normalized_manifest = normalize_robot_asset_manifest(
+        embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+    )
     required_assets = sorted(
         set(backend_execution_binding.required_assets)
         | set(required_assets_for_hardware_class(target_hardware_class))
     )
     available_assets = sorted(
-        set(available_assets_for_hardware_class(target_hardware_class, embodiment_context))
+        set(
+            available_assets_for_hardware_class(
+                target_hardware_class,
+                embodiment_context,
+                runtime_target_contract=runtime_target_contract,
+            )
+        )
         | set(backend_execution_binding.available_assets)
     )
-    missing_assets = list(missing_assets_for_hardware_class(target_hardware_class, embodiment_context))
+    missing_assets = list(
+        missing_assets_for_hardware_class(
+            target_hardware_class,
+            embodiment_context,
+            runtime_target_contract=runtime_target_contract,
+        )
+    )
     for asset_name in required_assets:
         if asset_name not in available_assets and asset_name not in missing_assets:
             missing_assets.append(asset_name)

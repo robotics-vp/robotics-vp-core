@@ -431,7 +431,10 @@ def _materialize_isaac_binding(
         "observation_contracts": [] if contract is None else list(contract.observation_contracts),
         "action_contracts": [] if contract is None else list(contract.action_contracts),
         "robot_asset_manifest": robot_asset_manifest,
-        "normalized_robot_asset_manifest": normalize_robot_asset_manifest(embodiment_context),
+        "normalized_robot_asset_manifest": normalize_robot_asset_manifest(
+            embodiment_context,
+            runtime_target_contract=runtime_target_contract,
+        ),
         "runtime_target_contract": runtime_target_contract,
     }
     refs: list[str] = []

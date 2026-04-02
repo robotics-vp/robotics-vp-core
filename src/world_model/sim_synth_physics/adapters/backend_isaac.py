@@ -33,8 +33,17 @@ def _has_module(name: str) -> bool:
 def _asset_lists(embodiment_context: Mapping[str, Any]) -> tuple[list[str], list[str], list[str]]:
     target_hardware_class = "unitree_g1_r1_class"
     required = required_assets_for_hardware_class(target_hardware_class)
-    available = available_assets_for_hardware_class(target_hardware_class, embodiment_context)
-    missing = missing_assets_for_hardware_class(target_hardware_class, embodiment_context)
+    runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
+    available = available_assets_for_hardware_class(
+        target_hardware_class,
+        embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+    )
+    missing = missing_assets_for_hardware_class(
+        target_hardware_class,
+        embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+    )
     return required, available, missing
 
 
@@ -50,8 +59,11 @@ def build_isaac_backend_binding(
     shadow_backend_available = True
     required_assets, available_assets, missing_assets = _asset_lists(embodiment_context)
     manifest = extract_robot_asset_manifest(embodiment_context)
-    normalized_manifest = normalize_robot_asset_manifest(embodiment_context)
     runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
+    normalized_manifest = normalize_robot_asset_manifest(
+        embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+    )
     runtime_layout_contract = describe_isaac_runtime_layouts(embodiment_context)
     policy_contract = describe_isaac_policy_contract(embodiment_context)
     deployment_contract = build_isaac_unitree_deployment_contract(

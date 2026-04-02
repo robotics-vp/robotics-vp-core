@@ -132,7 +132,10 @@ def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
     isaac_runtime_targets = describe_isaac_runtime_targets(embodiment_context)
     isaac_runtime_layouts = describe_isaac_runtime_layouts(embodiment_context)
     isaac_policy_contract = describe_isaac_policy_contract(embodiment_context)
-    normalized_asset_manifest = normalize_robot_asset_manifest(embodiment_context)
+    normalized_asset_manifest = normalize_robot_asset_manifest(
+        embodiment_context,
+        runtime_target_contract=isaac_runtime_targets,
+    )
     isaac_deployment_contract = build_isaac_unitree_deployment_contract(
         embodiment_context=embodiment_context,
         runtime_target_contract=isaac_runtime_targets,
