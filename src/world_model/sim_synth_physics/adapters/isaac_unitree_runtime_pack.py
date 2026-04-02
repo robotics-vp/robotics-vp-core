@@ -26,7 +26,9 @@ def _fallback_preferred_profile(runtime_layout_contract: Mapping[str, Any]) -> s
     }
     for profile_id in strings(runtime_layout_contract.get("preferred_profile_order")):
         row = by_id.get(profile_id, {})
-        if bool(row.get("root_exists", False)):
+        if bool(row.get("root_exists", False)) and str(
+            row.get("install_preflight_status", "") or ""
+        ) != "install_blocked":
             return str(profile_id)
     return ""
 
@@ -97,7 +99,9 @@ def build_isaac_unitree_runtime_pack(
         normalized_robot_asset_manifest
     )
     ready_modes = strings(deployment.get("ready_modes"))
-    ready_targets = strings(runtime_target_contract.get("ready_target_ids"))
+    ready_targets = strings(runtime_target_contract.get("verified_target_ids")) or strings(
+        runtime_target_contract.get("ready_target_ids")
+    )
     policy_candidates = strings(policy_contract.get("checkpoint_candidates"))
     deploy_config_candidates = strings(policy_contract.get("deploy_config_candidates"))
     runtime_report_candidates = strings(policy_contract.get("runtime_report_candidates"))
@@ -157,6 +161,12 @@ def build_isaac_unitree_runtime_pack(
         "robot_variant": str(deployment.get("robot_variant", "") or ""),
         "placement_class": str(deployment.get("placement_class", "") or ""),
         "runtime_target_ids": ready_targets,
+        "runtime_target_preflight_status": str(
+            runtime_target_contract.get("runtime_target_preflight_status", "") or ""
+        ),
+        "unverified_runtime_target_ids": strings(
+            runtime_target_contract.get("unverified_required_target_ids")
+        ),
         "profile_root": str(profile.get("root", "") or ""),
         "profile_git_metadata": mapping(profile.get("root_git_metadata")),
         "profile_candidate_counts": {

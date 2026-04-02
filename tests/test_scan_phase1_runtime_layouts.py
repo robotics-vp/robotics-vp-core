@@ -14,8 +14,10 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     (unitree_sim_root / "action_provider").mkdir()
     sdk_root = tmp_path / "sdk2"
     sdk_root.mkdir()
+    (sdk_root / "include").mkdir()
     asset_root = tmp_path / "assets"
     asset_root.mkdir()
+    (asset_root / "g1.usd").write_text("x", encoding="utf-8")
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     (policy_root / "g1_policy.onnx").write_text("x", encoding="utf-8")

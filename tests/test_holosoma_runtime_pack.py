@@ -97,4 +97,45 @@ def test_holosoma_runtime_pack_allows_motion_train_without_policy(tmp_path) -> N
     assert pack["pack_status"] in {"pack_ready", "pack_partial"}
     assert "motion_train" in pack["ready_modes"]
     assert "policy_checkpoint" not in pack["missing_components"]
-    assert pack["profile_install_preflight_status"] == "install_blocked"
+    assert pack["preferred_profile"] == "holosoma_motion_bank"
+    assert pack["profile_install_preflight_status"] == "install_ready"
+
+
+def test_holosoma_runtime_pack_falls_back_to_motion_bank_when_repo_install_blocked(
+    tmp_path,
+) -> None:
+    holosoma_root = tmp_path / "holosoma"
+    holosoma_root.mkdir()
+    (holosoma_root / "README.md").write_text("holosoma", encoding="utf-8")
+    motion_root = tmp_path / "motions"
+    motion_root.mkdir()
+    motion_clip = motion_root / "g1_walk.npz"
+    motion_clip.write_text("x", encoding="utf-8")
+
+    embodiment_context = {
+        "holosoma_root": str(holosoma_root),
+        "holosoma_motion_root": str(motion_root),
+        "motion_clip_paths": [str(motion_clip)],
+    }
+    runtime_target_contract = describe_holosoma_runtime_targets(embodiment_context)
+    runtime_layout_contract = describe_holosoma_runtime_layouts(embodiment_context)
+    policy_contract = describe_holosoma_policy_contract(embodiment_context)
+    deployment_contract = build_holosoma_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+    )
+    pack = build_holosoma_runtime_pack(
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        deployment_contract=deployment_contract,
+        embodiment_context=embodiment_context,
+    )
+
+    assert pack["preferred_profile"] == "holosoma_motion_bank"
+    assert sorted(pack["runtime_target_ids"]) == [
+        "holosoma_motion_root",
+        "holosoma_root",
+    ]

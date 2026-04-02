@@ -24,8 +24,10 @@ def test_isaac_runtime_binding_selects_policy_and_launch_root(tmp_path) -> None:
     (sim_root / "action_provider").mkdir()
     sdk_root = tmp_path / "sdk2"
     sdk_root.mkdir()
+    (sdk_root / "include").mkdir()
     asset_root = tmp_path / "assets"
     asset_root.mkdir()
+    (asset_root / "g1.usd").write_text("x", encoding="utf-8")
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     policy_path = policy_root / "g1_policy.onnx"
@@ -95,8 +97,10 @@ def test_isaac_runtime_binding_blocks_when_launch_command_missing(tmp_path) -> N
     (sim_root / "sim_main.py").write_text("", encoding="utf-8")
     sdk_root = tmp_path / "sdk2"
     sdk_root.mkdir()
+    (sdk_root / "include").mkdir()
     asset_root = tmp_path / "assets"
     asset_root.mkdir()
+    (asset_root / "g1.usd").write_text("x", encoding="utf-8")
 
     embodiment_context = {
         "unitree_sim_isaaclab_root": str(sim_root),
@@ -144,8 +148,10 @@ def test_isaac_runtime_binding_surfaces_declared_only_asset_preflight_truth(tmp_
     (sim_root / "action_provider").mkdir()
     sdk_root = tmp_path / "sdk2"
     sdk_root.mkdir()
+    (sdk_root / "include").mkdir()
     asset_root = tmp_path / "assets"
     asset_root.mkdir()
+    (asset_root / "g1.usd").write_text("x", encoding="utf-8")
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     policy_path = policy_root / "g1_policy.onnx"
@@ -238,11 +244,11 @@ def test_isaac_runtime_binding_surfaces_declared_only_asset_preflight_truth(tmp_
     assert binding["selected_profile_install_preflight_status"] == "install_ready"
     assert binding["host_preflight_status"] == "preflight_blocked"
     assert "asset::unitree_robot_description" in binding["host_preflight_missing_components"]
-    assert binding["selected_verified_target_ids"] == []
-    assert sorted(binding["selected_partial_target_ids"]) == [
+    assert sorted(binding["selected_verified_target_ids"]) == [
         "unitree_asset_root",
         "unitree_sdk2_root",
     ]
+    assert binding["selected_partial_target_ids"] == []
     assert (
         binding["selected_ref_evidence"]["policy_ref"]["verification_status"]
         == "local_path_exists"
@@ -251,13 +257,13 @@ def test_isaac_runtime_binding_surfaces_declared_only_asset_preflight_truth(tmp_
         binding["selected_target_ref_evidence"]["unitree_sdk2_root"][
             "verification_status"
         ]
-        == "install_shape_missing"
+        == "install_shape_ready"
     )
     assert (
         binding["selected_target_ref_evidence"]["unitree_asset_root"][
             "verification_status"
         ]
-        == "install_shape_missing"
+        == "install_shape_ready"
     )
     assert (
         binding["selected_asset_ref_evidence"]["unitree_robot_description"][

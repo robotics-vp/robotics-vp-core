@@ -218,6 +218,74 @@ def _candidate_records(root: str, patterns: Iterable[str], limit: int = 6) -> li
     return matches
 
 
+def _policy_root_rows(
+    candidate_policy_roots: Iterable[tuple[str, str]],
+    *,
+    checkpoint_patterns: tuple[str, ...],
+    deploy_patterns: tuple[str, ...],
+    runtime_report_patterns: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for source, root in candidate_policy_roots:
+        cleaned = str(root or "").strip()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        checkpoint_candidate_records = _candidate_records(cleaned, checkpoint_patterns)
+        deploy_config_candidate_records = _candidate_records(cleaned, deploy_patterns)
+        runtime_report_candidate_records = _candidate_records(cleaned, runtime_report_patterns)
+        rows.append(
+            {
+                "source": source,
+                "root": cleaned,
+                "root_exists": bool(Path(cleaned).exists()),
+                "checkpoint_candidate_records": checkpoint_candidate_records,
+                "checkpoint_candidates": [str(row["ref"]) for row in checkpoint_candidate_records],
+                "deploy_config_candidate_records": deploy_config_candidate_records,
+                "deploy_config_candidates": [
+                    str(row["ref"]) for row in deploy_config_candidate_records
+                ],
+                "runtime_report_candidate_records": runtime_report_candidate_records,
+                "runtime_report_candidates": [
+                    str(row["ref"]) for row in runtime_report_candidate_records
+                ],
+            }
+        )
+    return rows
+
+
+def _select_policy_root_row(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    explicit_policy_root: str,
+) -> dict[str, Any]:
+    normalized_explicit = str(explicit_policy_root or "").strip()
+    row_mappings = [mapping(row) for row in rows]
+    for row in row_mappings:
+        if (
+            str(row.get("root", "") or "") == normalized_explicit
+            and bool(row.get("checkpoint_candidates"))
+        ):
+            return row
+    for row in row_mappings:
+        if bool(row.get("checkpoint_candidates")):
+            return row
+    for row in row_mappings:
+        if str(row.get("root", "") or "") == normalized_explicit:
+            return row
+    for row in row_mappings:
+        if (
+            bool(row.get("root_exists", False))
+            and (
+                bool(row.get("deploy_config_candidates"))
+                or bool(row.get("runtime_report_candidates"))
+            )
+        ):
+            return row
+    return row_mappings[0] if row_mappings else {}
+
+
 def describe_isaac_runtime_layouts(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
@@ -381,66 +449,88 @@ def describe_isaac_policy_contract(
         embodiment, "isaac_policy_root", "unitree_policy_root", "policy_root"
     ) or _env_path("ISAAC_POLICY_ROOT", "UNITREE_POLICY_ROOT")
     candidate_policy_roots = [
-        explicit_policy_root,
-        _resolved_path(
+        ("explicit_policy_root", explicit_policy_root),
+        (
+            "unitree_rl_gym_root",
+            _resolved_path(
             _context_path(embodiment, "unitree_rl_gym_root", "unitree_runtime_repo_root")
             or _env_path("UNITREE_RL_GYM_ROOT"),
             discover_names=("unitree_rl_gym",),
+            ),
         ),
-        _resolved_path(
+        (
+            "unitree_sim_isaaclab_root",
+            _resolved_path(
             _context_path(embodiment, "unitree_sim_isaaclab_root")
             or _env_path("UNITREE_SIM_ISAACLAB_ROOT"),
             discover_names=("unitree_sim_isaaclab",),
+            ),
         ),
-        _resolved_path(
+        (
+            "unitree_lerobot_root",
+            _resolved_path(
             _context_path(embodiment, "unitree_lerobot_root", "unitree_il_lerobot_root")
             or _env_path("UNITREE_LEROBOT_ROOT", "UNITREE_IL_LEROBOT_ROOT"),
             discover_names=("unitree_IL_lerobot", "unitree_il_lerobot", "unitree_lerobot"),
+            ),
         ),
-        _resolved_path(
+        (
+            "humanoidverse_root",
+            _resolved_path(
             _context_path(embodiment, "humanoidverse_root")
             or _env_path("HUMANOIDVERSE_ROOT"),
             discover_names=("HumanoidVerse", "humanoidverse"),
+            ),
         ),
-        _resolved_path(
+        (
+            "xr_teleoperate_root",
+            _resolved_path(
             _context_path(embodiment, "xr_teleoperate_root")
             or _env_path("XR_TELEOPERATE_ROOT"),
             discover_names=("xr_teleoperate",),
+            ),
         ),
     ]
     policy_ref = _context_path(
         embodiment, "isaac_policy_id", "runtime_policy_id", "evaluation_policy_id", "policy_id"
     ) or str(os.environ.get("ISAAC_POLICY_PATH", "") or "").strip()
-    policy_root = ""
-    checkpoint_candidates: list[str] = []
-    deploy_config_candidates: list[str] = []
-    runtime_report_candidates: list[str] = []
-    checkpoint_candidate_records: list[dict[str, Any]] = []
-    deploy_config_candidate_records: list[dict[str, Any]] = []
-    runtime_report_candidate_records: list[dict[str, Any]] = []
-    for root in candidate_policy_roots:
-        if not root:
-            continue
-        checkpoint_candidate_records = _candidate_records(root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
-        deploy_config_candidate_records = _candidate_records(root, ("*.yaml", "*.yml", "*.json"))
-        runtime_report_candidate_records = _candidate_records(
-            root,
-            ("logs/**/*.json", "logs/**/*.yaml", "deploy/**/*.yaml", "deploy_real/**/*"),
-        )
-        checkpoint_candidates = [str(row["ref"]) for row in checkpoint_candidate_records]
-        deploy_config_candidates = [str(row["ref"]) for row in deploy_config_candidate_records]
-        runtime_report_candidates = [str(row["ref"]) for row in runtime_report_candidate_records]
-        if checkpoint_candidate_records or root == explicit_policy_root:
-            policy_root = root
-            break
-    if not policy_root:
-        policy_root = explicit_policy_root
+    policy_root_rows = _policy_root_rows(
+        candidate_policy_roots,
+        checkpoint_patterns=("*.pt", "*.pth", "*.onnx", "*.ckpt"),
+        deploy_patterns=("*.yaml", "*.yml", "*.json"),
+        runtime_report_patterns=(
+            "logs/**/*.json",
+            "logs/**/*.yaml",
+            "deploy/**/*.yaml",
+            "deploy_real/**/*",
+        ),
+    )
+    selected_policy_root = _select_policy_root_row(
+        policy_root_rows, explicit_policy_root=explicit_policy_root
+    )
+    policy_root = str(selected_policy_root.get("root", "") or explicit_policy_root or "")
+    checkpoint_candidate_records = [
+        mapping(row) for row in list(selected_policy_root.get("checkpoint_candidate_records", []) or [])
+    ]
+    deploy_config_candidate_records = [
+        mapping(row)
+        for row in list(selected_policy_root.get("deploy_config_candidate_records", []) or [])
+    ]
+    runtime_report_candidate_records = [
+        mapping(row)
+        for row in list(selected_policy_root.get("runtime_report_candidate_records", []) or [])
+    ]
+    checkpoint_candidates = [str(row["ref"]) for row in checkpoint_candidate_records]
+    deploy_config_candidates = [str(row["ref"]) for row in deploy_config_candidate_records]
+    runtime_report_candidates = [str(row["ref"]) for row in runtime_report_candidate_records]
     policy_ref_exists = bool(policy_ref and Path(policy_ref).exists())
     return {
         "version": "backend_policy_contract_v1",
         "backend": "isaac",
         "policy_root": policy_root,
         "policy_root_exists": bool(policy_root and Path(policy_root).exists()),
+        "policy_root_source": str(selected_policy_root.get("source", "") or ""),
+        "policy_root_rows": policy_root_rows,
         "policy_ref": policy_ref,
         "policy_ref_exists": policy_ref_exists,
         "checkpoint_candidates": checkpoint_candidates,
@@ -557,45 +647,51 @@ def describe_holosoma_policy_contract(
         embodiment, "holosoma_policy_root", "policy_root"
     ) or _env_path("HOLOSOMA_POLICY_ROOT")
     candidate_policy_roots = [
-        explicit_policy_root,
-        _resolved_path(
+        ("explicit_policy_root", explicit_policy_root),
+        (
+            "holosoma_root",
+            _resolved_path(
             _context_path(embodiment, "holosoma_root", "holosoma_repo_root")
             or _env_path("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
             discover_names=("holosoma",),
+            ),
         ),
     ]
     policy_ref = _context_path(
         embodiment, "holosoma_policy_id", "runtime_policy_id", "evaluation_policy_id", "policy_id"
     ) or str(os.environ.get("HOLOSOMA_POLICY_PATH", "") or "").strip()
-    policy_root = ""
-    checkpoint_candidates: list[str] = []
-    deploy_config_candidates: list[str] = []
-    runtime_report_candidates: list[str] = []
-    checkpoint_candidate_records: list[dict[str, Any]] = []
-    deploy_config_candidate_records: list[dict[str, Any]] = []
-    runtime_report_candidate_records: list[dict[str, Any]] = []
-    for root in candidate_policy_roots:
-        if not root:
-            continue
-        checkpoint_candidate_records = _candidate_records(root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
-        deploy_config_candidate_records = _candidate_records(root, ("*.yaml", "*.yml", "*.json"))
-        runtime_report_candidate_records = _candidate_records(
-            root, ("logs/**/*.json", "metrics/**/*.json", "outputs/**/*.json")
-        )
-        checkpoint_candidates = [str(row["ref"]) for row in checkpoint_candidate_records]
-        deploy_config_candidates = [str(row["ref"]) for row in deploy_config_candidate_records]
-        runtime_report_candidates = [str(row["ref"]) for row in runtime_report_candidate_records]
-        if checkpoint_candidate_records or root == explicit_policy_root:
-            policy_root = root
-            break
-    if not policy_root:
-        policy_root = explicit_policy_root
+    policy_root_rows = _policy_root_rows(
+        candidate_policy_roots,
+        checkpoint_patterns=("*.pt", "*.pth", "*.onnx", "*.ckpt"),
+        deploy_patterns=("*.yaml", "*.yml", "*.json"),
+        runtime_report_patterns=("logs/**/*.json", "metrics/**/*.json", "outputs/**/*.json"),
+    )
+    selected_policy_root = _select_policy_root_row(
+        policy_root_rows, explicit_policy_root=explicit_policy_root
+    )
+    policy_root = str(selected_policy_root.get("root", "") or explicit_policy_root or "")
+    checkpoint_candidate_records = [
+        mapping(row) for row in list(selected_policy_root.get("checkpoint_candidate_records", []) or [])
+    ]
+    deploy_config_candidate_records = [
+        mapping(row)
+        for row in list(selected_policy_root.get("deploy_config_candidate_records", []) or [])
+    ]
+    runtime_report_candidate_records = [
+        mapping(row)
+        for row in list(selected_policy_root.get("runtime_report_candidate_records", []) or [])
+    ]
+    checkpoint_candidates = [str(row["ref"]) for row in checkpoint_candidate_records]
+    deploy_config_candidates = [str(row["ref"]) for row in deploy_config_candidate_records]
+    runtime_report_candidates = [str(row["ref"]) for row in runtime_report_candidate_records]
     policy_ref_exists = bool(policy_ref and Path(policy_ref).exists())
     return {
         "version": "backend_policy_contract_v1",
         "backend": "holosoma",
         "policy_root": policy_root,
         "policy_root_exists": bool(policy_root and Path(policy_root).exists()),
+        "policy_root_source": str(selected_policy_root.get("source", "") or ""),
+        "policy_root_rows": policy_root_rows,
         "policy_ref": policy_ref,
         "policy_ref_exists": policy_ref_exists,
         "checkpoint_candidates": checkpoint_candidates,

@@ -39,8 +39,10 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
     policy_path.write_text("x", encoding="utf-8")
     asset_root = tmp_path / "assets"
     asset_root.mkdir()
+    (asset_root / "g1.usd").write_text("x", encoding="utf-8")
     sdk_root = tmp_path / "sdk2"
     sdk_root.mkdir()
+    (sdk_root / "include").mkdir()
 
     embodiment_context = {
         "unitree_sim_isaaclab_root": str(unitree_sim_root),
@@ -223,6 +225,8 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
     (holosoma_root / "holosoma" / "__init__.py").write_text("", encoding="utf-8")
     motion_root = tmp_path / "motions"
     motion_root.mkdir()
+    motion_clip = motion_root / "g1_walk.npz"
+    motion_clip.write_text("x", encoding="utf-8")
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     policy_path = policy_root / "policy.ckpt"
@@ -235,6 +239,7 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
         "holosoma_motion_root": str(motion_root),
         "holosoma_policy_root": str(policy_root),
         "retargeting_root": str(retargeting_root),
+        "motion_clip_paths": [str(motion_clip)],
     }
     runtime_target_contract = describe_holosoma_runtime_targets(embodiment_context)
     runtime_layout_contract = describe_holosoma_runtime_layouts(embodiment_context)
@@ -278,10 +283,10 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
     }
     assert runtime_bundle["output_contract"]["profile_id"] == "holosoma_repo"
     assert runtime_bundle["output_contract"]["sources"]
-    assert runtime_bundle["upstream_runtime_pack"]["pack_status"] == "pack_partial"
+    assert runtime_bundle["upstream_runtime_pack"]["pack_status"] == "pack_ready"
     assert "policy_surface" in runtime_bundle["upstream_runtime_pack"]["ready_surfaces"]
     assert runtime_bundle["upstream_runtime_pack"]["primary_policy_ref"] == str(policy_path)
-    assert runtime_bundle["upstream_runtime_pack"]["existing_motion_sources"] == []
+    assert runtime_bundle["upstream_runtime_pack"]["existing_motion_sources"] == [str(motion_clip)]
     assert (
         runtime_bundle["upstream_runtime_pack"]["profile_install_preflight_status"]
         == "install_ready"

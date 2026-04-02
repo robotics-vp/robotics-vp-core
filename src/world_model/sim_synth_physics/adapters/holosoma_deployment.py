@@ -30,6 +30,28 @@ def _has_reward_overlay(embodiment_context: Mapping[str, Any]) -> bool:
     return bool(embodiment.get("whole_body_reward_overlay"))
 
 
+def _usable_profiles(runtime_layout_contract: Mapping[str, Any]) -> list[str]:
+    usable: list[str] = []
+    for row in list(runtime_layout_contract.get("profiles", []) or []):
+        row_mapping = mapping(row)
+        profile_id = str(row_mapping.get("profile_id", "") or "")
+        if not profile_id:
+            continue
+        if not bool(row_mapping.get("root_exists", False)):
+            continue
+        if str(row_mapping.get("install_preflight_status", "") or "") == "install_blocked":
+            continue
+        usable.append(profile_id)
+    return usable
+
+
+def _verified_targets(runtime_target_contract: Mapping[str, Any]) -> set[str]:
+    verified = strings(runtime_target_contract.get("verified_target_ids"))
+    if verified:
+        return set(verified)
+    return set(strings(runtime_target_contract.get("ready_target_ids")))
+
+
 def _mode_contract(
     *,
     mode_id: str,
@@ -76,8 +98,8 @@ def build_holosoma_deployment_contract(
     runtime_layout_contract: Mapping[str, Any],
     policy_contract: Mapping[str, Any],
 ) -> dict[str, Any]:
-    ready_profiles = strings(runtime_layout_contract.get("ready_profiles"))
-    ready_targets = set(strings(runtime_target_contract.get("ready_target_ids")))
+    ready_profiles = _usable_profiles(runtime_layout_contract)
+    ready_targets = _verified_targets(runtime_target_contract)
     policy_ready = bool(policy_contract.get("policy_ready", False))
     deployment_modes = [
         _mode_contract(
@@ -137,6 +159,10 @@ def build_holosoma_deployment_contract(
     return {
         "version": "holosoma_deployment_contract_v1",
         "ready_profiles": ready_profiles,
+        "verified_target_ids": sorted(ready_targets),
+        "runtime_target_preflight_status": str(
+            runtime_target_contract.get("runtime_target_preflight_status", "") or ""
+        ),
         "preferred_profile_order": preferred_profile_order,
         "preferred_profile": preferred_profile,
         "policy_ready": policy_ready,

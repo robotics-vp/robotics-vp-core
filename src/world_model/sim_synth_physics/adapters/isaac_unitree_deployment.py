@@ -49,6 +49,28 @@ def _missing_assets(
     return [asset_id for asset_id in asset_ids if not _asset_present(normalized_asset_manifest, asset_id)]
 
 
+def _usable_profiles(runtime_layout_contract: Mapping[str, Any]) -> list[str]:
+    usable: list[str] = []
+    for row in list(runtime_layout_contract.get("profiles", []) or []):
+        row_mapping = mapping(row)
+        profile_id = str(row_mapping.get("profile_id", "") or "")
+        if not profile_id:
+            continue
+        if not bool(row_mapping.get("root_exists", False)):
+            continue
+        if str(row_mapping.get("install_preflight_status", "") or "") == "install_blocked":
+            continue
+        usable.append(profile_id)
+    return usable
+
+
+def _verified_targets(runtime_target_contract: Mapping[str, Any]) -> set[str]:
+    verified = strings(runtime_target_contract.get("verified_target_ids"))
+    if verified:
+        return set(verified)
+    return set(strings(runtime_target_contract.get("ready_target_ids")))
+
+
 def _mode_contract(
     *,
     mode_id: str,
@@ -90,8 +112,8 @@ def build_isaac_unitree_deployment_contract(
     policy_contract: Mapping[str, Any],
     normalized_asset_manifest: Mapping[str, Any],
 ) -> dict[str, Any]:
-    ready_profiles = strings(runtime_layout_contract.get("ready_profiles"))
-    ready_targets = set(strings(runtime_target_contract.get("ready_target_ids")))
+    ready_profiles = _usable_profiles(runtime_layout_contract)
+    ready_targets = _verified_targets(runtime_target_contract)
     policy_ready = bool(policy_contract.get("policy_ready", False))
     checkpoint_candidates = strings(policy_contract.get("checkpoint_candidates"))
     deploy_config_candidates = strings(policy_contract.get("deploy_config_candidates"))
@@ -206,6 +228,10 @@ def build_isaac_unitree_deployment_contract(
             else "companion_gpu_shadow"
         ),
         "ready_profiles": ready_profiles,
+        "verified_target_ids": sorted(ready_targets),
+        "runtime_target_preflight_status": str(
+            runtime_target_contract.get("runtime_target_preflight_status", "") or ""
+        ),
         "preferred_profile_order": preferred_profile_order,
         "preferred_profile": preferred_profile,
         "policy_ready": policy_ready,

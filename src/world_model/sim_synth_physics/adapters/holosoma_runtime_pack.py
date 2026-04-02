@@ -27,7 +27,9 @@ def _fallback_preferred_profile(runtime_layout_contract: Mapping[str, Any]) -> s
     }
     for profile_id in strings(runtime_layout_contract.get("preferred_profile_order")):
         row = by_id.get(profile_id, {})
-        if bool(row.get("root_exists", False)):
+        if bool(row.get("root_exists", False)) and str(
+            row.get("install_preflight_status", "") or ""
+        ) != "install_blocked":
             return str(profile_id)
     return ""
 
@@ -83,7 +85,9 @@ def build_holosoma_runtime_pack(
     profile = _profile_row(runtime_layout_contract, preferred_profile)
     profile_install_by_id = _profile_install_by_id(runtime_layout_contract)
     ready_modes = strings(deployment.get("ready_modes"))
-    ready_targets = strings(runtime_target_contract.get("ready_target_ids"))
+    ready_targets = strings(runtime_target_contract.get("verified_target_ids")) or strings(
+        runtime_target_contract.get("ready_target_ids")
+    )
     checkpoint_candidates = strings(policy_contract.get("checkpoint_candidates"))
     deploy_config_candidates = strings(policy_contract.get("deploy_config_candidates"))
     runtime_report_candidates = strings(policy_contract.get("runtime_report_candidates"))
@@ -156,6 +160,12 @@ def build_holosoma_runtime_pack(
         "pack_id": stable_id("backend_upstream_runtime_pack", payload),
         **payload,
         "runtime_target_ids": ready_targets,
+        "runtime_target_preflight_status": str(
+            runtime_target_contract.get("runtime_target_preflight_status", "") or ""
+        ),
+        "unverified_runtime_target_ids": strings(
+            runtime_target_contract.get("unverified_required_target_ids")
+        ),
         "profile_root": str(profile.get("root", "") or ""),
         "profile_git_metadata": mapping(profile.get("root_git_metadata")),
         "profile_candidate_counts": {

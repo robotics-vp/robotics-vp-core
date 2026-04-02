@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from src.world_model.sim_synth_physics.runtime_layouts import (
     describe_holosoma_policy_contract,
     describe_holosoma_runtime_layouts,
@@ -146,6 +148,29 @@ def test_isaac_policy_contract_can_fall_back_to_autodiscovered_repo_root(
     assert contract["primary_checkpoint_ref"].endswith("policy.onnx")
 
 
+def test_isaac_policy_contract_ignores_empty_explicit_root_when_runtime_root_has_checkpoint(
+    tmp_path: Path,
+) -> None:
+    explicit_root = tmp_path / "empty_policies"
+    explicit_root.mkdir()
+    runtime_root = tmp_path / "unitree_rl_gym"
+    logs_dir = runtime_root / "logs" / "run_1"
+    logs_dir.mkdir(parents=True)
+    (logs_dir / "policy.onnx").write_text("x", encoding="utf-8")
+
+    contract = describe_isaac_policy_contract(
+        {
+            "unitree_policy_root": str(explicit_root),
+            "unitree_rl_gym_root": str(runtime_root),
+        }
+    )
+
+    assert contract["policy_ready"] is True
+    assert contract["policy_root"] == str(runtime_root.resolve())
+    assert contract["policy_root_source"] == "unitree_rl_gym_root"
+    assert contract["primary_checkpoint_ref"].endswith("policy.onnx")
+
+
 def test_holosoma_policy_contract_can_fall_back_to_autodiscovered_repo_root(
     tmp_path, monkeypatch
 ) -> None:
@@ -161,4 +186,27 @@ def test_holosoma_policy_contract_can_fall_back_to_autodiscovered_repo_root(
 
     assert contract["policy_ready"] is True
     assert contract["policy_root"] == str(repo_root.resolve())
+    assert contract["primary_checkpoint_ref"].endswith("policy.ckpt")
+
+
+def test_holosoma_policy_contract_ignores_empty_explicit_root_when_repo_has_checkpoint(
+    tmp_path: Path,
+) -> None:
+    explicit_root = tmp_path / "empty_policies"
+    explicit_root.mkdir()
+    repo_root = tmp_path / "holosoma"
+    checkpoints_dir = repo_root / "checkpoints"
+    checkpoints_dir.mkdir(parents=True)
+    (checkpoints_dir / "policy.ckpt").write_text("x", encoding="utf-8")
+
+    contract = describe_holosoma_policy_contract(
+        {
+            "holosoma_policy_root": str(explicit_root),
+            "holosoma_root": str(repo_root),
+        }
+    )
+
+    assert contract["policy_ready"] is True
+    assert contract["policy_root"] == str(repo_root.resolve())
+    assert contract["policy_root_source"] == "holosoma_root"
     assert contract["primary_checkpoint_ref"].endswith("policy.ckpt")
