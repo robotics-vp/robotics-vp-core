@@ -2,6 +2,20 @@
 
 ## 2026-04-02
 
+- Tightened Phase-1 concrete ref selection against real local runtime artifacts:
+  - `src/world_model/sim_synth_physics/ref_evidence.py` now exposes candidate-selection and candidate-summary helpers, so ref choice can be driven by verification status instead of list order
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py` now choose:
+    - `primary_policy_ref`
+    - `primary_deploy_config_ref`
+    - `primary_runtime_report_ref`
+    from the best verified local candidate when available, and preserve the chosen source plus candidate-evidence summaries
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py` now preserve `selected_*_source` on the binding path instead of quietly inheriting first-candidate ordering
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `training_corpus.py` now carry that source/evidence truth into execution-facing and trainer-facing artifacts
+- Why this matters:
+  - before this tranche, the branch could still choose a worse local artifact simply because it appeared earlier in a candidate list
+  - after this tranche, real verified local checkpoint/report/deploy artifacts outrank missing earlier candidates on the audited path
+  - this keeps pushing the remaining ambiguity outward toward real external runtime/install/GPU reality instead of repo-local candidate ordering
+
 - Promoted usable-profile truth into the runtime-layout contract itself:
   - `src/world_model/sim_synth_physics/runtime_layouts.py` now emits:
     - `usable_profiles`

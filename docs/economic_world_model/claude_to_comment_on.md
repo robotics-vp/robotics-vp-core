@@ -25,6 +25,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Selected-target install-shape truth | materially closed on the audited path |
 | Policy-root/profile selection against real local installs | materially closed on the audited path |
 | Runtime-layout usable-profile propagation | materially closed on the audited path |
+| Checkpoint/report/deploy ref evidence selection | materially closed on the audited path |
 | Promotion/demotion machinery (Tier 3.2) | Category A gap closed |
 | Shadow execution ladder threading (Tier 3.6) | Category A gap closed on audited path |
 | Branch planner fallback honesty (Tier 3.3) | materially closed on audited path |
@@ -46,6 +47,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
   - verified targets, not just existing target paths, now drive deployment/runtime-pack readiness
   - empty explicit policy roots no longer outrank discovered runtime roots that actually contain checkpoints
 - Runtime-layout contracts now expose `usable_profiles` directly, and bundle/bridge/work-order/trainer paths preserve that stronger truth instead of forcing downstream consumers to reconstruct it from weaker `ready_profiles` semantics.
+- Runtime packs and bindings now prefer verified local checkpoint / deploy-config / runtime-report refs over earlier missing candidates, and they preserve both the chosen ref source and candidate-evidence summaries instead of flattening selection back into first-candidate ordering.
 - Shadow execution consumes selected runtime-binding truth instead of only carrying runtime-ladder metadata in the receipt.
 - Branch plans and trainer rows explicitly distinguish:
   - learned payload applied
@@ -75,6 +77,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
   - merely existing targets
   rather than collapsing all of that into root-exists posture.
 - Runtime bundles, bridge receipts, work orders, and trainer rows now also preserve `runtime_layout_usable_profiles`, so the stronger profile truth survives into execution-facing and training-facing artifacts.
+- Upstream runtime packs now also preserve candidate-evidence summaries plus the source of the chosen primary policy / deploy / runtime-report ref, and runtime bindings preserve the selected ref source, so “why this exact ref was chosen” is replayable instead of implicit.
 
 ## What Fake Readiness Was Removed
 
@@ -84,6 +87,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 - Explicit-but-empty policy roots no longer make a lane look more real than a discovered runtime root with actual checkpoints.
 - Install-blocked runtime profiles no longer count as deployable just because the repo root exists.
 - Downstream Phase 1 consumers no longer have to treat `ready_profiles` as if it already meant “usable profile”; that distinction is now explicit and replayable.
+- A missing first candidate can no longer outrank a later verified local checkpoint or runtime report just because it appeared earlier in a list.
 
 ## What Was Not Changed
 
@@ -103,6 +107,7 @@ This file is the single current-state handoff. Historical tranche detail belongs
 | Selected-target runtime roots could look ready from path existence alone | A -> closed on audited path | bindings/preflight now consume install-shape verification instead of path existence alone |
 | Install-blocked profiles and empty explicit policy roots could still overstate readiness | A -> closed on audited path | deployment/runtime-pack selection now uses usable profiles, verified targets, and real checkpoint-bearing roots |
 | Usable-profile truth was still being reconstructed ad hoc downstream | A -> closed on audited path | runtime-layout contracts, bundles, bridge receipts, work orders, and trainer exports now preserve it explicitly |
+| Checkpoint/report selection still depended on first-candidate ordering in runtime packs and bindings | A -> closed on audited path | primary refs now prefer verified local artifacts and preserve candidate-evidence/source truth |
 | Real Isaac / Unitree installs, assets, checkpoints | B | Remaining blocker is external host/runtime/asset reality |
 | Real Holosoma runtime, motion/policy/retargeting assets | B | Remaining blocker is external host/runtime/asset reality |
 | GPU-backed GGDS / LDM / video materialization | B | Remaining blocker is GPU/model/runtime availability |

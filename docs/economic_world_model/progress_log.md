@@ -2,6 +2,23 @@
 
 ## 2026-04-02
 
+- Changed: tightened Phase-1 checkpoint / deploy-config / runtime-report selection so verified local artifacts now outrank merely earlier candidates in runtime-pack and binding selection:
+  - `src/world_model/sim_synth_physics/ref_evidence.py` now exposes reusable candidate-evidence selection/summarization helpers
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py` now:
+    - choose `primary_policy_ref`, `primary_deploy_config_ref`, and `primary_runtime_report_ref` from the best verified local candidate when available
+    - preserve `*_ref_source`
+    - preserve candidate-evidence summaries for policy / deploy / runtime-report surfaces
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py` now preserve the selected ref source on the binding path instead of silently inheriting first-candidate ordering
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `training_corpus.py` now carry that upstream/selected ref evidence into execution-facing and trainer-facing artifacts
+- Why this matters:
+  - the branch previously had stronger install/profile truth, but the concrete checkpoint/report/deploy ref could still quietly depend on candidate ordering
+  - verified local runtime artifacts now win over earlier missing candidates without inventing a new ladder rung
+  - this removes another repo-local ambiguity and pushes the honest remainder further toward actual external install/runtime/GPU reality
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/ref_evidence.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/ref_evidence.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py`, `python3 -m pytest -q tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed (result: `20 passed`).
+- Status summary:
+  - the audited ref-selection cluster has no new Category A gap
+  - Category B is now even more clearly about whether the local runtime/install/checkpoint reality actually exists, not whether the WM picks the strongest local artifact once it does
+
 - Changed: promoted `usable_profiles` into the Phase-1 runtime-layout contract and threaded that stronger profile truth through downstream artifacts:
   - `src/world_model/sim_synth_physics/runtime_layouts.py` now emits:
     - `usable_profiles`
