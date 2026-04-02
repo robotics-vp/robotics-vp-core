@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Literal, Mapping, Optional
 
 from .branch_planner import LearnedBranchPlanner
+from .promotion import _check_demotion
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ def resolve_branch_planner_helper(
     helper: Any,
     *,
     mode: Literal["disabled", "auto", "required"] = "auto",
+    evidence_signals: Optional[Mapping[str, Any]] = None,
 ) -> tuple[Optional[Any], Dict[str, Any]]:
     if mode not in {"disabled", "auto", "required"}:
         raise ValueError(f"Unsupported branch-planner mode: {mode}")
@@ -85,6 +87,11 @@ def resolve_branch_planner_helper(
             if hasattr(helper, "benchmark_gate")
             else False
         )
+        benchmark_gate = _mapping(
+            getattr(helper, "benchmark_gate", {})
+            if hasattr(helper, "benchmark_gate")
+            else {}
+        )
         promotion_stage = (
             "promoted"
             if benchmark_gate_ready
@@ -92,6 +99,16 @@ def resolve_branch_planner_helper(
         )
         if mode == "required" and not benchmark_gate_ready:
             raise ValueError("branch-planner mode 'required' requires a benchmark-gated package")
+        evidence = _mapping(evidence_signals)
+        should_demote, demotion_reason = _check_demotion(benchmark_gate, evidence)
+        if benchmark_gate_ready and should_demote:
+            return helper, {
+                "mode": mode,
+                "status": "loaded_direct",
+                "promotion_stage": "demoted_to_shadow",
+                "benchmark_gate_ready": benchmark_gate_ready,
+                "demotion_reason": demotion_reason,
+            }
         return helper, {
             "mode": mode,
             "status": "loaded_direct",
@@ -153,6 +170,11 @@ def resolve_branch_planner_helper(
         setattr(model, "metadata", dict(package.metadata))
     if mode == "required" and not benchmark_gate_ready:
         raise ValueError("branch-planner mode 'required' requires a benchmark-gated package")
+    evidence = _mapping(evidence_signals)
+    pkg_gate = _mapping(package.benchmark_gate) if package else {}
+    should_demote, demotion_reason = _check_demotion(pkg_gate, evidence)
+    if benchmark_gate_ready and should_demote:
+        promotion_stage = "demoted_to_shadow"
     return model, {
         "mode": mode,
         "status": "loaded",
@@ -160,6 +182,7 @@ def resolve_branch_planner_helper(
         "package_path": package.package_path if package is not None else str(checkpoint_path),
         "promotion_stage": promotion_stage,
         "benchmark_gate_ready": benchmark_gate_ready,
+        **({"demotion_reason": demotion_reason} if should_demote else {}),
         "unsatisfied_preconditions": list(
             package.execution_preconditions.get("unsatisfied_preconditions", [])
             if package is not None

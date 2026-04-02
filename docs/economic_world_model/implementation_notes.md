@@ -2,6 +2,20 @@
 
 ## 2026-04-02
 
+- Implemented Tier 3.2 promotion/demotion machinery (Claude-authored):
+  - Added `_check_demotion(benchmark_gate, evidence_signals)` to `promotion.py`
+  - Three demotion triggers:
+    - `benchmark_gate_revoked`: explicit boolean signal
+    - `evidence_failure`: explicit boolean signal
+    - `recent_failure_rate > demotion_failure_threshold` (threshold from benchmark_gate, default 0.5)
+  - Demoted stage is `demoted_to_shadow` (weight 0.25, same as shadow_candidate)
+  - Status dict carries `demotion_reason` and `evidence_signals` when demoted
+  - `_check_demotion` is a shared function imported by both `backend_selector_runtime.py` and `branch_planner_runtime.py`
+  - All three resolvers (`resolve_helper`, `resolve_backend_selector_helper`, `resolve_branch_planner_helper`) accept optional `evidence_signals` param
+  - Backward compatible: no `evidence_signals` → no demotion check → existing behavior unchanged
+  - Consumer impact: `compiler.py:312`, `calibration.py:139`, `synthetic_branches.py:314` check `promotion_stage == "promoted"` — a demoted helper will correctly NOT match this check, causing fallback to heuristic behavior
+  - Fixed `test_holosoma_binding_records_runtime_target_contract` stale assertion: `pack_status` now accepts `pack_partial` since install-hardened pack correctly reports partial readiness for an empty test directory
+
 - Pushed the Phase-1 Category B edge further into actual local host/runtime consumption:
   - added `src/world_model/sim_synth_physics/local_runtime_discovery.py`
   - targeted autodiscovery now checks common local roots such as:

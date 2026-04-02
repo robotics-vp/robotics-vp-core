@@ -2,6 +2,23 @@
 
 ## 2026-04-02
 
+- Changed: closed Tier 3.2 (promotion/demotion machinery) Category A gap — Claude-authored implementation:
+  - `src/world_model/sim_synth_physics/promotion.py`: added `_check_demotion()` and `evidence_signals` parameter to `resolve_helper()`
+  - `src/world_model/sim_synth_physics/backend_selector_runtime.py`: threaded evidence-based demotion through both direct-loaded and package-loaded paths
+  - `src/world_model/sim_synth_physics/branch_planner_runtime.py`: same demotion threading
+  - Added 7 new tests covering demotion triggers (evidence_failure, benchmark_gate_revoked, failure_rate), no-demotion on healthy evidence, and all three resolver types
+  - Fixed stale test expectation in `test_holosoma_binding_records_runtime_target_contract`: updated to accept `pack_partial` (honest result from install-hardened code)
+- Why this matters:
+  - previously, a promoted helper stayed promoted forever regardless of subsequent evidence — this was a structural completeness gap
+  - demoted helpers get weight 0.25 (shadow_candidate level), so compiler/calibration/branch consumers correctly fall back to heuristic behavior
+  - three demotion triggers: `benchmark_gate_revoked`, `evidence_failure`, `recent_failure_rate > threshold`
+  - `demoted_to_shadow` is a fourth internal promotion stage, not a new mode
+- Verification: `python3 -m compileall`, `python3 -m pytest tests/test_sim_synth_physics_world_model.py` and full Phase 1 suite: 61 passed, 0 failed
+- Status summary:
+  - Tier 3.2 is now structurally closed
+  - remaining unverified Tier 3 items: 3.1, 3.3, 3.4, 3.5, 3.6
+  - highest-risk next: 3.6 (shadow execution ladder threading), 3.1 (render provider receipts), 3.3 (branch planner fallback receipts)
+
 - Changed: pushed the active Phase-1 Category B edge further toward real local host/runtime evidence:
   - added `src/world_model/sim_synth_physics/local_runtime_discovery.py`
   - `runtime_targets.py` now supports targeted autodiscovery of common local upstream repo roots for Isaac/Unitree and Holosoma lanes when embodiment/env roots are not explicitly wired

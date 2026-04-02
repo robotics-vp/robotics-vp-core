@@ -9,11 +9,35 @@ from .common import mapping
 HelperMode = Literal["disabled", "auto", "required"]
 
 
+def _check_demotion(
+    benchmark_gate: Dict[str, Any],
+    evidence_signals: Dict[str, Any],
+) -> tuple[bool, str]:
+    """Check whether evidence signals warrant demotion of a promoted helper.
+
+    Returns (should_demote, reason).
+    """
+    if not evidence_signals:
+        return False, ""
+    if bool(evidence_signals.get("benchmark_gate_revoked", False)):
+        return True, "benchmark_gate_revoked"
+    if bool(evidence_signals.get("evidence_failure", False)):
+        return True, "evidence_failure"
+    failure_rate = float(evidence_signals.get("recent_failure_rate", 0.0) or 0.0)
+    failure_threshold = float(
+        benchmark_gate.get("demotion_failure_threshold", 0.5) or 0.5
+    )
+    if failure_rate > failure_threshold:
+        return True, f"failure_rate_{failure_rate:.2f}_exceeds_{failure_threshold:.2f}"
+    return False, ""
+
+
 def resolve_helper(
     helper: Any,
     *,
     mode: HelperMode = "auto",
     name: str,
+    evidence_signals: Mapping[str, Any] | None = None,
 ) -> tuple[Any | None, Dict[str, Any]]:
     if mode == "disabled":
         return None, {
@@ -36,6 +60,23 @@ def resolve_helper(
 
     benchmark_gate = mapping(getattr(helper, "benchmark_gate", {}))
     benchmark_ready = bool(benchmark_gate.get("ready", False))
+    evidence = mapping(evidence_signals)
+
+    # Demotion check: a promoted helper can be demoted back to shadow_candidate
+    # if evidence signals indicate degradation.
+    should_demote, demotion_reason = _check_demotion(benchmark_gate, evidence)
+    if benchmark_ready and should_demote:
+        return helper, {
+            "status": "available",
+            "mode": mode,
+            "promotion_stage": "demoted_to_shadow",
+            "benchmark_gate_ready": benchmark_ready,
+            "helper_weight": 0.25,
+            "benchmark_gate": benchmark_gate,
+            "demotion_reason": demotion_reason,
+            "evidence_signals": evidence,
+        }
+
     promotion_stage = "promoted" if benchmark_ready else "shadow_candidate"
     helper_weight = 0.7 if benchmark_ready else 0.25
     return helper, {

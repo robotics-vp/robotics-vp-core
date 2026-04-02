@@ -19,105 +19,86 @@ This file is the single current-state handoff. Historical tranche detail belongs
 
 | Area | Current state |
 |------|---------------|
-| Runtime layout/profile evidence | **materially improved** |
-| Upstream runtime-pack evidence | **materially improved** |
-| Selected-profile install/preflight truth | **closed on the audited path** |
-| Training/work-order preservation of install truth | **materially improved** |
-| Holosoma selected-profile false blocker | **fixed** |
-| Isaac partially discovered preferred-profile fallback | **fixed** |
-| Promotion/demotion history surface | **unchanged / secondary** |
-| Render/provider lane | **unchanged in this tranche** |
+| Runtime layout/profile evidence | **materially improved** (prior tranche) |
+| Upstream runtime-pack evidence | **materially improved** (prior tranche) |
+| Selected-profile install/preflight truth | **closed on the audited path** (prior tranche) |
+| Training/work-order preservation of install truth | **materially improved** (prior tranche) |
+| Holosoma selected-profile false blocker | **fixed** (prior tranche) |
+| Isaac partially discovered preferred-profile fallback | **fixed** (prior tranche) |
+| **Promotion/demotion machinery (Tier 3.2)** | **Category A gap closed** (this tranche) |
+| Render/provider lane | **unchanged** |
+
+### Tier 3.2 detail
+
+| Item | Status | Notes |
+|------|--------|-------|
+| `resolve_helper()` demotion path | **implemented** | Evidence-based demotion via `evidence_signals` param |
+| `resolve_backend_selector_helper()` demotion | **implemented** | Both direct-loaded and package-loaded paths |
+| `resolve_branch_planner_helper()` demotion | **implemented** | Both direct-loaded and package-loaded paths |
+| Demotion triggers | **implemented** | `benchmark_gate_revoked`, `evidence_failure`, `recent_failure_rate > threshold` |
+| Demoted weight assignment | **correct** | 0.25 (same as shadow_candidate) |
+| Demotion reason tracing | **implemented** | `demotion_reason` field in status dict |
+| Stale test expectation fix | **fixed** | `test_holosoma_binding_records_runtime_target_contract` now accepts `pack_partial` |
+| Demotion tests | **7 new tests** | Covers all three resolvers, both trigger types, and no-demotion cases |
 
 ## Current Branch Truth
 
 - Phase 1 Sim / Synth / Physics remains the active implementation center.
 - The branch has not drifted upward into Perception / Grounding implementation.
-- The latest meaningful closure work did **not** add a new runtime rung. It tightened the existing runtime layout -> runtime pack -> runtime binding path.
-- Runtime profiles now carry explicit install/preflight truth, not only root/candidate truth:
-  - selected install entrypoint paths
-  - matched/missing entrypoints
-  - primary entrypoint ref
-  - install-preflight status
-  - install missing/verified components
-- Isaac/Unitree and Holosoma upstream runtime packs now preserve that profile-local install truth and expose it by profile id.
-- Runtime bindings now resolve install/preflight truth against the **actually selected profile**, not just the pack’s preferred profile.
-- Training-corpus rows and runtime work orders now preserve that install/preflight truth instead of flattening it away.
+- Promotion machinery now has a demotion path: `promoted` → `demoted_to_shadow` when evidence signals indicate benchmark gate revocation, evidence failure, or excessive failure rate.
+- Demoted helpers get weight 0.25 (same as shadow_candidate), ensuring the compiler falls back to heuristic behavior without fully disabling the helper.
+- The three downstream consumers that check `promotion_stage == "promoted"` (compiler.py:312, calibration.py:139, synthetic_branches.py:314) will correctly NOT treat a demoted helper as promoted.
 
 ## What Changed Topologically
 
-- Runtime layouts are no longer only “root exists + candidate refs” surfaces.
-- Upstream runtime packs are no longer only preferred-profile summaries; they now carry reusable per-profile install truth.
-- Runtime bindings no longer inherit profile-install blockers from the wrong profile when the selected mode changes.
-- The Holosoma motion-train lane can now honestly select `holosoma_motion_bank` without inheriting `holosoma_repo` install gaps like `profile_entrypoint`.
-- Partially discovered Isaac/Unitree upstream profiles can now still be selected as the best local upstream profile instead of collapsing to an empty preferred profile when deployment-level readiness stays strict.
+- No new WM, ladder rung, or abstraction was introduced.
+- The existing `disabled|auto|required` promotion posture now has a fourth internal state: `demoted_to_shadow`. This is not a new mode — it's a status within `auto`/`required` mode that reverses a previous promotion.
+- `_check_demotion()` is a shared function used by all three resolvers.
 
 ## What Fake Readiness Was Removed
 
-- “Repo root exists” is no longer treated as enough install truth for a selected runtime profile.
-- “Pack preferred profile is blocked” no longer automatically means “selected binding profile is blocked.”
-- Holosoma local motion-train no longer looks blocked by repo-entrypoint gaps that belong only to a different selected profile.
-- Training/work-order consumers no longer have to infer selected-profile install truth from pack status alone.
+- A helper that was once promoted could previously stay promoted forever regardless of subsequent evidence. This is no longer possible.
+- Demotion is triggered by explicit evidence signals, not by time or heuristic decay.
 
 ## What Was Not Changed
 
-This tranche did **not** claim new closure in:
-
-- `src/world_model/sim_synth_physics/render_providers.py`
-- `src/world_model/sim_synth_physics/promotion.py`
-- any Perception / Grounding implementation surface
-- frozen Phase B math or controller logic
+- `src/world_model/sim_synth_physics/render_providers.py` (Tier 3.1)
+- `src/world_model/sim_synth_physics/branch_planner.py` (Tier 3.3)
+- `src/world_model/sim_synth_physics/inferential.py` (Tier 3.4)
+- `src/world_model/sim_synth_physics/randomization.py`, `calibration.py` (Tier 3.5)
+- `src/world_model/sim_synth_physics/shadow_execution.py` (Tier 3.6)
+- No Perception / Grounding implementation surfaces
+- Frozen Phase B math and controller logic
 
 ## Phase 1 Closure Assessment
 
-### Category A: internal incompleteness that should still be fixable in-repo
+| Finding | Category | Rationale |
+|---------|----------|-----------|
+| Promotion had no demotion path | A → **closed** | Implemented evidence-based demotion in all three resolvers |
+| Stale test expectation (pack_ready vs pack_partial) | A → **closed** | Test updated to accept honest pack_partial from install-hardened code |
+| Render providers emit state but no receipts (3.1) | unverified | Not audited this tranche |
+| Branch planner fallback receipt honesty (3.3) | unverified | Not audited this tranche |
+| Inferential yield reaction to fidelity (3.4) | unverified | Not audited this tranche |
+| Randomization humanoid axes (3.5) | unverified | Not audited this tranche |
+| Shadow execution adapter ladder threading (3.6) | unverified | Not audited this tranche |
+| Gen2Sim admission receipt emission (1.3) | unverified | Not audited this tranche |
 
-No fresh Category A gap is being claimed on the audited runtime layout/pack/binding/install cluster.
+Category A count: 0 (on audited items)
+Category B count: stable (unchanged from prior)
+Unverified Tier 3 items: 5
 
-That does **not** mean total Phase 1 closure. It means this specific install/preflight cluster is now structurally honest on the audited path.
-
-### Category B: honest externalized remainder
-
-- real Isaac / Unitree installs, assets, checkpoints, and host setup
-- real Holosoma host/runtime, motion corpora, retargeting assets, and policies
-- real GPU-backed GGDS / LDM / video materialization
-- benchmark density from actual backend execution on those real substrates
-
-### Category C: non-blocking secondary refinement
-
-- deeper promotion/demotion provenance
-- denser benchmark and outcome evidence once Category B substrates are real
-
-## Explicit Internal vs External Statement
-
-### Internal incompleteness fixed today
-
-- profile-level install/preflight evidence was added to runtime layouts
-- upstream runtime packs now preserve profile-local install truth rather than only preferred-profile truth
-- bindings now resolve install truth against the actually selected profile
-- runtime work orders and trainer rows now preserve that selected-profile install truth
-- the Holosoma motion-train selected-profile blocker leak was removed
-- the Isaac partially discovered preferred-profile collapse was removed
-
-### What remains internal
-
-- no fresh obvious Category A gap is being claimed in the audited install/preflight cluster
-- there is still room for more density, but not an obvious missing canonical install/preflight surface on this path
-
-### What is now honestly externalized
-
-- whether real local Isaac/Unitree upstream repos/assets/checkpoints are present and usable
-- whether real local Holosoma runtime/motion/policy/retargeting assets are present and usable
-- whether GPU/model runtime is available for GGDS / LDM / video materialization
+Closure recommendation: **not yet closed** — 5 Tier 3 items remain unverified
 
 ## Recommendation to Claude
 
 - **Phase 1 remains the active implementation center.**
-- **Parallel Perception prep is allowed but secondary.**
-- Do **not** treat this audited-cluster closure as total Phase 1 closure.
-- The next highest-leverage Phase 1 work should keep pushing Category B reality:
-  1. strengthen local install/preflight evidence against actual discovered Isaac/Unitree clones/assets/checkpoints
-  2. do the same for real Holosoma host/runtime/motion/policy/retargeting assets
-  3. keep preserving that truth through launch/work-order/training surfaces without inventing a new ladder
+- This tranche closed the highest-risk Category A Tier 3 item (promotion/demotion).
+- The next highest-risk Tier 3 items to audit are:
+  1. **3.6 Shadow execution adapter ladder threading** — likely Category A if shadow execution bypasses the Tier 2 ladder
+  2. **3.1 Render provider receipt emission** — likely Category A if receipt chain requires it
+  3. **3.3 Branch planner fallback receipt** — likely Category A if fallback is silent
+- After auditing those three items, the remaining Tier 3 items (3.4, 3.5) are lower risk and may be Category B/C.
+- Once all Tier 3 items are classified, the Phase 1 Closure Assessment table can be completed.
 
 ## Procedural Note
 
