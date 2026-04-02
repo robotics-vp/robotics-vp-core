@@ -427,6 +427,10 @@ def build_backend_selector_rows_from_receipts(
         backend_runtime_execution_receipt = _mapping(
             bundle_mapping.get("backend_runtime_execution_receipt")
         )
+        backend_runtime_execution_metadata = _mapping(
+            backend_runtime_execution_receipt.get("metadata")
+        )
+        backend_runtime_bundle = _mapping(backend_runtime_execution_metadata.get("runtime_bundle"))
         backend_runtime_adapter_receipt = _mapping(
             bundle_mapping.get("backend_runtime_adapter_receipt")
         )
@@ -452,6 +456,12 @@ def build_backend_selector_rows_from_receipts(
         structured_outputs = _mapping(
             backend_runtime_outcome_metadata.get("structured_outputs")
         )
+        upstream_runtime_pack = _mapping(
+            backend_runtime_bundle.get("upstream_runtime_pack")
+        ) or _mapping(backend_runtime_bridge_receipt.get("metadata", {})).get(
+            "upstream_runtime_pack", {}
+        )
+        upstream_runtime_pack = _mapping(upstream_runtime_pack)
         backend_shadow_execution_receipt = _mapping(
             bundle_mapping.get("backend_shadow_execution_receipt")
         )
@@ -562,6 +572,15 @@ def build_backend_selector_rows_from_receipts(
                     "backend_binding_status": backend_binding_receipt.get("binding_status"),
                     "backend_runtime_execution_receipt_id": backend_runtime_execution_receipt.get("receipt_id"),
                     "backend_runtime_execution_status": backend_runtime_execution_receipt.get("execution_status"),
+                    "backend_upstream_runtime_pack_status": upstream_runtime_pack.get(
+                        "pack_status"
+                    ),
+                    "backend_upstream_runtime_ready_surfaces": list(
+                        upstream_runtime_pack.get("ready_surfaces") or []
+                    ),
+                    "backend_upstream_runtime_missing_components": list(
+                        upstream_runtime_pack.get("missing_components") or []
+                    ),
                     "backend_runtime_adapter_receipt_id": backend_runtime_adapter_receipt.get("receipt_id"),
                     "backend_runtime_adapter_status": backend_runtime_adapter_receipt.get("adapter_status"),
                     "backend_runtime_adapter_execution_path": backend_runtime_adapter_receipt.get("execution_path"),
@@ -649,6 +668,13 @@ def build_branch_planner_rows_from_receipts(
         backend_runtime_launch_receipt = _mapping(
             bundle_mapping.get("backend_runtime_launch_receipt")
         )
+        backend_runtime_execution_receipt = _mapping(
+            bundle_mapping.get("backend_runtime_execution_receipt")
+        )
+        backend_runtime_execution_metadata = _mapping(
+            backend_runtime_execution_receipt.get("metadata")
+        )
+        backend_runtime_bundle = _mapping(backend_runtime_execution_metadata.get("runtime_bundle"))
         backend_runtime_adapter_receipt = _mapping(
             bundle_mapping.get("backend_runtime_adapter_receipt")
         )
@@ -671,6 +697,12 @@ def build_branch_planner_rows_from_receipts(
         structured_outputs = _mapping(
             backend_runtime_outcome_metadata.get("structured_outputs")
         )
+        upstream_runtime_pack = _mapping(
+            backend_runtime_bundle.get("upstream_runtime_pack")
+        ) or _mapping(backend_runtime_bridge_receipt.get("metadata", {})).get(
+            "upstream_runtime_pack", {}
+        )
+        upstream_runtime_pack = _mapping(upstream_runtime_pack)
         for plan_index, plan in enumerate(_mapping_list(world_state.get("synthetic_branch_plans"))):
             plan_id = str(plan.get("plan_id", ""))
             source_job_id = str(plan.get("source_job_id", ""))
@@ -751,6 +783,15 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_launch_receipt_id": backend_runtime_launch_receipt.get(
                             "receipt_id"
+                        ),
+                        "backend_upstream_runtime_pack_status": upstream_runtime_pack.get(
+                            "pack_status"
+                        ),
+                        "backend_upstream_runtime_ready_surfaces": list(
+                            upstream_runtime_pack.get("ready_surfaces") or []
+                        ),
+                        "backend_upstream_runtime_missing_components": list(
+                            upstream_runtime_pack.get("missing_components") or []
                         ),
                         "backend_runtime_adapter_receipt_id": backend_runtime_adapter_receipt.get(
                             "receipt_id"

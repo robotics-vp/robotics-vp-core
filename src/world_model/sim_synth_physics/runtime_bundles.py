@@ -231,6 +231,7 @@ def build_backend_runtime_bundle(
     normalized_robot_asset_manifest: Mapping[str, Any],
     robot_contract_context: Mapping[str, Any] | None = None,
     deployment_contract: Mapping[str, Any] | None = None,
+    upstream_runtime_pack: Mapping[str, Any] | None = None,
     output_root: Optional[Path],
 ) -> tuple[list[str], dict[str, Any], dict[str, Any]]:
     target_profile_map = (
@@ -268,6 +269,7 @@ def build_backend_runtime_bundle(
         "runtime_layout_contract": mapping(runtime_layout_contract),
         "policy_contract": mapping(policy_contract),
         "deployment_contract": mapping(deployment_contract),
+        "upstream_runtime_pack": mapping(upstream_runtime_pack),
         "robot_asset_manifest": mapping(robot_asset_manifest),
         "normalized_robot_asset_manifest": mapping(normalized_robot_asset_manifest),
         "robot_contract_context": mapping(robot_contract_context),
@@ -320,6 +322,7 @@ def build_backend_runtime_bundle(
         "policy_ready": bool(policy_contract.get("policy_ready", False)),
         "runtime_targets_ready": bool(runtime_target_contract.get("runtime_targets_ready", False)),
         "deployment_contract": mapping(deployment_contract),
+        "upstream_runtime_pack": mapping(upstream_runtime_pack),
         "command": str(mapping(preferred_launch_spec).get("command", "") or ""),
         "root": str(mapping(preferred_launch_spec).get("root", "") or ""),
         "upstream_profile": mapping(
@@ -334,8 +337,12 @@ def build_backend_runtime_bundle(
     if output_root is not None:
         bundle_path = output_root / "backend_runtime_bundle.json"
         launch_spec_path = output_root / "backend_launch_spec.json"
+        runtime_pack_path = output_root / "backend_upstream_runtime_pack.json"
         _write_json(bundle_path, runtime_bundle)
         _write_json(launch_spec_path, launch_spec)
+        if upstream_runtime_pack:
+            _write_json(runtime_pack_path, mapping(upstream_runtime_pack))
+            refs.append(str(runtime_pack_path.resolve()))
         refs.extend([str(bundle_path.resolve()), str(launch_spec_path.resolve())])
     return refs, runtime_bundle, launch_spec
 

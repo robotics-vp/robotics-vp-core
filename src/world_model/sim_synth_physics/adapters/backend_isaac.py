@@ -6,6 +6,7 @@ import importlib.util
 from typing import Any, Dict, Mapping
 
 from .isaac_unitree_deployment import build_isaac_unitree_deployment_contract
+from .isaac_unitree_runtime_pack import build_isaac_unitree_runtime_pack
 from ..asset_manifest import (
     available_assets_for_hardware_class,
     extract_robot_asset_manifest,
@@ -59,6 +60,13 @@ def build_isaac_backend_binding(
         runtime_layout_contract=runtime_layout_contract,
         policy_contract=policy_contract,
         normalized_asset_manifest=normalized_manifest,
+    )
+    upstream_runtime_pack = build_isaac_unitree_runtime_pack(
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        deployment_contract=deployment_contract,
+        normalized_robot_asset_manifest=normalized_manifest,
     )
     adapter_ready = (
         shadow_backend_available
@@ -131,6 +139,7 @@ def build_isaac_backend_binding(
             "runtime_layout_contract": runtime_layout_contract,
             "policy_contract": policy_contract,
             "deployment_contract": deployment_contract,
+            "upstream_runtime_pack": upstream_runtime_pack,
             "normalized_asset_manifest": normalized_manifest,
             "raw_asset_manifest": manifest,
             "embodiment_context": mapping(embodiment_context),

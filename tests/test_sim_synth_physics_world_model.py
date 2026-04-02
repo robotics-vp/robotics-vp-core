@@ -227,6 +227,10 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
     assert "runtime_layout_contract" in world_state.backend_execution_binding.metadata
     assert "policy_contract" in world_state.backend_execution_binding.metadata
     assert (
+        world_state.backend_execution_binding.metadata["upstream_runtime_pack"]["pack_status"]
+        == "pack_partial"
+    )
+    assert (
         world_state.backend_execution_binding.metadata["normalized_asset_manifest"]["unitree_robot_description"][
             "present"
         ]
@@ -241,6 +245,10 @@ def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
     assert "dds" in world_state.backend_runtime_bridge.transport_stack
     assert result.backend_runtime_bridge_receipt.bridge_status == "runtime_bridge_ready"
     assert result.backend_runtime_bridge_receipt.execution_authority == "shadow_runtime"
+    assert (
+        result.backend_runtime_bridge_receipt.metadata["upstream_runtime_pack"]["pack_status"]
+        == "pack_partial"
+    )
     assert "whole_body_balance_guard_v1" in result.backend_runtime_bridge_receipt.safety_channels
     assert "watchdog_state_v1" in result.backend_runtime_bridge_receipt.telemetry_contracts
     assert result.backend_runtime_bridge_receipt.planner_rate_hz == pytest.approx(10.0)
@@ -310,8 +318,11 @@ def test_world_state_marks_isaac_external_launch_ready_for_lerobot_and_teleop(
     assert world_state.backend_execution_binding is not None
     assert world_state.backend_execution_binding.binding_status == "external_launch_ready"
     deployment_contract = world_state.backend_execution_binding.metadata["deployment_contract"]
+    upstream_runtime_pack = world_state.backend_execution_binding.metadata["upstream_runtime_pack"]
     assert deployment_contract["teleop_launch_ready"] is True
     assert deployment_contract["lerobot_eval_ready"] is True
+    assert upstream_runtime_pack["pack_status"] == "pack_ready"
+    assert "runtime_target_surface" in upstream_runtime_pack["ready_surfaces"]
     assert world_state.backend_runtime_bridge is not None
     assert world_state.backend_runtime_bridge.bridge_status == "runtime_bridge_ready"
     assert world_state.backend_runtime_bridge.transport_profile == "unitree_xr_teleop_bridge"
@@ -404,6 +415,11 @@ def test_holosoma_binding_records_runtime_target_contract(
     )
     assert "runtime_layout_contract" in world_state.backend_execution_binding.metadata
     assert "policy_contract" in world_state.backend_execution_binding.metadata
+    assert world_state.backend_execution_binding.metadata["deployment_contract"]["motion_train_ready"] is True
+    assert (
+        world_state.backend_execution_binding.metadata["upstream_runtime_pack"]["pack_status"]
+        == "pack_ready"
+    )
     assert world_state.backend_runtime_bridge is not None
     assert world_state.backend_runtime_bridge.bridge_status == "runtime_bridge_ready"
     assert world_state.backend_runtime_bridge.transport_profile == "holosoma_motion_runtime_bridge"

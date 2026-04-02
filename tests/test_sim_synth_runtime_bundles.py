@@ -2,8 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.world_model.sim_synth_physics.adapters.holosoma_deployment import (
+    build_holosoma_deployment_contract,
+)
+from src.world_model.sim_synth_physics.adapters.holosoma_runtime_pack import (
+    build_holosoma_runtime_pack,
+)
 from src.world_model.sim_synth_physics.adapters.isaac_unitree_deployment import (
     build_isaac_unitree_deployment_contract,
+)
+from src.world_model.sim_synth_physics.adapters.isaac_unitree_runtime_pack import (
+    build_isaac_unitree_runtime_pack,
 )
 from src.world_model.sim_synth_physics.runtime_bundles import build_backend_runtime_bundle
 from src.world_model.sim_synth_physics.runtime_layouts import (
@@ -39,33 +48,48 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
         "unitree_asset_root": str(asset_root),
         "unitree_sdk2_root": str(sdk_root),
     }
+    runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
+    runtime_layout_contract = describe_isaac_runtime_layouts(embodiment_context)
+    policy_contract = describe_isaac_policy_contract(embodiment_context)
+    deployment_contract = build_isaac_unitree_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        normalized_asset_manifest={
+            "unitree_robot_description": {"present": True},
+            "whole_body_joint_map": {"present": True},
+            "camera_extrinsics": {"present": True},
+            "imu_extrinsics": {"present": True},
+            "force_torque_calibration": {"present": True},
+            "actuator_latency_profile": {"present": True},
+            "joint_limit_profile": {"present": True},
+            "safety_watchdog_profile": {"present": True},
+        },
+    )
+    upstream_runtime_pack = build_isaac_unitree_runtime_pack(
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        deployment_contract=deployment_contract,
+        normalized_robot_asset_manifest={
+            "unitree_robot_description": {"present": True, "value": "/assets/g1.usd"},
+            "whole_body_joint_map": {"present": True, "value": "/assets/joint_map.yaml"},
+        },
+    )
     refs, runtime_bundle, launch_spec = build_backend_runtime_bundle(
         backend="isaac",
         task_id="peg_in_hole",
         policy_ref=str(policy_path),
-        runtime_target_contract=describe_isaac_runtime_targets(embodiment_context),
-        runtime_layout_contract=describe_isaac_runtime_layouts(embodiment_context),
-        policy_contract=describe_isaac_policy_contract(embodiment_context),
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
         robot_asset_manifest={"unitree_usd": "/assets/g1.usd"},
         normalized_robot_asset_manifest={
             "unitree_robot_description": {"present": True, "value": "/assets/g1.usd"}
         },
-        deployment_contract=build_isaac_unitree_deployment_contract(
-            embodiment_context=embodiment_context,
-            runtime_target_contract=describe_isaac_runtime_targets(embodiment_context),
-            runtime_layout_contract=describe_isaac_runtime_layouts(embodiment_context),
-            policy_contract=describe_isaac_policy_contract(embodiment_context),
-            normalized_asset_manifest={
-                "unitree_robot_description": {"present": True},
-                "whole_body_joint_map": {"present": True},
-                "camera_extrinsics": {"present": True},
-                "imu_extrinsics": {"present": True},
-                "force_torque_calibration": {"present": True},
-                "actuator_latency_profile": {"present": True},
-                "joint_limit_profile": {"present": True},
-                "safety_watchdog_profile": {"present": True},
-            },
-        ),
+        deployment_contract=deployment_contract,
+        upstream_runtime_pack=upstream_runtime_pack,
         output_root=tmp_path / "bundle",
     )
 
@@ -90,6 +114,8 @@ def test_build_isaac_runtime_bundle_prefers_unitree_sim_profile(tmp_path: Path) 
     assert runtime_bundle["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert launch_spec["output_contract"]["profile_id"] == "unitree_sim_isaaclab"
     assert runtime_bundle["output_contract"]["sources"]
+    assert runtime_bundle["upstream_runtime_pack"]["pack_status"] == "pack_ready"
+    assert launch_spec["upstream_runtime_pack"]["ready_surfaces"]
 
 
 def test_build_isaac_runtime_bundle_can_prefer_lerobot_profile(tmp_path: Path) -> None:
@@ -143,6 +169,15 @@ def test_build_isaac_runtime_bundle_can_prefer_lerobot_profile(tmp_path: Path) -
             "unitree_robot_description": {"present": True, "value": "/assets/g1.usd"}
         },
         deployment_contract=deployment_contract,
+        upstream_runtime_pack=build_isaac_unitree_runtime_pack(
+            runtime_target_contract=runtime_target_contract,
+            runtime_layout_contract=runtime_layout_contract,
+            policy_contract=policy_contract,
+            deployment_contract=deployment_contract,
+            normalized_robot_asset_manifest={
+                "unitree_robot_description": {"present": True, "value": "/assets/g1.usd"}
+            },
+        ),
         output_root=tmp_path / "bundle",
     )
 
@@ -160,6 +195,7 @@ def test_build_isaac_runtime_bundle_can_prefer_lerobot_profile(tmp_path: Path) -
         launch_spec["executable_adapter_consumer"]["consumer_mode"]
         == "external_lerobot_eval"
     )
+    assert runtime_bundle["upstream_runtime_pack"]["preferred_profile"] == "unitree_lerobot"
 
 
 def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> None:
@@ -181,15 +217,33 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
         "holosoma_policy_root": str(policy_root),
         "retargeting_root": str(retargeting_root),
     }
+    runtime_target_contract = describe_holosoma_runtime_targets(embodiment_context)
+    runtime_layout_contract = describe_holosoma_runtime_layouts(embodiment_context)
+    policy_contract = describe_holosoma_policy_contract(embodiment_context)
+    deployment_contract = build_holosoma_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+    )
+    upstream_runtime_pack = build_holosoma_runtime_pack(
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        deployment_contract=deployment_contract,
+        embodiment_context=embodiment_context,
+    )
     refs, runtime_bundle, launch_spec = build_backend_runtime_bundle(
         backend="holosoma",
         task_id="humanoid_wbt_g1",
         policy_ref=str(policy_path),
-        runtime_target_contract=describe_holosoma_runtime_targets(embodiment_context),
-        runtime_layout_contract=describe_holosoma_runtime_layouts(embodiment_context),
-        policy_contract=describe_holosoma_policy_contract(embodiment_context),
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
         robot_asset_manifest={},
         normalized_robot_asset_manifest={},
+        deployment_contract=deployment_contract,
+        upstream_runtime_pack=upstream_runtime_pack,
         output_root=tmp_path / "bundle",
     )
 
@@ -205,3 +259,5 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
     }
     assert runtime_bundle["output_contract"]["profile_id"] == "holosoma_repo"
     assert runtime_bundle["output_contract"]["sources"]
+    assert runtime_bundle["upstream_runtime_pack"]["pack_status"] == "pack_partial"
+    assert "policy_surface" in runtime_bundle["upstream_runtime_pack"]["ready_surfaces"]

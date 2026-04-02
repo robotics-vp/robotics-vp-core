@@ -8,6 +8,21 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from src.world_model.sim_synth_physics.adapters.holosoma_deployment import (
+    build_holosoma_deployment_contract,
+)
+from src.world_model.sim_synth_physics.adapters.holosoma_runtime_pack import (
+    build_holosoma_runtime_pack,
+)
+from src.world_model.sim_synth_physics.adapters.isaac_unitree_deployment import (
+    build_isaac_unitree_deployment_contract,
+)
+from src.world_model.sim_synth_physics.adapters.isaac_unitree_runtime_pack import (
+    build_isaac_unitree_runtime_pack,
+)
+from src.world_model.sim_synth_physics.asset_manifest import (
+    normalize_robot_asset_manifest,
+)
 from src.world_model.sim_synth_physics.runtime_layouts import (
     describe_holosoma_policy_contract,
     describe_holosoma_runtime_layouts,
@@ -43,14 +58,52 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[Sequence[str]] = None) -> dict[str, Any]:
     args = parse_args(argv)
     embodiment_context = _load_mapping(args.embodiment_context) or {}
+    isaac_runtime_targets = describe_isaac_runtime_targets(embodiment_context)
+    isaac_runtime_layouts = describe_isaac_runtime_layouts(embodiment_context)
+    isaac_policy_contract = describe_isaac_policy_contract(embodiment_context)
+    normalized_asset_manifest = normalize_robot_asset_manifest(embodiment_context)
+    isaac_deployment_contract = build_isaac_unitree_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=isaac_runtime_targets,
+        runtime_layout_contract=isaac_runtime_layouts,
+        policy_contract=isaac_policy_contract,
+        normalized_asset_manifest=normalized_asset_manifest,
+    )
+    isaac_runtime_pack = build_isaac_unitree_runtime_pack(
+        runtime_target_contract=isaac_runtime_targets,
+        runtime_layout_contract=isaac_runtime_layouts,
+        policy_contract=isaac_policy_contract,
+        deployment_contract=isaac_deployment_contract,
+        normalized_robot_asset_manifest=normalized_asset_manifest,
+    )
+    holosoma_runtime_targets = describe_holosoma_runtime_targets(embodiment_context)
+    holosoma_runtime_layouts = describe_holosoma_runtime_layouts(embodiment_context)
+    holosoma_policy_contract = describe_holosoma_policy_contract(embodiment_context)
+    holosoma_deployment_contract = build_holosoma_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=holosoma_runtime_targets,
+        runtime_layout_contract=holosoma_runtime_layouts,
+        policy_contract=holosoma_policy_contract,
+    )
+    holosoma_runtime_pack = build_holosoma_runtime_pack(
+        runtime_target_contract=holosoma_runtime_targets,
+        runtime_layout_contract=holosoma_runtime_layouts,
+        policy_contract=holosoma_policy_contract,
+        deployment_contract=holosoma_deployment_contract,
+        embodiment_context=embodiment_context,
+    )
     summary = {
         "version": "phase1_runtime_layout_scan_v1",
-        "isaac_runtime_targets": describe_isaac_runtime_targets(embodiment_context),
-        "isaac_runtime_layouts": describe_isaac_runtime_layouts(embodiment_context),
-        "isaac_policy_contract": describe_isaac_policy_contract(embodiment_context),
-        "holosoma_runtime_targets": describe_holosoma_runtime_targets(embodiment_context),
-        "holosoma_runtime_layouts": describe_holosoma_runtime_layouts(embodiment_context),
-        "holosoma_policy_contract": describe_holosoma_policy_contract(embodiment_context),
+        "isaac_runtime_targets": isaac_runtime_targets,
+        "isaac_runtime_layouts": isaac_runtime_layouts,
+        "isaac_policy_contract": isaac_policy_contract,
+        "isaac_deployment_contract": isaac_deployment_contract,
+        "isaac_upstream_runtime_pack": isaac_runtime_pack,
+        "holosoma_runtime_targets": holosoma_runtime_targets,
+        "holosoma_runtime_layouts": holosoma_runtime_layouts,
+        "holosoma_policy_contract": holosoma_policy_contract,
+        "holosoma_deployment_contract": holosoma_deployment_contract,
+        "holosoma_upstream_runtime_pack": holosoma_runtime_pack,
     }
     output_path = Path(args.output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

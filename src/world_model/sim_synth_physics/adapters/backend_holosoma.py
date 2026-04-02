@@ -8,6 +8,8 @@ from typing import Any, Dict, Mapping
 from src.motor_backend.holosoma_backend import HOLOSOMA_TASK_MAP
 
 from ..common import mapping
+from .holosoma_deployment import build_holosoma_deployment_contract
+from .holosoma_runtime_pack import build_holosoma_runtime_pack
 from ..runtime_layouts import (
     describe_holosoma_policy_contract,
     describe_holosoma_runtime_layouts,
@@ -49,12 +51,25 @@ def build_holosoma_backend_binding(
     runtime_target_contract = describe_holosoma_runtime_targets(embodiment_context)
     runtime_layout_contract = describe_holosoma_runtime_layouts(embodiment_context)
     policy_contract = describe_holosoma_policy_contract(embodiment_context)
-    required_assets = [
-        "humanoid_embodiment_context",
+    deployment_contract = build_holosoma_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+    )
+    upstream_runtime_pack = build_holosoma_runtime_pack(
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        deployment_contract=deployment_contract,
+        embodiment_context=embodiment_context,
+    )
+    required_assets = ["humanoid_embodiment_context", "holosoma_runtime"]
+    optional_assets = [
         "motion_source_bundle",
         "whole_body_retargeting_contract",
         "whole_body_reward_overlay",
-        "holosoma_runtime",
+        "policy_checkpoint",
     ]
     available_assets = ([] if not active_embodiments else ["humanoid_embodiment_context"])
     if motion_sources or motion_clips:
@@ -63,12 +78,15 @@ def build_holosoma_backend_binding(
         available_assets.append("whole_body_retargeting_contract")
     if reward_overlay:
         available_assets.append("whole_body_reward_overlay")
+    if policy_contract.get("policy_ready", False):
+        available_assets.append("policy_checkpoint")
     if available:
         available_assets.append("holosoma_runtime")
     missing_assets = [asset for asset in required_assets if asset not in available_assets]
-    if available and not missing_assets:
-        binding_status = "ready"
-    elif active_embodiments:
+    ready_modes = list(deployment_contract.get("ready_modes") or [])
+    if available and ready_modes and not missing_assets:
+        binding_status = "runtime_ready"
+    elif ready_modes or active_embodiments:
         binding_status = "shadow_ready"
     else:
         binding_status = "assets_missing"
@@ -104,6 +122,9 @@ def build_holosoma_backend_binding(
             "runtime_target_contract": runtime_target_contract,
             "runtime_layout_contract": runtime_layout_contract,
             "policy_contract": policy_contract,
+            "deployment_contract": deployment_contract,
+            "upstream_runtime_pack": upstream_runtime_pack,
+            "optional_assets": optional_assets,
             "embodiment_context": mapping(embodiment_context),
         },
     }

@@ -145,6 +145,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "backend_runtime_execution_receipt": root / "backend_runtime_execution_receipt.json",
         "backend_runtime_adapter_receipt": root / "backend_runtime_adapter_receipt.json",
         "backend_runtime_adapter_realization": root / "backend_runtime_adapter_realization.json",
+        "backend_upstream_runtime_pack": root / "backend_upstream_runtime_pack.json",
         "backend_runtime_launch_receipt": root / "backend_runtime_launch_receipt.json",
         "backend_runtime_outcome_receipt": root / "backend_runtime_outcome_receipt.json",
         "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
@@ -573,6 +574,15 @@ def _build_training_feedback_manifest(
         "bridge_execution_authority": backend_runtime_bridge_receipt.execution_authority,
         "bridge_transport_profile": backend_runtime_bridge_receipt.transport_profile,
         "bridge_readiness_score": float(backend_runtime_bridge_receipt.bridge_readiness_score),
+        "backend_upstream_runtime_pack": mapping(
+            backend_runtime_bridge_receipt.metadata.get("upstream_runtime_pack")
+        ),
+        "backend_upstream_runtime_pack_status": str(
+            mapping(backend_runtime_bridge_receipt.metadata.get("upstream_runtime_pack")).get(
+                "pack_status", ""
+            )
+            or ""
+        ),
         "backend_runtime_work_order_count": len(backend_runtime_work_orders),
         "backend_runtime_work_order_statuses": [
             receipt.status for receipt in backend_runtime_work_orders
@@ -645,6 +655,8 @@ def _build_backend_execution_binding_receipt(
                 "runtime_layout_contract", {}
             ),
             "policy_contract": mapping(binding.metadata).get("policy_contract", {}),
+            "deployment_contract": mapping(binding.metadata).get("deployment_contract", {}),
+            "upstream_runtime_pack": mapping(binding.metadata).get("upstream_runtime_pack", {}),
             "normalized_asset_manifest": mapping(binding.metadata).get(
                 "normalized_asset_manifest", {}
             ),
@@ -1034,6 +1046,18 @@ class SimSynthPhysicsRuntime:
                     artifact_paths["backend_runtime_adapter_realization"],
                     mapping(backend_runtime_adapter_receipt.metadata.get("realization")),
                 )
+            upstream_runtime_pack = mapping(
+                backend_runtime_bridge_receipt.metadata.get("upstream_runtime_pack")
+            ) or mapping(
+                {}
+                if backend_runtime_execution_receipt is None
+                else mapping(backend_runtime_execution_receipt.metadata).get("runtime_bundle", {})
+            ).get("upstream_runtime_pack", {})
+            if upstream_runtime_pack:
+                _write_json(
+                    artifact_paths["backend_upstream_runtime_pack"],
+                    upstream_runtime_pack,
+                )
             if backend_runtime_launch_receipt is not None:
                 _write_json(
                     artifact_paths["backend_runtime_launch_receipt"],
@@ -1158,6 +1182,22 @@ class SimSynthPhysicsRuntime:
                             else backend_runtime_adapter_receipt.metadata.get("realization")
                         ).get("realization_status", "")
                         or ""
+                    ),
+                    "backend_upstream_runtime_pack_status": str(
+                        mapping(
+                            backend_runtime_bridge_receipt.metadata.get(
+                                "upstream_runtime_pack"
+                            )
+                        ).get("pack_status", "")
+                        or ""
+                    ),
+                    "backend_upstream_runtime_ready_surfaces": list(
+                        mapping(
+                            backend_runtime_bridge_receipt.metadata.get(
+                                "upstream_runtime_pack"
+                            )
+                        ).get("ready_surfaces", [])
+                        or []
                     ),
                     "backend_runtime_launch_status": (
                         ""

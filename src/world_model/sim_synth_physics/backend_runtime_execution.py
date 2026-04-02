@@ -529,6 +529,10 @@ def materialize_backend_runtime_execution(
         binding_metadata.get("deployment_contract")
         or binding_metadata_nested.get("deployment_contract")
     )
+    upstream_runtime_pack = _mapping(
+        binding_metadata.get("upstream_runtime_pack")
+        or binding_metadata_nested.get("upstream_runtime_pack")
+    )
     runtime_bundle_refs, runtime_bundle, launch_spec = build_backend_runtime_bundle(
         backend=backend,
         task_id=task_id,
@@ -549,6 +553,7 @@ def materialize_backend_runtime_execution(
             "action_contracts": _strings(binding_payload.get("action_contracts")),
         },
         deployment_contract=deployment_contract,
+        upstream_runtime_pack=upstream_runtime_pack,
         output_root=output_root,
     )
     artifact_refs.extend(runtime_bundle_refs)

@@ -421,6 +421,9 @@ def compile_backend_runtime_bridge(
             "deployment_contract": mapping(
                 backend_execution_binding.metadata.get("deployment_contract")
             ),
+            "upstream_runtime_pack": mapping(
+                backend_execution_binding.metadata.get("upstream_runtime_pack")
+            ),
             "target_hardware_class": target_hardware_class,
             "missing_assets": missing_assets,
             "calibration_contracts": (
@@ -555,6 +558,9 @@ def build_backend_runtime_bridge_receipt(
             "policy_contract": mapping(bridge_state.metadata).get("policy_contract", {}),
             "deployment_contract": mapping(bridge_state.metadata).get(
                 "deployment_contract", {}
+            ),
+            "upstream_runtime_pack": mapping(bridge_state.metadata).get(
+                "upstream_runtime_pack", {}
             ),
             "missing_assets": mapping(bridge_state.metadata).get("missing_assets", []),
             "runtime_targets_ready": mapping(bridge_state.metadata).get("runtime_targets_ready", False),

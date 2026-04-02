@@ -75,6 +75,7 @@ def _work_order_status(
     missing_runtime_targets: list[str],
     missing_assets: list[str],
     missing_preconditions: list[str],
+    upstream_runtime_pack: dict[str, object],
 ) -> str:
     if bridge_receipt.execution_authority == "concrete_runtime":
         return "satisfied_by_concrete_runtime"
@@ -94,6 +95,8 @@ def _work_order_status(
         return "blocked_by_runtime_targets"
     if missing_assets:
         return "blocked_by_assets"
+    if str(upstream_runtime_pack.get("pack_status", "") or "") == "pack_blocked":
+        return "blocked_by_runtime_pack"
     if missing_preconditions:
         return "blocked_by_runtime_preconditions"
     if bridge_receipt.execution_authority == "shadow_runtime":
@@ -122,6 +125,10 @@ def build_backend_runtime_work_orders(
     runtime_layout_ready_profiles = strings(
         bridge_metadata.get("runtime_layout_ready_profiles")
     ) or strings(runtime_layout_contract.get("ready_profiles"))
+    runtime_metadata = {} if runtime_receipt is None else mapping(runtime_receipt.metadata)
+    upstream_runtime_pack = mapping(
+        runtime_metadata.get("upstream_runtime_pack")
+    ) or mapping(bridge_metadata.get("upstream_runtime_pack"))
     missing_runtime_targets = strings(
         runtime_target_contract.get("missing_required_target_ids")
     )
@@ -134,7 +141,10 @@ def build_backend_runtime_work_orders(
         if runtime_receipt is None
         else mapping(runtime_receipt.metadata).get("missing_preconditions")
     )
-    runtime_metadata = {} if runtime_receipt is None else mapping(runtime_receipt.metadata)
+    pack_missing_components = strings(upstream_runtime_pack.get("missing_components"))
+    for item in pack_missing_components:
+        if item not in missing_preconditions:
+            missing_preconditions.append(item)
     outcome_metadata = (
         {} if runtime_outcome_receipt is None else mapping(runtime_outcome_receipt.metadata)
     )
@@ -153,6 +163,7 @@ def build_backend_runtime_work_orders(
         missing_runtime_targets=missing_runtime_targets,
         missing_assets=missing_assets,
         missing_preconditions=missing_preconditions,
+        upstream_runtime_pack=upstream_runtime_pack,
     )
     payload = {
         "backend": backend,
@@ -216,6 +227,13 @@ def build_backend_runtime_work_orders(
                 "runtime_layout_contract": runtime_layout_contract,
                 "policy_contract": policy_contract,
                 "policy_ready": bool(bridge_metadata.get("policy_ready", False)),
+                "upstream_runtime_pack": upstream_runtime_pack,
+                "upstream_runtime_pack_status": str(
+                    upstream_runtime_pack.get("pack_status", "") or ""
+                ),
+                "upstream_runtime_pack_ready_surfaces": strings(
+                    upstream_runtime_pack.get("ready_surfaces")
+                ),
                 "runtime_bundle": runtime_metadata.get("runtime_bundle", {}),
                 "launch_spec": launch_spec,
             },
