@@ -87,3 +87,50 @@ def test_runtime_outcomes_harvest_unitree_sim_outputs(tmp_path: Path) -> None:
         outcome_receipt.metadata["structured_outputs"]["surface_ready"]["policy_surface_ready"]
         is True
     )
+
+
+def test_runtime_outcomes_harvest_local_runtime_artifacts_without_launch(tmp_path: Path) -> None:
+    episode_dir = tmp_path / "rollouts" / "scenario_1" / "episode_000"
+    episode_dir.mkdir(parents=True)
+    trajectory_path = episode_dir / "trajectory.npz"
+    trajectory_path.write_bytes(b"fake")
+    metrics_path = tmp_path / "backend_runtime_metrics.json"
+    metrics_path.write_text('{"success_rate": 1.0}', encoding="utf-8")
+    policy_path = tmp_path / "trained_policy.onnx"
+    policy_path.write_text("x", encoding="utf-8")
+
+    runtime_bundle = {
+        "backend": "holosoma",
+        "preferred_profile": "holosoma_repo",
+        "runtime_target_contract": {"targets": []},
+        "policy_contract": {"policy_root": str(tmp_path), "policy_ref": ""},
+    }
+    launch_spec = {
+        "backend": "holosoma",
+        "preferred_profile": "holosoma_repo",
+        "root": str(tmp_path),
+        "policy_ref": "",
+        "command": "",
+    }
+    output_contract = build_backend_runtime_output_contract(runtime_bundle, launch_spec)
+    output_summary = harvest_backend_runtime_outcomes(
+        output_contract,
+        executed=True,
+        explicit_artifact_refs=[str(trajectory_path), str(metrics_path)],
+        explicit_policy_ref=str(policy_path),
+    )
+    outcome_receipt = build_backend_runtime_outcome_receipt(
+        runtime_bundle=runtime_bundle,
+        launch_receipt=None,
+        output_summary=output_summary,
+    )
+
+    assert output_summary["outcome_status"] == "runtime_outputs_harvested"
+    assert output_summary["structured_outputs"]["surface_ready"]["dataset_surface_ready"] is True
+    assert output_summary["structured_outputs"]["surface_ready"]["metrics_surface_ready"] is True
+    assert output_summary["structured_outputs"]["surface_ready"]["policy_surface_ready"] is True
+    assert output_summary["structured_outputs"]["counts"]["dataset_episode_count"] == 1
+    assert outcome_receipt.outcome_status == "runtime_outputs_harvested"
+    assert outcome_receipt.executed is True
+    assert outcome_receipt.metadata["harvest_mode"] == "local_runtime_execution"
+    assert outcome_receipt.metadata["launch_receipt_id"] == ""

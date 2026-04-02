@@ -1030,6 +1030,180 @@ def test_runtime_executes_external_launch_when_requested(
     assert (tmp_path / "backend_runtime_outcome_receipt.json").exists()
 
 
+def test_runtime_executes_concrete_isaac_backend_when_local_bridge_exists(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from src.world_model.sim_synth_physics import backend_adapters as adapter_module
+    from src.world_model.sim_synth_physics import backend_runtime_execution as runtime_exec_module
+    from src.world_model.sim_synth_physics import runtime_targets as runtime_targets_module
+    from src.world_model.sim_synth_physics.adapters import backend_isaac as binding_module
+    from src.world_model.sim_synth_physics.adapters import (
+        isaac_unitree_adapter_execution as isaac_adapter_module,
+    )
+    from src.world_model.sim_synth_physics.adapters import (
+        local_backend_factory_adapter as local_factory_module,
+    )
+
+    class FakeRuntimeBackend:
+        def evaluate_policy(
+            self,
+            policy_id,
+            task_id,
+            objective,
+            num_episodes,
+            scenario_id=None,
+            rollout_base_dir=None,
+            seed=None,
+        ):
+            assert task_id
+            assert num_episodes == 1
+            assert scenario_id
+            assert rollout_base_dir is not None
+            episode_dir = Path(rollout_base_dir) / scenario_id / "episode_000"
+            episode_dir.mkdir(parents=True, exist_ok=True)
+            trajectory_path = episode_dir / "trajectory.npz"
+            trajectory_path.write_bytes(b"fake")
+            rollout_bundle = RolloutBundle(
+                scenario_id=scenario_id,
+                episodes=[
+                    EpisodeRollout(
+                        metadata=EpisodeMetadata(
+                            episode_id=f"{scenario_id}_episode_000",
+                            task_id=task_id,
+                            robot_family="unitree_g1",
+                            seed=seed,
+                            env_params={"mode": "isaac_local"},
+                        ),
+                        trajectory_path=trajectory_path,
+                    )
+                ],
+            )
+            return MotorEvalResult(
+                policy_id=policy_id,
+                raw_metrics={"success_rate": 1.0, "mpl_units_per_hour": 91.0},
+                econ_metrics={"mpl_units_per_hour": 91.0, "wage_parity": 1.5},
+                rollout_bundle=rollout_bundle,
+            )
+
+    monkeypatch.setattr(
+        adapter_module,
+        "_has_module",
+        lambda name: name == "src.motor_backend.workcell_isaaclab_backend",
+    )
+    monkeypatch.setattr(
+        binding_module,
+        "_has_module",
+        lambda name: name == "src.motor_backend.workcell_isaaclab_backend",
+    )
+    monkeypatch.setattr(
+        runtime_targets_module,
+        "_has_module",
+        lambda name: name == "src.motor_backend.workcell_isaaclab_backend",
+    )
+    monkeypatch.setattr(isaac_adapter_module, "_has_local_bridge_module", lambda: True)
+    monkeypatch.setattr(
+        runtime_exec_module,
+        "_runtime_supports_execution",
+        lambda backend: backend == "isaac",
+    )
+    monkeypatch.setattr(
+        local_factory_module,
+        "make_motor_backend",
+        lambda name, econ_meter, store, backend_config=None: FakeRuntimeBackend(),
+    )
+    monkeypatch.setattr(
+        runtime_exec_module,
+        "make_motor_backend",
+        lambda name, econ_meter, store, backend_config=None: FakeRuntimeBackend(),
+    )
+
+    runtime_root = tmp_path / "unitree_sim_isaaclab"
+    runtime_root.mkdir()
+    policy_root = tmp_path / "policies"
+    policy_root.mkdir()
+    policy_path = policy_root / "g1_policy.onnx"
+    policy_path.write_text("x", encoding="utf-8")
+    sdk_root = tmp_path / "unitree_sdk2"
+    sdk_root.mkdir()
+    asset_root = tmp_path / "assets"
+    asset_root.mkdir()
+
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(default_backend="pybullet", fallback_backend="pybullet")
+    )
+    world_state = runtime.compile_world_state(
+        _make_test_graph(),
+        backend_selector=PromotedBackendSelector(),
+        embodiment_context={
+            "unitree_sim_isaaclab_root": str(runtime_root),
+            "unitree_sdk2_root": str(sdk_root),
+            "unitree_asset_root": str(asset_root),
+            "isaac_policy_root": str(policy_root),
+            "runtime_policy_id": str(policy_path),
+            "robot_asset_manifest": {
+                "unitree_usd": "/assets/unitree/g1.usd",
+                "joint_map_path": "/assets/unitree/joint_map.yaml",
+                "camera_extrinsics": "/assets/unitree/camera_extrinsics.json",
+                "imu_extrinsics": "/assets/unitree/imu_extrinsics.json",
+                "force_torque_calibration": "/assets/unitree/ft_calibration.json",
+                "actuator_latency_profile": "/assets/unitree/latency.yaml",
+                "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
+                "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
+            },
+        },
+    )
+
+    result = runtime.execute_world_state(world_state, output_dir=tmp_path)
+
+    assert result.backend_runtime_execution_receipt is not None
+    assert result.backend_runtime_execution_receipt.execution_status == "runtime_execution_completed"
+    assert result.backend_runtime_adapter_receipt is not None
+    assert result.backend_runtime_adapter_receipt.adapter_status == "local_bridge_handed_off"
+    assert (
+        result.backend_runtime_adapter_receipt.metadata["realization"]["realization_path"]
+        == "local_backend_factory"
+    )
+    assert result.backend_runtime_outcome_receipt is not None
+    assert result.backend_runtime_outcome_receipt.outcome_status == "runtime_outputs_harvested"
+    assert result.backend_runtime_outcome_receipt.harvested_output_count >= 3
+    assert result.backend_runtime_outcome_receipt.metadata["harvest_mode"] == "local_runtime_execution"
+    assert (
+        result.backend_runtime_outcome_receipt.metadata["structured_outputs"]["surface_ready"][
+            "policy_surface_ready"
+        ]
+        is True
+    )
+    assert (
+        result.backend_runtime_outcome_receipt.metadata["structured_outputs"]["surface_ready"][
+            "dataset_surface_ready"
+        ]
+        is True
+    )
+    assert (
+        result.backend_runtime_outcome_receipt.metadata["structured_outputs"]["surface_ready"][
+            "metrics_surface_ready"
+        ]
+        is True
+    )
+    assert (
+        result.backend_runtime_execution_receipt.metadata["runtime_outcome_receipt"][
+            "outcome_status"
+        ]
+        == "runtime_outputs_harvested"
+    )
+    assert (
+        result.backend_runtime_bridge_receipt.execution_authority == "concrete_runtime"
+    )
+    assert (tmp_path / "backend_runtime_outcome_receipt.json").exists()
+    assert (
+        tmp_path
+        / "backend_runtime_execution"
+        / "isaac"
+        / "backend_runtime_output_summary.json"
+    ).exists()
+
+
 def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp_path: Path) -> None:
     runtime = SimSynthPhysicsRuntime(SimSynthPhysicsRuntimeConfig(default_backend="pybullet"))
 
@@ -1234,6 +1408,21 @@ def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exis
         "backend_runtime_metrics.json" in ref
         for ref in result.backend_runtime_execution_receipt.artifact_refs
     )
+    assert result.backend_runtime_outcome_receipt is not None
+    assert result.backend_runtime_outcome_receipt.outcome_status == "runtime_outputs_harvested"
+    assert result.backend_runtime_outcome_receipt.metadata["harvest_mode"] == "local_runtime_execution"
+    assert (
+        result.backend_runtime_outcome_receipt.metadata["structured_outputs"]["surface_ready"][
+            "dataset_surface_ready"
+        ]
+        is True
+    )
+    assert (
+        result.backend_runtime_outcome_receipt.metadata["structured_outputs"]["surface_ready"][
+            "metrics_surface_ready"
+        ]
+        is True
+    )
     assert result.backend_runtime_bridge_receipt.execution_authority == "concrete_runtime"
     assert result.backend_runtime_work_orders[0].status == "satisfied_by_concrete_runtime"
     assert (tmp_path / "backend_runtime_execution_receipt.json").exists()
@@ -1349,6 +1538,21 @@ def test_runtime_trains_concrete_holosoma_backend_when_motion_datapacks_exist(
     assert any(
         "backend_runtime_metrics.json" in ref
         for ref in result.backend_runtime_execution_receipt.artifact_refs
+    )
+    assert result.backend_runtime_outcome_receipt is not None
+    assert result.backend_runtime_outcome_receipt.outcome_status == "runtime_outputs_harvested"
+    assert result.backend_runtime_outcome_receipt.metadata["harvest_mode"] == "local_runtime_execution"
+    assert (
+        result.backend_runtime_outcome_receipt.metadata["structured_outputs"]["surface_ready"][
+            "dataset_surface_ready"
+        ]
+        is True
+    )
+    assert (
+        result.backend_runtime_outcome_receipt.metadata["structured_outputs"]["surface_ready"][
+            "metrics_surface_ready"
+        ]
+        is True
     )
     assert result.backend_runtime_bridge_receipt.execution_authority == "concrete_runtime"
     assert result.backend_runtime_work_orders[0].status == "satisfied_by_concrete_runtime"

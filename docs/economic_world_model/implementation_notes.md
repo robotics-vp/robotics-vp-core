@@ -2220,3 +2220,42 @@
     - real Isaac/Unitree runtime/assets/policies behind the ladder
     - real Holosoma host/runtime/motion/retargeting assets behind the same ladder
     - GPU-backed GGDS / video materialization
+
+- The next audited Phase-1 closure fix was in the concrete-runtime evidence path, not in a new abstraction layer:
+  - `runtime_outcomes.py` can now harvest explicit local runtime artifacts and emit `backend_runtime_outcome_receipt_v1` without depending on a launch receipt
+  - the receipt metadata now carries `harvest_mode=local_runtime_execution` when the evidence came from a concrete local runtime rather than an external launch handoff
+  - this matters because local concrete runtime success should not be flattened back into launch-shaped semantics once the branch already has direct policy / rollout / metrics outputs
+
+- `runtime_outcome_parsers.py` was tightened for the same reason:
+  - rollout `trajectory` artifacts and `episode_*` captures are now classified as dataset surfaces before generic motion-dataset fallbacks
+  - this prevents local runtime rollout evidence from undercounting dataset-ready trainer/replay material when the path is concrete but still local
+
+- `backend_runtime_execution.py` now makes that outcome truth load-bearing:
+  - after successful concrete local runtime eval/train, it explicitly harvests policy / metrics / rollout outputs
+  - it writes:
+    - `backend_runtime_output_contract.json`
+    - `backend_runtime_output_summary.json`
+    - `backend_runtime_outcome_receipt.json`
+  - it also threads the outcome receipt back into runtime-execution metadata so the loop can distinguish:
+    - launch-shaped external execution
+    - concrete local runtime execution with harvested outputs
+
+- The Isaac/Unitree local bridge lane needed one more honesty fix:
+  - `isaac_unitree_runtime_binding.py` now treats local `sim_eval` as a narrower local-binding mode, so stale upstream-pack placeholders like `preferred_runtime_profile`, `runtime_profile_surface`, and generic `runtime_profile` no longer block a lane that already has a real local bridge plus the actual local prerequisites it needs
+  - `isaac_unitree_executable_adapter.py` now uses binding-selected missing components as the primary request truth and only supplements them with still-missing required assets or policy state
+  - effect: a concretely executable local Isaac path is no longer marked blocked before it even reaches explicit local backend materialization
+
+- The new tests are intentionally topology-specific:
+  - `tests/test_sim_synth_runtime_outcomes.py` now verifies explicit local-runtime artifact harvest without a launch receipt
+  - `tests/test_sim_synth_physics_world_model.py` now verifies:
+    - concrete local Isaac runtime through the local bridge / backend-factory path
+    - concrete local Holosoma eval/train paths preserving `backend_runtime_outcome_receipt`
+    - local runtime outcome receipts marking policy / dataset / metrics surfaces ready when those artifacts were actually emitted
+
+- The result is another honest narrowing of Phase 1:
+  - internal gap removed: local concrete runtime no longer degrades into launch-shaped truth
+  - internal gap removed: local Isaac bridge no longer inherits irrelevant external-pack blockers
+  - remaining blockers are more decisively external:
+    - real upstream runtime/assets/checkpoints
+    - real host/runtime installs
+    - GPU-backed model/materialization availability

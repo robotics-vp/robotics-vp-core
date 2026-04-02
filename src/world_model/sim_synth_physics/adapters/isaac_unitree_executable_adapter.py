@@ -118,14 +118,20 @@ def build_isaac_unitree_executable_adapter_request(
     placement_class = str(deployment_contract.get("placement_class", "") or "")
     asset_refs, available_asset_ids = _asset_rows(normalized_robot_asset_manifest)
     robot_context = mapping(robot_contract_context)
-    missing_preconditions = strings(mode_contract.get("missing_preconditions")) + strings(
-        binding.get("missing_components")
-    )
     policy_required = deployment_mode != "teleop_bridge"
     selected_policy_ref = str(binding.get("selected_policy_ref", "") or policy_ref)
     selected_command = str(binding.get("selected_command", "") or mapping(launch_spec).get("command", "") or "")
     selected_launch_root = str(binding.get("selected_launch_root", "") or mapping(launch_spec).get("root", "") or "")
     selected_deploy_config = str(binding.get("selected_deploy_config", "") or "")
+    if binding:
+        missing_preconditions = strings(binding.get("missing_components"))
+    else:
+        missing_preconditions = strings(mode_contract.get("missing_preconditions"))
+    for asset_id in strings(mode_contract.get("required_asset_ids")):
+        if asset_id not in available_asset_ids and asset_id not in missing_preconditions:
+            missing_preconditions.append(asset_id)
+    if policy_required and not selected_policy_ref and "policy_checkpoint" not in missing_preconditions:
+        missing_preconditions.append("policy_checkpoint")
 
     env_overrides.update(
         {

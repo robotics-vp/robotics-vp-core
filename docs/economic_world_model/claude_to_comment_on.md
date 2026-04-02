@@ -136,3 +136,86 @@ Result:
 - The next highest-leverage Phase 1 cut is:
   1. use real upstream runtime / asset / checkpoint evidence to harden the concrete Isaac / Unitree lane against the now-compiled closure surfaces
   2. bring Holosoma runtime execution and outcome density up to the same evidence standard
+
+## Tranche Spec Coverage
+
+This follow-on pass covered the next Phase-1 closure target from the prior assessment:
+
+- harden the concrete Isaac / Unitree lane against the now-compiled closure surfaces
+- bring Holosoma runtime execution and outcome density up to the same evidence standard
+
+Result:
+
+- local concrete runtime execution now emits explicit runtime-outcome truth instead of being flattened back into launch-shaped semantics
+- the Isaac/Unitree local bridge lane no longer inherits stale external-pack blockers when the local concrete prerequisites are already satisfied
+
+## What Was Not Changed
+
+This tranche intentionally did **not** change:
+
+- `src/world_model/sim_synth_physics/render_providers.py`
+- `src/world_model/sim_synth_physics/promotion.py`
+- `src/world_model/sim_synth_physics/gen2sim_admission.py`
+- `src/world_model/sim_synth_physics/randomization.py`
+- `src/world_model/sim_synth_physics/calibration.py`
+- any Perception / Grounding implementation surface
+- any frozen Phase B math or controller logic
+
+## What Changed Topologically
+
+- `backend_runtime_outcome_receipt_v1` can now be emitted from **local concrete runtime execution** without a launch receipt, with `harvest_mode=local_runtime_execution`
+- local concrete runtime success for Isaac/Unitree and Holosoma now preserves:
+  - policy surface readiness
+  - dataset surface readiness
+  - metrics surface readiness
+- the local Isaac/Unitree path is now evaluated against **local-binding-relevant** missing components instead of inheriting stale upstream runtime-pack blockers that only matter for external launch posture
+
+## What Fake Readiness Was Removed
+
+- a local concrete runtime path no longer looks complete only in runtime-execution metadata while outcome truth still remains launch-shaped
+- a local Isaac bridge no longer looks blocked because of `runtime_profile` / `preferred_runtime_profile` / `runtime_profile_surface` placeholders when the real local bridge path is already available
+- rollout `trajectory` artifacts no longer undercount as generic motion-only artifacts when they are actually dataset-ready trainer/replay evidence
+
+## What Is Still Only Contract-Shaped
+
+- the upstream Isaac / Unitree runtime, assets, checkpoints, and host installation remain external reality
+- the upstream Holosoma host/runtime/motion/retargeting assets and policies remain external reality
+- GGDS / LDM / video materialization still remain GPU / model / host dependent
+
+## Phase 1 Closure Assessment
+
+| Finding | Category | Rationale |
+|---------|----------|-----------|
+| Local concrete runtime outcomes were still flattened into launch-shaped truth | **resolved A** | Closed by explicit local artifact harvest plus local-runtime outcome receipts. |
+| Local Isaac bridge inherited stale external-pack blockers | **resolved A** | Closed by narrowing runtime-binding/request missing-component truth to the local path’s actual prerequisites. |
+| Real upstream runtime/assets/checkpoints for Isaac/Unitree are still absent | **B** | The branch now names this more honestly; the remaining blocker is external runtime/asset reality. |
+| Real Holosoma host/runtime/motion/retargeting assets are still absent | **B** | The branch now names this more honestly; the remaining blocker is external provider/runtime reality. |
+| GPU-backed GGDS / LDM / video materialization is still absent | **B** | Wiring exists; execution still depends on external host/model availability. |
+
+Category A count after this pass: 0 on the concrete-runtime evidence cluster
+Category B count: 3
+
+## Explicit Internal vs External Statement
+
+### Internal incompleteness fixed today
+
+- local concrete runtime outcome harvesting for Isaac/Unitree and Holosoma
+- local-runtime receipt truth for policy / dataset / metrics surfaces
+- stale external-pack blocker leakage into the local Isaac bridge request path
+
+### What remains internal
+
+- no obvious new Category A receipt-chain gap was found in the audited concrete-runtime evidence path
+- the remaining internal work is now mostly incremental density / evidence hardening rather than a missing canonical local-runtime surface
+
+### What is now honestly externalized
+
+- real Isaac/Unitree upstream runtime/assets/checkpoints/host install
+- real Holosoma host/runtime/motion/policy/retargeting assets
+- GPU-backed GGDS / LDM / video materialization
+
+## Recommendation to Claude
+
+- **Phase 1 remains the active implementation center.**
+- **Parallel Perception prep is allowed but secondary.**
+- Phase 1 is approaching real closure on the internal runtime-ladder / receipt-honesty side; the next highest-leverage cuts should keep pushing real upstream runtime/assets/checkpoints into the now-honest local/runtime evidence path rather than inventing a new layer.

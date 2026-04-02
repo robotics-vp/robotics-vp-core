@@ -1337,6 +1337,43 @@ def materialize_backend_runtime_execution(
             },
         )
         artifact_refs.append(str(metrics_path.resolve()))
+    if policy_id and Path(policy_id).exists():
+        policy_ref = str(Path(policy_id).resolve())
+        if policy_ref not in artifact_refs:
+            artifact_refs.append(policy_ref)
+    local_output_summary = harvest_backend_runtime_outcomes(
+        runtime_output_contract,
+        executed=True,
+        explicit_artifact_refs=artifact_refs,
+        explicit_policy_ref=policy_id,
+    )
+    local_outcome_receipt = build_backend_runtime_outcome_receipt(
+        runtime_bundle=runtime_bundle,
+        launch_receipt=None,
+        output_summary=local_output_summary,
+    )
+    runtime_outcome_receipt_payload = local_outcome_receipt.to_dict()
+    runtime_outcome_refs = strings(local_output_summary.get("artifact_refs"))
+    for ref in runtime_outcome_refs:
+        if ref and ref not in artifact_refs:
+            artifact_refs.append(ref)
+    if output_root is not None:
+        consumer_path = output_root / "backend_executable_adapter_consumer.json"
+        output_contract_path = output_root / "backend_runtime_output_contract.json"
+        output_summary_path = output_root / "backend_runtime_output_summary.json"
+        outcome_receipt_path = output_root / "backend_runtime_outcome_receipt.json"
+        _write_json(consumer_path, executable_adapter_consumer)
+        _write_json(output_contract_path, runtime_output_contract)
+        _write_json(output_summary_path, local_output_summary)
+        _write_json(outcome_receipt_path, runtime_outcome_receipt_payload)
+        for ref in (
+            str(consumer_path.resolve()),
+            str(output_contract_path.resolve()),
+            str(output_summary_path.resolve()),
+            str(outcome_receipt_path.resolve()),
+        ):
+            if ref not in artifact_refs:
+                artifact_refs.append(ref)
     return BackendRuntimeExecutionReceipt(
         receipt_id=f"backend_runtime_execution_receipt_{world_state.state_id}",
         backend=backend,

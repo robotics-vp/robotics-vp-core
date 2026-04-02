@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from .common import mapping, stable_id, strings
 from .receipts import BackendRuntimeLaunchReceipt, BackendRuntimeOutcomeReceipt
@@ -333,6 +333,8 @@ def harvest_backend_runtime_outcomes(
     *,
     executed: bool,
     limit_per_source: int = 10,
+    explicit_artifact_refs: Sequence[str] | None = None,
+    explicit_policy_ref: str = "",
 ) -> dict[str, Any]:
     contract = mapping(output_contract)
     sources = [mapping(item) for item in list(contract.get("sources", []) or [])]
@@ -378,6 +380,32 @@ def harvest_backend_runtime_outcomes(
                 "upstream_hint": str(source.get("upstream_hint", "") or ""),
             }
         )
+    explicit_refs: list[str] = []
+    for ref in strings(explicit_artifact_refs):
+        if ref and Path(ref).exists():
+            resolved = str(Path(ref).resolve())
+            if resolved not in explicit_refs:
+                explicit_refs.append(resolved)
+    if explicit_policy_ref and Path(explicit_policy_ref).exists():
+        resolved_policy_ref = str(Path(explicit_policy_ref).resolve())
+        if resolved_policy_ref not in explicit_refs:
+            explicit_refs.append(resolved_policy_ref)
+    if explicit_refs:
+        any_ready_source = True
+        for ref in explicit_refs:
+            if ref not in harvested_artifacts:
+                harvested_artifacts.append(ref)
+        source_summaries.append(
+            {
+                "source_id": "explicit_runtime_artifacts",
+                "artifact_kind": "runtime_execution_artifacts",
+                "root": "",
+                "root_exists": True,
+                "matched_refs": explicit_refs,
+                "matched_count": len(explicit_refs),
+                "upstream_hint": "Artifacts emitted directly by concrete local runtime execution.",
+            }
+        )
     if not executed:
         outcome_status = "launch_not_executed"
     elif harvested_artifacts:
@@ -404,31 +432,41 @@ def harvest_backend_runtime_outcomes(
 def build_backend_runtime_outcome_receipt(
     *,
     runtime_bundle: Mapping[str, Any],
-    launch_receipt: BackendRuntimeLaunchReceipt,
+    launch_receipt: BackendRuntimeLaunchReceipt | None,
     output_summary: Mapping[str, Any],
     artifact_refs: list[str] | None = None,
 ) -> BackendRuntimeOutcomeReceipt:
     bundle = mapping(runtime_bundle)
     summary = mapping(output_summary)
+    executed = bool(summary.get("executed", False))
+    launch_receipt_id = ""
+    launch_status = ""
+    if launch_receipt is not None:
+        executed = bool(launch_receipt.executed)
+        launch_receipt_id = launch_receipt.receipt_id
+        launch_status = launch_receipt.launch_status
     payload = {
         "backend": str(bundle.get("backend", "") or ""),
         "profile_id": str(summary.get("profile_id", "") or ""),
         "outcome_status": str(summary.get("outcome_status", "") or ""),
-        "executed": bool(launch_receipt.executed),
+        "executed": executed,
         "harvested_output_count": int(summary.get("harvested_output_count", 0) or 0),
-        "launch_status": launch_receipt.launch_status,
+        "launch_status": launch_status,
     }
     return BackendRuntimeOutcomeReceipt(
         receipt_id=stable_id("backend_runtime_outcome_receipt", payload),
         backend=str(bundle.get("backend", "") or ""),
         outcome_profile=str(summary.get("profile_id", "") or ""),
         outcome_status=str(summary.get("outcome_status", "") or ""),
-        executed=bool(launch_receipt.executed),
+        executed=executed,
         harvested_output_count=int(summary.get("harvested_output_count", 0) or 0),
         artifact_refs=strings(artifact_refs or summary.get("artifact_refs")),
         metadata={
-            "launch_receipt_id": launch_receipt.receipt_id,
-            "launch_status": launch_receipt.launch_status,
+            "launch_receipt_id": launch_receipt_id,
+            "launch_status": launch_status,
+            "harvest_mode": (
+                "external_launch" if launch_receipt is not None else "local_runtime_execution"
+            ),
             "artifact_kind_counts": mapping(summary.get("artifact_kind_counts")),
             "source_summaries": list(summary.get("source_summaries", []) or []),
             "structured_outputs": mapping(summary.get("structured_outputs")),

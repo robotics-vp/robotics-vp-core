@@ -1204,3 +1204,27 @@
   - real Isaac/Unitree upstream runtime, assets, checkpoints, and host setup still need to sit behind the new runtime-pack -> runtime-binding -> adapter ladder
   - real Holosoma host/runtime/motion/retargeting assets still need to sit behind the same ladder
   - GPU-backed GGDS / video materialization is still outside the current host
+
+- Changed: closed the next concrete-runtime evidence gap so local backend execution no longer falls back to launch-shaped truth:
+  - `runtime_outcome_parsers.py` now classifies rollout `trajectory` artifacts as dataset capture surfaces before generic motion-dataset classification, so local runtime rollouts count as trainer/replay-ready dataset evidence
+  - `runtime_outcomes.py` now supports explicit local runtime artifact harvest and can emit `backend_runtime_outcome_receipt_v1` without a launch receipt, with `harvest_mode=local_runtime_execution`
+  - `backend_runtime_execution.py` now harvests policy / metrics / rollout artifacts directly after successful concrete local execution and writes:
+    - `backend_runtime_output_contract.json`
+    - `backend_runtime_output_summary.json`
+    - `backend_runtime_outcome_receipt.json`
+  - this means the concrete local Isaac/Unitree and Holosoma paths now preserve policy / dataset / metrics surface readiness as canonical outcome truth instead of leaving that evidence implicit in runtime-execution metadata
+- Changed: fixed a real fake-readiness bug on the Isaac/Unitree local bridge lane:
+  - `isaac_unitree_runtime_binding.py` now filters out stale upstream-pack/runtime-profile gaps when the selected local `sim_eval` path already has the concrete local requirements it actually needs
+  - `isaac_unitree_executable_adapter.py` now takes binding-selected missing components as primary request truth and only supplements them with still-missing required robot assets or policy state
+  - consequence: a real local Isaac bridge with policy ref + SDK root + asset root is no longer blocked by irrelevant external-pack placeholders before it reaches the backend factory
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_physics_world_model.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`
+  - `git diff --check`
+  - result: `26 passed` and `5 passed`
+- Blocked: the remaining honest Phase 1 backend gap is increasingly external rather than receipt-chain-local:
+  - real Isaac/Unitree upstream runtime/assets/checkpoints still need to sit behind the now-honest local concrete evidence path
+  - real Holosoma host/runtime/motion/policy/retargeting assets still need to sit behind the same path
+  - GPU-backed GGDS / video materialization remains external host/model work

@@ -42,27 +42,75 @@ def _required_surfaces(deployment_mode: str) -> list[str]:
             "runtime_profile_surface",
             "runtime_target_surface",
             "policy_surface",
-            "asset_surface",
         ],
         "teleop_bridge": [
             "runtime_profile_surface",
             "runtime_target_surface",
-            "asset_surface",
         ],
         "lerobot_eval": [
             "runtime_profile_surface",
             "runtime_target_surface",
             "policy_surface",
-            "asset_surface",
         ],
         "physical_deploy": [
             "runtime_profile_surface",
             "runtime_target_surface",
             "policy_surface",
-            "asset_surface",
         ],
     }
     return list(by_mode.get(deployment_mode, by_mode["sim_eval"]))
+
+
+def _local_required_surfaces(deployment_mode: str) -> list[str]:
+    by_mode = {
+        "sim_eval": [
+            "policy_surface",
+        ],
+    }
+    return list(by_mode.get(deployment_mode, by_mode["sim_eval"]))
+
+
+def _relevant_pack_missing_components(
+    *,
+    pack_missing_components: Sequence[str],
+    required_surfaces: Sequence[str],
+    local_runtime_binding: bool,
+    explicit_policy_available: bool,
+    asset_refs_available: bool,
+) -> list[str]:
+    relevant: list[str] = []
+    for item in list(pack_missing_components):
+        if item == "deployment_mode":
+            continue
+        if item == "preferred_runtime_profile" and local_runtime_binding:
+            continue
+        if item == "runtime_targets" and local_runtime_binding:
+            continue
+        if item == "policy_checkpoint" and explicit_policy_available:
+            continue
+        if item == "policy_checkpoint" and "policy_surface" not in required_surfaces:
+            continue
+        if item == "robot_assets":
+            continue
+        relevant.append(str(item))
+    return relevant
+
+
+def _required_target_ids(
+    *,
+    deployment_mode: str,
+    mode_contract: Mapping[str, Any],
+    local_runtime_binding: bool,
+) -> list[str]:
+    if not local_runtime_binding:
+        return strings(mode_contract.get("required_target_ids"))
+    local_by_mode = {
+        "sim_eval": [
+            "unitree_sdk2_root",
+            "unitree_asset_root",
+        ],
+    }
+    return list(local_by_mode.get(deployment_mode, []))
 
 
 def build_isaac_unitree_runtime_binding(
@@ -100,7 +148,14 @@ def build_isaac_unitree_runtime_binding(
     )
     mode_contract = _mode_contract(deployment_contract, deployment_mode)
     pack_ready_surfaces = strings(pack.get("ready_surfaces"))
-    required_surfaces = _required_surfaces(deployment_mode)
+    local_runtime_binding = bool(runtime_target_contract.get("python_bridge_available", False)) and (
+        deployment_mode == "sim_eval"
+    )
+    required_surfaces = (
+        _local_required_surfaces(deployment_mode)
+        if local_runtime_binding
+        else _required_surfaces(deployment_mode)
+    )
     surface_gaps = [surface for surface in required_surfaces if surface not in pack_ready_surfaces]
 
     selected_policy_ref = str(
@@ -123,14 +178,31 @@ def build_isaac_unitree_runtime_binding(
         or ""
     )
     selected_command = str(selected_launch_spec.get("command", "") or "")
-    required_target_ids = strings(mode_contract.get("required_target_ids"))
+    required_target_ids = _required_target_ids(
+        deployment_mode=deployment_mode,
+        mode_contract=mode_contract,
+        local_runtime_binding=local_runtime_binding,
+    )
     selected_target_refs, missing_targets = _target_refs(runtime_target_contract, required_target_ids)
 
-    missing_components = strings(pack.get("missing_components"))
+    selected_asset_refs = mapping(pack.get("asset_refs"))
+    missing_components = _relevant_pack_missing_components(
+        pack_missing_components=strings(pack.get("missing_components")),
+        required_surfaces=required_surfaces,
+        local_runtime_binding=local_runtime_binding,
+        explicit_policy_available=bool(selected_policy_ref),
+        asset_refs_available=bool(selected_asset_refs),
+    )
     for item in strings(mode_contract.get("missing_preconditions")):
+        if item == "runtime_profile" and local_runtime_binding:
+            continue
+        if item == "policy_checkpoint" and selected_policy_ref:
+            continue
         if item not in missing_components:
             missing_components.append(item)
     for item in surface_gaps:
+        if item == "runtime_profile_surface" and local_runtime_binding:
+            continue
         if item not in missing_components:
             missing_components.append(item)
     for item in missing_targets:
@@ -138,9 +210,9 @@ def build_isaac_unitree_runtime_binding(
             missing_components.append(item)
     if "policy_surface" in required_surfaces and not selected_policy_ref and "policy_checkpoint" not in missing_components:
         missing_components.append("policy_checkpoint")
-    if not selected_launch_root and "launch_root" not in missing_components:
+    if not local_runtime_binding and not selected_launch_root and "launch_root" not in missing_components:
         missing_components.append("launch_root")
-    if not selected_command and "launch_command" not in missing_components:
+    if not local_runtime_binding and not selected_command and "launch_command" not in missing_components:
         missing_components.append("launch_command")
 
     binding_status = "binding_ready"
@@ -158,6 +230,7 @@ def build_isaac_unitree_runtime_binding(
         "task_id": task_id,
         "selected_policy_ref": selected_policy_ref,
         "selected_launch_root": selected_launch_root,
+        "local_runtime_binding": local_runtime_binding,
     }
     return {
         "version": "backend_runtime_binding_v1",
@@ -170,7 +243,7 @@ def build_isaac_unitree_runtime_binding(
         "selected_deploy_config": selected_deploy_config,
         "selected_runtime_report": selected_runtime_report,
         "selected_target_refs": selected_target_refs,
-        "selected_asset_refs": mapping(pack.get("asset_refs")),
+        "selected_asset_refs": selected_asset_refs,
         "selected_asset_ids": strings(pack.get("ready_asset_ids")),
         "missing_components": list(dict.fromkeys(missing_components)),
         "pack_status": str(pack.get("pack_status", "") or ""),

@@ -27,6 +27,19 @@ def _classify_artifact(ref: str) -> str:
     suffix = path.suffix.lower()
     lowered = str(path).lower()
     name = path.name.lower()
+    if any(
+        token in lowered
+        for token in (
+            "episode_",
+            "recordings/",
+            "teleop/utils/data",
+            "dataset/",
+            "replay/",
+            "trajectory",
+            "rollout",
+        )
+    ):
+        return "dataset_capture"
     if suffix in POLICY_SUFFIXES:
         return "policy_checkpoint"
     if suffix in ASSET_SUFFIXES:
@@ -37,8 +50,6 @@ def _classify_artifact(ref: str) -> str:
         return "motion_dataset"
     if "teleop/televuer" in lowered and suffix in {".pem", ".key", ".cnf"}:
         return "teleop_cert"
-    if any(token in lowered for token in ("episode_", "recordings/", "teleop/utils/data", "dataset/", "replay/")):
-        return "dataset_capture"
     if "generated/" in lowered:
         return "generated_capture"
     if suffix == ".csv":
