@@ -138,6 +138,15 @@ def build_backend_runtime_work_orders(
     runtime_layout_usable_profiles = strings(
         bridge_metadata.get("runtime_layout_usable_profiles")
     ) or strings(runtime_layout_contract.get("usable_profiles"))
+    runtime_layout_install_ready_profiles = strings(
+        runtime_layout_contract.get("install_ready_profiles")
+    )
+    runtime_layout_install_partial_profiles = strings(
+        runtime_layout_contract.get("install_partial_profiles")
+    )
+    runtime_layout_install_blocked_profiles = strings(
+        runtime_layout_contract.get("install_blocked_profiles")
+    )
     runtime_metadata = {} if runtime_receipt is None else mapping(runtime_receipt.metadata)
     upstream_runtime_pack = mapping(
         runtime_metadata.get("upstream_runtime_pack")
@@ -173,6 +182,9 @@ def build_backend_runtime_work_orders(
             missing_preconditions.append(item)
     outcome_metadata = (
         {} if runtime_outcome_receipt is None else mapping(runtime_outcome_receipt.metadata)
+    )
+    launch_metadata = {} if runtime_receipt is None else mapping(
+        mapping(runtime_metadata.get("launch_receipt")).get("metadata")
     )
     structured_outputs = mapping(outcome_metadata.get("structured_outputs"))
     selected_ref_validation = mapping(outcome_metadata.get("selected_ref_validation"))
@@ -277,6 +289,9 @@ def build_backend_runtime_work_orders(
                 ),
                 "runtime_layout_ready_profiles": runtime_layout_ready_profiles,
                 "runtime_layout_usable_profiles": runtime_layout_usable_profiles,
+                "runtime_layout_install_ready_profiles": runtime_layout_install_ready_profiles,
+                "runtime_layout_install_partial_profiles": runtime_layout_install_partial_profiles,
+                "runtime_layout_install_blocked_profiles": runtime_layout_install_blocked_profiles,
                 "runtime_layout_contract": runtime_layout_contract,
                 "policy_contract": policy_contract,
                 "policy_ready": bool(bridge_metadata.get("policy_ready", False)),
@@ -388,6 +403,12 @@ def build_backend_runtime_work_orders(
                 "runtime_binding_host_preflight_missing_components": strings(
                     runtime_binding.get("host_preflight_missing_components")
                 ),
+                "runtime_binding_host_preflight_ready_components": strings(
+                    runtime_binding.get("host_preflight_ready_components")
+                ),
+                "runtime_binding_host_preflight_verified_components": strings(
+                    runtime_binding.get("host_preflight_verified_components")
+                ),
                 "runtime_binding_host_preflight_symbolic_components": strings(
                     runtime_binding.get("host_preflight_symbolic_components")
                 ),
@@ -396,6 +417,10 @@ def build_backend_runtime_work_orders(
                 ),
                 "runtime_bundle": runtime_metadata.get("runtime_bundle", {}),
                 "launch_spec": launch_spec,
+                "runtime_launch_missing_preconditions": strings(
+                    launch_metadata.get("missing_preconditions")
+                ),
+                "runtime_launch_notes": strings(launch_metadata.get("notes")),
             },
         )
     ]

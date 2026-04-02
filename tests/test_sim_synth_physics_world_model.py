@@ -1018,6 +1018,20 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
     unitree_asset_root = tmp_path / "unitree_assets"
     unitree_asset_root.mkdir()
     (unitree_asset_root / "g1.usd").write_text("x", encoding="utf-8")
+    joint_map_path = unitree_asset_root / "joint_map.yaml"
+    joint_map_path.write_text("{}", encoding="utf-8")
+    camera_extrinsics_path = unitree_asset_root / "camera_extrinsics.json"
+    camera_extrinsics_path.write_text("{}", encoding="utf-8")
+    imu_extrinsics_path = unitree_asset_root / "imu_extrinsics.json"
+    imu_extrinsics_path.write_text("{}", encoding="utf-8")
+    ft_calibration_path = unitree_asset_root / "ft_calibration.json"
+    ft_calibration_path.write_text("{}", encoding="utf-8")
+    latency_profile_path = unitree_asset_root / "latency.yaml"
+    latency_profile_path.write_text("latency_ms: 8\n", encoding="utf-8")
+    joint_limit_profile_path = unitree_asset_root / "joint_limits.yaml"
+    joint_limit_profile_path.write_text("limits: {}\n", encoding="utf-8")
+    watchdog_profile_path = unitree_asset_root / "watchdog.yaml"
+    watchdog_profile_path.write_text("watchdog: {}\n", encoding="utf-8")
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     policy_path = policy_root / "g1_policy.onnx"
@@ -1033,14 +1047,14 @@ def test_runtime_prepares_external_launch_when_runtime_roots_are_ready(
             "isaac_policy_root": str(policy_root),
             "runtime_policy_id": str(policy_path),
             "robot_asset_manifest": {
-                "unitree_usd": "/assets/unitree/g1.usd",
-                "joint_map_path": "/assets/unitree/joint_map.yaml",
-                "camera_extrinsics": "/assets/unitree/camera_extrinsics.json",
-                "imu_extrinsics": "/assets/unitree/imu_extrinsics.json",
-                "force_torque_calibration": "/assets/unitree/ft_calibration.json",
-                "actuator_latency_profile": "/assets/unitree/latency.yaml",
-                "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
-                "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
+                "unitree_usd": str(unitree_asset_root / "g1.usd"),
+                "joint_map_path": str(joint_map_path),
+                "camera_extrinsics": str(camera_extrinsics_path),
+                "imu_extrinsics": str(imu_extrinsics_path),
+                "force_torque_calibration": str(ft_calibration_path),
+                "actuator_latency_profile": str(latency_profile_path),
+                "joint_limit_profile": str(joint_limit_profile_path),
+                "safety_watchdog_profile": str(watchdog_profile_path),
             },
         },
     )
@@ -1137,6 +1151,20 @@ def test_runtime_executes_external_launch_when_requested(
     unitree_asset_root = tmp_path / "unitree_assets"
     unitree_asset_root.mkdir()
     (unitree_asset_root / "g1.usd").write_text("x", encoding="utf-8")
+    joint_map_path = unitree_asset_root / "joint_map.yaml"
+    joint_map_path.write_text("{}", encoding="utf-8")
+    camera_extrinsics_path = unitree_asset_root / "camera_extrinsics.json"
+    camera_extrinsics_path.write_text("{}", encoding="utf-8")
+    imu_extrinsics_path = unitree_asset_root / "imu_extrinsics.json"
+    imu_extrinsics_path.write_text("{}", encoding="utf-8")
+    ft_calibration_path = unitree_asset_root / "ft_calibration.json"
+    ft_calibration_path.write_text("{}", encoding="utf-8")
+    latency_profile_path = unitree_asset_root / "latency.yaml"
+    latency_profile_path.write_text("latency_ms: 8\n", encoding="utf-8")
+    joint_limit_profile_path = unitree_asset_root / "joint_limits.yaml"
+    joint_limit_profile_path.write_text("limits: {}\n", encoding="utf-8")
+    watchdog_profile_path = unitree_asset_root / "watchdog.yaml"
+    watchdog_profile_path.write_text("watchdog: {}\n", encoding="utf-8")
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     policy_path = policy_root / "g1_policy.onnx"
@@ -1152,14 +1180,14 @@ def test_runtime_executes_external_launch_when_requested(
             "isaac_policy_root": str(policy_root),
             "runtime_policy_id": str(policy_path),
             "robot_asset_manifest": {
-                "unitree_usd": "/assets/unitree/g1.usd",
-                "joint_map_path": "/assets/unitree/joint_map.yaml",
-                "camera_extrinsics": "/assets/unitree/camera_extrinsics.json",
-                "imu_extrinsics": "/assets/unitree/imu_extrinsics.json",
-                "force_torque_calibration": "/assets/unitree/ft_calibration.json",
-                "actuator_latency_profile": "/assets/unitree/latency.yaml",
-                "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
-                "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
+                "unitree_usd": str(unitree_asset_root / "g1.usd"),
+                "joint_map_path": str(joint_map_path),
+                "camera_extrinsics": str(camera_extrinsics_path),
+                "imu_extrinsics": str(imu_extrinsics_path),
+                "force_torque_calibration": str(ft_calibration_path),
+                "actuator_latency_profile": str(latency_profile_path),
+                "joint_limit_profile": str(joint_limit_profile_path),
+                "safety_watchdog_profile": str(watchdog_profile_path),
             },
         },
     )

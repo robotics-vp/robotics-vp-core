@@ -135,7 +135,7 @@ def test_prepare_backend_runtime_launch_consumes_non_asset_host_preflight_truth(
 
     assert plan["status"] == "blocked"
     assert "target::unitree_sdk2_root" in plan["missing_preconditions"]
-    assert "asset::unitree_robot_description" not in plan["missing_preconditions"]
+    assert "asset::unitree_robot_description" in plan["missing_preconditions"]
     assert plan["host_preflight_status"] == "preflight_blocked"
 
 

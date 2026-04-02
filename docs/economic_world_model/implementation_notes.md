@@ -2,6 +2,27 @@
 
 ## 2026-04-02
 
+- Finished a late-Phase-1 closure pass over the remaining local/runtime/install honesty seams:
+  - `src/world_model/sim_synth_physics/runtime_launch.py` now blocks launch readiness on `asset::...` host-preflight gaps instead of letting those asset blockers sit only in binding/work-order metadata
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now preserves:
+    - runtime-layout install-ready / install-partial / install-blocked profile groups
+    - host-preflight ready / verified component sets
+    - launch missing preconditions and notes
+  - `src/world_model/sim_synth_physics/training_corpus.py` now preserves the same stronger local truth in backend-selector and branch-planner rows
+- Why this matters:
+  - before this tranche, launch/work-order/training surfaces were not perfectly aligned; a lane could still look cleaner in launch or trainer exports than the runtime binding actually said
+  - after this tranche, blocked local runtime/install/asset truth is consistent across the late Phase-1 path
+  - this was the last meaningful internal pseudo-readiness seam found in the audited closure pass
+
+- Captured the current host reality explicitly:
+  - the repo-root scan says both Isaac/Unitree and Holosoma have zero usable profiles on this host
+  - no relevant runtime env vars are set
+  - no external `isaaclab`, `unitree_sdk2py`, or `holosoma` Python modules are importable
+  - no external Isaac/Unitree/Holosoma runtime roots were found in the common local clone directories the branch audits
+- Why this matters:
+  - the branch can now justify “remaining blockers are external” with an actual host report instead of architectural optimism
+  - the next meaningful move is to install or point at real external runtimes/assets/checkpoints or bring up the GPU-backed materialization lane, not to add another Phase-1 abstraction
+
 - Made `scripts/scan_phase1_runtime_layouts.py` a real repo-root CLI and host-reality summary surface:
   - inserted repo root into `sys.path` before `src.*` imports so the script now runs directly from the workspace root
   - added `scan_summary` compression for both backend lanes

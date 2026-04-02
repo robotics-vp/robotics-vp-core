@@ -2,6 +2,30 @@
 
 ## 2026-04-02
 
+- Changed: finished a late-Phase-1 closure pass over the remaining local/runtime/install honesty seams:
+  - `src/world_model/sim_synth_physics/runtime_launch.py` now treats `asset::...` host-preflight blockers as launch blockers instead of filtering them out
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now preserves:
+    - runtime-layout install-ready / install-partial / install-blocked profiles
+    - host-preflight ready / verified component sets
+    - launch missing preconditions and notes
+  - `src/world_model/sim_synth_physics/training_corpus.py` now preserves the same stronger local evidence in backend-selector and branch-planner rows
+- Why this matters:
+  - before this tranche, the branch could still preserve blocked truth in runtime bindings while letting the launch surface or trainer rows look cleaner than the real host state
+  - now launch, work-order, and training surfaces agree about blocked local runtime/install/asset truth
+  - this closes the last meaningful internal pseudo-readiness seam found in the late Phase-1 audit
+- Host audit summary:
+  - `scripts/scan_phase1_runtime_layouts.py` now reports both backend lanes as blocked on this host
+  - no relevant Isaac/Unitree/Holosoma env vars are set
+  - no external `isaaclab`, `unitree_sdk2py`, or `holosoma` Python modules are importable
+  - no external Isaac/Unitree/Holosoma runtime roots were found in the common local clone directories the branch audits
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, `python3 scripts/scan_phase1_runtime_layouts.py --output-path /tmp/phase1_runtime_scan_final.json`, and `git diff --check` passed (results: `17 passed`, `50 passed`).
+- Status summary:
+  - audited Phase-1 Category A count is now `0` across the closure surfaces touched in this pass
+  - the remaining blocker set is now honestly external on this host:
+    - real Isaac/Unitree installs/assets/checkpoints
+    - real Holosoma runtime/motion/policy/retargeting assets
+    - real GPU-backed GGDS / LDM / video materialization
+
 - Changed: made `scripts/scan_phase1_runtime_layouts.py` a real repo-root Phase-1 host-reality probe instead of a scan that only worked cleanly under pytest import conditions:
   - the script now inserts repo root into `sys.path` before importing `src.*`
   - it now emits `scan_summary` for both Isaac/Unitree and Holosoma lanes, including:

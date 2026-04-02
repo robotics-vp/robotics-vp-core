@@ -138,6 +138,7 @@ Must be true by August 31, 2026:
 
 - sim / synth / physics WM plumbing is structurally real
 - for Phase 1 backend closure, the repo-root host scan must emit explicit local usable-profile / install / preflight truth for Isaac/Unitree and Holosoma instead of leaving Category B runtime reality implicit across many artifacts
+- and that same blocked truth must survive launch, work-order, and trainer-facing exports instead of being softened after the scan/runtime-binding layer
 - perception / grounding WM plumbing is structurally real
 - embodiment / actuation WM plumbing is structurally real enough to start training and later Unitree integration without another contract purge
 - economic-WM ingestion over lower-WM receipts is structurally real

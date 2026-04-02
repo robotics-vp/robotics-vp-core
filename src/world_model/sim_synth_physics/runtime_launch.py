@@ -103,8 +103,6 @@ def prepare_backend_runtime_launch(
         if item not in missing_preconditions:
             missing_preconditions.append(item)
     for item in strings(runtime_binding.get("host_preflight_missing_components")):
-        if str(item).startswith("asset::"):
-            continue
         if item not in missing_preconditions:
             missing_preconditions.append(item)
     host_preflight_status = str(runtime_binding.get("host_preflight_status", "") or "")

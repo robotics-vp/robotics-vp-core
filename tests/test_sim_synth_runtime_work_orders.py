@@ -37,6 +37,9 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
             "runtime_layout_contract": {
                 "ready_profiles": ["unitree_sim_isaaclab"],
                 "usable_profiles": ["unitree_sim_isaaclab"],
+                "install_ready_profiles": ["unitree_sim_isaaclab"],
+                "install_partial_profiles": [],
+                "install_blocked_profiles": ["isaaclab_core"],
             },
             "policy_contract": {
                 "policy_ready": False,
@@ -64,6 +67,8 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
             "runtime_binding": {
                 "host_preflight_status": "preflight_blocked",
                 "host_preflight_missing_components": ["asset::unitree_robot_description"],
+                "host_preflight_ready_components": ["target::unitree_sim_isaaclab_root"],
+                "host_preflight_verified_components": ["target::unitree_sim_isaaclab_root"],
                 "selected_ref_evidence": {
                     "policy_ref": {
                         "verification_status": "symbolic_ref",
@@ -72,6 +77,12 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
             },
             "launch_spec": {
                 "command": "python ${UNITREE_SIM_ISAACLAB_ROOT}/sim_main.py --task peg_in_hole --policy ${POLICY_REF} --headless"
+            },
+            "launch_receipt": {
+                "metadata": {
+                    "missing_preconditions": ["asset::unitree_robot_description"],
+                    "notes": ["Launch blocked until verified robot assets are present."],
+                }
             },
         },
     )
@@ -93,11 +104,26 @@ def test_build_backend_runtime_work_orders_blocks_on_runtime_targets() -> None:
     assert work_orders[0].metadata["runtime_layout_usable_profiles"] == [
         "unitree_sim_isaaclab"
     ]
+    assert work_orders[0].metadata["runtime_layout_install_ready_profiles"] == [
+        "unitree_sim_isaaclab"
+    ]
+    assert work_orders[0].metadata["runtime_layout_install_blocked_profiles"] == [
+        "isaaclab_core"
+    ]
     assert any("sim_main.py" in hint for hint in work_orders[0].command_hints)
     assert work_orders[0].metadata["policy_ready"] is False
     assert work_orders[0].metadata["runtime_binding_selected_deploy_config"] == ""
     assert work_orders[0].metadata["runtime_binding_host_preflight_status"] == "preflight_blocked"
     assert work_orders[0].metadata["runtime_binding_host_preflight_missing_components"] == [
+        "asset::unitree_robot_description"
+    ]
+    assert work_orders[0].metadata["runtime_binding_host_preflight_ready_components"] == [
+        "target::unitree_sim_isaaclab_root"
+    ]
+    assert work_orders[0].metadata["runtime_binding_host_preflight_verified_components"] == [
+        "target::unitree_sim_isaaclab_root"
+    ]
+    assert work_orders[0].metadata["runtime_launch_missing_preconditions"] == [
         "asset::unitree_robot_description"
     ]
     assert work_orders[0].metadata["upstream_runtime_primary_policy_ref"] == ""

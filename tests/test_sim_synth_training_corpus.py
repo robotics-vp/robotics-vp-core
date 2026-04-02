@@ -201,7 +201,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                 "metadata": {
                     "runtime_target_contract": {
                         "missing_required_target_ids": ["unitree_sdk2_root"]
-                    }
+                    },
+                    "runtime_layout_contract": {
+                        "install_ready_profiles": ["unitree_sim_isaaclab"],
+                        "install_partial_profiles": [],
+                        "install_blocked_profiles": ["isaaclab_core"],
+                    },
                 },
                 "version": "backend_runtime_bridge_receipt_v1",
             },
@@ -240,6 +245,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                         "host_preflight_status": "preflight_blocked",
                         "host_preflight_missing_components": [
                             "asset::unitree_robot_description"
+                        ],
+                        "host_preflight_ready_components": [
+                            "target::unitree_sim_isaaclab_root"
+                        ],
+                        "host_preflight_verified_components": [
+                            "target::unitree_sim_isaaclab_root"
                         ],
                         "host_preflight_symbolic_components": ["policy_ref"],
                         "selected_ref_evidence": {
@@ -290,6 +301,10 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                 "executed": True,
                 "command": "python sim_main.py --task peg_in_hole",
                 "cwd": "/tmp/unitree_sim_isaaclab",
+                "metadata": {
+                    "missing_preconditions": ["asset::unitree_robot_description"],
+                    "notes": ["Launch blocked until verified robot assets are present."],
+                },
                 "version": "backend_runtime_launch_receipt_v1",
             },
             indent=2,
@@ -432,9 +447,23 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         == ["asset::unitree_robot_description"]
     )
     assert (
+        backend_rows[0]["metadata"]["backend_runtime_binding_host_preflight_ready_components"]
+        == ["target::unitree_sim_isaaclab_root"]
+    )
+    assert (
+        backend_rows[0]["metadata"]["backend_runtime_binding_host_preflight_verified_components"]
+        == ["target::unitree_sim_isaaclab_root"]
+    )
+    assert (
         backend_rows[0]["metadata"]["backend_runtime_binding_host_preflight_symbolic_components"]
         == ["policy_ref"]
     )
+    assert backend_rows[0]["metadata"]["backend_runtime_layout_install_ready_profiles"] == [
+        "unitree_sim_isaaclab"
+    ]
+    assert backend_rows[0]["metadata"]["backend_runtime_layout_install_blocked_profiles"] == [
+        "isaaclab_core"
+    ]
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_status"] == "external_launch_completed"
     assert backend_rows[0]["metadata"]["backend_runtime_adapter_execution_path"] == "external_launch"
@@ -443,6 +472,9 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
     assert backend_rows[0]["metadata"]["backend_runtime_launch_executed"] is True
+    assert backend_rows[0]["metadata"]["backend_runtime_launch_missing_preconditions"] == [
+        "asset::unitree_robot_description"
+    ]
     assert (
         backend_rows[0]["metadata"]["backend_runtime_outcome_receipt_id"]
         == "runtime_outcome_1"
@@ -489,9 +521,23 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         == ["asset::unitree_robot_description"]
     )
     assert (
+        branch_rows[0]["metadata"]["backend_runtime_binding_host_preflight_ready_components"]
+        == ["target::unitree_sim_isaaclab_root"]
+    )
+    assert (
+        branch_rows[0]["metadata"]["backend_runtime_binding_host_preflight_verified_components"]
+        == ["target::unitree_sim_isaaclab_root"]
+    )
+    assert (
         branch_rows[0]["metadata"]["backend_runtime_binding_host_preflight_symbolic_components"]
         == ["policy_ref"]
     )
+    assert branch_rows[0]["metadata"]["backend_runtime_layout_install_ready_profiles"] == [
+        "unitree_sim_isaaclab"
+    ]
+    assert branch_rows[0]["metadata"]["backend_runtime_layout_install_blocked_profiles"] == [
+        "isaaclab_core"
+    ]
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_status"] == "external_launch_completed"
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_execution_path"] == "external_launch"
@@ -499,6 +545,9 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_realization_status"] == "external_launch_delegate_ready"
     assert branch_rows[0]["metadata"]["backend_runtime_launch_receipt_id"] == "launch_1"
     assert branch_rows[0]["metadata"]["backend_runtime_launch_status"] == "launch_completed"
+    assert branch_rows[0]["metadata"]["backend_runtime_launch_missing_preconditions"] == [
+        "asset::unitree_robot_description"
+    ]
     assert (
         branch_rows[0]["metadata"]["backend_runtime_outcome_receipt_id"]
         == "runtime_outcome_1"

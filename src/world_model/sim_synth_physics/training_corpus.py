@@ -519,6 +519,9 @@ def build_backend_selector_rows_from_receipts(
         backend_runtime_launch_receipt = _mapping(
             bundle_mapping.get("backend_runtime_launch_receipt")
         )
+        backend_runtime_launch_metadata = _mapping(
+            backend_runtime_launch_receipt.get("metadata")
+        )
         backend_runtime_outcome_receipt = _mapping(
             bundle_mapping.get("backend_runtime_outcome_receipt")
         )
@@ -743,6 +746,30 @@ def build_backend_selector_rows_from_receipts(
                         )
                         or []
                     ),
+                    "backend_runtime_layout_install_ready_profiles": list(
+                        _mapping(
+                            _mapping(backend_runtime_bridge_receipt.get("metadata")).get(
+                                "runtime_layout_contract", {}
+                            )
+                        ).get("install_ready_profiles", [])
+                        or []
+                    ),
+                    "backend_runtime_layout_install_partial_profiles": list(
+                        _mapping(
+                            _mapping(backend_runtime_bridge_receipt.get("metadata")).get(
+                                "runtime_layout_contract", {}
+                            )
+                        ).get("install_partial_profiles", [])
+                        or []
+                    ),
+                    "backend_runtime_layout_install_blocked_profiles": list(
+                        _mapping(
+                            _mapping(backend_runtime_bridge_receipt.get("metadata")).get(
+                                "runtime_layout_contract", {}
+                            )
+                        ).get("install_blocked_profiles", [])
+                        or []
+                    ),
                     "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
                         "selected_policy_ref"
                     ),
@@ -780,6 +807,12 @@ def build_backend_selector_rows_from_receipts(
                     "backend_runtime_binding_host_preflight_missing_components": list(
                         backend_runtime_binding.get("host_preflight_missing_components") or []
                     ),
+                    "backend_runtime_binding_host_preflight_ready_components": list(
+                        backend_runtime_binding.get("host_preflight_ready_components") or []
+                    ),
+                    "backend_runtime_binding_host_preflight_verified_components": list(
+                        backend_runtime_binding.get("host_preflight_verified_components") or []
+                    ),
                     "backend_runtime_binding_host_preflight_symbolic_components": list(
                         backend_runtime_binding.get("host_preflight_symbolic_components") or []
                     ),
@@ -816,6 +849,12 @@ def build_backend_selector_rows_from_receipts(
                     "backend_runtime_launch_receipt_id": backend_runtime_launch_receipt.get("receipt_id"),
                     "backend_runtime_launch_status": backend_runtime_launch_receipt.get("launch_status"),
                     "backend_runtime_launch_executed": backend_runtime_launch_receipt.get("executed"),
+                    "backend_runtime_launch_missing_preconditions": list(
+                        backend_runtime_launch_metadata.get("missing_preconditions") or []
+                    ),
+                    "backend_runtime_launch_notes": list(
+                        backend_runtime_launch_metadata.get("notes") or []
+                    ),
                     "backend_runtime_outcome_receipt_id": backend_runtime_outcome_receipt.get("receipt_id"),
                     "backend_runtime_outcome_status": backend_runtime_outcome_receipt.get("outcome_status"),
                     "backend_runtime_output_count": backend_runtime_outcome_receipt.get(
@@ -909,6 +948,9 @@ def build_branch_planner_rows_from_receipts(
         )
         backend_runtime_launch_receipt = _mapping(
             bundle_mapping.get("backend_runtime_launch_receipt")
+        )
+        backend_runtime_launch_metadata = _mapping(
+            backend_runtime_launch_receipt.get("metadata")
         )
         backend_runtime_execution_receipt = _mapping(
             bundle_mapping.get("backend_runtime_execution_receipt")
@@ -1167,6 +1209,30 @@ def build_branch_planner_rows_from_receipts(
                             )
                             or []
                         ),
+                        "backend_runtime_layout_install_ready_profiles": list(
+                            _mapping(
+                                _mapping(backend_runtime_bridge_receipt.get("metadata")).get(
+                                    "runtime_layout_contract", {}
+                                )
+                            ).get("install_ready_profiles", [])
+                            or []
+                        ),
+                        "backend_runtime_layout_install_partial_profiles": list(
+                            _mapping(
+                                _mapping(backend_runtime_bridge_receipt.get("metadata")).get(
+                                    "runtime_layout_contract", {}
+                                )
+                            ).get("install_partial_profiles", [])
+                            or []
+                        ),
+                        "backend_runtime_layout_install_blocked_profiles": list(
+                            _mapping(
+                                _mapping(backend_runtime_bridge_receipt.get("metadata")).get(
+                                    "runtime_layout_contract", {}
+                                )
+                            ).get("install_blocked_profiles", [])
+                            or []
+                        ),
                         "backend_runtime_binding_selected_policy_ref": backend_runtime_binding.get(
                             "selected_policy_ref"
                         ),
@@ -1205,6 +1271,14 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_binding_host_preflight_missing_components": list(
                             backend_runtime_binding.get("host_preflight_missing_components")
+                            or []
+                        ),
+                        "backend_runtime_binding_host_preflight_ready_components": list(
+                            backend_runtime_binding.get("host_preflight_ready_components")
+                            or []
+                        ),
+                        "backend_runtime_binding_host_preflight_verified_components": list(
+                            backend_runtime_binding.get("host_preflight_verified_components")
                             or []
                         ),
                         "backend_runtime_binding_host_preflight_symbolic_components": list(
@@ -1252,6 +1326,13 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_launch_executed": backend_runtime_launch_receipt.get(
                             "executed"
+                        ),
+                        "backend_runtime_launch_missing_preconditions": list(
+                            backend_runtime_launch_metadata.get("missing_preconditions")
+                            or []
+                        ),
+                        "backend_runtime_launch_notes": list(
+                            backend_runtime_launch_metadata.get("notes") or []
                         ),
                         "backend_runtime_outcome_receipt_id": backend_runtime_outcome_receipt.get(
                             "receipt_id"
