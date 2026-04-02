@@ -105,6 +105,10 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
 
     assert world_state.simulation_agenda.jobs[0].skill_edge == "Grasp Handle -> Locate Handle"
     assert world_state.physics_context.backend == "pybullet"
+    assert world_state.physics_execution_contract is not None
+    assert world_state.physics_execution_contract.requested_backend == "pybullet"
+    assert world_state.physics_execution_contract.route_status == "ready"
+    assert world_state.physics_execution_contract.metadata["requested_branch_count"] == 2
     assert world_state.physics_adaptation_policy is not None
     assert world_state.physics_adaptation_policy.domain_randomization_profile
     assert world_state.backend_execution_binding is not None
@@ -121,6 +125,16 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
         plan.source_job_id for plan in world_state.synthetic_branch_plans
     ]
     assert world_state.gen2sim_admission is not None
+    assert (
+        world_state.metadata["compiled_receipt_inventory"]["runtime_depth_projection"][
+            "binding_status"
+        ]
+        == world_state.backend_execution_binding.binding_status
+    )
+    assert (
+        world_state.artifact_refs["physics_execution_contract_id"]
+        == world_state.physics_execution_contract.contract_id
+    )
     assert (
         world_state.simulation_agenda.jobs[0].inferential_learnability_contract["subject_kind"]
         == "sim_synth_job"
@@ -139,12 +153,20 @@ def test_world_state_to_dict_round_trips_core_phase1_state() -> None:
 
     assert round_tripped["state_id"] == world_state.state_id
     assert round_tripped["physics_context"]["backend"] == world_state.physics_context.backend
+    assert (
+        round_tripped["physics_execution_contract"]["contract_id"]
+        == world_state.physics_execution_contract.contract_id
+    )
     assert round_tripped["physics_adaptation_policy"]["policy_id"] == world_state.physics_adaptation_policy.policy_id
     assert round_tripped["backend_execution_binding"]["binding_id"] == world_state.backend_execution_binding.binding_id
     assert round_tripped["robot_asset_contract"]["contract_id"] == world_state.robot_asset_contract.contract_id
     assert round_tripped["backend_runtime_bridge"]["bridge_id"] == world_state.backend_runtime_bridge.bridge_id
     assert round_tripped["gen2sim_admission"]["admission_id"] == world_state.gen2sim_admission.admission_id
     assert round_tripped["diffusion_conditioning"]["conditioning_id"] == world_state.diffusion_conditioning.conditioning_id
+    assert (
+        round_tripped["metadata"]["compiled_receipt_inventory"]["inventory_id"]
+        == world_state.metadata["compiled_receipt_inventory"]["inventory_id"]
+    )
     assert round_tripped["synthetic_branch_plans"]
 
 

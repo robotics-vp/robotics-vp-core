@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 from .agenda import SimulationAgenda
 from .common import clip01, mapping, strings
+from .physics_contracts import PhysicsExecutionContract
 
 
 @dataclass(frozen=True)
@@ -342,6 +343,7 @@ class SimSynthPhysicsWorldState:
     state_id: str
     simulation_agenda: SimulationAgenda
     physics_context: PhysicsContextState
+    physics_execution_contract: Optional[PhysicsExecutionContract] = None
     physics_adaptation_policy: Optional[PhysicsAdaptationPolicyState] = None
     backend_execution_binding: Optional[BackendExecutionBindingState] = None
     robot_asset_contract: Optional[RobotAssetContractState] = None
@@ -359,6 +361,11 @@ class SimSynthPhysicsWorldState:
             "state_id": self.state_id,
             "simulation_agenda": self.simulation_agenda.to_dict(),
             "physics_context": self.physics_context.to_dict(),
+            "physics_execution_contract": (
+                self.physics_execution_contract.to_dict()
+                if self.physics_execution_contract is not None
+                else None
+            ),
             "physics_adaptation_policy": (
                 self.physics_adaptation_policy.to_dict()
                 if self.physics_adaptation_policy is not None

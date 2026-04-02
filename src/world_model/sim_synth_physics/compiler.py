@@ -16,6 +16,7 @@ from .agenda import SimulationAgenda, SimulationJobSpec
 from .asset_contracts import compile_robot_asset_contract
 from .backend_adapters import describe_backend_adapter
 from .backend_bindings import compile_backend_execution_binding
+from .backend_router import build_physics_execution_contract
 from .backend_selector_runtime import resolve_backend_selector_helper
 from .common import clip01, mapping, safe_float, stable_id
 from .inferential import (
@@ -41,6 +42,31 @@ EXPECTED_RECEIPTS = [
     "physics_calibration_receipt",
     "replay_artifact_refs",
     "training_feedback_refs",
+]
+
+COMPILER_OWNED_RECEIPTS = [
+    "physics_execution_contract_v1",
+    "physics_adaptation_receipt_v1",
+    "gen2sim_admission_receipt_v1",
+    "backend_execution_binding_receipt_v1",
+    "robot_asset_contract_receipt_v1",
+    "backend_runtime_bridge_receipt_v1",
+]
+
+RUNTIME_OWNED_RECEIPTS = [
+    "backend_runtime_work_order_receipt_v1",
+    "backend_runtime_execution_receipt_v1",
+    "backend_runtime_adapter_receipt_v1",
+    "backend_runtime_launch_receipt_v1",
+    "backend_runtime_outcome_receipt_v1",
+    "backend_shadow_execution_receipt_v1",
+    "physics_calibration_receipt_v1",
+    "sim_synth_training_feedback_v1",
+]
+
+PER_BRANCH_RECEIPTS = [
+    "render_provider_receipt_v1",
+    "simulation_outcome_receipt_v1",
 ]
 
 
@@ -409,6 +435,154 @@ def _compile_diffusion_conditioning(
     )
 
 
+def _compile_runtime_depth_projection(
+    *,
+    physics_execution_contract: Any,
+    backend_execution_binding: Any,
+    backend_runtime_bridge: Any,
+) -> dict[str, Any]:
+    binding_metadata = (
+        {} if backend_execution_binding is None else mapping(backend_execution_binding.metadata)
+    )
+    bridge_metadata = (
+        {} if backend_runtime_bridge is None else mapping(backend_runtime_bridge.metadata)
+    )
+    runtime_target_contract = mapping(binding_metadata.get("runtime_target_contract"))
+    runtime_layout_contract = mapping(binding_metadata.get("runtime_layout_contract"))
+    policy_contract = mapping(binding_metadata.get("policy_contract"))
+    deployment_contract = mapping(binding_metadata.get("deployment_contract"))
+    upstream_runtime_pack = mapping(binding_metadata.get("upstream_runtime_pack"))
+    ready_modes = [
+        str(mode)
+        for mode in list(deployment_contract.get("ready_modes") or [])
+        if str(mode)
+    ]
+    ready_profiles = [
+        str(profile)
+        for profile in list(
+            bridge_metadata.get("runtime_layout_ready_profiles")
+            or runtime_layout_contract.get("ready_profiles")
+            or []
+        )
+        if str(profile)
+    ]
+    ready_target_ids = [
+        str(target_id)
+        for target_id in list(runtime_target_contract.get("ready_target_ids") or [])
+        if str(target_id)
+    ]
+    missing_target_ids = [
+        str(target_id)
+        for target_id in list(runtime_target_contract.get("missing_required_target_ids") or [])
+        if str(target_id)
+    ]
+    return {
+        "route_status": str(getattr(physics_execution_contract, "route_status", "") or ""),
+        "requested_backend": str(
+            getattr(physics_execution_contract, "requested_backend", "") or ""
+        ),
+        "resolved_backend": str(
+            getattr(physics_execution_contract, "resolved_backend", "") or ""
+        ),
+        "binding_status": (
+            "" if backend_execution_binding is None else str(backend_execution_binding.binding_status)
+        ),
+        "bridge_status": (
+            "" if backend_runtime_bridge is None else str(backend_runtime_bridge.bridge_status)
+        ),
+        "transport_profile": (
+            ""
+            if backend_runtime_bridge is None
+            else str(backend_runtime_bridge.transport_profile)
+        ),
+        "runtime_targets_ready": bool(runtime_target_contract.get("runtime_targets_ready", False)),
+        "ready_runtime_target_ids": ready_target_ids,
+        "missing_runtime_target_ids": missing_target_ids,
+        "runtime_layout_ready_profiles": ready_profiles,
+        "policy_ready": bool(
+            bridge_metadata.get("policy_ready", policy_contract.get("policy_ready", False))
+        ),
+        "deployment_ready_modes": ready_modes,
+        "upstream_runtime_pack_status": str(upstream_runtime_pack.get("pack_status", "") or ""),
+        "upstream_runtime_ready_surfaces": [
+            str(surface)
+            for surface in list(upstream_runtime_pack.get("ready_surfaces") or [])
+            if str(surface)
+        ],
+        "upstream_runtime_missing_components": [
+            str(component)
+            for component in list(upstream_runtime_pack.get("missing_components") or [])
+            if str(component)
+        ],
+        "ladder_surface_versions": {
+            "runtime_target_contract": str(runtime_target_contract.get("version", "") or ""),
+            "runtime_layout_contract": str(runtime_layout_contract.get("version", "") or ""),
+            "policy_contract": str(policy_contract.get("version", "") or ""),
+            "deployment_contract": str(deployment_contract.get("version", "") or ""),
+            "upstream_runtime_pack": str(upstream_runtime_pack.get("version", "") or ""),
+            "backend_runtime_bridge": (
+                ""
+                if backend_runtime_bridge is None
+                else str(backend_runtime_bridge.version)
+            ),
+        },
+    }
+
+
+def _compile_receipt_inventory(
+    *,
+    state_id: str,
+    physics_execution_contract: Any,
+    backend_execution_binding: Any,
+    backend_runtime_bridge: Any,
+    branch_plans: list[SyntheticBranchPlan],
+    gen2sim_admission: Gen2SimAdmissionState,
+    diffusion_conditioning: Optional[DiffusionConditioningState],
+) -> dict[str, Any]:
+    runtime_depth = _compile_runtime_depth_projection(
+        physics_execution_contract=physics_execution_contract,
+        backend_execution_binding=backend_execution_binding,
+        backend_runtime_bridge=backend_runtime_bridge,
+    )
+    inventory_payload = {
+        "state_id": state_id,
+        "physics_execution_contract_id": str(
+            getattr(physics_execution_contract, "contract_id", "") or ""
+        ),
+        "binding_status": str(runtime_depth.get("binding_status", "") or ""),
+        "bridge_status": str(runtime_depth.get("bridge_status", "") or ""),
+        "resolved_backend": str(runtime_depth.get("resolved_backend", "") or ""),
+    }
+    return {
+        "version": "sim_synth_compiled_receipt_inventory_v1",
+        "inventory_id": stable_id("sim_synth_compiled_receipt_inventory", inventory_payload),
+        "compiler_owned_receipts": list(COMPILER_OWNED_RECEIPTS),
+        "runtime_owned_receipts": list(RUNTIME_OWNED_RECEIPTS),
+        "per_branch_receipts": list(PER_BRANCH_RECEIPTS),
+        "state_artifacts": {
+            "physics_execution_contract_id": str(
+                getattr(physics_execution_contract, "contract_id", "") or ""
+            ),
+            "backend_execution_binding_id": (
+                "" if backend_execution_binding is None else str(backend_execution_binding.binding_id)
+            ),
+            "backend_runtime_bridge_id": (
+                "" if backend_runtime_bridge is None else str(backend_runtime_bridge.bridge_id)
+            ),
+            "admission_id": str(getattr(gen2sim_admission, "admission_id", "") or ""),
+            "diffusion_conditioning_id": (
+                ""
+                if diffusion_conditioning is None
+                else str(diffusion_conditioning.conditioning_id)
+            ),
+        },
+        "branch_plan_count": len(branch_plans),
+        "admissible_branch_count": len(gen2sim_admission.admissible_branch_ids),
+        "blocked_branch_count": len(gen2sim_admission.blocked_branch_ids),
+        "runtime_depth_projection": runtime_depth,
+    }
+
+
 def compile_sim_synth_physics_world_state(
     coverage_graph: Any,
     *,
@@ -428,6 +602,7 @@ def compile_sim_synth_physics_world_state(
     backend_selector_mode: HelperMode = "auto",
     branch_planner: Any = None,
     branch_planner_mode: HelperMode = "auto",
+    fallback_backend: str | None = None,
 ) -> SimSynthPhysicsWorldState:
     """Compile the canonical sim/synth/physics WM state for one planning window."""
 
@@ -544,7 +719,7 @@ def compile_sim_synth_physics_world_state(
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
         "admission_id": gen2sim_admission.admission_id,
     }
-    return SimSynthPhysicsWorldState(
+    provisional_world_state = SimSynthPhysicsWorldState(
         state_id=stable_id("sim_synth_physics", state_payload),
         simulation_agenda=agenda,
         physics_context=physics_context,
@@ -573,4 +748,38 @@ def compile_sim_synth_physics_world_state(
                 [plan.inferential_learnability_contract for plan in branch_plans]
             ),
         },
+    )
+    physics_execution_contract = build_physics_execution_contract(
+        provisional_world_state,
+        fallback_backend=str(fallback_backend or default_backend),
+    )
+    compiled_receipt_inventory = _compile_receipt_inventory(
+        state_id=provisional_world_state.state_id,
+        physics_execution_contract=physics_execution_contract,
+        backend_execution_binding=backend_execution_binding,
+        backend_runtime_bridge=backend_runtime_bridge,
+        branch_plans=branch_plans,
+        gen2sim_admission=gen2sim_admission,
+        diffusion_conditioning=diffusion_conditioning,
+    )
+    final_artifact_refs = dict(provisional_world_state.artifact_refs)
+    final_artifact_refs["physics_execution_contract_id"] = physics_execution_contract.contract_id
+    final_artifact_refs["compiled_receipt_inventory_id"] = str(
+        compiled_receipt_inventory.get("inventory_id", "") or ""
+    )
+    final_metadata = dict(provisional_world_state.metadata)
+    final_metadata["compiled_receipt_inventory"] = compiled_receipt_inventory
+    final_metadata["runtime_depth_projection"] = mapping(
+        compiled_receipt_inventory.get("runtime_depth_projection")
+    )
+    final_metadata["phase1_compiler_closure"] = {
+        "physics_execution_contract_compiled": True,
+        "runtime_depth_projected_in_compiler": True,
+        "fallback_backend": str(fallback_backend or default_backend),
+    }
+    return replace(
+        provisional_world_state,
+        physics_execution_contract=physics_execution_contract,
+        artifact_refs=final_artifact_refs,
+        metadata=final_metadata,
     )

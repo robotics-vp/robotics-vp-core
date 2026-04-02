@@ -136,6 +136,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "receipt_bundle",
             "sim_synth",
             "world_state",
+            "physics_execution_contract",
             "physics_adaptation_receipt",
             "backend_execution_binding_receipt",
             "robot_asset_contract_receipt",
@@ -157,6 +158,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
 
 def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_world_states: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_execution_contracts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_adaptations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_bindings: dict[Path, list[Dict[str, Any]]] = {}
     grouped_asset_contracts: dict[Path, list[Dict[str, Any]]] = {}
@@ -195,6 +197,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
             parent = path.parent.resolve()
             if version == "sim_synth_physics_world_state_v1":
                 grouped_world_states.setdefault(parent, []).append(dict(payload))
+            elif version == "physics_execution_contract_v1":
+                grouped_execution_contracts.setdefault(parent, []).append(dict(payload))
             elif version == "physics_adaptation_receipt_v1":
                 grouped_adaptations.setdefault(parent, []).append(dict(payload))
             elif version == "backend_execution_binding_receipt_v1":
@@ -225,6 +229,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     bundles: list[Dict[str, Any]] = list(explicit_bundles)
     all_dirs = sorted(
         set(grouped_world_states)
+        | set(grouped_execution_contracts)
         | set(grouped_adaptations)
         | set(grouped_backend_bindings)
         | set(grouped_asset_contracts)
@@ -241,6 +246,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     )
     for directory in all_dirs:
         world_states = grouped_world_states.get(directory, [])
+        execution_contracts = grouped_execution_contracts.get(directory, [])
         adaptations = grouped_adaptations.get(directory, [])
         backend_bindings = grouped_backend_bindings.get(directory, [])
         asset_contracts = grouped_asset_contracts.get(directory, [])
@@ -261,6 +267,12 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 "bundle_id": str(world_state.get("state_id", "")) or directory.name,
                 "world_state": dict(world_state),
             }
+            if execution_contracts:
+                bundle["physics_execution_contract"] = dict(execution_contracts[-1])
+            elif isinstance(world_state.get("physics_execution_contract"), Mapping):
+                bundle["physics_execution_contract"] = dict(
+                    _mapping(world_state.get("physics_execution_contract"))
+                )
             if adaptations:
                 bundle["physics_adaptation_receipt"] = dict(adaptations[-1])
             if backend_bindings:
@@ -304,6 +316,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         for payload in rows
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "sim_synth_physics_world_state_v1"
+    ]
+    execution_contracts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "physics_execution_contract_v1"
     ]
     adaptations = [
         dict(payload)
@@ -389,6 +407,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             "bundle_id": str(world_state.get("state_id", "")) or parent.name,
             "world_state": world_state,
         }
+        if execution_contracts:
+            bundle["physics_execution_contract"] = execution_contracts[-1]
+        elif isinstance(world_state.get("physics_execution_contract"), Mapping):
+            bundle["physics_execution_contract"] = _mapping(
+                world_state.get("physics_execution_contract")
+            )
         if adaptations:
             bundle["physics_adaptation_receipt"] = adaptations[-1]
         if backend_bindings:
@@ -431,6 +455,18 @@ def build_backend_selector_rows_from_receipts(
         agenda = _mapping(world_state.get("simulation_agenda"))
         jobs = _mapping_list(agenda.get("jobs"))
         physics_context = _mapping(world_state.get("physics_context"))
+        physics_execution_contract = _mapping(
+            bundle_mapping.get("physics_execution_contract")
+            or world_state.get("physics_execution_contract")
+        )
+        world_state_metadata = _mapping(world_state.get("metadata"))
+        compiled_receipt_inventory = _mapping(
+            world_state_metadata.get("compiled_receipt_inventory")
+        )
+        runtime_depth_projection = _mapping(
+            world_state_metadata.get("runtime_depth_projection")
+            or compiled_receipt_inventory.get("runtime_depth_projection")
+        )
         if not jobs or not physics_context:
             continue
         physics_metadata = _mapping(physics_context.get("metadata"))
@@ -562,6 +598,16 @@ def build_backend_selector_rows_from_receipts(
                 "metadata": {
                     "bundle_index": bundle_index,
                     "world_state_id": world_state.get("state_id"),
+                    "physics_execution_contract_id": physics_execution_contract.get("contract_id"),
+                    "physics_route_status": physics_execution_contract.get("route_status"),
+                    "physics_requested_backend": physics_execution_contract.get("requested_backend"),
+                    "physics_resolved_backend": physics_execution_contract.get("resolved_backend"),
+                    "compiled_receipt_inventory_id": compiled_receipt_inventory.get("inventory_id"),
+                    "compiled_runtime_binding_status": runtime_depth_projection.get("binding_status"),
+                    "compiled_runtime_bridge_status": runtime_depth_projection.get("bridge_status"),
+                    "compiled_runtime_pack_status": runtime_depth_projection.get(
+                        "upstream_runtime_pack_status"
+                    ),
                     "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                     "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
                     "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(
@@ -688,6 +734,18 @@ def build_branch_planner_rows_from_receipts(
             if str(job.get("job_id"))
         }
         physics_context = _mapping(world_state.get("physics_context"))
+        physics_execution_contract = _mapping(
+            bundle_mapping.get("physics_execution_contract")
+            or world_state.get("physics_execution_contract")
+        )
+        world_state_metadata = _mapping(world_state.get("metadata"))
+        compiled_receipt_inventory = _mapping(
+            world_state_metadata.get("compiled_receipt_inventory")
+        )
+        runtime_depth_projection = _mapping(
+            world_state_metadata.get("runtime_depth_projection")
+            or compiled_receipt_inventory.get("runtime_depth_projection")
+        )
         if not jobs or not physics_context:
             continue
         benchmark_signals = _mapping(
@@ -828,6 +886,28 @@ def build_branch_planner_rows_from_receipts(
                     "metadata": {
                         "bundle_index": bundle_index,
                         "world_state_id": world_state.get("state_id"),
+                        "physics_execution_contract_id": physics_execution_contract.get(
+                            "contract_id"
+                        ),
+                        "physics_route_status": physics_execution_contract.get("route_status"),
+                        "physics_requested_backend": physics_execution_contract.get(
+                            "requested_backend"
+                        ),
+                        "physics_resolved_backend": physics_execution_contract.get(
+                            "resolved_backend"
+                        ),
+                        "compiled_receipt_inventory_id": compiled_receipt_inventory.get(
+                            "inventory_id"
+                        ),
+                        "compiled_runtime_binding_status": runtime_depth_projection.get(
+                            "binding_status"
+                        ),
+                        "compiled_runtime_bridge_status": runtime_depth_projection.get(
+                            "bridge_status"
+                        ),
+                        "compiled_runtime_pack_status": runtime_depth_projection.get(
+                            "upstream_runtime_pack_status"
+                        ),
                         "branch_plan_id": plan_id,
                         "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                         "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),

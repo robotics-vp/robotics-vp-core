@@ -771,6 +771,7 @@ class SimSynthPhysicsRuntime:
             backend_selector_mode=self.config.backend_selector_mode,
             branch_planner=branch_planner,
             branch_planner_mode=self.config.branch_planner_mode,
+            fallback_backend=self.config.fallback_backend,
         )
 
     def compile_legacy_agenda(
@@ -848,7 +849,7 @@ class SimSynthPhysicsRuntime:
         external_launch_cwd: str | Path | None = None,
     ) -> SimSynthPhysicsLoopResult:
         artifact_paths = _artifact_paths(output_dir) if output_dir is not None else {}
-        execution_contract = build_physics_execution_contract(
+        execution_contract = world_state.physics_execution_contract or build_physics_execution_contract(
             world_state,
             fallback_backend=self.config.fallback_backend,
         )

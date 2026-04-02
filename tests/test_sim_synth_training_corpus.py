@@ -17,8 +17,49 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                 "state_id": "sim_state_1",
                 "simulation_agenda": {"jobs": [{"job_id": "job_1"}]},
                 "physics_context": {"backend": "pybullet", "metadata": {}},
+                "physics_execution_contract": {
+                    "contract_id": "contract_1",
+                    "requested_backend": "pybullet",
+                    "resolved_backend": "isaac",
+                    "fidelity_tier": "high_fidelity",
+                    "domain_randomization_regime": "benchmark_focus",
+                    "calibration_profile": "shadow_replay",
+                    "backend_selection_policy": "heuristic_plus_learned_backend_selector",
+                    "adapter_name": "workcell_isaaclab",
+                    "route_status": "fallback",
+                    "version": "physics_execution_contract_v1",
+                },
                 "synthetic_branch_plans": [{"plan_id": "plan_1", "source_job_id": "job_1"}],
+                "metadata": {
+                    "compiled_receipt_inventory": {
+                        "inventory_id": "inventory_1",
+                        "runtime_depth_projection": {
+                            "binding_status": "assets_missing",
+                            "bridge_status": "runtime_targets_missing",
+                            "upstream_runtime_pack_status": "pack_partial",
+                        },
+                    }
+                },
                 "version": "sim_synth_physics_world_state_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (receipt_dir / "episode_physics_execution_contract_v1.json").write_text(
+        json.dumps(
+            {
+                "contract_id": "contract_1",
+                "requested_backend": "pybullet",
+                "resolved_backend": "isaac",
+                "fidelity_tier": "high_fidelity",
+                "domain_randomization_regime": "benchmark_focus",
+                "calibration_profile": "shadow_replay",
+                "backend_selection_policy": "heuristic_plus_learned_backend_selector",
+                "adapter_name": "workcell_isaaclab",
+                "route_status": "fallback",
+                "version": "physics_execution_contract_v1",
             },
             indent=2,
             sort_keys=True,
@@ -292,6 +333,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
 
     assert len(bundles) == 1
     assert bundles[0]["world_state"]["state_id"] == "sim_state_1"
+    assert bundles[0]["physics_execution_contract"]["contract_id"] == "contract_1"
     assert bundles[0]["physics_adaptation_receipt"]["receipt_id"] == "adapt_1"
     assert bundles[0]["backend_execution_binding_receipt"]["receipt_id"] == "binding_1"
     assert bundles[0]["robot_asset_contract_receipt"]["receipt_id"] == "asset_1"
@@ -311,6 +353,14 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["target_system_identification_profile"] == "humanoid_shadow_system_id"
     assert backend_rows[0]["target_source"] == "runtime_receipt"
     assert backend_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
+    assert backend_rows[0]["metadata"]["physics_execution_contract_id"] == "contract_1"
+    assert backend_rows[0]["metadata"]["physics_route_status"] == "fallback"
+    assert backend_rows[0]["metadata"]["compiled_receipt_inventory_id"] == "inventory_1"
+    assert backend_rows[0]["metadata"]["compiled_runtime_binding_status"] == "assets_missing"
+    assert (
+        backend_rows[0]["metadata"]["compiled_runtime_bridge_status"]
+        == "runtime_targets_missing"
+    )
     assert backend_rows[0]["metadata"]["robot_asset_readiness_score"] == 0.25
     assert backend_rows[0]["metadata"]["robot_asset_missing_assets"] == [
         "unitree_robot_description",
@@ -362,6 +412,14 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["target_render_materialization_status"] == "scene_materialized"
     assert branch_rows[0]["target_render_materialization_mode"] == "scene_config"
     assert branch_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
+    assert branch_rows[0]["metadata"]["physics_execution_contract_id"] == "contract_1"
+    assert branch_rows[0]["metadata"]["physics_route_status"] == "fallback"
+    assert branch_rows[0]["metadata"]["compiled_receipt_inventory_id"] == "inventory_1"
+    assert branch_rows[0]["metadata"]["compiled_runtime_binding_status"] == "assets_missing"
+    assert (
+        branch_rows[0]["metadata"]["compiled_runtime_bridge_status"]
+        == "runtime_targets_missing"
+    )
     assert branch_rows[0]["metadata"]["robot_asset_readiness_score"] == 0.25
     assert branch_rows[0]["metadata"]["adaptation_receipt_id"] == "adapt_1"
     assert branch_rows[0]["metadata"]["gen2sim_admission_receipt_id"] == "gen2sim_1"
