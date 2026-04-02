@@ -2550,3 +2550,13 @@
     - real local Isaac/Unitree installs/assets/checkpoints
     - real local Holosoma runtime/motion/policy/retargeting assets
     - real GPU-backed materialization
+
+- Non-GPU host-consumption pass:
+  - Public Isaac/Unitree and Holosoma repos are now present under `/Users/amarmurray/code`, and the existing Phase-1 scan path is consuming them as real local evidence instead of treating this host as empty.
+  - The Holosoma lane had a real internal incompleteness: motion, policy, and retargeting surfaces existed inside a real local repo, but the branch only knew how to consume them if they were restated as separate top-level roots. That is now fixed by deriving those subroots directly from the repo when present.
+  - Holosoma policy selection also had a real false-readiness seam: generic `**/*.pt` matching could select retargeting demo artifacts as runtime policy. The candidate patterns now prefer actual model/checkpoint surfaces instead.
+  - The Isaac lane exposed a second internal issue once public local clones existed: autodiscovery could outrank an explicit caller-provided runtime profile. Deployment selection, runtime-bundle selection, and runtime-bridge transport selection now keep explicit context authoritative while still preserving autodiscovered evidence.
+  - The host scan now demonstrates a useful non-GPU split:
+    - Isaac/Unitree: real runtime roots, real target roots, real policy/runtime-report refs, still blocked on concrete asset-manifest/calibration/watchdog surfaces
+    - Holosoma: repo-local runtime/model/motion/retargeting surfaces now materially visible and `host_preflight_ready`
+  - This means Phase 1 can still progress without a GPU whenever real runtime roots/assets/checkpoints arrive; the GPU is now more clearly the bottleneck for actual execution/materialization, not for local evidence consumption.
