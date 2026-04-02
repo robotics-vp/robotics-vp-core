@@ -13,7 +13,14 @@ from src.motor_backend.holosoma_backend import HOLOSOMA_TASK_MAP
 
 from .common import mapping
 from .physics_contracts import PhysicsExecutionContract
-from .receipts import BackendExecutionBindingReceipt, BackendShadowExecutionReceipt
+from .receipts import (
+    BackendExecutionBindingReceipt,
+    BackendRuntimeAdapterReceipt,
+    BackendRuntimeExecutionReceipt,
+    BackendRuntimeLaunchReceipt,
+    BackendRuntimeOutcomeReceipt,
+    BackendShadowExecutionReceipt,
+)
 from .state import SimSynthPhysicsWorldState
 
 
@@ -40,6 +47,130 @@ def _has_module(name: str) -> bool:
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _runtime_ladder_metadata(
+    *,
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+    backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt],
+    backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt],
+    backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
+) -> dict[str, Any]:
+    execution_metadata = _mapping(
+        {}
+        if backend_runtime_execution_receipt is None
+        else backend_runtime_execution_receipt.metadata
+    )
+    runtime_bundle = _mapping(execution_metadata.get("runtime_bundle"))
+    runtime_binding = _mapping(
+        execution_metadata.get("runtime_binding") or runtime_bundle.get("runtime_binding")
+    )
+    adapter_metadata = _mapping(
+        {}
+        if backend_runtime_adapter_receipt is None
+        else backend_runtime_adapter_receipt.metadata
+    )
+    adapter_realization = _mapping(adapter_metadata.get("realization"))
+    local_adapter_invocation = _mapping(adapter_metadata.get("local_adapter_invocation"))
+    local_adapter_result = _mapping(adapter_metadata.get("local_adapter_result"))
+    outcome_metadata = _mapping(
+        {}
+        if backend_runtime_outcome_receipt is None
+        else backend_runtime_outcome_receipt.metadata
+    )
+    structured_outputs = _mapping(outcome_metadata.get("structured_outputs"))
+    return {
+        "backend_runtime_execution_receipt_id": (
+            ""
+            if backend_runtime_execution_receipt is None
+            else backend_runtime_execution_receipt.receipt_id
+        ),
+        "backend_runtime_execution_status": (
+            ""
+            if backend_runtime_execution_receipt is None
+            else backend_runtime_execution_receipt.execution_status
+        ),
+        "backend_runtime_adapter_receipt_id": (
+            ""
+            if backend_runtime_adapter_receipt is None
+            else backend_runtime_adapter_receipt.receipt_id
+        ),
+        "backend_runtime_adapter_status": (
+            ""
+            if backend_runtime_adapter_receipt is None
+            else backend_runtime_adapter_receipt.adapter_status
+        ),
+        "backend_runtime_adapter_execution_path": (
+            ""
+            if backend_runtime_adapter_receipt is None
+            else backend_runtime_adapter_receipt.execution_path
+        ),
+        "backend_runtime_adapter_realization_path": str(
+            adapter_realization.get("realization_path", "") or ""
+        ),
+        "backend_runtime_adapter_realization_status": str(
+            adapter_realization.get("realization_status", "") or ""
+        ),
+        "backend_runtime_local_adapter_invocation_status": str(
+            local_adapter_invocation.get("invocation_status", "") or ""
+        ),
+        "backend_runtime_local_adapter_result_status": str(
+            local_adapter_result.get("result_status", "") or ""
+        ),
+        "backend_runtime_launch_receipt_id": (
+            ""
+            if backend_runtime_launch_receipt is None
+            else backend_runtime_launch_receipt.receipt_id
+        ),
+        "backend_runtime_launch_status": (
+            ""
+            if backend_runtime_launch_receipt is None
+            else backend_runtime_launch_receipt.launch_status
+        ),
+        "backend_runtime_launch_executed": (
+            False
+            if backend_runtime_launch_receipt is None
+            else bool(backend_runtime_launch_receipt.executed)
+        ),
+        "backend_runtime_outcome_receipt_id": (
+            ""
+            if backend_runtime_outcome_receipt is None
+            else backend_runtime_outcome_receipt.receipt_id
+        ),
+        "backend_runtime_outcome_status": (
+            ""
+            if backend_runtime_outcome_receipt is None
+            else backend_runtime_outcome_receipt.outcome_status
+        ),
+        "backend_runtime_output_count": (
+            0
+            if backend_runtime_outcome_receipt is None
+            else int(backend_runtime_outcome_receipt.harvested_output_count)
+        ),
+        "backend_runtime_ready_surfaces": list(structured_outputs.get("ready_surfaces") or []),
+        "backend_runtime_binding": runtime_binding,
+        "backend_runtime_binding_status": str(runtime_binding.get("binding_status", "") or ""),
+        "backend_runtime_binding_selected_profile": str(
+            runtime_binding.get("selected_profile", "") or ""
+        ),
+        "backend_runtime_binding_selected_policy_ref": str(
+            runtime_binding.get("selected_policy_ref", "") or ""
+        ),
+        "backend_runtime_binding_selected_launch_root": str(
+            runtime_binding.get("selected_launch_root", "") or ""
+        ),
+        "backend_runtime_binding_missing_components": list(
+            runtime_binding.get("missing_components") or []
+        ),
+        "runtime_ladder_threaded": any(
+            [
+                backend_runtime_execution_receipt is not None,
+                backend_runtime_adapter_receipt is not None,
+                backend_runtime_launch_receipt is not None,
+                backend_runtime_outcome_receipt is not None,
+            ]
+        ),
+    }
 
 
 def _materialize_robot_asset_sidecars(
@@ -243,6 +374,10 @@ def _materialize_isaac_shadow_execution(
     execution_contract: PhysicsExecutionContract,
     backend_binding_receipt: BackendExecutionBindingReceipt,
     *,
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+    backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt],
+    backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt],
+    backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     output_root: Optional[Path],
 ) -> BackendShadowExecutionReceipt:
     asset_sidecar_refs, asset_summary = _materialize_robot_asset_sidecars(
@@ -269,6 +404,12 @@ def _materialize_isaac_shadow_execution(
     )
     batch_summary_path = (
         None if output_root is None else output_root / "backend_shadow_batch_summary.json"
+    )
+    runtime_ladder_metadata = _runtime_ladder_metadata(
+        backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+        backend_runtime_adapter_receipt=backend_runtime_adapter_receipt,
+        backend_runtime_launch_receipt=backend_runtime_launch_receipt,
+        backend_runtime_outcome_receipt=backend_runtime_outcome_receipt,
     )
 
     try:
@@ -320,6 +461,7 @@ def _materialize_isaac_shadow_execution(
             artifact_refs.append(str(batch_summary_path.resolve()))
     finally:
         backend.close()
+    shadow_harvest_mode = "shadow_with_data_harvest" if episode_ids else "shadow_only_preview"
 
     receipt = BackendShadowExecutionReceipt(
         receipt_id=f"backend_shadow_execution_receipt_{world_state.state_id}",
@@ -351,7 +493,9 @@ def _materialize_isaac_shadow_execution(
             "observation_contracts": list(asset_summary.get("observation_contracts", [])),
             "action_contracts": list(asset_summary.get("action_contracts", [])),
             "asset_readiness_score": float(asset_summary.get("asset_readiness_score", 0.0) or 0.0),
+            "shadow_harvest_mode": shadow_harvest_mode,
             "env_config": mapping(env_config),
+            **runtime_ladder_metadata,
         },
     )
     if summary_path is not None:
@@ -364,6 +508,10 @@ def _materialize_holosoma_shadow_execution(
     execution_contract: PhysicsExecutionContract,
     backend_binding_receipt: BackendExecutionBindingReceipt,
     *,
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+    backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt],
+    backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt],
+    backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     output_root: Optional[Path],
 ) -> BackendShadowExecutionReceipt:
     asset_sidecar_refs, asset_summary = _materialize_robot_asset_sidecars(
@@ -400,6 +548,12 @@ def _materialize_holosoma_shadow_execution(
             },
         )
         artifact_refs.append(str(work_order_path.resolve()))
+    runtime_ladder_metadata = _runtime_ladder_metadata(
+        backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+        backend_runtime_adapter_receipt=backend_runtime_adapter_receipt,
+        backend_runtime_launch_receipt=backend_runtime_launch_receipt,
+        backend_runtime_outcome_receipt=backend_runtime_outcome_receipt,
+    )
 
     execution_status = (
         "shadow_work_order_materialized"
@@ -436,7 +590,9 @@ def _materialize_holosoma_shadow_execution(
             "observation_contracts": list(asset_summary.get("observation_contracts", [])),
             "action_contracts": list(asset_summary.get("action_contracts", [])),
             "asset_readiness_score": float(asset_summary.get("asset_readiness_score", 0.0) or 0.0),
+            "shadow_harvest_mode": "shadow_only_preview",
             "work_order": mapping(work_order),
+            **runtime_ladder_metadata,
         },
     )
     if summary_path is not None:
@@ -449,6 +605,10 @@ def materialize_backend_shadow_execution(
     execution_contract: PhysicsExecutionContract,
     backend_binding_receipt: BackendExecutionBindingReceipt,
     *,
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt] = None,
+    backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt] = None,
+    backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt] = None,
+    backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt] = None,
     output_dir: str | Path | None = None,
 ) -> BackendShadowExecutionReceipt | None:
     """Run an explicit WM-owned shadow execution where a concrete backend is absent."""
@@ -462,6 +622,10 @@ def materialize_backend_shadow_execution(
             world_state,
             execution_contract,
             backend_binding_receipt,
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_adapter_receipt=backend_runtime_adapter_receipt,
+            backend_runtime_launch_receipt=backend_runtime_launch_receipt,
+            backend_runtime_outcome_receipt=backend_runtime_outcome_receipt,
             output_root=output_root,
         )
     if str(binding.backend) == "holosoma":
@@ -469,6 +633,10 @@ def materialize_backend_shadow_execution(
             world_state,
             execution_contract,
             backend_binding_receipt,
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_adapter_receipt=backend_runtime_adapter_receipt,
+            backend_runtime_launch_receipt=backend_runtime_launch_receipt,
+            backend_runtime_outcome_receipt=backend_runtime_outcome_receipt,
             output_root=output_root,
         )
     return None

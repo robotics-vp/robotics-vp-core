@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any, Mapping, Optional, Sequence
 
 import numpy as np
@@ -13,6 +14,7 @@ from src.economics.inferential_contract import (
 from src.evidence.gen2sim_validity import assess_gen2sim_validity
 
 from .common import clip01, mapping, safe_float, stable_id
+from .receipts import Gen2SimAdmissionReceipt
 from .state import Gen2SimAdmissionState, SyntheticBranchPlan
 
 
@@ -21,6 +23,7 @@ def compile_gen2sim_admission_state(
     jobs: Sequence[Any],
     *,
     benchmark_signals: Mapping[str, Any],
+    robot_asset_contract: Any | None = None,
 ) -> Gen2SimAdmissionState:
     benchmark_payload = mapping(benchmark_signals)
     benchmark_gate_ready = bool(
@@ -87,6 +90,20 @@ def compile_gen2sim_admission_state(
         f"{len(blocked_branch_ids)} blocked by benchmark, grounding, or inferential preconditions."
     )
     inferential_summary = summarize_inferential_learnability_contracts(contracts)
+    asset_metadata = {}
+    if robot_asset_contract is not None:
+        asset_metadata = {
+            "robot_asset_contract_id": str(getattr(robot_asset_contract, "contract_id", "") or ""),
+            "asset_profile": str(getattr(robot_asset_contract, "asset_profile", "") or ""),
+            "target_hardware_class": str(
+                getattr(robot_asset_contract, "target_hardware_class", "") or ""
+            ),
+            "asset_readiness_score": safe_float(
+                getattr(robot_asset_contract, "metadata", {}).get("asset_readiness_score", 0.0),
+                0.0,
+            ),
+            "missing_assets": list(getattr(robot_asset_contract, "missing_assets", []) or []),
+        }
     return Gen2SimAdmissionState(
         admission_id=stable_id(
             "gen2sim_admission",
@@ -109,7 +126,103 @@ def compile_gen2sim_admission_state(
                 **{plan_id: score for plan_id, score in admissible_rows},
                 **{plan_id: score for plan_id, score in blocked_rows},
             },
+            "robot_asset_contract": asset_metadata,
         },
+    )
+
+
+def _helper_stage_counts(branch_plans: Sequence[SyntheticBranchPlan]) -> dict[str, int]:
+    counter: Counter[str] = Counter()
+    for plan in branch_plans:
+        helper_status = mapping(getattr(plan, "metadata", {}).get("branch_helper_status"))
+        counter[str(helper_status.get("promotion_stage", "") or "heuristic_fallback")] += 1
+    return dict(counter)
+
+
+def _render_provider_counts(branch_plans: Sequence[SyntheticBranchPlan]) -> dict[str, int]:
+    counter: Counter[str] = Counter()
+    for plan in branch_plans:
+        provider = getattr(plan, "render_provider", None)
+        provider_kind = "" if provider is None else str(getattr(provider, "provider_kind", "") or "")
+        counter[provider_kind or "unknown"] += 1
+    return dict(counter)
+
+
+def build_gen2sim_admission_receipt(
+    admission_state: Gen2SimAdmissionState,
+    branch_plans: Sequence[SyntheticBranchPlan],
+    jobs: Sequence[Any],
+) -> Gen2SimAdmissionReceipt:
+    """Build a typed receipt for the compiled gen2sim admission decision."""
+
+    job_by_id = {str(getattr(job, "job_id", "") or ""): job for job in jobs}
+    branch_by_id = {str(plan.plan_id): plan for plan in branch_plans}
+    admissible_branch_ids = list(admission_state.admissible_branch_ids or [])
+    blocked_branch_ids = list(admission_state.blocked_branch_ids or [])
+    admissible_source_job_ids = sorted(
+        {
+            str(branch_by_id[branch_id].source_job_id)
+            for branch_id in admissible_branch_ids
+            if branch_id in branch_by_id
+        }
+    )
+    blocked_source_job_ids = sorted(
+        {
+            str(branch_by_id[branch_id].source_job_id)
+            for branch_id in blocked_branch_ids
+            if branch_id in branch_by_id
+        }
+    )
+    benchmark_signals = mapping(admission_state.metadata.get("benchmark_signals"))
+    benchmark_provenance = {
+        "semantic_grounding_non_heuristic": bool(
+            benchmark_signals.get("semantic_grounding_non_heuristic", False)
+        ),
+        "scene_tracks_backend_real": bool(benchmark_signals.get("scene_tracks_backend_real", False)),
+        "vision_backbone_real": bool(benchmark_signals.get("vision_backbone_real", False)),
+        "teacher_runtime_real": bool(benchmark_signals.get("teacher_runtime_real", False)),
+    }
+    metadata = {
+        "branch_count": len(branch_plans),
+        "job_count": len([job for job in jobs if str(getattr(job, "job_id", "") or "")]),
+        "admissible_branch_count": len(admissible_branch_ids),
+        "blocked_branch_count": len(blocked_branch_ids),
+        "admissible_source_job_ids": admissible_source_job_ids,
+        "blocked_source_job_ids": blocked_source_job_ids,
+        "helper_promotion_stage_counts": _helper_stage_counts(branch_plans),
+        "render_provider_kind_counts": _render_provider_counts(branch_plans),
+        "benchmark_provenance": benchmark_provenance,
+        "synthetic_evidence_counts": {
+            "synthetic_branch_plan_count": len(branch_plans),
+            "admissible_synthetic_branch_count": len(admissible_branch_ids),
+            "blocked_synthetic_branch_count": len(blocked_branch_ids),
+        },
+        "job_readiness": {
+            job_id: safe_float(getattr(job_by_id[job_id], "readiness", 0.0), 0.0)
+            for job_id in sorted(job_by_id)
+        },
+        "admission_scores": mapping(admission_state.metadata.get("admission_scores")),
+        "robot_asset_contract": mapping(admission_state.metadata.get("robot_asset_contract")),
+        "state_metadata": mapping(admission_state.metadata),
+    }
+    receipt_payload = {
+        "admission_id": admission_state.admission_id,
+        "admissible_branch_ids": admissible_branch_ids,
+        "blocked_branch_ids": blocked_branch_ids,
+        "selection_policy": admission_state.selection_policy,
+    }
+    return Gen2SimAdmissionReceipt(
+        receipt_id=stable_id("gen2sim_admission_receipt", receipt_payload),
+        admission_id=admission_state.admission_id,
+        benchmark_gate_ready=bool(admission_state.benchmark_gate_ready),
+        admissible_branch_ids=admissible_branch_ids,
+        blocked_branch_ids=blocked_branch_ids,
+        selection_policy=str(admission_state.selection_policy or "receipt_gated"),
+        rationale=str(admission_state.rationale or ""),
+        inferential_learnability_summary=mapping(
+            admission_state.inferential_learnability_summary
+        ),
+        metadata=metadata,
     )
 
 
@@ -183,5 +296,6 @@ def assess_local_branch_corpus_gen2sim(
 
 __all__ = [
     "assess_local_branch_corpus_gen2sim",
+    "build_gen2sim_admission_receipt",
     "compile_gen2sim_admission_state",
 ]

@@ -8,6 +8,7 @@ from src.world_model.semantic_coverage_graph import CoverageEdge, CoverageNode, 
 from src.world_model.sim_synth_physics.agenda import SimulationJobSpec
 from src.world_model.sim_synth_physics.gen2sim_admission import (
     assess_local_branch_corpus_gen2sim,
+    build_gen2sim_admission_receipt,
     compile_gen2sim_admission_state,
 )
 from src.world_model.sim_synth_physics.state import SyntheticBranchPlan
@@ -152,9 +153,13 @@ def test_compile_gen2sim_admission_state_blocks_when_grounding_missing() -> None
         [job],
         benchmark_signals={"ready": False, "semantic_grounding_non_heuristic": False},
     )
+    receipt = build_gen2sim_admission_receipt(admission, [plan], [job])
 
     assert admission.admissible_branch_ids == []
     assert admission.blocked_branch_ids == ["plan_1"]
+    assert receipt.admission_id == admission.admission_id
+    assert receipt.metadata["helper_promotion_stage_counts"]["heuristic_fallback"] == 1
+    assert receipt.metadata["synthetic_evidence_counts"]["blocked_synthetic_branch_count"] == 1
 
 
 def test_assess_local_branch_corpus_gen2sim_and_metadata_summary() -> None:

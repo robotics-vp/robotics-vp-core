@@ -98,6 +98,27 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_gen2sim_admission_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "gen2sim_1",
+                "admission_id": "gen2sim_state_1",
+                "benchmark_gate_ready": False,
+                "admissible_branch_ids": ["plan_1"],
+                "blocked_branch_ids": [],
+                "selection_policy": "receipt_gated_with_inferential_contracts",
+                "rationale": "1 branch admissible",
+                "metadata": {
+                    "admissible_branch_count": 1,
+                    "blocked_branch_count": 0,
+                },
+                "version": "gen2sim_admission_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_backend_runtime_bridge_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -274,6 +295,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["physics_adaptation_receipt"]["receipt_id"] == "adapt_1"
     assert bundles[0]["backend_execution_binding_receipt"]["receipt_id"] == "binding_1"
     assert bundles[0]["robot_asset_contract_receipt"]["receipt_id"] == "asset_1"
+    assert bundles[0]["gen2sim_admission_receipt"]["receipt_id"] == "gen2sim_1"
     assert bundles[0]["backend_runtime_bridge_receipt"]["receipt_id"] == "bridge_1"
     assert bundles[0]["backend_runtime_execution_receipt"]["receipt_id"] == "runtime_1"
     assert bundles[0]["backend_runtime_adapter_receipt"]["receipt_id"] == "adapter_1"
@@ -306,6 +328,8 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         backend_rows[0]["metadata"]["backend_shadow_execution_status"]
         == "shadow_executed_with_asset_gaps"
     )
+    assert backend_rows[0]["metadata"]["gen2sim_admission_receipt_id"] == "gen2sim_1"
+    assert backend_rows[0]["metadata"]["gen2sim_admissible_branch_count"] == 1
     assert backend_rows[0]["metadata"]["backend_runtime_execution_receipt_id"] == "runtime_1"
     assert (
         backend_rows[0]["metadata"]["backend_runtime_execution_status"]
@@ -339,6 +363,9 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["target_render_materialization_mode"] == "scene_config"
     assert branch_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
     assert branch_rows[0]["metadata"]["robot_asset_readiness_score"] == 0.25
+    assert branch_rows[0]["metadata"]["adaptation_receipt_id"] == "adapt_1"
+    assert branch_rows[0]["metadata"]["gen2sim_admission_receipt_id"] == "gen2sim_1"
+    assert branch_rows[0]["metadata"]["gen2sim_admissible_branch_count"] == 1
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_receipt_id"] == "bridge_1"
     assert branch_rows[0]["metadata"]["backend_runtime_bridge_status"] == "runtime_targets_missing"
     assert branch_rows[0]["metadata"]["backend_runtime_adapter_receipt_id"] == "adapter_1"
@@ -354,6 +381,10 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     )
     assert branch_rows[0]["metadata"]["backend_runtime_outcome_status"] == "runtime_outputs_harvested"
     assert branch_rows[0]["metadata"]["backend_runtime_output_count"] == 2
+    assert branch_rows[0]["metadata"]["backend_shadow_execution_receipt_id"] == "shadow_1"
+    assert branch_rows[0]["metadata"]["backend_shadow_execution_status"] == "shadow_executed_with_asset_gaps"
+    assert branch_rows[0]["metadata"]["calibration_receipt_id"] == "cal_1"
+    assert branch_rows[0]["metadata"]["calibration_quality_score"] == 0.8
     assert branch_rows[0]["metadata"]["backend_runtime_ready_surfaces"] == [
         "metrics_surface_ready",
         "policy_surface_ready",

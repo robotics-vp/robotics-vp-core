@@ -509,6 +509,7 @@ def compile_sim_synth_physics_world_state(
         branch_plans,
         jobs,
         benchmark_signals=benchmark_payload,
+        robot_asset_contract=robot_asset_contract,
     )
     diffusion_conditioning = _compile_diffusion_conditioning(
         jobs,

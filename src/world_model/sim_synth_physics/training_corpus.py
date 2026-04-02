@@ -139,6 +139,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "physics_adaptation_receipt",
             "backend_execution_binding_receipt",
             "robot_asset_contract_receipt",
+            "gen2sim_admission_receipt",
             "backend_runtime_bridge_receipt",
             "backend_runtime_execution_receipt",
             "backend_runtime_adapter_receipt",
@@ -159,6 +160,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_adaptations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_bindings: dict[Path, list[Dict[str, Any]]] = {}
     grouped_asset_contracts: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_gen2sim_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_bridges: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_runtime: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_adapter: dict[Path, list[Dict[str, Any]]] = {}
@@ -199,6 +201,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_backend_bindings.setdefault(parent, []).append(dict(payload))
             elif version == "robot_asset_contract_receipt_v1":
                 grouped_asset_contracts.setdefault(parent, []).append(dict(payload))
+            elif version == "gen2sim_admission_receipt_v1":
+                grouped_gen2sim_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "backend_runtime_bridge_receipt_v1":
                 grouped_backend_bridges.setdefault(parent, []).append(dict(payload))
             elif version == "backend_runtime_execution_receipt_v1":
@@ -224,6 +228,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         | set(grouped_adaptations)
         | set(grouped_backend_bindings)
         | set(grouped_asset_contracts)
+        | set(grouped_gen2sim_receipts)
         | set(grouped_backend_bridges)
         | set(grouped_backend_runtime)
         | set(grouped_backend_adapter)
@@ -239,6 +244,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         adaptations = grouped_adaptations.get(directory, [])
         backend_bindings = grouped_backend_bindings.get(directory, [])
         asset_contracts = grouped_asset_contracts.get(directory, [])
+        gen2sim_receipts = grouped_gen2sim_receipts.get(directory, [])
         backend_bridge_receipts = grouped_backend_bridges.get(directory, [])
         backend_runtime_receipts = grouped_backend_runtime.get(directory, [])
         backend_adapter_receipts = grouped_backend_adapter.get(directory, [])
@@ -261,6 +267,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 bundle["backend_execution_binding_receipt"] = dict(backend_bindings[-1])
             if asset_contracts:
                 bundle["robot_asset_contract_receipt"] = dict(asset_contracts[-1])
+            if gen2sim_receipts:
+                bundle["gen2sim_admission_receipt"] = dict(gen2sim_receipts[-1])
             if backend_bridge_receipts:
                 bundle["backend_runtime_bridge_receipt"] = dict(backend_bridge_receipts[-1])
             if backend_runtime_receipts:
@@ -314,6 +322,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         for payload in rows
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "robot_asset_contract_receipt_v1"
+    ]
+    gen2sim_receipts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "gen2sim_admission_receipt_v1"
     ]
     backend_bridge_receipts = [
         dict(payload)
@@ -381,6 +395,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             bundle["backend_execution_binding_receipt"] = backend_bindings[-1]
         if asset_contracts:
             bundle["robot_asset_contract_receipt"] = asset_contracts[-1]
+        if gen2sim_receipts:
+            bundle["gen2sim_admission_receipt"] = gen2sim_receipts[-1]
         if backend_bridge_receipts:
             bundle["backend_runtime_bridge_receipt"] = backend_bridge_receipts[-1]
         if backend_runtime_receipts:
@@ -421,6 +437,7 @@ def build_backend_selector_rows_from_receipts(
         adaptation_receipt = _mapping(bundle_mapping.get("physics_adaptation_receipt"))
         backend_binding_receipt = _mapping(bundle_mapping.get("backend_execution_binding_receipt"))
         robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
+        gen2sim_admission_receipt = _mapping(bundle_mapping.get("gen2sim_admission_receipt"))
         backend_runtime_bridge_receipt = _mapping(
             bundle_mapping.get("backend_runtime_bridge_receipt")
         )
@@ -546,6 +563,16 @@ def build_backend_selector_rows_from_receipts(
                     "bundle_index": bundle_index,
                     "world_state_id": world_state.get("state_id"),
                     "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
+                    "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
+                    "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(
+                        "benchmark_gate_ready"
+                    ),
+                    "gen2sim_admissible_branch_count": len(
+                        gen2sim_admission_receipt.get("admissible_branch_ids") or []
+                    ),
+                    "gen2sim_blocked_branch_count": len(
+                        gen2sim_admission_receipt.get("blocked_branch_ids") or []
+                    ),
                     "backend_execution_binding_receipt_id": backend_binding_receipt.get("receipt_id"),
                     "robot_asset_contract_receipt_id": robot_asset_contract_receipt.get("receipt_id"),
                     "robot_asset_readiness_score": robot_asset_contract_receipt.get("readiness_score"),
@@ -634,6 +661,9 @@ def build_backend_selector_rows_from_receipts(
                     ),
                     "backend_shadow_execution_receipt_id": backend_shadow_execution_receipt.get("receipt_id"),
                     "backend_shadow_execution_status": backend_shadow_execution_receipt.get("execution_status"),
+                    "backend_shadow_harvest_mode": _mapping(
+                        backend_shadow_execution_receipt.get("metadata")
+                    ).get("shadow_harvest_mode"),
                     "calibration_receipt_id": calibration_receipt.get("receipt_id"),
                     "calibration_quality_score": calibration_receipt.get("quality_score"),
                 },
@@ -681,6 +711,7 @@ def build_branch_planner_rows_from_receipts(
             if str(receipt.get("branch_plan_id"))
         }
         robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
+        gen2sim_admission_receipt = _mapping(bundle_mapping.get("gen2sim_admission_receipt"))
         backend_runtime_bridge_receipt = _mapping(
             bundle_mapping.get("backend_runtime_bridge_receipt")
         )
@@ -720,6 +751,14 @@ def build_branch_planner_rows_from_receipts(
         structured_outputs = _mapping(
             backend_runtime_outcome_metadata.get("structured_outputs")
         )
+        backend_shadow_execution_receipt = _mapping(
+            bundle_mapping.get("backend_shadow_execution_receipt")
+        )
+        calibration_receipt = _mapping(
+            bundle_mapping.get("physics_calibration_receipt")
+            or bundle_mapping.get("physics_calibration")
+        )
+        adaptation_receipt = _mapping(bundle_mapping.get("physics_adaptation_receipt"))
         upstream_runtime_pack = _mapping(
             backend_runtime_bundle.get("upstream_runtime_pack")
         ) or _mapping(backend_runtime_bridge_receipt.get("metadata", {})).get(
@@ -790,6 +829,17 @@ def build_branch_planner_rows_from_receipts(
                         "bundle_index": bundle_index,
                         "world_state_id": world_state.get("state_id"),
                         "branch_plan_id": plan_id,
+                        "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
+                        "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
+                        "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(
+                            "benchmark_gate_ready"
+                        ),
+                        "gen2sim_admissible_branch_count": len(
+                            gen2sim_admission_receipt.get("admissible_branch_ids") or []
+                        ),
+                        "gen2sim_blocked_branch_count": len(
+                            gen2sim_admission_receipt.get("blocked_branch_ids") or []
+                        ),
                         "robot_asset_contract_receipt_id": robot_asset_contract_receipt.get("receipt_id"),
                         "robot_asset_readiness_score": robot_asset_contract_receipt.get("readiness_score"),
                         "backend_runtime_bridge_receipt_id": backend_runtime_bridge_receipt.get(
@@ -876,6 +926,17 @@ def build_branch_planner_rows_from_receipts(
                         "backend_runtime_metric_keys": list(
                             structured_outputs.get("metric_keys") or []
                         ),
+                        "backend_shadow_execution_receipt_id": backend_shadow_execution_receipt.get(
+                            "receipt_id"
+                        ),
+                        "backend_shadow_execution_status": backend_shadow_execution_receipt.get(
+                            "execution_status"
+                        ),
+                        "backend_shadow_harvest_mode": _mapping(
+                            backend_shadow_execution_receipt.get("metadata")
+                        ).get("shadow_harvest_mode"),
+                        "calibration_receipt_id": calibration_receipt.get("receipt_id"),
+                        "calibration_quality_score": calibration_receipt.get("quality_score"),
                         "render_provider_receipt_id": render_receipt.get("receipt_id"),
                         "render_artifact_refs": list(render_receipt.get("artifact_refs") or []),
                         "render_unsatisfied_preconditions": list(

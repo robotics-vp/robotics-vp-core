@@ -28,6 +28,7 @@ from .calibration import (
 from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
 from .gen2sim_admission import (
     assess_local_branch_corpus_gen2sim,
+    build_gen2sim_admission_receipt,
     compile_gen2sim_admission_state,
 )
 from .physics_contracts import PhysicsExecutionContract
@@ -38,6 +39,7 @@ from .receipts import (
     BackendRuntimeOutcomeReceipt,
     BackendShadowExecutionReceipt,
     BackendRuntimeWorkOrderReceipt,
+    Gen2SimAdmissionReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
     RenderProviderReceipt,
@@ -108,6 +110,7 @@ __all__ = [
     "BranchPlannerRuntimePackage",
     "DiffusionConditioningState",
     "GapDrivenDiffusionPlan",
+    "Gen2SimAdmissionReceipt",
     "Gen2SimAdmissionState",
     "LearnedBackendSelector",
     "LearnedBranchPlanner",
@@ -128,6 +131,7 @@ __all__ = [
     "SimulationOutcomeReceipt",
     "SyntheticBranchPlan",
     "assess_local_branch_corpus_gen2sim",
+    "build_gen2sim_admission_receipt",
     "build_physics_adaptation_receipt",
     "build_physics_calibration_receipt",
     "compile_robot_asset_contract",

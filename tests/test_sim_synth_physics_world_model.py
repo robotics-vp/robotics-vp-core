@@ -131,6 +131,23 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
     )
 
 
+def test_world_state_to_dict_round_trips_core_phase1_state() -> None:
+    world_state = compile_sim_synth_physics_world_state(_make_test_graph(), limit=2)
+
+    payload = world_state.to_dict()
+    round_tripped = json.loads(json.dumps(payload))
+
+    assert round_tripped["state_id"] == world_state.state_id
+    assert round_tripped["physics_context"]["backend"] == world_state.physics_context.backend
+    assert round_tripped["physics_adaptation_policy"]["policy_id"] == world_state.physics_adaptation_policy.policy_id
+    assert round_tripped["backend_execution_binding"]["binding_id"] == world_state.backend_execution_binding.binding_id
+    assert round_tripped["robot_asset_contract"]["contract_id"] == world_state.robot_asset_contract.contract_id
+    assert round_tripped["backend_runtime_bridge"]["bridge_id"] == world_state.backend_runtime_bridge.bridge_id
+    assert round_tripped["gen2sim_admission"]["admission_id"] == world_state.gen2sim_admission.admission_id
+    assert round_tripped["diffusion_conditioning"]["conditioning_id"] == world_state.diffusion_conditioning.conditioning_id
+    assert round_tripped["synthetic_branch_plans"]
+
+
 def test_world_state_uses_promoted_backend_selector_from_day_one() -> None:
     world_state = compile_sim_synth_physics_world_state(
         _make_test_graph(),
@@ -637,6 +654,8 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert result.physics_execution_contract.resolved_backend == "pybullet"
     assert result.physics_execution_contract.route_status == "fallback"
     assert result.physics_adaptation_receipt.target_hardware_class == "unitree_g1_r1_class"
+    assert result.gen2sim_admission_receipt.admission_id == result.world_state.gen2sim_admission.admission_id
+    assert result.gen2sim_admission_receipt.metadata["robot_asset_contract"]["target_hardware_class"] == "unitree_g1_r1_class"
     assert result.backend_execution_binding_receipt.binding_status in {
         "assets_missing",
         "shadow_ready",
@@ -683,6 +702,9 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     )
     assert result.backend_shadow_execution_receipt.metadata["robot_asset_contract_id"] == result.world_state.robot_asset_contract.contract_id
     assert len(result.backend_shadow_execution_receipt.metadata["asset_sidecar_refs"]) == 3
+    assert result.backend_shadow_execution_receipt.metadata["shadow_harvest_mode"] == "shadow_with_data_harvest"
+    assert result.backend_shadow_execution_receipt.metadata["backend_runtime_execution_receipt_id"] == result.backend_runtime_execution_receipt.receipt_id
+    assert result.backend_shadow_execution_receipt.metadata["backend_runtime_binding_status"]
     assert (
         result.physics_calibration_receipt.metadata["runtime_evidence"][
             "materialized_render_provider_count"
@@ -702,6 +724,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     )
     assert (tmp_path / "physics_execution_contract.json").exists()
     assert (tmp_path / "physics_adaptation_receipt.json").exists()
+    assert (tmp_path / "gen2sim_admission_receipt.json").exists()
     assert (tmp_path / "backend_execution_binding_receipt.json").exists()
     assert (tmp_path / "robot_asset_contract_receipt.json").exists()
     assert (tmp_path / "backend_runtime_bridge_receipt.json").exists()
@@ -739,6 +762,7 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
     assert result.physics_execution_contract.requested_backend == "holosoma"
     assert result.physics_execution_contract.resolved_backend == "pybullet"
     assert result.physics_execution_contract.route_status == "fallback"
+    assert result.gen2sim_admission_receipt.admission_id == result.world_state.gen2sim_admission.admission_id
     assert result.backend_execution_binding_receipt.binding_status in {"shadow_ready", "assets_missing"}
     assert result.robot_asset_contract_receipt.target_hardware_class == "unitree_g1_r1_class"
     assert result.backend_runtime_execution_receipt is not None
@@ -773,6 +797,8 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
     assert "launch_spec" in result.backend_runtime_execution_receipt.metadata
     assert result.backend_shadow_execution_receipt.metadata["robot_asset_contract_id"] == result.world_state.robot_asset_contract.contract_id
     assert len(result.backend_shadow_execution_receipt.metadata["asset_sidecar_refs"]) == 3
+    assert result.backend_shadow_execution_receipt.metadata["shadow_harvest_mode"] == "shadow_only_preview"
+    assert result.backend_shadow_execution_receipt.metadata["backend_runtime_execution_receipt_id"] == result.backend_runtime_execution_receipt.receipt_id
     assert result.backend_shadow_execution_receipt.artifact_refs
     assert any("holosoma_shadow_work_order.json" in ref for ref in result.backend_shadow_execution_receipt.artifact_refs)
     assert (
@@ -999,6 +1025,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
 
     assert feedback_manifest["world_state_id"] == result.world_state.state_id
     assert feedback_manifest["physics_adaptation_receipt_id"] == result.physics_adaptation_receipt.receipt_id
+    assert feedback_manifest["gen2sim_admission_receipt_id"] == result.gen2sim_admission_receipt.receipt_id
     assert feedback_manifest["backend_execution_binding_receipt_id"] == result.backend_execution_binding_receipt.receipt_id
     assert feedback_manifest["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id
     assert (
@@ -1012,6 +1039,8 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
         "concrete_runtime",
     }
     assert feedback_manifest["backend_runtime_work_order_count"] >= 0
+    assert feedback_manifest["gen2sim_admissible_branch_count"] >= 0
+    assert feedback_manifest["gen2sim_blocked_branch_count"] >= 0
     assert feedback_manifest["backend_shadow_execution_status"] in {
         "",
         "shadow_executed",
@@ -1049,6 +1078,7 @@ def test_runtime_run_planning_window_writes_feedback_and_diffusion_artifacts(tmp
     assert feedback_manifest["robot_asset_readiness_score"] >= 0.0
     assert diffusion_bundle["plans"]
     assert loop_summary["physics_execution_contract_id"] == result.physics_execution_contract.contract_id
+    assert loop_summary["gen2sim_admission_receipt_id"] == result.gen2sim_admission_receipt.receipt_id
     assert loop_summary["render_provider_receipt_count"] == len(result.render_provider_receipts)
     assert loop_summary["materialized_render_provider_count"] >= 1
     assert loop_summary["robot_asset_contract_receipt_id"] == result.robot_asset_contract_receipt.receipt_id

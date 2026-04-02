@@ -16,6 +16,7 @@ from .calibration import (
 from .common import mapping
 from .compiler import compile_sim_synth_physics_world_state
 from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
+from .gen2sim_admission import build_gen2sim_admission_receipt
 from .physics_contracts import PhysicsExecutionContract
 from .promotion import HelperMode
 from .render_materialization import materialize_render_provider_receipts
@@ -28,6 +29,7 @@ from .receipts import (
     BackendRuntimeOutcomeReceipt,
     BackendRuntimeWorkOrderReceipt,
     BackendShadowExecutionReceipt,
+    Gen2SimAdmissionReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
     RenderProviderReceipt,
@@ -64,6 +66,7 @@ class SimSynthPhysicsLoopResult:
     world_state: SimSynthPhysicsWorldState
     physics_execution_contract: PhysicsExecutionContract
     physics_adaptation_receipt: PhysicsAdaptationReceipt
+    gen2sim_admission_receipt: Gen2SimAdmissionReceipt
     backend_execution_binding_receipt: BackendExecutionBindingReceipt
     robot_asset_contract_receipt: RobotAssetContractReceipt
     backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt
@@ -85,6 +88,7 @@ class SimSynthPhysicsLoopResult:
             "world_state": self.world_state.to_dict(),
             "physics_execution_contract": self.physics_execution_contract.to_dict(),
             "physics_adaptation_receipt": self.physics_adaptation_receipt.to_dict(),
+            "gen2sim_admission_receipt": self.gen2sim_admission_receipt.to_dict(),
             "backend_execution_binding_receipt": self.backend_execution_binding_receipt.to_dict(),
             "robot_asset_contract_receipt": self.robot_asset_contract_receipt.to_dict(),
             "backend_runtime_bridge_receipt": self.backend_runtime_bridge_receipt.to_dict(),
@@ -138,6 +142,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "world_state": root / "sim_synth_physics_world_state.json",
         "physics_execution_contract": root / "physics_execution_contract.json",
         "physics_adaptation_receipt": root / "physics_adaptation_receipt.json",
+        "gen2sim_admission_receipt": root / "gen2sim_admission_receipt.json",
         "backend_execution_binding_receipt": root / "backend_execution_binding_receipt.json",
         "robot_asset_contract_receipt": root / "robot_asset_contract_receipt.json",
         "backend_runtime_bridge_receipt": root / "backend_runtime_bridge_receipt.json",
@@ -443,6 +448,7 @@ def _build_training_feedback_manifest(
     world_state: SimSynthPhysicsWorldState,
     execution_contract: PhysicsExecutionContract,
     adaptation_receipt: PhysicsAdaptationReceipt,
+    gen2sim_admission_receipt: Gen2SimAdmissionReceipt,
     backend_binding_receipt: BackendExecutionBindingReceipt,
     robot_asset_contract_receipt: RobotAssetContractReceipt,
     backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt,
@@ -505,6 +511,7 @@ def _build_training_feedback_manifest(
         "world_state_id": world_state.state_id,
         "physics_execution_contract_id": execution_contract.contract_id,
         "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+        "gen2sim_admission_receipt_id": gen2sim_admission_receipt.receipt_id,
         "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
         "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
         "backend_runtime_bridge_receipt_id": backend_runtime_bridge_receipt.receipt_id,
@@ -538,6 +545,9 @@ def _build_training_feedback_manifest(
         ),
         "physics_calibration_receipt_id": calibration_receipt.receipt_id,
         "route_status": execution_contract.route_status,
+        "gen2sim_benchmark_gate_ready": bool(gen2sim_admission_receipt.benchmark_gate_ready),
+        "gen2sim_admissible_branch_count": len(gen2sim_admission_receipt.admissible_branch_ids),
+        "gen2sim_blocked_branch_count": len(gen2sim_admission_receipt.blocked_branch_ids),
         "backend_shadow_execution_status": (
             ""
             if backend_shadow_execution_receipt is None
@@ -863,10 +873,19 @@ class SimSynthPhysicsRuntime:
         backend_runtime_outcome_receipt = _build_backend_runtime_outcome_receipt(
             backend_runtime_execution_receipt
         )
+        gen2sim_admission_receipt = build_gen2sim_admission_receipt(
+            world_state.gen2sim_admission,
+            world_state.synthetic_branch_plans,
+            world_state.simulation_agenda.jobs,
+        )
         backend_shadow_execution_receipt = materialize_backend_shadow_execution(
             world_state,
             execution_contract,
             backend_binding_receipt,
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_adapter_receipt=backend_runtime_adapter_receipt,
+            backend_runtime_launch_receipt=backend_runtime_launch_receipt,
+            backend_runtime_outcome_receipt=backend_runtime_outcome_receipt,
             output_dir=output_dir,
         )
         training_feedback_path = artifact_paths.get("training_feedback_manifest")
@@ -987,6 +1006,7 @@ class SimSynthPhysicsRuntime:
             world_state,
             execution_contract,
             adaptation_receipt,
+            gen2sim_admission_receipt,
             backend_binding_receipt,
             robot_asset_contract_receipt,
             backend_runtime_bridge_receipt,
@@ -1004,6 +1024,7 @@ class SimSynthPhysicsRuntime:
             world_state=world_state,
             physics_execution_contract=execution_contract,
             physics_adaptation_receipt=adaptation_receipt,
+            gen2sim_admission_receipt=gen2sim_admission_receipt,
             backend_execution_binding_receipt=backend_binding_receipt,
             robot_asset_contract_receipt=robot_asset_contract_receipt,
             backend_runtime_bridge_receipt=backend_runtime_bridge_receipt,
@@ -1030,6 +1051,10 @@ class SimSynthPhysicsRuntime:
             _write_json(
                 artifact_paths["physics_adaptation_receipt"],
                 adaptation_receipt.to_dict(),
+            )
+            _write_json(
+                artifact_paths["gen2sim_admission_receipt"],
+                gen2sim_admission_receipt.to_dict(),
             )
             _write_json(
                 artifact_paths["backend_execution_binding_receipt"],
@@ -1134,6 +1159,10 @@ class SimSynthPhysicsRuntime:
                     "world_state_id": world_state.state_id,
                     "physics_execution_contract_id": execution_contract.contract_id,
                     "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+                    "gen2sim_admission_receipt_id": gen2sim_admission_receipt.receipt_id,
+                    "gen2sim_benchmark_gate_ready": bool(gen2sim_admission_receipt.benchmark_gate_ready),
+                    "gen2sim_admissible_branch_count": len(gen2sim_admission_receipt.admissible_branch_ids),
+                    "gen2sim_blocked_branch_count": len(gen2sim_admission_receipt.blocked_branch_ids),
                     "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
                     "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
                     "backend_runtime_bridge_receipt_id": backend_runtime_bridge_receipt.receipt_id,

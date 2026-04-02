@@ -351,6 +351,38 @@ class RobotAssetContractReceipt:
 
 
 @dataclass(frozen=True)
+class Gen2SimAdmissionReceipt:
+    """Receipt for one WM-owned gen2sim admission decision surface."""
+
+    receipt_id: str
+    admission_id: str
+    benchmark_gate_ready: bool
+    admissible_branch_ids: list[str] = field(default_factory=list)
+    blocked_branch_ids: list[str] = field(default_factory=list)
+    selection_policy: str = "receipt_gated"
+    rationale: str = ""
+    inferential_learnability_summary: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "gen2sim_admission_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "admission_id": self.admission_id,
+            "benchmark_gate_ready": bool(self.benchmark_gate_ready),
+            "admissible_branch_ids": strings(self.admissible_branch_ids),
+            "blocked_branch_ids": strings(self.blocked_branch_ids),
+            "selection_policy": self.selection_policy,
+            "rationale": self.rationale,
+            "inferential_learnability_summary": mapping(
+                self.inferential_learnability_summary
+            ),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class RenderProviderReceipt:
     """Materialization receipt for one WM-owned branch/render provider selection."""
 
