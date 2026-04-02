@@ -14,6 +14,17 @@ from src.objectives.economic_objective import EconomicObjectiveSpec
 from src.ontology.models import Robot, Task
 from src.ontology.store import OntologyStore
 
+from .adapters.holosoma_adapter_execution import (
+    build_holosoma_adapter_receipt,
+    finalize_holosoma_adapter_execution,
+    prepare_holosoma_adapter_execution,
+)
+from .adapters.holosoma_adapter_realization import (
+    build_holosoma_adapter_realization,
+)
+from .adapters.holosoma_executable_consumer import (
+    build_holosoma_executable_adapter_consumer,
+)
 from .adapters.isaac_unitree_adapter_execution import (
     build_isaac_unitree_adapter_receipt,
     finalize_isaac_unitree_adapter_execution,
@@ -21,6 +32,10 @@ from .adapters.isaac_unitree_adapter_execution import (
 )
 from .adapters.isaac_unitree_adapter_realization import (
     build_isaac_unitree_adapter_realization,
+)
+from .adapters.local_backend_factory_adapter import (
+    build_local_backend_factory_invocation,
+    materialize_local_backend_factory_invocation,
 )
 from .asset_manifest import extract_robot_asset_manifest, normalize_robot_asset_manifest
 from .common import mapping, safe_float, strings
@@ -571,6 +586,40 @@ def materialize_backend_runtime_execution(
     require_policy = not (backend == "holosoma" and can_train_holosoma and not policy_id)
     if not policy_id and not can_train_holosoma:
         missing_preconditions.append("runtime_policy_id")
+    if backend == "holosoma" and can_train_holosoma and not policy_id:
+        patched_request = _mapping(
+            launch_spec.get("executable_adapter_request")
+            or runtime_bundle.get("executable_adapter_request")
+        )
+        if patched_request:
+            patched_request["deployment_mode"] = "motion_train"
+            patched_request["policy_required"] = False
+            patched_request["adapter_entrypoint"] = "holosoma_motion_train"
+            patched_request["preferred_profile"] = str(
+                patched_request.get("preferred_profile") or "holosoma_motion_bank"
+            )
+            patched_missing = [
+                item
+                for item in _strings(patched_request.get("missing_preconditions"))
+                if item != "policy_checkpoint"
+            ]
+            patched_request["missing_preconditions"] = patched_missing
+            patched_env = _mapping(patched_request.get("env_overrides"))
+            patched_env["HOLOSOMA_MOTION_TRAIN_ENABLED"] = "1"
+            patched_request["env_overrides"] = patched_env
+            patched_consumer = build_holosoma_executable_adapter_consumer(patched_request)
+            runtime_bundle["executable_adapter_request"] = patched_request
+            runtime_bundle["executable_adapter_consumer"] = patched_consumer
+            launch_spec["executable_adapter_request"] = patched_request
+            launch_spec["executable_adapter_consumer"] = patched_consumer
+            if not str(launch_spec.get("preferred_profile", "") or ""):
+                launch_spec["preferred_profile"] = str(
+                    patched_request.get("preferred_profile") or "holosoma_motion_bank"
+                )
+            if not str(runtime_bundle.get("preferred_profile", "") or ""):
+                runtime_bundle["preferred_profile"] = str(
+                    patched_request.get("preferred_profile") or "holosoma_motion_bank"
+                )
     launch_plan = prepare_backend_runtime_launch(
         runtime_bundle,
         launch_spec,
@@ -590,6 +639,8 @@ def materialize_backend_runtime_execution(
     launch_receipt_payload: dict[str, Any] | None = None
     adapter_receipt_payload: dict[str, Any] | None = None
     adapter_realization_payload: dict[str, Any] | None = None
+    local_adapter_invocation_payload: dict[str, Any] | None = None
+    local_adapter_result_payload: dict[str, Any] | None = None
     runtime_outcome_receipt_payload: dict[str, Any] | None = None
     runtime_outcome_refs: list[str] = []
     local_runtime_supported = _runtime_supports_execution(backend)
@@ -619,6 +670,50 @@ def materialize_backend_runtime_execution(
             adapter_refs.append(str(adapter_execution_path.resolve()))
             adapter_refs.append(str(adapter_realization_path.resolve()))
             artifact_refs.extend(adapter_refs)
+    elif backend == "holosoma" and executable_adapter_request and executable_adapter_consumer:
+        adapter_execution = prepare_holosoma_adapter_execution(
+            executable_adapter_request,
+            executable_adapter_consumer,
+        )
+        adapter_realization = build_holosoma_adapter_realization(
+            executable_adapter_request=executable_adapter_request,
+            executable_adapter_consumer=executable_adapter_consumer,
+            adapter_execution=adapter_execution,
+            runtime_bundle=runtime_bundle,
+            launch_spec=launch_spec,
+            binding_payload={
+                "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                "binding_status": backend_binding_receipt.binding_status,
+            },
+        )
+        adapter_realization_payload = dict(adapter_realization)
+        if output_root is not None:
+            adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
+            adapter_realization_path = output_root / "backend_runtime_adapter_realization.json"
+            _write_json(adapter_execution_path, adapter_execution)
+            _write_json(adapter_realization_path, adapter_realization_payload)
+            adapter_refs.append(str(adapter_execution_path.resolve()))
+            adapter_refs.append(str(adapter_realization_path.resolve()))
+            artifact_refs.extend(adapter_refs)
+    if (
+        adapter_realization_payload
+        and str(adapter_realization_payload.get("realization_path", "") or "")
+        == "local_backend_factory"
+    ):
+        local_adapter_invocation_payload = build_local_backend_factory_invocation(
+            backend=backend,
+            executable_adapter_request=executable_adapter_request,
+            executable_adapter_consumer=executable_adapter_consumer,
+            adapter_execution=adapter_execution,
+            adapter_realization=adapter_realization_payload,
+            binding_payload=binding_payload,
+        )
+        if output_root is not None:
+            local_adapter_invocation_path = output_root / "backend_local_factory_invocation.json"
+            _write_json(local_adapter_invocation_path, local_adapter_invocation_payload)
+            ref = str(local_adapter_invocation_path.resolve())
+            if ref not in artifact_refs:
+                artifact_refs.append(ref)
     if not local_runtime_supported:
         launch_result: dict[str, Any] = dict(launch_plan)
         launch_result.setdefault("executed", False)
@@ -631,26 +726,52 @@ def materialize_backend_runtime_execution(
                 require_policy=require_policy,
             )
         if adapter_execution:
-            adapter_execution = finalize_isaac_unitree_adapter_execution(
-                adapter_execution,
-                launch_result=launch_result,
-            )
-            adapter_realization_payload = build_isaac_unitree_adapter_realization(
-                executable_adapter_request=executable_adapter_request,
-                executable_adapter_consumer=executable_adapter_consumer,
-                adapter_execution=adapter_execution,
-                runtime_bundle=runtime_bundle,
-                launch_spec=launch_spec,
-                binding_payload={
-                    "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
-                    "binding_status": backend_binding_receipt.binding_status,
-                },
-            )
-            adapter_receipt = build_isaac_unitree_adapter_receipt(
-                adapter_execution,
-                artifact_refs=adapter_refs,
-                realization=adapter_realization_payload,
-            )
+            if backend == "isaac":
+                adapter_execution = finalize_isaac_unitree_adapter_execution(
+                    adapter_execution,
+                    launch_result=launch_result,
+                )
+                adapter_realization_payload = build_isaac_unitree_adapter_realization(
+                    executable_adapter_request=executable_adapter_request,
+                    executable_adapter_consumer=executable_adapter_consumer,
+                    adapter_execution=adapter_execution,
+                    runtime_bundle=runtime_bundle,
+                    launch_spec=launch_spec,
+                    binding_payload={
+                        "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                        "binding_status": backend_binding_receipt.binding_status,
+                    },
+                )
+                adapter_receipt = build_isaac_unitree_adapter_receipt(
+                    adapter_execution,
+                    artifact_refs=adapter_refs,
+                    realization=adapter_realization_payload,
+                    local_adapter_invocation=local_adapter_invocation_payload,
+                    local_adapter_result=local_adapter_result_payload,
+                )
+            else:
+                adapter_execution = finalize_holosoma_adapter_execution(
+                    adapter_execution,
+                    launch_result=launch_result,
+                )
+                adapter_realization_payload = build_holosoma_adapter_realization(
+                    executable_adapter_request=executable_adapter_request,
+                    executable_adapter_consumer=executable_adapter_consumer,
+                    adapter_execution=adapter_execution,
+                    runtime_bundle=runtime_bundle,
+                    launch_spec=launch_spec,
+                    binding_payload={
+                        "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                        "binding_status": backend_binding_receipt.binding_status,
+                    },
+                )
+                adapter_receipt = build_holosoma_adapter_receipt(
+                    adapter_execution,
+                    artifact_refs=adapter_refs,
+                    realization=adapter_realization_payload,
+                    local_adapter_invocation=local_adapter_invocation_payload,
+                    local_adapter_result=local_adapter_result_payload,
+                )
             adapter_receipt_payload = adapter_receipt.to_dict()
         launch_receipt = build_backend_runtime_launch_receipt(
             runtime_bundle,
@@ -673,6 +794,8 @@ def materialize_backend_runtime_execution(
             adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
             adapter_realization_path = output_root / "backend_runtime_adapter_realization.json"
             adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
+            local_adapter_invocation_path = output_root / "backend_local_factory_invocation.json"
+            local_adapter_result_path = output_root / "backend_local_factory_result.json"
             receipt_path = output_root / "backend_runtime_launch_receipt.json"
             consumer_path = output_root / "backend_executable_adapter_consumer.json"
             output_contract_path = output_root / "backend_runtime_output_contract.json"
@@ -693,6 +816,10 @@ def materialize_backend_runtime_execution(
                 _write_json(adapter_realization_path, adapter_realization_payload)
             if adapter_receipt_payload is not None:
                 _write_json(adapter_receipt_path, adapter_receipt_payload)
+            if local_adapter_invocation_payload is not None:
+                _write_json(local_adapter_invocation_path, local_adapter_invocation_payload)
+            if local_adapter_result_payload is not None:
+                _write_json(local_adapter_result_path, local_adapter_result_payload)
             _write_json(receipt_path, launch_receipt_payload)
             _write_json(consumer_path, executable_adapter_consumer)
             _write_json(output_contract_path, runtime_output_contract)
@@ -704,6 +831,10 @@ def materialize_backend_runtime_execution(
                     str(adapter_execution_path.resolve()) if adapter_execution else "",
                     str(adapter_realization_path.resolve()) if adapter_realization_payload else "",
                     str(adapter_receipt_path.resolve()) if adapter_receipt_payload else "",
+                    str(local_adapter_invocation_path.resolve())
+                    if local_adapter_invocation_payload
+                    else "",
+                    str(local_adapter_result_path.resolve()) if local_adapter_result_payload else "",
                     str(receipt_path.resolve()),
                     str(consumer_path.resolve()),
                     str(output_contract_path.resolve()),
@@ -752,6 +883,8 @@ def materialize_backend_runtime_execution(
                     "adapter_execution": adapter_execution,
                     "adapter_realization": adapter_realization_payload,
                     "adapter_receipt": adapter_receipt_payload,
+                    "local_adapter_invocation": local_adapter_invocation_payload,
+                    "local_adapter_result": local_adapter_result_payload,
                     "runtime_output_contract": runtime_output_contract,
                     "launch_plan": launch_plan,
                     "launch_receipt": launch_receipt_payload,
@@ -766,26 +899,52 @@ def materialize_backend_runtime_execution(
                 missing_preconditions.append(item)
         if launch_receipt_payload is None:
             if adapter_execution:
-                adapter_execution = finalize_isaac_unitree_adapter_execution(
-                    adapter_execution,
-                    launch_result=launch_plan,
-                )
-                adapter_realization_payload = build_isaac_unitree_adapter_realization(
-                    executable_adapter_request=executable_adapter_request,
-                    executable_adapter_consumer=executable_adapter_consumer,
-                    adapter_execution=adapter_execution,
-                    runtime_bundle=runtime_bundle,
-                    launch_spec=launch_spec,
-                    binding_payload={
-                        "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
-                        "binding_status": backend_binding_receipt.binding_status,
-                    },
-                )
-                adapter_receipt = build_isaac_unitree_adapter_receipt(
-                    adapter_execution,
-                    artifact_refs=adapter_refs,
-                    realization=adapter_realization_payload,
-                )
+                if backend == "isaac":
+                    adapter_execution = finalize_isaac_unitree_adapter_execution(
+                        adapter_execution,
+                        launch_result=launch_plan,
+                    )
+                    adapter_realization_payload = build_isaac_unitree_adapter_realization(
+                        executable_adapter_request=executable_adapter_request,
+                        executable_adapter_consumer=executable_adapter_consumer,
+                        adapter_execution=adapter_execution,
+                        runtime_bundle=runtime_bundle,
+                        launch_spec=launch_spec,
+                        binding_payload={
+                            "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                            "binding_status": backend_binding_receipt.binding_status,
+                        },
+                    )
+                    adapter_receipt = build_isaac_unitree_adapter_receipt(
+                        adapter_execution,
+                        artifact_refs=adapter_refs,
+                        realization=adapter_realization_payload,
+                        local_adapter_invocation=local_adapter_invocation_payload,
+                        local_adapter_result=local_adapter_result_payload,
+                    )
+                else:
+                    adapter_execution = finalize_holosoma_adapter_execution(
+                        adapter_execution,
+                        launch_result=launch_plan,
+                    )
+                    adapter_realization_payload = build_holosoma_adapter_realization(
+                        executable_adapter_request=executable_adapter_request,
+                        executable_adapter_consumer=executable_adapter_consumer,
+                        adapter_execution=adapter_execution,
+                        runtime_bundle=runtime_bundle,
+                        launch_spec=launch_spec,
+                        binding_payload={
+                            "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                            "binding_status": backend_binding_receipt.binding_status,
+                        },
+                    )
+                    adapter_receipt = build_holosoma_adapter_receipt(
+                        adapter_execution,
+                        artifact_refs=adapter_refs,
+                        realization=adapter_realization_payload,
+                        local_adapter_invocation=local_adapter_invocation_payload,
+                        local_adapter_result=local_adapter_result_payload,
+                    )
                 adapter_receipt_payload = adapter_receipt.to_dict()
             launch_receipt = build_backend_runtime_launch_receipt(
                 runtime_bundle,
@@ -798,6 +957,8 @@ def materialize_backend_runtime_execution(
                 adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
                 adapter_realization_path = output_root / "backend_runtime_adapter_realization.json"
                 adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
+                local_adapter_invocation_path = output_root / "backend_local_factory_invocation.json"
+                local_adapter_result_path = output_root / "backend_local_factory_result.json"
                 receipt_path = output_root / "backend_runtime_launch_receipt.json"
                 consumer_path = output_root / "backend_executable_adapter_consumer.json"
                 output_contract_path = output_root / "backend_runtime_output_contract.json"
@@ -818,6 +979,10 @@ def materialize_backend_runtime_execution(
                     _write_json(adapter_realization_path, adapter_realization_payload)
                 if adapter_receipt_payload is not None:
                     _write_json(adapter_receipt_path, adapter_receipt_payload)
+                if local_adapter_invocation_payload is not None:
+                    _write_json(local_adapter_invocation_path, local_adapter_invocation_payload)
+                if local_adapter_result_payload is not None:
+                    _write_json(local_adapter_result_path, local_adapter_result_payload)
                 _write_json(receipt_path, launch_receipt_payload)
                 _write_json(consumer_path, executable_adapter_consumer)
                 _write_json(output_contract_path, runtime_output_contract)
@@ -861,6 +1026,10 @@ def materialize_backend_runtime_execution(
                         str(adapter_execution_path.resolve()) if adapter_execution else "",
                         str(adapter_realization_path.resolve()) if adapter_realization_payload else "",
                         str(adapter_receipt_path.resolve()) if adapter_receipt_payload else "",
+                        str(local_adapter_invocation_path.resolve())
+                        if local_adapter_invocation_payload
+                        else "",
+                        str(local_adapter_result_path.resolve()) if local_adapter_result_payload else "",
                         str(receipt_path.resolve()),
                         str(consumer_path.resolve()),
                         str(output_contract_path.resolve()),
@@ -907,6 +1076,8 @@ def materialize_backend_runtime_execution(
                 "adapter_execution": adapter_execution,
                 "adapter_realization": adapter_realization_payload,
                 "adapter_receipt": adapter_receipt_payload,
+                "local_adapter_invocation": local_adapter_invocation_payload,
+                "local_adapter_result": local_adapter_result_payload,
                 "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
                 "launch_receipt": launch_receipt_payload,
@@ -919,51 +1090,118 @@ def materialize_backend_runtime_execution(
 
     execution_mode = f"{backend_name}_evaluate_policy"
     execution_status = "runtime_execution_failed"
-    if adapter_execution and backend == "isaac":
-        adapter_execution = finalize_isaac_unitree_adapter_execution(
-            adapter_execution,
-            local_runtime_handoff=True,
+    backend_instance = None
+    if local_adapter_invocation_payload is not None:
+        backend_instance, local_adapter_result_payload = materialize_local_backend_factory_invocation(
+            local_adapter_invocation_payload,
+            econ_meter=econ_meter,
+            store=store,
         )
-        adapter_realization_payload = build_isaac_unitree_adapter_realization(
-            executable_adapter_request=executable_adapter_request,
-            executable_adapter_consumer=executable_adapter_consumer,
-            adapter_execution=adapter_execution,
-            runtime_bundle=runtime_bundle,
-            launch_spec=launch_spec,
-            binding_payload={
-                "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
-                "binding_status": backend_binding_receipt.binding_status,
-            },
-        )
-        adapter_receipt = build_isaac_unitree_adapter_receipt(
-            adapter_execution,
-            artifact_refs=adapter_refs,
-            realization=adapter_realization_payload,
-        )
+        if output_root is not None and local_adapter_result_payload is not None:
+            local_adapter_result_path = output_root / "backend_local_factory_result.json"
+            _write_json(local_adapter_result_path, local_adapter_result_payload)
+            ref = str(local_adapter_result_path.resolve())
+            if ref not in artifact_refs:
+                artifact_refs.append(ref)
+    if adapter_execution and backend in {"isaac", "holosoma"}:
+        if backend == "isaac":
+            adapter_execution = finalize_isaac_unitree_adapter_execution(
+                adapter_execution,
+                local_runtime_handoff=backend_instance is not None,
+            )
+            adapter_realization_payload = build_isaac_unitree_adapter_realization(
+                executable_adapter_request=executable_adapter_request,
+                executable_adapter_consumer=executable_adapter_consumer,
+                adapter_execution=adapter_execution,
+                runtime_bundle=runtime_bundle,
+                launch_spec=launch_spec,
+                binding_payload={
+                    "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                    "binding_status": backend_binding_receipt.binding_status,
+                },
+            )
+            adapter_receipt = build_isaac_unitree_adapter_receipt(
+                adapter_execution,
+                artifact_refs=adapter_refs,
+                realization=adapter_realization_payload,
+                local_adapter_invocation=local_adapter_invocation_payload,
+                local_adapter_result=local_adapter_result_payload,
+            )
+        else:
+            adapter_execution = finalize_holosoma_adapter_execution(
+                adapter_execution,
+                local_runtime_handoff=backend_instance is not None,
+            )
+            adapter_realization_payload = build_holosoma_adapter_realization(
+                executable_adapter_request=executable_adapter_request,
+                executable_adapter_consumer=executable_adapter_consumer,
+                adapter_execution=adapter_execution,
+                runtime_bundle=runtime_bundle,
+                launch_spec=launch_spec,
+                binding_payload={
+                    "executor_entrypoint": backend_binding_receipt.executor_entrypoint,
+                    "binding_status": backend_binding_receipt.binding_status,
+                },
+            )
+            adapter_receipt = build_holosoma_adapter_receipt(
+                adapter_execution,
+                artifact_refs=adapter_refs,
+                realization=adapter_realization_payload,
+                local_adapter_invocation=local_adapter_invocation_payload,
+                local_adapter_result=local_adapter_result_payload,
+            )
         adapter_receipt_payload = adapter_receipt.to_dict()
         if output_root is not None:
             adapter_execution_path = output_root / "backend_runtime_adapter_execution.json"
             adapter_realization_path = output_root / "backend_runtime_adapter_realization.json"
             adapter_receipt_path = output_root / "backend_runtime_adapter_receipt.json"
+            local_adapter_invocation_path = output_root / "backend_local_factory_invocation.json"
+            local_adapter_result_path = output_root / "backend_local_factory_result.json"
             _write_json(adapter_execution_path, adapter_execution)
             _write_json(adapter_realization_path, adapter_realization_payload)
             _write_json(adapter_receipt_path, adapter_receipt_payload)
+            if local_adapter_invocation_payload is not None:
+                _write_json(local_adapter_invocation_path, local_adapter_invocation_payload)
+            if local_adapter_result_payload is not None:
+                _write_json(local_adapter_result_path, local_adapter_result_payload)
             for ref in (
                 str(adapter_execution_path.resolve()),
                 str(adapter_realization_path.resolve()),
                 str(adapter_receipt_path.resolve()),
+                (
+                    str(local_adapter_invocation_path.resolve())
+                    if local_adapter_invocation_payload is not None
+                    else ""
+                ),
+                (
+                    str(local_adapter_result_path.resolve())
+                    if local_adapter_result_payload is not None
+                    else ""
+                ),
             ):
-                if ref not in artifact_refs:
+                if ref and ref not in artifact_refs:
                     artifact_refs.append(ref)
     try:
-        backend_instance = make_motor_backend(
-            backend_name,
-            econ_meter=econ_meter,
-            store=store,
-            backend_config=(
-                None if backend == "holosoma" else binding_payload
-            ),
-        )
+        if backend_instance is None:
+            if local_adapter_invocation_payload is not None:
+                raise RuntimeError(
+                    str(
+                        _mapping(local_adapter_result_payload).get(
+                            "error",
+                            _mapping(local_adapter_result_payload).get(
+                                "result_status",
+                                "local_backend_materialization_failed",
+                            ),
+                        )
+                        or "local_backend_materialization_failed"
+                    )
+                )
+            backend_instance = make_motor_backend(
+                backend_name,
+                econ_meter=econ_meter,
+                store=store,
+                backend_config=(None if backend == "holosoma" else binding_payload),
+            )
         if backend_instance is None:
             raise RuntimeError(f"{backend_name} backend is not available.")
         if backend == "holosoma" and not policy_id and can_train_holosoma:
@@ -1032,6 +1270,8 @@ def materialize_backend_runtime_execution(
                 "adapter_execution": adapter_execution,
                 "adapter_realization": adapter_realization_payload,
                 "adapter_receipt": adapter_receipt_payload,
+                "local_adapter_invocation": local_adapter_invocation_payload,
+                "local_adapter_result": local_adapter_result_payload,
                 "runtime_output_contract": runtime_output_contract,
                 "launch_plan": launch_plan,
                 "launch_receipt": launch_receipt_payload,
@@ -1083,6 +1323,8 @@ def materialize_backend_runtime_execution(
             "adapter_execution": adapter_execution,
             "adapter_realization": adapter_realization_payload,
             "adapter_receipt": adapter_receipt_payload,
+            "local_adapter_invocation": local_adapter_invocation_payload,
+            "local_adapter_result": local_adapter_result_payload,
             "runtime_output_contract": runtime_output_contract,
             "launch_plan": launch_plan,
             "launch_receipt": launch_receipt_payload,

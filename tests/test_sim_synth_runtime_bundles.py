@@ -198,5 +198,10 @@ def test_build_holosoma_runtime_bundle_prefers_repo_profile(tmp_path: Path) -> N
     assert launch_spec["preferred_profile"] == "holosoma_repo"
     assert "holosoma.eval" in launch_spec["command"]
     assert launch_spec["policy_ready"] is True
+    assert runtime_bundle["executable_adapter_request"]["adapter_family"] == "holosoma"
+    assert runtime_bundle["executable_adapter_consumer"]["consumer_mode"] in {
+        "local_runtime_binding",
+        "external_runtime_launch",
+    }
     assert runtime_bundle["output_contract"]["profile_id"] == "holosoma_repo"
     assert runtime_bundle["output_contract"]["sources"]

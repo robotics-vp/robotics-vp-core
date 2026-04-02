@@ -1061,6 +1061,14 @@ def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exis
     tmp_path: Path,
 ) -> None:
     from src.world_model.sim_synth_physics import backend_runtime_execution as runtime_exec_module
+    from src.world_model.sim_synth_physics import runtime_targets as runtime_targets_module
+    from src.world_model.sim_synth_physics.adapters import backend_holosoma as binding_module
+    from src.world_model.sim_synth_physics.adapters import (
+        holosoma_adapter_execution as holosoma_adapter_module,
+    )
+    from src.world_model.sim_synth_physics.adapters import (
+        local_backend_factory_adapter as local_factory_module,
+    )
 
     class FakeRuntimeBackend:
         def evaluate_policy(
@@ -1103,7 +1111,15 @@ def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exis
                 rollout_bundle=rollout_bundle,
             )
 
+    monkeypatch.setattr(binding_module, "_has_module", lambda name: name == "holosoma")
+    monkeypatch.setattr(runtime_targets_module, "_has_module", lambda name: name == "holosoma")
+    monkeypatch.setattr(holosoma_adapter_module, "_has_local_runtime_module", lambda: True)
     monkeypatch.setattr(runtime_exec_module, "_runtime_supports_execution", lambda backend: backend == "holosoma")
+    monkeypatch.setattr(
+        local_factory_module,
+        "make_motor_backend",
+        lambda name, econ_meter, store, backend_config=None: FakeRuntimeBackend(),
+    )
     monkeypatch.setattr(
         runtime_exec_module,
         "make_motor_backend",
@@ -1130,6 +1146,15 @@ def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exis
     assert result.backend_runtime_execution_receipt.execution_status == "runtime_execution_completed"
     assert result.backend_runtime_execution_receipt.policy_id == "holosoma_policy.onnx"
     assert (
+        result.backend_runtime_execution_receipt.metadata["executable_adapter_request"][
+            "adapter_family"
+        ]
+        == "holosoma"
+    )
+    assert result.backend_runtime_execution_receipt.metadata["adapter_realization"][
+        "realization_path"
+    ] == "local_backend_factory"
+    assert (
         result.physics_adaptation_receipt.metadata["runtime_evidence"]["runtime_execution_status"]
         == "runtime_execution_completed"
     )
@@ -1151,6 +1176,14 @@ def test_runtime_trains_concrete_holosoma_backend_when_motion_datapacks_exist(
     tmp_path: Path,
 ) -> None:
     from src.world_model.sim_synth_physics import backend_runtime_execution as runtime_exec_module
+    from src.world_model.sim_synth_physics import runtime_targets as runtime_targets_module
+    from src.world_model.sim_synth_physics.adapters import backend_holosoma as binding_module
+    from src.world_model.sim_synth_physics.adapters import (
+        holosoma_adapter_execution as holosoma_adapter_module,
+    )
+    from src.world_model.sim_synth_physics.adapters import (
+        local_backend_factory_adapter as local_factory_module,
+    )
 
     class FakeRuntimeBackend:
         def train_policy(
@@ -1199,7 +1232,15 @@ def test_runtime_trains_concrete_holosoma_backend_when_motion_datapacks_exist(
                 rollout_bundle=rollout_bundle,
             )
 
+    monkeypatch.setattr(binding_module, "_has_module", lambda name: name == "holosoma")
+    monkeypatch.setattr(runtime_targets_module, "_has_module", lambda name: name == "holosoma")
+    monkeypatch.setattr(holosoma_adapter_module, "_has_local_runtime_module", lambda: True)
     monkeypatch.setattr(runtime_exec_module, "_runtime_supports_execution", lambda backend: backend == "holosoma")
+    monkeypatch.setattr(
+        local_factory_module,
+        "make_motor_backend",
+        lambda name, econ_meter, store, backend_config=None: FakeRuntimeBackend(),
+    )
     monkeypatch.setattr(
         runtime_exec_module,
         "make_motor_backend",
@@ -1226,6 +1267,9 @@ def test_runtime_trains_concrete_holosoma_backend_when_motion_datapacks_exist(
     assert result.backend_runtime_execution_receipt.execution_status == "runtime_training_completed"
     assert result.backend_runtime_execution_receipt.execution_mode == "holosoma_train_policy"
     assert result.backend_runtime_execution_receipt.policy_id == "trained_holosoma_policy.onnx"
+    assert result.backend_runtime_execution_receipt.metadata["adapter_realization"][
+        "realization_path"
+    ] == "local_backend_factory"
     assert (
         result.physics_adaptation_receipt.metadata["runtime_evidence"]["runtime_execution_status"]
         == "runtime_training_completed"

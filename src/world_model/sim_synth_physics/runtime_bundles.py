@@ -6,6 +6,12 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
+from .adapters.holosoma_executable_adapter import (
+    build_holosoma_executable_adapter_request,
+)
+from .adapters.holosoma_executable_consumer import (
+    build_holosoma_executable_adapter_consumer,
+)
 from .adapters.isaac_unitree_executable_adapter import (
     build_isaac_unitree_executable_adapter_request,
 )
@@ -284,6 +290,23 @@ def build_backend_runtime_bundle(
             output_contract=output_contract,
         )
         executable_adapter_consumer = build_isaac_unitree_executable_adapter_consumer(
+            executable_adapter_request
+        )
+        runtime_bundle["executable_adapter_request"] = executable_adapter_request
+        runtime_bundle["executable_adapter_consumer"] = executable_adapter_consumer
+    elif backend == "holosoma":
+        executable_adapter_request = build_holosoma_executable_adapter_request(
+            task_id=task_id,
+            policy_ref=policy_ref,
+            preferred_profile=preferred_profile,
+            launch_spec=preferred_launch_spec,
+            runtime_target_contract=runtime_target_contract,
+            policy_contract=policy_contract,
+            normalized_robot_asset_manifest=normalized_robot_asset_manifest,
+            robot_contract_context=mapping(robot_contract_context),
+            output_contract=output_contract,
+        )
+        executable_adapter_consumer = build_holosoma_executable_adapter_consumer(
             executable_adapter_request
         )
         runtime_bundle["executable_adapter_request"] = executable_adapter_request
