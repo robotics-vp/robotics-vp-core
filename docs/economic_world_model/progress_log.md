@@ -2,6 +2,22 @@
 
 ## 2026-04-02
 
+- Changed: tightened Phase-1 runtime-outcome honesty so harvested outputs are now checked against the selected runtime refs instead of only being counted/classified:
+  - `src/world_model/sim_synth_physics/runtime_bundles.py` now passes runtime-binding truth into the output-contract build path
+  - `src/world_model/sim_synth_physics/runtime_outcomes.py` now:
+    - carries expected selected policy / deploy-config / runtime-report refs in the output contract
+    - includes exact selected refs in harvest sources when those local artifacts exist
+    - emits `selected_ref_validation` in the output summary / outcome receipt
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `training_corpus.py` now preserve selected-ref validation status in execution-facing and trainer-facing artifacts
+- Why this matters:
+  - before this tranche, a runtime lane could harvest outputs successfully without saying whether those outputs matched the chosen runtime policy/report surfaces
+  - now “runtime outputs harvested” and “selected runtime refs matched” are distinct but adjacent truths
+  - this removes another pseudo-readiness seam and pushes the honest remainder further toward real external runtime/install/GPU reality
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_outcomes.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_bundles.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_outcomes.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_bundles.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_bundles.py`, and `git diff --check` passed (result: `12 passed`).
+- Status summary:
+  - the audited selected-output validation cluster has no new Category A gap
+  - Category B is now more explicitly about whether real runtime artifacts exist at all, not whether harvested outputs can be matched back to the selected runtime surfaces once they do
+
 - Changed: tightened Phase-1 checkpoint / deploy-config / runtime-report selection so verified local artifacts now outrank merely earlier candidates in runtime-pack and binding selection:
   - `src/world_model/sim_synth_physics/ref_evidence.py` now exposes reusable candidate-evidence selection/summarization helpers
   - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py` now:

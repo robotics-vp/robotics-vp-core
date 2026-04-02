@@ -2,6 +2,15 @@
 
 ## 2026-04-02
 
+- Tightened Phase-1 runtime-outcome truth against selected runtime refs:
+  - `src/world_model/sim_synth_physics/runtime_bundles.py` now ensures output-contract construction can see the already-selected runtime binding
+  - `src/world_model/sim_synth_physics/runtime_outcomes.py` now carries expected selected policy / deploy-config / runtime-report refs inside the output contract, includes them as exact refs when locally present, and emits `selected_ref_validation` in the output summary / outcome receipt
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `training_corpus.py` now preserve that validation status in execution-facing and trainer-facing artifacts
+- Why this matters:
+  - before this tranche, “runtime outputs harvested” did not say whether the harvested artifacts actually matched the selected runtime refs that the lane intended to use
+  - after this tranche, selected-runtime mismatch or missing-output truth is explicit and replayable on the audited path
+  - this keeps collapsing repo-local ambiguity without introducing a new ladder rung
+
 - Tightened Phase-1 concrete ref selection against real local runtime artifacts:
   - `src/world_model/sim_synth_physics/ref_evidence.py` now exposes candidate-selection and candidate-summary helpers, so ref choice can be driven by verification status instead of list order
   - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py` now choose:
