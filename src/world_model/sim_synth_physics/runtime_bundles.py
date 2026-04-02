@@ -323,6 +323,7 @@ def build_backend_runtime_bundle(
                 preferred_launch_spec,
             )
         runtime_bundle["preferred_profile"] = preferred_profile
+        runtime_bundle["runtime_binding"] = runtime_binding
         output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
         runtime_bundle["output_contract"] = output_contract
         executable_adapter_request = build_isaac_unitree_executable_adapter_request(
@@ -361,6 +362,7 @@ def build_backend_runtime_bundle(
                 preferred_launch_spec,
             )
         runtime_bundle["preferred_profile"] = preferred_profile
+        runtime_bundle["runtime_binding"] = runtime_binding
         output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
         runtime_bundle["output_contract"] = output_contract
         executable_adapter_request = build_holosoma_executable_adapter_request(

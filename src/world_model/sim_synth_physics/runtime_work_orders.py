@@ -168,6 +168,7 @@ def build_backend_runtime_work_orders(
         {} if runtime_outcome_receipt is None else mapping(runtime_outcome_receipt.metadata)
     )
     structured_outputs = mapping(outcome_metadata.get("structured_outputs"))
+    selected_ref_validation = mapping(outcome_metadata.get("selected_ref_validation"))
     linked_backlog_ids = list(BACKEND_BACKLOG_IDS.get(backend, []))
     command_hints = _load_command_hints(linked_backlog_ids)
     launch_spec = mapping(runtime_metadata.get("launch_spec"))
@@ -234,6 +235,15 @@ def build_backend_runtime_work_orders(
                 "backend_runtime_ready_surfaces": strings(structured_outputs.get("ready_surfaces")),
                 "backend_runtime_primary_policy_ref": str(
                     structured_outputs.get("primary_policy_ref", "") or ""
+                ),
+                "backend_runtime_selected_ref_validation_status": str(
+                    selected_ref_validation.get("status", "") or ""
+                ),
+                "backend_runtime_selected_ref_validation_mismatched_components": strings(
+                    selected_ref_validation.get("mismatched_components")
+                ),
+                "backend_runtime_selected_ref_validation_missing_components": strings(
+                    selected_ref_validation.get("missing_components")
                 ),
                 "backend_runtime_metric_keys": strings(structured_outputs.get("metric_keys")),
                 "execution_authority": bridge_receipt.execution_authority,

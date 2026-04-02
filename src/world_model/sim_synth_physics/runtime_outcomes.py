@@ -244,6 +244,31 @@ def _policy_ref(runtime_bundle: Mapping[str, Any], launch_spec: Mapping[str, Any
     return str(spec.get("policy_ref", policy_contract.get("policy_ref", "")) or "")
 
 
+def _selected_refs(
+    runtime_bundle: Mapping[str, Any],
+    launch_spec: Mapping[str, Any],
+) -> dict[str, str]:
+    bundle = mapping(runtime_bundle)
+    spec = mapping(launch_spec)
+    runtime_binding = mapping(bundle.get("runtime_binding")) or mapping(spec.get("runtime_binding"))
+    return {
+        "policy_ref": str(
+            runtime_binding.get("selected_policy_ref")
+            or _policy_ref(bundle, spec)
+            or ""
+        ),
+        "deploy_config_ref": str(runtime_binding.get("selected_deploy_config", "") or ""),
+        "runtime_report_ref": str(runtime_binding.get("selected_runtime_report", "") or ""),
+        "policy_ref_source": str(runtime_binding.get("selected_policy_ref_source", "") or ""),
+        "deploy_config_ref_source": str(
+            runtime_binding.get("selected_deploy_config_source", "") or ""
+        ),
+        "runtime_report_ref_source": str(
+            runtime_binding.get("selected_runtime_report_source", "") or ""
+        ),
+    }
+
+
 def _source_root(
     runtime_bundle: Mapping[str, Any],
     launch_spec: Mapping[str, Any],
@@ -275,15 +300,29 @@ def build_backend_runtime_output_contract(
     spec = mapping(launch_spec)
     backend = str(bundle.get("backend", spec.get("backend", "")) or "")
     profile_id = str(spec.get("preferred_profile", bundle.get("preferred_profile", "")) or "")
-    policy_ref = _policy_ref(bundle, spec)
+    selected_refs = _selected_refs(bundle, spec)
+    policy_ref = str(selected_refs.get("policy_ref", "") or "")
     sources: list[dict[str, Any]] = []
     for source_spec in _output_specs(backend, profile_id):
         root = _source_root(bundle, spec, source_spec)
         exact_refs = []
-        if str(source_spec.get("artifact_kind", "")) == "policy_bank" and policy_ref:
+        artifact_kind = str(source_spec.get("artifact_kind", "") or "")
+        if artifact_kind == "policy_bank" and policy_ref:
             policy_path = Path(policy_ref)
             if policy_path.exists():
                 exact_refs.append(str(policy_path.resolve()))
+        if artifact_kind in {"policy_bank", "deploy_contracts", "runtime_outputs"}:
+            deploy_config_ref = str(selected_refs.get("deploy_config_ref", "") or "")
+            if deploy_config_ref:
+                deploy_path = Path(deploy_config_ref)
+                if deploy_path.exists():
+                    exact_refs.append(str(deploy_path.resolve()))
+        if artifact_kind in {"runtime_outputs", "policy_bank"}:
+            runtime_report_ref = str(selected_refs.get("runtime_report_ref", "") or "")
+            if runtime_report_ref:
+                runtime_report_path = Path(runtime_report_ref)
+                if runtime_report_path.exists():
+                    exact_refs.append(str(runtime_report_path.resolve()))
         sources.append(
             {
                 "source_id": str(source_spec.get("source_id", "") or ""),
@@ -299,6 +338,8 @@ def build_backend_runtime_output_contract(
         "backend": backend,
         "profile_id": profile_id,
         "policy_ref": policy_ref,
+        "expected_deploy_config_ref": str(selected_refs.get("deploy_config_ref", "") or ""),
+        "expected_runtime_report_ref": str(selected_refs.get("runtime_report_ref", "") or ""),
         "source_count": len(sources),
     }
     return {
@@ -307,7 +348,88 @@ def build_backend_runtime_output_contract(
         "backend": backend,
         "profile_id": profile_id,
         "policy_ref": policy_ref,
+        "expected_policy_ref": policy_ref,
+        "expected_policy_ref_source": str(selected_refs.get("policy_ref_source", "") or ""),
+        "expected_deploy_config_ref": str(selected_refs.get("deploy_config_ref", "") or ""),
+        "expected_deploy_config_ref_source": str(
+            selected_refs.get("deploy_config_ref_source", "") or ""
+        ),
+        "expected_runtime_report_ref": str(selected_refs.get("runtime_report_ref", "") or ""),
+        "expected_runtime_report_ref_source": str(
+            selected_refs.get("runtime_report_ref_source", "") or ""
+        ),
         "sources": sources,
+    }
+
+
+def _validate_selected_output_refs(
+    output_contract: Mapping[str, Any],
+    artifact_refs: Sequence[str],
+    structured_outputs: Mapping[str, Any],
+) -> dict[str, Any]:
+    contract = mapping(output_contract)
+    structured = mapping(structured_outputs)
+    harvested_ref_set = {str(ref) for ref in strings(artifact_refs)}
+    policy_refs = set(strings(structured.get("policy_checkpoint_refs")))
+    deploy_refs = set(strings(structured.get("deploy_config_refs")))
+    expected_rows = [
+        (
+            "policy_ref",
+            str(contract.get("expected_policy_ref", "") or ""),
+            str(contract.get("expected_policy_ref_source", "") or ""),
+        ),
+        (
+            "deploy_config_ref",
+            str(contract.get("expected_deploy_config_ref", "") or ""),
+            str(contract.get("expected_deploy_config_ref_source", "") or ""),
+        ),
+        (
+            "runtime_report_ref",
+            str(contract.get("expected_runtime_report_ref", "") or ""),
+            str(contract.get("expected_runtime_report_ref_source", "") or ""),
+        ),
+    ]
+    expected_components = [component for component, ref, _source in expected_rows if ref]
+    matched_components: list[str] = []
+    mismatched_components: list[str] = []
+    missing_components: list[str] = []
+    expected_refs: dict[str, str] = {}
+    expected_sources: dict[str, str] = {}
+    for component, ref, source in expected_rows:
+        if not ref:
+            continue
+        expected_refs[component] = ref
+        expected_sources[component] = source
+        if component == "policy_ref":
+            matched = ref in policy_refs or ref in harvested_ref_set
+        elif component == "deploy_config_ref":
+            matched = ref in deploy_refs or ref in harvested_ref_set
+        else:
+            matched = ref in harvested_ref_set
+        if matched:
+            matched_components.append(component)
+        elif harvested_ref_set:
+            mismatched_components.append(component)
+        else:
+            missing_components.append(component)
+    if not expected_components:
+        status = "no_expected_selected_refs"
+    elif not mismatched_components and not missing_components:
+        status = "selected_refs_matched"
+    elif matched_components:
+        status = "selected_refs_partial"
+    elif mismatched_components:
+        status = "selected_refs_mismatched"
+    else:
+        status = "selected_refs_missing"
+    return {
+        "status": status,
+        "expected_components": expected_components,
+        "matched_components": matched_components,
+        "mismatched_components": mismatched_components,
+        "missing_components": missing_components,
+        "expected_refs": expected_refs,
+        "expected_ref_sources": expected_sources,
     }
 
 
@@ -414,6 +536,12 @@ def harvest_backend_runtime_outcomes(
         outcome_status = "runtime_outputs_missing"
     else:
         outcome_status = "outcome_sources_missing"
+    structured_outputs = summarize_runtime_output_artifacts(harvested_artifacts)
+    selected_ref_validation = _validate_selected_output_refs(
+        contract,
+        harvested_artifacts,
+        structured_outputs,
+    )
     return {
         "version": "backend_runtime_output_summary_v1",
         "backend": str(contract.get("backend", "") or ""),
@@ -424,7 +552,8 @@ def harvest_backend_runtime_outcomes(
         "artifact_kind_counts": kind_counts,
         "source_summaries": source_summaries,
         "artifact_refs": harvested_artifacts,
-        "structured_outputs": summarize_runtime_output_artifacts(harvested_artifacts),
+        "structured_outputs": structured_outputs,
+        "selected_ref_validation": selected_ref_validation,
         "output_contract": contract,
     }
 
@@ -470,6 +599,7 @@ def build_backend_runtime_outcome_receipt(
             "artifact_kind_counts": mapping(summary.get("artifact_kind_counts")),
             "source_summaries": list(summary.get("source_summaries", []) or []),
             "structured_outputs": mapping(summary.get("structured_outputs")),
+            "selected_ref_validation": mapping(summary.get("selected_ref_validation")),
             "output_contract": mapping(summary.get("output_contract")),
         },
     )

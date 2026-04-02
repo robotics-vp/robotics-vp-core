@@ -174,7 +174,12 @@ def test_build_backend_runtime_work_orders_marks_external_runtime_outputs_comple
                 "ready_surfaces": ["policy_surface_ready"],
                 "metric_keys": [],
                 "primary_policy_ref": "/tmp/unitree_sim_isaaclab/logs/run_1/policy.onnx",
-            }
+            },
+            "selected_ref_validation": {
+                "status": "selected_refs_matched",
+                "mismatched_components": [],
+                "missing_components": [],
+            },
         },
     )
 
@@ -197,4 +202,8 @@ def test_build_backend_runtime_work_orders_marks_external_runtime_outputs_comple
     assert work_orders[0].metadata["backend_runtime_ready_surfaces"] == [
         "policy_surface_ready"
     ]
+    assert (
+        work_orders[0].metadata["backend_runtime_selected_ref_validation_status"]
+        == "selected_refs_matched"
+    )
     assert work_orders[0].metadata["upstream_runtime_primary_runtime_report_ref"] == ""

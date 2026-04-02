@@ -31,6 +31,13 @@ def test_runtime_outcomes_harvest_unitree_sim_outputs(tmp_path: Path) -> None:
     runtime_bundle = {
         "backend": "isaac",
         "preferred_profile": "unitree_sim_isaaclab",
+        "runtime_binding": {
+            "selected_profile": "unitree_sim_isaaclab",
+            "selected_policy_ref": str(policy_ref),
+            "selected_policy_ref_source": "test",
+            "selected_runtime_report": str(logs_dir / "metrics.json"),
+            "selected_runtime_report_source": "test",
+        },
         "runtime_target_contract": {
             "targets": [
                 {"target_id": "unitree_sim_isaaclab_root", "ref": str(runtime_root)},
@@ -80,6 +87,11 @@ def test_runtime_outcomes_harvest_unitree_sim_outputs(tmp_path: Path) -> None:
     )
     assert output_summary["structured_outputs"]["primary_policy_ref"].endswith("policy.onnx")
     assert output_summary["structured_outputs"]["runtime_metrics_refs"]
+    assert output_summary["selected_ref_validation"]["status"] == "selected_refs_matched"
+    assert sorted(output_summary["selected_ref_validation"]["matched_components"]) == [
+        "policy_ref",
+        "runtime_report_ref",
+    ]
     assert outcome_receipt.outcome_status == "runtime_outputs_harvested"
     assert outcome_receipt.harvested_output_count >= 3
     assert any(ref.endswith("metrics.json") for ref in outcome_receipt.artifact_refs)
@@ -87,6 +99,7 @@ def test_runtime_outcomes_harvest_unitree_sim_outputs(tmp_path: Path) -> None:
         outcome_receipt.metadata["structured_outputs"]["surface_ready"]["policy_surface_ready"]
         is True
     )
+    assert outcome_receipt.metadata["selected_ref_validation"]["status"] == "selected_refs_matched"
 
 
 def test_runtime_outcomes_harvest_local_runtime_artifacts_without_launch(tmp_path: Path) -> None:
@@ -102,6 +115,13 @@ def test_runtime_outcomes_harvest_local_runtime_artifacts_without_launch(tmp_pat
     runtime_bundle = {
         "backend": "holosoma",
         "preferred_profile": "holosoma_repo",
+        "runtime_binding": {
+            "selected_profile": "holosoma_repo",
+            "selected_policy_ref": str(policy_path),
+            "selected_policy_ref_source": "test",
+            "selected_runtime_report": str(metrics_path),
+            "selected_runtime_report_source": "test",
+        },
         "runtime_target_contract": {"targets": []},
         "policy_contract": {"policy_root": str(tmp_path), "policy_ref": ""},
     }
@@ -130,7 +150,51 @@ def test_runtime_outcomes_harvest_local_runtime_artifacts_without_launch(tmp_pat
     assert output_summary["structured_outputs"]["surface_ready"]["metrics_surface_ready"] is True
     assert output_summary["structured_outputs"]["surface_ready"]["policy_surface_ready"] is True
     assert output_summary["structured_outputs"]["counts"]["dataset_episode_count"] == 1
+    assert output_summary["selected_ref_validation"]["status"] == "selected_refs_matched"
     assert outcome_receipt.outcome_status == "runtime_outputs_harvested"
     assert outcome_receipt.executed is True
     assert outcome_receipt.metadata["harvest_mode"] == "local_runtime_execution"
     assert outcome_receipt.metadata["launch_receipt_id"] == ""
+
+
+def test_runtime_outcomes_flag_selected_ref_mismatch(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "unitree_sim_isaaclab"
+    runtime_root.mkdir()
+    (runtime_root / "sim_main.py").write_text("", encoding="utf-8")
+    logs_dir = runtime_root / "logs" / "run_1"
+    logs_dir.mkdir(parents=True)
+    harvested_policy = logs_dir / "policy.onnx"
+    harvested_policy.write_text("x", encoding="utf-8")
+    expected_policy = tmp_path / "expected_policy.onnx"
+
+    runtime_bundle = {
+        "backend": "isaac",
+        "preferred_profile": "unitree_sim_isaaclab",
+        "runtime_binding": {
+            "selected_profile": "unitree_sim_isaaclab",
+            "selected_policy_ref": str(expected_policy),
+            "selected_policy_ref_source": "test",
+        },
+        "runtime_target_contract": {
+            "targets": [
+                {"target_id": "unitree_sim_isaaclab_root", "ref": str(runtime_root)},
+            ]
+        },
+        "policy_contract": {"policy_root": str(runtime_root), "policy_ref": ""},
+    }
+    launch_spec = {
+        "backend": "isaac",
+        "preferred_profile": "unitree_sim_isaaclab",
+        "root": str(runtime_root),
+        "policy_ref": "",
+        "command": "python sim_main.py --task g1",
+    }
+
+    output_contract = build_backend_runtime_output_contract(runtime_bundle, launch_spec)
+    output_summary = harvest_backend_runtime_outcomes(output_contract, executed=True)
+
+    assert output_summary["outcome_status"] == "runtime_outputs_harvested"
+    assert output_summary["selected_ref_validation"]["status"] == "selected_refs_mismatched"
+    assert output_summary["selected_ref_validation"]["mismatched_components"] == [
+        "policy_ref"
+    ]

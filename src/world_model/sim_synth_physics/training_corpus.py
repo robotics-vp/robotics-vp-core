@@ -513,6 +513,9 @@ def build_backend_selector_rows_from_receipts(
         structured_outputs = _mapping(
             backend_runtime_outcome_metadata.get("structured_outputs")
         )
+        selected_ref_validation = _mapping(
+            backend_runtime_outcome_metadata.get("selected_ref_validation")
+        )
         upstream_runtime_pack = _mapping(
             backend_runtime_bundle.get("upstream_runtime_pack")
         ) or _mapping(backend_runtime_bridge_receipt.get("metadata", {})).get(
@@ -808,6 +811,15 @@ def build_backend_selector_rows_from_receipts(
                     "backend_runtime_primary_policy_ref": structured_outputs.get(
                         "primary_policy_ref"
                     ),
+                    "backend_runtime_selected_ref_validation_status": selected_ref_validation.get(
+                        "status"
+                    ),
+                    "backend_runtime_selected_ref_validation_mismatched_components": list(
+                        selected_ref_validation.get("mismatched_components") or []
+                    ),
+                    "backend_runtime_selected_ref_validation_missing_components": list(
+                        selected_ref_validation.get("missing_components") or []
+                    ),
                     "backend_runtime_metric_keys": list(
                         structured_outputs.get("metric_keys") or []
                     ),
@@ -914,6 +926,9 @@ def build_branch_planner_rows_from_receipts(
         )
         structured_outputs = _mapping(
             backend_runtime_outcome_metadata.get("structured_outputs")
+        )
+        selected_ref_validation = _mapping(
+            backend_runtime_outcome_metadata.get("selected_ref_validation")
         )
         backend_shadow_execution_receipt = _mapping(
             bundle_mapping.get("backend_shadow_execution_receipt")
@@ -1236,6 +1251,15 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "backend_runtime_primary_policy_ref": structured_outputs.get(
                             "primary_policy_ref"
+                        ),
+                        "backend_runtime_selected_ref_validation_status": selected_ref_validation.get(
+                            "status"
+                        ),
+                        "backend_runtime_selected_ref_validation_mismatched_components": list(
+                            selected_ref_validation.get("mismatched_components") or []
+                        ),
+                        "backend_runtime_selected_ref_validation_missing_components": list(
+                            selected_ref_validation.get("missing_components") or []
                         ),
                         "backend_runtime_metric_keys": list(
                             structured_outputs.get("metric_keys") or []

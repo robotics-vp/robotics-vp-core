@@ -318,7 +318,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                         ],
                         "metric_keys": ["metrics.score"],
                         "primary_policy_ref": "/tmp/unitree_sim_isaaclab/logs/run_1/policy.onnx",
-                    }
+                    },
+                    "selected_ref_validation": {
+                        "status": "selected_refs_matched",
+                        "mismatched_components": [],
+                        "missing_components": [],
+                    },
                 },
                 "version": "backend_runtime_outcome_receipt_v1",
             },
@@ -451,6 +456,10 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["metadata"]["backend_runtime_primary_policy_ref"].endswith(
         "policy.onnx"
     )
+    assert (
+        backend_rows[0]["metadata"]["backend_runtime_selected_ref_validation_status"]
+        == "selected_refs_matched"
+    )
     assert backend_rows[0]["metadata"]["backend_runtime_metric_keys"] == ["metrics.score"]
 
     branch_rows = build_branch_planner_rows_from_receipts(bundles)
@@ -496,6 +505,10 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     )
     assert branch_rows[0]["metadata"]["backend_runtime_outcome_status"] == "runtime_outputs_harvested"
     assert branch_rows[0]["metadata"]["backend_runtime_output_count"] == 2
+    assert (
+        branch_rows[0]["metadata"]["backend_runtime_selected_ref_validation_status"]
+        == "selected_refs_matched"
+    )
     assert branch_rows[0]["metadata"]["backend_shadow_execution_receipt_id"] == "shadow_1"
     assert branch_rows[0]["metadata"]["backend_shadow_execution_status"] == "shadow_executed_with_asset_gaps"
     assert branch_rows[0]["metadata"]["calibration_receipt_id"] == "cal_1"
