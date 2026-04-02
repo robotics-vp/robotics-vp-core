@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .common import mapping
+from .local_runtime_discovery import discover_named_root
 
 
 def _has_module(name: str) -> bool:
@@ -33,13 +34,39 @@ def _env_path(*keys: str) -> str:
     return ""
 
 
-def _target_record(*, target_id: str, label: str, ref: str, source: str) -> dict[str, Any]:
+def _resolved_path_with_source(
+    *,
+    explicit_ref: str,
+    discover_names: tuple[str, ...] = (),
+) -> tuple[str, str, list[str]]:
+    cleaned = str(explicit_ref or "").strip()
+    if cleaned:
+        return cleaned, "embodiment_or_env", []
+    if not discover_names:
+        return "", "", []
+    discovered = discover_named_root(discover_names)
+    return (
+        str(discovered.get("ref", "") or ""),
+        str(discovered.get("source", "") or ""),
+        list(discovered.get("checked_paths", []) or []),
+    )
+
+
+def _target_record(
+    *,
+    target_id: str,
+    label: str,
+    ref: str,
+    source: str,
+    checked_paths: list[str] | None = None,
+) -> dict[str, Any]:
     return {
         "target_id": target_id,
         "label": label,
         "ref": ref,
         "exists": bool(ref and Path(ref).exists()),
         "source": source,
+        "checked_paths": list(checked_paths or []),
     }
 
 
@@ -75,143 +102,177 @@ def describe_isaac_runtime_targets(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     embodiment = mapping(embodiment_context)
-    isaaclab_root = _context_path(embodiment, "isaaclab_root", "isaac_lab_root", "isaac_repo_root") or _env_path(
-        "ISAACLAB_ROOT",
-        "ISAAC_LAB_ROOT",
+    isaaclab_root, isaaclab_source, isaaclab_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(embodiment, "isaaclab_root", "isaac_lab_root", "isaac_repo_root")
+        or _env_path("ISAACLAB_ROOT", "ISAAC_LAB_ROOT"),
+        discover_names=("IsaacLab",),
     )
-    isaacsim_root = _context_path(embodiment, "isaacsim_root", "isaac_sim_root") or _env_path(
-        "ISAACSIM_ROOT",
-        "ISAAC_SIM_ROOT",
-        "OMNI_ISAAC_ROOT",
+    isaacsim_root, isaacsim_source, isaacsim_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(embodiment, "isaacsim_root", "isaac_sim_root")
+        or _env_path("ISAACSIM_ROOT", "ISAAC_SIM_ROOT", "OMNI_ISAAC_ROOT"),
     )
-    unitree_sdk2_root = _context_path(embodiment, "unitree_sdk2_root", "unitree_sdk_root") or _env_path(
-        "UNITREE_SDK2_ROOT",
-        "UNITREE_SDK_ROOT",
+    unitree_sdk2_root, unitree_sdk2_source, unitree_sdk2_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(embodiment, "unitree_sdk2_root", "unitree_sdk_root")
+        or _env_path("UNITREE_SDK2_ROOT", "UNITREE_SDK_ROOT"),
+        discover_names=("unitree_sdk2", "unitree_sdk"),
     )
-    unitree_asset_root = _context_path(
+    unitree_asset_root, unitree_asset_source, unitree_asset_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
         embodiment,
         "unitree_asset_root",
         "unitree_assets_root",
         "robot_asset_root",
-    ) or _env_path(
-        "UNITREE_ASSET_ROOT",
-        "UNITREE_ASSETS_ROOT",
-        "UNITREE_URDF_ROOT",
+    ) or _env_path("UNITREE_ASSET_ROOT", "UNITREE_ASSETS_ROOT", "UNITREE_URDF_ROOT"),
+        discover_names=("unitree_assets", "unitree_asset_root", "unitree_models"),
     )
-    unitree_rl_gym_root = _context_path(
-        embodiment,
-        "unitree_rl_gym_root",
-        "unitree_runtime_repo_root",
-    ) or _env_path("UNITREE_RL_GYM_ROOT")
-    unitree_sim_isaaclab_root = _context_path(
-        embodiment,
-        "unitree_sim_isaaclab_root",
-    ) or _env_path("UNITREE_SIM_ISAACLAB_ROOT")
-    humanoidverse_root = _context_path(embodiment, "humanoidverse_root") or _env_path(
-        "HUMANOIDVERSE_ROOT"
+    unitree_rl_gym_root, unitree_rl_source, unitree_rl_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
+            embodiment,
+            "unitree_rl_gym_root",
+            "unitree_runtime_repo_root",
+        ) or _env_path("UNITREE_RL_GYM_ROOT"),
+        discover_names=("unitree_rl_gym",),
     )
-    xr_teleoperate_root = _context_path(embodiment, "xr_teleoperate_root") or _env_path(
-        "XR_TELEOPERATE_ROOT"
+    unitree_sim_isaaclab_root, unitree_sim_source, unitree_sim_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
+            embodiment,
+            "unitree_sim_isaaclab_root",
+        ) or _env_path("UNITREE_SIM_ISAACLAB_ROOT"),
+        discover_names=("unitree_sim_isaaclab",),
     )
-    unitree_model_root = _context_path(embodiment, "unitree_model_root") or _env_path(
-        "UNITREE_MODEL_ROOT"
+    humanoidverse_root, humanoidverse_source, humanoidverse_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(embodiment, "humanoidverse_root")
+        or _env_path("HUMANOIDVERSE_ROOT"),
+        discover_names=("HumanoidVerse", "humanoidverse"),
     )
-    unitree_policy_root = _context_path(
+    xr_teleoperate_root, xr_source, xr_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(embodiment, "xr_teleoperate_root")
+        or _env_path("XR_TELEOPERATE_ROOT"),
+        discover_names=("xr_teleoperate",),
+    )
+    unitree_model_root, unitree_model_source, unitree_model_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(embodiment, "unitree_model_root")
+        or _env_path("UNITREE_MODEL_ROOT"),
+        discover_names=("unitree_model", "unitree_models"),
+    )
+    unitree_policy_root, unitree_policy_source, unitree_policy_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
         embodiment,
         "unitree_policy_root",
         "isaac_policy_root",
-    ) or _env_path("UNITREE_POLICY_ROOT", "ISAAC_POLICY_ROOT")
-    unitree_sdk2_python_root = _context_path(
+    ) or _env_path("UNITREE_POLICY_ROOT", "ISAAC_POLICY_ROOT"),
+    )
+    unitree_sdk2_python_root, unitree_sdk2_python_source, unitree_sdk2_python_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
         embodiment,
         "unitree_sdk2_python_root",
-    ) or _env_path("UNITREE_SDK2_PYTHON_ROOT")
-    teleimager_root = _context_path(
+    ) or _env_path("UNITREE_SDK2_PYTHON_ROOT"),
+    )
+    teleimager_root, teleimager_source, teleimager_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
         embodiment,
         "teleimager_root",
-    ) or _env_path("TELEIMAGER_ROOT")
-    unitree_il_lerobot_root = _context_path(
+    ) or _env_path("TELEIMAGER_ROOT"),
+    )
+    unitree_il_lerobot_root, lerobot_source, lerobot_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
         embodiment,
         "unitree_lerobot_root",
         "unitree_il_lerobot_root",
-    ) or _env_path("UNITREE_IL_LEROBOT_ROOT", "UNITREE_LEROBOT_ROOT")
+    ) or _env_path("UNITREE_IL_LEROBOT_ROOT", "UNITREE_LEROBOT_ROOT"),
+        discover_names=("unitree_IL_lerobot", "unitree_il_lerobot", "unitree_lerobot"),
+    )
     records = [
         _target_record(
             target_id="isaaclab_root",
             label="Isaac Lab root",
             ref=isaaclab_root,
-            source="embodiment_or_env",
+            source=isaaclab_source,
+            checked_paths=isaaclab_checked,
         ),
         _target_record(
             target_id="isaacsim_root",
             label="Isaac Sim root",
             ref=isaacsim_root,
-            source="embodiment_or_env",
+            source=isaacsim_source,
+            checked_paths=isaacsim_checked,
         ),
         _target_record(
             target_id="unitree_sdk2_root",
             label="Unitree SDK2 root",
             ref=unitree_sdk2_root,
-            source="embodiment_or_env",
+            source=unitree_sdk2_source,
+            checked_paths=unitree_sdk2_checked,
         ),
         _target_record(
             target_id="unitree_asset_root",
             label="Unitree asset root",
             ref=unitree_asset_root,
-            source="embodiment_or_env",
+            source=unitree_asset_source,
+            checked_paths=unitree_asset_checked,
         ),
         _target_record(
             target_id="unitree_sim_isaaclab_root",
             label="Unitree Isaac Lab root",
             ref=unitree_sim_isaaclab_root,
-            source="embodiment_or_env",
+            source=unitree_sim_source,
+            checked_paths=unitree_sim_checked,
         ),
         _target_record(
             target_id="unitree_rl_gym_root",
             label="Unitree RL Gym root",
             ref=unitree_rl_gym_root,
-            source="embodiment_or_env",
+            source=unitree_rl_source,
+            checked_paths=unitree_rl_checked,
         ),
         _target_record(
             target_id="xr_teleoperate_root",
             label="XR Teleoperate root",
             ref=xr_teleoperate_root,
-            source="embodiment_or_env",
+            source=xr_source,
+            checked_paths=xr_checked,
         ),
         _target_record(
             target_id="unitree_model_root",
             label="Unitree model root",
             ref=unitree_model_root,
-            source="embodiment_or_env",
+            source=unitree_model_source,
+            checked_paths=unitree_model_checked,
         ),
         _target_record(
             target_id="unitree_policy_root",
             label="Unitree policy root",
             ref=unitree_policy_root,
-            source="embodiment_or_env",
+            source=unitree_policy_source,
+            checked_paths=unitree_policy_checked,
         ),
         _target_record(
             target_id="unitree_sdk2_python_root",
             label="Unitree SDK2 Python root",
             ref=unitree_sdk2_python_root,
-            source="embodiment_or_env",
+            source=unitree_sdk2_python_source,
+            checked_paths=unitree_sdk2_python_checked,
         ),
         _target_record(
             target_id="humanoidverse_root",
             label="HumanoidVerse root",
             ref=humanoidverse_root,
-            source="embodiment_or_env",
+            source=humanoidverse_source,
+            checked_paths=humanoidverse_checked,
         ),
         _target_record(
             target_id="teleimager_root",
             label="Teleimager root",
             ref=teleimager_root,
-            source="embodiment_or_env",
+            source=teleimager_source,
+            checked_paths=teleimager_checked,
         ),
         _target_record(
             target_id="unitree_il_lerobot_root",
             label="Unitree IL Lerobot root",
             ref=unitree_il_lerobot_root,
-            source="embodiment_or_env",
+            source=lerobot_source,
+            checked_paths=lerobot_checked,
         ),
     ]
     summary = _runtime_stack_summary(
@@ -256,49 +317,62 @@ def describe_holosoma_runtime_targets(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     embodiment = mapping(embodiment_context)
-    holosoma_root = _context_path(embodiment, "holosoma_root", "holosoma_repo_root") or _env_path(
-        "HOLOSOMA_ROOT",
-        "HOLOSOMA_REPO_ROOT",
+    holosoma_root, holosoma_source, holosoma_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(embodiment, "holosoma_root", "holosoma_repo_root")
+        or _env_path("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
+        discover_names=("holosoma",),
     )
-    holosoma_motion_root = _context_path(
+    holosoma_motion_root, holosoma_motion_source, holosoma_motion_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
         embodiment,
         "holosoma_motion_root",
         "motion_data_root",
-    ) or _env_path("HOLOSOMA_MOTION_ROOT")
-    holosoma_policy_root = _context_path(
+    ) or _env_path("HOLOSOMA_MOTION_ROOT"),
+        discover_names=("holosoma_motion", "motions"),
+    )
+    holosoma_policy_root, holosoma_policy_source, holosoma_policy_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
         embodiment,
         "holosoma_policy_root",
         "policy_root",
-    ) or _env_path("HOLOSOMA_POLICY_ROOT")
-    retargeting_root = _context_path(
+    ) or _env_path("HOLOSOMA_POLICY_ROOT"),
+    )
+    retargeting_root, retarget_source, retarget_checked = _resolved_path_with_source(
+        explicit_ref=_context_path(
         embodiment,
         "retargeting_root",
         "whole_body_retargeting_root",
-    ) or _env_path("RETARGETING_ROOT")
+    ) or _env_path("RETARGETING_ROOT"),
+        discover_names=("retargeting",),
+    )
     records = [
         _target_record(
             target_id="holosoma_root",
             label="Holosoma root",
             ref=holosoma_root,
-            source="embodiment_or_env",
+            source=holosoma_source,
+            checked_paths=holosoma_checked,
         ),
         _target_record(
             target_id="holosoma_motion_root",
             label="Holosoma motion root",
             ref=holosoma_motion_root,
-            source="embodiment_or_env",
+            source=holosoma_motion_source,
+            checked_paths=holosoma_motion_checked,
         ),
         _target_record(
             target_id="holosoma_policy_root",
             label="Holosoma policy root",
             ref=holosoma_policy_root,
-            source="embodiment_or_env",
+            source=holosoma_policy_source,
+            checked_paths=holosoma_policy_checked,
         ),
         _target_record(
             target_id="retargeting_root",
             label="Whole-body retargeting root",
             ref=retargeting_root,
-            source="embodiment_or_env",
+            source=retarget_source,
+            checked_paths=retarget_checked,
         ),
     ]
     summary = _runtime_stack_summary(

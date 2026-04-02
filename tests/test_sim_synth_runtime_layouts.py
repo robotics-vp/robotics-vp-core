@@ -115,3 +115,39 @@ def test_holosoma_runtime_layouts_and_policy_contracts_detect_roots(tmp_path) ->
     assert policy_contract["checkpoint_candidate_count"] >= 1
     assert policy_contract["primary_checkpoint_ref"].endswith("policy.ckpt")
     assert policy_contract["primary_deploy_config_ref"].endswith("deploy.yaml")
+
+
+def test_isaac_policy_contract_can_fall_back_to_autodiscovered_repo_root(
+    tmp_path, monkeypatch
+) -> None:
+    home = tmp_path / "home"
+    repo_root = home / "code" / "unitree_rl_gym"
+    logs_dir = repo_root / "logs" / "run_1"
+    logs_dir.mkdir(parents=True)
+    (logs_dir / "policy.onnx").write_text("x", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+
+    contract = describe_isaac_policy_contract({})
+
+    assert contract["policy_ready"] is True
+    assert contract["policy_root"] == str(repo_root.resolve())
+    assert contract["primary_checkpoint_ref"].endswith("policy.onnx")
+
+
+def test_holosoma_policy_contract_can_fall_back_to_autodiscovered_repo_root(
+    tmp_path, monkeypatch
+) -> None:
+    home = tmp_path / "home"
+    repo_root = home / "code" / "holosoma"
+    checkpoints_dir = repo_root / "checkpoints"
+    checkpoints_dir.mkdir(parents=True)
+    (checkpoints_dir / "policy.ckpt").write_text("x", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+
+    contract = describe_holosoma_policy_contract({})
+
+    assert contract["policy_ready"] is True
+    assert contract["policy_root"] == str(repo_root.resolve())
+    assert contract["primary_checkpoint_ref"].endswith("policy.ckpt")

@@ -66,3 +66,45 @@ def test_holosoma_runtime_targets_require_motion_root(tmp_path) -> None:
     assert contract["backend"] == "holosoma"
     assert contract["runtime_targets_ready"] is False
     assert "holosoma_motion_root" in contract["missing_required_target_ids"]
+
+
+def test_isaac_runtime_targets_autodiscover_known_repo_roots(
+    tmp_path, monkeypatch
+) -> None:
+    home = tmp_path / "home"
+    code_root = home / "code"
+    sim_root = code_root / "unitree_sim_isaaclab"
+    sdk_root = code_root / "unitree_sdk2"
+    asset_root = code_root / "unitree_assets"
+    sim_root.mkdir(parents=True)
+    sdk_root.mkdir(parents=True)
+    asset_root.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+
+    contract = describe_isaac_runtime_targets({})
+
+    assert "unitree_sim_isaaclab_root" in contract["ready_target_ids"]
+    sim_row = next(
+        row for row in contract["targets"] if row["target_id"] == "unitree_sim_isaaclab_root"
+    )
+    assert sim_row["ref"] == str(sim_root.resolve())
+    assert sim_row["source"] == "autodiscovery"
+
+
+def test_holosoma_runtime_targets_autodiscover_repo_root(tmp_path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    code_root = home / "code"
+    holosoma_root = code_root / "holosoma"
+    motion_root = code_root / "motions"
+    holosoma_root.mkdir(parents=True)
+    motion_root.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+
+    contract = describe_holosoma_runtime_targets({})
+
+    assert "holosoma_root" in contract["ready_target_ids"]
+    holosoma_row = next(row for row in contract["targets"] if row["target_id"] == "holosoma_root")
+    assert holosoma_row["ref"] == str(holosoma_root.resolve())
+    assert holosoma_row["source"] == "autodiscovery"

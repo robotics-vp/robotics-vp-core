@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from .common import mapping
+from .local_runtime_discovery import discover_named_root
 
 
 def _context_path(embodiment_context: Mapping[str, Any], *keys: str) -> str:
@@ -24,6 +25,15 @@ def _env_path(*keys: str) -> str:
         if value:
             return value
     return ""
+
+
+def _resolved_path(explicit_ref: str, *, discover_names: tuple[str, ...] = ()) -> str:
+    cleaned = str(explicit_ref or "").strip()
+    if cleaned:
+        return cleaned
+    if not discover_names:
+        return ""
+    return str(discover_named_root(discover_names).get("ref", "") or "")
 
 
 def _existing(root: str, rel_paths: Iterable[str]) -> tuple[list[str], list[str]]:
@@ -168,27 +178,48 @@ def describe_isaac_runtime_layouts(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     embodiment = mapping(embodiment_context)
-    isaaclab_root = _context_path(
+    isaaclab_root = _resolved_path(
+        _context_path(
         embodiment, "isaaclab_root", "isaac_lab_root", "isaac_repo_root"
-    ) or _env_path("ISAACLAB_ROOT", "ISAAC_LAB_ROOT")
-    unitree_sim_isaaclab_root = _context_path(
+    ) or _env_path("ISAACLAB_ROOT", "ISAAC_LAB_ROOT"),
+        discover_names=("IsaacLab",),
+    )
+    unitree_sim_isaaclab_root = _resolved_path(
+        _context_path(
         embodiment, "unitree_sim_isaaclab_root"
-    ) or _env_path("UNITREE_SIM_ISAACLAB_ROOT")
-    unitree_rl_gym_root = _context_path(
+    ) or _env_path("UNITREE_SIM_ISAACLAB_ROOT"),
+        discover_names=("unitree_sim_isaaclab",),
+    )
+    unitree_rl_gym_root = _resolved_path(
+        _context_path(
         embodiment, "unitree_rl_gym_root", "unitree_runtime_repo_root"
-    ) or _env_path("UNITREE_RL_GYM_ROOT")
-    humanoidverse_root = _context_path(
+    ) or _env_path("UNITREE_RL_GYM_ROOT"),
+        discover_names=("unitree_rl_gym",),
+    )
+    humanoidverse_root = _resolved_path(
+        _context_path(
         embodiment, "humanoidverse_root"
-    ) or _env_path("HUMANOIDVERSE_ROOT")
-    xr_teleoperate_root = _context_path(
+    ) or _env_path("HUMANOIDVERSE_ROOT"),
+        discover_names=("HumanoidVerse", "humanoidverse"),
+    )
+    xr_teleoperate_root = _resolved_path(
+        _context_path(
         embodiment, "xr_teleoperate_root"
-    ) or _env_path("XR_TELEOPERATE_ROOT")
-    unitree_lerobot_root = _context_path(
+    ) or _env_path("XR_TELEOPERATE_ROOT"),
+        discover_names=("xr_teleoperate",),
+    )
+    unitree_lerobot_root = _resolved_path(
+        _context_path(
         embodiment, "unitree_lerobot_root", "unitree_il_lerobot_root"
-    ) or _env_path("UNITREE_LEROBOT_ROOT", "UNITREE_IL_LEROBOT_ROOT")
-    unitree_model_root = _context_path(
+    ) or _env_path("UNITREE_LEROBOT_ROOT", "UNITREE_IL_LEROBOT_ROOT"),
+        discover_names=("unitree_IL_lerobot", "unitree_il_lerobot", "unitree_lerobot"),
+    )
+    unitree_model_root = _resolved_path(
+        _context_path(
         embodiment, "unitree_model_root"
-    ) or _env_path("UNITREE_MODEL_ROOT")
+    ) or _env_path("UNITREE_MODEL_ROOT"),
+        discover_names=("unitree_model", "unitree_models"),
+    )
     profiles = [
         _profile(
             profile_id="isaaclab_core",
@@ -295,28 +326,64 @@ def describe_isaac_policy_contract(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     embodiment = mapping(embodiment_context)
-    policy_root = _context_path(
+    explicit_policy_root = _context_path(
         embodiment, "isaac_policy_root", "unitree_policy_root", "policy_root"
     ) or _env_path("ISAAC_POLICY_ROOT", "UNITREE_POLICY_ROOT")
+    candidate_policy_roots = [
+        explicit_policy_root,
+        _resolved_path(
+            _context_path(embodiment, "unitree_rl_gym_root", "unitree_runtime_repo_root")
+            or _env_path("UNITREE_RL_GYM_ROOT"),
+            discover_names=("unitree_rl_gym",),
+        ),
+        _resolved_path(
+            _context_path(embodiment, "unitree_sim_isaaclab_root")
+            or _env_path("UNITREE_SIM_ISAACLAB_ROOT"),
+            discover_names=("unitree_sim_isaaclab",),
+        ),
+        _resolved_path(
+            _context_path(embodiment, "unitree_lerobot_root", "unitree_il_lerobot_root")
+            or _env_path("UNITREE_LEROBOT_ROOT", "UNITREE_IL_LEROBOT_ROOT"),
+            discover_names=("unitree_IL_lerobot", "unitree_il_lerobot", "unitree_lerobot"),
+        ),
+        _resolved_path(
+            _context_path(embodiment, "humanoidverse_root")
+            or _env_path("HUMANOIDVERSE_ROOT"),
+            discover_names=("HumanoidVerse", "humanoidverse"),
+        ),
+        _resolved_path(
+            _context_path(embodiment, "xr_teleoperate_root")
+            or _env_path("XR_TELEOPERATE_ROOT"),
+            discover_names=("xr_teleoperate",),
+        ),
+    ]
     policy_ref = _context_path(
         embodiment, "isaac_policy_id", "runtime_policy_id", "evaluation_policy_id", "policy_id"
     ) or str(os.environ.get("ISAAC_POLICY_PATH", "") or "").strip()
-    checkpoint_candidates = _candidate_files(policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
-    deploy_config_candidates = _candidate_files(policy_root, ("*.yaml", "*.yml", "*.json"))
-    runtime_report_candidates = _candidate_files(
-        policy_root,
-        ("logs/**/*.json", "logs/**/*.yaml", "deploy/**/*.yaml", "deploy_real/**/*"),
-    )
-    checkpoint_candidate_records = _candidate_records(
-        policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt")
-    )
-    deploy_config_candidate_records = _candidate_records(
-        policy_root, ("*.yaml", "*.yml", "*.json")
-    )
-    runtime_report_candidate_records = _candidate_records(
-        policy_root,
-        ("logs/**/*.json", "logs/**/*.yaml", "deploy/**/*.yaml", "deploy_real/**/*"),
-    )
+    policy_root = ""
+    checkpoint_candidates: list[str] = []
+    deploy_config_candidates: list[str] = []
+    runtime_report_candidates: list[str] = []
+    checkpoint_candidate_records: list[dict[str, Any]] = []
+    deploy_config_candidate_records: list[dict[str, Any]] = []
+    runtime_report_candidate_records: list[dict[str, Any]] = []
+    for root in candidate_policy_roots:
+        if not root:
+            continue
+        checkpoint_candidate_records = _candidate_records(root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
+        deploy_config_candidate_records = _candidate_records(root, ("*.yaml", "*.yml", "*.json"))
+        runtime_report_candidate_records = _candidate_records(
+            root,
+            ("logs/**/*.json", "logs/**/*.yaml", "deploy/**/*.yaml", "deploy_real/**/*"),
+        )
+        checkpoint_candidates = [str(row["ref"]) for row in checkpoint_candidate_records]
+        deploy_config_candidates = [str(row["ref"]) for row in deploy_config_candidate_records]
+        runtime_report_candidates = [str(row["ref"]) for row in runtime_report_candidate_records]
+        if checkpoint_candidate_records or root == explicit_policy_root:
+            policy_root = root
+            break
+    if not policy_root:
+        policy_root = explicit_policy_root
     policy_ref_exists = bool(policy_ref and Path(policy_ref).exists())
     return {
         "version": "backend_policy_contract_v1",
@@ -351,18 +418,29 @@ def describe_holosoma_runtime_layouts(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     embodiment = mapping(embodiment_context)
-    holosoma_root = _context_path(
+    holosoma_root = _resolved_path(
+        _context_path(
         embodiment, "holosoma_root", "holosoma_repo_root"
-    ) or _env_path("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT")
-    motion_root = _context_path(
+    ) or _env_path("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
+        discover_names=("holosoma",),
+    )
+    motion_root = _resolved_path(
+        _context_path(
         embodiment, "holosoma_motion_root", "motion_data_root"
-    ) or _env_path("HOLOSOMA_MOTION_ROOT")
-    policy_root = _context_path(
+    ) or _env_path("HOLOSOMA_MOTION_ROOT"),
+        discover_names=("holosoma_motion", "motions"),
+    )
+    policy_root = _resolved_path(
+        _context_path(
         embodiment, "holosoma_policy_root", "policy_root"
-    ) or _env_path("HOLOSOMA_POLICY_ROOT")
-    retargeting_root = _context_path(
+    ) or _env_path("HOLOSOMA_POLICY_ROOT"),
+    )
+    retargeting_root = _resolved_path(
+        _context_path(
         embodiment, "retargeting_root", "whole_body_retargeting_root"
-    ) or _env_path("RETARGETING_ROOT")
+    ) or _env_path("RETARGETING_ROOT"),
+        discover_names=("retargeting",),
+    )
     profiles = [
         _profile(
             profile_id="holosoma_repo",
@@ -420,26 +498,43 @@ def describe_holosoma_policy_contract(
     embodiment_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     embodiment = mapping(embodiment_context)
-    policy_root = _context_path(
+    explicit_policy_root = _context_path(
         embodiment, "holosoma_policy_root", "policy_root"
     ) or _env_path("HOLOSOMA_POLICY_ROOT")
+    candidate_policy_roots = [
+        explicit_policy_root,
+        _resolved_path(
+            _context_path(embodiment, "holosoma_root", "holosoma_repo_root")
+            or _env_path("HOLOSOMA_ROOT", "HOLOSOMA_REPO_ROOT"),
+            discover_names=("holosoma",),
+        ),
+    ]
     policy_ref = _context_path(
         embodiment, "holosoma_policy_id", "runtime_policy_id", "evaluation_policy_id", "policy_id"
     ) or str(os.environ.get("HOLOSOMA_POLICY_PATH", "") or "").strip()
-    checkpoint_candidates = _candidate_files(policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
-    deploy_config_candidates = _candidate_files(policy_root, ("*.yaml", "*.yml", "*.json"))
-    runtime_report_candidates = _candidate_files(
-        policy_root, ("logs/**/*.json", "metrics/**/*.json", "outputs/**/*.json")
-    )
-    checkpoint_candidate_records = _candidate_records(
-        policy_root, ("*.pt", "*.pth", "*.onnx", "*.ckpt")
-    )
-    deploy_config_candidate_records = _candidate_records(
-        policy_root, ("*.yaml", "*.yml", "*.json")
-    )
-    runtime_report_candidate_records = _candidate_records(
-        policy_root, ("logs/**/*.json", "metrics/**/*.json", "outputs/**/*.json")
-    )
+    policy_root = ""
+    checkpoint_candidates: list[str] = []
+    deploy_config_candidates: list[str] = []
+    runtime_report_candidates: list[str] = []
+    checkpoint_candidate_records: list[dict[str, Any]] = []
+    deploy_config_candidate_records: list[dict[str, Any]] = []
+    runtime_report_candidate_records: list[dict[str, Any]] = []
+    for root in candidate_policy_roots:
+        if not root:
+            continue
+        checkpoint_candidate_records = _candidate_records(root, ("*.pt", "*.pth", "*.onnx", "*.ckpt"))
+        deploy_config_candidate_records = _candidate_records(root, ("*.yaml", "*.yml", "*.json"))
+        runtime_report_candidate_records = _candidate_records(
+            root, ("logs/**/*.json", "metrics/**/*.json", "outputs/**/*.json")
+        )
+        checkpoint_candidates = [str(row["ref"]) for row in checkpoint_candidate_records]
+        deploy_config_candidates = [str(row["ref"]) for row in deploy_config_candidate_records]
+        runtime_report_candidates = [str(row["ref"]) for row in runtime_report_candidate_records]
+        if checkpoint_candidate_records or root == explicit_policy_root:
+            policy_root = root
+            break
+    if not policy_root:
+        policy_root = explicit_policy_root
     policy_ref_exists = bool(policy_ref and Path(policy_ref).exists())
     return {
         "version": "backend_policy_contract_v1",
