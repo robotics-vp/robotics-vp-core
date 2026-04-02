@@ -480,6 +480,9 @@ def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None
     assert first_plan.selection_policy == "heuristic_plus_learned_branch_planner"
     assert first_plan.metadata["branch_helper_status"]["promotion_stage"] == "shadow_candidate"
     assert first_plan.metadata["branch_helper_trace"]["generation_mode"] == "neural_branch_candidate"
+    assert first_plan.metadata["branch_helper_resolution"] == "heuristic_due_to_shadow_candidate"
+    assert first_plan.metadata["branch_helper_resolution_reason"] == "benchmark_gate_not_ready"
+    assert first_plan.metadata["branch_helper_payload_applied"] is False
     assert first_plan.render_provider is not None
     assert first_plan.render_provider.provider_kind in {
         "lsd_scene_graph",
@@ -662,6 +665,9 @@ def test_world_state_loads_branch_planner_runtime_package(tmp_path: Path) -> Non
     assert helper_status["promotion_stage"] == "promoted"
     assert helper_status["package_id"] == "branch_planner_test_pkg"
     assert helper_trace["generation_mode"] == "neural_branch_candidate"
+    assert first_plan.metadata["branch_helper_resolution"] == "learned_payload_applied"
+    assert first_plan.metadata["branch_helper_resolution_reason"] == "benchmark_gate_ready"
+    assert first_plan.metadata["branch_helper_payload_applied"] is True
 
 
 def test_resolve_helper_demotion_on_evidence_failure() -> None:
@@ -844,6 +850,23 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert result.backend_shadow_execution_receipt.metadata["shadow_harvest_mode"] == "shadow_with_data_harvest"
     assert result.backend_shadow_execution_receipt.metadata["backend_runtime_execution_receipt_id"] == result.backend_runtime_execution_receipt.receipt_id
     assert result.backend_shadow_execution_receipt.metadata["backend_runtime_binding_status"]
+    assert result.backend_shadow_execution_receipt.metadata["shadow_runtime_binding_consumed"] is True
+    assert (
+        result.backend_shadow_execution_receipt.metadata["env_config"][
+            "runtime_binding_selected_profile"
+        ]
+        == result.backend_shadow_execution_receipt.metadata[
+            "backend_runtime_binding_selected_profile"
+        ]
+    )
+    assert (
+        result.backend_shadow_execution_receipt.metadata["env_config"][
+            "runtime_binding_selected_target_refs"
+        ]
+        == result.backend_shadow_execution_receipt.metadata["backend_runtime_binding"][
+            "selected_target_refs"
+        ]
+    )
     assert (
         result.physics_calibration_receipt.metadata["runtime_evidence"][
             "materialized_render_provider_count"
@@ -938,6 +961,23 @@ def test_runtime_materializes_holosoma_shadow_work_order(tmp_path: Path) -> None
     assert len(result.backend_shadow_execution_receipt.metadata["asset_sidecar_refs"]) == 3
     assert result.backend_shadow_execution_receipt.metadata["shadow_harvest_mode"] == "shadow_only_preview"
     assert result.backend_shadow_execution_receipt.metadata["backend_runtime_execution_receipt_id"] == result.backend_runtime_execution_receipt.receipt_id
+    assert result.backend_shadow_execution_receipt.metadata["shadow_runtime_binding_consumed"] is True
+    assert (
+        result.backend_shadow_execution_receipt.metadata["work_order"][
+            "runtime_binding_selected_profile"
+        ]
+        == result.backend_shadow_execution_receipt.metadata[
+            "backend_runtime_binding_selected_profile"
+        ]
+    )
+    assert (
+        result.backend_shadow_execution_receipt.metadata["work_order"][
+            "runtime_binding_selected_motion_sources"
+        ]
+        == result.backend_shadow_execution_receipt.metadata["backend_runtime_binding"][
+            "selected_motion_sources"
+        ]
+    )
     assert result.backend_shadow_execution_receipt.artifact_refs
     assert any("holosoma_shadow_work_order.json" in ref for ref in result.backend_shadow_execution_receipt.artifact_refs)
     assert (

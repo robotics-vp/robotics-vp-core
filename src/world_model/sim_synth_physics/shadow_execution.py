@@ -173,6 +173,36 @@ def _runtime_ladder_metadata(
     }
 
 
+def _runtime_binding_context(
+    *,
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+) -> dict[str, Any]:
+    execution_metadata = _mapping(
+        {}
+        if backend_runtime_execution_receipt is None
+        else backend_runtime_execution_receipt.metadata
+    )
+    runtime_bundle = _mapping(execution_metadata.get("runtime_bundle"))
+    return {
+        "runtime_target_contract": _mapping(
+            execution_metadata.get("runtime_target_contract")
+            or runtime_bundle.get("runtime_target_contract")
+        ),
+        "runtime_binding": _mapping(
+            execution_metadata.get("runtime_binding") or runtime_bundle.get("runtime_binding")
+        ),
+    }
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    deduped: list[str] = []
+    for value in values:
+        cleaned = str(value or "")
+        if cleaned and cleaned not in deduped:
+            deduped.append(cleaned)
+    return deduped
+
+
 def _materialize_robot_asset_sidecars(
     world_state: SimSynthPhysicsWorldState,
     *,
@@ -244,6 +274,8 @@ def _derive_isaac_shadow_env_config(
     world_state: SimSynthPhysicsWorldState,
     *,
     output_dir: Optional[str | Path],
+    runtime_target_contract: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any],
 ) -> dict[str, Any]:
     embodiment_context = _mapping(world_state.input_context.get("embodiment"))
     control_constraints = _mapping(embodiment_context.get("control_constraints"))
@@ -266,6 +298,9 @@ def _derive_isaac_shadow_env_config(
         embodiment_context.get("action_dim", control_constraints.get("action_dim", 12)),
         12,
     )
+    selected_target_refs = _mapping(runtime_binding.get("selected_target_refs"))
+    selected_policy_ref = str(runtime_binding.get("selected_policy_ref", "") or "")
+    selected_launch_root = str(runtime_binding.get("selected_launch_root", "") or "")
     task_name = getattr(first_job, "objective", None) or env_name
     return {
         "env_name": str(env_name),
@@ -283,6 +318,22 @@ def _derive_isaac_shadow_env_config(
         "seed": 0,
         "econ_params": _mapping(world_state.input_context.get("economic")),
         "robot_asset_manifest": robot_asset_manifest,
+        "runtime_binding_selected_profile": str(
+            runtime_binding.get("selected_profile", "") or ""
+        ),
+        "runtime_binding_selected_policy_ref": selected_policy_ref,
+        "runtime_binding_selected_launch_root": selected_launch_root,
+        "runtime_binding_selected_target_refs": selected_target_refs,
+        "runtime_binding_host_preflight_status": str(
+            runtime_binding.get("host_preflight_status", "") or ""
+        ),
+        "runtime_binding_selected_profile_install_preflight_status": str(
+            runtime_binding.get("selected_profile_install_preflight_status", "") or ""
+        ),
+        "runtime_binding_selected_profile_primary_entrypoint_ref": str(
+            runtime_binding.get("selected_profile_primary_entrypoint_ref", "") or ""
+        ),
+        "runtime_target_ids": list(runtime_target_contract.get("ready_target_ids", []) or []),
         "output_root": (
             None
             if output_dir is None
@@ -316,6 +367,8 @@ def _derive_holosoma_shadow_work_order(
     world_state: SimSynthPhysicsWorldState,
     *,
     output_dir: Optional[Path],
+    runtime_target_contract: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any],
 ) -> dict[str, Any]:
     embodiment_context = _mapping(world_state.input_context.get("embodiment"))
     control_constraints = _mapping(embodiment_context.get("control_constraints"))
@@ -363,6 +416,31 @@ def _derive_holosoma_shadow_work_order(
             or embodiment_context.get("target_embodiments")
             or []
         ),
+        "runtime_binding_selected_profile": str(
+            runtime_binding.get("selected_profile", "") or ""
+        ),
+        "runtime_binding_selected_policy_ref": str(
+            runtime_binding.get("selected_policy_ref", "") or ""
+        ),
+        "runtime_binding_selected_launch_root": str(
+            runtime_binding.get("selected_launch_root", "") or ""
+        ),
+        "runtime_binding_selected_target_refs": _mapping(
+            runtime_binding.get("selected_target_refs")
+        ),
+        "runtime_binding_selected_motion_sources": list(
+            runtime_binding.get("selected_motion_sources") or []
+        ),
+        "runtime_binding_selected_retargeting_root": str(
+            runtime_binding.get("selected_retargeting_root", "") or ""
+        ),
+        "runtime_binding_host_preflight_status": str(
+            runtime_binding.get("host_preflight_status", "") or ""
+        ),
+        "runtime_binding_selected_profile_install_preflight_status": str(
+            runtime_binding.get("selected_profile_install_preflight_status", "") or ""
+        ),
+        "runtime_target_ids": list(runtime_target_contract.get("ready_target_ids", []) or []),
         "source_job_id": "" if job is None else str(job.job_id),
         "source_objective": "" if job is None else str(job.objective_preset),
         "work_order_root": work_order_root,
@@ -380,12 +458,22 @@ def _materialize_isaac_shadow_execution(
     backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     output_root: Optional[Path],
 ) -> BackendShadowExecutionReceipt:
+    binding_context = _runtime_binding_context(
+        backend_runtime_execution_receipt=backend_runtime_execution_receipt
+    )
+    runtime_target_contract = _mapping(binding_context.get("runtime_target_contract"))
+    runtime_binding = _mapping(binding_context.get("runtime_binding"))
     asset_sidecar_refs, asset_summary = _materialize_robot_asset_sidecars(
         world_state,
         output_root=output_root,
         backend="isaac",
     )
-    env_config = _derive_isaac_shadow_env_config(world_state, output_dir=output_root)
+    env_config = _derive_isaac_shadow_env_config(
+        world_state,
+        output_dir=output_root,
+        runtime_target_contract=runtime_target_contract,
+        runtime_binding=runtime_binding,
+    )
     env_config["robot_asset_contract_id"] = asset_summary.get("robot_asset_contract_id", "")
     env_config["calibration_contracts"] = list(asset_summary.get("calibration_contracts", []))
     env_config["observation_contracts"] = list(asset_summary.get("observation_contracts", []))
@@ -495,6 +583,7 @@ def _materialize_isaac_shadow_execution(
             "asset_readiness_score": float(asset_summary.get("asset_readiness_score", 0.0) or 0.0),
             "shadow_harvest_mode": shadow_harvest_mode,
             "env_config": mapping(env_config),
+            "shadow_runtime_binding_consumed": bool(runtime_binding),
             **runtime_ladder_metadata,
         },
     )
@@ -514,12 +603,22 @@ def _materialize_holosoma_shadow_execution(
     backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     output_root: Optional[Path],
 ) -> BackendShadowExecutionReceipt:
+    binding_context = _runtime_binding_context(
+        backend_runtime_execution_receipt=backend_runtime_execution_receipt
+    )
+    runtime_target_contract = _mapping(binding_context.get("runtime_target_contract"))
+    runtime_binding = _mapping(binding_context.get("runtime_binding"))
     asset_sidecar_refs, asset_summary = _materialize_robot_asset_sidecars(
         world_state,
         output_root=output_root,
         backend="holosoma",
     )
-    work_order = _derive_holosoma_shadow_work_order(world_state, output_dir=output_root)
+    work_order = _derive_holosoma_shadow_work_order(
+        world_state,
+        output_dir=output_root,
+        runtime_target_contract=runtime_target_contract,
+        runtime_binding=runtime_binding,
+    )
     work_order["robot_asset_contract_id"] = asset_summary.get("robot_asset_contract_id", "")
     work_order["calibration_contracts"] = list(asset_summary.get("calibration_contracts", []))
     work_order["observation_contracts"] = list(asset_summary.get("observation_contracts", []))
@@ -532,8 +631,20 @@ def _materialize_holosoma_shadow_execution(
     runtime_available = bool(_has_module("holosoma"))
     missing_assets = list(backend_binding_receipt.metadata.get("missing_assets", []) or [])
     unsatisfied_preconditions = list(missing_assets)
+    unsatisfied_preconditions.extend(
+        str(item)
+        for item in list(runtime_binding.get("host_preflight_missing_components") or [])
+        if not str(item).startswith("asset::")
+    )
+    unsatisfied_preconditions.extend(
+        str(item)
+        for item in list(runtime_binding.get("selected_profile_install_missing_components") or [])
+        if str(item) not in {"profile_root", "profile_entrypoint"}
+    )
+    unsatisfied_preconditions = _dedupe_strings(unsatisfied_preconditions)
     if not runtime_available:
         unsatisfied_preconditions.append("holosoma_runtime")
+        unsatisfied_preconditions = _dedupe_strings(unsatisfied_preconditions)
     if work_order_path is not None:
         _write_json(
             work_order_path,
@@ -592,6 +703,7 @@ def _materialize_holosoma_shadow_execution(
             "asset_readiness_score": float(asset_summary.get("asset_readiness_score", 0.0) or 0.0),
             "shadow_harvest_mode": "shadow_only_preview",
             "work_order": mapping(work_order),
+            "shadow_runtime_binding_consumed": bool(runtime_binding),
             **runtime_ladder_metadata,
         },
     )

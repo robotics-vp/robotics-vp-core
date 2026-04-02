@@ -29,7 +29,26 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                     "route_status": "fallback",
                     "version": "physics_execution_contract_v1",
                 },
-                "synthetic_branch_plans": [{"plan_id": "plan_1", "source_job_id": "job_1"}],
+                "synthetic_branch_plans": [
+                    {
+                        "plan_id": "plan_1",
+                        "source_job_id": "job_1",
+                        "metadata": {
+                            "branch_helper_status": {
+                                "status": "loaded",
+                                "promotion_stage": "shadow_candidate",
+                                "benchmark_gate_ready": False,
+                            },
+                            "branch_helper_trace": {
+                                "generation_mode": "neural_branch_candidate",
+                                "expected_yield_score": 0.91,
+                            },
+                            "branch_helper_resolution": "heuristic_due_to_shadow_candidate",
+                            "branch_helper_resolution_reason": "benchmark_gate_not_ready",
+                            "branch_helper_payload_applied": False,
+                        },
+                    }
+                ],
                 "metadata": {
                     "compiled_receipt_inventory": {
                         "inventory_id": "inventory_1",
@@ -481,6 +500,20 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["backend_shadow_execution_status"] == "shadow_executed_with_asset_gaps"
     assert branch_rows[0]["metadata"]["calibration_receipt_id"] == "cal_1"
     assert branch_rows[0]["metadata"]["calibration_quality_score"] == 0.8
+    assert (
+        branch_rows[0]["metadata"]["branch_helper_resolution"]
+        == "heuristic_due_to_shadow_candidate"
+    )
+    assert (
+        branch_rows[0]["metadata"]["branch_helper_resolution_reason"]
+        == "benchmark_gate_not_ready"
+    )
+    assert branch_rows[0]["metadata"]["branch_helper_payload_applied"] is False
+    assert (
+        branch_rows[0]["metadata"]["branch_helper_trace_generation_mode"]
+        == "neural_branch_candidate"
+    )
+    assert branch_rows[0]["metadata"]["branch_helper_trace_expected_yield_score"] == 0.91
     assert branch_rows[0]["metadata"]["backend_runtime_ready_surfaces"] == [
         "metrics_surface_ready",
         "policy_surface_ready",

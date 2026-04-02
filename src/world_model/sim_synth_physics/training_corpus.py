@@ -894,6 +894,7 @@ def build_branch_planner_rows_from_receipts(
             if not plan_id or job is None:
                 continue
             plan_metadata = _mapping(plan.get("metadata"))
+            helper_trace = _mapping(plan_metadata.get("branch_helper_trace"))
             render_provider = _mapping(plan.get("render_provider"))
             helper_status = _mapping(plan_metadata.get("branch_helper_status"))
             outcome = _mapping(outcomes.get(plan_id))
@@ -973,6 +974,22 @@ def build_branch_planner_rows_from_receipts(
                             "upstream_runtime_pack_status"
                         ),
                         "branch_plan_id": plan_id,
+                        "branch_helper_resolution": str(
+                            plan_metadata.get("branch_helper_resolution") or ""
+                        ),
+                        "branch_helper_resolution_reason": str(
+                            plan_metadata.get("branch_helper_resolution_reason") or ""
+                        ),
+                        "branch_helper_payload_applied": bool(
+                            plan_metadata.get("branch_helper_payload_applied", False)
+                        ),
+                        "branch_helper_trace_generation_mode": str(
+                            helper_trace.get("generation_mode") or ""
+                        ),
+                        "branch_helper_trace_expected_yield_score": _clip01(
+                            helper_trace.get("expected_yield_score"),
+                            0.0,
+                        ),
                         "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                         "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
                         "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(

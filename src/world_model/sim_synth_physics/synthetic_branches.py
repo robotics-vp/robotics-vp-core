@@ -277,6 +277,39 @@ def heuristic_yield_score(job: Any) -> float:
     )
 
 
+def _branch_helper_resolution(
+    *,
+    helper_status: Mapping[str, Any],
+    helper_payload: Mapping[str, Any],
+) -> tuple[str, str, bool]:
+    promotion_stage = str(helper_status.get("promotion_stage", "") or "")
+    status = str(helper_status.get("status", "") or "")
+    benchmark_gate_ready = bool(helper_status.get("benchmark_gate_ready", False))
+    trace_available = bool(helper_payload)
+
+    if promotion_stage == "promoted" and trace_available:
+        return "learned_payload_applied", "benchmark_gate_ready", True
+    if promotion_stage == "demoted_to_shadow":
+        return (
+            "heuristic_due_to_demotion",
+            str(helper_status.get("demotion_reason", "") or "demoted_to_shadow"),
+            False,
+        )
+    if trace_available and promotion_stage == "shadow_candidate":
+        return (
+            "heuristic_due_to_shadow_candidate",
+            "benchmark_gate_not_ready" if not benchmark_gate_ready else "shadow_candidate",
+            False,
+        )
+    if trace_available and promotion_stage == "heuristic_fallback":
+        return "heuristic_due_to_helper_fallback", status or "heuristic_fallback", False
+    if status in {"disabled", "missing", "package_missing"}:
+        return "heuristic_due_to_helper_unavailable", status or "helper_unavailable", False
+    if trace_available:
+        return "heuristic_due_to_unapplied_trace", status or promotion_stage or "trace_unapplied", False
+    return "heuristic_only", status or promotion_stage or "no_helper_trace", False
+
+
 def compile_synthetic_branch_plans(
     jobs: Sequence[Any],
     *,
@@ -316,6 +349,14 @@ def compile_synthetic_branch_plans(
                 expected_yield_score = clip01(
                     helper_payload.get("expected_yield_score", heuristic_score)
                 )
+        (
+            helper_resolution,
+            helper_resolution_reason,
+            helper_payload_applied,
+        ) = _branch_helper_resolution(
+            helper_status=helper_status,
+            helper_payload=helper_payload,
+        )
         job_contract = coerce_inferential_learnability_contract(
             job.inferential_learnability_contract
         )
@@ -380,6 +421,9 @@ def compile_synthetic_branch_plans(
                     "inferential_replay_weight": inferential_replay_weight,
                     "branch_helper_status": helper_status,
                     "branch_helper_trace": helper_payload,
+                    "branch_helper_resolution": helper_resolution,
+                    "branch_helper_resolution_reason": helper_resolution_reason,
+                    "branch_helper_payload_applied": helper_payload_applied,
                 },
             )
         )
