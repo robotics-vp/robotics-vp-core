@@ -1,5 +1,31 @@
 # Economic World Model Progress Log
 
+## 2026-04-03 — WM Section Readiness Standard + Scalable Imitation-Learning Pipelines
+
+- **Added** WM Section Readiness Standard to `multi_wm_architecture_plan.md`:
+  - 9-point template for all future WM sections (canonical mission, subsystem decomposition, typed surfaces, neural candidates, hyperparameter governance, topological placement, timescale hierarchy, robostack contribution, phase sequencing honesty)
+  - Standard ensures all WM sections meet the decomposition rigor present in Economic WM and Embodiment/Actuation WM plans
+  - Distinguishes inactive-but-structurally-rigorous vs vague "figure it out later" posture
+- **Added** scalable imitation-learning pipelines to Embodiment/Actuation WM:
+  - Ownership placement in Inverse-Dynamics/Retargeting Lane (Subsystem 4) and Joint Skill/Action Proposal Head (Subsystem 5)
+  - Typed artifacts: DemonstrationIngestReceipt, RetargetingTraceBundle, ActionRecoveryReceipt, DatapackQualityReceipt, ImitationPriorSnapshot, ImitationDriftReceipt
+  - Model families: ACT-style chunking, LeRobot interfaces, diffusion policy, inverse-dynamics heads, retargeting networks
+  - Hyperparameter governance by WM constraints (DoF, contact richness, safety envelope, task family)
+  - 5-stage promotion ladder: scripted fallback → imitation shadow → imitation advisory → benchmark-gated promotion → production recurrent
+- **Updated** `docs/actuation_embodiment_world_model.md`:
+  - Expanded Subsystem 4 (Inverse-Dynamics Lane) with imitation-learning pipeline functions and typed artifacts
+  - Expanded Subsystem 5 (Action Proposal Head) with imitation integration and promotion ladder
+  - New dedicated "Scalable Imitation-Learning Pipelines" section with full doctrine
+  - Added UMI/Retargeting Patterns to "What We Borrow" section
+- **Updated** `multi_wm_architecture_plan.md` Phase 3 section:
+  - Added "Scalable Imitation-Learning Pipelines" subsection
+  - Updated OSS dependency map with imitation learning deps (ACT, LeRobot, Diffusion Policy, UMI)
+- **Updated** `.agent/claude_copilot.md`:
+  - Changed implementation priority from Phase 1 (Sim/Synth/Physics) to Phase 2 (Perception/Grounding)
+  - Phase 1 declared structurally closed on 2026-04-02; remaining blockers are external
+  - Updated watch list and anti-patterns for Phase 2 focus
+- All changes are doc-only and Phase 2-compatible (spec sharpening for Phase 3 target, not phase transition)
+
 ## 2026-04-03 — Embodiment / Actuation WM Specification (Doc-Only Pass)
 
 - **Created** `docs/actuation_embodiment_world_model.md`:
