@@ -238,6 +238,98 @@ In other words:
 
 This rule applies to Phase 1 and every later WM or deployment-enabler phase in this document.
 
+## WM Section Readiness Standard
+
+A future WM section is not considered "ready" if it remains only a box-and-arrow
+description. The decomposition rigor present in the Economic WM doctrine and
+the Embodiment / Actuation WM plan should become the standard for all WM
+roadmap sections.
+
+Each WM plan should, at minimum, specify the following nine points:
+
+### 1. Canonical Mission / Ownership
+
+- What world/state this WM actually owns
+- What it is explicitly *not*
+- Clear boundaries that prevent collapse into neighboring WMs or a mother-latent
+
+### 2. Internal Subsystem Decomposition
+
+- Real functional subsystems, not one blob
+- Each subsystem should contribute to robostack usefulness, not just
+  architectural symmetry
+- Named subsystems with clear ownership boundaries
+
+### 3. Typed State / Receipt / Interface Surfaces
+
+- What typed objects this WM owns and emits
+- What downstream consumers they feed
+- How they relate to ObjectiveTensor / ConstraintSet / EconTensor / transport
+  layers
+- Receipt families and their emission points
+
+### 4. Neural Structure Candidates by Subsystem
+
+- What model family fits each subsystem functionally
+- For example: switching SSM, graph transformer, set attention, local dynamics
+  model, diffusion/action-chunk proposer, projection heads, etc.
+- Justified by subsystem function, not cargo-culted from SOTA
+- Capacity bands and scaling considerations
+
+### 5. Hyperparameter / Promotion / Governance Shaping
+
+- Which hyperparameters are local to the WM
+- Which are shaped by adjacent-WM needs
+- Which are later influenced by Economic WM allocation or meta-regal governance
+- What stays provider-backed vs WM-native
+- How promotion posture works where relevant
+- Benchmark gates for promotion
+
+### 6. Topological Placement
+
+- What adjacent WMs it consumes from
+- What it emits downward/upward
+- How it avoids collapsing into a mother-latent or swallowing neighboring WM
+  responsibilities
+- Bridge contracts with adjacent WMs
+
+### 7. Timescale Hierarchy
+
+- Fast / mid / slow loops where relevant
+- What kinds of learned seams belong at each timescale
+- What should remain non-neural / control-engineering / typed-constraint logic
+- Multi-rate observation and action requirements
+
+### 8. Robostack / G1 Contribution
+
+- How the WM and its internal subsystems contribute to eventual real robot
+  operation
+- The bar is not "architecturally elegant" but "functionally meaningful for the
+  stack"
+- Unitree-class readiness implications
+
+### 9. Phase Sequencing Honesty
+
+- What is spec/doctrine now
+- What is active implementation work now
+- What is deliberately deferred until the phase becomes active
+- Clear blockers: data/GPU/assets/calibration vs missing structure
+
+This standard does **not** mean every inactive phase needs implementation-level
+detail right now. It means every future WM section should be **structurally
+rigorous enough to be buildable later without ontological confusion**.
+
+Inactive WM sections may have:
+- doctrine and schema specified in detail
+- implementation deferred with explicit preconditions
+- adjacent spec work proceeding in parallel with active-phase implementation
+
+What inactive WM sections must not have:
+- vague "we'll figure out the subsystems later" posture
+- unnamed neural architectures where the function is already known
+- missing hyperparameter governance that will later require a cleanup pass
+- unclear topological boundaries that risk collapse
+
 ## Mechanics-First WM Readiness Rule
 
 Do not count a WM as "stood up" just because it can log, summarize, or emit a typed state object.
@@ -1619,6 +1711,127 @@ Recommended additive module targets:
 - placement / QoS receipt modules
 - resource-aware capability and action-feasibility helpers
 
+### Scalable Imitation-Learning Pipelines
+
+Imitation learning should not be treated as an ambient training tactic outside
+the WM. It belongs explicitly in the Embodiment / Actuation WM as a real
+subsystem concern.
+
+#### Ownership placement
+
+The primary home for imitation learning is:
+
+1. **Inverse-Dynamics / Retargeting Lane** (Subsystem 4): where demonstrations,
+   teleop traces, video-derived traces, and action-recovery traces are
+   normalized into embodiment-native training material
+2. **Joint Skill / Action Proposal Head** (Subsystem 5): where imitation-derived
+   priors become actionable chunk proposals for real control
+
+The inverse/retargeting lane is where demonstrations are ingested, retargeted
+across embodiments, and packaged into replay-ready traces. The action proposal
+head is where those imitation-derived priors become actionable for control.
+
+#### Imitation-learning dataflow ownership
+
+| Subsystem | Imitation-learning function |
+|-----------|----------------------------|
+| Inverse-Dynamics / Retargeting Lane | Demonstration ingestion, cross-embodiment retargeting, action recovery from state transitions, kinematic feasibility filtering, datapack construction |
+| Joint Skill / Action Proposal Head | Imitation-derived action prior formation, chunked policy/skill proposal from imitation priors, action-chunk confidence scoring |
+| Drift / Calibration / Cost Evaluator | Dataset quality assessment, replay packaging validation, provenance tracking, demonstration-to-deployment gap estimation |
+
+#### Typed artifacts and receipts
+
+Imitation-learning surfaces should emit canonical typed objects:
+
+- `DemonstrationIngestReceipt`: source type, embodiment source, frame count,
+  quality estimate, ingestion timestamp, provenance refs
+- `RetargetingTraceBundle`: source embodiment, target embodiment, recovered
+  action chunks, retargeting quality, kinematic feasibility, failure points
+- `ActionRecoveryReceipt`: state transition pairs processed, action chunks
+  recovered, inverse-dynamics model used, confidence distribution
+- `ImitationPriorSnapshot`: chunk horizon, action distribution summary,
+  embodiment binding, training corpus refs, promotion stage
+- `DatapackQualityReceipt`: dataset quality scores, provenance chain,
+  replay/training readiness, calibration status
+
+These receipts feed downstream into:
+- Training pipeline for policy learning
+- Economic WM for data valuation
+- Replay buffer for experience reuse
+- Action Proposal Head for prior injection
+
+#### Model family candidates
+
+| Function | Model family | Justification |
+|----------|--------------|---------------|
+| Action recovery from state transitions | Inverse-dynamics heads (MLP/Transformer over state pairs) | Direct mapping from state deltas to actions |
+| Cross-embodiment retargeting | Retargeting networks with embodiment embeddings | Must generalize across kinematic chains |
+| Chunked policy/skill prior | ACT-style action chunking transformers | Multi-step action chunk prediction |
+| Multimodal action proposal | Diffusion policy heads | Multiple valid action modes in contact-rich tasks |
+| Video-to-action extraction | LeRobot-style practical interfaces | Standardized policy/data contracts |
+
+These enter as bounded subsystem seams, not as the Embodiment WM ontology.
+
+#### Hyperparameter governance by the WM
+
+Imitation-learning hyperparameters should **not** be treated as globally
+free-floating. They should be shaped by the Embodiment / Actuation WM's own
+burdens and constraints:
+
+| Hyperparameter | Shaping constraint |
+|----------------|-------------------|
+| Action-chunk length / horizon | Embodiment DoF, contact richness, task family |
+| Proposal multiplicity | Contact ambiguity, grasp multiplicity, safety envelope |
+| Retargeting tolerance / alignment thresholds | Source-target kinematic similarity, safety margins |
+| Inverse-dynamics model capacity | State dimensionality, action space complexity |
+| Imitation-derived proposal head capacity | Embodiment complexity, skill catalog size |
+| Promotion thresholds (scripted → learned) | Benchmark gates, safety compliance, downstream success |
+
+The WM should govern:
+
+- Chunk length and action horizon selection
+- Proposal multiplicity limits
+- Retargeting tolerance and alignment thresholds
+- Capacity of inverse/retargeting models
+- Capacity of imitation-derived proposal heads
+- Promotion thresholds from scripted/action-prior fallback into learned chunk
+  proposers
+
+#### Topological integration
+
+Imitation-learning seams fit topologically inside the Embodiment WM rather than
+replacing it:
+
+- Demonstrations enter via typed provider contracts (teleop, video, sim replay)
+- Inverse-dynamics / retargeting lane normalizes them into embodiment-native
+  traces
+- Action proposal head consumes those traces as trainable priors
+- Drift evaluator monitors demonstration-to-deployment gap
+- Economic WM receives quality/provenance receipts for data valuation
+- Training pipeline consumes packaged datapacks with full lineage
+
+Imported imitation-learning architectures (ACT, LeRobot, diffusion policy) enter
+as bounded subsystem seams. They do not become the ontology of the Embodiment
+WM. They must remain typed, receipt-emitting, benchmark-gated, and subordinate
+to the WM's canonical body/contact/capability/control state.
+
+#### Bridge from imitation priors to promoted action heads
+
+The promotion path from imitation priors to load-bearing action proposal heads:
+
+1. **Scripted fallback**: Hand-coded skill primitives remain the authority
+2. **Imitation prior shadow**: Imitation-derived proposals logged but not
+   executed
+3. **Imitation prior advisory**: Imitation proposals inform selection among
+   scripted options
+4. **Benchmark-gated promotion**: Imitation head takes primary authority after
+   passing task success, safety, and embodiment-feasibility gates
+5. **Production recurrent**: Imitation-derived head is primary with scripted
+   fallback for edge cases
+
+This promotion ladder ensures imitation learning contributes to real control
+only after honest benchmark evidence.
+
 Neuralization rule from tranche 1:
 
 - embodiment WM should expose bounded learned seams for capability estimation, action-feasibility scoring, latency-envelope prediction, compute-headroom prediction, battery / thermal forecasting, and backend/robot adapter selection immediately
@@ -1635,6 +1848,9 @@ OSS dependency map:
 - locomotion: legged_gym, walk-these-ways, Unitree RL Gym
 - dexterous manipulation: DexGraspNet, IsaacGymEnvs dexterous tasks, HORA
 - robot description: Unitree URDFs
+- imitation learning / action chunking: ACT, LeRobot (lerobot), Diffusion Policy
+- inverse dynamics / retargeting: LeRobot action recovery, UMI-style retargeting
+- video-to-action: OpenVLA (as provider, not truth owner), DROID-style datasets
 
 Preconditions:
 

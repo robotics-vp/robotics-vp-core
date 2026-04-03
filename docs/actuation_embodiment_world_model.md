@@ -179,7 +179,8 @@ economic cost attribution pipeline.
 
 **What it is**: Recovers candidate actions / skill traces from state
 transitions, demonstrations, teleoperation logs, video, or future real robot
-recordings.
+recordings. This is the **primary home for scalable imitation-learning
+ingestion** in the Embodiment / Actuation WM.
 
 **What it does**:
 
@@ -190,13 +191,45 @@ recordings.
 - Bootstraps action priors from video or human demonstrations
 - Produces replay-ready traces for datapack/training construction
 
+**Scalable imitation-learning pipeline functions**:
+
+- **Demonstration ingestion**: Teleop traces, video demonstrations, sim rollouts,
+  real robot recordings all enter through typed provider contracts
+- **Cross-embodiment retargeting**: Demonstrations from source embodiment
+  (teleop arm, human video) mapped to target embodiment (G1, tabletop arm)
+  with kinematic feasibility filtering
+- **Action recovery from state transitions**: Given observation pairs, recover
+  plausible action sequences that could produce the transition
+- **Dataset quality assessment**: Quality scoring, provenance tracking, and
+  replay/training readiness validation
+- **Chunked policy/skill prior formation**: Packaging recovered action
+  sequences into trainable skill priors for downstream heads
+
 **What it does NOT do**: It is not the final controller. It produces
 candidate actions and retargeted traces that the skill/action proposal head
 evaluates and the training pipeline consumes.
 
-**Architecture pattern**: Inverse-dynamics models (LeRobot-style practical
-action recovery, ACT-style action chunking from demonstrations). Used for
-bootstrapping, imitation, and datapack construction.
+**Architecture patterns and model families**:
+
+| Function | Model family | Justification |
+|----------|--------------|---------------|
+| State-to-action recovery | Inverse-dynamics heads (MLP/Transformer) | Direct mapping from state deltas |
+| Cross-embodiment retargeting | Retargeting networks with embodiment embeddings | Generalize across kinematic chains |
+| Video-to-action extraction | LeRobot-style interfaces, OpenVLA (as provider) | Standardized policy/data contracts |
+| Demonstration quality scoring | Learned quality predictors | Filter low-quality demonstrations |
+
+These architectures enter as bounded subsystem seams, not as WM replacements.
+
+**Typed artifacts emitted**:
+
+- `DemonstrationIngestReceipt`: source type, source embodiment, frame count,
+  quality estimate, ingestion timestamp, provenance refs
+- `RetargetingTraceBundle`: source/target embodiment, recovered action chunks,
+  retargeting quality, kinematic feasibility, failure point identification
+- `ActionRecoveryReceipt`: state pairs processed, actions recovered, model
+  used, confidence distribution
+- `DatapackQualityReceipt`: dataset quality scores, provenance chain,
+  replay/training readiness, calibration status
 
 **Relation to existing artifacts**: This is the functional compiler behind
 `SkillSegments_v1.npz`, which currently stores interaction primitive
@@ -207,7 +240,8 @@ segmentation. The inverse lane produces the raw material that
 
 **What it is**: Proposes short skill chunks or action chunks jointly with
 expected state evolution. This is the Embodiment WM's primary output to the
-downstream control loop.
+downstream control loop and the **downstream consumer of imitation-learning
+priors** from the Inverse-Dynamics / Retargeting Lane.
 
 **What it proposes**:
 
@@ -217,16 +251,51 @@ downstream control loop.
 - Multi-modal proposals when multiple approaches are feasible (e.g. two
   valid grasp poses)
 - Action-chunk confidence and expected cost vector per proposal
+- **Imitation-derived action priors** from the upstream retargeting lane
 
-**Architecture pattern**: Inspired by diffusion policy (multimodal
-short-horizon control priors, action-chunk proposal structure) and
-ACT/LeRobot (action chunking with standardized policy interfaces). These
-enter as bounded subsystem seams, not as the whole stack.
+**Imitation-learning integration**:
+
+The action proposal head is where imitation-derived priors become actionable
+for real control. The relationship to the upstream inverse-dynamics /
+retargeting lane:
+
+1. Inverse-dynamics lane produces `RetargetingTraceBundle` with recovered
+   action chunks
+2. This head consumes those bundles as trainable skill/action priors
+3. Training uses imitation loss plus downstream success/safety signals
+4. Promoted heads blend scripted fallbacks with learned imitation priors
+
+**Architecture patterns and model families**:
+
+| Function | Model family | Justification |
+|----------|--------------|---------------|
+| Action chunk proposal | ACT-style action chunking transformers | Multi-step chunk prediction |
+| Multimodal proposal | Diffusion policy heads | Multiple valid action modes |
+| Imitation prior injection | Prior-conditioned policy heads | Blend scripted and learned |
+| Skill primitive instantiation | Task-conditioned policy networks | Workcell task catalog |
+
+These architectures enter as bounded subsystem seams, not as the whole stack.
+
+**Typed artifacts emitted**:
+
+- `ImitationPriorSnapshot`: chunk horizon, action distribution summary,
+  embodiment binding, training corpus refs, promotion stage
+- `ActionProposalBundle`: proposals with imitation-derived confidence scores
 
 **Promotion posture**: `disabled|auto|required`. At `heuristic_fallback`,
 uses scripted skill primitives. At `promoted`, uses learned action chunk
 proposers. The promotion gate is benchmark-gated on downstream task success
 rate and safety compliance.
+
+**Imitation-to-promotion ladder**:
+
+1. **Scripted fallback**: Hand-coded skill primitives remain the authority
+2. **Imitation prior shadow**: Imitation-derived proposals logged, not executed
+3. **Imitation prior advisory**: Imitation proposals inform scripted selection
+4. **Benchmark-gated promotion**: Imitation head takes primary authority after
+   passing task success, safety, and embodiment-feasibility gates
+5. **Production recurrent**: Imitation-derived head is primary with scripted
+   fallback for edge cases
 
 **Relation to existing artifacts**: This produces the action proposals that
 the motor backends (`src/motor_backend/`) execute. The motor backend
@@ -505,13 +574,29 @@ for temporal grounding.
 
 **What we borrow**: Practical action chunking interfaces, standardized
 policy/data contracts, training/eval ergonomics for robot policies, inverse
-dynamics for action recovery from demonstrations.
+dynamics for action recovery from demonstrations, scalable imitation-learning
+dataflow patterns.
 
-**Where it enters**: Inverse-Dynamics / Retargeting Lane (action recovery),
-Joint Skill / Action Proposal Head (action chunk format).
+**Where it enters**: Inverse-Dynamics / Retargeting Lane (action recovery,
+demonstration ingestion, cross-embodiment retargeting), Joint Skill / Action
+Proposal Head (action chunk format, imitation-derived priors).
 
 **Promotion posture**: Pattern adoption for interfaces and data format. Neural
-seams from ACT-style models behind promotion gates.
+seams from ACT-style models behind promotion gates. See "Scalable
+Imitation-Learning Pipelines" section for the full promotion ladder.
+
+### UMI / Retargeting Patterns
+
+**What we borrow**: Universal manipulation interface patterns for
+cross-embodiment demonstration collection and retargeting, hand-object
+trajectory transfer, embodiment-agnostic demonstration formats.
+
+**Where it enters**: Inverse-Dynamics / Retargeting Lane (cross-embodiment
+retargeting, kinematic feasibility filtering, embodiment-agnostic trace
+formats).
+
+**Promotion posture**: Provider-backed retargeting with typed contracts. Quality
+scoring determines which retargeted traces enter the training pipeline.
 
 ### Diffusion Policy
 
@@ -564,6 +649,144 @@ From any external architecture:
 - Any architecture that sidelines constraint/governance/economic legibility
 - Any "world model" framing that equates the entire stack with one predictive
   network
+
+---
+
+## Scalable Imitation-Learning Pipelines
+
+Imitation learning should not be treated as an ambient training tactic outside
+the WM. It belongs explicitly in the Embodiment / Actuation WM as a real
+subsystem concern.
+
+### Ownership Placement
+
+The primary home for imitation learning is:
+
+1. **Inverse-Dynamics / Retargeting Lane** (Subsystem 4): where demonstrations,
+   teleop traces, video-derived traces, and action-recovery traces are
+   normalized into embodiment-native training material
+2. **Joint Skill / Action Proposal Head** (Subsystem 5): where imitation-derived
+   priors become actionable chunk proposals for real control
+
+The inverse/retargeting lane is where demonstrations are ingested, retargeted
+across embodiments, and packaged into replay-ready traces. The action proposal
+head is where those imitation-derived priors become actionable for control.
+
+### Dataflow Through the WM
+
+```
+Demonstrations (teleop, video, sim replay, real robot)
+    ↓ typed provider contracts
+Inverse-Dynamics / Retargeting Lane
+    ↓ DemonstrationIngestReceipt, RetargetingTraceBundle, ActionRecoveryReceipt
+    ↓ DatapackQualityReceipt → Economic WM (data valuation)
+Joint Skill / Action Proposal Head
+    ↓ ImitationPriorSnapshot, ActionProposalBundle
+Motor Backends (execution)
+    ↓ execution traces
+Drift / Calibration / Cost Evaluator
+    ↓ demonstration-to-deployment gap estimation
+Training Pipeline (corpus construction)
+```
+
+### Typed Artifacts and Receipts
+
+| Artifact | Emitting Subsystem | Downstream Consumers |
+|----------|-------------------|---------------------|
+| `DemonstrationIngestReceipt` | Inverse-Dynamics Lane | Training pipeline, Economic WM |
+| `RetargetingTraceBundle` | Inverse-Dynamics Lane | Action Proposal Head, Replay buffer |
+| `ActionRecoveryReceipt` | Inverse-Dynamics Lane | Training pipeline |
+| `DatapackQualityReceipt` | Inverse-Dynamics Lane | Economic WM (data valuation) |
+| `ImitationPriorSnapshot` | Action Proposal Head | Training pipeline, promotion gates |
+| `ImitationDriftReceipt` | Drift Evaluator | Policy demotion, recalibration |
+
+### Model Family Candidates by Function
+
+| Function | Model Family | Justification |
+|----------|--------------|---------------|
+| Action recovery from state transitions | Inverse-dynamics heads (MLP/Transformer) | Direct state-delta to action mapping |
+| Cross-embodiment retargeting | Retargeting networks with embodiment embeddings | Generalize across kinematic chains |
+| Chunked policy/skill prior | ACT-style action chunking transformers | Multi-step action chunk prediction |
+| Multimodal action proposal | Diffusion policy heads | Multiple valid action modes in contact-rich tasks |
+| Video-to-action extraction | LeRobot-style interfaces | Standardized policy/data contracts |
+| Demonstration quality scoring | Learned quality predictors | Filter low-quality demonstrations |
+
+These enter as bounded subsystem seams, not as the Embodiment WM ontology. They
+must remain typed, receipt-emitting, benchmark-gated, and subordinate to the
+WM's canonical body/contact/capability/control state.
+
+### Hyperparameter Governance by the WM
+
+Imitation-learning hyperparameters should **not** be treated as globally
+free-floating. They should be shaped by the Embodiment / Actuation WM's own
+burdens and constraints.
+
+**Shaping constraints**:
+
+| Hyperparameter | Shaping Constraint |
+|----------------|-------------------|
+| Action-chunk length / horizon | Embodiment DoF, contact richness, task family |
+| Proposal multiplicity | Contact ambiguity, grasp multiplicity, safety envelope |
+| Retargeting tolerance / alignment thresholds | Source-target kinematic similarity, safety margins |
+| Inverse-dynamics model capacity | State dimensionality, action space complexity |
+| Imitation-derived proposal head capacity | Embodiment complexity, skill catalog size |
+| Promotion thresholds (scripted → learned) | Benchmark gates, safety compliance, downstream success |
+| Dataset quality thresholds | Deployment realism, embodiment match quality |
+
+**What the WM governs**:
+
+- Chunk length and action horizon selection
+- Proposal multiplicity limits
+- Retargeting tolerance and alignment thresholds
+- Capacity of inverse/retargeting models
+- Capacity of imitation-derived proposal heads
+- Promotion thresholds from scripted/action-prior fallback into learned chunk
+  proposers
+- Dataset quality filtering thresholds
+
+**What stays shaped by adjacent WMs**:
+
+- Economic WM: data valuation weights, corpus prioritization, training budget
+- Perception WM: video/visual feature quality requirements
+- Sim/Synth WM: sim-to-real gap thresholds, synthetic demonstration validity
+
+### Promotion Ladder for Imitation-Derived Heads
+
+1. **Scripted fallback**: Hand-coded skill primitives remain the authority.
+   Imitation models may exist but have no runtime influence.
+
+2. **Imitation prior shadow**: Imitation-derived proposals are logged but not
+   executed. Used for offline comparison and benchmark development.
+
+3. **Imitation prior advisory**: Imitation proposals inform selection among
+   scripted options. Scripted primitives still execute; imitation priors
+   influence ranking/selection.
+
+4. **Benchmark-gated promotion**: Imitation head takes primary authority after
+   passing:
+   - Task success rate gates
+   - Safety compliance gates
+   - Embodiment-feasibility gates
+   - Sim-to-real transfer quality gates
+
+5. **Production recurrent**: Imitation-derived head is primary with scripted
+   fallback for edge cases and safety-critical recovery.
+
+### What Imitation Learning Does NOT Replace
+
+Imitation-learning seams do not replace:
+
+- The WM's canonical body/contact/capability/control state ownership
+- The typed interface surfaces (EmbodimentState, ContactAffordanceGraph, etc.)
+- The Local Contact Dynamics Model (short-horizon prediction remains separate
+  from imitation priors)
+- The Drift / Calibration / Cost Evaluator (imitation heads are evaluated by
+  this subsystem, not replacements for it)
+- Economic attribution and governance audit paths
+- Safety envelope enforcement at the fast loop level
+
+Imitation learning enters as a **training methodology and prior source** for
+the action proposal head. It does not become the Embodiment WM ontology.
 
 ---
 
