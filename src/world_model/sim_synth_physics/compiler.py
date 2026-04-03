@@ -597,6 +597,7 @@ def compile_sim_synth_physics_world_state(
     coverage_graph: Any,
     *,
     semantic_context: Optional[Mapping[str, Any]] = None,
+    perception_grounding_state: Any = None,
     economic_context: Optional[Mapping[str, Any]] = None,
     embodiment_context: Optional[Mapping[str, Any]] = None,
     benchmark_signals: Optional[Mapping[str, Any]] = None,
@@ -706,6 +707,7 @@ def compile_sim_synth_physics_world_state(
         "semantic": build_semantic_input_context(
             coverage_graph=coverage_graph,
             semantic_context=semantic_context,
+            perception_grounding_state=perception_grounding_state,
         ),
         "economic": build_economic_input_context(economic_context),
         "embodiment": build_embodiment_input_context(embodiment_context),

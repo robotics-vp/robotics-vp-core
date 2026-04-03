@@ -36,6 +36,7 @@ from .provider_contracts import (
     VisionBackboneProviderContract,
     VJEPAProviderContract,
 )
+from .compiler import compile_perception_grounding_world_state
 from .promotion import (
     resolve_evidence_fusion_helper,
     resolve_graph_transformer_helper,
@@ -116,6 +117,8 @@ __all__ = [
     "SAMProviderContract",
     "VisionBackboneProviderContract",
     "VJEPAProviderContract",
+    # Compiler
+    "compile_perception_grounding_world_state",
     # Promotion
     "resolve_evidence_fusion_helper",
     "resolve_graph_transformer_helper",

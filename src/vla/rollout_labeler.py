@@ -21,6 +21,9 @@ from src.evidence.teacher_trace import (
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
 from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
 from src.sima2.semantic_primitive_extractor import extract_primitives_from_rollout
+from src.world_model.perception_grounding import (
+    compile_perception_grounding_world_state,
+)
 from src.vla.semantic_evidence import (
     build_vla_semantic_evidence_payload,
     save_vla_semantic_evidence_npz,
@@ -118,6 +121,19 @@ def label_rollouts_with_vla(
             if vla_action_error:
                 vla_error_reason = vla_action_error
 
+        perception_grounding_state = _compile_episode_perception_grounding_state(
+            episode=episode,
+            task_id=episode.metadata.task_id,
+            instruction=base_datapack.objective_hint or base_datapack.description or "",
+            trajectory_payload=trajectory_payload,
+            semantic_tags=sorted(episode_tags),
+            vla_action=vla_action,
+        )
+        if perception_grounding_state is not None:
+            episode_tags.update(
+                _annotation_tags_from_perception_state(perception_grounding_state)
+            )
+
         artifact_refs = _write_vla_semantic_evidence_sidecar(
             episode=episode,
             semantic_tags=sorted(episode_tags),
@@ -137,8 +153,10 @@ def label_rollouts_with_vla(
                 teacher_envelope=teacher_envelope,
                 vla_error_reason=vla_error_reason,
                 artifact_refs=artifact_refs,
+                perception_grounding_state=perception_grounding_state,
             )
         )
+        derived_tags.update(episode_tags)
 
         if derived_objective_hint is None:
             derived_objective_hint = _derive_objective_hint(primitives, episode.metrics)
@@ -239,6 +257,66 @@ def _extract_scene_tracks_payload(payload: Any) -> Optional[Dict[str, Any]]:
         except Exception:
             return None
     return None
+
+
+def _compile_episode_perception_grounding_state(
+    *,
+    episode: EpisodeRollout,
+    task_id: str,
+    instruction: str,
+    trajectory_payload: Any,
+    semantic_tags: Sequence[str],
+    vla_action: Optional[Mapping[str, Any]],
+) -> Optional[Any]:
+    scene_tracks = _extract_scene_tracks_payload(trajectory_payload)
+    if scene_tracks is None:
+        return None
+    vla_semantic_evidence = build_vla_semantic_evidence_payload(
+        scene_tracks=scene_tracks,
+        vla_payload=vla_action,
+        semantic_tags=list(semantic_tags),
+        instruction=instruction,
+    )
+    return compile_perception_grounding_world_state(
+        episode_id=episode.metadata.episode_id,
+        task_id=task_id,
+        semantic_tags=list(semantic_tags),
+        scene_tracks_payload=scene_tracks,
+        vla_semantic_evidence=vla_semantic_evidence,
+        metadata={
+            "trajectory_path": str(episode.trajectory_path),
+            "source": "vla_rollout_labeler",
+        },
+    )
+
+
+def _annotation_tags_from_perception_state(perception_grounding_state: Optional[Any]) -> list[str]:
+    if perception_grounding_state is None:
+        return []
+    registry = getattr(perception_grounding_state, "semantic_bridge_registry", None)
+    annotation_bridge = (
+        None if registry is None else getattr(registry, "annotation_bridge", None)
+    )
+    if annotation_bridge is None:
+        return []
+    tags: set[str] = set()
+    for label in dict(getattr(annotation_bridge, "object_class_labels", {}) or {}).values():
+        normalized = str(label).strip().lower().replace(" ", "_")
+        if normalized:
+            tags.add(f"object:{normalized}")
+    for labels in dict(getattr(annotation_bridge, "object_event_labels", {}) or {}).values():
+        tags.update(str(label) for label in list(labels or []) if str(label).strip())
+    tags.update(
+        str(tag)
+        for tag in list(getattr(annotation_bridge, "failure_interpretation_tags", []) or [])
+        if str(tag).strip()
+    )
+    tags.update(
+        str(tag)
+        for tag in list(getattr(annotation_bridge, "recovery_interpretation_tags", []) or [])
+        if str(tag).strip()
+    )
+    return sorted(tags)
 
 
 def _write_vla_semantic_evidence_sidecar(
@@ -377,6 +455,7 @@ def _build_episode_labeling_row(
     teacher_envelope: Optional[TeacherActionEnvelope],
     vla_error_reason: Optional[str],
     artifact_refs: Mapping[str, Any],
+    perception_grounding_state: Optional[Any] = None,
 ) -> dict[str, Any]:
     episode_metadata_payload = _load_episode_metadata_payload(episode)
     scene_tracks_payload = _extract_scene_tracks_payload(trajectory_payload)
@@ -427,6 +506,12 @@ def _build_episode_labeling_row(
     artifact_map["trajectory_path"] = str(episode.trajectory_path)
     if scene_tracks_payload is not None and not artifact_map.get("scene_tracks_ref"):
         artifact_map["scene_tracks_ref"] = str(episode.trajectory_path)
+    annotation_bridge = None
+    if perception_grounding_state is not None:
+        registry = getattr(perception_grounding_state, "semantic_bridge_registry", None)
+        annotation_bridge = (
+            None if registry is None else getattr(registry, "annotation_bridge", None)
+        )
     return {
         "episode_id": episode.metadata.episode_id,
         "task_id": episode.metadata.task_id,
@@ -448,6 +533,23 @@ def _build_episode_labeling_row(
         "semantic_grounding_mode": semantic_grounding_mode,
         "semantic_memory_grounded": semantic_memory_grounded,
         "grounded_track_object_count": grounded_track_object_count,
+        "perception_grounding_state_id": str(
+            getattr(perception_grounding_state, "state_id", "")
+        ),
+        "perception_scene_object_count": int(
+            getattr(getattr(perception_grounding_state, "scene_graph", None), "object_count", 0)
+            or 0
+        ),
+        "perception_annotation_bridge_ready": bool(annotation_bridge is not None),
+        "perception_annotation_tags": _annotation_tags_from_perception_state(
+            perception_grounding_state
+        ),
+        "perception_annotation_failure_tags": list(
+            getattr(annotation_bridge, "failure_interpretation_tags", []) or []
+        ),
+        "perception_annotation_recovery_tags": list(
+            getattr(annotation_bridge, "recovery_interpretation_tags", []) or []
+        ),
         "vla_error_reason": str(vla_error_reason or ""),
         "artifact_refs": artifact_map,
     }
@@ -471,6 +573,13 @@ def _aggregate_labeling_metadata(
     grounded_track_object_count = sum(
         int(_safe_float(row.get("grounded_track_object_count", 0.0), 0.0)) for row in rows
     )
+    perception_scene_object_count_mean = _mean(
+        [row.get("perception_scene_object_count", 0.0) for row in rows]
+    )
+    perception_annotation_bridge_fraction = _fraction_true(
+        rows,
+        "perception_annotation_bridge_ready",
+    )
     teacher_confidence_mean = _mean([row.get("teacher_confidence", 0.0) for row in rows])
     teacher_live_fraction = _fraction_true(rows, "teacher_runtime_live")
     scene_tracks_real_fraction = _fraction_true(rows, "scene_tracks_non_stub")
@@ -488,6 +597,8 @@ def _aggregate_labeling_metadata(
         ),
         "semantic_memory_grounded": grounded_track_object_count > 0 or semantic_grounding_fraction > 0.0,
         "grounded_track_object_count": grounded_track_object_count,
+        "perception_scene_object_count_mean": perception_scene_object_count_mean,
+        "perception_annotation_bridge_fraction": perception_annotation_bridge_fraction,
     }
     benchmark_signals = collect_benchmark_gating_signals(benchmark_payload)
     readiness = build_execution_preconditions(
@@ -560,12 +671,15 @@ def _aggregate_labeling_metadata(
             grounded_track_object_count > 0 or semantic_grounding_fraction > 0.0
         ),
         "grounded_track_object_count": grounded_track_object_count,
+        "perception_scene_object_count_mean": perception_scene_object_count_mean,
+        "perception_annotation_bridge_fraction": perception_annotation_bridge_fraction,
         "benchmark_signals": benchmark_signals,
         "execution_preconditions": readiness.to_dict(),
         "future_training_signals": {
             "teacher_runtime_live": teacher_live_fraction > 0.0,
             "scene_tracks_non_stub": scene_tracks_real_fraction > 0.0,
             "semantic_grounding_non_heuristic": semantic_grounding_fraction > 0.0,
+            "perception_annotation_bridge_ready": perception_annotation_bridge_fraction > 0.0,
             "benchmark_eligible": bool(benchmark_signals.get("benchmark_eligible", False)),
         },
         "future_training_artifacts": artifact_refs,
