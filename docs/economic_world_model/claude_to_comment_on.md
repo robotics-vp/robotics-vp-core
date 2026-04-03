@@ -7,170 +7,145 @@
 - **Primary implementation center**: Phase 2 Perception / Grounding WM
 - **Phase 1 posture**: structurally closed on audited internal surfaces; remaining blockers are external GPU/runtime/asset items tracked in `docs/economic_world_model/phase1_external_gpu_runtime_backlog.md`
 
-## Active Specs / Doctrine
+## Tranche Coverage
 
-- `docs/economic_world_model/phase2_closure_standard.md`
-- `docs/economic_world_model/phase1_external_gpu_runtime_backlog.md`
-- `docs/economic_world_model/doctrine_semantic_bridge_successor.md`
-- `docs/economic_world_model/doctrine_provider_dataset_resource_surfaces.md`
-- `docs/economic_world_model/multi_wm_architecture_plan.md`
-- `docs/economic_world_model/roadmap.md`
+This pass moved Phase 2 from schema/doctrine presence toward the first
+loop-facing subsystem behavior.
 
-## What Landed In This Pass
+Implemented:
 
-### Phase 2 package reconciliation
-
-The local Phase 2 package is now coherent enough to become branch truth:
-
-- `src/world_model/perception_grounding/state.py`
-  - integrated `SemanticBridgeRegistry` into `PerceptionGroundingWorldState`
-  - added Habitat-inspired lower-WM surfaces:
-    - `ProviderSurfaceState`
-    - `DatasetSurfaceState`
-    - `TaskMeasurementSurface`
-    - `DeploymentResourceSurface`
-    - `ComputeEnvelopeState`
-    - `InferenceCapacityState`
-    - `BatteryState`
-    - `ThermalState`
-- `src/world_model/perception_grounding/receipts.py`
-  - added:
-    - `ProviderAvailabilityReceipt`
-    - `InferenceHeadroomReceipt`
-    - `DeploymentResourceReceipt`
+- `src/world_model/perception_grounding/compiler.py`
+  - new `compile_perception_grounding_world_state(...)`
+  - compiles canonical Perception / Grounding state from real upstream inputs:
+    - scene tracks
+    - belief state
+    - VLA semantic evidence
+    - existing semantic-world-model heuristics
 - `src/world_model/perception_grounding/__init__.py`
-  - exports the new state/receipt family
+  - exports the compiler
+- `src/world_model/sim_synth_physics/adapters/semantic_inputs.py`
+  - consumes compiled Perception state and bridge summaries into live sim-synth semantic context
+  - now emits perception-backed inferential summary values instead of only raw semantic passthrough
+- `src/world_model/sim_synth_physics/compiler.py`
+  - accepts `perception_grounding_state=` and threads it into the canonical sim-synth input context
+- `src/vla/rollout_labeler.py`
+  - compiles Perception / Grounding state from real episode scene tracks + semantic evidence
+  - consumes annotation-bridge outputs into rollout labeling tags and metadata
+- `src/vision/backbone_stub.py`
+  - now exposes typed provider/advisory posture through `VisionBackboneProviderContract`
+  - latent metadata now carries explicit stub/advisory truth
+- `src/policies/vision_encoder.py`
+  - exposes the same provider-contract posture
 
-### Semantic successor posture
+## What Topologically Became More Real
 
-- `src/world_model/perception_grounding/semantic_bridges.py`
-  - remains the canonical distributed semantic successor family:
-    - Sim / Synth bridge
-    - Embodiment bridge
-    - Annotation / evidence bridge
-    - Economic bridge
-- `src/world_model/perception_grounding/promotion.py`
-  - `resolve_semantic_bridge_helper()` is present and now covered by tests
-- `src/vla/semantic_vla.py`
-  - remains importable, but is explicitly `scaffolding_only`
-  - carries successor metadata pointing to the distributed bridge family
+- Perception / Grounding WM is no longer only a schema package. It now owns a
+  real compiler path that produces canonical scene graph, temporal grounding,
+  evidence routing, provider/dataset/task/resource surfaces, and a heuristic
+  semantic-bridge registry from real upstream inputs.
+- The semantic successor family is no longer merely declared. The first bridge
+  outputs are compiled and downstream-consumed:
+  - Sim / Synth semantic bridge now affects sim-synth semantic context
+  - Annotation / evidence semantic bridge now affects rollout-labeling tags and row metadata
+- `VisionBackboneStub` is no longer ambient placeholder functionality. It now
+  declares explicit `stub_smoke_only` provider truth and advisory posture.
 
-### Tests
+## What Internal Incompleteness Was Fixed
 
-- `tests/test_perception_grounding_world_model.py`
-  - now covers:
-    - all four semantic bridge state families via registry serialization
-    - provider/dataset/task/resource surfaces
-    - provider/headroom/deployment receipts
-    - semantic bridge promotion/demotion
-    - `SemanticVLA` scaffolding/successor metadata
+Fixed in this pass:
 
-### Verification status
-
-The semantic-bridge refinement is now fully verified on the audited local
-Phase 2 surfaces:
-
-- `python3 -m compileall src -q`
-- `python3 -m ruff check src/world_model/perception_grounding src/vla/semantic_vla.py tests/test_perception_grounding_world_model.py`
-- `python3 -m pytest -q tests/test_perception_grounding_world_model.py`
-
-Current focused result:
-
-- `48 passed`
+1. Missing Perception compiler/runtime path
+2. Missing first downstream Sim / Synth shadow consumer
+3. Missing first downstream annotation/evidence shadow consumer
+4. Missing typed provider/advisory posture for `backbone_stub.py`
+5. Missing first functional semantic bridge preconditions in live compiled outputs
 
 ## What Was Not Changed
 
-- No Phase 1 Sim / Synth / Physics implementation was reopened.
+- No Phase 1 Sim / Synth / Physics work was reopened.
 - No new top-level WM was introduced.
-- No monolithic semantic latent / mother-blob was introduced.
-- No frozen Phase B math or controller logic was touched.
-- No broad Perception compiler/runtime/provider-adapter implementation was added yet.
+- No GPU/provider bring-up was faked.
+- No bounded runtime authority was given to Perception helpers.
+- No monolithic semantic model or mother-latent was introduced.
 
 ## SemanticVLA Treatment
 
-`SemanticVLA` is now explicitly transitional:
+`SemanticVLA` remains:
 
-- it is **not** the long-term semantic-analysis posture
-- it is **not** deleted or forgotten
-- it remains backward-compatible scaffolding while the real successor is built
+- explicitly transitional
+- scaffolding-only
+- backward-compatible
 
-The intended successor is explicit in both code and docs:
+It is **not** the semantic owner. The current semantic owner/successor posture is:
 
-1. Perception / Grounding canonical semantic substrate
+1. canonical Perception / Grounding semantic substrate
 2. WM-native semantic bridge family
-3. provider-backed / fusion-backed evidence under typed contracts
-4. later downstream consumption by Sim / Synth / Physics, Embodiment, annotation/evidence, and Economic WM
+3. provider-backed / fusion-backed evidence entering that substrate
+4. downstream WM-specific semantic consumption
 
 ## Phase 2 Closure Assessment
 
-### Internal incompleteness fixed in this pass
+### Category A: still internal
 
-- semantic bridge types are no longer floating beside the top-level Perception WM state
-- Phase 2 now explicitly names lower-WM provider/dataset/task/resource surfaces instead of leaving them as discussion-only doctrine
-- the receipt set now carries provider-availability, inference-headroom, and deployment-resource truth
-- `SemanticVLA` successor posture is tested, not only described
-- semantic bridge promotion behavior and bridge-registry serialization are tested as current branch truth
+Phase 2 is not closed yet. Remaining internal items include:
 
-### Remaining Category A items
+1. provider invocation / provider-availability / deployment-resource receipts are typed but not yet emitted by the live compiler/runtime path
+2. provider registry / install/runtime scan path is not yet compiled into Perception WM truth the way late Phase 1 did for sim-synth
+3. learned/helper seams exist behind typed posture, but the current compiler path is still heuristic-only shadow runtime
+4. replay/training export for Perception WM state and bridge outputs is not yet its own dedicated path
+5. downstream consumption is present, but still narrow:
+   - one Sim / Synth semantic-context consumer
+   - one annotation/rollout-labeling consumer
+   - no embodiment-facing or economic-facing shadow consumer yet
 
-These are still internal and keep Phase 2 open:
+### Category B: external
 
-1. compiler/runtime path that builds `PerceptionGroundingWorldState` from real scene tracks, evidence, and provider truth
-2. evidence-fusion implementation behind the typed promotion posture
-3. temporal-grounding implementation behind the typed promotion posture
-4. real provider-adapter wiring, including putting `src/vision/backbone_stub.py` behind the typed provider-contract posture
-5. downstream Sim / Synth / Physics consumption hook
-6. downstream annotation/evidence bridge consumption hook
-7. replay/training export path for Perception WM receipts and bridge outputs
-8. typed provider-evidence token / fusion input contract beyond state-only declarations
-
-### Category B blockers
-
-These are now honestly external:
-
-- real SAM 3 / 3.1, DINOv2/SigLIP, V-JEPA 2, and depth execution on GPU hosts
-- real Unitree egocentric camera feeds and calibration data
-- real multi-provider concurrent calibration
-- real long-horizon humanoid self-occlusion corpora
+- real SAM 3 / 3.1, DINOv2/SigLIP, V-JEPA 2, and depth runtime on GPU hosts
+- real provider weights/checkpoints and multi-provider concurrent execution
+- real robot/egocentric perception streams, calibration, and long-horizon humanoid corpora
 
 ### Category C
 
-- none currently unresolved on the audited schema/doctrine cluster
+- none newly unresolved on the audited compiler-and-consumer tranche
 
-## Phase 1 / Phase 2 Sequencing Read
+## Robust-Subsystem Read
 
-- **Phase 1**: implementation priority does not need to return there unless new external runtime/assets arrive or a direct contradiction is discovered
-- **Phase 2**: now correctly active
-- **Parallel prep**: later Phase 3 doctrine/spec work is acceptable only as secondary work while Phase 2 Category A items are being burned down
+The Perception / Grounding WM is now beginning to satisfy the
+subsystem-within-WM bar:
 
-## Recommendation To Claude
+- it compiles canonical state from real inputs
+- it owns real heuristic fusion/evidence-routing posture
+- it produces bridge outputs with named downstream preconditions
+- it changes downstream behavior in two existing loops
 
-Keep Phase 2 as the implementation center.
+It is still only at early `shadow_runtime`, not `bounded_runtime_authority`.
 
-Priority order:
+## Why The Remaining Gaps Are Honest
 
-1. build the first compiler/runtime skeleton for `PerceptionGroundingWorldState`
-2. wire `SemanticVLA` / `backbone_stub.py` consumers behind typed provider-contract posture instead of free-floating placeholder usage
-3. add the first downstream shadow consumption hook into Sim / Synth / Physics and annotation/evidence paths
+The gaps above are no longer “missing schema” or “missing doctrine” gaps.
+They are now the correct next-stage gaps:
 
-Bridge preconditions that must remain explicit in that next tranche:
+- provider/runtime truth emission
+- richer replay/export surfaces
+- more downstream consumers
+- later GPU/provider bring-up
 
-- Sim / Synth:
-  - object preservation
-  - synthetic-vs-real semantic alignment
-  - branch evaluation
-  - branch-outcome semantics
-- Embodiment:
-  - affordance
-  - action relevance
-  - bodily-feasibility relevance
-  - object-task relation
-- Annotation / evidence:
-  - object-linked primitive/event crosswalk
-  - failure/recovery labeling
-- Economic:
-  - grounding quality
-  - semantic contribution
-  - action-relevant structural yield
+That is the right posture. The branch should not regress to treating
+Perception as a beautiful contract shell.
 
-Do not reopen Phase 1 unless new external runtime/assets arrive or a real missing contract is discovered.
+## Recommendation
+
+- Keep Phase 2 as the implementation center.
+- Do not reopen Phase 1 unless new external runtime/assets arrive or a direct contradiction appears.
+- Parallel Phase 3 prep is acceptable, but Phase 2 should keep primary implementation priority until:
+  - Perception receipts are live
+  - provider/runtime truth is compiled
+  - at least one more downstream WM consumes the bridge family in shadow mode
+
+## Next Best Tranche
+
+1. emit live provider/deployment/headroom receipts from the Perception compiler/runtime path
+2. add a typed provider/runtime inventory/availability compiler path so Perception owns honest provider truth, not only downstream-consumable state
+3. add the next downstream shadow consumer:
+   - embodiment-facing affordance/action-relevance shadow consumption, or
+   - annotation/evidence replay/export surfaces if that is easier to land cleanly first

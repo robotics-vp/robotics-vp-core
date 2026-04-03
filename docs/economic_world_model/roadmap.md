@@ -142,6 +142,18 @@ now, later Sim / Synth / Physics backend/fidelity/materialization truth,
 later Embodiment latency/action-feasibility truth, and only after that become
 allocatable Economic-WM objects.
 
+Current branch status:
+
+- the typed Phase 2 surface family is now live in `src/world_model/perception_grounding/`
+- the first functional compiler path is landed
+- the first shadow consumers are landed in:
+  - `src/world_model/sim_synth_physics/adapters/semantic_inputs.py`
+  - `src/vla/rollout_labeler.py`
+- the next best Phase 2 work is therefore:
+  - live receipt emission
+  - provider/runtime inventory truth
+  - additional downstream consumers
+
 This borrows the useful layering pattern from Habitat-style stacks:
 
 1. dataset/world inventory

@@ -1604,3 +1604,28 @@
       - `asset::actuator_latency_profile`
       - `asset::safety_watchdog_profile`
   - This narrowed the useful non-GPU Phase-1 remainder again: public repos helped materially, and the remaining Isaac asset blockers are now the two contract surfaces that still lack clean public artifacts.
+
+- Phase 2 Perception / Grounding first functional compiler tranche:
+  - `src/world_model/perception_grounding/compiler.py` now compiles `PerceptionGroundingWorldState` from real upstream inputs already present in-repo:
+    - scene tracks
+    - belief state
+    - VLA semantic evidence
+    - existing semantic-world-model heuristic grounding
+  - the compiled state now owns:
+    - canonical scene graph
+    - temporal grounding state
+    - evidence routing state
+    - provider/dataset/task/deployment-resource surfaces
+    - semantic bridge registry with first heuristic bridge outputs
+  - the semantic bridge family is no longer only declared:
+    - Sim / Synth semantic bridge now feeds sim-synth semantic input context and inferential summary fields
+    - annotation / evidence semantic bridge now feeds rollout-labeler tags and labeling metadata
+  - `VisionBackboneStub` and `HeuristicVisionEncoderPolicy` now expose typed provider/advisory posture instead of remaining ambient placeholder consumers
+  - closure effect:
+    - Phase 2 is no longer just a schema/receipt shell
+    - the Perception / Grounding WM is now starting to behave like a loop-facing subsystem at `shadow_runtime`
+    - remaining internal work is now the next honest cluster:
+      - live provider/deployment/headroom receipt emission
+      - provider/runtime inventory compilation
+      - replay/export surfaces
+      - more downstream consumers

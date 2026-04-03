@@ -52,12 +52,13 @@ Already landed on this branch:
 
 ## What This Tranche Should Do
 
-This is no longer a pure schema-only tranche. The next highest-leverage work is
-to make the Phase 2 package compiler- and consumer-shaped.
+This is no longer a pure schema-only tranche. The current branch now has the
+first compiler- and consumer-shaped tranche landed. The next highest-leverage
+work is to deepen runtime/provider truth and expand downstream consumers.
 
 ### 1. Compiler / runtime skeleton
 
-Build `src/world_model/perception_grounding/compiler.py` with:
+Landed:
 
 - `compile_perception_grounding_world_state(...)`
 
@@ -69,10 +70,14 @@ Inputs should include, where available:
 - optional semantic-evidence / teacher hints
 - optional deployment/resource posture
 
-Outputs should include:
+Current outputs include:
 
 - `PerceptionGroundingWorldState`
-- typed receipts for provider availability, calibration, and runtime posture
+- canonical scene graph
+- temporal grounding
+- evidence routing
+- provider/dataset/task/deployment-resource surfaces
+- semantic bridge registry
 
 This should stay honest:
 
@@ -82,17 +87,17 @@ This should stay honest:
 
 ### 2. Provider-contract consumer wiring
 
-Put the current placeholder consumers behind typed Phase 2 provider posture:
+Landed in the first functional tranche:
 
 - `src/vision/backbone_stub.py`
-- any remaining `SemanticVLA` callers that still treat it as a semantic owner
+- `src/policies/vision_encoder.py`
 
 The goal is not to “improve” the stub. The goal is to make placeholder use
 structurally visible through provider/advisory posture.
 
 ### 3. First downstream shadow consumers
 
-Add the first Perception-WM shadow consumption hooks:
+Landed:
 
 - Sim / Synth / Physics shadow consumer
 - annotation / semantic-evidence shadow consumer
@@ -102,6 +107,14 @@ This should be typed and additive:
 - do not rewrite the downstream WM
 - do not give Phase 2 bounded authority yet
 - do make the canonical Perception state consumable in shadow mode
+
+### 4. Next highest-leverage continuation
+
+- emit live provider/deployment/headroom receipts from the compiler/runtime path
+- compile provider/runtime inventory truth into Perception state
+- add the next downstream consumer tranche:
+  - embodiment-facing affordance/action-relevance shadow consumption, or
+  - annotation/evidence replay-export surfaces
 
 ## Bridge Preconditions To Preserve
 

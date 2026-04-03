@@ -100,6 +100,18 @@ Phase 2 targets at minimum `shadow_runtime` before closure:
 Phase 2 should not claim closure below `shadow_runtime` unless the gap is
 genuinely external (all remaining items are GPU/provider/data blocked).
 
+Current branch read:
+
+- the branch has now reached early `shadow_runtime` on audited surfaces:
+  - Perception state compiles from real local inputs
+  - one Sim / Synth shadow consumer exists
+  - one annotation/evidence shadow consumer exists
+- Phase 2 is still open because additional Category A work remains around:
+  - live receipt emission
+  - provider/runtime truth compilation
+  - replay/export surfaces
+  - additional downstream consumers
+
 ## Required Surface Families
 
 The audited Phase 2 closure sheet must explicitly check for:

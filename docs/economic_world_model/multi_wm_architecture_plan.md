@@ -1194,6 +1194,15 @@ Objective:
 - turn the current vision, scene-tracks, map-first, teacher-runtime, and grounding path into one canonical perception/grounding WM
 - explicitly bring up SAM 3 / 3.1 as an external/provider lane for open-vocabulary concept segmentation and video tracking
 
+Current branch status:
+
+- schema/doctrine reconciliation is landed
+- `compile_perception_grounding_world_state(...)` now exists and compiles canonical Perception / Grounding state from real local inputs already present in the repo
+- first shadow consumers are landed:
+  - Sim / Synth semantic-context consumption
+  - rollout-labeling / annotation consumption
+- the next Phase 2 cut is not more schema work; it is provider/runtime truth, receipt emission, and additional downstream consumption
+
 #### Open-Vocabulary Concept Segmentation and Video Tracking
 
 The future Perception / Grounding WM should own canonical state for:

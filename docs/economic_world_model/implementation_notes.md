@@ -2715,3 +2715,39 @@ New package `src/world_model/perception_grounding/` following the exact pattern 
     - there are public control-frequency and soft-emergency-stop signals
     - there is still no clean whole-body latency-contract or safety-watchdog artifact I would count as those required surfaces without overclaiming
   - That makes the remaining non-GPU Isaac asset gap much narrower and much more honestly external.
+
+- Phase 2 implementation note: the first Perception / Grounding compiler tranche should reuse the existing semantic-world-model heuristic grounding as the initial heuristic backend rather than creating a second disconnected semantic heuristic stack. That is now the live posture in `src/world_model/perception_grounding/compiler.py`.
+
+- Why this is the right first functional tranche:
+  - it keeps lower-WM ownership inside the new Perception / Grounding WM
+  - it compiles canonical state from real upstream sources already on disk
+  - it keeps `SemanticVLA` transitional instead of pretending it is load-bearing
+  - it makes the semantic bridge family start affecting real downstream consumers instead of remaining declaration-only
+
+- Current functional shape:
+  - upstream inputs:
+    - scene tracks
+    - belief state
+    - VLA semantic evidence
+  - canonical compiled outputs:
+    - scene graph
+    - temporal grounding
+    - evidence routing
+    - provider/dataset/task/deployment-resource surfaces
+    - semantic bridge registry
+  - downstream consumers:
+    - Sim / Synth semantic context / inferential summary
+    - rollout labeling / annotation metadata
+
+- This is intentionally still `shadow_runtime`:
+  - helper posture is typed and compiled
+  - bridge outputs are functional and downstream-consumed
+  - but there is no bounded runtime authority yet
+  - provider/runtime truth still needs its own emitted receipt path
+
+- Important residual internal work after this tranche:
+  - emit live `ProviderAvailabilityReceipt`, `InferenceHeadroomReceipt`, and `DeploymentResourceReceipt` from the Perception compiler/runtime path instead of only carrying the typed state surfaces
+  - compile provider/runtime inventory truth directly into Perception WM state rather than inferring only from payload presence
+  - add the next consumer tranche so the bridge family expands beyond:
+    - one Sim / Synth context consumer
+    - one annotation consumer
