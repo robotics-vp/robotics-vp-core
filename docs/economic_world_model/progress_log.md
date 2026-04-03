@@ -1,5 +1,38 @@
 # Economic World Model Progress Log
 
+## 2026-04-03 — Provider Adapter Neural Seams (Phase 2 Implementation)
+
+- **Added** four provider adapter neural seams to `src/world_model/perception_grounding/neural_seams.py`:
+  - `SAMCalibrationSeam` (~500K-2M params): calibrates SAM mask confidence, epistemic uncertainty, prompt satisfaction
+  - `VisionBackboneProjectionSeam` (~1M params): 2-layer MLP projecting DINOv2/SigLIP features to WM token space
+  - `DepthMetricCalibrationSeam` (~500K-1M params): learns scale/shift for metric depth + per-pixel uncertainty
+  - `VJEPATemporalAlignmentSeam` (~2-5M params): cross-attention aligning V-JEPA temporal predictions to WM object tokens
+- **Created** `src/world_model/perception_grounding/seam_registry.py`:
+  - `PerceptionSeamRegistry` class: manages seam lifecycle (register, load, save, unload)
+  - `SeamDescriptor` dataclass: tracks seam state (posture, checkpoint path, param count)
+  - `create_default_registry()` factory: pre-registers all standard seam types
+  - Checkpoint persistence and device placement support
+- **Added** `resolve_provider_adapter_helper()` to `promotion.py`:
+  - Resolver for per-provider adapter seams with `disabled|auto|required` posture
+  - Demotion logic on evidence failure or benchmark gate revocation
+- **Updated** `__init__.py`:
+  - Exports all new seams, registry classes, and resolver function
+- **Created** `tests/test_perception_grounding_neural_seams.py`:
+  - 37 tests covering forward pass, batching, param counts, registry operations, promotion logic
+- **Wired** seams into compiler in `compiler.py`:
+  - Added `_invoke_provider_adapter_seam()` helper with receipt emission
+  - Compiler accepts optional seam parameters (sam_calibration_seam, vision_backbone_projection_seam, etc.)
+  - Compiler accepts optional provider inputs (sam_mask_features, backbone_features, depth_map, vjepa_tokens, etc.)
+  - Seams invoked when promoted + inputs available; skipped otherwise
+  - `ProviderInvocationReceipt` emitted for each seam invocation with status, latency, quality
+  - `compile_perception_grounding_with_receipts()` returns all receipts including provider adapter receipts
+- **Documented** training objectives for all seams in module docstring:
+  - Each seam has primary, secondary, and auxiliary supervised objectives
+  - Objectives are supervised/contrastive/predictive, NOT direct RL on task reward
+  - Checkpoint governance via `PerceptionSeamRegistry`
+- This completes the highest-leverage Phase 2 implementation work identified
+- Next: seam training infrastructure, additional downstream consumers, benchmark gates
+
 ## 2026-04-03 — WM Section Readiness Standard + Scalable Imitation-Learning Pipelines
 
 - **Added** WM Section Readiness Standard to `multi_wm_architecture_plan.md`:

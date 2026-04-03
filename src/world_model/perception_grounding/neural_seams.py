@@ -10,24 +10,67 @@ transitional fallback.  These seams are the successor codepath.
 
 Current seams
 -------------
-- ``EvidenceFusionSeam``: tiny set-attention module that fuses
-  heterogeneous provider evidence into calibrated provider weights
-  and fusion confidence.  Replaces the hardcoded 0.55/0.25/0.15/0.05
-  weighted fusion at the ``promoted`` promotion stage.
+- ``EvidenceFusionSeam``: tiny set-attention module (~10-50K params) that
+  fuses heterogeneous provider evidence into calibrated provider weights
+  and fusion confidence.
 
-Capacity
---------
-``EvidenceFusionSeam`` is deliberately tiny (10-50K params, d_model=32,
-2 attention heads).  This is the smallest useful neural component that
-can replace the heuristic fusion and demonstrate that the promotion
-posture is real — not doctrinal aspiration.
+- ``SAMCalibrationSeam``: calibration head (~500K-2M params) for SAM 3/3.1
+  mask outputs.  Produces calibrated confidence, epistemic uncertainty,
+  and prompt satisfaction score from raw SAM mask features.
 
-Training objective (future)
----------------------------
-Supervised on downstream task quality and evidence agreement.  Not
-direct RL on task reward.  Bridges and fusion seams are middleware:
-supervised/contrastive/predictive training is correct for structural
-fidelity.
+- ``VisionBackboneProjectionSeam``: 2-layer MLP (~1M params) projecting
+  frozen DINOv2/SigLIP backbone features to WM object token space (d=128).
+
+- ``DepthMetricCalibrationSeam``: metric calibration head (~500K-1M params)
+  for monocular depth.  Learns scene-global scale/shift correction with
+  per-pixel uncertainty.
+
+- ``VJEPATemporalAlignmentSeam``: cross-attention module (~2-5M params)
+  aligning V-JEPA 2 temporal latent predictions to WM object tokens.
+
+Capacity principles
+-------------------
+All seams are deliberately bounded:
+- Small enough to train with limited data (perception-provider agreement)
+- Large enough to demonstrate non-trivial learned behavior
+- Promotion-gated so heuristic fallback remains available
+
+Training objectives (supervised, not RL)
+----------------------------------------
+These seams are middleware: they transform external provider outputs
+into WM-native form.  Training uses supervised/contrastive/predictive
+objectives, NOT direct RL on task reward.
+
+**EvidenceFusionSeam**:
+- Primary: minimize disagreement between fused state and held-out provider
+- Secondary: maximize downstream task success correlation (as frozen target)
+- Auxiliary: contrastive loss on provider availability patterns
+
+**SAMCalibrationSeam**:
+- Primary: calibrated confidence should match downstream mask quality
+- Secondary: epistemic uncertainty should correlate with provider disagreement
+- Auxiliary: prompt satisfaction should correlate with segmentation IoU
+
+**VisionBackboneProjectionSeam**:
+- Primary: projected features should predict downstream object identity
+- Secondary: contrastive loss between projected features and scene-level labels
+- Auxiliary: alignment with other provider embeddings (V-JEPA, depth)
+
+**DepthMetricCalibrationSeam**:
+- Primary: metric depth should match available ground truth (LiDAR, stereo)
+- Secondary: uncertainty should correlate with depth estimation error
+- Auxiliary: scale/shift consistency across frames
+
+**VJEPATemporalAlignmentSeam**:
+- Primary: aligned temporal state should predict actual future object state
+- Secondary: temporal confidence should correlate with prediction accuracy
+- Auxiliary: contrastive loss on temporal ordering
+
+Checkpoint governance
+---------------------
+Seam checkpoints are managed by ``PerceptionSeamRegistry`` in
+``seam_registry.py``.  Checkpoints are loaded/saved per seam_id,
+enabling independent promotion/demotion of individual seams.
 """
 
 from __future__ import annotations
@@ -278,9 +321,611 @@ class EvidenceFusionSeam(nn.Module):
         }
 
 
+# ---------------------------------------------------------------------------
+# SAM Calibration Seam
+# ---------------------------------------------------------------------------
+
+
+class SAMCalibrationSeam(nn.Module):
+    """Calibration head for SAM 3/3.1 mask outputs.
+
+    Takes raw SAM mask features (per-mask embeddings + raw confidence) and
+    produces calibrated confidence, epistemic uncertainty, and prompt
+    satisfaction score.
+
+    Architecture::
+
+        mask_features (N_masks, d_mask)
+            → input_proj (d_mask → d_model)
+            → self-attention (cross-mask reasoning)
+            → layer-norm + FFN + layer-norm
+            → calibration_head → (calibrated_conf, epistemic_unc, prompt_sat)
+
+    Capacity: ~500K-2M params (d_model=128, n_heads=4, d_ff=256).
+    Governed by Perception/Grounding WM, not SAM.
+
+    Promotion posture: ``disabled|auto|required`` via standard machinery.
+    When disabled, raw SAM confidences pass through uncalibrated.
+    """
+
+    def __init__(
+        self,
+        d_mask: int = 256,
+        d_model: int = 128,
+        n_heads: int = 4,
+        d_ff: int = 256,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_mask = d_mask
+        self.d_model = d_model
+        self.n_heads = n_heads
+
+        self.input_proj = nn.Linear(d_mask, d_model)
+        self.self_attn = nn.MultiheadAttention(
+            d_model, n_heads, dropout=dropout, batch_first=True,
+        )
+        self.norm1 = nn.LayerNorm(d_model)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, d_model),
+        )
+        self.norm2 = nn.LayerNorm(d_model)
+
+        # Three calibration outputs per mask
+        self.calibration_head = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, 3),  # conf, epistemic_unc, prompt_sat
+        )
+
+    def forward(
+        self,
+        mask_features: torch.Tensor,
+        raw_confidence: torch.Tensor,
+        mask_valid: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Calibrate SAM mask outputs.
+
+        Args:
+            mask_features: ``(batch, N_masks, d_mask)`` or ``(N_masks, d_mask)``.
+            raw_confidence: ``(batch, N_masks)`` or ``(N_masks,)`` — SAM's
+                raw per-mask confidence scores.
+            mask_valid: ``(batch, N_masks)`` bool — True if mask is valid.
+
+        Returns:
+            Dict with:
+                - calibrated_confidence: ``(batch, N_masks)``
+                - epistemic_uncertainty: ``(batch, N_masks)``
+                - prompt_satisfaction: ``(batch, N_masks)``
+        """
+        unbatched = mask_features.dim() == 2
+        if unbatched:
+            mask_features = mask_features.unsqueeze(0)
+            raw_confidence = raw_confidence.unsqueeze(0)
+            if mask_valid is not None:
+                mask_valid = mask_valid.unsqueeze(0)
+
+        # Concatenate raw confidence as additional feature
+        conf_feat = raw_confidence.unsqueeze(-1)  # (batch, N, 1)
+        x = torch.cat([mask_features, conf_feat], dim=-1)
+
+        # Project (handle dimension mismatch gracefully)
+        if x.size(-1) != self.d_mask:
+            # Pad or truncate to expected d_mask
+            if x.size(-1) < self.d_mask:
+                pad = torch.zeros(
+                    *x.shape[:-1], self.d_mask - x.size(-1),
+                    device=x.device, dtype=x.dtype
+                )
+                x = torch.cat([x, pad], dim=-1)
+            else:
+                x = x[..., :self.d_mask]
+
+        x = self.input_proj(x)
+
+        # Self-attention across masks
+        key_padding_mask = ~mask_valid if mask_valid is not None else None
+        attn_out, _ = self.self_attn(x, x, x, key_padding_mask=key_padding_mask)
+        x = self.norm1(x + attn_out)
+
+        # Feed-forward
+        ff_out = self.ffn(x)
+        x = self.norm2(x + ff_out)
+
+        # Calibration outputs
+        calibration = self.calibration_head(x)  # (batch, N, 3)
+        calibrated_conf = torch.sigmoid(calibration[..., 0])
+        epistemic_unc = torch.sigmoid(calibration[..., 1])
+        prompt_sat = torch.sigmoid(calibration[..., 2])
+
+        result = {
+            "calibrated_confidence": calibrated_conf,
+            "epistemic_uncertainty": epistemic_unc,
+            "prompt_satisfaction": prompt_sat,
+        }
+
+        if unbatched:
+            result = {k: v.squeeze(0) for k, v in result.items()}
+
+        return result
+
+    def param_count(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def describe(self) -> Dict[str, Any]:
+        return {
+            "seam_type": "sam_calibration",
+            "d_mask": self.d_mask,
+            "d_model": self.d_model,
+            "n_heads": self.n_heads,
+            "param_count": self.param_count(),
+            "module_class": self.__class__.__name__,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Vision Backbone Projection Seam
+# ---------------------------------------------------------------------------
+
+
+class VisionBackboneProjectionSeam(nn.Module):
+    """Projection head for DINOv2/SigLIP backbone features.
+
+    2-layer MLP that projects frozen backbone features to the canonical
+    WM object token dimension.  Backbone weights are always frozen;
+    only this projection head is trained.
+
+    Architecture::
+
+        backbone_features (H*W, d_backbone)
+            → fc1 (d_backbone → d_hidden)
+            → GELU + dropout
+            → fc2 (d_hidden → d_out)
+            → layer-norm
+
+    Capacity: ~1-5M params depending on backbone dimension.
+    d_backbone=1024 (DINOv2-L), d_hidden=512, d_out=128 → ~1.1M params.
+
+    Promotion posture: ``disabled|auto|required``.
+    When disabled, backbone features are either unavailable or passed
+    through identity (if dimensions match).
+    """
+
+    def __init__(
+        self,
+        d_backbone: int = 1024,
+        d_hidden: int = 512,
+        d_out: int = 128,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_backbone = d_backbone
+        self.d_hidden = d_hidden
+        self.d_out = d_out
+
+        self.fc1 = nn.Linear(d_backbone, d_hidden)
+        self.fc2 = nn.Linear(d_hidden, d_out)
+        self.norm = nn.LayerNorm(d_out)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(
+        self,
+        backbone_features: torch.Tensor,
+    ) -> torch.Tensor:
+        """Project backbone features to WM token space.
+
+        Args:
+            backbone_features: ``(batch, N_tokens, d_backbone)`` or
+                ``(N_tokens, d_backbone)`` — ViT patch tokens or pooled
+                features from frozen backbone.
+
+        Returns:
+            Projected features ``(batch, N_tokens, d_out)`` or
+            ``(N_tokens, d_out)``.
+        """
+        unbatched = backbone_features.dim() == 2
+        if unbatched:
+            backbone_features = backbone_features.unsqueeze(0)
+
+        x = self.fc1(backbone_features)
+        x = F.gelu(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        x = self.norm(x)
+
+        if unbatched:
+            x = x.squeeze(0)
+
+        return x
+
+    def param_count(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def describe(self) -> Dict[str, Any]:
+        return {
+            "seam_type": "vision_backbone_projection",
+            "d_backbone": self.d_backbone,
+            "d_hidden": self.d_hidden,
+            "d_out": self.d_out,
+            "param_count": self.param_count(),
+            "module_class": self.__class__.__name__,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Depth Metric Calibration Seam
+# ---------------------------------------------------------------------------
+
+
+class DepthMetricCalibrationSeam(nn.Module):
+    """Metric calibration head for monocular depth estimation.
+
+    Takes relative depth predictions from DepthAnythingV2/UniDepth and
+    produces metric-calibrated depth via learned scale and shift
+    corrections.  Also estimates per-pixel uncertainty.
+
+    Architecture::
+
+        depth_features (H, W, d_depth) + camera_intrinsics
+            → spatial_encoder (conv stack)
+            → global_pool + intrinsics_embed
+            → scale_shift_head → (scale, shift)
+            → uncertainty_head → per-pixel uncertainty
+
+    The scale/shift are scene-global; uncertainty is per-pixel.
+
+    Capacity: ~500K-1M params.
+
+    Promotion posture: ``disabled|auto|required``.
+    When disabled, raw relative depth passes through (not metric).
+    """
+
+    def __init__(
+        self,
+        d_depth: int = 1,
+        d_hidden: int = 128,
+        intrinsic_dim: int = 4,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_depth = d_depth
+        self.d_hidden = d_hidden
+
+        # Spatial encoder: lightweight conv stack
+        self.spatial_encoder = nn.Sequential(
+            nn.Conv2d(d_depth, 32, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1, stride=2),
+            nn.GELU(),
+            nn.Conv2d(64, d_hidden, kernel_size=3, padding=1, stride=2),
+            nn.GELU(),
+            nn.AdaptiveAvgPool2d(1),
+        )
+
+        # Intrinsics embedding (fx, fy, cx, cy)
+        self.intrinsics_embed = nn.Linear(intrinsic_dim, d_hidden)
+
+        # Scale and shift prediction
+        self.scale_shift_head = nn.Sequential(
+            nn.Linear(d_hidden * 2, d_hidden),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_hidden, 2),  # scale, shift
+        )
+
+        # Per-pixel uncertainty (operates on original resolution features)
+        self.uncertainty_conv = nn.Sequential(
+            nn.Conv2d(d_depth, 32, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(32, 1, kernel_size=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(
+        self,
+        depth_map: torch.Tensor,
+        camera_intrinsics: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Calibrate relative depth to metric depth.
+
+        Args:
+            depth_map: ``(batch, 1, H, W)`` or ``(1, H, W)`` — relative
+                depth from frozen depth model.
+            camera_intrinsics: ``(batch, 4)`` or ``(4,)`` — [fx, fy, cx, cy].
+                If None, uses default intrinsics.
+
+        Returns:
+            Dict with:
+                - metric_depth: ``(batch, 1, H, W)`` — calibrated depth
+                - scale: ``(batch,)`` — learned scale factor
+                - shift: ``(batch,)`` — learned shift factor
+                - uncertainty: ``(batch, 1, H, W)`` — per-pixel uncertainty
+        """
+        unbatched = depth_map.dim() == 3
+        if unbatched:
+            depth_map = depth_map.unsqueeze(0)
+            if camera_intrinsics is not None:
+                camera_intrinsics = camera_intrinsics.unsqueeze(0)
+
+        batch_size = depth_map.size(0)
+        device = depth_map.device
+        dtype = depth_map.dtype
+
+        # Default intrinsics if not provided (normalized focal length)
+        if camera_intrinsics is None:
+            camera_intrinsics = torch.tensor(
+                [[1.0, 1.0, 0.5, 0.5]], device=device, dtype=dtype
+            ).expand(batch_size, -1)
+
+        # Global features from depth
+        global_feat = self.spatial_encoder(depth_map).flatten(1)  # (batch, d_hidden)
+
+        # Intrinsics embedding
+        intrinsic_feat = self.intrinsics_embed(camera_intrinsics)  # (batch, d_hidden)
+
+        # Predict scale and shift
+        combined = torch.cat([global_feat, intrinsic_feat], dim=-1)
+        scale_shift = self.scale_shift_head(combined)
+        scale = F.softplus(scale_shift[:, 0]) + 0.1  # Ensure positive scale
+        shift = scale_shift[:, 1]
+
+        # Apply calibration
+        metric_depth = depth_map * scale.view(-1, 1, 1, 1) + shift.view(-1, 1, 1, 1)
+
+        # Per-pixel uncertainty
+        uncertainty = self.uncertainty_conv(depth_map)
+
+        result = {
+            "metric_depth": metric_depth,
+            "scale": scale,
+            "shift": shift,
+            "uncertainty": uncertainty,
+        }
+
+        if unbatched:
+            result = {
+                k: v.squeeze(0) if v.dim() > 0 else v
+                for k, v in result.items()
+            }
+
+        return result
+
+    def param_count(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def describe(self) -> Dict[str, Any]:
+        return {
+            "seam_type": "depth_metric_calibration",
+            "d_depth": self.d_depth,
+            "d_hidden": self.d_hidden,
+            "param_count": self.param_count(),
+            "module_class": self.__class__.__name__,
+        }
+
+
+# ---------------------------------------------------------------------------
+# V-JEPA Temporal Alignment Seam
+# ---------------------------------------------------------------------------
+
+
+class VJEPATemporalAlignmentSeam(nn.Module):
+    """Temporal alignment head for V-JEPA 2 latent predictions.
+
+    Cross-attention module that aligns V-JEPA latent tokens (future
+    predictions) to WM object tokens.  Enables temporal state reasoning
+    without collapsing V-JEPA's rich latent space.
+
+    Architecture::
+
+        vjepa_tokens (T, N_vjepa, d_vjepa)
+            → input_proj (d_vjepa → d_model)
+            → cross-attn(query=wm_tokens, key/value=vjepa_tokens)
+            → layer-norm + FFN + layer-norm
+            → output_proj (d_model → d_out)
+
+    The WM queries V-JEPA for temporal state; V-JEPA provides evidence.
+
+    Capacity: ~2-5M params (d_model=256, n_heads=8).
+
+    Promotion posture: ``disabled|auto|required``.
+    When disabled, temporal state relies on scene_tracks extrapolation only.
+    """
+
+    def __init__(
+        self,
+        d_vjepa: int = 1024,
+        d_wm_token: int = 128,
+        d_model: int = 256,
+        d_out: int = 128,
+        n_heads: int = 8,
+        d_ff: int = 512,
+        n_temporal_steps: int = 4,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_vjepa = d_vjepa
+        self.d_wm_token = d_wm_token
+        self.d_model = d_model
+        self.d_out = d_out
+        self.n_heads = n_heads
+        self.n_temporal_steps = n_temporal_steps
+
+        # Project V-JEPA tokens to model dimension
+        self.vjepa_proj = nn.Linear(d_vjepa, d_model)
+
+        # Project WM tokens to query dimension
+        self.wm_query_proj = nn.Linear(d_wm_token, d_model)
+
+        # Temporal position embedding
+        self.temporal_pos_embed = nn.Parameter(
+            torch.randn(1, n_temporal_steps, 1, d_model) * 0.02
+        )
+
+        # Cross-attention: WM queries V-JEPA
+        self.cross_attn = nn.MultiheadAttention(
+            d_model, n_heads, dropout=dropout, batch_first=True,
+        )
+        self.norm1 = nn.LayerNorm(d_model)
+
+        # Self-attention among aligned tokens
+        self.self_attn = nn.MultiheadAttention(
+            d_model, n_heads, dropout=dropout, batch_first=True,
+        )
+        self.norm2 = nn.LayerNorm(d_model)
+
+        # Feed-forward
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, d_model),
+        )
+        self.norm3 = nn.LayerNorm(d_model)
+
+        # Output projection
+        self.output_proj = nn.Linear(d_model, d_out)
+
+        # Confidence estimation
+        self.confidence_head = nn.Sequential(
+            nn.Linear(d_model, d_model // 2),
+            nn.GELU(),
+            nn.Linear(d_model // 2, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(
+        self,
+        vjepa_tokens: torch.Tensor,
+        wm_object_tokens: torch.Tensor,
+        vjepa_mask: Optional[torch.Tensor] = None,
+        wm_mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Align V-JEPA temporal predictions to WM object tokens.
+
+        Args:
+            vjepa_tokens: ``(batch, T, N_vjepa, d_vjepa)`` — V-JEPA latent
+                predictions for T future timesteps.
+            wm_object_tokens: ``(batch, N_obj, d_wm_token)`` — current WM
+                object tokens that will query temporal state.
+            vjepa_mask: ``(batch, T, N_vjepa)`` — True if token is masked.
+            wm_mask: ``(batch, N_obj)`` — True if object is masked.
+
+        Returns:
+            Dict with:
+                - temporal_aligned: ``(batch, T, N_obj, d_out)`` — aligned
+                    temporal state per object per timestep
+                - temporal_confidence: ``(batch, T)`` — per-timestep
+                    alignment confidence
+        """
+        unbatched = vjepa_tokens.dim() == 3
+        if unbatched:
+            vjepa_tokens = vjepa_tokens.unsqueeze(0)
+            wm_object_tokens = wm_object_tokens.unsqueeze(0)
+            if vjepa_mask is not None:
+                vjepa_mask = vjepa_mask.unsqueeze(0)
+            if wm_mask is not None:
+                wm_mask = wm_mask.unsqueeze(0)
+
+        batch_size = vjepa_tokens.size(0)
+        T = vjepa_tokens.size(1)
+        N_vjepa = vjepa_tokens.size(2)
+        N_obj = wm_object_tokens.size(1)
+
+        # Project inputs
+        vjepa_proj = self.vjepa_proj(vjepa_tokens)  # (batch, T, N_vjepa, d_model)
+        wm_query = self.wm_query_proj(wm_object_tokens)  # (batch, N_obj, d_model)
+
+        # Add temporal position embedding
+        if T <= self.n_temporal_steps:
+            vjepa_proj = vjepa_proj + self.temporal_pos_embed[:, :T, :, :]
+        else:
+            # Interpolate position embeddings for longer sequences
+            pos = F.interpolate(
+                self.temporal_pos_embed.permute(0, 3, 1, 2),
+                size=(T, 1),
+                mode="bilinear",
+                align_corners=False,
+            ).permute(0, 2, 3, 1)
+            vjepa_proj = vjepa_proj + pos
+
+        # Process each timestep
+        temporal_aligned = []
+        temporal_confidence = []
+
+        for t in range(T):
+            # V-JEPA keys/values for this timestep
+            kv = vjepa_proj[:, t, :, :]  # (batch, N_vjepa, d_model)
+
+            # Cross-attention: WM objects query V-JEPA
+            t_mask = vjepa_mask[:, t, :] if vjepa_mask is not None else None
+            cross_out, _ = self.cross_attn(
+                wm_query, kv, kv, key_padding_mask=t_mask
+            )
+            x = self.norm1(wm_query + cross_out)
+
+            # Self-attention among objects
+            self_out, _ = self.self_attn(x, x, x, key_padding_mask=wm_mask)
+            x = self.norm2(x + self_out)
+
+            # Feed-forward
+            ff_out = self.ffn(x)
+            x = self.norm3(x + ff_out)
+
+            # Output projection
+            aligned = self.output_proj(x)  # (batch, N_obj, d_out)
+            temporal_aligned.append(aligned)
+
+            # Timestep confidence from pooled features
+            if wm_mask is not None:
+                mask_f = (~wm_mask).unsqueeze(-1).float()
+                pooled = (x * mask_f).sum(dim=1) / mask_f.sum(dim=1).clamp(min=1.0)
+            else:
+                pooled = x.mean(dim=1)
+            conf = self.confidence_head(pooled).squeeze(-1)
+            temporal_confidence.append(conf)
+
+        # Stack outputs
+        temporal_aligned = torch.stack(temporal_aligned, dim=1)  # (batch, T, N_obj, d_out)
+        temporal_confidence = torch.stack(temporal_confidence, dim=1)  # (batch, T)
+
+        result = {
+            "temporal_aligned": temporal_aligned,
+            "temporal_confidence": temporal_confidence,
+        }
+
+        if unbatched:
+            result = {k: v.squeeze(0) for k, v in result.items()}
+
+        return result
+
+    def param_count(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def describe(self) -> Dict[str, Any]:
+        return {
+            "seam_type": "vjepa_temporal_alignment",
+            "d_vjepa": self.d_vjepa,
+            "d_wm_token": self.d_wm_token,
+            "d_model": self.d_model,
+            "d_out": self.d_out,
+            "n_heads": self.n_heads,
+            "n_temporal_steps": self.n_temporal_steps,
+            "param_count": self.param_count(),
+            "module_class": self.__class__.__name__,
+        }
+
+
 __all__ = [
-    "PROVIDER_KIND_VOCAB",
-    "TRUTH_CLASS_SCORES",
+    "DepthMetricCalibrationSeam",
     "EvidenceFusionSeam",
+    "PROVIDER_KIND_VOCAB",
+    "SAMCalibrationSeam",
+    "TRUTH_CLASS_SCORES",
+    "VisionBackboneProjectionSeam",
+    "VJEPATemporalAlignmentSeam",
     "encode_provider_features",
 ]

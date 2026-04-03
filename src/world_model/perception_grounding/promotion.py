@@ -392,9 +392,111 @@ def resolve_semantic_bridge_helper(
     }
 
 
+def resolve_provider_adapter_helper(
+    *,
+    provider_kind: str,
+    loading_posture: str,
+    benchmark_signals: Mapping[str, Any],
+    evidence_signals: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Resolve a provider adapter neural seam's promotion posture.
+
+    Provider adapters are learned projection/calibration heads that sit
+    between frozen external providers (SAM, DINOv2, V-JEPA 2, Depth) and
+    the canonical WM state.  They are governed by Perception/Grounding WM.
+
+    ``provider_kind`` identifies which adapter:
+    - ``sam_calibration``: SAM mask confidence calibration head
+    - ``vision_backbone_projection``: DINOv2/SigLIP feature projection
+    - ``depth_metric_calibration``: Depth scale/shift calibration
+    - ``vjepa_temporal_alignment``: V-JEPA temporal cross-attention
+
+    Promotion posture:
+    - ``disabled``: raw provider output (no calibration/projection)
+    - ``auto``: learned adapter if benchmark-ready, else raw
+    - ``required``: must use learned adapter or fail
+    """
+    posture = str(loading_posture or "disabled")
+    benchmark_ready = bool(
+        benchmark_signals.get("ready", False)
+        or benchmark_signals.get("benchmark_eligible", False)
+    )
+    benchmark_gate = dict(benchmark_signals.get("benchmark_gate", {}) or {})
+
+    base = {"provider_kind": str(provider_kind)}
+
+    if posture == "disabled":
+        return {
+            **base,
+            "helper_active": False,
+            "promotion_stage": "raw_provider_output",
+            "helper_weight": 0.0,
+            "posture": "disabled",
+        }
+
+    if posture == "required":
+        if benchmark_ready:
+            should_demote, reason = _check_demotion(
+                benchmark_gate, dict(evidence_signals or {})
+            )
+            if should_demote:
+                return {
+                    **base,
+                    "helper_active": True,
+                    "promotion_stage": "demoted_to_shadow",
+                    "helper_weight": 0.25,
+                    "posture": "required",
+                    "demotion_reason": reason,
+                }
+            return {
+                **base,
+                "helper_active": True,
+                "promotion_stage": "promoted",
+                "helper_weight": 1.0,
+                "posture": "required",
+            }
+        return {
+            **base,
+            "helper_active": False,
+            "promotion_stage": "required_but_not_ready",
+            "helper_weight": 0.0,
+            "posture": "required",
+        }
+
+    # auto
+    if benchmark_ready:
+        should_demote, reason = _check_demotion(
+            benchmark_gate, dict(evidence_signals or {})
+        )
+        if should_demote:
+            return {
+                **base,
+                "helper_active": True,
+                "promotion_stage": "demoted_to_shadow",
+                "helper_weight": 0.25,
+                "posture": "auto",
+                "demotion_reason": reason,
+            }
+        return {
+            **base,
+            "helper_active": True,
+            "promotion_stage": "promoted",
+            "helper_weight": 1.0,
+            "posture": "auto",
+        }
+    return {
+        **base,
+        "helper_active": False,
+        "promotion_stage": "raw_provider_output",
+        "helper_weight": 0.0,
+        "posture": "auto",
+    }
+
+
 __all__ = [
     "resolve_evidence_fusion_helper",
     "resolve_graph_transformer_helper",
+    "resolve_provider_adapter_helper",
     "resolve_semantic_bridge_helper",
     "resolve_temporal_grounding_helper",
 ]

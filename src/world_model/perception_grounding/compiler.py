@@ -17,10 +17,11 @@ from src.evidence.belief_state import BeliefState
 from src.world_model.semantic_world_model import SemanticWorldModelBuilder
 
 from .common import clip01, mapping, stable_id, strings
-from .receipts import EvidenceFusionReceipt
+from .receipts import EvidenceFusionReceipt, ProviderInvocationReceipt
 from .promotion import (
     resolve_evidence_fusion_helper,
     resolve_graph_transformer_helper,
+    resolve_provider_adapter_helper,
     resolve_semantic_bridge_helper,
     resolve_temporal_grounding_helper,
 )
@@ -415,6 +416,107 @@ def _temporal_grounding(
     )
 
 
+def _invoke_provider_adapter_seam(
+    *,
+    state_id: str,
+    provider_id: str,
+    provider_kind: str,
+    seam: Any,
+    seam_input: Any,
+    benchmark_signals: Mapping[str, Any],
+) -> Tuple[Optional[Any], ProviderInvocationReceipt]:
+    """Invoke a provider adapter seam and emit an invocation receipt.
+
+    Args:
+        state_id: State ID for receipt generation.
+        provider_id: Provider identifier (e.g., "sam_3_1", "dinov2").
+        provider_kind: Provider kind (e.g., "sam_calibration", "vision_backbone_projection").
+        seam: The neural seam module (torch.nn.Module).
+        seam_input: Input data for the seam forward pass.
+        benchmark_signals: Benchmark signals for promotion resolution.
+
+    Returns:
+        Tuple of (seam output or None, ProviderInvocationReceipt).
+    """
+    import time
+
+    helper_status = resolve_provider_adapter_helper(
+        provider_kind=provider_kind,
+        loading_posture="auto",
+        benchmark_signals=benchmark_signals,
+    )
+    promotion_stage = str(helper_status.get("promotion_stage", "raw_provider_output"))
+
+    # If not promoted or no seam, return fallback receipt
+    if promotion_stage != "promoted" or seam is None:
+        return None, ProviderInvocationReceipt(
+            receipt_id=f"provider_invocation_{provider_id}_{state_id}",
+            provider_id=provider_id,
+            provider_kind=provider_kind,
+            invocation_status="skipped",
+            fallback_used=True,
+            fallback_reason="seam_not_promoted" if seam is not None else "seam_not_available",
+            metadata={
+                "promotion_stage": promotion_stage,
+                "helper_status": dict(helper_status),
+            },
+        )
+
+    # Invoke the seam
+    start_time = time.perf_counter()
+    output = None
+    invocation_status = "success"
+    fallback_used = False
+    fallback_reason = ""
+    output_quality = 0.0
+    output_token_count = 0
+
+    try:
+        import torch
+
+        with torch.no_grad():
+            output = seam(seam_input) if not isinstance(seam_input, tuple) else seam(*seam_input)
+
+        # Extract quality/token count from output if available
+        if isinstance(output, dict):
+            if "calibrated_confidence" in output:
+                output_quality = clip01(float(output["calibrated_confidence"].mean().item()))
+            elif "temporal_confidence" in output:
+                output_quality = clip01(float(output["temporal_confidence"].mean().item()))
+            else:
+                output_quality = 0.7  # Default for successful projection
+        elif hasattr(output, "shape"):
+            output_token_count = int(output.shape[0] if output.dim() >= 1 else 1)
+            output_quality = 0.7
+
+    except Exception as e:
+        invocation_status = "error"
+        fallback_used = True
+        fallback_reason = str(e)[:200]
+        output = None
+
+    latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+    receipt = ProviderInvocationReceipt(
+        receipt_id=f"provider_invocation_{provider_id}_{state_id}",
+        provider_id=provider_id,
+        provider_kind=provider_kind,
+        invocation_status=invocation_status,
+        output_quality_score=output_quality,
+        latency_ms=latency_ms,
+        output_token_count=output_token_count,
+        fallback_used=fallback_used,
+        fallback_reason=fallback_reason,
+        metadata={
+            "promotion_stage": promotion_stage,
+            "seam_type": type(seam).__name__ if seam else "none",
+            "helper_status": dict(helper_status),
+        },
+    )
+
+    return output, receipt
+
+
 def _evidence_routing(
     *,
     state_id: str,
@@ -775,9 +877,30 @@ def compile_perception_grounding_world_state(
     benchmark_signals: Optional[Mapping[str, Any]] = None,
     metadata: Optional[Mapping[str, Any]] = None,
     objective_preset: str = "balanced",
+    # Neural seams (optional, invoked when promoted)
     evidence_fusion_seam: Optional[Any] = None,
+    sam_calibration_seam: Optional[Any] = None,
+    vision_backbone_projection_seam: Optional[Any] = None,
+    depth_metric_calibration_seam: Optional[Any] = None,
+    vjepa_temporal_alignment_seam: Optional[Any] = None,
+    # Provider adapter inputs (optional, passed to seams when available)
+    sam_mask_features: Optional[Any] = None,
+    sam_raw_confidence: Optional[Any] = None,
+    backbone_features: Optional[Any] = None,
+    depth_map: Optional[Any] = None,
+    camera_intrinsics: Optional[Any] = None,
+    vjepa_tokens: Optional[Any] = None,
+    wm_object_tokens: Optional[Any] = None,
 ) -> PerceptionGroundingWorldState:
-    """Compile the first loop-facing Perception / Grounding WM state."""
+    """Compile the first loop-facing Perception / Grounding WM state.
+
+    Provider adapter seams are invoked when:
+    - The seam is provided (not None)
+    - The corresponding input data is provided
+    - The seam's promotion posture is "promoted" based on benchmark signals
+
+    When invoked, seams emit ProviderInvocationReceipt to the receipts list.
+    """
 
     resolved_tags = strings(semantic_tags)
     resolved_belief = belief_state or _empty_belief_state(
@@ -829,6 +952,78 @@ def compile_perception_grounding_world_state(
         loading_posture="auto",
         benchmark_signals=benchmark_payload,
     )
+
+    # --- Invoke provider adapter seams ---
+    provider_adapter_receipts: List[ProviderInvocationReceipt] = []
+    provider_adapter_outputs: dict[str, Any] = {}
+
+    # SAM calibration seam
+    if sam_calibration_seam is not None and sam_mask_features is not None:
+        seam_input = (sam_mask_features, sam_raw_confidence) if sam_raw_confidence is not None else (sam_mask_features,)
+        output, receipt = _invoke_provider_adapter_seam(
+            state_id=state_id,
+            provider_id="sam_3_1",
+            provider_kind="sam_calibration",
+            seam=sam_calibration_seam,
+            seam_input=seam_input,
+            benchmark_signals=benchmark_payload,
+        )
+        provider_adapter_receipts.append(receipt)
+        if output is not None:
+            provider_adapter_outputs["sam_calibration"] = output
+
+    # Vision backbone projection seam
+    if vision_backbone_projection_seam is not None and backbone_features is not None:
+        output, receipt = _invoke_provider_adapter_seam(
+            state_id=state_id,
+            provider_id="dinov2_vit_l_14",
+            provider_kind="vision_backbone_projection",
+            seam=vision_backbone_projection_seam,
+            seam_input=backbone_features,
+            benchmark_signals=benchmark_payload,
+        )
+        provider_adapter_receipts.append(receipt)
+        if output is not None:
+            provider_adapter_outputs["vision_backbone_projection"] = output
+
+    # Depth metric calibration seam
+    if depth_metric_calibration_seam is not None and depth_map is not None:
+        seam_input = (depth_map, camera_intrinsics) if camera_intrinsics is not None else (depth_map,)
+        output, receipt = _invoke_provider_adapter_seam(
+            state_id=state_id,
+            provider_id="depth_anything_v2",
+            provider_kind="depth_metric_calibration",
+            seam=depth_metric_calibration_seam,
+            seam_input=seam_input,
+            benchmark_signals=benchmark_payload,
+        )
+        provider_adapter_receipts.append(receipt)
+        if output is not None:
+            provider_adapter_outputs["depth_metric_calibration"] = output
+
+    # V-JEPA temporal alignment seam
+    if vjepa_temporal_alignment_seam is not None and vjepa_tokens is not None:
+        # wm_object_tokens defaults to scene_graph tokens if not provided
+        wm_tokens = wm_object_tokens
+        if wm_tokens is None and scene_graph.object_tracks:
+            import torch
+            wm_tokens = torch.tensor(
+                [track.feature_token for track in scene_graph.object_tracks],
+                dtype=torch.float32,
+            )
+        if wm_tokens is not None:
+            output, receipt = _invoke_provider_adapter_seam(
+                state_id=state_id,
+                provider_id="vjepa2",
+                provider_kind="vjepa_temporal_alignment",
+                seam=vjepa_temporal_alignment_seam,
+                seam_input=(vjepa_tokens, wm_tokens),
+                benchmark_signals=benchmark_payload,
+            )
+            provider_adapter_receipts.append(receipt)
+            if output is not None:
+                provider_adapter_outputs["vjepa_temporal_alignment"] = output
+
     deployment_surface = deployment_resource_surface or DeploymentResourceSurface(
         surface_id=f"deployment_resource_{state_id}",
         deployment_posture="unavailable",
@@ -887,6 +1082,8 @@ def compile_perception_grounding_world_state(
             "evidence_helper_status": evidence_helper,
             "temporal_helper_status": temporal_helper,
             "evidence_fusion_receipt": evidence_fusion_receipt.to_dict(),
+            "provider_adapter_receipts": [r.to_dict() for r in provider_adapter_receipts],
+            "provider_adapter_outputs_available": list(provider_adapter_outputs.keys()),
             **mapping(metadata),
         },
     )
@@ -923,9 +1120,14 @@ def compile_perception_grounding_with_receipts(
     ``compile_perception_grounding_world_state``.  Returns a
     ``PerceptionCompilationResult`` with both the state and the
     typed receipts from the compilation pass.
+
+    Receipts include:
+    - EvidenceFusionReceipt: evidence routing and fusion quality
+    - ProviderInvocationReceipt: per-seam invocation status and quality
     """
     state = compile_perception_grounding_world_state(**kwargs)
     receipts: list[Any] = []
+
     # Extract the evidence fusion receipt from state metadata
     efr_dict = state.metadata.get("evidence_fusion_receipt")
     if efr_dict is not None:
@@ -947,6 +1149,26 @@ def compile_perception_grounding_with_receipts(
                 metadata=dict(efr_dict.get("metadata", {})),
             )
         )
+
+    # Extract provider adapter receipts from state metadata
+    par_list = state.metadata.get("provider_adapter_receipts", [])
+    for par_dict in par_list:
+        if isinstance(par_dict, dict):
+            receipts.append(
+                ProviderInvocationReceipt(
+                    receipt_id=str(par_dict.get("receipt_id", "")),
+                    provider_id=str(par_dict.get("provider_id", "")),
+                    provider_kind=str(par_dict.get("provider_kind", "")),
+                    invocation_status=str(par_dict.get("invocation_status", "")),
+                    output_quality_score=float(par_dict.get("output_quality_score", 0.0)),
+                    latency_ms=float(par_dict.get("latency_ms", 0.0)),
+                    output_token_count=int(par_dict.get("output_token_count", 0)),
+                    fallback_used=bool(par_dict.get("fallback_used", False)),
+                    fallback_reason=str(par_dict.get("fallback_reason", "")),
+                    metadata=dict(par_dict.get("metadata", {})),
+                )
+            )
+
     return PerceptionCompilationResult(state=state, receipts=receipts)
 
 

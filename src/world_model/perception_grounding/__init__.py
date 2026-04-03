@@ -42,14 +42,24 @@ from .compiler import (
     compile_perception_grounding_world_state,
 )
 from .neural_seams import (
+    DepthMetricCalibrationSeam,
     EvidenceFusionSeam,
+    SAMCalibrationSeam,
+    VisionBackboneProjectionSeam,
+    VJEPATemporalAlignmentSeam,
     encode_provider_features,
 )
 from .promotion import (
     resolve_evidence_fusion_helper,
     resolve_graph_transformer_helper,
+    resolve_provider_adapter_helper,
     resolve_semantic_bridge_helper,
     resolve_temporal_grounding_helper,
+)
+from .seam_registry import (
+    PerceptionSeamRegistry,
+    SeamDescriptor,
+    create_default_registry,
 )
 from .receipts import (
     DeploymentResourceReceipt,
@@ -130,11 +140,20 @@ __all__ = [
     "compile_perception_grounding_with_receipts",
     "compile_perception_grounding_world_state",
     # Neural seams
+    "DepthMetricCalibrationSeam",
     "EvidenceFusionSeam",
+    "SAMCalibrationSeam",
+    "VisionBackboneProjectionSeam",
+    "VJEPATemporalAlignmentSeam",
     "encode_provider_features",
+    # Seam registry
+    "PerceptionSeamRegistry",
+    "SeamDescriptor",
+    "create_default_registry",
     # Promotion
     "resolve_evidence_fusion_helper",
     "resolve_graph_transformer_helper",
+    "resolve_provider_adapter_helper",
     "resolve_semantic_bridge_helper",
     "resolve_temporal_grounding_helper",
 ]
