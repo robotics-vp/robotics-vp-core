@@ -13,6 +13,27 @@ relation state. It also needs explicit lower-WM surfaces for:
 This borrows the useful separation patterns from Habitat-style stacks without
 letting Habitat become the ontology or truth owner in this repo.
 
+Relevant design-pattern donors:
+
+- Habitat-Sim README
+- Habitat-Lab docs
+- Habitat-Lab `Measure` pattern
+- Habitat-Lab `VectorEnv` pattern
+
+What we are borrowing from them:
+
+- explicit dataset/world inventory separation
+- explicit simulator/provider separation
+- explicit task/measurement surfaces
+- vectorized runtime/eval discipline
+- explicit sensor/config posture
+
+What we are not borrowing:
+
+- a single environment object as the master ontology
+- provider-owned semantic truth
+- flattening WM boundaries into one runtime container
+
 ## Layering Rule
 
 Adopt the pattern:

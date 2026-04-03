@@ -61,6 +61,17 @@ This is the right transitional posture:
   - WM-native bridge family
   - provider-backed / fusion-backed evidence
 
+### Semantic-bridge verification status
+
+The semantic-bridge refinement is now explicit branch truth rather than a
+half-landed local pass:
+
+- semantic bridge registry/state is carried by the top-level Perception WM state
+- semantic bridge promotion logic is covered by tests
+- bridge serialization coverage now includes the embodiment bridge as well as
+  the sim-synth, annotation, and economic bridge surfaces
+- `SemanticVLA` scaffolding/successor metadata is covered by tests
+
 ### What still remains internal in Phase 2
 
 - compiler/runtime build path for `PerceptionGroundingWorldState`

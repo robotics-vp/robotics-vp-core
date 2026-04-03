@@ -15,6 +15,7 @@ from src.world_model.perception_grounding import (
     DeploymentResourceReceipt,
     DeploymentResourceSurface,
     DepthProviderContract,
+    EmbodimentSemanticBridgeState,
     EconomicSemanticBridgeState,
     EvidenceFusionReceipt,
     EvidenceRoutingState,
@@ -282,6 +283,15 @@ class TestSemanticBridgeState:
             helper_posture="auto",
             helper_promotion_stage="promoted",
         )
+        embodiment_bridge = EmbodimentSemanticBridgeState(
+            bridge_id="emb_1",
+            source_graph_id="g1",
+            per_object_affordance_scores={"t1": 0.9},
+            per_object_affordance_classes={"t1": ["graspable", "liftable"]},
+            body_object_pairwise_scores={"left_hand": {"t1": 0.8}},
+            resource_conditioned=True,
+            embodiment_dof=29,
+        )
         annotation_bridge = AnnotationSemanticBridgeState(
             bridge_id="ab_1",
             source_graph_id="g1",
@@ -298,11 +308,14 @@ class TestSemanticBridgeState:
             registry_id="reg_1",
             source_graph_id="g1",
             sim_synth_bridge=sim_bridge,
+            embodiment_bridge=embodiment_bridge,
             annotation_bridge=annotation_bridge,
             economic_bridge=economic_bridge,
         )
         d = registry.to_dict()
         assert d["sim_synth_bridge"]["helper_promotion_stage"] == "promoted"
+        assert d["embodiment_bridge"]["resource_conditioned"] is True
+        assert d["embodiment_bridge"]["body_object_pairwise_scores"]["left_hand"]["t1"] == 0.8
         assert d["annotation_bridge"]["object_class_labels"]["t1"] == "cup"
         assert d["economic_bridge"]["semantic_density"] == 0.75
         assert d["semantic_vla_successor_status"] == "distributed_bridge_family"

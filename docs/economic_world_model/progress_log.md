@@ -19,7 +19,9 @@
   - `DeploymentResourceReceipt`
 - **Verified** the semantic successor posture:
   - `resolve_semantic_bridge_helper()` is now covered by tests
+  - all four bridge families are now represented in registry serialization coverage
   - `src/vla/semantic_vla.py` scaffolding posture is now covered by tests, including successor metadata
+  - focused compile + lint + perception-grounding regression now pass on the reconciled Phase 2 package
 - **Added doctrine**:
   - `docs/economic_world_model/doctrine_provider_dataset_resource_surfaces.md`
   - refined `docs/economic_world_model/doctrine_semantic_bridge_successor.md`

@@ -59,11 +59,24 @@ The local Phase 2 package is now coherent enough to become branch truth:
 
 - `tests/test_perception_grounding_world_model.py`
   - now covers:
-    - semantic bridge registry/state
+    - all four semantic bridge state families via registry serialization
     - provider/dataset/task/resource surfaces
     - provider/headroom/deployment receipts
     - semantic bridge promotion/demotion
     - `SemanticVLA` scaffolding/successor metadata
+
+### Verification status
+
+The semantic-bridge refinement is now fully verified on the audited local
+Phase 2 surfaces:
+
+- `python3 -m compileall src -q`
+- `python3 -m ruff check src/world_model/perception_grounding src/vla/semantic_vla.py tests/test_perception_grounding_world_model.py`
+- `python3 -m pytest -q tests/test_perception_grounding_world_model.py`
+
+Current focused result:
+
+- `48 passed`
 
 ## What Was Not Changed
 
@@ -96,6 +109,7 @@ The intended successor is explicit in both code and docs:
 - Phase 2 now explicitly names lower-WM provider/dataset/task/resource surfaces instead of leaving them as discussion-only doctrine
 - the receipt set now carries provider-availability, inference-headroom, and deployment-resource truth
 - `SemanticVLA` successor posture is tested, not only described
+- semantic bridge promotion behavior and bridge-registry serialization are tested as current branch truth
 
 ### Remaining Category A items
 
@@ -138,5 +152,25 @@ Priority order:
 1. build the first compiler/runtime skeleton for `PerceptionGroundingWorldState`
 2. wire `SemanticVLA` / `backbone_stub.py` consumers behind typed provider-contract posture instead of free-floating placeholder usage
 3. add the first downstream shadow consumption hook into Sim / Synth / Physics and annotation/evidence paths
+
+Bridge preconditions that must remain explicit in that next tranche:
+
+- Sim / Synth:
+  - object preservation
+  - synthetic-vs-real semantic alignment
+  - branch evaluation
+  - branch-outcome semantics
+- Embodiment:
+  - affordance
+  - action relevance
+  - bodily-feasibility relevance
+  - object-task relation
+- Annotation / evidence:
+  - object-linked primitive/event crosswalk
+  - failure/recovery labeling
+- Economic:
+  - grounding quality
+  - semantic contribution
+  - action-relevant structural yield
 
 Do not reopen Phase 1 unless new external runtime/assets arrive or a real missing contract is discovered.
