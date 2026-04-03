@@ -161,13 +161,24 @@ switching systems let regime persistence and transitions be learned.
 - `EconomicTransition`
 - `EconomicCounterfactual`
 - `EconomicInvariant`
+- `SlowManifoldProjection` — compiled slow state from the estimator;
+  prevents local receipt noise from reparameterizing macro economic state
+- `ShadowPriceField` — per-resource marginal prices (Lagrangian
+  multipliers) updated on meso timescale
+- `ParetoFrontierSlice` — distributional frontier segment with tail-risk
+  metadata from the allocator
+- `PersistenceAnnotation` — hysteresis / hold-steady metadata on
+  governance transport
 
 `EconTensor` can remain as a portable compiled representation but should not
 be treated as the full ontology.
 
 ## Multi-timescale / near-adiabatic structure
 
-The future Economic WM must be explicitly multi-timescale.
+The future Economic WM must be explicitly multi-timescale. This is not a
+metaphor — adiabatic elimination (slow/fast variable separation via
+quasi-steady-state manifold reduction) provides a rigorous design pattern for
+the internal decomposition boundaries.
 
 ### Fast variables
 
@@ -185,6 +196,7 @@ The future Economic WM must be explicitly multi-timescale.
 - which datapacks or slices to train on
 - embodiment assignment
 - exploration quotas
+- shadow prices / Lagrangian multipliers for resource constraints
 
 ### Slow / near-adiabatic variables
 
@@ -194,6 +206,27 @@ The future Economic WM must be explicitly multi-timescale.
 - promotion thresholds for governance nodes
 - trusted transport semantics
 - deployment-trust / safety invariants
+- regime identity and duration
+
+### Adiabatic separation design rules
+
+The following rules are concrete, not metaphorical. They govern the data
+flow between the four internal parts of the Economic WM:
+
+1. **No fast→slow feedback without explicit gating.** Fast receipt noise must
+   not reparameterize slow manifold state. The `SlowManifoldProjection`
+   interface enforces this: fast receipts are aggregated and projected before
+   affecting the estimator's slow state.
+2. **Slow state conditions fast dynamics.** The dynamics model takes slow
+   manifold state (regime, constraint manifold, macro-pressure vector) as
+   parametric context, not as optimizable variables.
+3. **Meso variables are the update channel for shadow prices.** Lagrangian
+   multipliers / shadow prices for resource budgets update on a meso
+   timescale — slower than per-step allocation but faster than regime
+   transitions.
+4. **Persistence / hysteresis prevents thrashing.** Governance transport
+   downward carries persistence annotations. Lower WMs should track
+   governance fields without overreacting to marginal changes.
 
 **Design rule:** slow variables should not swing violently in response to
 local noise. Superstatistics formalizes a similar idea by treating fast local
@@ -262,13 +295,27 @@ Outputs:
 - marginal tension / shadow-price-like signals
 
 Architecture family: switching state-space models and regime-aware sequence
-models rather than plain transformers first. DS3M-like models and
-RED-SDS-style explicit-duration regime models are closer to the real problem.
+models rather than plain transformers first. Confirmed candidates:
+
+- **DS3M** (Deep Switching State Space Model) — RNN + nonlinear SSSM with
+  discrete regime latents + continuous stochastic latents. Good for
+  long-range dependencies and abrupt regime changes. PyTorch reference:
+  `Sherry-Xu/Deep-Switching-State-Space-Model`.
+- **RED-SDS** (Recurrent Explicit Duration Switching Dynamical Systems) —
+  explicitly models regime duration, not only regime identity. Critical for
+  the Economic WM because regime persistence is a first-class concern
+  (energy-scarce regimes last shifts, not steps). PyTorch reference:
+  `abdulfatir/REDSDS`.
+
+The estimator should emit a `SlowManifoldProjection` that downstream layers
+consume, enforcing the adiabatic separation: fast receipts are projected
+onto the slow manifold via a typed aggregation layer.
 
 ### 2. Economic Dynamics Model
 
 Forecasts how economic state evolves under candidate allocations and policy
-choices.
+choices. Dynamics are **conditioned on slow manifold state** (regime,
+constraint manifold, macro-pressure vector) from the estimator.
 
 Questions:
 
@@ -302,6 +349,22 @@ Outputs should not be scalar rewards first. They should be:
 The Pareto allocator should be **distributional, regime-aware, and
 execution-aware**, preserving uncertainty over multivariate returns rather
 than only their expectations.
+
+Confirmed architecture patterns:
+
+- **DPMORL** (Distributional Pareto Multi-Objective RL, NeurIPS 2023) —
+  return-distribution-aware utility functions for Pareto policy training.
+  Emits distributional frontier slices, not point estimates.
+- **PGMORL** (Prediction-Guided MORL, ICML 2020) — evolutionary, dense
+  Pareto front generation for continuous control. Good benchmark pattern
+  for frontier generation.
+- **Risk budgeting via augmented Lagrangian** — shadow prices (Lagrange
+  multipliers) as dynamic resource prices, updated on meso timescale. Each
+  resource constraint has an associated `ShadowPriceField` that shapes
+  downstream allocation.
+
+The allocator should emit `ParetoFrontierSlice` objects with tail-risk
+metadata, not raw scalar weights.
 
 ### 4. Economic Governance / Reciprocity Layer
 

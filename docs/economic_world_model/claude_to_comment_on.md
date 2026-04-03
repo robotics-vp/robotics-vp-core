@@ -219,12 +219,18 @@ The Habitat extraction is not exhausted. The biggest remaining opportunity
 sits in Sim / Synth / Physics WM for:
 
 - simulator/task separation discipline
+  (confirmed source: `habitat.core.embodied_task.EmbodiedTask`)
 - articulated embodiment + sensor config
-- scene/measurement harness patterns
-- vectorized runtime/eval patterns
+  (confirmed source: `habitat.articulated_agents` + `habitat_sim.physics`)
+- Measure/Measurement registry patterns
+  (confirmed source: `habitat.core.embodied_task.Measure` — UUID-keyed,
+  dependency-ordered, directly adoptable for `TaskMeasurementSurface`)
 - camera geometry / view-warp utilities
+  (confirmed: CPU-only K-matrix math, implementable now)
+- differentiable physics provider candidate
+  (confirmed: JaxSim — JAX-native, URDF/SDF, `ami-iit/jaxsim`)
 
-This should be named as a specific open Phase 1.x adoption item, not forgotten.
+This is a specific open Phase 1.x adoption item.
 See updated `roadmap.md` and `multi_wm_architecture_plan.md`.
 
 ## Doctrine Updates Landed This Pass
@@ -236,11 +242,20 @@ allocator-governor — the canonical world model of productive flow,
 dissipation, and allocative opportunity. Key properties:
 
 - multi-timescale (fast/meso/slow-adiabatic variable split)
+- **adiabatic separation as concrete design pattern** (not metaphor):
+  no fast→slow feedback without gating, slow state conditions fast dynamics,
+  meso-timescale shadow prices, persistence/hysteresis prevents thrashing
 - asymmetric upward/downward transport
 - four-component decomposition (state estimator → dynamics → allocator →
   governance/reciprocity)
 - staged neuralization (typed ontology first → neural estimation → neural
   dynamics → neural allocator → local shaping compilers)
+- confirmed architecture families:
+  - **Estimator**: DS3M / RED-SDS switching SSMs (explicit regime duration)
+  - **Allocator**: DPMORL distributional Pareto + risk-budgeting Lagrangian
+  - **Dynamics**: regime-conditioned sequence models
+- new typed objects: `SlowManifoldProjection`, `ShadowPriceField`,
+  `ParetoFrontierSlice`, `PersistenceAnnotation`
 - quant-inspired imports as algorithmic patterns: coherent risk, distributional
   Pareto, regime switching, risk budgeting, stress testing, execution-cost
   awareness

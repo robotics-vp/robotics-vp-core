@@ -142,20 +142,36 @@ named as an explicit reopenable Phase 1 adoption track, not forgotten.
 These require no Habitat code import. They are contract/architecture patterns:
 
 - Habitat-style simulator/task separation for backend execution discipline
+  (source: `habitat.core.env` + `habitat.core.embodied_task.EmbodiedTask`
+  — clean sim→task→measurement→episode protocol)
 - Articulated embodiment + sensor config schema borrowing
-- Scene/measurement harness patterns for sim branch evaluation
-- Semantic scene hierarchy / object-region-scene decomposition for Isaac assets
+  (source: `habitat.articulated_agents` + `habitat_sim.physics` URDF/SDF)
+- Measure/Measurement registry patterns for sim branch evaluation
+  (source: `habitat.core.embodied_task.Measure` — UUID-keyed, dependency-
+  ordered, reset/update protocol; directly adoptable for our
+  `TaskMeasurementSurface` receipt family)
+- Semantic scene hierarchy / object-region-scene decomposition
+  (source: `habitat_sim.scene` + `habitat_sim.metadata`)
+- SensorSuite composition pattern for provider registry
+  (source: `habitat.core.simulator.SensorSuite` — registry-composed sensor
+  suite with per-step observation updates)
 
 #### Real code / provider adoption candidates (requires evaluation)
 
 These may involve selective code borrowing or provider integration:
 
 - Camera geometry / view-warp / calibration utilities for sim-real consistency
-  (Habitat-Lab camera utils, `habitat_sim` view-transform patterns)
+  (source: Habitat-Lab view-transform-warp tutorial — concrete K-matrix
+  construction, extrinsic transform chains, depth unprojection/projection.
+  CPU-only math, no GPU dependency. Implementable now as a utility module.)
 - Vectorized runtime/eval patterns for batch sim execution
-  (Habitat-Lab `VectorEnv`, evaluate patterns)
+  (source: Habitat-Lab `VectorEnv`, evaluate patterns)
 - Interactive play / benchmark harness patterns
-  (Habitat-Lab `habitat_baselines/rl/ppo/ppo_trainer.py` eval loops)
+  (source: Habitat-Lab interactive play script + `habitat_baselines` eval)
+- Differentiable physics provider
+  (candidate: JaxSim — JAX-native, URDF/SDF, reduced-coordinate dynamics,
+  CPU/GPU/TPU. Reference: `ami-iit/jaxsim`. Strong candidate for
+  `DifferentiablePhysicsProvider` contract in Sim/Synth WM.)
 
 Each requires a scoping evaluation: what to borrow, what to adapt, what to
 ignore. Do not bulk-import.
@@ -322,17 +338,26 @@ raw receipts; downward carries compiled allocative fields with regime context.
 ### Internal decomposition
 
 1. **Economic State Estimator**: consumes lower-WM receipts → `EconomicState`
-   + `EconomicRegime` + `BottleneckMap`. Architecture: switching SSMs /
-   regime-aware sequence models, not plain transformers first.
+   + `EconomicRegime` + `BottleneckMap` + `SlowManifoldProjection`.
+   Architecture: switching SSMs / regime-aware sequence models (confirmed:
+   DS3M for long-range regime detection, RED-SDS for explicit-duration regime
+   persistence). Emits slow manifold projection enforcing adiabatic
+   separation: fast receipts projected before affecting macro state.
 2. **Economic Dynamics Model**: forecasts state evolution under candidate
-   allocations. Architecture: regime-switching rollouts, typed receipt
-   forecasts, differentiable-physics coupling where appropriate.
+   allocations, **conditioned on slow manifold state** (regime, constraint
+   manifold, macro-pressure vector). Architecture: regime-switching rollouts,
+   typed receipt forecasts, differentiable-physics coupling where appropriate.
+   No-thrashing rule: fast dynamics don't feed back into slow manifold
+   without explicit gating.
 3. **Economic Allocator / Compiler**: converts state + forecasts into
    structured allocative fields. The Pareto allocator should be
-   **distributional, regime-aware, and execution-aware**.
+   **distributional, regime-aware, and execution-aware** (confirmed:
+   DPMORL distributional Pareto for frontier slices, risk budgeting via
+   augmented Lagrangian for `ShadowPriceField` per resource constraint).
+   Emits `ParetoFrontierSlice` objects with tail-risk metadata.
 4. **Economic Governance / Reciprocity Layer**: reciprocal coupling to lower
    WMs. Bottom-up: receipts. Top-down: shaping fields, budget envelopes,
-   admissible operating regions.
+   admissible operating regions, `PersistenceAnnotation` hysteresis.
 
 ### Quant-inspired algorithmic imports
 
