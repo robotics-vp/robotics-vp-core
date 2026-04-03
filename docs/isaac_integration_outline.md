@@ -1,5 +1,14 @@
 # Isaac Integration Outline (Scaffold)
 
+> **Architectural context**: Isaac Lab integration enters the multi-WM topology
+> as a motor backend consumed by the **Embodiment / Actuation WM**
+> (`docs/actuation_embodiment_world_model.md`). We borrow Isaac Lab's scalable
+> embodiment-aware task environments, contact-rich simulation surfaces, and
+> sensor/backend/task abstraction patterns. We do NOT import Isaac Lab's
+> environment abstraction as the master ontology — our WM boundaries remain
+> separate. Isaac backend availability is a typed provider-truth surface
+> inside the Embodiment WM, not an implicit assumption.
+
 Goal: swap the physics backend while keeping the economics + orchestrator + datapack stack unchanged.
 
 ## PhysicsBackend API

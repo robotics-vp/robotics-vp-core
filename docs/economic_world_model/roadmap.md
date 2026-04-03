@@ -213,9 +213,24 @@ master environment abstraction. This repo owns its WM boundaries.
 
 ### Embodiment / Actuation WM (Phase 3) — future preparatory
 
+> Full specification: `docs/actuation_embodiment_world_model.md`
+
+The Embodiment / Actuation WM is now explicitly specified as a six-subsystem
+canonical WM with typed interfaces, external-architecture borrowing logic,
+and a concrete timescale hierarchy. The existing embryonic artifacts
+(EmbodimentProfile_v1 through CalibrationTargets_v1) are identified as early
+typed outputs of those subsystems. When Phase 3 begins, the first tranches
+should follow the repo's established pattern: typed state contracts → shadow
+compiler → downstream consumers → receipt emission → bounded neural seams.
+
 Useful contract ideas from Habitat include articulated-agent config discipline,
-sensor schema, and action-space normalization. These should be adopted when
-Phase 3 work begins, not imported prematurely.
+sensor schema, and action-space normalization. Additionally, external
+architecture borrowing from V-JEPA 2 (local dynamics), LeRobot/ACT (action
+chunking, inverse dynamics), Diffusion Policy (multimodal proposals), Isaac
+Lab (embodiment-aware sim), and TD-MPC2 (bounded latent planning) should
+enter as bounded, promotion-gated, receipt-emitting seams inside the
+Embodiment WM — not as replacement ontologies. See
+`docs/actuation_embodiment_world_model.md` for the borrowing discipline.
 
 ### Economic WM and Transport / Meta-Node — not a Habitat concern
 

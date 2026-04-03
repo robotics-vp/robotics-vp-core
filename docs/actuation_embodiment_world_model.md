@@ -1,0 +1,730 @@
+# Embodiment / Actuation World Model
+
+## Purpose
+
+The Embodiment / Actuation WM is a canonical adjacent world model in this
+stack's multi-WM topology. Its mission:
+
+> Turn task intent + local world state + embodiment constraints into
+> body-aware, capability-aware, contact-aware control state and action
+> proposals for real robot embodiments.
+
+This WM makes the robot ready to actually control a body. It is the layer
+between high-level task/simulation decisions and real actuator commands on a
+G1, a tabletop arm, or any future embodiment in the fleet.
+
+It is **not** a global planner. It is the canonical body/capability/contact/
+control WM for real embodiments operating under physics, safety, energy,
+and deployment constraints.
+
+---
+
+## How Our WM Topology Differs from the Dominant Framing
+
+Many public "world model" discussions treat the term as synonymous with a
+single predictive model — an action-conditioned latent predictor, an
+inverse-dynamics network, a joint world-action model, or a latent video
+predictor. These are useful model families, and we borrow from them. But
+they are not our ontology.
+
+In this stack:
+
+- **World models are adjacent canonical modules in a typed topology.**
+  Perception, Embodiment, Sim/Synth/Physics, Economic, and Meta-Governance
+  are separate WMs communicating via typed, replayable state surfaces.
+- **No mother-latent.** We do not collapse perception, control, physics,
+  economics, and governance into one uninterpretable vector embedding.
+  Typed contracts (BeliefState, ObjectiveTensor, ConstraintSet, EconTensor)
+  are the primary defense against that failure mode.
+- **Imported architectures enter as bounded subsystem seams**, not as
+  replacement ontologies. A predictive model like V-JEPA 2 or TD-MPC2
+  enters as a promotion-gated, receipt-emitting, rollback-safe neural seam
+  inside a specific WM — it does not become the WM.
+- **Economics, governance, and constraints remain first-class and legible.**
+  Every WM-boundary crossing preserves typed observability, economic
+  attribution, and governance auditability.
+
+This matters for the Embodiment / Actuation WM specifically because the
+public literature often conflates "world model for control" with "one latent
+dynamics model that replaces explicit body/contact/capability state." We
+explicitly reject that conflation. The Embodiment WM is a typed subsystem
+that *contains* local dynamics models as bounded seams, but *is not
+equivalent to* any single predictive model.
+
+---
+
+## Relation to the Multi-WM Stack
+
+```
+Perception / Grounding WM
+    ↓ scene graph, affordance bridge, object tracks, evidence routing
+Embodiment / Actuation WM    ← this document
+    ↓ capability state, action proposals, cost vectors, drift reports
+Sim / Synth / Physics WM
+    ↓ sim agendas, branch evaluations, synthetic evidence
+Economic WM
+    ↓ allocation envelopes, shaping fields, resource budgets
+Meta-Regal-Node Superposition / Control WM
+```
+
+The Embodiment WM:
+
+- **Consumes** Perception WM scene graph, embodiment bridge, provider truth
+- **Consumes** Sim/Synth WM branch evaluations and physics forecasts
+- **Consumes** Economic WM resource envelopes and deployment constraints
+- **Produces** body-aware control state for downstream actuator backends
+- **Produces** typed receipts for economic valuation, governance audit, and
+  replay/training export
+- **Produces** calibration/drift signals that feed back to Sim/Synth and
+  Perception WMs
+
+---
+
+## Core Subsystems
+
+The Embodiment / Actuation WM contains six named subsystems. Each is a
+functional contributor to the robostack, not an abstract schema.
+
+### 1. Capability / Embodiment State Surface
+
+**What it is**: The canonical typed entry surface for body-aware control.
+Every downstream subsystem within this WM reads from this surface.
+
+**What it carries**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `embodiment_id` | str | Robot family + serial (e.g. `g1_unit_001`) |
+| `embodiment_class` | str | `tabletop_arm`, `mobile_manipulator`, `humanoid` |
+| `actuator_config` | ActuatorConfigState | Joint count, limits, torque profiles, gear ratios |
+| `joint_state` | JointStateVector | Current positions, velocities, torques, temperatures |
+| `contact_state` | ContactStateVector | Per-effector contact normals, forces, slip estimates |
+| `tool_state` | ToolStateDescriptor | Active tool, tool-change state, tool wear estimate |
+| `safety_envelope` | SafetyEnvelopeState | Joint limits, velocity limits, force limits, collision zones |
+| `backend_tags` | list[str] | `isaac`, `pybullet`, `holosoma`, `real_hw`, etc. |
+| `physics_profile_hash` | str | Hash of the physics config used for this embodiment |
+| `compute_placement` | str | `on_device`, `companion`, `cloud` |
+| `battery_fraction` | float | Current battery level (relevant for G1 energy budgeting) |
+
+**Why it matters**: Without explicit body state, downstream control is blind
+to joint limits, tool availability, contact truth, and safety constraints.
+This is what turns generic task proposals into body-aware action feasibility.
+
+**Relation to existing artifacts**: This subsystem generalizes and subsumes
+`EmbodimentProfile_v1.npz`, which currently stores contacts, confidence, and
+impossible-contact flags. `EmbodimentProfile_v1` is the embryonic typed output
+of this surface.
+
+### 2. Contact / Affordance Graph Builder
+
+**What it is**: The Embodiment WM's "local world" — the actionable graph of
+what can be grasped, inserted, placed, fastened, obstructed, or otherwise
+physically engaged by the current embodiment configuration.
+
+**How it works**:
+
+- Consumes Perception WM scene graph (object tracks, edges, affordance hints)
+- Consumes Perception WM embodiment bridge (per-object affordance scores,
+  body-object pairwise scores, action feasibility summary)
+- Consumes workcell ontology (fixture positions, tool availability, part specs)
+- Consumes current Capability/Embodiment state (joint state, tool, safety)
+- Produces a locally actionable contact/affordance graph:
+  - per-object: graspable? insertable? placeable? fastenable? obstructed?
+    misaligned? risky? within reach? within force budget?
+  - per-pair: body-object engagement feasibility, approach vector quality,
+    collision risk, tool compatibility
+  - per-fixture: fixture state, clamp state, insertion alignment
+
+**What it does NOT do**: It does not plan full task sequences. It builds the
+local contact/affordance truth that the skill/action proposal head and the
+local dynamics model consume.
+
+**Relation to existing artifacts**: This generalizes `AffordanceGraph_v1.npz`,
+which currently stores contact/affordance edges with confidence. The graph
+builder is the functional compiler that produces `AffordanceGraph_v1`
+content plus richer body-aware feasibility scoring.
+
+### 3. Local Contact Dynamics Model
+
+**What it is**: A short-horizon, embodiment-specific predictive subsystem.
+It predicts what happens in the near future when the robot executes a
+candidate action in the current contact/affordance state.
+
+**What it predicts** (1-10 steps ahead, embodiment-specific):
+
+- Contact transitions: will contact engage/disengage? Will slip occur?
+- Force transients: expected force profile during insertion/engagement
+- Insertion/engagement success probability
+- Jam/wedge risk under current approach vector
+- Recovery feasibility if current action fails
+- Energy cost of the predicted trajectory
+
+**Architecture pattern**: Inspired by action-conditioned latent dynamics
+models (TD-MPC2 style bounded short-horizon planning, V-JEPA 2 style latent
+prediction) but scoped to the local contact/embodiment regime. This is
+explicitly NOT the global planning WM — it is a bounded predictive seam
+inside the Embodiment WM, operating over the local contact graph state.
+
+**Promotion posture**: `disabled|auto|required`. At `heuristic_fallback`,
+uses analytic contact models (spring-damper, Coulomb friction). At
+`promoted`, uses the learned local dynamics model. At `disabled`, passes
+through without dynamics prediction.
+
+**Relation to existing artifacts**: No direct predecessor artifact. This is
+a new subsystem that should emit `LocalDynamicsForecast` typed outputs
+consumable by the action proposal head, the drift evaluator, and the
+economic cost attribution pipeline.
+
+### 4. Inverse-Dynamics / Retargeting Lane
+
+**What it is**: Recovers candidate actions / skill traces from state
+transitions, demonstrations, teleoperation logs, video, or future real robot
+recordings.
+
+**What it does**:
+
+- Given (state_t, state_{t+1}), recovers the action that could produce that
+  transition for the current embodiment configuration
+- Retargets demonstrations from one embodiment to another (e.g. teleop with
+  one arm → G1 bimanual mapping)
+- Bootstraps action priors from video or human demonstrations
+- Produces replay-ready traces for datapack/training construction
+
+**What it does NOT do**: It is not the final controller. It produces
+candidate actions and retargeted traces that the skill/action proposal head
+evaluates and the training pipeline consumes.
+
+**Architecture pattern**: Inverse-dynamics models (LeRobot-style practical
+action recovery, ACT-style action chunking from demonstrations). Used for
+bootstrapping, imitation, and datapack construction.
+
+**Relation to existing artifacts**: This is the functional compiler behind
+`SkillSegments_v1.npz`, which currently stores interaction primitive
+segmentation. The inverse lane produces the raw material that
+`SkillSegments_v1` captures.
+
+### 5. Joint Skill / Action Proposal Head
+
+**What it is**: Proposes short skill chunks or action chunks jointly with
+expected state evolution. This is the Embodiment WM's primary output to the
+downstream control loop.
+
+**What it proposes**:
+
+- Short action chunks (4-16 steps) with expected state trajectories
+- Skill primitives from the workcell task catalog (PICK, PLACE, INSERT,
+  FASTEN, etc.) instantiated with concrete embodiment parameters
+- Multi-modal proposals when multiple approaches are feasible (e.g. two
+  valid grasp poses)
+- Action-chunk confidence and expected cost vector per proposal
+
+**Architecture pattern**: Inspired by diffusion policy (multimodal
+short-horizon control priors, action-chunk proposal structure) and
+ACT/LeRobot (action chunking with standardized policy interfaces). These
+enter as bounded subsystem seams, not as the whole stack.
+
+**Promotion posture**: `disabled|auto|required`. At `heuristic_fallback`,
+uses scripted skill primitives. At `promoted`, uses learned action chunk
+proposers. The promotion gate is benchmark-gated on downstream task success
+rate and safety compliance.
+
+**Relation to existing artifacts**: This produces the action proposals that
+the motor backends (`src/motor_backend/`) execute. The motor backend
+interface (`train_policy`, `evaluate_policy`, `deploy_policy_handle`) is the
+downstream consumer.
+
+### 6. Drift / Calibration / Cost Evaluator
+
+**What it is**: Continuously estimates the gap between expected and actual
+embodiment behavior, and the costs incurred by that gap.
+
+**What it evaluates**:
+
+| Signal | Description |
+|--------|-------------|
+| Sim/backend mismatch | Predicted vs actual contact forces, joint responses |
+| Calibration drift | Joint encoder drift, tool-tip calibration degradation |
+| Contact drift | Expected vs actual contact topology changes |
+| Capability degradation | Increasing torque demand, thermal throttling, wear |
+| Energy cost | Wh per segment, energy efficiency relative to plan |
+| Time cost | Actual vs planned execution time per skill segment |
+| Risk cost | Safety margin erosion, near-miss frequency |
+| Recalibration trigger | Whether current drift exceeds recalibration threshold |
+| Policy demotion trigger | Whether current mismatch exceeds demotion threshold |
+
+**Relation to existing artifacts**: This is the functional evaluator behind
+`EmbodimentCostBreakdown_v1.json` (Wh/time/risk per segment),
+`EmbodimentValueAttribution_v1.json` (ΔMPL/Δerror/ΔEP attribution by
+segment), `EmbodimentDriftReport_v1.json` (contact/constraint/sim-backend
+drift), and `CalibrationTargets_v1.json` (advisory physics knob deltas).
+
+These existing artifacts are not random side outputs. They are the embryonic
+typed outputs / sidecars / diagnostics of the broader Embodiment / Actuation
+WM's drift/cost evaluation subsystem.
+
+---
+
+## Mapping to Existing Embodiment Artifacts
+
+The repo already emits a family of embodiment artifacts from
+`docs/embodiment_module.md`. These are not random side artifacts; they are
+embryonic typed outputs of the Embodiment / Actuation WM subsystems:
+
+| Artifact | Producing Subsystem | Role |
+|----------|---------------------|------|
+| `EmbodimentProfile_v1.npz` | Capability / Embodiment State Surface | Canonical body state snapshot |
+| `AffordanceGraph_v1.npz` | Contact / Affordance Graph Builder | Local actionable graph |
+| `SkillSegments_v1.npz` | Inverse-Dynamics / Retargeting Lane | Interaction primitive traces |
+| `EmbodimentCostBreakdown_v1.json` | Drift / Calibration / Cost Evaluator | Segment-level cost vectors |
+| `EmbodimentValueAttribution_v1.json` | Drift / Calibration / Cost Evaluator | Economic attribution |
+| `EmbodimentDriftReport_v1.json` | Drift / Calibration / Cost Evaluator | Mismatch diagnostics |
+| `CalibrationTargets_v1.json` | Drift / Calibration / Cost Evaluator | Recalibration advisories |
+
+As the Embodiment / Actuation WM matures, these artifacts should:
+
+1. Become typed dataclass outputs (frozen, serializable, versioned) like the
+   Perception WM state objects
+2. Carry explicit provenance linking them to the producing subsystem and
+   promotion stage
+3. Be consumable by downstream replay, training, economic valuation, and
+   governance audit paths
+4. Emit receipts alongside state (following the evidence-fusion-seam pattern:
+   bounded seam → promotion-gated → receipt-emitting → rollback-safe)
+
+---
+
+## Proposed Typed Interfaces
+
+These are doc-level contract proposals. They are not implemented yet but
+describe the canonical typed surfaces this WM should eventually own.
+
+### EmbodimentState
+
+```
+EmbodimentState:
+    state_id: str
+    embodiment_id: str
+    embodiment_class: str           # tabletop_arm | mobile_manipulator | humanoid
+    actuator_config: ActuatorConfigState
+    joint_state: JointStateVector   # positions, velocities, torques, temperatures
+    contact_state: ContactStateVector
+    tool_state: ToolStateDescriptor
+    safety_envelope: SafetyEnvelopeState
+    backend_tags: list[str]
+    physics_profile_hash: str
+    compute_placement: str          # on_device | companion | cloud
+    battery_fraction: float
+    metadata: dict
+```
+
+**Downstream consumers**: Contact/Affordance Graph Builder, Local Dynamics
+Model, Action Proposal Head, Drift Evaluator, Economic WM (energy/compute
+allocation).
+
+### ContactAffordanceGraph
+
+```
+ContactAffordanceGraph:
+    graph_id: str
+    source_scene_graph_id: str
+    source_embodiment_state_id: str
+    per_object_affordance: dict[str, AffordanceAssessment]
+        # graspable, insertable, placeable, fastenable, obstructed,
+        # within_reach, within_force_budget, risk_level
+    body_object_pairs: list[BodyObjectPair]
+        # body_part_id, object_id, engagement_feasibility,
+        # approach_quality, collision_risk, tool_compatibility
+    fixture_states: list[FixtureContactState]
+    actionable_object_count: int
+    metadata: dict
+```
+
+**Downstream consumers**: Action Proposal Head, Local Dynamics Model,
+Sim/Synth WM (branch evaluation conditioning), Economic WM (task-feasibility
+pricing).
+
+**Relation to ObjectiveTensor / ConstraintSet**: The ContactAffordanceGraph
+does not replace ConstraintSet. ConstraintSet carries task-level hard/soft
+constraints; the ContactAffordanceGraph carries embodiment-local contact
+feasibility within those constraints.
+
+### LocalDynamicsQuery / LocalDynamicsForecast
+
+```
+LocalDynamicsQuery:
+    query_id: str
+    current_contact_state: ContactStateVector
+    candidate_action_chunk: ActionChunk
+    embodiment_state_id: str
+    horizon_steps: int              # 1-10
+
+LocalDynamicsForecast:
+    forecast_id: str
+    query_id: str
+    predicted_contact_sequence: list[ContactStateVector]
+    slip_risk: float
+    jam_risk: float
+    insertion_success_probability: float
+    force_profile: list[float]
+    energy_cost_estimate: float
+    recovery_feasibility: float
+    promotion_stage: str            # heuristic_fallback | promoted
+    confidence: float
+    metadata: dict
+```
+
+**Downstream consumers**: Action Proposal Head (scoring), Drift Evaluator
+(predicted vs actual comparison), Sim/Synth WM (real-vs-sim dynamics gap).
+
+### InverseRetargetTrace
+
+```
+InverseRetargetTrace:
+    trace_id: str
+    source_embodiment: str
+    target_embodiment: str
+    source_trajectory: list[JointStateVector]
+    recovered_actions: list[ActionChunk]
+    retarget_quality: float
+    kinematic_feasibility: float
+    source_type: str                # teleop | video | demonstration | replay
+    metadata: dict
+```
+
+**Downstream consumers**: Training pipeline (datapack construction), Replay
+buffer, Action Proposal Head (action priors), Economic WM (data valuation).
+
+### ActionProposalBundle
+
+```
+ActionProposalBundle:
+    bundle_id: str
+    proposals: list[ActionProposal]
+        # action_chunk, expected_trajectory, confidence, cost_vector,
+        # skill_type, promotion_stage
+    selected_index: int             # -1 if no selection yet
+    selection_method: str           # heuristic | learned | governance_constrained
+    contact_graph_id: str
+    embodiment_state_id: str
+    metadata: dict
+```
+
+**Downstream consumers**: Motor backends (execution), Sim/Synth WM (rollout
+scoring), Economic WM (cost/benefit evaluation), Governance nodes
+(safety/constraint checking).
+
+**Relation to ObjectiveTensor**: ActionProposalBundle carries per-proposal
+cost vectors that should be consumable by ObjectiveCompiler for
+scalarization under the active ObjectiveProfile. No premature scalarization
+inside the Embodiment WM.
+
+### EmbodimentDriftSummary
+
+```
+EmbodimentDriftSummary:
+    summary_id: str
+    sim_backend_mismatch: float
+    calibration_drift: float
+    contact_drift: float
+    capability_degradation: float
+    recalibration_recommended: bool
+    policy_demotion_recommended: bool
+    drift_sources: list[DriftSource]
+    metadata: dict
+```
+
+**Downstream consumers**: Sim/Synth WM (sim fidelity adjustment), Economic
+WM (cost attribution), Governance nodes (safety assessment), Training
+pipeline (curriculum adjustment).
+
+**Relation to existing artifacts**: This is the typed successor to
+`EmbodimentDriftReport_v1.json`.
+
+### CalibrationTargetSet
+
+```
+CalibrationTargetSet:
+    target_set_id: str
+    targets: list[CalibrationTarget]
+        # parameter_name, current_value, recommended_value,
+        # drift_magnitude, priority, source_evidence
+    physics_profile_hash: str
+    embodiment_id: str
+    metadata: dict
+```
+
+**Relation to existing artifacts**: Typed successor to
+`CalibrationTargets_v1.json`.
+
+### EmbodimentCostVector
+
+```
+EmbodimentCostVector:
+    vector_id: str
+    episode_id: str
+    segment_id: str
+    energy_wh: float
+    time_s: float
+    risk_score: float
+    wear_estimate: float
+    compute_cost: float
+    tool_change_count: int
+    safety_margin_used: float
+    metadata: dict
+```
+
+**Downstream consumers**: Economic WM (direct cost ingestion), EconTensor
+construction, PricingSentinel (deployment cost attribution), Value Ledger.
+
+**Relation to EconTensor**: EmbodimentCostVector is a lower-WM input to
+EconTensor construction. It should not bypass the Economic WM to directly
+influence reward; economics sits above lower-WM cost surfaces as the
+allocative authority.
+
+---
+
+## What We Borrow from External Architectures
+
+Imported architectures enter this stack as bounded, promotable, typed,
+receipt-emitting subsystem seams inside the Embodiment / Actuation WM. They
+do not replace the multi-WM topology.
+
+### V-JEPA 2 / I-JEPA
+
+**What we borrow**: Latent predictive modeling, representation-first
+prediction, no obligation to decode pixels at test time, semantic predictive
+priors for contact-state forecasting.
+
+**Where it enters**: Local Contact Dynamics Model (latent short-horizon
+prediction of contact state evolution). Also dual-homed in Perception WM
+for temporal grounding.
+
+**Promotion posture**: Provider-backed, behind typed contract, benchmark-gated.
+
+### LeRobot / ACT
+
+**What we borrow**: Practical action chunking interfaces, standardized
+policy/data contracts, training/eval ergonomics for robot policies, inverse
+dynamics for action recovery from demonstrations.
+
+**Where it enters**: Inverse-Dynamics / Retargeting Lane (action recovery),
+Joint Skill / Action Proposal Head (action chunk format).
+
+**Promotion posture**: Pattern adoption for interfaces and data format. Neural
+seams from ACT-style models behind promotion gates.
+
+### Diffusion Policy
+
+**What we borrow**: Action-chunk proposal structure, multimodal short-horizon
+control priors, conditional generation for action distribution modeling.
+
+**Where it enters**: Joint Skill / Action Proposal Head (multimodal proposal
+generation when multiple approaches are feasible).
+
+**Promotion posture**: Neural seam behind `disabled|auto|required` with
+benchmark gating on task success rate.
+
+### Isaac Lab
+
+**What we borrow**: Scalable embodiment-aware task environments, contact-rich
+simulation surfaces, sensor/backend/task abstraction patterns, articulated
+agent configuration discipline.
+
+**Where it enters**: Capability / Embodiment State Surface (embodiment config
+patterns), Contact / Affordance Graph Builder (contact-rich sim surfaces),
+motor backend integration (`IsaacBackend`).
+
+**What we explicitly do NOT import**: Isaac Lab's environment abstraction does
+not become the master environment ontology. Our WM boundaries remain
+separate.
+
+### TD-MPC2
+
+**What we borrow**: Bounded short-horizon latent dynamics + planning for
+continuous control, model-predictive control within a latent space, world
+model as local planning substrate.
+
+**Where it enters**: Local Contact Dynamics Model (bounded short-horizon
+planning over contact state). This is a subsystem seam, not the whole stack.
+
+**What we explicitly do NOT import**: TD-MPC2's implicit assumption that the
+world model IS the planner. In our topology, the Embodiment WM contains a
+local dynamics model that aids planning; it does not collapse dynamics,
+planning, control, economics, and governance into one model.
+
+### What We Explicitly Do NOT Import
+
+From any external architecture:
+
+- Any ontology that collapses economics/governance/perception/actuation into
+  one uninterpretable model
+- Any assumption that video generation or full pixel decoding should sit on
+  the real-time actuation critical path
+- Any replacement of typed contracts with opaque hidden state
+- Any architecture that sidelines constraint/governance/economic legibility
+- Any "world model" framing that equates the entire stack with one predictive
+  network
+
+---
+
+## Hierarchy and Timescales
+
+The Embodiment / Actuation WM operates across three nested control
+timescales. Imported predictive models fit into this hierarchy without
+displacing it.
+
+### Fast Inner Loop (1-10ms, per-step)
+
+- Proprio / joint state update
+- Contact detection and force feedback
+- Low-level torque/position control
+- Safety limit enforcement
+- Local impedance/compliance regulation
+
+**What runs here**: Actuator backends (Isaac, PyBullet, real hardware),
+safety envelope monitoring. No learned seam operates at this timescale
+initially — it is physics and control engineering.
+
+### Mid-Level Loop (10-200ms, per-chunk)
+
+- Action chunk execution and monitoring
+- Local contact dynamics prediction (short-horizon forecasting)
+- Skill primitive execution (PICK, PLACE, INSERT, FASTEN)
+- Contact/affordance graph update
+- Drift detection within execution
+
+**What runs here**: The Local Contact Dynamics Model, the Action Proposal
+Head, and real-time contact/affordance graph updates. This is where learned
+seams like diffusion policy chunks or TD-MPC2-style planning operate.
+
+### Slow Supervisory Loop (200ms-seconds, per-task-segment)
+
+- Skill selection and sequencing
+- Simulation branch evaluation
+- Economic cost/benefit assessment
+- Calibration drift evaluation
+- Policy promotion/demotion decisions
+- Replay/training export decisions
+
+**What runs here**: The Drift/Calibration/Cost Evaluator, Economic WM
+integration, governance audit, and training pipeline feedback. This loop
+consumes the results of the faster loops and shapes the overall strategy.
+
+**Key principle**: Faster loops do not wait for slower loops. Slower loops
+shape the parameters (which skill, which action prior, which calibration) that
+faster loops execute. This is the same multi-timescale discipline as the
+Economic WM's fast/meso/slow variable split.
+
+---
+
+## Why This Matters for Real Robot Readiness
+
+The Embodiment / Actuation WM is the substrate that gets the stack closer to
+controlling an actual robot body. Without it, the stack can compile rich
+semantic scene state and evaluate simulation branches, but cannot translate
+those into body-aware, constraint-respecting, contact-aware actuator commands.
+
+### Concrete readiness targets
+
+| Capability | WM Subsystem | Workcell Task |
+|------------|-------------|---------------|
+| Grasp planning under contact uncertainty | Contact/Affordance Graph + Local Dynamics | Bin picking (TASK-L002) |
+| Tight-tolerance insertion | Local Dynamics + Action Proposal | Peg-in-hole (TASK-A001) |
+| Fastener installation with torque control | Action Proposal + Drift Evaluator | Fastener installation (TASK-A002) |
+| Kitting with multi-object sequencing | Contact/Affordance Graph + Action Proposal | Kitting (TASK-L001) |
+| Tool change and recalibration | Capability State + Drift Evaluator | Tool change (TASK-M001) |
+| Sim-to-real transfer monitoring | Drift Evaluator | All tasks |
+| Energy-aware skill selection | Cost Evaluator + Economic WM | All tasks (G1 battery-constrained) |
+| Backend mismatch detection | Drift Evaluator + Sim/Synth WM | All tasks |
+
+### G1 / Unitree / humanoid integration path
+
+The Embodiment / Actuation WM is designed to accommodate:
+
+- 29 DoF bimanual humanoid (G1)
+- Mobile base + dual arm coordination
+- Egocentric camera feeds (consumed via Perception WM embodiment bridge)
+- On-device vs companion compute placement decisions
+- Battery-constrained operation (battery_fraction as first-class state)
+- Real-time safety envelope enforcement
+
+The WM does not require the G1 hardware to be present today. The typed
+interfaces are designed so that:
+
+1. Current tabletop-arm and workcell sim backends exercise the same WM
+   subsystems at reduced DoF and complexity
+2. G1-specific embodiment profiles and safety envelopes can be added as
+   configuration, not architecture changes
+3. Calibration drift and backend mismatch detection generalize across
+   embodiments
+
+---
+
+## Phase Sequencing
+
+This document is Phase 2-compatible doctrine sharpening. It clarifies the
+doctrinal target for the Embodiment / Actuation WM so that:
+
+1. Current Phase 2 Perception WM work can validate that its outputs
+   (especially the embodiment bridge) are shaped correctly for later
+   Embodiment WM consumption
+2. The transition from Phase 2 to Phase 3 has a concrete, legible target
+   rather than a vague "embodiment work"
+3. Any narrow Phase 2 shadow-boundary validation (e.g., proving that
+   Perception outputs can translate into typed affordance/contact bundles)
+   has explicit doctrinal grounding
+
+This does **not** mean we are executing Phase 3 now. The current
+implementation center remains Phase 2 Perception / Grounding WM. This
+document is spec-first, not implement-first.
+
+When the implementation priority shifts to the Embodiment / Actuation WM,
+the first tranches should follow the repo's established pattern:
+
+1. Typed state contracts (frozen dataclasses)
+2. Shadow compiler that produces canonical state from existing inputs
+3. First downstream consumers wired
+4. Receipt emission from compilation
+5. First bounded neural seams behind promotion posture
+6. Provider contracts for external backends
+
+---
+
+## Cross-WM Resource Surfaces
+
+Following the pattern established in Phase 2 Perception, the Embodiment /
+Actuation WM should independently carry its version of the typed lower-WM
+resource surfaces:
+
+- **Provider surface**: which motor backends are available, their truth class
+  (real hardware, sim, synthetic stub), latency characteristics
+- **Compute surface**: on-device vs companion placement, inference headroom
+  for learned control seams
+- **Energy surface**: battery fraction, energy cost per skill segment,
+  thermal headroom
+- **Safety surface**: current safety envelope utilization, margin remaining,
+  near-miss count
+
+These are lower-WM owned surfaces. The Economic WM allocates across them but
+does not originate them.
+
+---
+
+## Anti-Patterns
+
+Do not:
+
+- Collapse the Embodiment WM into one end-to-end learned controller with no
+  typed internal structure
+- Let external policy architectures replace the typed contract surfaces
+- Push economic reward directly into low-level motor control (economics
+  allocates resources and shapes objectives; it does not output torques)
+- Treat the Embodiment WM as "just motor backends" — it owns body state,
+  contact truth, affordance assessment, dynamics prediction, and cost
+  attribution, not just command execution
+- Let the Contact/Affordance Graph become a static data structure — it must
+  update within the mid-level loop as contact state changes
+- Skip calibration/drift evaluation — this is what makes sim-to-real
+  transfer honest rather than assumed
+- Import external architectures as top-level ontology — they enter as
+  bounded seams, not as architectural replacement

@@ -1,5 +1,25 @@
 # Economic World Model Progress Log
 
+## 2026-04-03 — Embodiment / Actuation WM Specification (Doc-Only Pass)
+
+- **Created** `docs/actuation_embodiment_world_model.md`:
+  - Full canonical WM spec: mission, six core subsystems, typed interfaces, external-architecture borrowing logic, timescale hierarchy, real-robot-readiness mapping, phase sequencing, anti-patterns
+  - Clarifies how our multi-WM topology differs from "single predictive model" framing
+  - Specifies six subsystems: capability/embodiment state surface, contact/affordance graph builder, local contact dynamics model, inverse-dynamics/retargeting lane, joint skill/action proposal head, drift/calibration/cost evaluator
+  - Proposes 8 typed interfaces: EmbodimentState, ContactAffordanceGraph, LocalDynamicsQuery/Forecast, InverseRetargetTrace, ActionProposalBundle, EmbodimentDriftSummary, CalibrationTargetSet, EmbodimentCostVector
+  - Maps existing embryonic artifacts (EmbodimentProfile_v1 through CalibrationTargets_v1) to their producing WM subsystems
+  - Documents borrowing logic for V-JEPA 2, LeRobot/ACT, Diffusion Policy, Isaac Lab, TD-MPC2 — all entering as bounded seams, not ontology replacements
+  - Three-timescale hierarchy: fast inner loop (proprio/contact), mid-level (action chunks/dynamics), slow supervisory (selection/economics/governance)
+  - Concrete readiness targets mapped to workcell task catalog (bin picking, peg-in-hole, fastener installation, kitting, tool change)
+- **Modified** `README.md`: sharpened Embodiment WM entry with six-subsystem summary and doc reference
+- **Modified** `ROADMAP_STAGES_2_5.md`: added Embodiment WM context block referencing full spec
+- **Modified** `docs/embodiment_module.md`: added architectural context linking to Embodiment WM spec, explaining existing artifacts as embryonic WM outputs
+- **Modified** `docs/motor_backends.md`: added architectural context connecting motor backends to Embodiment WM execution layer
+- **Modified** `docs/isaac_integration_outline.md`: added architectural context for Isaac Lab as a bounded motor backend, not master ontology
+- **Modified** `docs/economic_world_model/multi_wm_architecture_plan.md`: updated section 2 with six-subsystem summary, existing artifact mapping, gap list; updated Phase 3 section with typed interface targets and doc reference
+- **Modified** `docs/economic_world_model/roadmap.md`: expanded Phase 3 preparatory section with full borrowing discipline and doc reference
+- All changes are doc-only and Phase 2-compatible (spec sharpening for later phase target, not phase transition)
+
 ## 2026-04-03 — First Bounded Neural Seam + Receipt Emission (Claude Implementation Pass)
 
 - **Created** `src/world_model/perception_grounding/neural_seams.py`:

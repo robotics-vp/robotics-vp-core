@@ -834,10 +834,22 @@ Disposition:
 
 ### 2. Embodiment / Actuation WM
 
+> Full specification: `docs/actuation_embodiment_world_model.md`
+
 Purpose:
 
 - own canonical body state, action semantics, capability envelopes, latency, and physical feasibility
 - bridge from task/governance intent to embodiment-feasible action plans
+- turn task intent + local world state + embodiment constraints into body-aware, capability-aware, contact-aware control state and action proposals for real robot embodiments
+
+Six core subsystems:
+
+1. **Capability / Embodiment State Surface**: canonical typed entry surface for body-aware control (robot family, joint state, contact state, tool state, safety envelope, compute/energy)
+2. **Contact / Affordance Graph Builder**: locally actionable graph of what is graspable, insertable, placeable, fastenable, obstructed, risky — the Embodiment WM's "local world"
+3. **Local Contact Dynamics Model**: short-horizon, embodiment-specific predictive subsystem for contact transitions, slip/jam risk, insertion success, recovery feasibility
+4. **Inverse-Dynamics / Retargeting Lane**: recovers candidate actions from state transitions, demonstrations, teleop, video for bootstrapping and datapack construction
+5. **Joint Skill / Action Proposal Head**: proposes short skill/action chunks jointly with expected state evolution for downstream execution
+6. **Drift / Calibration / Cost Evaluator**: continuously estimates sim/backend mismatch, calibration drift, capability degradation, energy/time/risk costs
 
 Why needed:
 
@@ -852,6 +864,7 @@ Current anchors:
 - `src/runtime/observation_adapter_v2.py`
 - `src/runtime/action_adapter_v2.py`
 - `src/motor_backend/*`
+- `EmbodimentProfile_v1`, `AffordanceGraph_v1`, `SkillSegments_v1`, `EmbodimentCostBreakdown_v1`, `EmbodimentValueAttribution_v1`, `EmbodimentDriftReport_v1`, `CalibrationTargets_v1` (embryonic typed outputs of the WM subsystems)
 
 Current gaps:
 
@@ -859,6 +872,7 @@ Current gaps:
 - no URDF-driven body contract
 - no humanoid locomotion or dexterous hand interface
 - no real-time reflex/control separation yet
+- existing embodiment artifacts are not yet frozen-dataclass typed state objects with receipts and downstream consumers
 
 ### 3. Sim / Synth / Physics WM
 
@@ -1545,14 +1559,20 @@ Preconditions:
 
 ### Phase 3 - Embodiment / Actuation WM
 
+> Full WM specification: `docs/actuation_embodiment_world_model.md`
+
 Objective:
 
 - create canonical body/action state for fixed-base and future humanoid/mobile embodiments
+- implement the six core subsystems (capability state, contact/affordance graph, local dynamics, inverse-dynamics/retargeting, action proposal, drift/calibration/cost evaluation)
+- wire Perception WM embodiment bridge as the primary upstream input
+- establish typed interfaces (EmbodimentState, ContactAffordanceGraph, LocalDynamicsForecast, ActionProposalBundle, EmbodimentDriftSummary, EmbodimentCostVector) as frozen-dataclass state objects with receipt emission
 
 Why needed:
 
 - the repo still lacks a real body model for Unitree-class systems
 - the current embodiment layer is useful but advisory and manipulation-centric
+- existing embodiment artifacts (EmbodimentProfile_v1, AffordanceGraph_v1, SkillSegments_v1, etc.) are embryonic outputs that need typed-surface promotion
 
 Phase outcome:
 

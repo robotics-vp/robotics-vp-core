@@ -1,5 +1,13 @@
 # Motor Backends
 
+> **Architectural context**: Motor backends are the execution layer downstream
+> of the **Embodiment / Actuation World Model** (`docs/actuation_embodiment_world_model.md`).
+> In the multi-WM topology, the Embodiment WM owns body state, contact truth,
+> affordance assessment, dynamics prediction, and action proposals. Motor
+> backends execute those proposals against specific physics simulators or real
+> hardware. The Embodiment WM's drift/calibration/cost evaluator monitors
+> backend mismatch and feeds sim-to-real transfer quality back into the loop.
+
 ## Overview
 
 Motor backends provide a thin abstraction for training, evaluating, and deploying low-level motor policies from the economics stack.

@@ -83,7 +83,7 @@ Additionally, datapacks are treated as structured composite objects whose source
 Each WM serves a concrete function in making the robot ready for deployment:
 
 1. **Perception / grounding WM**: turns raw sensor/video streams into stable scene state the robot can actually act on. The stack expects to integrate real open-vocabulary concept segmentation and video object tracking provider lanes (e.g., SAM 3 / 3.1) here to feed canonical perception state, synthetic branch evaluation, and semantic annotation surfaces.
-2. **Embodiment / actuation WM**: turns task intent into body/action/capability-aware control state for real robot embodiments.
+2. **Embodiment / actuation WM**: turns task intent + local world state + embodiment constraints into body-aware, capability-aware, contact-aware control state and action proposals for real robot embodiments. Owns six subsystems: capability/embodiment state surface, contact/affordance graph builder, local contact dynamics model, inverse-dynamics/retargeting lane, joint skill/action proposal head, and drift/calibration/cost evaluator. See `docs/actuation_embodiment_world_model.md`.
 3. **Sim / synth / physics WM**: decides what to simulate, what to synthesize, what backend/fidelity to use, and what synthetic branches are worth feeding back into training.
 4. **Economic WM**: decides what tasks, environments, data, and training runs matter most under throughput, error, energy, and labor constraints.
 5. **Meta-node superposition / control WM**: the later cross-WM policy and governance layer for multi-objective Pareto optimization.

@@ -8,6 +8,16 @@
 - No changes to existing RL training loops
 - All new modules must have smoke tests
 
+**Embodiment / Actuation WM**: The full specification for the Embodiment /
+Actuation WM — including its six core subsystems, typed interfaces, external
+architecture borrowing logic, and timescale hierarchy — is now documented in
+`docs/actuation_embodiment_world_model.md`. The existing embodiment artifacts
+(`EmbodimentProfile_v1`, `AffordanceGraph_v1`, `SkillSegments_v1`,
+`EmbodimentCostBreakdown_v1`, `EmbodimentValueAttribution_v1`,
+`EmbodimentDriftReport_v1`, `CalibrationTargets_v1`) are embryonic outputs of
+that WM's subsystems. Stages that reference embodiment work should use that
+document as the doctrinal target.
+
 ---
 
 ## Current Architecture Summary
