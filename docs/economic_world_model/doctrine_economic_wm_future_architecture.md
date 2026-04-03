@@ -180,6 +180,13 @@ metaphor — adiabatic elimination (slow/fast variable separation via
 quasi-steady-state manifold reduction) provides a rigorous design pattern for
 the internal decomposition boundaries.
 
+**Important constraint:** these are **design patterns for decomposition and
+control**, not a replacement ontology. Terms like "pressure," "flow," and
+"fluid" must not become vague substitutes for typed state, typed receipts,
+and typed transport. The adiabatic pattern gives us a multi-timescale
+control/estimation structure; it does not redefine the Economic WM as a
+fluid system.
+
 ### Fast variables
 
 - local routing

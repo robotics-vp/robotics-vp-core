@@ -144,17 +144,27 @@ These require no Habitat code import. They are contract/architecture patterns:
 - Habitat-style simulator/task separation for backend execution discipline
   (source: `habitat.core.env` + `habitat.core.embodied_task.EmbodiedTask`
   — clean sim→task→measurement→episode protocol)
+  → **implementation target**: runtime adapter (`SimulatorBackend` /
+  `TaskDefinition` contract pair in Sim/Synth WM)
 - Articulated embodiment + sensor config schema borrowing
   (source: `habitat.articulated_agents` + `habitat_sim.physics` URDF/SDF)
+  → **implementation target**: provider contract (`EmbodimentConfig` in
+  Embodiment WM, URDF-based)
 - Measure/Measurement registry patterns for sim branch evaluation
   (source: `habitat.core.embodied_task.Measure` — UUID-keyed, dependency-
   ordered, reset/update protocol; directly adoptable for our
   `TaskMeasurementSurface` receipt family)
+  → **implementation target**: measurement/receipt family
+  (`TaskMeasurementSurface` in Sim/Synth WM)
 - Semantic scene hierarchy / object-region-scene decomposition
   (source: `habitat_sim.scene` + `habitat_sim.metadata`)
+  → **implementation target**: utility module (`SceneGraph` types, already
+  partially in Perception WM `state.py`)
 - SensorSuite composition pattern for provider registry
   (source: `habitat.core.simulator.SensorSuite` — registry-composed sensor
   suite with per-step observation updates)
+  → **implementation target**: provider contract (`PerceptionProviderRegistry`
+  pattern, already partially landed)
 
 #### Real code / provider adoption candidates (requires evaluation)
 
@@ -163,15 +173,22 @@ These may involve selective code borrowing or provider integration:
 - Camera geometry / view-warp / calibration utilities for sim-real consistency
   (source: Habitat-Lab view-transform-warp tutorial — concrete K-matrix
   construction, extrinsic transform chains, depth unprojection/projection.
-  CPU-only math, no GPU dependency. Implementable now as a utility module.)
+  CPU-only math, no GPU dependency. Implementable now.)
+  → **implementation target**: utility module
+  (`camera_geometry.py` in `src/world_model/sim_synth_physics/utils/`)
 - Vectorized runtime/eval patterns for batch sim execution
   (source: Habitat-Lab `VectorEnv`, evaluate patterns)
+  → **implementation target**: runtime adapter
+  (`VectorizedSimRunner` in Sim/Synth WM)
 - Interactive play / benchmark harness patterns
   (source: Habitat-Lab interactive play script + `habitat_baselines` eval)
+  → **implementation target**: benchmark harness
+  (`scripts/` benchmark/play harness)
 - Differentiable physics provider
   (candidate: JaxSim — JAX-native, URDF/SDF, reduced-coordinate dynamics,
-  CPU/GPU/TPU. Reference: `ami-iit/jaxsim`. Strong candidate for
-  `DifferentiablePhysicsProvider` contract in Sim/Synth WM.)
+  CPU/GPU/TPU. Reference: `ami-iit/jaxsim`.)
+  → **implementation target**: provider contract
+  (`DifferentiablePhysicsProvider` in Sim/Synth WM)
 
 Each requires a scoping evaluation: what to borrow, what to adapt, what to
 ignore. Do not bulk-import.
@@ -304,6 +321,11 @@ plane) should be framed as:
 
 It is **not**: a scalar reward head, a dashboard, a thin weight-picker, a PnL
 tracker, or a mother-latent.
+
+**Staging guard:** everything below is **future doctrine** for when the
+Economic WM is built. It is not a call to divert current Phase 2 work.
+The sequencing remains: lower WMs first → typed receipt/state surfaces →
+Economic WM neuralization phases later.
 
 It is also **not the sole sovereign governor** of the stack. The stack's telos
 is governed robot control under multiple non-collapsible realities (physics,
