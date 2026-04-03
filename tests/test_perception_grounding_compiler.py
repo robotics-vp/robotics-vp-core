@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import numpy as np
+import torch
 
 from src.evidence.belief_state import BeliefState
 from src.vision.backbone_stub import VisionBackboneStub
 from src.vision.interfaces import VisionFrame
 from src.world_model.perception_grounding import (
+    EvidenceFusionSeam,
+    PerceptionCompilationResult,
+    compile_perception_grounding_with_receipts,
     compile_perception_grounding_world_state,
+    encode_provider_features,
 )
+from src.world_model.perception_grounding.receipts import EvidenceFusionReceipt
 from src.world_model.semantic_coverage_graph import (
     CoverageEdge,
     CoverageNode,
@@ -135,6 +141,187 @@ def test_compiled_perception_state_feeds_sim_synth_semantic_context() -> None:
     assert (
         semantic_ctx["inferential_learnability_summary"]["mean_signal_yield_score"] > 0.0
     )
+
+
+def test_evidence_fusion_seam_forward_pass() -> None:
+    """The neural seam runs a forward pass and produces valid weights + confidence."""
+    seam = EvidenceFusionSeam.heuristic_init(d_model=32, n_heads=2, d_ff=64)
+    assert seam.param_count() > 0
+
+    features = encode_provider_features(
+        provider_ids=["scene_tracks", "vla_semantic_evidence", "vision_backbone_stub"],
+        provider_kinds={
+            "scene_tracks": "scene_tracks",
+            "vla_semantic_evidence": "teacher_semantics",
+            "vision_backbone_stub": "vision_backbone",
+        },
+        provider_availability={
+            "scene_tracks": "available",
+            "vla_semantic_evidence": "available",
+            "vision_backbone_stub": "available",
+        },
+        provider_truth_class={
+            "scene_tracks": "provider_backed",
+            "vla_semantic_evidence": "advisory_evidence",
+            "vision_backbone_stub": "stub_smoke_only",
+        },
+        semantic_quality=0.7,
+        coverage=0.8,
+        disagreement=0.1,
+        object_count_norm=0.5,
+        edge_count_norm=0.25,
+    )
+
+    assert features.shape == (3, 12)
+
+    with torch.no_grad():
+        weights, confidence = seam(features)
+
+    assert weights.shape == (3,)
+    assert abs(weights.sum().item() - 1.0) < 1e-5
+    assert all(w >= 0.0 for w in weights.tolist())
+    assert 0.0 <= confidence.item() <= 1.0
+
+
+def test_evidence_fusion_seam_batched() -> None:
+    """The neural seam handles batched input correctly."""
+    seam = EvidenceFusionSeam(d_model=32, n_heads=2, d_ff=64)
+    batch_features = torch.randn(4, 3, 12)
+
+    with torch.no_grad():
+        weights, confidence = seam(batch_features)
+
+    assert weights.shape == (4, 3)
+    assert confidence.shape == (4,)
+    # Each row sums to 1
+    for i in range(4):
+        assert abs(weights[i].sum().item() - 1.0) < 1e-5
+
+
+def test_evidence_fusion_seam_with_mask() -> None:
+    """Masked providers get zero weight."""
+    seam = EvidenceFusionSeam(d_model=32, n_heads=2, d_ff=64)
+    features = torch.randn(3, 12)
+    mask = torch.tensor([False, False, True])  # third provider masked
+
+    with torch.no_grad():
+        weights, confidence = seam(features, provider_mask=mask)
+
+    assert weights.shape == (3,)
+    assert weights[2].item() < 1e-6  # masked provider gets ~0 weight
+    assert abs(weights.sum().item() - 1.0) < 1e-5
+
+
+def test_compiler_backward_compat_without_seam() -> None:
+    """Compiler still works identically when no neural seam is provided."""
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_compat",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+    )
+
+    assert state.maturity_stage == "shadow_runtime"
+    assert state.evidence_routing is not None
+    assert state.evidence_routing.fusion_method == "semantic_world_model_heuristic_fusion"
+    # Receipt should be present in metadata
+    assert "evidence_fusion_receipt" in state.metadata
+    receipt_dict = state.metadata["evidence_fusion_receipt"]
+    assert receipt_dict["fusion_method"] == "semantic_world_model_heuristic_fusion"
+    assert receipt_dict["metadata"]["neural_seam_used"] is False
+
+
+def test_compiler_with_neural_seam_promoted() -> None:
+    """When benchmark_signals promote and seam is provided, neural path runs."""
+    seam = EvidenceFusionSeam.heuristic_init()
+
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_neural",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        benchmark_signals={"ready": True},
+        evidence_fusion_seam=seam,
+    )
+
+    assert state.evidence_routing is not None
+    assert state.evidence_routing.fusion_method == "neural_evidence_fusion_seam"
+    assert state.evidence_routing.metadata["neural_seam_used"] is True
+    assert state.evidence_routing.fusion_confidence > 0.0
+    # Weights should still sum to ~1.0
+    total = sum(state.evidence_routing.provider_contributions.values())
+    assert abs(total - 1.0) < 1e-4
+
+
+def test_compiler_neural_seam_fallback_without_benchmark() -> None:
+    """Without benchmark_signals, seam is provided but heuristic runs."""
+    seam = EvidenceFusionSeam.heuristic_init()
+
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_no_bench",
+        task_id="drawer_vase",
+        semantic_tags=["drawer"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        evidence_fusion_seam=seam,
+    )
+
+    # No benchmark = heuristic_fallback, seam not used
+    assert state.evidence_routing.fusion_method == "semantic_world_model_heuristic_fusion"
+    assert state.evidence_routing.metadata["neural_seam_used"] is False
+
+
+def test_compile_with_receipts_returns_typed_result() -> None:
+    """compile_perception_grounding_with_receipts returns structured result."""
+    result = compile_perception_grounding_with_receipts(
+        episode_id="ep_receipts",
+        task_id="drawer_vase",
+        semantic_tags=["drawer"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+    )
+
+    assert isinstance(result, PerceptionCompilationResult)
+    assert result.state.maturity_stage == "shadow_runtime"
+    assert len(result.receipts) >= 1
+    assert isinstance(result.receipts[0], EvidenceFusionReceipt)
+    assert result.receipts[0].fusion_method == "semantic_world_model_heuristic_fusion"
+    assert result.receipts[0].provider_ids
+    assert result.receipts[0].provider_weights
+
+
+def test_compile_with_receipts_neural_seam() -> None:
+    """compile_with_receipts captures neural seam receipt."""
+    seam = EvidenceFusionSeam.heuristic_init()
+
+    result = compile_perception_grounding_with_receipts(
+        episode_id="ep_neural_receipts",
+        task_id="drawer_vase",
+        semantic_tags=["drawer"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        benchmark_signals={"ready": True},
+        evidence_fusion_seam=seam,
+    )
+
+    assert len(result.receipts) >= 1
+    receipt = result.receipts[0]
+    assert receipt.fusion_method == "neural_evidence_fusion_seam"
+    assert receipt.metadata["neural_seam_used"] is True
+
+
+def test_evidence_fusion_seam_describe() -> None:
+    """Seam describe() returns useful metadata for logging/receipts."""
+    seam = EvidenceFusionSeam(d_model=32, n_heads=2, d_ff=64)
+    desc = seam.describe()
+
+    assert desc["seam_type"] == "evidence_fusion"
+    assert desc["d_model"] == 32
+    assert desc["n_heads"] == 2
+    assert desc["param_count"] > 0
+    assert desc["module_class"] == "EvidenceFusionSeam"
 
 
 def test_vision_backbone_stub_exposes_typed_provider_posture() -> None:

@@ -8,7 +8,8 @@ first heuristic semantic-bridge outputs.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional, Sequence
+from dataclasses import dataclass, field
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -16,6 +17,7 @@ from src.evidence.belief_state import BeliefState
 from src.world_model.semantic_world_model import SemanticWorldModelBuilder
 
 from .common import clip01, mapping, stable_id, strings
+from .receipts import EvidenceFusionReceipt
 from .promotion import (
     resolve_evidence_fusion_helper,
     resolve_graph_transformer_helper,
@@ -421,41 +423,131 @@ def _evidence_routing(
     helper_status: Mapping[str, Any],
     object_count: int,
     edge_count: int,
-) -> EvidenceRoutingState:
+    evidence_fusion_seam: Optional[Any] = None,
+) -> Tuple[EvidenceRoutingState, EvidenceFusionReceipt]:
+    """Route and fuse provider evidence, branching on promotion stage.
+
+    When ``promotion_stage == "promoted"`` and a neural seam is provided,
+    the seam forward pass produces fusion weights and confidence.
+    Otherwise the heuristic weighted-sum path executes as before.
+
+    Always emits an ``EvidenceFusionReceipt`` recording which path was
+    taken, the resulting weights, and confidence.
+    """
     provider_ids = list(provider_surface.provider_ids)
-    contributions: dict[str, float] = {}
-    if "scene_tracks" in provider_ids:
-        contributions["scene_tracks"] = 0.55
-    if "vla_semantic_evidence" in provider_ids:
-        contributions["vla_semantic_evidence"] = 0.25
-    if "teacher_trace" in provider_ids:
-        contributions["teacher_trace"] = 0.15
-    if "vision_backbone_stub" in provider_ids:
-        contributions["vision_backbone_stub"] = 0.05
-    contribution_total = sum(contributions.values()) or 1.0
-    normalized = {
-        key: value / contribution_total for key, value in contributions.items()
-    }
-    semantic_quality = clip01(_safe_float(belief_state.state_vector.get("semantic_quality"), 0.0))
-    coverage = clip01(_safe_float(belief_state.state_vector.get("evidence_coverage"), 0.0))
-    disagreement = clip01(_safe_float(belief_state.state_vector.get("evidence_disagreement_mean"), 0.0))
-    structure_bonus = clip01(0.5 * min(object_count, 6) / 6.0 + 0.5 * min(edge_count, 8) / 8.0)
-    fusion_confidence = clip01(0.45 * semantic_quality + 0.25 * coverage + 0.3 * structure_bonus)
-    return EvidenceRoutingState(
+    promotion_stage = str(
+        helper_status.get("promotion_stage", "heuristic_fallback")
+    )
+    fusion_method = "semantic_world_model_heuristic_fusion"
+    neural_seam_used = False
+
+    # Extract belief signals (used by both paths)
+    semantic_quality = clip01(
+        _safe_float(belief_state.state_vector.get("semantic_quality"), 0.0)
+    )
+    coverage = clip01(
+        _safe_float(belief_state.state_vector.get("evidence_coverage"), 0.0)
+    )
+    disagreement = clip01(
+        _safe_float(
+            belief_state.state_vector.get("evidence_disagreement_mean"), 0.0
+        )
+    )
+
+    # --- Neural seam path (promoted + seam available) ---
+    if promotion_stage == "promoted" and evidence_fusion_seam is not None:
+        try:
+            import torch
+
+            from .neural_seams import encode_provider_features
+
+            provider_features = encode_provider_features(
+                provider_ids=provider_ids,
+                provider_kinds=dict(provider_surface.provider_kinds),
+                provider_availability=dict(provider_surface.provider_availability),
+                provider_truth_class=dict(provider_surface.provider_truth_class),
+                semantic_quality=semantic_quality,
+                coverage=coverage,
+                disagreement=disagreement,
+                object_count_norm=clip01(object_count / 8.0),
+                edge_count_norm=clip01(edge_count / 8.0),
+            )
+
+            with torch.no_grad():
+                weights_tensor, confidence_tensor = evidence_fusion_seam(
+                    provider_features
+                )
+
+            weights_list = weights_tensor.tolist()
+            normalized = {
+                pid: float(w)
+                for pid, w in zip(provider_ids, weights_list)
+            }
+            fusion_confidence = clip01(float(confidence_tensor.item()))
+            fusion_method = "neural_evidence_fusion_seam"
+            neural_seam_used = True
+        except Exception:
+            # Any neural seam failure → fall through to heuristic
+            neural_seam_used = False
+
+    # --- Heuristic fallback path ---
+    if not neural_seam_used:
+        contributions: dict[str, float] = {}
+        if "scene_tracks" in provider_ids:
+            contributions["scene_tracks"] = 0.55
+        if "vla_semantic_evidence" in provider_ids:
+            contributions["vla_semantic_evidence"] = 0.25
+        if "teacher_trace" in provider_ids:
+            contributions["teacher_trace"] = 0.15
+        if "vision_backbone_stub" in provider_ids:
+            contributions["vision_backbone_stub"] = 0.05
+        contribution_total = sum(contributions.values()) or 1.0
+        normalized = {
+            key: value / contribution_total
+            for key, value in contributions.items()
+        }
+        structure_bonus = clip01(
+            0.5 * min(object_count, 6) / 6.0
+            + 0.5 * min(edge_count, 8) / 8.0
+        )
+        fusion_confidence = clip01(
+            0.45 * semantic_quality + 0.25 * coverage + 0.3 * structure_bonus
+        )
+
+    routing_state = EvidenceRoutingState(
         routing_id=f"evidence_routing_{state_id}",
         provider_contributions=normalized,
-        fusion_method="semantic_world_model_heuristic_fusion",
+        fusion_method=fusion_method,
         fusion_confidence=fusion_confidence,
         fusion_disagreement=disagreement,
         provider_availability=provider_surface.provider_availability,
         helper_posture=str(helper_status.get("posture", "auto")),
-        helper_promotion_stage=str(helper_status.get("promotion_stage", "heuristic_fallback")),
+        helper_promotion_stage=promotion_stage,
         metadata={
             "belief_id": belief_state.belief_id,
             "semantic_quality": semantic_quality,
             "coverage": coverage,
+            "neural_seam_used": neural_seam_used,
         },
     )
+
+    receipt = EvidenceFusionReceipt(
+        receipt_id=f"evidence_fusion_receipt_{state_id}",
+        fusion_method=fusion_method,
+        provider_ids=provider_ids,
+        provider_weights=dict(normalized),
+        fusion_confidence=fusion_confidence,
+        fusion_disagreement=disagreement,
+        output_object_count=object_count,
+        output_edge_count=edge_count,
+        helper_posture=str(helper_status.get("posture", "auto")),
+        metadata={
+            "neural_seam_used": neural_seam_used,
+            "promotion_stage": promotion_stage,
+        },
+    )
+
+    return routing_state, receipt
 
 
 def _semantic_bridge_registry(
@@ -683,6 +775,7 @@ def compile_perception_grounding_world_state(
     benchmark_signals: Optional[Mapping[str, Any]] = None,
     metadata: Optional[Mapping[str, Any]] = None,
     objective_preset: str = "balanced",
+    evidence_fusion_seam: Optional[Any] = None,
 ) -> PerceptionGroundingWorldState:
     """Compile the first loop-facing Perception / Grounding WM state."""
 
@@ -723,13 +816,14 @@ def compile_perception_grounding_world_state(
         loading_posture="auto",
         benchmark_signals=benchmark_payload,
     )
-    evidence_routing = _evidence_routing(
+    evidence_routing, evidence_fusion_receipt = _evidence_routing(
         state_id=state_id,
         belief_state=resolved_belief,
         provider_surface=provider_surface,
         helper_status=evidence_helper,
         object_count=scene_graph.object_count,
         edge_count=scene_graph.edge_count,
+        evidence_fusion_seam=evidence_fusion_seam,
     )
     temporal_helper = resolve_temporal_grounding_helper(
         loading_posture="auto",
@@ -792,9 +886,72 @@ def compile_perception_grounding_world_state(
             "graph_helper_status": graph_helper,
             "evidence_helper_status": evidence_helper,
             "temporal_helper_status": temporal_helper,
+            "evidence_fusion_receipt": evidence_fusion_receipt.to_dict(),
             **mapping(metadata),
         },
     )
 
 
-__all__ = ["compile_perception_grounding_world_state"]
+# ---------------------------------------------------------------------------
+# Compilation result with receipts
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PerceptionCompilationResult:
+    """Result of perception grounding compilation with explicit receipts.
+
+    The ``state`` field is the canonical ``PerceptionGroundingWorldState``.
+    The ``receipts`` field carries typed receipt objects from the
+    compilation pass — primarily ``EvidenceFusionReceipt`` now, with
+    provider/deployment/bridge receipts added in later tranches.
+
+    Downstream consumers that only need state can ignore receipts.
+    Training/replay/promotion-gate consumers should inspect receipts.
+    """
+
+    state: PerceptionGroundingWorldState
+    receipts: List[Any] = field(default_factory=list)
+
+
+def compile_perception_grounding_with_receipts(
+    **kwargs: Any,
+) -> PerceptionCompilationResult:
+    """Compile Perception / Grounding WM state and return receipts.
+
+    Accepts the same keyword arguments as
+    ``compile_perception_grounding_world_state``.  Returns a
+    ``PerceptionCompilationResult`` with both the state and the
+    typed receipts from the compilation pass.
+    """
+    state = compile_perception_grounding_world_state(**kwargs)
+    receipts: list[Any] = []
+    # Extract the evidence fusion receipt from state metadata
+    efr_dict = state.metadata.get("evidence_fusion_receipt")
+    if efr_dict is not None:
+        receipts.append(
+            EvidenceFusionReceipt(
+                receipt_id=str(efr_dict.get("receipt_id", "")),
+                fusion_method=str(efr_dict.get("fusion_method", "")),
+                provider_ids=list(efr_dict.get("provider_ids", [])),
+                provider_weights=dict(efr_dict.get("provider_weights", {})),
+                fusion_confidence=float(efr_dict.get("fusion_confidence", 0.0)),
+                fusion_disagreement=float(
+                    efr_dict.get("fusion_disagreement", 0.0)
+                ),
+                output_object_count=int(
+                    efr_dict.get("output_object_count", 0)
+                ),
+                output_edge_count=int(efr_dict.get("output_edge_count", 0)),
+                helper_posture=str(efr_dict.get("helper_posture", "")),
+                metadata=dict(efr_dict.get("metadata", {})),
+            )
+        )
+    return PerceptionCompilationResult(state=state, receipts=receipts)
+
+
+__all__ = [
+    "PerceptionCompilationResult",
+    "compile_perception_grounding_with_receipts",
+    "compile_perception_grounding_world_state",
+]

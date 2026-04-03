@@ -6,26 +6,22 @@
 - **Branch**: `codex/multi-wm-architecture-plan`
 - **Primary implementation center**: Phase 2 Perception / Grounding WM
 - **Phase 1 posture**: structurally closed on audited internal surfaces; remaining blockers are external GPU/runtime/asset items tracked in `docs/economic_world_model/phase1_external_gpu_runtime_backlog.md`; Habitat-derived Sim/Synth/Physics adoption track remains an explicit reopenable Phase 1.x item
+- **Latest pass**: Claude implementation pass — first bounded neural seam + receipt emission
 
-## Tranche Coverage
+## Tranche 2.1 Coverage (Codex — prior pass)
 
-This pass moved Phase 2 from schema/doctrine presence toward the first
+Moved Phase 2 from schema/doctrine presence toward the first
 loop-facing subsystem behavior.
 
 Implemented:
 
 - `src/world_model/perception_grounding/compiler.py`
   - new `compile_perception_grounding_world_state(...)`
-  - compiles canonical Perception / Grounding state from real upstream inputs:
-    - scene tracks
-    - belief state
-    - VLA semantic evidence
-    - existing semantic-world-model heuristics
+  - compiles canonical Perception / Grounding state from real upstream inputs
 - `src/world_model/perception_grounding/__init__.py`
   - exports the compiler
 - `src/world_model/sim_synth_physics/adapters/semantic_inputs.py`
   - consumes compiled Perception state and bridge summaries into live sim-synth semantic context
-  - now emits perception-backed inferential summary values instead of only raw semantic passthrough
 - `src/world_model/sim_synth_physics/compiler.py`
   - accepts `perception_grounding_state=` and threads it into the canonical sim-synth input context
 - `src/vla/rollout_labeler.py`
@@ -33,55 +29,94 @@ Implemented:
   - consumes annotation-bridge outputs into rollout labeling tags and metadata
 - `src/vision/backbone_stub.py`
   - now exposes typed provider/advisory posture through `VisionBackboneProviderContract`
-  - latent metadata now carries explicit stub/advisory truth
 - `src/policies/vision_encoder.py`
   - exposes the same provider-contract posture
 
-## What Topologically Became More Real
+## Tranche 2.2a Coverage (Claude — this pass)
 
-- Perception / Grounding WM is no longer only a schema package. It now owns a
-  real compiler path that produces canonical scene graph, temporal grounding,
-  evidence routing, provider/dataset/task/resource surfaces, and a heuristic
-  semantic-bridge registry from real upstream inputs.
-- The semantic successor family is no longer merely declared. The first bridge
-  outputs are compiled and downstream-consumed:
-  - Sim / Synth semantic bridge now affects sim-synth semantic context
-  - Annotation / evidence semantic bridge now affects rollout-labeling tags and row metadata
-- `VisionBackboneStub` is no longer ambient placeholder functionality. It now
-  declares explicit `stub_smoke_only` provider truth and advisory posture.
+This pass landed the **first bounded neural seam** and **receipt emission**,
+satisfying the anti-heuristic-without-neuralization standard.
 
-## What Internal Incompleteness Was Fixed
+Implemented:
 
-Fixed in this pass:
+- `src/world_model/perception_grounding/neural_seams.py` **(NEW)**
+  - `EvidenceFusionSeam(torch.nn.Module)` — real set-attention module
+    - 2-head multi-head self-attention over provider evidence tokens
+    - input projection (d=12 → d_model=32), self-attention, FFN, layer norm
+    - per-provider weight head (softmax-normalized)
+    - pooled confidence head (sigmoid)
+    - ~10-50K trainable params (deliberately tiny — smallest useful seam)
+    - `heuristic_init()` classmethod for conservative initialization
+    - `describe()` for receipt/logging metadata
+    - `param_count()` introspection
+  - `encode_provider_features()` — encodes provider kind, availability,
+    truth class, and belief-state signals into a typed feature tensor
+  - `PROVIDER_KIND_VOCAB`, `TRUTH_CLASS_SCORES` — typed vocabularies
 
-1. Missing Perception compiler/runtime path
-2. Missing first downstream Sim / Synth shadow consumer
-3. Missing first downstream annotation/evidence shadow consumer
-4. Missing typed provider/advisory posture for `backbone_stub.py`
-5. Missing first functional semantic bridge preconditions in live compiled outputs
+- `src/world_model/perception_grounding/compiler.py` **(MODIFIED)**
+  - `_evidence_routing()` now **branches on promotion stage**:
+    - `"heuristic_fallback"`: existing hardcoded weighted fusion (unchanged)
+    - `"promoted"` + seam provided: neural seam forward pass produces weights + confidence
+    - fallback on any neural seam error (graceful degradation)
+  - `_evidence_routing()` now **emits `EvidenceFusionReceipt`** on every call:
+    - records fusion method, provider weights, confidence, disagreement
+    - records whether neural seam was used or heuristic fallback
+    - receipt stored in state metadata as `evidence_fusion_receipt`
+  - `compile_perception_grounding_world_state()` accepts optional `evidence_fusion_seam=`
+  - New `PerceptionCompilationResult` dataclass: `(state, receipts)`
+  - New `compile_perception_grounding_with_receipts()` function
+
+- `src/world_model/perception_grounding/__init__.py` **(MODIFIED)**
+  - exports `EvidenceFusionSeam`, `encode_provider_features`,
+    `PerceptionCompilationResult`, `compile_perception_grounding_with_receipts`
+
+- `tests/test_perception_grounding_compiler.py` **(MODIFIED — 9 new tests)**
+  - `test_evidence_fusion_seam_forward_pass` — seam produces valid weights + confidence
+  - `test_evidence_fusion_seam_batched` — batched input works
+  - `test_evidence_fusion_seam_with_mask` — masked providers get zero weight
+  - `test_compiler_backward_compat_without_seam` — existing API unchanged
+  - `test_compiler_with_neural_seam_promoted` — promoted path uses seam
+  - `test_compiler_neural_seam_fallback_without_benchmark` — no benchmark = heuristic
+  - `test_compile_with_receipts_returns_typed_result` — receipt structure correct
+  - `test_compile_with_receipts_neural_seam` — receipt records neural seam use
+  - `test_evidence_fusion_seam_describe` — introspection metadata correct
+
+## What Topologically Became More Real (cumulative)
+
+- Evidence fusion is no longer permanently heuristic. A real `torch.nn.Module`
+  sits behind the promotion gate and executes when `benchmark_signals` promote.
+- The promotion machinery has its first real consumer — the neural seam forward
+  pass only runs at `"promoted"` stage, controlled by the existing
+  `resolve_evidence_fusion_helper` posture.
+- Receipt emission is live. The compiler now emits a typed
+  `EvidenceFusionReceipt` on every compilation, recording which path was taken,
+  what weights were produced, and whether the neural or heuristic path ran.
+- The anti-heuristic-without-neuralization standard is now satisfied at the
+  evidence fusion surface — the hardcoded 0.55/0.25/0.15/0.05 is explicitly
+  transitional with a real neural successor codepath.
+
+## What Internal Incompleteness Was Fixed (this pass)
+
+1. Missing neural seam codepath behind promotion posture — **FIXED**: `EvidenceFusionSeam`
+2. Missing evidence fusion receipt emission — **FIXED**: `EvidenceFusionReceipt` emitted on every compilation
+3. Missing promotion-stage branching in compiler — **FIXED**: `_evidence_routing` branches on stage
+4. Missing `compile_with_receipts` API — **FIXED**: `PerceptionCompilationResult` returned
 
 ## What Was Not Changed
 
 - No Phase 1 Sim / Synth / Physics work was reopened.
 - No new top-level WM was introduced.
 - No GPU/provider bring-up was faked.
-- No bounded runtime authority was given to Perception helpers.
+- No state.py schema changes.
+- No semantic_bridges.py changes.
+- No provider_contracts.py changes.
 - No monolithic semantic model or mother-latent was introduced.
+- Backward compatibility fully preserved — all existing callers unaffected.
 
 ## SemanticVLA Treatment
 
-`SemanticVLA` remains:
-
-- explicitly transitional
-- scaffolding-only
-- backward-compatible
-
-It is **not** the semantic owner. The current semantic owner/successor posture is:
-
-1. canonical Perception / Grounding semantic substrate
-2. WM-native semantic bridge family
-3. provider-backed / fusion-backed evidence entering that substrate
-4. downstream WM-specific semantic consumption
+Unchanged from prior pass. `SemanticVLA` remains explicitly transitional,
+scaffolding-only, backward-compatible.
 
 ## Phase 2 Closure Assessment
 
@@ -89,14 +124,16 @@ It is **not** the semantic owner. The current semantic owner/successor posture i
 
 Phase 2 is not closed yet. Remaining internal items include:
 
-1. provider invocation / provider-availability / deployment-resource receipts are typed but not yet emitted by the live compiler/runtime path
-2. provider registry / install/runtime scan path is not yet compiled into Perception WM truth the way late Phase 1 did for sim-synth
-3. learned/helper seams exist behind typed posture, but the current compiler path is still heuristic-only shadow runtime
+1. ~~learned/helper seams exist behind typed posture, but the current compiler path is still heuristic-only~~ **RESOLVED**: evidence fusion seam is now a real neural codepath
+2. provider invocation / provider-availability / deployment-resource receipts are typed but only `EvidenceFusionReceipt` is live — remaining receipt types need emission
+3. provider registry / install/runtime scan path is not yet compiled into Perception WM truth
 4. replay/training export for Perception WM state and bridge outputs is not yet its own dedicated path
 5. downstream consumption is present, but still narrow:
    - one Sim / Synth semantic-context consumer
    - one annotation/rollout-labeling consumer
    - no embodiment-facing or economic-facing shadow consumer yet
+6. annotation bridge projection heads not yet neural (next-priority neural seam)
+7. dimensional regime markers not yet added to state/bridge metadata
 
 ### Category B: external
 
@@ -106,179 +143,86 @@ Phase 2 is not closed yet. Remaining internal items include:
 
 ### Category C
 
-- none newly unresolved on the audited compiler-and-consumer tranche
+- none newly unresolved
 
 ## Robust-Subsystem Read
 
-The Perception / Grounding WM is now beginning to satisfy the
-subsystem-within-WM bar:
+The Perception / Grounding WM now:
 
-- it compiles canonical state from real inputs
-- it owns real heuristic fusion/evidence-routing posture
-- it produces bridge outputs with named downstream preconditions
-- it changes downstream behavior in two existing loops
+- compiles canonical state from real inputs
+- owns real heuristic fusion/evidence-routing posture
+- **has its first real neural seam behind promotion posture** (evidence fusion)
+- emits typed receipts from compilation (evidence fusion receipt)
+- produces bridge outputs with named downstream preconditions
+- changes downstream behavior in two existing loops
 
-It is still only at early `shadow_runtime`, not `bounded_runtime_authority`.
+It is at `shadow_runtime` with the first `bounded_runtime_authority` codepath
+(evidence fusion seam) behind benchmark gating.
 
 **Critical remaining proof of subsystem usefulness**: embodiment-facing
 affordance / action-relevance shadow consumption. Without this, Perception
 risks remaining a well-instrumented semantic shell that is structurally
-complete but not actually useful for robot control. The embodiment bridge is
-compiled but has no downstream consumer. Wiring that consumer is how
-Perception starts becoming obviously relevant to actual G1-operable loop
-behavior.
-
-## Why The Remaining Gaps Are Honest
-
-The gaps above are no longer “missing schema” or “missing doctrine” gaps.
-They are now the correct next-stage gaps:
-
-- provider/runtime truth emission
-- richer replay/export surfaces
-- more downstream consumers
-- later GPU/provider bring-up
-
-That is the right posture. The branch should not regress to treating
-Perception as a beautiful contract shell.
+complete but not actually useful for robot control.
 
 ## Recommendation
 
 - Keep Phase 2 as the implementation center.
 - Do not reopen Phase 1 unless new external runtime/assets arrive or a direct contradiction appears.
-- Parallel Phase 3 prep is acceptable, but Phase 2 should keep primary implementation priority until:
-  - Perception receipts are live
-  - provider/runtime truth is compiled
-  - at least one more downstream WM consumes the bridge family in shadow mode
+- The neural seam landing shifts the next-priority work toward:
+  1. Additional receipt types (provider availability, deployment resource, bridge receipts)
+  2. Embodiment-facing shadow consumer skeleton
+  3. Annotation bridge projection heads (second neural seam)
+  4. Provider contract → compiler connection
+  5. Dimensional regime markers
 
-## Next Best Tranche (Tranche 2.2)
+## Next Best Tranche (Tranche 2.2b — for Codex)
 
-### Priority 1: Receipt emission + promotion-gate wiring
+### Priority 1: Additional receipt emission
 
-The compiler must return receipts alongside state. Each compilation should emit:
+Extend `compile_perception_grounding_with_receipts` to emit:
 
-- `EvidenceFusionReceipt` (fusion method, provider weights, confidence)
-- `ProviderAvailabilityReceipt` per provider (availability, truth class)
-- `PerceptionContributionReceipt` (grounding quality, semantic yield)
-- `SemanticBridgeReceipt` per active bridge (quality, downstream usefulness)
+- `ProviderAvailabilityReceipt` per provider
+- `PerceptionContributionReceipt` per compilation
+- `SemanticBridgeReceipt` per active bridge
 
-The evidence fusion path in `_evidence_routing()` must branch on
-`evidence_helper["promotion_stage"]` and record which path was taken. At
-`heuristic_fallback`, it uses the current weighted fusion. At `promoted`, it
-should call through a learned fusion path (which can initially raise
-NotImplementedError or fall back with receipt). The branch must exist.
-
-### Priority 2: Provider contract → compiler connection
-
-The compiler should accept an optional `PerceptionProviderRegistry` and build
-`ProviderSurfaceState` from the real typed contracts instead of inferring
-providers from argument presence. Current inference is the fallback, not the
-only path.
-
-### Priority 3: Embodiment-facing shadow consumer skeleton
+### Priority 2: Embodiment-facing shadow consumer skeleton
 
 A minimal consumer that reads
 `perception_grounding_state.semantic_bridge_registry.embodiment_bridge` and
 produces typed output. This validates the bridge output shape and prepares the
 Phase 3 interface contract.
 
-### Priority 4: Dimensional regime + bridge input source markers
+### Priority 3: Annotation bridge projection heads (second neural seam)
+
+Tiny learned MLPs for the annotation bridge's object→label/affordance/risk
+heads. The annotation bridge is already functionally load-bearing for training
+dataset formation. This is the second-highest-priority neural seam.
+
+### Priority 4: Provider contract → compiler connection
+
+The compiler should accept an optional `PerceptionProviderRegistry` and build
+`ProviderSurfaceState` from the real typed contracts instead of inferring
+providers from argument presence.
+
+### Priority 5: Dimensional regime + bridge input source markers
 
 - Add `feature_dim_regime` to `SceneGraphState` and bridge state metadata.
   Values: `"heuristic_d8"` (current), `"provider_d128"` (target).
 - Add `bridge_input_source` to `SemanticBridgeRegistry` metadata.
   Current: `"semantic_world_model_heuristic"`. Target: `"canonical_scene_graph_substrate"`.
 
-### Priority 5: First bounded neural seam implementation
-
-**Critical**: Do not let receipt/gating/provider truth work become a reason to
-postpone bounded neural implementation indefinitely. Once Priorities 1-2 are
-landed, the very next step should be to start implementing the first bounded
-neural seam. Candidates, in priority order:
-
-1. **Evidence fusion seam**: a tiny learned set-attention module (100K-500K
-   params, 2-4 attention heads) that can be swapped in at the `promoted`
-   promotion stage. Initially heuristic-initialized, disabled by default,
-   benchmark-gated. Even if it starts as a parameterized version of the
-   current weighted fusion, it should be a real `torch.nn.Module` behind the
-   promotion posture.
-2. **Annotation bridge projection heads**: the annotation bridge's
-   object→label/affordance/risk heads as tiny learned MLPs. These are the
-   smallest useful neural seam and the annotation bridge is already
-   functionally load-bearing for training dataset formation.
-3. **Provider calibration/projection head**: if DINOv2 weights become locally
-   available, a learned projection head (d=1024→d=128) behind the
-   `VisionBackboneProviderContract` projection_head_posture.
-
-The rule is: heuristic fusion/bridge/graph paths are transitional priors. The
-compiler/runtime path should increasingly prepare for and then execute immediate
-bounded neural substitution.
-
 ### Habitat-derived Sim/Synth/Physics adoption track reminder
 
-The Habitat extraction is not exhausted. The biggest remaining opportunity
-sits in Sim / Synth / Physics WM for:
+Unchanged from prior pass. The biggest remaining opportunity sits in
+Sim / Synth / Physics WM. See `roadmap.md` and `multi_wm_architecture_plan.md`.
 
-- simulator/task separation discipline
-  (confirmed source: `habitat.core.embodied_task.EmbodiedTask`)
-- articulated embodiment + sensor config
-  (confirmed source: `habitat.articulated_agents` + `habitat_sim.physics`)
-- Measure/Measurement registry patterns
-  (confirmed source: `habitat.core.embodied_task.Measure` — UUID-keyed,
-  dependency-ordered, directly adoptable for `TaskMeasurementSurface`)
-- camera geometry / view-warp utilities
-  (confirmed: CPU-only K-matrix math, implementable now)
-- differentiable physics provider candidate
-  (confirmed: JaxSim — JAX-native, URDF/SDF, `ami-iit/jaxsim`)
-
-This is a specific open Phase 1.x adoption item.
-See updated `roadmap.md` and `multi_wm_architecture_plan.md`.
-
-## Doctrine Updates Landed This Pass
+## Doctrine Updates Landed (prior pass — unchanged)
 
 ### Future Economic WM
-
-The Economic WM is now framed as a neuralizable, scalable, typed
-allocator-governor — the canonical world model of productive flow,
-dissipation, and allocative opportunity. Key properties:
-
-- multi-timescale (fast/meso/slow-adiabatic variable split)
-- **adiabatic separation as concrete design pattern** (not metaphor):
-  no fast→slow feedback without gating, slow state conditions fast dynamics,
-  meso-timescale shadow prices, persistence/hysteresis prevents thrashing
-- asymmetric upward/downward transport
-- four-component decomposition (state estimator → dynamics → allocator →
-  governance/reciprocity)
-- staged neuralization (typed ontology first → neural estimation → neural
-  dynamics → neural allocator → local shaping compilers)
-- confirmed architecture families:
-  - **Estimator**: DS3M / RED-SDS switching SSMs (explicit regime duration)
-  - **Allocator**: DPMORL distributional Pareto + risk-budgeting Lagrangian
-  - **Dynamics**: regime-conditioned sequence models
-- new typed objects: `SlowManifoldProjection`, `ShadowPriceField`,
-  `ParetoFrontierSlice`, `PersistenceAnnotation`
-- quant-inspired imports as algorithmic patterns: coherent risk, distributional
-  Pareto, regime switching, risk budgeting, stress testing, execution-cost
-  awareness
 
 See `doctrine_economic_wm_future_architecture.md`.
 
 ### Meta-Regal-Node Superposition WM
-
-The Economic WM is explicitly **not the sovereign governor** of the stack.
-Above it sits the meta-regal-node WM that composes multiple
-domain-governance nodes (economics, anti-reward-hacking, plausibility, safety,
-deployment truth, data value, later coordination) under regime-sensitive
-Pareto, veto, and admissibility logic.
-
-Two fundamentally different Pareto problems:
-
-- **intra-domain** (within Economic WM): throughput vs energy vs wear etc.
-- **inter-domain** (within meta-regal-node): economics vs safety vs
-  plausibility etc. More fundamental: governs whether intra-domain
-  optimization can be trusted.
-
-The architecture preserves governance pluralism: no single domain ontology
-(including economics) can silently redefine the others.
 
 See `doctrine_meta_regal_node_wm.md`.
 
@@ -286,7 +230,8 @@ See `doctrine_meta_regal_node_wm.md`.
 
 - Structural preparation (receipts, promotion gates) is necessary but not
   sufficient — bounded neural seams must follow
+- **First bounded neural seam now landed**: `EvidenceFusionSeam`
 - Embodiment-facing consumption is the next critical proof of Perception
-  subsystem usefulness — prevents Perception from being a semantic shell
+  subsystem usefulness
 - Habitat extraction is not exhausted — biggest remaining opportunity is
-  Sim/Synth/Physics, now named as a 3-tier adoption track
+  Sim/Synth/Physics

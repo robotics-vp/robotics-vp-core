@@ -36,7 +36,15 @@ from .provider_contracts import (
     VisionBackboneProviderContract,
     VJEPAProviderContract,
 )
-from .compiler import compile_perception_grounding_world_state
+from .compiler import (
+    PerceptionCompilationResult,
+    compile_perception_grounding_with_receipts,
+    compile_perception_grounding_world_state,
+)
+from .neural_seams import (
+    EvidenceFusionSeam,
+    encode_provider_features,
+)
 from .promotion import (
     resolve_evidence_fusion_helper,
     resolve_graph_transformer_helper,
@@ -118,7 +126,12 @@ __all__ = [
     "VisionBackboneProviderContract",
     "VJEPAProviderContract",
     # Compiler
+    "PerceptionCompilationResult",
+    "compile_perception_grounding_with_receipts",
     "compile_perception_grounding_world_state",
+    # Neural seams
+    "EvidenceFusionSeam",
+    "encode_provider_features",
     # Promotion
     "resolve_evidence_fusion_helper",
     "resolve_graph_transformer_helper",

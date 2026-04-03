@@ -1,5 +1,26 @@
 # Economic World Model Progress Log
 
+## 2026-04-03 — First Bounded Neural Seam + Receipt Emission (Claude Implementation Pass)
+
+- **Created** `src/world_model/perception_grounding/neural_seams.py`:
+  - `EvidenceFusionSeam(torch.nn.Module)` — real set-attention module (2-head MHA, d_model=32, ~10-50K params)
+  - Replaces hardcoded 0.55/0.25/0.15/0.05 evidence weights at `promoted` promotion stage
+  - `encode_provider_features()` — typed feature encoder for provider kind/availability/truth/belief signals
+  - `heuristic_init()` classmethod, `describe()` metadata, `param_count()` introspection
+- **Modified** `src/world_model/perception_grounding/compiler.py`:
+  - `_evidence_routing()` now branches on `promotion_stage`:
+    - `"heuristic_fallback"` → existing hardcoded weighted fusion
+    - `"promoted"` + seam provided → neural seam forward pass
+    - graceful fallback on neural seam error
+  - `EvidenceFusionReceipt` emitted on every compilation (both paths)
+  - `compile_perception_grounding_world_state()` accepts optional `evidence_fusion_seam=`
+  - New `PerceptionCompilationResult(state, receipts)` dataclass
+  - New `compile_perception_grounding_with_receipts()` function
+- **Modified** `tests/test_perception_grounding_compiler.py`:
+  - 9 new tests covering neural seam forward pass, batched input, masking, backward compatibility, promoted path, fallback behavior, receipt emission, compile_with_receipts, and seam introspection
+- **Verification**: 12/12 compiler tests pass, 48/48 perception grounding tests pass, 1412/1412 full suite tests pass, compile clean
+- **Significance**: This is the first time the Perception / Grounding WM has a real `torch.nn.Module` behind the promotion posture. The anti-heuristic-without-neuralization standard is now satisfied at the evidence fusion surface. Heuristic fusion is explicitly transitional with a real neural successor codepath.
+
 ## 2026-04-03 — Economic WM + Meta-Regal-Node + Embodiment Doctrine Pass
 
 - **Created** `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`:
