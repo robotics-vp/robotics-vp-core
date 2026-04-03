@@ -4,9 +4,9 @@
 
 - **Type**: contract/schema update + scaffolding implementation
 - **Branch**: `codex/multi-wm-architecture-plan`
-- **Priority**: HELD — prepared as adjacent spec work, not the active implementation target
-- **Sequencing**: this tranche activates AFTER `codex_tranche_sim_synth_closure.md` is structurally complete
-- **Timeline**: target completion before end of June 2026 (after Sim/Synth/Physics closure)
+- **Priority**: ACTIVE — Phase 2 is now the implementation center of gravity
+- **Sequencing**: activated after audited late-Phase-1 internal closure; remaining Phase 1 blockers are external GPU/runtime bring-up items
+- **Timeline**: active starting April 2026
 
 ## Motivation
 

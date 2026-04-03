@@ -1213,6 +1213,33 @@ The future Perception / Grounding WM should own canonical state for:
 - Raw SAM outputs are not the final semantic truth surface. The WM fuses those outputs with SceneTracks, object refs, semantic catalogs, geometry/depth, temporal continuity, and later embodiment-facing relevance.
 - This prevents collapse into a new unowned "mask blob" layer. Concept segmentation enters via typed provider contracts and becomes canonical Perception-WM state.
 
+#### Provider / Dataset / Measurement / Resource Surfaces
+
+Borrow the useful separation pattern from Habitat-style stacks, but keep
+ownership WM-native:
+
+- `DatasetSurfaceState`: world inventory, split, sensor inventory, scene hierarchy
+- `ProviderSurfaceState`: provider/runtime inventory, sensor modalities, vectorized runtime posture
+- `TaskMeasurementSurface`: explicit perception-eval measures and measurement windows
+- `DeploymentResourceSurface`: runtime feasibility, placement, bandwidth, and companion posture
+
+Deployment/resource state should already be typed here even before full
+Embodiment/Economic maturity, including:
+
+- `ComputeEnvelopeState`
+- `InferenceCapacityState`
+- `BatteryState`
+- `ThermalState`
+
+Required receipt families from tranche 2.x onward:
+
+- `ProviderAvailabilityReceipt`
+- `InferenceHeadroomReceipt`
+- `DeploymentResourceReceipt`
+
+These surfaces stay under lower-WM ownership first. Later WMs may consume them,
+but they should not be postponed until the Economic WM.
+
 #### SAM 3 / 3.1 vs. SIMA-2
 
 These are not the same function.
@@ -1232,6 +1259,31 @@ SAM-backed concept segmentation and tracking should feed rollout labeling, seman
 - better alignment between visual object evidence and behavioral/action segmentation
 
 These systems must consume canonicalized or provider-truthed outputs, not define semantic truth by themselves.
+
+#### Semantic Bridge Preconditions
+
+The Perception / Grounding WM should not stop at saying it "owns semantics."
+It should make explicit which bridge families later feed which WMs:
+
+- Sim / Synth / Physics bridge:
+  - object preservation
+  - synthetic-vs-real semantic alignment
+  - branch evaluation and branch-outcome semantics
+- Embodiment / Actuation bridge:
+  - affordance
+  - action relevance
+  - bodily-feasibility relevance
+  - object-task relation
+- Annotation / semantic-evidence bridge:
+  - object-linked primitive/event crosswalk
+  - failure / recovery labeling
+- Economic bridge:
+  - grounding quality
+  - semantic contribution
+  - action-relevant structural yield
+
+Those bridge preconditions should be structural now, even when some consuming
+WMs are implemented later.
 
 #### Impact on Sim / Synth / Physics WM (Phase 1)
 

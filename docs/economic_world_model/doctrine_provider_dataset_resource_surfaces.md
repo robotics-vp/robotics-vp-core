@@ -1,0 +1,121 @@
+# Doctrine: Provider / Dataset / Resource Surfaces For Phase 2
+
+## Purpose
+
+Phase 2 Perception / Grounding WM should not stop at canonical object and
+relation state. It also needs explicit lower-WM surfaces for:
+
+- dataset/world inventory
+- provider/runtime availability
+- task/measurement state
+- deployment/resource posture
+
+This borrows the useful separation patterns from Habitat-style stacks without
+letting Habitat become the ontology or truth owner in this repo.
+
+## Layering Rule
+
+Adopt the pattern:
+
+1. **Dataset/world inventory layer**
+2. **Provider/runtime layer**
+3. **Task/measurement layer**
+4. **Deployment/resource layer**
+5. **WM-owned canonical state and semantic bridges above those layers**
+
+Do not collapse these into one environment object. In this repo:
+
+- the Perception / Grounding WM owns the typed state
+- external providers remain providers
+- receipts remain replayable and benchmarkable
+- later Economic WM allocation consumes these surfaces instead of inventing them
+
+## Contract Families
+
+Phase 2 should explicitly name and preserve:
+
+- `ProviderSurfaceState`
+- `DatasetSurfaceState`
+- `TaskMeasurementSurface`
+- `DeploymentResourceSurface`
+- `ComputeEnvelopeState`
+- `InferenceCapacityState`
+- `BatteryState`
+- `ThermalState`
+
+Typed receipts that should accompany them:
+
+- `ProviderAvailabilityReceipt`
+- `InferenceHeadroomReceipt`
+- `DeploymentResourceReceipt`
+
+## Why These Belong In Lower WMs First
+
+These surfaces matter before the Economic WM because they already change
+runtime truth in lower WMs:
+
+- Perception WM needs provider availability, batch capacity, and headroom to
+  decide what evidence can be gathered honestly.
+- Sim / Synth / Physics WM later needs the same family for backend/fidelity/
+  materialization decisions.
+- Embodiment / Actuation WM later needs them for action feasibility, latency,
+  and on-device vs companion placement.
+
+Only after those surfaces exist as typed lower-WM state should the Economic WM
+elevate them into allocatable budget objects.
+
+## Semantic Bridge Preconditions
+
+The semantic bridge family should be shaped with these surfaces in mind now.
+
+The Perception canonical semantic substrate later feeds:
+
+- Sim / Synth / Physics bridge:
+  - object preservation
+  - synthetic-vs-real semantic alignment
+  - branch evaluation
+  - branch outcome semantics
+- Embodiment bridge:
+  - affordance
+  - action relevance
+  - bodily feasibility relevance
+  - object-task relation
+- Annotation / semantic-evidence bridge:
+  - object-linked primitive/event crosswalk
+  - failure / recovery labeling
+- Economic bridge:
+  - grounding quality
+  - semantic contribution
+  - action-relevant structural yield
+
+These are bridge preconditions now, even if some consuming WMs are later.
+
+## Resource Doctrine
+
+On-board compute availability and inference headroom should first exist as
+first-class provider/deployment-resource state within the lower WMs, with typed
+receipts and honest availability posture. Only later should they be elevated
+into allocatable Economic-WM objects.
+
+The same rule applies to:
+
+- battery
+- thermal headroom
+- bandwidth
+- companion-compute posture
+
+## Phase 2 Implementation Bias
+
+Before GPU/provider bring-up, Phase 2 should already have:
+
+- typed lower-WM provider/dataset/task/resource surfaces
+- typed semantic bridge registry and receipts
+- explicit provider truth and unavailable-mode posture
+- explicit deployment-resource blockers rather than generic “not ready”
+
+After GPU/provider bring-up, those surfaces should gain:
+
+- real provider execution receipts
+- real inference headroom measurements
+- real calibration and runtime traces
+- benchmark-gated promotion signals

@@ -1,5 +1,119 @@
 # Economic World Model Implementation Notes
 
+## 2026-04-03 — Phase 2 Reconciliation: semantic successor topology made explicit
+
+### What changed
+
+The locally created Phase 2 package had a real topology gap: semantic bridge
+types and doctrine existed, but they were not actually carried by the
+top-level `PerceptionGroundingWorldState`. The branch also lacked the explicit
+provider/dataset/task/deployment-resource surface family we discussed using
+Habitat-style patterns for.
+
+This pass fixed that by making the schema itself more operational:
+
+- `PerceptionGroundingWorldState` now carries:
+  - `provider_surface`
+  - `dataset_surface`
+  - `task_measurements`
+  - `deployment_resource_surface`
+  - `semantic_bridge_registry`
+- `state.py` now defines:
+  - `ProviderSurfaceState`
+  - `DatasetSurfaceState`
+  - `TaskMeasurementSurface`
+  - `DeploymentResourceSurface`
+  - `ComputeEnvelopeState`
+  - `InferenceCapacityState`
+  - `BatteryState`
+  - `ThermalState`
+- `receipts.py` now defines:
+  - `ProviderAvailabilityReceipt`
+  - `InferenceHeadroomReceipt`
+  - `DeploymentResourceReceipt`
+
+### Why this matters
+
+This turns the branch away from “Perception owns semantics” as a slogan and
+toward a more implementation-shaped subsystem:
+
+- semantic bridges are now structurally part of the top-level state
+- provider/runtime inventory is explicit
+- dataset/world inventory is explicit
+- task/measurement surfaces are explicit
+- deployment/resource posture is explicit
+
+That gives later compiler/runtime work a clear typed target without inventing a
+new top-level WM or collapsing everything into one environment object.
+
+### SemanticVLA posture
+
+`src/vla/semantic_vla.py` remains importable for backward compatibility, but
+it is now explicitly tested as scaffolding with successor metadata pointing to
+the distributed semantic bridge family.
+
+This is the right transitional posture:
+
+- not promoted as the future semantic-analysis owner
+- not deleted and forgotten
+- explicitly replaced by:
+  - canonical perception substrate
+  - WM-native bridge family
+  - provider-backed / fusion-backed evidence
+
+### What still remains internal in Phase 2
+
+- compiler/runtime build path for `PerceptionGroundingWorldState`
+- evidence-fusion implementation
+- temporal-grounding implementation
+- provider-adapter wiring, including `backbone_stub.py` posture
+- downstream Sim / Synth / Physics hook
+- downstream annotation/evidence hook
+- replay/training export wiring
+
+## 2026-04-02 — Phase 2 Tranche 2.0: Perception / Grounding WM Schema
+
+### What was built
+
+New package `src/world_model/perception_grounding/` following the exact pattern established by `sim_synth_physics/`:
+
+**State types** (`state.py`):
+- `ObjectTrackState`: frozen dataclass with track_id, 3D pose (16-element homogeneous matrix), feature_token (d=128 vector matching Graph Transformer node dim), provider_sources, temporal persistence metadata, affordance/risk hints. Confidence and uncertainty are clipped to [0,1].
+- `SceneEdge`: typed edge with explicit edge_type vocabulary (spatial_adjacency, contact, containment, occlusion, temporal_co_occurrence, affordance_relation) matching the neuralization doctrine's Graph Transformer edge types with d=64 edge features.
+- `SceneGraphState`: scene graph aggregating object_tracks + edges + scene_summary_token (d=256). This is the primary output of the Graph Transformer and the canonical scene representation consumed by downstream bridges.
+- `TemporalGroundingState`: temporal persistence state tracking visible/occluded/lost/recovered tracks, coherence scores, memory token count, and helper posture. This is the output of the causal transformer temporal grounding module.
+- `EvidenceRoutingState`: evidence fusion ownership with per-provider contribution weights, fusion method, confidence/disagreement, and helper posture. This is the output of the set transformer (Perceiver-style) fusion module.
+- `PerceptionGroundingWorldState`: top-level state composing scene_graph + temporal_grounding + evidence_routing + input_context + maturity_stage. Starts at `schema_only`, targets `shadow_runtime`.
+
+**Receipt types** (`receipts.py`):
+- `ProviderInvocationReceipt`: per-provider invocation/skip with quality, latency, fallback reason.
+- `GroundingCalibrationReceipt`: calibration evidence with grounding accuracy, spatial accuracy, provider agreement, downstream task correlation.
+- `EvidenceFusionReceipt`: per-fusion pass with provider IDs/weights, output counts, helper posture.
+- `TemporalGroundingReceipt`: per-frame temporal tracking with maintained/lost/recovered/id-switch counts.
+- `PerceptionContributionReceipt`: per-episode contribution receipt for Economic WM consumption.
+
+**Provider contracts** (`provider_contracts.py`):
+- `PerceptionProviderContract`: base contract with availability, provider_truth_class, loading_posture, learned_adapter_posture, calibration_status, fallback semantics.
+- `SAMProviderContract`: SAM 3/3.1 specific — image/video predictor availability, memory/multiplex mode, calibration_head_posture, mask_to_token_projector_posture. Default unavailable with `scene_tracks_only` fallback.
+- `VisionBackboneProviderContract`: DINOv2/SigLIP — backbone_dim=1024, projection_output_dim=128, projection_head_posture. Default unavailable with `deterministic_stub` fallback (existing backbone_stub.py).
+- `VJEPAProviderContract`: V-JEPA 2 — dual-homing contract, upstream_repo=`facebookresearch/vjepa2`, projection_posture, temporal_alignment_head_posture. Default unavailable with `planning_only` fallback.
+- `DepthProviderContract`: DepthAnythingV2/UniDepth — metric_calibration_head_posture, camera_intrinsics_required. Default unavailable with `scene_tracks_geometry_only` fallback.
+- `PerceptionProviderRegistry`: registry composing all provider contracts.
+
+**Promotion machinery** (`promotion.py`):
+- `resolve_graph_transformer_helper()`: disabled|auto|required for the Graph Transformer
+- `resolve_temporal_grounding_helper()`: disabled|auto|required for temporal grounding
+- `resolve_evidence_fusion_helper()`: disabled|auto|required for evidence fusion
+- Shared `_check_demotion()` with same three demotion triggers as sim_synth_physics (benchmark_gate_revoked, evidence_failure, failure_rate exceeding threshold)
+
+### Design decisions
+
+1. Feature token dimensionality (d=128 for objects, d=64 for edges, d=256 for scene summary) follows the neuralization bridge doctrine exactly.
+2. Provider contracts default to `unavailable` — anti-stub compliant. No silent provider masquerade.
+3. All learned components carry explicit `helper_posture` and `promotion_stage` fields in their state types, not just in promotion resolvers.
+4. `PerceptionContributionReceipt` is explicitly designed for Economic WM consumption — carries grounding_quality, semantic_yield, calibration_confidence, action_relevance_prior, novelty_score, temporal_stability.
+5. Maturity stage on the top-level state (`schema_only` → `logging_only` → `shadow_runtime` → ...) matches the WM maturity ladder from multi_wm_architecture_plan.md.
+
 ## 2026-04-02
 
 - Finished a late-Phase-1 closure pass over the remaining local/runtime/install honesty seams:

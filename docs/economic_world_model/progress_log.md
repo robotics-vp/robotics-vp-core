@@ -1,5 +1,49 @@
 # Economic World Model Progress Log
 
+## 2026-04-03 — Phase 2 Reconciliation: Semantic Bridges + Provider/Resource Surfaces
+
+- **Reconciled** the locally created Phase 2 Perception / Grounding WM package into a coherent current-state tranche instead of leaving the branch in a half-landed state.
+- **Integrated** `SemanticBridgeRegistry` into `PerceptionGroundingWorldState`, so the semantic successor stack is now part of the canonical top-level Perception WM state rather than an adjacent orphan module.
+- **Added** Habitat-inspired but WM-native lower-WM surfaces in `src/world_model/perception_grounding/state.py`:
+  - `ProviderSurfaceState`
+  - `DatasetSurfaceState`
+  - `TaskMeasurementSurface`
+  - `DeploymentResourceSurface`
+  - `ComputeEnvelopeState`
+  - `InferenceCapacityState`
+  - `BatteryState`
+  - `ThermalState`
+- **Added** typed receipts in `src/world_model/perception_grounding/receipts.py`:
+  - `ProviderAvailabilityReceipt`
+  - `InferenceHeadroomReceipt`
+  - `DeploymentResourceReceipt`
+- **Verified** the semantic successor posture:
+  - `resolve_semantic_bridge_helper()` is now covered by tests
+  - `src/vla/semantic_vla.py` scaffolding posture is now covered by tests, including successor metadata
+- **Added doctrine**:
+  - `docs/economic_world_model/doctrine_provider_dataset_resource_surfaces.md`
+  - refined `docs/economic_world_model/doctrine_semantic_bridge_successor.md`
+  - refined Phase 2 wording in `multi_wm_architecture_plan.md` and `roadmap.md`
+- **Current status**:
+  - Phase 1 remains structurally closed enough and should not be reopened without new external runtime/assets or a direct contradiction
+  - Phase 2 is now the active implementation center with a cleaner semantic successor posture
+  - remaining Phase 2 blockers are still mostly compiler/runtime/adapters/downstream wiring, not schema/doctrine ambiguity
+
+## 2026-04-02 — Phase 2 Kickoff: Perception / Grounding WM Tranche 2.0
+
+- **Phase transition**: Phase 1 Sim/Synth/Physics WM declared structurally closed. Zero Category A items. Remaining blockers are external GPU/runtime/asset items recorded in `phase1_external_gpu_runtime_backlog.md`.
+- **Created**: `docs/economic_world_model/phase2_closure_standard.md` — Category A/B/C closure framework for Phase 2
+- **Created**: `docs/economic_world_model/phase1_external_gpu_runtime_backlog.md` — explicit pre-training prerequisites
+- **Created**: `src/world_model/perception_grounding/` package with:
+  - `state.py`: 6 canonical state types (ObjectTrackState, SceneEdge, SceneGraphState, TemporalGroundingState, EvidenceRoutingState, PerceptionGroundingWorldState)
+  - `receipts.py`: 5 receipt types (ProviderInvocation, GroundingCalibration, EvidenceFusion, TemporalGrounding, PerceptionContribution)
+  - `provider_contracts.py`: 6 provider contract types (base, SAM 3/3.1, DINOv2/SigLIP, V-JEPA 2, Depth, Registry)
+  - `promotion.py`: 3 helper resolvers (graph_transformer, temporal_grounding, evidence_fusion) with shared demotion
+- **Created**: `tests/test_perception_grounding_world_model.py` — 33 tests, all passing
+- **Updated**: `claude_to_comment_on.md` with Phase 2 status, neuralization map, and next tranche recommendation
+- **Neuralization specified**: Full subsystem map with neural structure, capacity bands, governing WM, promotion posture, and downstream consumers for all 7 perception subsystems
+- **Maturity**: `schema_only` — state types exist and serialize; no compiler or runtime yet
+
 ## 2026-04-02
 
 - Changed: finished a late-Phase-1 closure pass over the remaining local/runtime/install honesty seams:

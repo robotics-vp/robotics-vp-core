@@ -115,6 +115,43 @@ The repo must track a parallel backlog / provider bring-up item stating the stac
 - unsettled provider choice is acceptable.
 - unowned placeholder status is not acceptable.
 
+## Phase 2 Provider / Dataset / Resource Surface Rule
+
+Phase 2 should explicitly separate, under WM-owned typed state:
+
+- `DatasetSurfaceState`
+- `ProviderSurfaceState`
+- `TaskMeasurementSurface`
+- `DeploymentResourceSurface`
+
+With deployment/resource detail named early:
+
+- `ComputeEnvelopeState`
+- `InferenceCapacityState`
+- `BatteryState`
+- `ThermalState`
+
+And typed receipts:
+
+- `ProviderAvailabilityReceipt`
+- `InferenceHeadroomReceipt`
+- `DeploymentResourceReceipt`
+
+These are lower-WM surfaces first. They should inform Perception runtime truth
+now, later Sim / Synth / Physics backend/fidelity/materialization truth,
+later Embodiment latency/action-feasibility truth, and only after that become
+allocatable Economic-WM objects.
+
+This borrows the useful layering pattern from Habitat-style stacks:
+
+1. dataset/world inventory
+2. provider/runtime
+3. task/measurement
+4. deployment/resource posture
+
+But keeps canonical WM ownership, typed receipts, and economics-aware resource
+state native to this repo instead of flattening everything into one env object.
+
 ## Program Calendar
 
 Assumed dates for this roadmap:
