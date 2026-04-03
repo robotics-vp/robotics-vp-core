@@ -15,20 +15,27 @@ The central question is:
 
 ## Executive Conclusion
 
-Yes, the proposed topology makes architectural sense, with one important constraint:
+Yes, the proposed topology makes architectural sense, with two important
+constraints:
 
 - each lower world model must own a canonical, typed, replayable state surface
-- the economic world model should sit above those canonical state surfaces
-- the meta-node superposition/control world model should sit above the economic world model
-- the cross-WM transport layer should be middleware between adjacent world models, not a premature mother-latent that dissolves boundaries
+- the economic world model should sit above those canonical state surfaces as
+  the primary allocator-governor, but **not as the sole sovereign governor**
+- the meta-regal-node superposition WM should sit above the economic WM to
+  compose multiple domain-governance nodes (economics, anti-reward-hacking,
+  plausibility, safety, deployment truth) under regime-sensitive Pareto, veto,
+  and admissibility logic
+- the cross-WM transport layer should be middleware between adjacent world
+  models, not a premature mother-latent that dissolves boundaries
 
 The recommended canonical stack is:
 
 1. Perception / grounding WM
 2. Embodiment / actuation WM
 3. Sim / synth / physics WM
-4. Economic WM over those lower WMs
-5. Meta-node superposition / control WM above the economic WM
+4. Economic WM over those lower WMs (first-class allocative contributor)
+5. Meta-regal-node superposition / control WM above the economic WM
+   (composes governance pluralism, not just economic allocation)
 
 The recommended next WM to build is:
 
@@ -284,6 +291,117 @@ Cross-WM dependency rule:
 
 - a higher WM should not treat a lower WM as canonical just because the lower WM reached `schema_only`, `logging_only`, or a pretty demo
 - for future full-loop and hardware-ready use, lower WM state should be considered mature only once the lower layer has crossed `bounded_runtime_authority` and its relevant downstream consumers are actually wired
+
+## Habitat Extraction Posture
+
+The stack has borrowed useful design patterns from Habitat-style codebases.
+The Habitat pass is not exhausted.
+
+### What has been absorbed
+
+Perception / Grounding WM (Phase 2) has already absorbed the right level:
+
+- provider/dataset/task/resource surface separation as typed lower-WM state
+- explicit sensor/provider truth
+- loop-facing compilation with downstream consumption
+- deployment/headroom surfaces as first-class WM state
+
+### What remains open
+
+Sim / Synth / Physics WM (Phase 1.x) has the biggest remaining Habitat-derived
+opportunity. This is an explicit reopenable Phase 1 adoption track.
+
+#### Design-pattern adoption (no code dependency)
+
+- **Simulator/task separation**: Habitat cleanly separates simulator config,
+  task config, and measurement config. The sim-synth backend/runtime/execution
+  substrate should borrow this contract discipline.
+- **Articulated embodiment + sensor config**: Habitat's articulated-agent and
+  sensor-suite config patterns are directly relevant to Isaac/Unitree adapter
+  discipline and Holosoma motion execution.
+- **Scene/measurement harness**: Habitat's `Measure` pattern maps to typed
+  per-branch evaluation receipts and benchmark harnesses.
+- **Semantic scene hierarchy**: Habitat's dataset/scene hierarchy exporters
+  inform Isaac asset organization and scene decomposition.
+
+#### Real code / provider adoption candidates (requires evaluation)
+
+- **Camera geometry / view-warp**: Habitat's camera utilities are directly
+  relevant to sim-real visual consistency and view-transform discipline.
+  Evaluate for selective borrowing.
+- **Vectorized runtime/eval**: Habitat's `VectorEnv` pattern is relevant to
+  batch sim execution and branch parallelism. Evaluate for pattern adaptation.
+- **Play / benchmark harnesses**: Habitat's interactive evaluation patterns
+  inform the interactive sim-eval and benchmark-gating workflow. Evaluate for
+  selective adaptation.
+
+#### GPU/runtime-blocked items
+
+- Real Isaac Sim + Habitat-style scene loading with Unitree URDF assets
+- Real GPU-backed vectorized sim with batch rendering
+- Real sensor-suite config with Isaac camera sensors
+- Real benchmark harnesses with GPU-backed physics evaluation
+
+These sit alongside existing Phase 1 external backlog items.
+
+### Anti-overfit rule
+
+Borrow patterns, borrow contract ideas, borrow utilities, maybe borrow
+selective code. **Do not**:
+
+- inherit Habitat's ontology
+- make Habitat the master environment abstraction
+- flatten WM boundaries into one runtime container
+- let Habitat provider conventions override this repo's provider truth doctrine
+
+### Cross-WM resource surfaces
+
+The resource surface pattern (provider/dataset/task/deployment-resource)
+established in Phase 2 Perception is not Perception-specific. Each lower WM
+should independently carry its version of these typed surfaces:
+
+- Sim / Synth / Physics: backend availability, GPU headroom, sim fidelity,
+  materialization latency, branch capacity
+- Embodiment / Actuation: action-feasibility latency, on-device vs companion
+  placement, joint-limit and safety posture
+- Economic: allocation budget, cross-WM resource tradeoffs (consumes lower-WM
+  surfaces, does not originate them)
+
+## Future Economic WM Architecture
+
+The future upstream Economic WM (above the lower WMs, below the meta-regal-
+node WM) should be designed as a **neuralizable, scalable, typed
+allocator-governor**: the canonical world model of productive flow,
+constraint, dissipation, and allocative opportunity across the stack.
+
+It is **not**: a scalar reward head, a dashboard, a PnL tracker, a thin
+weight-picker, a mother-latent, or the **sole sovereign governor** of the
+stack. It is a first-class allocative contributor within a broader
+superposed governance field. See
+`docs/economic_world_model/doctrine_meta_regal_node_wm.md` for the
+governance-pluralism posture.
+
+### Key design properties
+
+- **Multi-timescale**: fast variables (local routing, dispatch), meso variables
+  (task allocation, budget routing), slow/near-adiabatic variables (objective
+  structure, deployment-trust invariants). Slow variables must not swing
+  violently with local noise.
+- **Asymmetric transport**: upward transport (receipts, abstraction, bottleneck
+  aggregation) is distinct from downward transport (allocative fields, shaping,
+  budget envelopes, admissible Pareto slices). Not the same tensor reversed.
+- **Four-component decomposition**: state estimator (switching SSMs) → dynamics
+  model (counterfactual forecasting) → allocator/compiler (distributional
+  Pareto) → governance/reciprocity layer (typed bidirectional coupling).
+- **Staged neuralization**: typed ontology first → neural state estimation →
+  neural dynamics → neural allocator → local shaping compilers. Neuralization
+  follows typed design, not precedes it.
+- **Quant-inspired imports**: coherent risk, distributional Pareto policies,
+  regime switching, risk budgeting, stress testing, execution-cost awareness —
+  as algorithmic patterns, not worldview.
+
+Full doctrine:
+`docs/economic_world_model/doctrine_economic_wm_future_architecture.md`
 
 ## Architectural Position
 
@@ -791,35 +909,105 @@ What still changes later:
 - the economic WM should consume lower canonical WMs more directly instead of leaning on summary proxies
 - its future neuralization should condition on lower-WM receipts, not just heuristic planning fields
 
-### 5. Meta-Node Superposition / Control WM
+### 5. Meta-Regal-Node Superposition / Control WM
 
 Purpose:
 
-- learn cross-WM governance and Pareto-objective policy over the entire stack
-- run counterfactuals over meta-node choices, not only over local task actions
+- compose multiple neuralized governance nodes under regime-sensitive Pareto,
+  veto, and admissibility logic
+- emit the final cross-WM shaping and control fields
+- prevent any single domain ontology (including economics) from silently
+  becoming the total governance surface
+
+#### Why the Economic WM cannot be sovereign
+
+The stack’s telos is not "optimize economics." It is governed robot control
+under multiple non-collapsible realities: physical plausibility, safety,
+anti-reward-hacking, deployment truth, embodiment limits, coordination
+integrity. The Economic WM is a first-class allocative contributor, but not
+the final court. If it becomes too central, the stack risks translating
+everything into economic language and treating physical/safety/deployment
+reality as subordinate constraints.
+
+#### Three governance levels
+
+1. **Subsystem / local WM level**: perception, embodiment, sim/synth,
+   economic, etc. Each owns local truths and local shaping.
+2. **Domain governance level**: economic allocation, anti-reward-hacking,
+   plausibility/geometry truth, deployment truth, safety, data value,
+   later coordination. Each becomes a neuralized evaluative-governance process.
+3. **Superposition / meta-governance level**: the WM that models and composes
+   the governance nodes themselves. This is the meta-regal-node WM.
+
+#### Two kinds of Pareto optimization
+
+- **Intra-domain** (inside the Economic WM): throughput vs energy vs wear vs
+  compute vs error. Multi-objective within one evaluative domain.
+- **Inter-domain** (inside the meta-regal-node WM): economics vs
+  anti-reward-hacking vs plausibility vs deployment truth vs safety. More
+  fundamental: governs whether intra-domain optimization can be trusted.
+
+These must be kept architecturally distinct.
+
+#### What the meta-regal-node WM must model
+
+Meta-governance state: current regime, conflict structure among nodes, node
+confidence/trust, active hard constraints, admissible Pareto region,
+persistence/hysteresis in governance mode.
+
+Meta-governance composition: when nodes are in Pareto relation, lexicographic,
+veto-like, advisory, or confidence-weighted.
+
+Meta-governance transport — downward: composed shaping fields, filtered budget
+envelopes, provenance. Upward: conflict receipts, override receipts,
+governance failure receipts, reward-hack suspicion receipts.
+
+#### Why "superposition" is the right word
+
+Governance nodes should not necessarily collapse immediately into one scalar
+or one strict hierarchy. Sometimes anti-reward-hacking is dominant, sometimes
+plausibility, sometimes deployment truth, sometimes economics matters most
+within a safe feasible region, sometimes coordination integrity is the
+relevant macro pressure. The nodes coexist in a partially unresolved relation
+until regime, embodiment state, task family, deployment mode, and confidence
+conditions tell the meta-layer how to compose them.
+
+This is structurally different from "economics outputs reward, regal nodes
+clip it." It is: structured superposition, regime-sensitive composition,
+partial vetoes, admissible regions, soft and hard constraint interplay, and
+typed provenance.
+
+#### Governance pluralism principle
+
+The architecture preserves pluralism at the governance layer while allowing
+strong specialization below it. Each governance node specializes in its
+domain. The meta-layer composes without collapsing. No single domain ontology
+(including economics) can silently redefine the others.
 
 Important clarification:
 
-- there are already local meta-node objects inside the semantic WM and adjacent helper lanes
+- there are already local meta-node objects inside the semantic WM and
+  adjacent helper lanes
 - this future WM does not replace those local objects
-- instead, it becomes the higher-order control layer that conditions, calibrates, and learns over them
-
-Current local meta-node maturity:
-
-- local meta-nodes are real routing/control objects now
-- but they are still mostly named bounded-control surfaces with learned layers around them
-- they are not yet fully learned geometric/cybernetic objects in their own right
+- instead, it becomes the higher-order control layer that conditions,
+  calibrates, and learns over them
 
 Implication:
 
-- the stack should not jump from today’s bounded local meta-node surfaces directly to an overarching superposition WM
-- there needs to be a local meta-node neuralization and robustness tranche first
-- that tranche should mature the local meta-node objects themselves before a mother-WM tries to learn over them
+- the stack should not jump from today’s bounded local meta-node surfaces
+  directly to an overarching superposition WM
+- there needs to be a local meta-node neuralization and robustness tranche
+  first, and domain governance nodes must be individually neuralized
+- the meta-layer only makes sense once its inputs are mature enough to compose
 
 Current status:
 
 - not ready to build next
-- should remain a later phase after lower WMs and transport layers are real
+- should remain a later phase after lower WMs, Economic WM, and transport
+  layers are real
+
+Full doctrine:
+`docs/economic_world_model/doctrine_meta_regal_node_wm.md`
 
 ## Why Sim / Synth / Physics WM Is Next
 
@@ -1853,45 +2041,79 @@ Exit criteria:
 - they have their own honest training/runtime/promotion story
 - the later superposition WM can treat them as mature lower-level objects instead of pseudo-symbolic placeholders
 
-### Phase 7 - Meta-Node Superposition / Control WM
+### Phase 7 - Meta-Regal-Node Superposition / Control WM
 
 Objective:
 
-- learn the policy over cross-WM governance, objective tradeoffs, and meta-node Pareto control
+- compose multiple neuralized domain-governance nodes under regime-sensitive
+  Pareto, veto, and admissibility logic
+- emit the final cross-WM shaping and control fields with typed provenance
+- learn the inter-domain Pareto composition, not just intra-domain allocation
 
-This is the final mother-layer, not the next layer.
+This is the final governance layer, not the next layer.
 
 What it should learn over:
 
-- economic WM receipts
+- economic WM allocation envelopes and receipts
+- anti-reward-hacking suspicion signals and integrity receipts
+- plausibility / geometry governance outputs
+- deployment-truth governance outputs
+- safety constraint governance outputs
+- data value governance outputs
 - lower-WM readiness and uncertainty
-- lower-WM compute-allocation and battery-allocation receipts
+- lower-WM compute/battery/thermal allocation receipts
 - counterfactual governance outcomes
 - meta-node action histories
 - cross-WM transport quality
+- conflict and override receipts from prior governance composition
+
+What it should compose:
+
+- when domain-governance outputs are in Pareto relation (tradeoffs exist)
+- when they are lexicographic (one node dominates)
+- when they are veto-like (one node imposes hard constraint)
+- when they are advisory (one node contributes information only)
+- when they are confidence-weighted (composition depends on node epistemic
+  confidence)
 
 What it should not do:
 
 - directly replace lower WMs
 - become a giant hidden-state monolith
 - erase local WM contracts or governance traces
+- let any single governance node (including the Economic WM) silently become
+  the total governance surface
+- collapse inter-domain composition into a scalar governance score
 
 Neuralization rule from tranche 1:
 
-- the mother-layer should also launch with bounded learned control seams, typed helper traces, and explicit promotion posture
-- it should not begin life as a heuristic governor that later needs a purge pass
+- the mother-layer should also launch with bounded learned control seams,
+  typed helper traces, and explicit promotion posture
+- it should not begin life as a heuristic governor that later needs a purge
+  pass
 
 Complete-subsystem rule:
 
-- the mother-layer should only be considered blocked when the remaining issue is lower-WM maturity, cross-WM corpus density, or real governance benchmark evidence, not absent runtime packaging or absent live-loop wiring
+- the mother-layer should only be considered blocked when the remaining issue
+  is lower-WM maturity, governance-node maturity, cross-WM corpus density, or
+  real governance benchmark evidence, not absent runtime packaging or absent
+  live-loop wiring
 
 Preconditions:
 
 - lower WMs are robust and honest
-- economic WM is consuming canonical lower-WM state
+- economic WM is consuming canonical lower-WM state and emitting allocation
+  envelopes
+- domain-governance nodes (anti-reward-hacking, plausibility, deployment truth,
+  safety, data value) are individually neuralized and emitting typed receipts
 - transport bridges are working between adjacent WMs
-- local meta-nodes have already passed their own neuralization/robustness tranche and emit canonical state plus trainable receipts
-- meta-node actions and governance satisfaction are already logged as trainable receipts
+- local meta-nodes have already passed their own neuralization/robustness
+  tranche and emit canonical state plus trainable receipts
+- meta-node actions and governance satisfaction are already logged as
+  trainable receipts
+
+Full doctrine:
+`docs/economic_world_model/doctrine_meta_regal_node_wm.md`
 
 ### Phase 8 - Production Loop Runtime and Weekly GPU Operations
 

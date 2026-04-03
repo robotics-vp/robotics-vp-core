@@ -115,6 +115,290 @@ The repo must track a parallel backlog / provider bring-up item stating the stac
 - unsettled provider choice is acceptable.
 - unowned placeholder status is not acceptable.
 
+## Habitat-Derived Adoption Track
+
+The Habitat pass is not exhausted across the stack. The following summarizes
+what has been absorbed and what remains open.
+
+### Perception / Grounding WM (Phase 2) — mostly absorbed
+
+The right Habitat-level lessons are already in the branch:
+
+- clean separation of provider/dataset/task/resource surfaces
+- explicit sensor/provider truth rather than one opaque env blob
+- loop-facing compilation rather than pure schema
+- deployment/headroom surfaces as lower-WM typed state
+
+No further Habitat copying is needed for Perception; the remaining work is
+neuralization and receipt emission.
+
+### Sim / Synth / Physics WM (Phase 1.x) — biggest remaining opportunity
+
+This is where the most Habitat-derived learning still sits. It should be
+named as an explicit reopenable Phase 1 adoption track, not forgotten.
+
+#### Design-pattern adoption (no code dependency, implementable now)
+
+These require no Habitat code import. They are contract/architecture patterns:
+
+- Habitat-style simulator/task separation for backend execution discipline
+- Articulated embodiment + sensor config schema borrowing
+- Scene/measurement harness patterns for sim branch evaluation
+- Semantic scene hierarchy / object-region-scene decomposition for Isaac assets
+
+#### Real code / provider adoption candidates (requires evaluation)
+
+These may involve selective code borrowing or provider integration:
+
+- Camera geometry / view-warp / calibration utilities for sim-real consistency
+  (Habitat-Lab camera utils, `habitat_sim` view-transform patterns)
+- Vectorized runtime/eval patterns for batch sim execution
+  (Habitat-Lab `VectorEnv`, evaluate patterns)
+- Interactive play / benchmark harness patterns
+  (Habitat-Lab `habitat_baselines/rl/ppo/ppo_trainer.py` eval loops)
+
+Each requires a scoping evaluation: what to borrow, what to adapt, what to
+ignore. Do not bulk-import.
+
+#### GPU/runtime-blocked adoption items (requires hardware/assets)
+
+These are real but blocked by external resources:
+
+- real Isaac Sim + Habitat-style scene loading with Unitree URDF assets
+- real GPU-backed vectorized sim with Habitat-style batch rendering
+- real sensor-suite config with Isaac camera sensors and egocentric views
+- real benchmark harnesses with GPU-backed physics evaluation
+
+These should sit in the Phase 1 external backlog alongside existing
+Isaac/Holosoma items.
+
+#### Anti-overfit rule
+
+Borrow patterns, borrow contract ideas, borrow utilities, maybe borrow
+selective code. **Do not** inherit Habitat's ontology or make Habitat the
+master environment abstraction. This repo owns its WM boundaries.
+
+### Embodiment / Actuation WM (Phase 3) — future preparatory
+
+Useful contract ideas from Habitat include articulated-agent config discipline,
+sensor schema, and action-space normalization. These should be adopted when
+Phase 3 work begins, not imported prematurely.
+
+### Economic WM and Transport / Meta-Node — not a Habitat concern
+
+Almost nothing should be copied from Habitat for these layers. The Economic
+WM consumes lower-WM receipts/substrates; the transport/meta-node layers
+are not Habitat's problem domain.
+
+### Cross-WM resource surfaces
+
+Resource surfaces (provider/dataset/task/deployment-resource) should not be
+treated as a Perception-only pattern. They are a universal lower-WM pattern
+that later feeds:
+
+- Sim / Synth / Physics backend/runtime/fidelity choice
+- Embodiment action-feasibility / latency posture
+- Economic allocation and governance
+
+Each lower WM should independently own its version of these typed surfaces,
+with receipts, following the same pattern established in Phase 2 but with
+WM-specific semantics.
+
+## Anti-Heuristic-Without-Neuralization Rule
+
+Structural preparation (receipts, promotion gates, provider contracts,
+dimensional markers) is **necessary but not sufficient**.
+
+Bounded neural seams should begin existing as real codepaths as soon as the
+substrate is honest enough. The branch should not drift into a comfort zone
+where heuristics get cleaner, receipts get richer, and neuralization keeps
+being postponed as "later." That would violate the core anti-heuristic
+posture: heuristic fusion, heuristic bridge scoring, and heuristic graph
+construction are **transitional priors**, not acceptable resting places.
+
+Concretely:
+
+- Heuristic fusion, heuristic bridge scoring, and heuristic scene graph
+  construction are acceptable only as transitional priors behind typed
+  `disabled|auto|required` promotion posture.
+- Once receipt emission and promotion-gate wiring are landed for a subsystem,
+  the **next** step should be to implement the first bounded neural seam for
+  that subsystem, not to indefinitely refine the heuristic path.
+- Early bounded neural seams should exist even if initially:
+  - tiny learned modules (100K-500K params)
+  - partially trained or heuristic-initialized
+  - disabled/auto by default
+  - benchmark-gated before promotion
+  - provider-blocked in some environments
+- The key neural seams that should begin earliest:
+  - evidence fusion (set transformer / perceiver over provider tokens)
+  - annotation bridge (projection heads for labeling quality)
+  - provider calibration/projection heads (DINOv2→d=128, SAM mask→token)
+- This rule applies to every lower WM, not just Perception.
+
+This does not mean "implement GPU-scale models immediately." It means the
+compiler/runtime path should increasingly prepare for and then execute
+immediate bounded neural substitution. Heuristic paths are the prior;
+learned paths are the target.
+
+The correct test: after each structural tranche lands, ask "is the next step
+more structure, or is it time for a real neural seam?" If the substrate is
+honest (receipts emitting, promotion gates wired, provider truth compiled),
+then the answer should be "neural seam" — even a tiny one.
+
+## Embodiment-Facing Subsystem Usefulness Rule
+
+A lower WM is not "real enough" merely because it compiles and feeds one or
+two narrow consumers. The Perception / Grounding WM in particular should not
+be judged as a real subsystem until it is demonstrably useful for
+**embodiment-facing action relevance**.
+
+This means:
+
+- the next important proof of Perception subsystem usefulness is
+  embodiment-facing affordance / action-relevance shadow consumption
+- this is where Perception stops being descriptive (scene state, labels,
+  semantic tags) and starts becoming obviously relevant to actual G1-operable
+  loop behavior
+- an embodiment-facing consumer validates that the canonical scene graph and
+  bridge outputs carry enough structured information for bodily feasibility,
+  grasp planning, and action-space filtering
+
+Without embodiment-facing consumption, the Perception WM risks becoming a
+well-instrumented semantic shell: structurally complete, receipt-emitting,
+but not actually useful for robot control.
+
+The same principle applies later to other WMs:
+
+- Sim / Synth / Physics is not real until its outputs demonstrably affect
+  training data selection and replay
+- Embodiment / Actuation is not real until its outputs demonstrably affect
+  motor control and safety gating
+- Economic WM is not real until its outputs demonstrably affect lower-WM
+  allocation and resource routing
+
+## Future Economic WM Posture
+
+The future upstream Economic WM (not the current shadow economic control
+plane) should be framed as:
+
+> **a neuralizable, scalable, typed allocator-governor — the canonical world
+> model of productive flow, constraint, dissipation, and allocative
+> opportunity across the robotics stack.**
+
+It is **not**: a scalar reward head, a dashboard, a thin weight-picker, a PnL
+tracker, or a mother-latent.
+
+It is also **not the sole sovereign governor** of the stack. The stack's telos
+is governed robot control under multiple non-collapsible realities (physics,
+safety, anti-reward-hacking, deployment truth, embodiment limits, coordination
+integrity). The Economic WM is a first-class allocative contributor within a
+broader superposed governance field — the meta-regal-node WM composes it with
+other domain-governance nodes under regime-sensitive Pareto, veto, and
+admissibility logic. See `doctrine_meta_regal_node_wm.md`.
+
+### Multi-timescale design
+
+The Economic WM must be explicitly multi-timescale:
+
+- **Fast**: local routing, queue dispatch, sim-branch selection, local shaping
+- **Meso**: task-family allocation, episode budget routing, exploration quotas
+- **Slow / near-adiabatic**: objective structure, topology-level priors,
+  global constraint manifolds, deployment-trust invariants
+
+Slow variables must not swing violently with local noise.
+
+### Upward vs downward transport
+
+Upward transport (lower WMs → Economic WM): receipt transport, abstraction,
+bottleneck aggregation, macro-state estimation.
+
+Downward transport (Economic WM → lower WMs): allocative fields, shaping
+fields, budget envelopes, admissible Pareto slices, governance guidance.
+
+These are **asymmetric objects**, not the same tensor reversed. Upward carries
+raw receipts; downward carries compiled allocative fields with regime context.
+
+### Internal decomposition
+
+1. **Economic State Estimator**: consumes lower-WM receipts → `EconomicState`
+   + `EconomicRegime` + `BottleneckMap`. Architecture: switching SSMs /
+   regime-aware sequence models, not plain transformers first.
+2. **Economic Dynamics Model**: forecasts state evolution under candidate
+   allocations. Architecture: regime-switching rollouts, typed receipt
+   forecasts, differentiable-physics coupling where appropriate.
+3. **Economic Allocator / Compiler**: converts state + forecasts into
+   structured allocative fields. The Pareto allocator should be
+   **distributional, regime-aware, and execution-aware**.
+4. **Economic Governance / Reciprocity Layer**: reciprocal coupling to lower
+   WMs. Bottom-up: receipts. Top-down: shaping fields, budget envelopes,
+   admissible operating regions.
+
+### Quant-inspired algorithmic imports
+
+Borrow as **algorithmic patterns**, not worldview:
+
+- coherent risk measures (CVaR-style tail sensitivity)
+- distributional Pareto policies (preserve uncertainty over return vectors)
+- regime switching (latent operating-mode inference, persistent regimes)
+- risk budgeting / shadow-price-like signals for scarce resources
+- stress testing / scenario-conditioned allocation
+- execution-cost awareness (friction in `DissipationField`, not penalty hack)
+
+### Staged neuralization
+
+1. typed non-neural scaffolding (receipts, regimes, surfaces)
+2. neural state estimation (switching SSMs over receipt streams)
+3. neural dynamics / counterfactual forecasting
+4. neural Pareto allocator (distributional frontier engine)
+5. local shaping compilers
+6. meta-node integration (only after lower layers stable)
+
+Neuralization follows typed ontology and transport design, not precedes it.
+
+Full doctrine: `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`
+
+## Future Meta-Regal-Node Superposition WM Posture
+
+Above the Economic WM sits the meta-regal-node superposition / control WM.
+Its job is to compose multiple domain-governance nodes under regime-sensitive
+logic.
+
+### Why the Economic WM is not sovereign
+
+The stack's telos is not "optimize economics." It is governed robot control
+under multiple non-collapsible realities. If the Economic WM becomes the sole
+governor, physical/safety/deployment reality gets treated as subordinate
+constraints to an economic worldview. That is dangerous for a control stack.
+
+### Three governance levels
+
+1. **Subsystem/local WM**: perception, embodiment, sim/synth. Local truths.
+2. **Domain governance**: economic allocation, anti-reward-hacking,
+   plausibility/geometry, deployment truth, safety, data value, coordination.
+3. **Meta-governance**: the WM that composes the governance nodes themselves.
+
+### Two kinds of Pareto
+
+- **Intra-domain** (Economic WM): throughput vs energy vs wear vs compute.
+- **Inter-domain** (meta-regal-node): economics vs anti-reward-hacking vs
+  plausibility vs safety. More fundamental: governs whether intra-domain
+  optimization can be trusted.
+
+### Governance pluralism principle
+
+The architecture preserves pluralism at the governance layer while allowing
+strong specialization below. No single domain ontology can silently redefine
+the others. The composition is regime-sensitive, confidence-aware, and typed.
+
+### Staging
+
+The meta-regal-node WM is built last: after lower WMs, Economic WM, and
+transport bridges are mature. Individual domain-governance nodes must be
+neuralized before the meta-layer can learn to compose them.
+
+Full doctrine: `docs/economic_world_model/doctrine_meta_regal_node_wm.md`
+
 ## Phase 2 Provider / Dataset / Resource Surface Rule
 
 Phase 2 should explicitly separate, under WM-owned typed state:

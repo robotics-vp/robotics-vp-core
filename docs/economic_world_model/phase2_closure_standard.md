@@ -131,6 +131,31 @@ The audited Phase 2 closure sheet must explicitly check for:
 These are lower-WM surfaces. They should not be skipped just because later
 economic allocation work will consume them too.
 
+## Anti-Heuristic-Without-Neuralization Rule
+
+Phase 2 must not stabilize as a permanently well-instrumented heuristic shell.
+
+Specifically:
+
+- Heuristic fusion, heuristic bridge scoring, and heuristic scene graph
+  construction are acceptable only as transitional priors behind typed
+  `disabled|auto|required` promotion posture.
+- Every heuristic surface must already imply a bounded neural successor path
+  with named architecture, capacity band, and training objective.
+- Once receipt emission and promotion-gate wiring are landed, the next Phase 2
+  work should implement the first bounded neural seams, not further refine
+  heuristics.
+- Early bounded neural seams should exist even if initially tiny, partially
+  trained, disabled by default, or benchmark-gated. They should be real
+  codepaths, not only future doctrine.
+- The key neural seams that should begin earliest in Phase 2:
+  1. Evidence fusion (set transformer / perceiver)
+  2. Annotation bridge projection heads
+  3. Provider calibration/projection heads (when weights become available)
+
+No Phase 2 subsystem should become a heuristic island just because it now
+compiles and feeds downstream consumers.
+
 ## Anti-Patterns
 
 Do not:
@@ -140,3 +165,5 @@ Do not:
 - Mark provider bring-up as external when public weights/repos are available and acquirable now
 - Leave heuristic-only subsystems without learned successor posture and call Phase 2 closed
 - Claim `shadow_runtime` maturity when downstream WMs are not actually consuming the state
+- Let receipt/gating/provider truth work become a reason to indefinitely postpone bounded neural implementation
+- Treat structural preparation as sufficient without actual neural seam codepaths

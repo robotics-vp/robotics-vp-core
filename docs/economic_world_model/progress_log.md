@@ -1,5 +1,80 @@
 # Economic World Model Progress Log
 
+## 2026-04-03 — Economic WM + Meta-Regal-Node + Embodiment Doctrine Pass
+
+- **Created** `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`:
+  - Economic WM framed as typed allocator-governor for productive flow / dissipation / allocation
+  - Not scalar reward head, dashboard, PnL tracker, or mother-latent
+  - Multi-timescale design: fast/meso/slow-adiabatic variable split
+  - Asymmetric upward/downward transport
+  - Four-component internal decomposition: state estimator → dynamics → allocator → governance
+  - Staged neuralization: typed ontology → neural estimation → dynamics → allocator → local compilers
+  - Quant-inspired algorithmic imports: coherent risk, distributional Pareto, regime switching, risk budgeting, stress testing, execution-cost awareness
+  - Superstatistics posture: keep multi-timescale and regime-mixing ideas, do not keep vague temperature metaphors
+  - Research buckets: regime-aware state estimation, risk-aware Pareto allocation, superstatistical abstractions, adiabatic control, differentiable simulation coupling
+  - Sovereignty clarification: Economic WM is first-class contributor, not sole governor
+  - Intra-domain vs inter-domain Pareto distinction made explicit
+- **Created** `docs/economic_world_model/doctrine_meta_regal_node_wm.md`:
+  - Meta-regal-node WM as the governance-pluralism composition layer
+  - Three governance levels: subsystem/local, domain governance, meta-governance
+  - Two kinds of Pareto: intra-domain (within Economic WM) vs inter-domain (across governance nodes)
+  - What the meta-layer must model: governance state, composition modes (Pareto/lexicographic/veto/advisory/confidence-weighted), transport (conflict/override/failure receipts)
+  - Governance pluralism principle: no single domain ontology can silently redefine others
+  - Staged neuralization: governance node neuralization before meta-composition learning
+  - Anti-patterns: no governance collapse, no scalar governance score, no opaque meta-controller
+- **Updated** `multi_wm_architecture_plan.md`:
+  - Executive conclusion updated: Economic WM is first-class contributor, not sole sovereign
+  - New "Future Economic WM Architecture" section with sovereignty clarification
+  - Phase 7 rewritten as "Meta-Regal-Node Superposition / Control WM" with domain-governance composition, inter-domain Pareto, governance-pluralism principle
+  - Meta-node section (#5) rewritten with three governance levels, two Pareto kinds, superposition rationale
+  - Habitat adoption track refined to 3-tier classification (design-pattern / code candidate / GPU-blocked)
+- **Updated** `roadmap.md`:
+  - Future Economic WM section with sovereignty clarification
+  - Future meta-regal-node section with governance pluralism, inter-domain Pareto
+  - Anti-heuristic rule strengthened: "necessary but not sufficient" test added
+  - New "Embodiment-Facing Subsystem Usefulness Rule" section
+  - Habitat adoption track refined to 3-tier classification
+- **Updated** `neuralization_bridge_doctrine.md`:
+  - Level 5 rewritten from "Meta-Node Governance" to "Meta-Regal-Node Governance" with inter-domain composition, governance-pluralism, confidence-aware node weighting
+- **Updated** `phase2_closure_standard.md`:
+  - Anti-heuristic-without-neuralization section (from prior pass)
+- **Updated** `doctrine_provider_dataset_resource_surfaces.md`:
+  - Cross-WM resource surface scope (from prior pass)
+- **Updated** `claude_to_comment_on.md`:
+  - Embodiment-facing usefulness pressure added to robust-subsystem read
+  - Economic WM and meta-regal-node doctrine summaries added
+  - Clean current-state handoff artifact for next Codex tranche
+- **Tests**: no code changes; 1422 passed, 0 failures (docs-only pass)
+
+## 2026-04-03 — Architectural Review + Anti-Heuristic / Habitat Doctrine Updates
+
+- **Reviewed** Codex's Tranche 2.1 (shadow compiler + first downstream consumers):
+  - compiler is real: compiles canonical state from scene tracks, belief state, VLA semantic evidence
+  - two downstream consumers wired: sim-synth semantic_inputs.py + rollout_labeler.py
+  - semantic bridge family compiled and consumed for sim-synth and annotation bridges
+  - assessment: genuine early `shadow_runtime`, not schema decoration
+- **Identified** remaining Category A items:
+  - receipts typed but not emitted by compiler (clearest remaining gap)
+  - provider contracts disconnected from compiler (ad-hoc string inference, not contract registry)
+  - evidence fusion always uses hardcoded weights regardless of promotion stage
+  - embodiment bridge compiled but orphaned (no downstream consumer)
+  - dimensional regime markers missing (heuristic d=8, not yet self-documenting)
+- **Added** anti-heuristic-without-neuralization rule to:
+  - `roadmap.md`: explicit rule that structural preparation is necessary but not sufficient; bounded neural seams should begin as real codepaths once substrate is honest enough
+  - `phase2_closure_standard.md`: new section naming earliest neural seams (evidence fusion, annotation bridge, provider calibration heads)
+- **Added** Habitat extraction posture to:
+  - `roadmap.md`: per-WM Habitat absorption status; Sim/Synth/Physics identified as biggest remaining opportunity
+  - `multi_wm_architecture_plan.md`: new "Habitat Extraction Posture" section with named adoption track items for Sim/Synth/Physics
+  - `doctrine_provider_dataset_resource_surfaces.md`: cross-WM resource surface scope (not Perception-only)
+- **Updated** `claude_to_comment_on.md` with corrected Tranche 2.2 framing:
+  - Priority 1: receipt emission + promotion-gate wiring
+  - Priority 2: provider contract → compiler connection
+  - Priority 3: embodiment shadow consumer skeleton
+  - Priority 4: dimensional regime + bridge input source markers
+  - Priority 5: first bounded neural seam implementation (evidence fusion, annotation bridge, provider calibration)
+  - Habitat reminder for Sim/Synth/Physics adoption track
+- **Tests**: 48 passed, compile clean
+
 ## 2026-04-03 — Phase 2 Reconciliation: Semantic Bridges + Provider/Resource Surfaces
 
 - **Reconciled** the locally created Phase 2 Perception / Grounding WM package into a coherent current-state tranche instead of leaving the branch in a half-landed state.

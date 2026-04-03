@@ -402,14 +402,28 @@ Most Sim/Synth/Physics WM modules should be trained with supervised or predictiv
 - Value prediction (critic training is supervised on realized outcomes)
 - Counterfactual evaluation (supervised on counterfactual outcome data)
 
-#### Level 5: Meta-Node Governance (Meta-Node WM, Phase 7)
+#### Level 5: Meta-Regal-Node Governance (Meta-Regal-Node WM, Phase 7)
 
-**What reward belongs here**: cross-WM governance quality
-- Pareto improvement over multi-objective outcomes
-- Governance satisfaction across WMs
-- Long-horizon stability of allocation decisions
+**What reward belongs here**: inter-domain governance quality
+- Inter-domain Pareto improvement across governance nodes (economics,
+  anti-reward-hacking, plausibility, safety, deployment truth)
+- Governance satisfaction across domain nodes, not just WMs
+- Long-horizon stability of governance composition
+- Conflict resolution quality (how well competing domain signals were composed)
+- Governance pluralism preservation (no single node silently dominates)
 
-**RL structure**: Multi-objective actor-critic with Pareto front tracking (hypernetwork-conditioned policy).
+**RL structure**: Multi-objective actor-critic with Pareto front tracking
+(hypernetwork-conditioned policy over the governance composition space).
+Regime-conditioned composition weights. Confidence-aware node weighting.
+
+**Key architectural distinction**: the intra-domain Pareto optimization
+(within the Economic WM) is fundamentally different from the inter-domain
+Pareto composition (within the meta-regal-node WM). The meta-layer governs
+whether the economic allocator's recommendations can be trusted in the
+current regime.
+
+Full doctrine:
+`docs/economic_world_model/doctrine_meta_regal_node_wm.md`
 
 ### Reward Propagation Rules
 

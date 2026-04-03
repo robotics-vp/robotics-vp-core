@@ -85,6 +85,37 @@ runtime truth in lower WMs:
 Only after those surfaces exist as typed lower-WM state should the Economic WM
 elevate them into allocatable budget objects.
 
+## Cross-WM Resource Surface Scope
+
+Resource surfaces are not a Perception-only pattern. Each lower WM should
+independently own its version of these typed surfaces:
+
+- **Perception / Grounding WM** (Phase 2, currently live):
+  - provider availability, batch capacity, inference headroom
+  - sensor inventory, calibration assets
+  - perception measurement quality
+  - deployment/companion compute posture
+
+- **Sim / Synth / Physics WM** (Phase 1.x, to be added):
+  - backend availability (Isaac, Holosoma, LDM, GGDS)
+  - GPU headroom, sim fidelity budget
+  - materialization latency, branch capacity
+  - sim-real consistency measurements
+
+- **Embodiment / Actuation WM** (Phase 3, to be added):
+  - action-feasibility latency, joint-limit posture
+  - on-device vs companion compute placement
+  - control-rate feasibility, safety watchdog headroom
+  - battery/thermal impact on action feasibility
+
+- **Economic WM** (Phase 5):
+  - consumes lower-WM resource surfaces as allocatable budget objects
+  - does not originate resource truth
+
+The receipt families (`ProviderAvailabilityReceipt`, `InferenceHeadroomReceipt`,
+`DeploymentResourceReceipt`) should also become cross-WM patterns. Each lower
+WM emits its own receipts; the Economic WM later consumes them for allocation.
+
 ## Semantic Bridge Preconditions
 
 The semantic bridge family should be shaped with these surfaces in mind now.
