@@ -17,7 +17,16 @@ from src.evidence.belief_state import BeliefState
 from src.world_model.semantic_world_model import SemanticWorldModelBuilder
 
 from .common import clip01, mapping, stable_id, strings
-from .receipts import EvidenceFusionReceipt, ProviderInvocationReceipt
+from .receipts import (
+    DeploymentResourceReceipt,
+    EvidenceFusionReceipt,
+    GroundingCalibrationReceipt,
+    InferenceHeadroomReceipt,
+    PerceptionContributionReceipt,
+    ProviderAvailabilityReceipt,
+    ProviderInvocationReceipt,
+    TemporalGroundingReceipt,
+)
 from .promotion import (
     resolve_evidence_fusion_helper,
     resolve_graph_transformer_helper,
@@ -862,6 +871,203 @@ def _semantic_bridge_registry(
     )
 
 
+def _provider_availability_receipts(
+    *,
+    state_id: str,
+    provider_surface: ProviderSurfaceState,
+) -> List[ProviderAvailabilityReceipt]:
+    """Emit pre-invocation availability receipts for each known provider."""
+    receipts: list[ProviderAvailabilityReceipt] = []
+    for pid in provider_surface.provider_ids:
+        avail = str(provider_surface.provider_availability.get(pid, "unknown"))
+        truth_cls = str(provider_surface.provider_truth_class.get(pid, "unknown"))
+        modalities = list(provider_surface.sensor_modalities.get(pid, []))
+        install_status = "installed" if avail == "available" else "not_installed"
+        if truth_cls == "stub_smoke_only":
+            install_status = "stub_only"
+        receipts.append(
+            ProviderAvailabilityReceipt(
+                receipt_id=f"provider_availability_{pid}_{state_id}",
+                provider_surface_id=provider_surface.surface_id,
+                provider_id=pid,
+                availability_status=avail,
+                install_status=install_status,
+                provider_truth_class=truth_cls,
+                sensor_modalities=modalities,
+                metadata={"source": "perception_grounding_compiler"},
+            )
+        )
+    return receipts
+
+
+def _grounding_calibration_receipt(
+    *,
+    state_id: str,
+    scene_graph: SceneGraphState,
+    evidence_routing: EvidenceRoutingState,
+    task_measurements: TaskMeasurementSurface,
+) -> GroundingCalibrationReceipt:
+    """Emit grounding quality calibration receipt from compiled state."""
+    mv = dict(task_measurements.measurement_values)
+    return GroundingCalibrationReceipt(
+        receipt_id=f"grounding_calibration_{state_id}",
+        calibration_method="compiler_heuristic_cross_provider",
+        grounding_accuracy=clip01(float(mv.get("grounding_quality", 0.0))),
+        spatial_accuracy=clip01(
+            scene_graph.graph_density * 0.5
+            + float(mv.get("object_count_norm", 0.0)) * 0.5
+        ),
+        temporal_consistency=clip01(float(mv.get("temporal_stability", 0.0))),
+        provider_agreement=clip01(1.0 - evidence_routing.fusion_disagreement),
+        cross_provider_disagreement=evidence_routing.fusion_disagreement,
+        downstream_task_correlation=clip01(
+            float(mv.get("grounding_quality", 0.0)) * 0.6
+            + float(mv.get("semantic_density", 0.0)) * 0.4
+        ),
+        metadata={
+            "fusion_method": evidence_routing.fusion_method,
+            "object_count": scene_graph.object_count,
+            "edge_count": scene_graph.edge_count,
+        },
+    )
+
+
+def _inference_headroom_receipts(
+    *,
+    state_id: str,
+    provider_surface: ProviderSurfaceState,
+    deployment_resource_surface: DeploymentResourceSurface,
+) -> List[InferenceHeadroomReceipt]:
+    """Emit per-provider inference headroom receipts."""
+    receipts: list[InferenceHeadroomReceipt] = []
+    inf_cap = deployment_resource_surface.inference_capacity
+    comp_env = deployment_resource_surface.compute_envelope
+    headroom = float(getattr(inf_cap, "headroom_fraction", 0.0)) if inf_cap else 0.0
+    on_device = bool(getattr(comp_env, "on_device_available", False)) if comp_env else False
+    companion = bool(getattr(comp_env, "companion_available", False)) if comp_env else False
+    bandwidth = float(deployment_resource_surface.bandwidth_mbps)
+
+    for pid in provider_surface.provider_ids:
+        per_provider_cap = (
+            float(inf_cap.provider_capacity_by_id.get(pid, headroom))
+            if inf_cap
+            else headroom
+        )
+        receipts.append(
+            InferenceHeadroomReceipt(
+                receipt_id=f"inference_headroom_{pid}_{state_id}",
+                deployment_surface_id=deployment_resource_surface.surface_id,
+                provider_id=pid,
+                headroom_fraction=clip01(per_provider_cap),
+                estimated_latency_ms=provider_surface.provider_latency_budget_ms,
+                on_device_available=on_device,
+                companion_available=companion,
+                bandwidth_mbps=bandwidth,
+                metadata={"source": "perception_grounding_compiler"},
+            )
+        )
+    return receipts
+
+
+def _deployment_resource_receipt(
+    *,
+    state_id: str,
+    deployment_resource_surface: DeploymentResourceSurface,
+) -> DeploymentResourceReceipt:
+    """Emit deployment-resource readiness receipt."""
+    comp = deployment_resource_surface.compute_envelope
+    batt = deployment_resource_surface.battery_state
+    therm = deployment_resource_surface.thermal_state
+    compute_ready = bool(getattr(comp, "on_device_available", False)) if comp else False
+    battery_ready = bool(
+        float(getattr(batt, "charge_fraction", 0.0)) > 0.1
+    ) if batt else False
+    thermal_ready = bool(
+        not getattr(therm, "throttled", True)
+    ) if therm else False
+
+    bottlenecks: list[str] = []
+    if not compute_ready:
+        bottlenecks.append("compute_unavailable")
+    if not battery_ready:
+        bottlenecks.append("battery_low_or_unknown")
+    if not thermal_ready:
+        bottlenecks.append("thermal_throttled_or_unknown")
+    if deployment_resource_surface.deployment_posture == "unavailable":
+        bottlenecks.append("deployment_posture_unavailable")
+
+    return DeploymentResourceReceipt(
+        receipt_id=f"deployment_resource_{state_id}",
+        deployment_surface_id=deployment_resource_surface.surface_id,
+        deployment_posture=deployment_resource_surface.deployment_posture,
+        compute_ready=compute_ready,
+        battery_ready=battery_ready,
+        thermal_ready=thermal_ready,
+        bottleneck_ids=bottlenecks,
+        metadata={"source": "perception_grounding_compiler"},
+    )
+
+
+def _temporal_grounding_receipt(
+    *,
+    state_id: str,
+    temporal_grounding_state: TemporalGroundingState,
+) -> TemporalGroundingReceipt:
+    """Emit temporal grounding quality receipt."""
+    return TemporalGroundingReceipt(
+        receipt_id=f"temporal_grounding_receipt_{state_id}",
+        frame_index=temporal_grounding_state.frame_index,
+        tracks_maintained=temporal_grounding_state.visible_tracks,
+        tracks_lost=temporal_grounding_state.lost_tracks,
+        tracks_recovered=temporal_grounding_state.recovered_tracks,
+        id_switches=temporal_grounding_state.id_switch_count,
+        temporal_coherence_score=temporal_grounding_state.temporal_coherence_score,
+        prediction_accuracy=temporal_grounding_state.prediction_quality_score,
+        helper_posture=temporal_grounding_state.helper_posture,
+        metadata={
+            "total_tracks": temporal_grounding_state.total_tracks,
+            "helper_promotion_stage": temporal_grounding_state.helper_promotion_stage,
+        },
+    )
+
+
+def _perception_contribution_receipt(
+    *,
+    state_id: str,
+    episode_id: str,
+    scene_graph: SceneGraphState,
+    evidence_routing: EvidenceRoutingState,
+    task_measurements: TaskMeasurementSurface,
+    temporal_grounding_state: TemporalGroundingState,
+) -> PerceptionContributionReceipt:
+    """Emit episode-level perception contribution receipt for Economic WM."""
+    mv = dict(task_measurements.measurement_values)
+    provider_count = len(evidence_routing.provider_contributions)
+    return PerceptionContributionReceipt(
+        receipt_id=f"perception_contribution_{state_id}",
+        episode_id=episode_id,
+        grounding_quality=clip01(float(mv.get("grounding_quality", 0.0))),
+        semantic_yield=clip01(float(mv.get("semantic_density", 0.0))),
+        calibration_confidence=evidence_routing.fusion_confidence,
+        action_relevance_prior=clip01(
+            float(mv.get("grounding_quality", 0.0)) * 0.5
+            + float(mv.get("object_count_norm", 0.0)) * 0.5
+        ),
+        novelty_score=clip01(
+            1.0 - float(mv.get("temporal_stability", 0.5))
+        ),
+        temporal_stability=clip01(
+            temporal_grounding_state.temporal_coherence_score
+        ),
+        provider_count=provider_count,
+        object_count=scene_graph.object_count,
+        metadata={
+            "fusion_method": evidence_routing.fusion_method,
+            "maturity_stage": "shadow_runtime",
+        },
+    )
+
+
 def compile_perception_grounding_world_state(
     *,
     episode_id: str,
@@ -1037,33 +1243,72 @@ def compile_perception_grounding_world_state(
         deployment_resource_surface=deployment_surface,
         benchmark_signals=benchmark_payload,
     )
+
+    # Build intermediate state objects that receipts depend on
+    temporal_grounding_state = _temporal_grounding(
+        state_id=state_id,
+        frame_index=frame_index,
+        scene_graph=scene_graph,
+        semantic_state=semantic_state,
+        helper_status=temporal_helper,
+    )
+    dataset_surface = _dataset_surface(
+        state_id=state_id,
+        scene_tracks_payload=scene_tracks_payload,
+        metadata=metadata,
+    )
+    task_measurements = _task_measurements(
+        state_id=state_id,
+        task_id=task_id,
+        semantic_state=semantic_state,
+        object_count=scene_graph.object_count,
+        edge_count=scene_graph.edge_count,
+        fusion_confidence=evidence_routing.fusion_confidence,
+    )
+
+    # --- Emit full receipt family ---
+    provider_avail_receipts = _provider_availability_receipts(
+        state_id=state_id,
+        provider_surface=provider_surface,
+    )
+    grounding_cal_receipt = _grounding_calibration_receipt(
+        state_id=state_id,
+        scene_graph=scene_graph,
+        evidence_routing=evidence_routing,
+        task_measurements=task_measurements,
+    )
+    inference_headroom_recs = _inference_headroom_receipts(
+        state_id=state_id,
+        provider_surface=provider_surface,
+        deployment_resource_surface=deployment_surface,
+    )
+    deploy_receipt = _deployment_resource_receipt(
+        state_id=state_id,
+        deployment_resource_surface=deployment_surface,
+    )
+    temporal_receipt = _temporal_grounding_receipt(
+        state_id=state_id,
+        temporal_grounding_state=temporal_grounding_state,
+    )
+    contribution_receipt = _perception_contribution_receipt(
+        state_id=state_id,
+        episode_id=episode_id,
+        scene_graph=scene_graph,
+        evidence_routing=evidence_routing,
+        task_measurements=task_measurements,
+        temporal_grounding_state=temporal_grounding_state,
+    )
+
     return PerceptionGroundingWorldState(
         state_id=state_id,
         frame_index=frame_index,
         episode_id=episode_id,
         scene_graph=scene_graph,
-        temporal_grounding=_temporal_grounding(
-            state_id=state_id,
-            frame_index=frame_index,
-            scene_graph=scene_graph,
-            semantic_state=semantic_state,
-            helper_status=temporal_helper,
-        ),
+        temporal_grounding=temporal_grounding_state,
         evidence_routing=evidence_routing,
         provider_surface=provider_surface,
-        dataset_surface=_dataset_surface(
-            state_id=state_id,
-            scene_tracks_payload=scene_tracks_payload,
-            metadata=metadata,
-        ),
-        task_measurements=_task_measurements(
-            state_id=state_id,
-            task_id=task_id,
-            semantic_state=semantic_state,
-            object_count=scene_graph.object_count,
-            edge_count=scene_graph.edge_count,
-            fusion_confidence=evidence_routing.fusion_confidence,
-        ),
+        dataset_surface=dataset_surface,
+        task_measurements=task_measurements,
         deployment_resource_surface=deployment_surface,
         semantic_bridge_registry=bridge_registry,
         input_context={
@@ -1084,6 +1329,12 @@ def compile_perception_grounding_world_state(
             "evidence_fusion_receipt": evidence_fusion_receipt.to_dict(),
             "provider_adapter_receipts": [r.to_dict() for r in provider_adapter_receipts],
             "provider_adapter_outputs_available": list(provider_adapter_outputs.keys()),
+            "provider_availability_receipts": [r.to_dict() for r in provider_avail_receipts],
+            "grounding_calibration_receipt": grounding_cal_receipt.to_dict(),
+            "inference_headroom_receipts": [r.to_dict() for r in inference_headroom_recs],
+            "deployment_resource_receipt": deploy_receipt.to_dict(),
+            "temporal_grounding_receipt": temporal_receipt.to_dict(),
+            "perception_contribution_receipt": contribution_receipt.to_dict(),
             **mapping(metadata),
         },
     )
@@ -1099,9 +1350,17 @@ class PerceptionCompilationResult:
     """Result of perception grounding compilation with explicit receipts.
 
     The ``state`` field is the canonical ``PerceptionGroundingWorldState``.
-    The ``receipts`` field carries typed receipt objects from the
-    compilation pass — primarily ``EvidenceFusionReceipt`` now, with
-    provider/deployment/bridge receipts added in later tranches.
+    The ``receipts`` field carries typed receipt objects from the full
+    receipt family:
+
+    - ``EvidenceFusionReceipt`` — evidence routing and fusion quality
+    - ``ProviderInvocationReceipt`` — per-seam invocation status
+    - ``ProviderAvailabilityReceipt`` — pre-invocation provider posture
+    - ``GroundingCalibrationReceipt`` — grounding quality calibration
+    - ``InferenceHeadroomReceipt`` — per-provider runtime headroom
+    - ``DeploymentResourceReceipt`` — deployment readiness and bottlenecks
+    - ``TemporalGroundingReceipt`` — scene persistence quality
+    - ``PerceptionContributionReceipt`` — episode-level contribution for Economic WM
 
     Downstream consumers that only need state can ignore receipts.
     Training/replay/promotion-gate consumers should inspect receipts.
@@ -1111,63 +1370,83 @@ class PerceptionCompilationResult:
     receipts: List[Any] = field(default_factory=list)
 
 
+def _reconstruct_receipt(receipt_type: type, d: dict) -> Any:
+    """Reconstruct a frozen dataclass receipt from its serialized dict."""
+    if not isinstance(d, dict):
+        return None
+    import dataclasses
+
+    field_names = {f.name for f in dataclasses.fields(receipt_type)}
+    filtered = {k: v for k, v in d.items() if k in field_names}
+    return receipt_type(**filtered)
+
+
 def compile_perception_grounding_with_receipts(
     **kwargs: Any,
 ) -> PerceptionCompilationResult:
-    """Compile Perception / Grounding WM state and return receipts.
+    """Compile Perception / Grounding WM state and return full receipt family.
 
     Accepts the same keyword arguments as
     ``compile_perception_grounding_world_state``.  Returns a
-    ``PerceptionCompilationResult`` with both the state and the
-    typed receipts from the compilation pass.
-
-    Receipts include:
-    - EvidenceFusionReceipt: evidence routing and fusion quality
-    - ProviderInvocationReceipt: per-seam invocation status and quality
+    ``PerceptionCompilationResult`` with both the state and all typed
+    receipts from the compilation pass.
     """
     state = compile_perception_grounding_world_state(**kwargs)
     receipts: list[Any] = []
+    md = state.metadata
 
-    # Extract the evidence fusion receipt from state metadata
-    efr_dict = state.metadata.get("evidence_fusion_receipt")
+    # Evidence fusion receipt
+    efr_dict = md.get("evidence_fusion_receipt")
     if efr_dict is not None:
-        receipts.append(
-            EvidenceFusionReceipt(
-                receipt_id=str(efr_dict.get("receipt_id", "")),
-                fusion_method=str(efr_dict.get("fusion_method", "")),
-                provider_ids=list(efr_dict.get("provider_ids", [])),
-                provider_weights=dict(efr_dict.get("provider_weights", {})),
-                fusion_confidence=float(efr_dict.get("fusion_confidence", 0.0)),
-                fusion_disagreement=float(
-                    efr_dict.get("fusion_disagreement", 0.0)
-                ),
-                output_object_count=int(
-                    efr_dict.get("output_object_count", 0)
-                ),
-                output_edge_count=int(efr_dict.get("output_edge_count", 0)),
-                helper_posture=str(efr_dict.get("helper_posture", "")),
-                metadata=dict(efr_dict.get("metadata", {})),
-            )
-        )
+        r = _reconstruct_receipt(EvidenceFusionReceipt, efr_dict)
+        if r is not None:
+            receipts.append(r)
 
-    # Extract provider adapter receipts from state metadata
-    par_list = state.metadata.get("provider_adapter_receipts", [])
-    for par_dict in par_list:
-        if isinstance(par_dict, dict):
-            receipts.append(
-                ProviderInvocationReceipt(
-                    receipt_id=str(par_dict.get("receipt_id", "")),
-                    provider_id=str(par_dict.get("provider_id", "")),
-                    provider_kind=str(par_dict.get("provider_kind", "")),
-                    invocation_status=str(par_dict.get("invocation_status", "")),
-                    output_quality_score=float(par_dict.get("output_quality_score", 0.0)),
-                    latency_ms=float(par_dict.get("latency_ms", 0.0)),
-                    output_token_count=int(par_dict.get("output_token_count", 0)),
-                    fallback_used=bool(par_dict.get("fallback_used", False)),
-                    fallback_reason=str(par_dict.get("fallback_reason", "")),
-                    metadata=dict(par_dict.get("metadata", {})),
-                )
-            )
+    # Provider adapter invocation receipts
+    for par_dict in md.get("provider_adapter_receipts", []):
+        r = _reconstruct_receipt(ProviderInvocationReceipt, par_dict)
+        if r is not None:
+            receipts.append(r)
+
+    # Provider availability receipts
+    for pa_dict in md.get("provider_availability_receipts", []):
+        r = _reconstruct_receipt(ProviderAvailabilityReceipt, pa_dict)
+        if r is not None:
+            receipts.append(r)
+
+    # Grounding calibration receipt
+    gc_dict = md.get("grounding_calibration_receipt")
+    if gc_dict is not None:
+        r = _reconstruct_receipt(GroundingCalibrationReceipt, gc_dict)
+        if r is not None:
+            receipts.append(r)
+
+    # Inference headroom receipts
+    for ih_dict in md.get("inference_headroom_receipts", []):
+        r = _reconstruct_receipt(InferenceHeadroomReceipt, ih_dict)
+        if r is not None:
+            receipts.append(r)
+
+    # Deployment resource receipt
+    dr_dict = md.get("deployment_resource_receipt")
+    if dr_dict is not None:
+        r = _reconstruct_receipt(DeploymentResourceReceipt, dr_dict)
+        if r is not None:
+            receipts.append(r)
+
+    # Temporal grounding receipt
+    tg_dict = md.get("temporal_grounding_receipt")
+    if tg_dict is not None:
+        r = _reconstruct_receipt(TemporalGroundingReceipt, tg_dict)
+        if r is not None:
+            receipts.append(r)
+
+    # Perception contribution receipt (for Economic WM)
+    pc_dict = md.get("perception_contribution_receipt")
+    if pc_dict is not None:
+        r = _reconstruct_receipt(PerceptionContributionReceipt, pc_dict)
+        if r is not None:
+            receipts.append(r)
 
     return PerceptionCompilationResult(state=state, receipts=receipts)
 

@@ -1,5 +1,34 @@
 # Economic World Model Progress Log
 
+## 2026-04-04 — Phase 2 Perception / Grounding WM: Embodiment Shadow Consumer + Full Receipt Family + Subsystem Discipline
+
+- **Created** `src/world_model/perception_grounding/embodiment_shadow_consumer.py`:
+  - `EmbodimentShadowSurface`: typed perception→embodiment shadow surface with per-object action relevance (reachability, obstruction, affordance feasibility, contact preconditions, misalignment risk), scene-level summaries, body-object engagement, resource/deployment readiness, provider truth posture, evidence quality for embodiment trust
+  - `ObjectActionRelevance`: per-object body-relevant action summary
+  - `EmbodimentShadowConsumptionReceipt`: receipt for each shadow consumption pass
+  - `consume_perception_for_embodiment()`: typed consumer entry point
+  - Shadow/advisory posture only — no control authority, no planner sovereignty
+  - Reduced-quality but honest behavior when providers are unavailable
+  - Shaped by `docs/actuation_embodiment_world_model.md` doctrine (6-subsystem Embodiment WM)
+- **Deepened** receipt emission in `compiler.py`:
+  - Compiler now emits **all 8 receipt types** live on every compilation pass:
+    `ProviderAvailabilityReceipt`, `EvidenceFusionReceipt`, `ProviderInvocationReceipt`, `GroundingCalibrationReceipt`, `InferenceHeadroomReceipt`, `DeploymentResourceReceipt`, `TemporalGroundingReceipt`, `PerceptionContributionReceipt`
+  - `compile_perception_grounding_with_receipts()` now extracts and returns full receipt family
+  - Provider availability receipts cover all known providers with honest truth-class and install status
+  - Deployment resource receipt identifies concrete bottlenecks (compute, battery, thermal, posture)
+  - Grounding calibration receipt computes cross-provider agreement and spatial/temporal accuracy
+  - Perception contribution receipt packages episode-level quality for future Economic WM consumption
+- **Codified** internal subsystem decomposition in `__init__.py` module docstring:
+  - 7 named subsystems: Object/Track Persistence, Scene Graph/Relation State, Temporal Grounding, Evidence Routing/Fusion, Affordance/Action-Relevance Bridge Surface, Provider/Runtime/Deployment-Resource Truth, Replay/Export/Bridge Registry Surfaces
+  - Each subsystem documented with: canonical typed state owned, receipts emitted, neural successor path (architecture + capacity + training objective), downstream consumers, and explicit "NOT" boundary
+  - Boundary rules enforced: no mother-latent, no provider-owned truth, no bridge-becomes-downstream-WM, no economic pre-collapse, no ungoverned fast→slow leakage
+- **Created** `tests/test_embodiment_shadow_consumer.py` (20 tests):
+  - Embodiment shadow consumer: typed output, per-object relevance, scene summaries, body-object engagement, resource readiness, provider truth, evidence quality, shadow posture, receipt completeness, serialization roundtrip, reduced-quality empty state, no sovereignty assertion
+  - Full receipt family: all 8 receipt types present, provider availability covers all providers, grounding calibration metrics, deployment bottleneck identification, temporal persistence metrics, perception contribution for Economic WM, metadata completeness
+  - Integration: compile → receipt family → embodiment shadow consumer end-to-end pipeline
+- **No regressions**: all 97 existing perception/grounding tests pass, 20 new tests pass (117 total)
+- **Phase 2 status**: 3 shadow consumers now wired (SimSynth, Annotation/VLA, Embodiment). Full receipt family live. Internal subsystem discipline codified. Maturity remains `shadow_runtime`.
+
 ## 2026-04-03 — WM Decomposition Standard Baseline + Sim/Synth/Physics GPU-Era Revisit Target + Execution Plane Standup
 
 - **Updated** `docs/economic_world_model/multi_wm_architecture_plan.md`:
