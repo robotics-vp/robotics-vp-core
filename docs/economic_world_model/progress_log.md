@@ -1,5 +1,12 @@
 # Economic World Model Progress Log
 
+## 2026-04-04 — Doctrine: Autoencoder / Codebook Posture (stack + Economic WM + Embodiment)
+
+- **Updated** `docs/economic_world_model/neuralization_bridge_doctrine.md`: new § Autoencoder / Codebook Posture Across the Stack—layer taxonomy table; Perception, Semantic→Economic (Perceiver primary; optional bounded auxiliaries only), Embodiment, Sim (light), explicit non-role for transport/meta-governance
+- **Updated** `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`: § Autoencoder / Manifold-Compression Posture (bounded auxiliary yes, backbone no; DS3M/RED-SDS primary preserved); placements before slow projection, motifs, meso/slow summarization; explicit non-replacements for estimator/dynamics/allocator/governance/transport/meta-regal; staged neuralization + research-bucket notes that AE research is auxiliary to A/B
+- **Updated** `docs/actuation_embodiment_world_model.md`: short § Autoencoder / Codebook Use Inside Embodiment—supports inverse/retargeting/ACT/diffusion lanes, does not replace them
+- **Left** `multi_wm_architecture_plan.md` unchanged (avoid redundant topology restatement; bridge + Economic + Embodiment docs own the delta)
+
 ## 2026-04-04 — Doctrine: Bio/Neuro Architecture Inspirations + Economic WM PINN Posture
 
 - **Created** `docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md`:

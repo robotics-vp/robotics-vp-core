@@ -940,6 +940,21 @@ Organizational principles that land primarily on this WM are specified in
 That note owns candidates, typed surfaces, and boundaries—do not restate it
 here.
 
+## Autoencoder / Codebook Use Inside Embodiment
+
+Autoencoder-family modules (VAE, VQ-VAE, contractive/denoising bottlenecks)
+may appear as **bounded seams** inside this WM—for example posture/contact
+or action-chunk **manifold compression**, **skill/synergy codebooks**,
+**interoceptive** bottlenecks, or compact latents for **retargeting** traces.
+
+They **support** the existing plan: inverse-dynamics heads, retargeting
+networks, ACT-style chunking, diffusion proposal heads, task-conditioned
+policy networks. They **do not** replace those lanes or the six-subsystem
+decomposition. Same rule as other imports: promotion-gated, receipt-emitting,
+**subsystem** scope—not a replacement ontology. Bridge-layer classification
+and stack-wide posture: `docs/economic_world_model/neuralization_bridge_doctrine.md`
+§ Autoencoder / Codebook Posture Across the Stack.
+
 ## Anti-Patterns
 
 Do not:

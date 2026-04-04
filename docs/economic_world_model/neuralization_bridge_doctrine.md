@@ -64,6 +64,80 @@ A module that wraps an external OSS provider (SAM 3/3.1, V-JEPA 2, OpenVLA, DINO
 
 Examples: SAM 3/3.1 concept segmentation adapter, V-JEPA 2 temporal prediction wrapper, DINOv2 feature extraction adapter.
 
+## Autoencoder / Codebook Posture Across the Stack
+
+Autoencoder-family models (contractive / denoising AEs, VAEs, VQ-VAEs,
+codebook learners, bounded bottleneck encoders) are **allowed** where they
+act as **compressors, manifold learners, or auxiliary regularizers** inside
+a WM or at a **bridge-local bottleneck**. They are **not** a default
+replacement for typed state, transport contracts, governance composition,
+or the primary model families already named in this doctrine (Graph
+Transformer semantic abstraction, Perceiver-style economic pooling,
+switching-SSM estimators in the Economic WM, inverse-dynamics and
+diffusion lanes in Embodiment, etc.).
+
+**Layer taxonomy (where they may appear):**
+
+| Typical role | Layer classification | Notes |
+|--------------|------------------------|--------|
+| Compression / denoising **inside** a WM’s native encoder or receipt path | `WM-native` | Must emit or preserve **typed** surfaces; bottleneck is a seam, not a new ontology. |
+| Optional pre-bottleneck shaping **in front of** a semantic-to-WM bridge | `semantic-to-WM bridge` (strictly subordinate) | Does **not** replace the bridge’s stated architecture (e.g. Perceiver queries for Semantic→Economic). |
+| Rare: auxiliary alignment on transport-shaped features | `WM-to-WM transport-shaped` | Only if it improves **typed fidelity** metrics—not “reconstruct everything.” |
+| Provider feature cleanup before projection | `provider-backed interpretation` | Small denoising / calibration head on top of frozen provider outputs. |
+
+**What they are not:** the primary answer for cross-WM **transport**
+(ontology mediation, affine maps, contrastive alignment—not reconstruction
+loss as the doctrine). **Not** the meta-regal story (governance composition,
+Pareto adjudication). **Not** an excuse to collapse to “one latent is truth.”
+
+### Perception / Grounding
+
+**Good fit (WM-native or bridge-local auxiliaries):** graph / relational /
+object–temporal compression; compact semantic bottlenecks; denoising or
+archetype stabilization that **supports** the canonical object-token substrate.
+
+**Constraint:** canonical typed scene / grounding state and receipts remain
+authoritative. An AE must not become the hidden master representation that
+replaces `BeliefState`-class contracts or the Graph Transformer’s role as
+the shared semantic abstraction.
+
+### Semantic→Economic bridge (Economic-facing)
+
+**Primary posture (unchanged):** **Perceiver-style** learned query tokens
+pooling variable-cardinality semantic tokens into **fixed-dimensional**
+economic summaries. That remains the architecturally correct Semantic→Economic
+bridge family.
+
+**Optional only:** a **bounded** denoising or pre-compression auxiliary on
+semantic tokens **before** the Perceiver readout, or a small regularizer that
+stabilizes summaries—**not** a second competing bridge, **not** a reason to
+make the Economic input path scene-dimensional again, **not** a replacement
+for Economic WM ownership of how summaries are trained against allocation
+and receipts.
+
+### Embodiment / Actuation
+
+**Good fit (WM-native):** posture/contact or action-chunk manifold
+compression; **skill / synergy codebooks** (VQ-style); interoceptive
+bottlenecks where telemetry is high-rate but control needs a typed low-D
+state.
+
+**Constraint:** does not replace the six-subsystem Embodiment ontology,
+inverse lane, action proposal head, or drift/cost surfaces as **owners** of
+their contracts.
+
+### Sim / Synth / Physics (light touch)
+
+Optional: branch- or rollout-level **archetype** compression, synthetic-episode
+motifs—only where it improves branch evaluation or dataset formation without
+replacing typed branch receipts or physics-facing bridges.
+
+### Transport / meta-governance
+
+**Explicit:** autoencoder-first design is **wrong** here. Transport is typed
+fidelity and structural alignment; meta-regal is inter-domain composition.
+Neither is “train a big AE across WMs and call it integrated.”
+
 ## Semantic Abstraction Architecture
 
 ### Canonical Semantic Abstraction (Perception/Grounding WM owns this)

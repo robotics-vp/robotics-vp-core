@@ -539,6 +539,13 @@ came from which macro signal.
 **Rule:** neuralization follows typed ontology and transport design, not
 precedes it.
 
+**Auxiliary compression note:** Stages B–C may use **bounded**
+autoencoder/codebook modules on high-rate receipt streams **before** slow
+aggregation (see § Autoencoder / Manifold-Compression Posture). Those modules
+are scaffolding for compression and motif extraction; they do **not** replace
+switching-SSM / regime-aware sequence estimators or the dynamics/allocator
+backbones.
+
 ## Scalability requirements
 
 ### Sparse / typed factorization
@@ -602,6 +609,82 @@ abstraction.
 
 Deliverable: proposal for which consequences should be estimated through
 learned models versus simulator-backed modules.
+
+**Auxiliary to A/B (not a substitute):** research into bounded receipt
+compressors, VQ/codebook motifs, or denoising summaries on typed streams is
+valid **supporting** work for ingestion and visualization of evidence—it does
+**not** replace Bucket A (DS3M / RED-SDS / regime-aware estimation) or Bucket B
+(distributional Pareto allocation).
+
+## Autoencoder / Manifold-Compression Posture
+
+### Core answer
+
+Autoencoder-family models (VAE, VQ-VAE, contractive/denoising bottlenecks,
+codebook learners) **can** sit **inside** the future Economic WM as **bounded
+auxiliaries**. The Economic WM must **not** be reframed as an
+“autoencoder-native” stack.
+
+The backbone remains:
+
+- typed economic ontology and receipts
+- **regime-aware state estimation** and dynamics / forecasting
+- allocator / compiler and typed governance transport
+
+**Primary estimator posture (unchanged):** switching state-space and
+regime-aware sequence models first—**DS3M**, **RED-SDS**, and related
+candidates remain the **primary** families for `EconomicState` /
+`EconomicRegime` inference over typed receipt sequences. Autoencoders do not
+supplant that choice.
+
+### Good candidate placements
+
+Where bounded AE/codebook modules help **without** becoming the backbone:
+
+- **Receipt-path compression** before `SlowManifoldProjection`: high-rate
+  typed receipts aggregated into a **compact** sequence representation that
+  still feeds the switching-SSM (the SSM reads compressed tokens, not raw
+  firehose dimensionality).
+- **Manifold learning around slow state**: auxiliary bottlenecks that
+  stabilize recurring macro patterns while slow variables remain **typed** and
+  projection-gated (adiabatic rules still apply).
+- **Regime-archetype / motif codebooks**: discrete codes for recurring
+  economic episode types, queue motifs, or shift patterns—**inputs or side
+  channels** to the regime estimator, not a replacement for explicit
+  `EconomicRegime` inference.
+- **Invariant / residual compression**: bottlenecks paired with PINN-style
+  or balance constraints (see § Constraint-Informed Submodules / PINN Posture)
+  where the AE learns what is **left over** after known structure.
+- **Meso/slow summarization**: compact summaries of heterogeneous WM receipt
+  tokens **before** meso shadow-price updates or slow governance fields—always
+  subordinate to typed envelopes and provenance.
+
+### What autoencoders must not replace
+
+- **Economic State Estimator backbone** (switching SSM / explicit-duration
+  regime models—not “one latent is the economy”).
+- **Economic Dynamics Model backbone** (counterfactual rollouts, reservoir
+  evolution—AE is not the dynamics).
+- **Economic Allocator / Compiler** (distributional Pareto, risk-aware
+  compilation—not reconstruction loss).
+- **Downward governance shaping** (budget envelopes, persistence,
+  admissible slices—not latent decoding).
+- **Upward/downward asymmetric transport** (typed asymmetry stays primary).
+- **Meta-regal composition** (inter-domain adjudication is not AE training).
+
+### Design stance
+
+**Bounded auxiliary / manifold-compression role: yes.**  
+**Economic-WM backbone: no.**
+
+### Relationship to other model families
+
+This section **preserves** the existing doctrine: sparse typed factorization,
+staged neuralization A→E, DS3M/RED-SDS-first estimation, DPMORL/PGMORL-style
+distributional allocator patterns, and PINN-like **constraint-informed**
+submodules. Autoencoder/codebook work is **orthogonal compression and motif
+machinery**—useful where dimensionality or recurring structure is expensive,
+never as the defining architecture of the Economic WM.
 
 ## Near-term roadmap insertions
 
