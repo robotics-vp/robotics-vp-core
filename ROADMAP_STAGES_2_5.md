@@ -18,6 +18,23 @@ architecture borrowing logic, and timescale hierarchy — is now documented in
 that WM's subsystems. Stages that reference embodiment work should use that
 document as the doctrinal target.
 
+**Multi-WM Decomposition Standard**: The multi-WM branch now expects richer
+subsystem decomposition standards for all WM roadmap sections. A 9-point WM
+Section Readiness Standard is documented in
+`docs/economic_world_model/multi_wm_architecture_plan.md`, covering canonical
+mission, internal subsystem decomposition, typed surfaces, neural structure
+candidates, hyperparameter governance, topological placement, timescale
+hierarchy, robostack/G1 contribution, and phase sequencing honesty. This
+standard is most fully exemplified by the Economic WM doctrine
+(`docs/economic_world_model/doctrine_economic_wm_future_architecture.md`) and
+the Embodiment / Actuation WM plan (`docs/actuation_embodiment_world_model.md`).
+The Sim / Synth / Physics WM — whose Phase 1 was declared structurally closed
+on 2026-04-02 — is explicitly marked for a Phase 1.x decomposition revisit
+during the GPU/runtime era, applying the same rigor standard. This is not a
+repudiation of Phase 1 closure (which established runtime truth, adapter
+ladders, and typed contracts/receipts) but an elevation of the specification
+standard to match what is now expected of all future WMs.
+
 ---
 
 ## Current Architecture Summary

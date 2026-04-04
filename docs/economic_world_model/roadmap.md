@@ -137,6 +137,20 @@ neuralization and receipt emission.
 This is where the most Habitat-derived learning still sits. It should be
 named as an explicit reopenable Phase 1 adoption track, not forgotten.
 
+> **GPU-Era Decomposition Revisit**: Phase 1 was declared structurally closed
+> on 2026-04-02 with zero Category A items. The current implementation
+> establishes runtime truth, adapter ladders, and typed contracts/receipts.
+> When this WM is reopened during the GPU/runtime era, it should be held to
+> the same **internal subsystem decomposition rigor** now exhibited by the
+> Economic WM doctrine and the Embodiment / Actuation WM plan. This is not a
+> repudiation of Phase 1 closure but an **elevation of the standard**. The
+> 10-subsystem decomposition target and the 9-point WM Section Readiness
+> Standard are documented in `multi_wm_architecture_plan.md`. The current
+> Phase 1 work established runtime truth and structural honesty; the later
+> Phase 1.x revisit will establish richer internal subsystem legibility,
+> neural seam placement, interface rigor, and data-engine contribution
+> clarity.
+
 #### Design-pattern adoption (no code dependency, implementable now)
 
 These require no Habitat code import. They are contract/architecture patterns:
@@ -514,6 +528,30 @@ This borrows the useful layering pattern from Habitat-style stacks:
 
 But keeps canonical WM ownership, typed receipts, and economics-aware resource
 state native to this repo instead of flattening everything into one env object.
+
+## WM Section Decomposition Standard
+
+A future WM section is not considered "ready" if it remains only a box-and-arrow
+description. The 9-point WM Section Readiness Standard in
+`multi_wm_architecture_plan.md` establishes the minimum for all WM roadmap
+sections:
+
+1. canonical mission / ownership
+2. internal subsystem decomposition
+3. typed state / receipt / interface surfaces
+4. neural structure candidates by subsystem
+5. hyperparameter / promotion / governance shaping
+6. topological placement
+7. timescale hierarchy
+8. robostack / G1 contribution
+9. phase sequencing honesty
+
+The Economic WM doctrine and Embodiment / Actuation WM plan exemplify this
+standard. The Sim / Synth / Physics WM is now explicitly marked for a
+Phase 1.x decomposition revisit during the GPU/runtime era, applying this
+same standard. The Perception / Grounding WM Phase 2 work is increasingly
+approaching this standard through its provider surfaces, seam training
+infrastructure, and typed receipts.
 
 ## Program Calendar
 

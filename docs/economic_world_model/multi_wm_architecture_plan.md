@@ -968,22 +968,261 @@ Current gaps:
 
 ### 3. Sim / Synth / Physics WM
 
-Purpose:
+> **Decomposition standard note**: Phase 1 was declared structurally closed on
+> 2026-04-02 with zero Category A items. The current implementation
+> (`src/world_model/sim_synth_physics/`, 60 files) establishes runtime truth,
+> adapter ladders, typed contracts/receipts, and honest provider posture. When
+> this WM is reopened for the GPU/runtime era (Phase 1.x), it should be held
+> to the same **internal subsystem decomposition rigor** now exhibited by the
+> Economic WM doctrine and the Embodiment / Actuation WM plan. This section
+> describes that future-target decomposition.
 
-- own the canonical state for:
-  - what should be simulated
-  - what should be diffused/generated
-  - what synthetic branches should be created
-  - which physics backend/fidelity/randomization regime should be used
-  - what receipts determine whether branches are valuable, admissible, and training-worthy
+#### Canonical Mission / Ownership
+
+This WM owns the canonical state for the **simulated, synthesized, and
+physics-evaluated branch of the data engine**. Concretely:
+
+- what should be simulated and under which physics regime
+- what should be diffused, rendered, or generated
+- what synthetic branches should be created, evaluated, and admitted
+- which physics backend/fidelity/randomization regime should be used
+- what receipts determine whether branches are valuable, admissible, and
+  training-worthy
+- how synthetic outputs contribute to replay, training corpus, and the
+  scalable data flywheel
+
+This WM is explicitly **not**:
+
+- a raw perception model (that is Perception / Grounding WM)
+- a whole-body actuation controller (that is Embodiment / Actuation WM)
+- a pricing or economic settlement layer (that is Economic WM)
+- a monolithic simulator runtime — it is a **WM that governs** simulation,
+  generation, and physics evaluation through typed subsystems
+
+#### Internal Subsystem Decomposition
+
+The Sim / Synth / Physics WM should be decomposed into the following
+functional subsystems. Each subsystem contributes to the robostack and the
+scalable data engine, not just to architectural symmetry.
+
+**1. Backend / Runtime / Provider Surface**
+
+Owns physics backend selection, runtime binding, provider truth, and adapter
+lifecycle. Determines which simulator/physics engine is available, at what
+fidelity, and how execution is delegated. Maps to existing
+`backend_adapters.py`, `backend_bindings.py`, `backend_router.py`,
+`backend_selector.py`, `runtime_bridge.py`, `runtime_bundles.py`,
+`runtime_launch.py`, and the `adapters/` subdirectory.
+
+Typed outputs: `BackendExecutionBindingState`, `BackendExecutionBindingReceipt`,
+`BackendRuntimeBridgeReceipt`, runtime layout/pack contracts.
+
+**2. Task / Measurement / Episode Layer**
+
+Owns the Habitat-derived simulator/task separation: task definitions,
+measurement surfaces, episode lifecycle, and per-branch evaluation harnesses.
+Borrows the `Measure` / `Measurement` registry pattern for typed per-branch
+evaluation receipts and benchmark gates.
+
+Typed outputs: `TaskMeasurementSurface`, per-episode measurement receipts,
+benchmark gate results.
+
+**3. Scene / Asset / Materialization Layer**
+
+Owns scene hierarchy, URDF/SDF/Xacro asset contracts, GPU-backed rendering
+configuration, and scene-level materialization state. Manages the mapping from
+abstract scenes to concrete simulator configurations. Includes articulated
+embodiment + sensor config schema borrowing from Habitat.
+
+Typed outputs: `RobotAssetContract`, `SceneHierarchyState`, sensor/camera
+config contracts, asset-readiness receipts.
+
+**4. Branch Planner / Branch Evaluator**
+
+Owns simulation agenda compilation, branch generation strategy, branch
+evaluation, and branch-to-training feedback routing. Determines what branches
+to create, ranks them by expected yield, and evaluates outcomes. Maps to
+existing `agenda.py`, `branch_planner.py`, `synthetic_branches.py`.
+
+Typed outputs: `SimulationAgenda`, `SyntheticBranchPlan`, branch yield
+estimates, branch evaluation receipts.
+
+**5. Sim-Real Gap / Realism Evaluator**
+
+Owns sim-to-real transfer quality estimation, domain-gap scoring, and realism
+evaluation for synthetic outputs. Determines whether a synthetic branch is
+physically plausible enough for downstream training. This subsystem becomes
+critical during the GPU-era revisit when real Isaac/Unitree execution produces
+ground-truth sim-real comparisons.
+
+Typed outputs: `SimRealGapReceipt`, transfer quality scores, realism
+confidence per branch.
+
+**6. Fidelity / Randomization / Calibration Allocator**
+
+Owns domain randomization policy, system-identification, physics fidelity
+routing, and calibration drift tracking. Determines which randomization
+axes are active, what calibration profile to use, and how fidelity trades
+against throughput. Maps to existing `randomization.py`, `calibration.py`,
+`physics_contracts.py`.
+
+Typed outputs: `PhysicsAdaptationPolicyState`, `PhysicsAdaptationReceipt`,
+`PhysicsCalibrationReceipt`, fidelity routing decisions.
+
+**7. Render / Diffusion / Materialization Lane**
+
+Owns GGDS/LDM/video diffusion conditioning, conditional generation,
+materialization quality, and render-provider contracts. Determines how
+visual/geometric branches are rendered or generated and at what quality.
+Maps to existing `render_providers.py`, `render_materialization.py`,
+`diffusion_contracts.py`.
+
+Typed outputs: `DiffusionConditioningState`, `BranchRenderProviderState`,
+render-provider receipts, materialization quality scores.
+
+**8. Differentiable-Physics Provider Lane**
+
+Owns the interface to differentiable physics backends (e.g., JaxSim, Brax,
+or differentiable MuJoCo wrappers) when they become available. Enables
+gradient-through-physics for policy optimization and sim-real adaptation.
+This lane is currently planning-only but should be reserved as a typed
+provider contract.
+
+Typed outputs: `DifferentiablePhysicsProviderState`, gradient availability
+receipts, differentiable-compatible branch markers.
+
+**9. Drift / Calibration / Backend Mismatch Evaluator**
+
+Owns continuous estimation of backend quality, physics drift, calibration
+staleness, and backend-to-backend mismatch. Feeds into both the Fidelity
+Allocator and the Economic WM's resource routing. Closely related to but
+distinct from Subsystem 6: this subsystem *evaluates* drift; Subsystem 6
+*allocates* in response to it.
+
+Typed outputs: `BackendMismatchReceipt`, calibration staleness scores,
+drift trend estimates, per-backend quality trajectories.
+
+**10. Training-Worthiness / Synthetic-Yield Evaluator**
+
+Owns branch admission scoring, training-worthiness evaluation, yield
+prediction, and economic-contribution estimation. Determines whether a
+synthetic branch actually improves the stack under compute and governance
+constraints. Maps to existing `gen2sim_admission.py`, `inferential.py`,
+`training_corpus.py`.
+
+Typed outputs: `Gen2SimAdmissionState`, `Gen2SimAdmissionReceipt`,
+inferential learnability scores, training-yield estimates, synthetic-branch
+epiplexity estimates.
+
+#### Typed State / Receipt / Interface Surfaces
+
+The WM already owns a substantial receipt chain (see Phase 1 canonical state
+objects above). The GPU-era revisit should ensure that every subsystem above
+emits named, versioned receipts and that downstream consumers
+(Economic WM, replay/training, Perception WM) consume them through typed
+interfaces rather than bespoke joins.
+
+Reserved type families (existing + planned):
+
+- `SimSynthPhysicsWorldState` — top-level canonical state
+- `SimulationAgenda`, `SimulationJobSpec` — agenda subsystem
+- `PhysicsContextState`, `PhysicsAdaptationPolicyState` — fidelity/calibration
+- `BackendExecutionBindingState` — backend subsystem
+- `DiffusionConditioningState`, `BranchRenderProviderState` — render/diffusion
+- `SyntheticBranchPlan`, `Gen2SimAdmissionState` — branch planning/admission
+- `SimulationOutcomeReceipt`, `PhysicsCalibrationReceipt`,
+  `PhysicsAdaptationReceipt`, `BackendExecutionBindingReceipt` — receipts
+
+#### Neural Structure Candidates by Subsystem
+
+When the GPU-era revisit produces real execution data, the following neural
+seam families should be evaluated per subsystem:
+
+| Subsystem | Candidate architecture | Capacity band | Training regime |
+|---|---|---|---|
+| Branch Planner | Set transformer / GNN over branch candidates | 1-10M | Supervised on branch-yield outcomes |
+| Branch Evaluator | MLP/transformer over branch receipt features | 500K-5M | Supervised + contrastive on sim-real pairs |
+| Fidelity Allocator | Contextual bandit / small policy head | 100K-1M | RL on downstream training yield |
+| Sim-Real Gap | Siamese/contrastive encoder over sim vs real | 2-10M | Contrastive on paired sim-real data |
+| Yield Evaluator | Regression head over branch features | 500K-2M | Supervised on realized training improvement |
+| Render Quality | Discriminator/critic over materialized output | 1-5M | GAN-style or contrastive |
+| Drift Evaluator | Temporal model over calibration receipts | 500K-2M | Predictive on calibration trajectory |
+| Backend Selector | Small policy / routing head | 100K-500K | Contextual bandit on execution quality |
+
+These should follow the repo's neuralization rule: heuristics first as
+explicit priors, then bounded neural seams with `disabled|auto|required`
+promotion posture, benchmark-gated promotion.
+
+#### Timescale Hierarchy
+
+- **Fast** (per-branch): backend selection, fidelity routing, branch
+  admission, render dispatch
+- **Mid** (per-agenda / per-episode window): agenda compilation, branch
+  planning, randomization policy, calibration updates
+- **Slow** (per-training-season): sim-real gap model updates, yield
+  predictor retraining, backend quality baselines, differentiable-physics
+  provider evaluation
+
+#### Topological Placement
+
+- **Consumes from**: Perception / Grounding WM (scene state, object tokens,
+  grounding quality), Embodiment / Actuation WM (body constraints, action
+  feasibility), Economic WM (resource budgets, priority allocation)
+- **Emits to**: Economic WM (branch yield receipts, resource consumption),
+  replay/training corpus (synthetic branches, receipts, provenance),
+  Perception WM (synthetic-vs-real semantic alignment needs)
+- **Bridge contracts**: Perception bridge (object preservation,
+  synthetic-vs-real alignment), Embodiment bridge (physics-to-control
+  transfer quality), Economic bridge (resource-to-yield accounting)
+
+#### Robostack / G1 Contribution
+
+This WM is the primary engine for **scalable synthetic data generation**.
+For G1/R1-class readiness:
+
+- generates the synthetic training branches that fill gaps in real-world data
+- evaluates whether synthetic physics is realistic enough for control transfer
+- manages the simulation infrastructure (Isaac/Unitree backend) that produces
+  humanoid-relevant training episodes
+- drives the data flywheel: better sim → better branches → better training →
+  better robot → better data about what to simulate next
+
+#### Phase Sequencing Honesty
+
+- **Current (Phase 1 structurally closed)**: runtime truth, adapter ladders,
+  typed contracts/receipts, honest provider posture. Implementation is
+  complete within the Phase 1 boundary.
+- **Blocked externally**: Isaac/Holosoma runtime installs, GPU-backed
+  GGDS/LDM/video materialization, Unitree-class sim assets, trained
+  checkpoints.
+- **Future (Phase 1.x GPU-era revisit)**: the 10-subsystem decomposition
+  above should be applied when real GPU execution produces ground-truth
+  data. This is not a repudiation of Phase 1 closure but an elevation of
+  the standard to match what is now expected of all future WMs.
+
+#### Habitat-Derived Adoption Lane (Reopenable)
+
+The Habitat-derived adoption track documented in the roadmap should be
+explicitly tied to the subsystem decomposition above:
+
+- simulator/task separation → Subsystem 2 (Task/Measurement/Episode)
+- measurement surfaces → Subsystem 2
+- articulated/sensor config → Subsystem 3 (Scene/Asset)
+- scene hierarchy → Subsystem 3
+- camera geometry / view-warp → Subsystem 3 + Subsystem 7
+- vectorized runtime/eval → Subsystem 1 (Backend/Runtime)
+- play/benchmark harnesses → Subsystem 2
+- differentiable physics → Subsystem 8
 
 Why needed:
 
 - this is currently the thickest flywheel gap
 - current logic is improved but still distributed across orchestrator, diffusion, synthetic branch collection, backend shims, and physics stubs
+- the 60-file implementation under `src/world_model/sim_synth_physics/` establishes structural honesty but does not yet exhibit the internal subsystem legibility that the Economic WM and Embodiment / Actuation WM docs now demonstrate
 
 Current anchors:
 
+- `src/world_model/sim_synth_physics/` (60 files: compiler, state, receipts, contracts, adapters, runtime, training corpus, promotion, shadow execution)
 - `src/orchestrator/semantic_simulation.py`
 - `src/orchestrator/diffusion_requests.py`
 - `src/evidence/gen2sim_validity.py`
@@ -997,6 +1236,7 @@ Current gaps:
 - parts of the LSD / NAG / GGDS path remain stubby
 - agenda ownership is still orchestrator-heavy instead of WM-owned
 - diffusion, gen2sim, and synthetic branch generation are not yet owned by one canonical state service
+- the implementation does not yet have explicit subsystem boundaries matching the 10-subsystem decomposition above — that is the Phase 1.x target
 
 ### 4. Economic WM
 
@@ -1480,6 +1720,69 @@ The WM should own:
 - receipts
 - promotion logic
 - governance hooks
+
+### Phase 1.x — GPU-Era Subsystem Decomposition Revisit
+
+Phase 1 was declared structurally closed on 2026-04-02 with zero Category A
+items. This is not a repudiation of that closure. The current 60-file
+implementation establishes runtime truth, adapter ladders, typed
+contracts/receipts, and honest provider posture.
+
+However, the roadmap standard for future WM sections has evolved. The
+Economic WM doctrine (`doctrine_economic_wm_future_architecture.md`) and the
+Embodiment / Actuation WM plan (`actuation_embodiment_world_model.md`) now
+exhibit a level of internal subsystem decomposition rigor that Phase 1 was
+not originally held to. The WM Section Readiness Standard (the 9-point
+template above) codifies this expectation.
+
+When the Sim / Synth / Physics WM is reopened for the GPU/runtime era —
+meaning when Isaac/Holosoma runtime, GPU-backed materialization, and
+Unitree-class assets become available — the revisit should apply the same
+decomposition standard. Specifically:
+
+**What Phase 1 established (preserved)**:
+
+- runtime truth and structural honesty
+- typed contracts and receipt chains
+- backend adapter ladders with honest fallback posture
+- compiler and canonical state assembly
+- training corpus extraction from receipts
+- shadow execution and promotion paths
+
+**What Phase 1.x should establish (future)**:
+
+- explicit internal subsystem boundaries matching the 10-subsystem
+  decomposition in the Recommended WM Set section above
+- per-subsystem neural seam candidates with architecture, capacity, and
+  training regime specified
+- per-subsystem typed interfaces between subsystems (not just WM-to-WM)
+- timescale structure within the WM (fast/mid/slow)
+- explicit hyperparameter governance: what is local, what is shaped by
+  adjacent WMs, what is later shaped by Economic WM allocation
+- benchmark gates per subsystem for promotion
+- Habitat-derived adoption items mapped to specific subsystems
+- sim-real gap evaluation as a first-class subsystem (not just a receipt)
+- differentiable-physics provider lane as a reserved subsystem
+
+**Phase 1.x is not**:
+
+- a demand for implementation-level detail right now
+- a reopening of Phase 1 implementation while Phase 2 is active
+- a repudiation of Phase 1 closure work
+
+**Phase 1.x is**:
+
+- an elevation of the documentation/specification standard
+- a future-target decomposition that should be ready when GPU/runtime
+  resources arrive
+- the same standard we now hold future WMs to, applied retroactively to
+  the largest and most implementation-rich WM in the stack
+
+**Trigger for Phase 1.x activation**: when the honest remaining blockers
+for GPU-backed execution are resolved (Isaac Lab runtime installs,
+Unitree sim assets, GPU-backed GGDS/LDM). At that point, the 10-subsystem
+decomposition should guide the implementation revisit rather than ad hoc
+bring-up.
 
 ### Phase 2 - Perception / Grounding WM
 

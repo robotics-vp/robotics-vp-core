@@ -1,5 +1,27 @@
 # Economic World Model Progress Log
 
+## 2026-04-03 — WM Decomposition Standard Baseline + Sim/Synth/Physics GPU-Era Revisit Target + Execution Plane Standup
+
+- **Updated** `docs/economic_world_model/multi_wm_architecture_plan.md`:
+  - Expanded the Sim / Synth / Physics WM section (Recommended WM Set §3) from a sparse purpose/gaps summary to a full 10-subsystem decomposition with typed interfaces, neural structure candidates, timescale hierarchy, topological placement, and robostack/G1 contribution
+  - Ten named subsystems: backend/runtime/provider surface, task/measurement/episode layer, scene/asset/materialization layer, branch planner/evaluator, sim-real gap/realism evaluator, fidelity/randomization/calibration allocator, render/diffusion/materialization lane, differentiable-physics provider lane, drift/calibration/backend mismatch evaluator, training-worthiness/synthetic-yield evaluator
+  - Added Phase 1.x GPU-Era Subsystem Decomposition Revisit section between Phase 1 and Phase 2, explicitly marking the future standard without reopening Phase 1 implementation
+  - Tied Habitat-derived adoption items to specific subsystems
+- **Updated** `docs/economic_world_model/roadmap.md`:
+  - Added GPU-era decomposition revisit callout to the Sim/Synth/Physics Habitat adoption track
+  - Added WM Section Decomposition Standard section referencing the 9-point readiness template
+- **Updated** `ROADMAP_STAGES_2_5.md`:
+  - Added Multi-WM Decomposition Standard note explaining that all WM sections are now held to richer subsystem decomposition standards
+- **Updated** `README.md`:
+  - Expanded Sim/Synth/Physics WM description to list the 10 internal subsystems
+  - Added paragraph on the multi-WM roadmap's movement toward canonical ownership, subsystem decomposition, typed receipts, and bounded neural seams
+- **Created** RunPod execution plane: `codex_skills/runpod-gpu-execution/SKILL.md`, `docs/agent_ergonomics/runpod_execution_plane.md`, `scripts/runpod/` (ensure_cli, launch_pod, exec_remote, sync_up, sync_down, collect_billing, cleanup_idle)
+- **Created** run manifest schema: `docs/agent_ergonomics/run_manifest_schema.md`, `configs/runpod/examples/`, `results/run_registry/README.md`
+- **Created** roadmap execution companion: `codex_skills/roadmap-execution-companion/SKILL.md`, `docs/agent_ergonomics/roadmap_execution_companion.md`
+- **Created** Feynman integration posture: `docs/agent_ergonomics/feynman_integration_posture.md`
+- **Updated** `AGENTS.md` with execution plane guidance (local vs Codex cloud vs RunPod) and run manifest recording
+- This re-baselines the standard for future WM roadmap sections and establishes the Sep 2026 execution model
+
 ## 2026-04-03 — Perception Seam Training Infrastructure + External Data Adapters
 
 - **Created** `src/training/perception_seam_losses.py`:

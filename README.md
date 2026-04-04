@@ -84,9 +84,11 @@ Each WM serves a concrete function in making the robot ready for deployment:
 
 1. **Perception / grounding WM**: turns raw sensor/video streams into stable scene state the robot can actually act on. The stack expects to integrate real open-vocabulary concept segmentation and video object tracking provider lanes (e.g., SAM 3 / 3.1) here to feed canonical perception state, synthetic branch evaluation, and semantic annotation surfaces.
 2. **Embodiment / actuation WM**: turns task intent + local world state + embodiment constraints into body-aware, capability-aware, contact-aware control state and action proposals for real robot embodiments. Owns six subsystems: capability/embodiment state surface, contact/affordance graph builder, local contact dynamics model, inverse-dynamics/retargeting lane, joint skill/action proposal head, and drift/calibration/cost evaluator. See `docs/actuation_embodiment_world_model.md`.
-3. **Sim / synth / physics WM**: decides what to simulate, what to synthesize, what backend/fidelity to use, and what synthetic branches are worth feeding back into training.
+3. **Sim / synth / physics WM**: owns the simulated, synthesized, and physics-evaluated branch of the data engine. Internally decomposed into ten subsystems: backend/runtime/provider surface, task/measurement/episode layer, scene/asset/materialization layer, branch planner/evaluator, sim-real gap evaluator, fidelity/randomization/calibration allocator, render/diffusion/materialization lane, differentiable-physics provider lane, drift/calibration/mismatch evaluator, and training-worthiness/synthetic-yield evaluator. See `docs/economic_world_model/multi_wm_architecture_plan.md`.
 4. **Economic WM**: decides what tasks, environments, data, and training runs matter most under throughput, error, energy, and labor constraints.
 5. **Meta-node superposition / control WM**: the later cross-WM policy and governance layer for multi-objective Pareto optimization.
+
+The multi-WM roadmap increasingly moves toward **canonical WM ownership**, **internal subsystem decomposition**, **typed receipts and interfaces**, and **bounded neural seams** inside each WM. Each WM section is held to a 9-point readiness standard documented in the architecture plan.
 
 Lower WMs own typed canonical state, the economic WM sits above them to allocate resources logically, and cross-WM transport acts as middleware. The next high-leverage priority is the **sim / synth / physics WM**.
 
@@ -109,6 +111,17 @@ The sequence is programmatic and cumulative, building toward live deployment:
 - **2027**: First Unitree/G1 hardware integration window. Ground the control loop on real embodiments.
 - **By Sep 30, 2027**: Autonomous micro-workcell regime. Demonstrate a closed cybernetic loop running locally and safely.
 - **Longer-horizon**: Broader loop maturity, multi-robot coordination, and expansion into acquisition-facing deployment surfaces across an industrial fleet.
+
+### Execution Model
+
+The repo has an intended execution model for the Sep 2026 GPU phase onward:
+
+- **Local**: lightweight edits, fast verification, deterministic checks
+- **Codex cloud**: code-only parallel work, scans, reviews, additive scaffolding
+- **RunPod**: GPU-backed loop runs, provider bring-up, replay generation, training/eval, heavy refactor validation
+- **Roadmap execution companion**: a repo-native agent pattern that reads roadmap docs, artifacts, receipts, and runs to surface bottlenecks and propose next-highest-leverage work
+
+See `AGENTS.md` and `docs/agent_ergonomics/` for details.
 
 ## Ixion and Industrial Cybernetica
 

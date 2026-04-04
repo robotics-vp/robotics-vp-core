@@ -1,0 +1,29 @@
+{
+  "run_id": "runpod-20260901-140000-def456",
+  "mode": "runpod",
+  "pod_class": "provider",
+  "commit_sha": "d85aa85",
+  "branch": "codex/multi-wm-architecture-plan",
+  "task": "SAM 3.1 provider bring-up: image predictor + video tracking smoke",
+  "config_paths": [],
+  "seeds": [0],
+  "image": "nvidia/cuda:12.1.0-runtime-ubuntu22.04",
+  "template": "robotics-vp-core-gpu",
+  "pod_id": null,
+  "volume_id": null,
+  "commands": [
+    "pip install -r requirements-gpu.txt",
+    "pip install segment-anything-2",
+    "python scripts/provider_bringup/sam3_smoke.py --mode image",
+    "python scripts/provider_bringup/sam3_smoke.py --mode video"
+  ],
+  "artifact_paths": [
+    "results/provider_bringup/sam3/"
+  ],
+  "status": "pending",
+  "started_at": null,
+  "finished_at": null,
+  "cost_snapshot": null,
+  "rollback_notes": "",
+  "replay_notes": ""
+}
