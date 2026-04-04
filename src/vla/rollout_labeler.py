@@ -23,6 +23,8 @@ from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
 from src.sima2.semantic_primitive_extractor import extract_primitives_from_rollout
 from src.world_model.perception_grounding import (
     compile_perception_grounding_world_state,
+    export_annotation_record,
+    save_annotation_export_json,
 )
 from src.vla.semantic_evidence import (
     build_vla_semantic_evidence_payload,
@@ -143,6 +145,15 @@ def label_rollouts_with_vla(
             instruction=base_datapack.objective_hint or base_datapack.description or "",
             vla_error_reason=vla_error_reason,
         )
+
+        # Write annotation export sidecar for scene-graph training
+        annotation_export_ref = _write_annotation_export_sidecar(
+            episode=episode,
+            perception_grounding_state=perception_grounding_state,
+        )
+        if annotation_export_ref:
+            artifact_refs["annotation_export_ref"] = annotation_export_ref
+
         episode_labeling_rows.append(
             _build_episode_labeling_row(
                 episode=episode,
@@ -443,6 +454,40 @@ def _write_vla_semantic_evidence_sidecar(
     except Exception as exc:
         logger.warning("Failed to write VLA semantic evidence sidecar: %s", exc)
     return {}
+
+
+def _write_annotation_export_sidecar(
+    *,
+    episode: EpisodeRollout,
+    perception_grounding_state: Optional[Any],
+) -> str:
+    """Write annotation export record as sidecar JSON.
+
+    Converts the perception grounding state's scene graph + annotation bridge
+    into a training-ready AnnotationExportRecord and writes it alongside the
+    episode trajectory.
+
+    Returns:
+        Path to the sidecar file, or empty string if export was not possible.
+    """
+    if perception_grounding_state is None:
+        return ""
+    try:
+        record = export_annotation_record(
+            perception_grounding_state,
+            source="vla_rollout_labeler",
+            metadata={"trajectory_path": str(episode.trajectory_path)},
+        )
+        if record is None or record.n_objects == 0:
+            return ""
+        export_path = episode.trajectory_path.with_name(
+            f"{episode.trajectory_path.stem}_annotation_export_v1.json"
+        )
+        save_annotation_export_json(export_path, [record])
+        return str(export_path)
+    except Exception as exc:
+        logger.warning("Failed to write annotation export sidecar: %s", exc)
+        return ""
 
 
 def _build_episode_labeling_row(

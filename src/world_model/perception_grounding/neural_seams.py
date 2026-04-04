@@ -919,11 +919,386 @@ class VJEPATemporalAlignmentSeam(nn.Module):
         }
 
 
+# ---------------------------------------------------------------------------
+# Scene Graph Transformer Seam
+# ---------------------------------------------------------------------------
+
+# Edge type vocabulary for typed graph attention
+EDGE_TYPE_VOCAB: Dict[str, int] = {
+    "spatial_adjacency": 0,
+    "contact": 1,
+    "containment": 2,
+    "occlusion": 3,
+    "temporal_co_occurrence": 4,
+    "affordance_relation": 5,
+}
+NUM_EDGE_TYPES: int = len(EDGE_TYPE_VOCAB)
+
+
+class SceneGraphTransformerSeam(nn.Module):
+    """Message-passing GNN seam for scene graph refinement.
+
+    Replaces heuristic scene graph construction (SceneTracks Kalman
+    filter + rule-based edges) with a learned message-passing module
+    that refines object tokens and edge weights using typed graph
+    attention.
+
+    This is the canonical neural successor for Scene Graph / Relation
+    State (subsystem #2 in the Perception / Grounding WM).
+
+    Architecture::
+
+        object_tokens (N, d_token=128) + edge_index (E, 2) + edge_type (E,)
+            → node_proj (d_token → d_model)
+            → edge_embed (num_edge_types → d_edge)
+            → L layers of:
+                edge-conditioned multihead attention (message passing)
+                + layer-norm + FFN + layer-norm
+            → node_out_proj (d_model → d_out)
+            → edge_weight_head (d_model*2 + d_edge → 1) per edge → sigmoid
+            → mean-pool → graph_confidence_head → sigmoid
+
+    The edge-conditioned attention lets each object attend to neighbors
+    with attention bias from edge type and features, so the model can
+    learn that contact edges matter more than occlusion for physics
+    planning, etc.
+
+    Capacity: ~500K-2M params (d_model=128, n_heads=4, n_layers=2).
+    Bounded: small enough for limited scene-graph supervision data,
+    large enough for non-trivial relational reasoning.
+
+    Promotion posture: ``disabled|auto|required`` via standard machinery.
+    When ``disabled``, the heuristic SceneTracks scene graph is used.
+    When promoted, this module refines the heuristic graph.
+    """
+
+    def __init__(
+        self,
+        d_token: int = 128,
+        d_model: int = 128,
+        d_out: int = 128,
+        d_edge: int = 64,
+        n_heads: int = 4,
+        d_ff: int = 256,
+        n_layers: int = 2,
+        num_edge_types: int = NUM_EDGE_TYPES,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_token = d_token
+        self.d_model = d_model
+        self.d_out = d_out
+        self.d_edge = d_edge
+        self.n_heads = n_heads
+        self.n_layers = n_layers
+        self.num_edge_types = num_edge_types
+
+        # Input projections
+        self.node_proj = nn.Linear(d_token, d_model)
+        self.edge_type_embed = nn.Embedding(num_edge_types, d_edge)
+        self.edge_feat_proj = nn.Linear(d_edge, d_edge)
+
+        # Message-passing layers
+        self.mp_layers = nn.ModuleList()
+        for _ in range(n_layers):
+            self.mp_layers.append(_GraphMessagePassingLayer(
+                d_model=d_model,
+                d_edge=d_edge,
+                n_heads=n_heads,
+                d_ff=d_ff,
+                dropout=dropout,
+            ))
+
+        # Output projections
+        self.node_out_proj = nn.Linear(d_model, d_out)
+        self.edge_weight_head = nn.Sequential(
+            nn.Linear(d_model * 2 + d_edge, d_ff),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, 1),
+        )
+        self.graph_confidence_head = nn.Sequential(
+            nn.Linear(d_model, d_model // 2),
+            nn.GELU(),
+            nn.Linear(d_model // 2, 1),
+        )
+
+    def forward(
+        self,
+        node_features: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_type: torch.Tensor,
+        edge_features: Optional[torch.Tensor] = None,
+        node_mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Refine scene graph via message passing.
+
+        Args:
+            node_features: ``(batch, N, d_token)`` or ``(N, d_token)``
+                — object token features from heuristic scene graph.
+            edge_index: ``(batch, E, 2)`` or ``(E, 2)`` — source/target
+                indices for each edge.
+            edge_type: ``(batch, E)`` or ``(E,)`` — edge type indices.
+            edge_features: ``(batch, E, d_edge)`` or ``(E, d_edge)``
+                — optional continuous edge features.
+            node_mask: ``(batch, N)`` — True if node is valid/present.
+
+        Returns:
+            Dict with:
+                - refined_tokens: ``(batch, N, d_out)`` — refined node features
+                - edge_weights: ``(batch, E)`` — learned edge importance in [0,1]
+                - graph_confidence: ``(batch,)`` — overall graph quality in [0,1]
+        """
+        unbatched = node_features.dim() == 2
+        if unbatched:
+            node_features = node_features.unsqueeze(0)
+            edge_index = edge_index.unsqueeze(0)
+            edge_type = edge_type.unsqueeze(0)
+            if edge_features is not None:
+                edge_features = edge_features.unsqueeze(0)
+            if node_mask is not None:
+                node_mask = node_mask.unsqueeze(0)
+
+        batch_size = node_features.size(0)
+        N = node_features.size(1)
+        E = edge_index.size(1)
+
+        # Project nodes
+        x = self.node_proj(node_features)  # (B, N, d_model)
+
+        # Compute edge embeddings
+        edge_type_clamped = edge_type.clamp(0, self.num_edge_types - 1)
+        e_type = self.edge_type_embed(edge_type_clamped)  # (B, E, d_edge)
+        if edge_features is not None:
+            e_feat = self.edge_feat_proj(edge_features)
+            e = e_type + e_feat
+        else:
+            e = e_type
+
+        # Message-passing layers
+        for layer in self.mp_layers:
+            x = layer(x, edge_index, e, node_mask)
+
+        # Output node features
+        refined_tokens = self.node_out_proj(x)  # (B, N, d_out)
+
+        # Edge weight prediction
+        src_idx = edge_index[..., 0].unsqueeze(-1).expand(-1, -1, x.size(-1))
+        tgt_idx = edge_index[..., 1].unsqueeze(-1).expand(-1, -1, x.size(-1))
+        src_feat = torch.gather(x, 1, src_idx)  # (B, E, d_model)
+        tgt_feat = torch.gather(x, 1, tgt_idx)  # (B, E, d_model)
+        edge_cat = torch.cat([src_feat, tgt_feat, e], dim=-1)
+        edge_weights = torch.sigmoid(
+            self.edge_weight_head(edge_cat).squeeze(-1)
+        )  # (B, E)
+
+        # Graph-level confidence from mean-pooled node features
+        if node_mask is not None:
+            mask_f = (~node_mask).unsqueeze(-1).float()
+            # node_mask True = valid, so we want to pool valid nodes
+            valid_f = node_mask.unsqueeze(-1).float()
+            pooled = (x * valid_f).sum(dim=1) / valid_f.sum(dim=1).clamp(min=1.0)
+        else:
+            pooled = x.mean(dim=1)
+        graph_confidence = torch.sigmoid(
+            self.graph_confidence_head(pooled).squeeze(-1)
+        )  # (B,)
+
+        result = {
+            "refined_tokens": refined_tokens,
+            "edge_weights": edge_weights,
+            "graph_confidence": graph_confidence,
+        }
+
+        if unbatched:
+            result = {k: v.squeeze(0) for k, v in result.items()}
+
+        return result
+
+    def param_count(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def describe(self) -> Dict[str, Any]:
+        return {
+            "seam_type": "scene_graph_transformer",
+            "d_token": self.d_token,
+            "d_model": self.d_model,
+            "d_out": self.d_out,
+            "d_edge": self.d_edge,
+            "n_heads": self.n_heads,
+            "n_layers": self.n_layers,
+            "num_edge_types": self.num_edge_types,
+            "param_count": self.param_count(),
+            "module_class": self.__class__.__name__,
+        }
+
+
+class _GraphMessagePassingLayer(nn.Module):
+    """Single message-passing layer with edge-conditioned attention.
+
+    Implements a simplified edge-conditioned graph attention mechanism:
+    1. For each node, aggregate neighbor features weighted by attention
+       scores that incorporate edge embeddings.
+    2. Apply layer-norm + FFN + layer-norm (standard transformer post-attn).
+
+    This avoids requiring sparse attention libraries by computing
+    attention via dense gather/scatter on the edge index.
+    """
+
+    def __init__(
+        self,
+        d_model: int,
+        d_edge: int,
+        n_heads: int,
+        d_ff: int,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.d_head = d_model // n_heads
+
+        # Query/key/value projections
+        self.q_proj = nn.Linear(d_model, d_model)
+        self.k_proj = nn.Linear(d_model, d_model)
+        self.v_proj = nn.Linear(d_model, d_model)
+
+        # Edge bias projection (d_edge → n_heads)
+        self.edge_bias_proj = nn.Linear(d_edge, n_heads)
+
+        # Output projection
+        self.out_proj = nn.Linear(d_model, d_model)
+        self.norm1 = nn.LayerNorm(d_model)
+
+        # FFN
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, d_model),
+        )
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_embed: torch.Tensor,
+        node_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Message passing with edge-conditioned attention.
+
+        Args:
+            x: (B, N, d_model)
+            edge_index: (B, E, 2) — [src, tgt] per edge
+            edge_embed: (B, E, d_edge)
+            node_mask: (B, N) — True if node is valid
+
+        Returns:
+            Updated x: (B, N, d_model)
+        """
+        B, N, D = x.shape
+        E = edge_index.size(1)
+        H = self.n_heads
+        d_h = self.d_head
+
+        # Compute Q, K, V for all nodes
+        Q = self.q_proj(x).view(B, N, H, d_h)  # (B, N, H, d_h)
+        K = self.k_proj(x).view(B, N, H, d_h)
+        V = self.v_proj(x).view(B, N, H, d_h)
+
+        # Gather source and target features via edge index
+        src_idx = edge_index[..., 0]  # (B, E)
+        tgt_idx = edge_index[..., 1]  # (B, E)
+
+        # Expand indices for gathering: (B, E) → (B, E, H, d_h)
+        src_expand = src_idx.unsqueeze(-1).unsqueeze(-1).expand(B, E, H, d_h)
+        tgt_expand = tgt_idx.unsqueeze(-1).unsqueeze(-1).expand(B, E, H, d_h)
+
+        K_src = torch.gather(K, 1, src_expand)  # (B, E, H, d_h)
+        V_src = torch.gather(V, 1, src_expand)  # (B, E, H, d_h)
+        Q_tgt = torch.gather(Q, 1, tgt_expand)  # (B, E, H, d_h)
+
+        # Attention scores: dot product + edge bias
+        attn_logits = (Q_tgt * K_src).sum(dim=-1) / (d_h ** 0.5)  # (B, E, H)
+        edge_bias = self.edge_bias_proj(edge_embed)  # (B, E, H)
+        attn_logits = attn_logits + edge_bias
+
+        # Softmax over edges targeting same node
+        # Use scatter-based softmax: for each target node, softmax over
+        # all edges pointing to it.
+        # For bounded graphs this is tractable; we use a simple approach:
+        # group by target node and apply softmax per group.
+        attn_weights = _edge_softmax(attn_logits, tgt_idx, N)  # (B, E, H)
+
+        # Weighted aggregation of values
+        weighted_v = attn_weights.unsqueeze(-1) * V_src  # (B, E, H, d_h)
+
+        # Scatter-add to target nodes
+        agg = torch.zeros(B, N, H, d_h, device=x.device, dtype=x.dtype)
+        tgt_scatter = tgt_idx.unsqueeze(-1).unsqueeze(-1).expand(B, E, H, d_h)
+        agg.scatter_add_(1, tgt_scatter, weighted_v)
+
+        # Reshape and project
+        agg = agg.reshape(B, N, D)
+        agg = self.out_proj(agg)
+        agg = self.dropout(agg)
+
+        # Residual + norm
+        x = self.norm1(x + agg)
+
+        # FFN block
+        ff_out = self.ffn(x)
+        ff_out = self.dropout(ff_out)
+        x = self.norm2(x + ff_out)
+
+        return x
+
+
+def _edge_softmax(
+    logits: torch.Tensor,
+    tgt_idx: torch.Tensor,
+    N: int,
+) -> torch.Tensor:
+    """Compute softmax over edges grouped by target node.
+
+    Args:
+        logits: (B, E, H) — raw attention logits per edge per head.
+        tgt_idx: (B, E) — target node index for each edge.
+        N: Total number of nodes.
+
+    Returns:
+        Attention weights: (B, E, H) — softmax-normalized per target node.
+    """
+    B, E, H = logits.shape
+
+    # For numerical stability, subtract max per target node
+    tgt_expand = tgt_idx.unsqueeze(-1).expand(B, E, H)
+    max_logits = torch.full((B, N, H), float("-inf"), device=logits.device, dtype=logits.dtype)
+    max_logits.scatter_reduce_(1, tgt_expand, logits, reduce="amax", include_self=False)
+    max_per_edge = torch.gather(max_logits, 1, tgt_expand)
+    logits_shifted = logits - max_per_edge
+
+    # Exponentiate
+    exp_logits = logits_shifted.exp()
+
+    # Sum per target node
+    sum_exp = torch.zeros(B, N, H, device=logits.device, dtype=logits.dtype)
+    sum_exp.scatter_add_(1, tgt_expand, exp_logits)
+    sum_per_edge = torch.gather(sum_exp, 1, tgt_expand).clamp(min=1e-8)
+
+    return exp_logits / sum_per_edge
+
+
 __all__ = [
     "DepthMetricCalibrationSeam",
+    "EDGE_TYPE_VOCAB",
     "EvidenceFusionSeam",
+    "NUM_EDGE_TYPES",
     "PROVIDER_KIND_VOCAB",
     "SAMCalibrationSeam",
+    "SceneGraphTransformerSeam",
     "TRUTH_CLASS_SCORES",
     "VisionBackboneProjectionSeam",
     "VJEPATemporalAlignmentSeam",

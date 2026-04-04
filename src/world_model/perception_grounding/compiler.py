@@ -20,6 +20,7 @@ from .common import clip01, mapping, stable_id, strings
 from .receipts import (
     DeploymentResourceReceipt,
     EvidenceFusionReceipt,
+    GraphTransformerShadowReceipt,
     GroundingCalibrationReceipt,
     InferenceHeadroomReceipt,
     PerceptionContributionReceipt,
@@ -661,6 +662,184 @@ def _evidence_routing(
     return routing_state, receipt
 
 
+def _run_graph_transformer_shadow(
+    *,
+    state_id: str,
+    scene_graph: SceneGraphState,
+    graph_helper: Mapping[str, Any],
+    seam: Any,
+    seam_id: str = "scene_graph_transformer_default",
+) -> Optional[GraphTransformerShadowReceipt]:
+    """Run SceneGraphTransformerSeam in shadow mode alongside the heuristic graph.
+
+    Always runs the seam (regardless of promotion stage) and emits a
+    comparison receipt.  The heuristic scene graph remains canonical;
+    this function only observes and reports.
+
+    Returns None if the seam forward pass fails (silently degraded).
+    """
+    import time
+
+    import torch
+
+    from .neural_seams import EDGE_TYPE_VOCAB
+
+    promotion_stage = str(graph_helper.get("promotion_stage", "heuristic_fallback"))
+    posture = str(graph_helper.get("posture", "auto"))
+
+    # Build seam inputs from the heuristic scene graph
+    tracks = scene_graph.object_tracks
+    edges = scene_graph.edges
+    n_nodes = len(tracks)
+    n_edges = len(edges)
+
+    if n_nodes == 0:
+        return None
+
+    # Node features: use the d=8 feature tokens from the heuristic graph,
+    # padded to d_token expected by the seam
+    d_token = getattr(seam, "d_token", 128)
+    node_features_list = []
+    for track in tracks:
+        tok = list(track.feature_token)
+        if len(tok) < d_token:
+            tok = tok + [0.0] * (d_token - len(tok))
+        node_features_list.append(tok[:d_token])
+    node_features = torch.tensor(node_features_list, dtype=torch.float32)
+
+    # Build edge index and edge types from heuristic edges
+    track_id_to_idx = {track.track_id: i for i, track in enumerate(tracks)}
+    edge_index_list = []
+    edge_type_list = []
+    heuristic_edge_confidences = []
+    for edge in edges:
+        src_idx = track_id_to_idx.get(edge.source_track_id)
+        tgt_idx = track_id_to_idx.get(edge.target_track_id)
+        if src_idx is not None and tgt_idx is not None:
+            edge_index_list.append([src_idx, tgt_idx])
+            edge_type_list.append(EDGE_TYPE_VOCAB.get(edge.edge_type, 0))
+            heuristic_edge_confidences.append(edge.confidence)
+
+    if not edge_index_list:
+        # No valid edges — add a self-loop so the seam can still run
+        edge_index_list = [[0, 0]]
+        edge_type_list = [0]
+        heuristic_edge_confidences = [0.0]
+
+    edge_index = torch.tensor(edge_index_list, dtype=torch.long)
+    edge_type = torch.tensor(edge_type_list, dtype=torch.long)
+    n_valid_edges = len(edge_index_list)
+
+    # Run shadow forward pass
+    t0 = time.perf_counter()
+    try:
+        seam.eval()
+        with torch.no_grad():
+            result = seam(node_features, edge_index, edge_type)
+    except Exception:
+        return None
+    latency_ms = (time.perf_counter() - t0) * 1000.0
+
+    refined_tokens = result["refined_tokens"]  # (N, d_out)
+    edge_weights = result["edge_weights"]  # (E,)
+    graph_confidence = float(result["graph_confidence"].item())
+
+    # --- Comparison metrics ---
+
+    # Node token cosine similarity (heuristic tokens vs refined)
+    # Compare in the overlapping dimension
+    d_compare = min(node_features.size(-1), refined_tokens.size(-1))
+    heur_norm = torch.nn.functional.normalize(node_features[..., :d_compare], dim=-1)
+    ref_norm = torch.nn.functional.normalize(refined_tokens[..., :d_compare], dim=-1)
+    cosine_sim = float((heur_norm * ref_norm).sum(dim=-1).mean().item())
+
+    # Edge weight correlation with heuristic confidences
+    heur_conf = torch.tensor(heuristic_edge_confidences, dtype=torch.float32)
+    if len(heur_conf) > 1 and edge_weights.numel() > 1:
+        ew = edge_weights[:len(heur_conf)]
+        # Pearson correlation
+        hc_mean = heur_conf.mean()
+        ew_mean = ew.mean()
+        cov = ((heur_conf - hc_mean) * (ew - ew_mean)).mean()
+        hc_std = heur_conf.std().clamp(min=1e-6)
+        ew_std = ew.std().clamp(min=1e-6)
+        edge_weight_corr = float((cov / (hc_std * ew_std)).clamp(-1, 1).item())
+    else:
+        edge_weight_corr = 0.0
+
+    # Edge overlap: fraction of heuristic edges with learned weight > 0.3
+    if edge_weights.numel() > 0:
+        edge_overlap = float((edge_weights > 0.3).float().mean().item())
+    else:
+        edge_overlap = 0.0
+
+    mean_edge_weight = float(edge_weights.mean().item()) if edge_weights.numel() > 0 else 0.0
+
+    # Confidence delta vs heuristic graph density as a proxy
+    heuristic_confidence = scene_graph.graph_density
+    confidence_delta = graph_confidence - heuristic_confidence
+
+    # --- Promotion gate (plasticity gating discipline) ---
+    # Shadow comparison metrics (cosine_sim, edge_overlap, edge_weight_corr)
+    # are diagnostic — they do NOT drive promotion.  The seam earns
+    # promotion by benchmark evidence, not by imitating the heuristic.
+    #
+    # Benchmark evidence fields are populated externally (annotation-export
+    # supervision, held-out label agreement, downstream usefulness).
+    # Until benchmark data flows, gate_score reflects intrinsic quality
+    # only and promotion_eligible is always False.
+    benchmark_evidence_present = False
+    annotation_supervision_score = 0.0
+    held_out_label_agreement = 0.0
+    downstream_usefulness_score = 0.0
+    receipt_consistency = 0.0
+
+    if benchmark_evidence_present:
+        gate_score = clip01(
+            0.3 * graph_confidence
+            + 0.3 * annotation_supervision_score
+            + 0.2 * held_out_label_agreement
+            + 0.1 * downstream_usefulness_score
+            + 0.1 * receipt_consistency
+        )
+        promotion_eligible = gate_score >= 0.6
+    else:
+        gate_score = clip01(graph_confidence)
+        promotion_eligible = False
+
+    param_count = sum(p.numel() for p in seam.parameters() if p.requires_grad)
+
+    return GraphTransformerShadowReceipt(
+        receipt_id=f"graph_transformer_shadow_{state_id}",
+        seam_id=seam_id,
+        promotion_stage=promotion_stage,
+        posture=posture,
+        graph_confidence=graph_confidence,
+        mean_edge_weight=mean_edge_weight,
+        edge_overlap_fraction=edge_overlap,
+        node_token_cosine_similarity=cosine_sim,
+        edge_weight_correlation=edge_weight_corr,
+        confidence_delta=confidence_delta,
+        edge_count_heuristic=n_edges,
+        edge_count_learned=n_valid_edges,
+        node_count=n_nodes,
+        benchmark_evidence_present=benchmark_evidence_present,
+        annotation_supervision_score=annotation_supervision_score,
+        held_out_label_agreement=held_out_label_agreement,
+        downstream_usefulness_score=downstream_usefulness_score,
+        receipt_consistency=receipt_consistency,
+        latency_ms=latency_ms,
+        param_count=param_count,
+        promotion_eligible=promotion_eligible,
+        gate_score=gate_score,
+        metadata={
+            "seam_type": "scene_graph_transformer",
+            "d_token": d_token,
+            "graph_id": scene_graph.graph_id,
+        },
+    )
+
+
 def _semantic_bridge_registry(
     *,
     state_id: str,
@@ -1085,6 +1264,8 @@ def compile_perception_grounding_world_state(
     objective_preset: str = "balanced",
     # Neural seams (optional, invoked when promoted)
     evidence_fusion_seam: Optional[Any] = None,
+    scene_graph_transformer_seam: Optional[Any] = None,
+    scene_graph_transformer_seam_id: str = "scene_graph_transformer_default",
     sam_calibration_seam: Optional[Any] = None,
     vision_backbone_projection_seam: Optional[Any] = None,
     depth_metric_calibration_seam: Optional[Any] = None,
@@ -1135,6 +1316,18 @@ def compile_perception_grounding_world_state(
         benchmark_signals=benchmark_payload,
     )
     scene_graph = _scene_graph(semantic_state, graph_helper)
+
+    # --- Graph Transformer shadow path ---
+    graph_transformer_shadow_receipt: Optional[GraphTransformerShadowReceipt] = None
+    if scene_graph_transformer_seam is not None:
+        graph_transformer_shadow_receipt = _run_graph_transformer_shadow(
+            state_id=state_id,
+            scene_graph=scene_graph,
+            graph_helper=graph_helper,
+            seam=scene_graph_transformer_seam,
+            seam_id=scene_graph_transformer_seam_id,
+        )
+
     provider_surface = _provider_surface(
         state_id=state_id,
         scene_tracks_payload=scene_tracks_payload,
@@ -1329,6 +1522,11 @@ def compile_perception_grounding_world_state(
             "evidence_fusion_receipt": evidence_fusion_receipt.to_dict(),
             "provider_adapter_receipts": [r.to_dict() for r in provider_adapter_receipts],
             "provider_adapter_outputs_available": list(provider_adapter_outputs.keys()),
+            "graph_transformer_shadow_receipt": (
+                graph_transformer_shadow_receipt.to_dict()
+                if graph_transformer_shadow_receipt is not None
+                else None
+            ),
             "provider_availability_receipts": [r.to_dict() for r in provider_avail_receipts],
             "grounding_calibration_receipt": grounding_cal_receipt.to_dict(),
             "inference_headroom_receipts": [r.to_dict() for r in inference_headroom_recs],
@@ -1405,6 +1603,13 @@ def compile_perception_grounding_with_receipts(
     # Provider adapter invocation receipts
     for par_dict in md.get("provider_adapter_receipts", []):
         r = _reconstruct_receipt(ProviderInvocationReceipt, par_dict)
+        if r is not None:
+            receipts.append(r)
+
+    # Graph transformer shadow receipt
+    gts_dict = md.get("graph_transformer_shadow_receipt")
+    if gts_dict is not None:
+        r = _reconstruct_receipt(GraphTransformerShadowReceipt, gts_dict)
         if r is not None:
             receipts.append(r)
 

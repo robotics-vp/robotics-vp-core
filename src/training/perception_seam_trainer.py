@@ -62,6 +62,7 @@ from .perception_seam_losses import (
     SeamLossResult,
     evidence_fusion_loss,
     sam_calibration_loss,
+    scene_graph_transformer_loss,
     vision_backbone_projection_loss,
     depth_metric_calibration_loss,
     vjepa_temporal_alignment_loss,
@@ -71,6 +72,7 @@ from .perception_seam_data import (
     EvidenceFusionBatch,
     SAMCalibrationBatch,
     DepthCalibrationBatch,
+    SceneGraphBatch,
     VJEPATemporalBatch,
 )
 
@@ -376,7 +378,7 @@ class PerceptionSeamTrainer:
 
     def _compute_loss(
         self,
-        batch: Union[EvidenceFusionBatch, SAMCalibrationBatch, DepthCalibrationBatch, VJEPATemporalBatch],
+        batch: Any,
     ) -> SeamLossResult:
         """Compute loss for a batch based on seam type."""
         if self.seam_type == "evidence_fusion":
@@ -389,6 +391,8 @@ class PerceptionSeamTrainer:
             return self._compute_vjepa_temporal_loss(batch)
         elif self.seam_type == "vision_backbone_projection":
             return self._compute_vision_backbone_loss(batch)
+        elif self.seam_type == "scene_graph_transformer":
+            return self._compute_scene_graph_loss(batch)
         else:
             raise ValueError(f"Unknown seam type: {self.seam_type}")
 
@@ -474,6 +478,30 @@ class PerceptionSeamTrainer:
             object_identity_labels=batch.object_identity_labels,
             scene_labels=getattr(batch, "scene_labels", None),
             cross_provider_embeddings=getattr(batch, "cross_provider_embeddings", None),
+        )
+
+    def _compute_scene_graph_loss(self, batch: SceneGraphBatch) -> SeamLossResult:
+        """Compute scene graph transformer loss."""
+        # Forward pass
+        result = self.seam(
+            batch.node_features,
+            batch.edge_index,
+            batch.edge_type,
+            edge_features=batch.edge_features,
+            node_mask=batch.node_mask,
+        )
+
+        # Compute loss
+        return scene_graph_transformer_loss(
+            refined_tokens=result["refined_tokens"],
+            edge_weights=result["edge_weights"],
+            graph_confidence=result["graph_confidence"],
+            input_tokens=batch.node_features,
+            node_labels=batch.node_labels,
+            edge_importance_target=batch.edge_importance,
+            node_confidence_target=batch.node_confidence_target,
+            node_mask=batch.node_mask,
+            edge_mask=batch.edge_mask,
         )
 
     def _training_step(self, batch: Any) -> Tuple[float, Dict[str, float], Dict[str, float]]:

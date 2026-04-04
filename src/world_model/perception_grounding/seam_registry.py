@@ -33,6 +33,7 @@ from .neural_seams import (
     DepthMetricCalibrationSeam,
     EvidenceFusionSeam,
     SAMCalibrationSeam,
+    SceneGraphTransformerSeam,
     VisionBackboneProjectionSeam,
     VJEPATemporalAlignmentSeam,
 )
@@ -50,6 +51,7 @@ SEAM_TYPES: Dict[str, Type[nn.Module]] = {
     "vision_backbone_projection": VisionBackboneProjectionSeam,
     "depth_metric_calibration": DepthMetricCalibrationSeam,
     "vjepa_temporal_alignment": VJEPATemporalAlignmentSeam,
+    "scene_graph_transformer": SceneGraphTransformerSeam,
 }
 
 # Default hyperparameters per seam type
@@ -87,6 +89,16 @@ SEAM_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "n_heads": 8,
         "d_ff": 512,
         "n_temporal_steps": 4,
+        "dropout": 0.1,
+    },
+    "scene_graph_transformer": {
+        "d_token": 128,
+        "d_model": 128,
+        "d_out": 128,
+        "d_edge": 64,
+        "n_heads": 4,
+        "d_ff": 256,
+        "n_layers": 2,
         "dropout": 0.1,
     },
 }
@@ -407,6 +419,11 @@ def create_default_registry(
     registry.register_seam(
         "vjepa_temporal_alignment",
         "vjepa_temporal_alignment_default",
+        posture="disabled",
+    )
+    registry.register_seam(
+        "scene_graph_transformer",
+        "scene_graph_transformer_default",
         posture="disabled",
     )
 

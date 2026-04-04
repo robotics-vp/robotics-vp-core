@@ -606,6 +606,149 @@ class VJEPATemporalDataset(Dataset[VJEPATemporalSample]):
 
 
 # ---------------------------------------------------------------------------
+# Scene Graph Transformer Dataset
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class SceneGraphSample:
+    """Sample for scene graph transformer seam training.
+
+    Each sample is a scene graph snapshot with object tokens, typed edges,
+    and supervision targets (annotation labels for node classification,
+    edge importance for edge weight supervision).
+    """
+
+    sample_id: str
+    node_features: torch.Tensor  # (N, d_token)
+    edge_index: torch.Tensor  # (E, 2) — [src, tgt] per edge
+    edge_type: torch.Tensor  # (E,) — edge type indices
+    edge_features: Optional[torch.Tensor] = None  # (E, d_edge)
+    node_mask: Optional[torch.Tensor] = None  # (N,) bool — True if valid
+    # Supervision targets
+    node_labels: Optional[torch.Tensor] = None  # (N,) int — category labels
+    edge_importance: Optional[torch.Tensor] = None  # (E,) float — target edge weights
+    node_confidence_target: Optional[torch.Tensor] = None  # (N,) float — confidence targets
+
+
+@dataclass
+class SceneGraphBatch:
+    """Collated batch for scene graph transformer seam training."""
+
+    node_features: torch.Tensor  # (batch, N_max, d_token)
+    edge_index: torch.Tensor  # (batch, E_max, 2)
+    edge_type: torch.Tensor  # (batch, E_max)
+    edge_features: Optional[torch.Tensor] = None  # (batch, E_max, d_edge)
+    node_mask: torch.Tensor = None  # type: ignore  # (batch, N_max) bool
+    # Supervision targets
+    node_labels: Optional[torch.Tensor] = None  # (batch, N_max) int
+    edge_importance: Optional[torch.Tensor] = None  # (batch, E_max) float
+    edge_mask: Optional[torch.Tensor] = None  # (batch, E_max) bool
+    node_confidence_target: Optional[torch.Tensor] = None  # (batch, N_max) float
+    sample_ids: Optional[List[str]] = None
+
+
+class SceneGraphDataset(Dataset[SceneGraphSample]):
+    """Dataset for scene graph transformer seam training.
+
+    Each sample is a scene graph with object tokens, typed edges,
+    and optional supervision targets from annotation export records.
+    """
+
+    def __init__(
+        self,
+        samples: Sequence[SceneGraphSample],
+        *,
+        max_nodes: int = 32,
+        max_edges: int = 128,
+    ) -> None:
+        self.samples = list(samples)
+        self.max_nodes = max_nodes
+        self.max_edges = max_edges
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> SceneGraphSample:
+        return self.samples[idx]
+
+    @staticmethod
+    def collate_fn(
+        samples: List[SceneGraphSample],
+        max_nodes: int = 32,
+        max_edges: int = 128,
+        d_token: int = 128,
+        d_edge: int = 64,
+    ) -> SceneGraphBatch:
+        """Collate scene graph samples into a padded batch."""
+        batch_size = len(samples)
+
+        node_features = torch.zeros(batch_size, max_nodes, d_token)
+        edge_index = torch.zeros(batch_size, max_edges, 2, dtype=torch.long)
+        edge_type = torch.zeros(batch_size, max_edges, dtype=torch.long)
+        edge_features = torch.zeros(batch_size, max_edges, d_edge)
+        node_mask = torch.zeros(batch_size, max_nodes, dtype=torch.bool)
+        edge_mask = torch.zeros(batch_size, max_edges, dtype=torch.bool)
+
+        has_node_labels = False
+        has_edge_importance = False
+        has_node_conf = False
+        node_labels = torch.zeros(batch_size, max_nodes, dtype=torch.long)
+        edge_importance = torch.zeros(batch_size, max_edges)
+        node_confidence_target = torch.zeros(batch_size, max_nodes)
+
+        has_edge_feat = False
+
+        for i, sample in enumerate(samples):
+            N = min(sample.node_features.size(0), max_nodes)
+            d = min(sample.node_features.size(1), d_token)
+            node_features[i, :N, :d] = sample.node_features[:N, :d]
+            node_mask[i, :N] = True
+
+            if sample.node_mask is not None:
+                valid = min(sample.node_mask.size(0), max_nodes)
+                node_mask[i, :valid] = sample.node_mask[:valid]
+
+            E = min(sample.edge_index.size(0), max_edges)
+            edge_index[i, :E] = sample.edge_index[:E].clamp(0, max_nodes - 1)
+            edge_type[i, :E] = sample.edge_type[:E]
+            edge_mask[i, :E] = True
+
+            if sample.edge_features is not None:
+                de = min(sample.edge_features.size(1), d_edge)
+                edge_features[i, :E, :de] = sample.edge_features[:E, :de]
+                has_edge_feat = True
+
+            if sample.node_labels is not None:
+                nl = min(sample.node_labels.size(0), max_nodes)
+                node_labels[i, :nl] = sample.node_labels[:nl]
+                has_node_labels = True
+
+            if sample.edge_importance is not None:
+                ei = min(sample.edge_importance.size(0), max_edges)
+                edge_importance[i, :ei] = sample.edge_importance[:ei]
+                has_edge_importance = True
+
+            if sample.node_confidence_target is not None:
+                nc = min(sample.node_confidence_target.size(0), max_nodes)
+                node_confidence_target[i, :nc] = sample.node_confidence_target[:nc]
+                has_node_conf = True
+
+        return SceneGraphBatch(
+            node_features=node_features,
+            edge_index=edge_index,
+            edge_type=edge_type,
+            edge_features=edge_features if has_edge_feat else None,
+            node_mask=node_mask,
+            node_labels=node_labels if has_node_labels else None,
+            edge_importance=edge_importance if has_edge_importance else None,
+            edge_mask=edge_mask,
+            node_confidence_target=node_confidence_target if has_node_conf else None,
+            sample_ids=[s.sample_id for s in samples],
+        )
+
+
+# ---------------------------------------------------------------------------
 # Synthetic data generation (for testing / bootstrapping)
 # ---------------------------------------------------------------------------
 
@@ -801,6 +944,91 @@ def generate_synthetic_vjepa_temporal_samples(
     return samples
 
 
+def generate_synthetic_scene_graph_samples(
+    n_samples: int = 100,
+    max_nodes: int = 16,
+    max_edges_per_node: int = 4,
+    d_token: int = 128,
+    d_edge: int = 64,
+    n_categories: int = 8,
+    n_edge_types: int = 6,
+    *,
+    seed: Optional[int] = None,
+) -> List[SceneGraphSample]:
+    """Generate synthetic scene graph samples for testing.
+
+    Creates random scene graphs with controlled structure:
+    - Spatially clustered objects with features
+    - Typed edges (proximity-based with random types)
+    - Node classification labels and edge importance targets
+    """
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    samples = []
+    for i in range(n_samples):
+        # Random number of nodes (3 to max_nodes)
+        N = max(3, int(torch.randint(3, max_nodes + 1, (1,)).item()))
+
+        # Node features: clustered random features
+        cluster_centers = torch.randn(min(3, N), d_token) * 2
+        assignments = torch.randint(0, min(3, N), (N,))
+        node_features = cluster_centers[assignments] + torch.randn(N, d_token) * 0.5
+
+        # Generate edges: connect nearby nodes (based on feature similarity)
+        src_list = []
+        tgt_list = []
+        type_list = []
+        for ni in range(N):
+            n_edges = min(max_edges_per_node, N - 1)
+            neighbors = torch.randperm(N)[:n_edges]
+            for nj in neighbors:
+                if nj != ni:
+                    src_list.append(ni)
+                    tgt_list.append(int(nj.item()))
+                    type_list.append(int(torch.randint(0, n_edge_types, (1,)).item()))
+
+        E = len(src_list)
+        if E == 0:
+            # Ensure at least one edge
+            src_list = [0]
+            tgt_list = [min(1, N - 1)]
+            type_list = [0]
+            E = 1
+
+        edge_index = torch.tensor(list(zip(src_list, tgt_list)), dtype=torch.long)
+        edge_type = torch.tensor(type_list, dtype=torch.long)
+        edge_features = torch.randn(E, d_edge) * 0.5
+
+        # Supervision targets
+        node_labels = torch.randint(0, n_categories, (N,))
+        # Edge importance: correlated with edge type (contact > occlusion)
+        base_importance = torch.tensor([0.9, 0.8, 0.7, 0.5, 0.6, 0.7])
+        edge_importance = base_importance[edge_type.clamp(0, 5)] + torch.randn(E) * 0.1
+        edge_importance = edge_importance.clamp(0, 1)
+        # Node confidence: higher for well-connected nodes
+        node_degree = torch.zeros(N)
+        for s in src_list:
+            node_degree[s] += 1
+        node_confidence = (node_degree / max(node_degree.max().item(), 1)).clamp(0.2, 1.0)
+        node_confidence = node_confidence + torch.randn(N) * 0.05
+        node_confidence = node_confidence.clamp(0, 1)
+
+        samples.append(SceneGraphSample(
+            sample_id=f"graph_synthetic_{i:04d}",
+            node_features=node_features,
+            edge_index=edge_index,
+            edge_type=edge_type,
+            edge_features=edge_features,
+            node_mask=torch.ones(N, dtype=torch.bool),
+            node_labels=node_labels,
+            edge_importance=edge_importance,
+            node_confidence_target=node_confidence,
+        ))
+
+    return samples
+
+
 # ---------------------------------------------------------------------------
 # Data loader factory
 # ---------------------------------------------------------------------------
@@ -904,6 +1132,194 @@ def create_vjepa_temporal_loader(
     )
 
 
+def create_scene_graph_loader(
+    samples: Sequence[SceneGraphSample],
+    *,
+    batch_size: int = 16,
+    shuffle: bool = True,
+    num_workers: int = 0,
+    max_nodes: int = 32,
+    max_edges: int = 128,
+    d_token: int = 128,
+    d_edge: int = 64,
+) -> DataLoader[SceneGraphBatch]:
+    """Create data loader for scene graph transformer seam training."""
+    dataset = SceneGraphDataset(samples, max_nodes=max_nodes, max_edges=max_edges)
+
+    def collate(batch: List[SceneGraphSample]) -> SceneGraphBatch:
+        return SceneGraphDataset.collate_fn(
+            batch, max_nodes=max_nodes, max_edges=max_edges,
+            d_token=d_token, d_edge=d_edge,
+        )
+
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        collate_fn=collate,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Real-data converter: AnnotationExportRecord → SceneGraphSample
+# ---------------------------------------------------------------------------
+
+
+def annotation_export_to_scene_graph_samples(
+    records: Sequence[Any],
+    *,
+    d_token: int = 128,
+    d_edge: int = 64,
+    category_vocab: Optional[Dict[str, int]] = None,
+    min_objects: int = 2,
+    min_edges: int = 1,
+) -> List[SceneGraphSample]:
+    """Convert AnnotationExportRecord instances to SceneGraphSample for seam training.
+
+    This is the narrowest real-data unlock: annotation exports emitted during
+    rollout labeling (via ``_write_annotation_export_sidecar``) contain typed
+    scene graph structure and annotation labels.  This function converts them
+    into the training sample format consumed by the SceneGraphTransformerSeam
+    trainer.
+
+    Provider truth is explicitly degraded:
+    - Feature tokens are d=8 (heuristic) padded to d_token — low-dimensional
+      but structurally honest.
+    - Edge features are d=4 padded to d_edge.
+    - Node labels come from annotation bridge class labels (may be partial).
+
+    Args:
+        records: Sequence of AnnotationExportRecord instances (or dicts with
+            the same fields — supports JSON-loaded records).
+        d_token: Target node feature dimension (will pad to this).
+        d_edge: Target edge feature dimension (will pad to this).
+        category_vocab: Optional mapping from category string to int label.
+            If None, labels are auto-assigned from unique categories seen.
+        min_objects: Minimum objects required to produce a sample.
+        min_edges: Minimum edges required.
+
+    Returns:
+        List of SceneGraphSample instances ready for seam training.
+    """
+    from src.world_model.perception_grounding.neural_seams import EDGE_TYPE_VOCAB
+
+    # Auto-build category vocab if not provided
+    if category_vocab is None:
+        all_cats: set[str] = set()
+        for rec in records:
+            cats = getattr(rec, "object_categories", None) or (
+                rec.get("object_categories", []) if isinstance(rec, dict) else []
+            )
+            all_cats.update(c for c in cats if c)
+        category_vocab = {cat: i for i, cat in enumerate(sorted(all_cats))}
+
+    samples: List[SceneGraphSample] = []
+
+    for rec in records:
+        # Support both dataclass and dict
+        def _get(field: str, default: Any = None) -> Any:
+            if isinstance(rec, dict):
+                return rec.get(field, default)
+            return getattr(rec, field, default)
+
+        record_id = _get("record_id", f"annot_{len(samples)}")
+        object_tokens_raw = _get("object_tokens", [])
+        object_categories = _get("object_categories", [])
+        object_confidences = _get("object_confidences", [])
+        edge_source_ids = _get("edge_source_ids", [])
+        edge_target_ids = _get("edge_target_ids", [])
+        edge_types = _get("edge_types", [])
+        edge_features_raw = _get("edge_features", [])
+        object_track_ids = _get("object_track_ids", [])
+
+        n_objects = len(object_tokens_raw)
+        n_edges = len(edge_source_ids)
+
+        if n_objects < min_objects or n_edges < min_edges:
+            continue
+
+        # Build node features: pad from d_raw to d_token
+        node_feat_list = []
+        for tok in object_tokens_raw:
+            t = list(tok)
+            if len(t) < d_token:
+                t = t + [0.0] * (d_token - len(t))
+            node_feat_list.append(t[:d_token])
+        node_features = torch.tensor(node_feat_list, dtype=torch.float32)
+
+        # Build edge index
+        track_id_to_idx = {tid: i for i, tid in enumerate(object_track_ids)}
+        edge_index_list = []
+        edge_type_list = []
+        edge_feat_list = []
+        edge_conf_list = []
+        edge_confs = _get("edge_confidences", [])
+
+        for ei in range(n_edges):
+            src_idx = track_id_to_idx.get(edge_source_ids[ei])
+            tgt_idx = track_id_to_idx.get(edge_target_ids[ei])
+            if src_idx is None or tgt_idx is None:
+                continue
+            edge_index_list.append([src_idx, tgt_idx])
+            et = EDGE_TYPE_VOCAB.get(edge_types[ei], 0) if ei < len(edge_types) else 0
+            edge_type_list.append(et)
+            # Edge features: pad from d_raw to d_edge
+            if ei < len(edge_features_raw):
+                ef = list(edge_features_raw[ei])
+            else:
+                ef = []
+            if len(ef) < d_edge:
+                ef = ef + [0.0] * (d_edge - len(ef))
+            edge_feat_list.append(ef[:d_edge])
+            # Edge confidence as importance target
+            conf = float(edge_confs[ei]) if ei < len(edge_confs) else 0.5
+            edge_conf_list.append(conf)
+
+        if len(edge_index_list) < min_edges:
+            continue
+
+        edge_index = torch.tensor(edge_index_list, dtype=torch.long)
+        edge_type = torch.tensor(edge_type_list, dtype=torch.long)
+        edge_features = torch.tensor(edge_feat_list, dtype=torch.float32)
+        edge_importance = torch.tensor(edge_conf_list, dtype=torch.float32)
+
+        # Node labels from annotation bridge class labels
+        class_labels = _get("object_class_labels", {})
+        if isinstance(class_labels, dict) and class_labels:
+            label_list = []
+            for tid in object_track_ids:
+                cat = class_labels.get(tid, "")
+                label_list.append(category_vocab.get(cat, 0))
+            node_labels = torch.tensor(label_list, dtype=torch.long)
+        else:
+            # Fall back to category vocab
+            label_list = []
+            for cat in object_categories:
+                label_list.append(category_vocab.get(cat, 0))
+            node_labels = torch.tensor(label_list, dtype=torch.long)
+
+        # Node confidence targets
+        node_conf = torch.tensor(
+            [float(c) for c in object_confidences],
+            dtype=torch.float32,
+        ) if object_confidences else torch.ones(n_objects, dtype=torch.float32) * 0.5
+
+        samples.append(SceneGraphSample(
+            sample_id=record_id,
+            node_features=node_features,
+            edge_index=edge_index,
+            edge_type=edge_type,
+            edge_features=edge_features,
+            node_mask=torch.ones(n_objects, dtype=torch.bool),
+            node_labels=node_labels,
+            edge_importance=edge_importance,
+            node_confidence_target=node_conf,
+        ))
+
+    return samples
+
+
 __all__ = [
     # Records
     "ProviderObservation",
@@ -924,14 +1340,22 @@ __all__ = [
     "VJEPATemporalSample",
     "VJEPATemporalBatch",
     "VJEPATemporalDataset",
+    # Scene graph
+    "SceneGraphSample",
+    "SceneGraphBatch",
+    "SceneGraphDataset",
     # Synthetic data
     "generate_synthetic_depth_calibration_samples",
     "generate_synthetic_evidence_fusion_samples",
     "generate_synthetic_sam_calibration_samples",
+    "generate_synthetic_scene_graph_samples",
     "generate_synthetic_vjepa_temporal_samples",
     # Loaders
     "create_depth_calibration_loader",
     "create_evidence_fusion_loader",
     "create_sam_calibration_loader",
+    "create_scene_graph_loader",
     "create_vjepa_temporal_loader",
+    # Real-data converters
+    "annotation_export_to_scene_graph_samples",
 ]

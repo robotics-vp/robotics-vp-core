@@ -741,6 +741,177 @@ def vjepa_temporal_alignment_loss(
 
 
 # ---------------------------------------------------------------------------
+# Scene Graph Transformer Seam Loss
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SceneGraphTransformerLossConfig:
+    """Configuration for scene graph transformer loss computation."""
+
+    node_classification_weight: float = 1.0
+    edge_importance_weight: float = 0.5
+    node_confidence_weight: float = 0.3
+    token_reconstruction_weight: float = 0.2
+    label_smoothing: float = 0.1
+
+
+def scene_graph_transformer_loss(
+    *,
+    refined_tokens: torch.Tensor,
+    edge_weights: torch.Tensor,
+    graph_confidence: torch.Tensor,
+    input_tokens: torch.Tensor,
+    node_labels: Optional[torch.Tensor] = None,
+    edge_importance_target: Optional[torch.Tensor] = None,
+    node_confidence_target: Optional[torch.Tensor] = None,
+    node_mask: Optional[torch.Tensor] = None,
+    edge_mask: Optional[torch.Tensor] = None,
+    n_categories: int = 8,
+    config: Optional[SceneGraphTransformerLossConfig] = None,
+) -> SeamLossResult:
+    """Compute loss for SceneGraphTransformerSeam training.
+
+    Primary: refined tokens should preserve and improve input representation
+    (token reconstruction / refinement loss).
+
+    Secondary: if node classification labels are available, refined tokens
+    should be linearly separable by category.
+
+    Auxiliary: edge weights should match importance targets; graph confidence
+    should correlate with actual graph quality.
+
+    Args:
+        refined_tokens: ``(batch, N, d_out)`` — refined node features.
+        edge_weights: ``(batch, E)`` — predicted edge importance.
+        graph_confidence: ``(batch,)`` — predicted graph quality.
+        input_tokens: ``(batch, N, d_token)`` — original node features.
+        node_labels: ``(batch, N)`` int — category labels (optional).
+        edge_importance_target: ``(batch, E)`` float — target edge weights.
+        node_confidence_target: ``(batch, N)`` float — target node confidence.
+        node_mask: ``(batch, N)`` bool — True for valid nodes.
+        edge_mask: ``(batch, E)`` bool — True for valid edges.
+        n_categories: Number of node categories for classification.
+        config: Loss weights.
+
+    Returns:
+        SeamLossResult with total loss and component breakdown.
+    """
+    if config is None:
+        config = SceneGraphTransformerLossConfig()
+
+    device = refined_tokens.device
+    component_losses: Dict[str, torch.Tensor] = {}
+    metrics: Dict[str, float] = {}
+
+    # Token reconstruction / refinement loss
+    # Refined tokens should be close to input (regularization) but
+    # with improved structure for downstream tasks.
+    if node_mask is not None:
+        mask_f = node_mask.unsqueeze(-1).float()
+        recon_loss = (
+            ((refined_tokens - input_tokens[..., :refined_tokens.size(-1)]) ** 2 * mask_f)
+            .sum() / mask_f.sum().clamp(min=1.0) / refined_tokens.size(-1)
+        )
+    else:
+        recon_loss = F.mse_loss(
+            refined_tokens, input_tokens[..., :refined_tokens.size(-1)]
+        )
+    component_losses["token_reconstruction"] = recon_loss
+
+    # Node classification loss (if labels available)
+    node_cls_loss = torch.tensor(0.0, device=device)
+    if node_labels is not None:
+        # Use a simple linear probe on refined tokens
+        # (This evaluates representation quality, not used for direct classification)
+        B, N, D = refined_tokens.shape
+        flat_tokens = refined_tokens.reshape(B * N, D)
+        flat_labels = node_labels.reshape(B * N)
+
+        # Compute per-class centroids and use distance-based classification
+        # Simple approach: prototype-based classification loss
+        valid_mask = node_mask.reshape(B * N) if node_mask is not None else torch.ones(B * N, dtype=torch.bool, device=device)
+        valid_tokens = flat_tokens[valid_mask]
+        valid_labels = flat_labels[valid_mask]
+
+        if valid_tokens.size(0) > 0:
+            # Compute class centroids
+            centroids = torch.zeros(n_categories, D, device=device)
+            counts = torch.zeros(n_categories, device=device)
+            for c in range(n_categories):
+                c_mask = valid_labels == c
+                if c_mask.any():
+                    centroids[c] = valid_tokens[c_mask].mean(dim=0)
+                    counts[c] = c_mask.sum().float()
+
+            # Distance to centroids (prototype loss)
+            dists = torch.cdist(valid_tokens, centroids)  # (valid, n_categories)
+            target_dist = F.one_hot(valid_labels.clamp(0, n_categories - 1), n_categories).float()
+            # Soft cross-entropy on negative distances
+            logits = -dists
+            node_cls_loss = F.cross_entropy(
+                logits, valid_labels.clamp(0, n_categories - 1),
+                label_smoothing=config.label_smoothing,
+            )
+            # Accuracy metric
+            preds = logits.argmax(dim=-1)
+            accuracy = (preds == valid_labels).float().mean().item()
+            metrics["node_classification_accuracy"] = accuracy
+
+        component_losses["node_classification"] = node_cls_loss
+
+    # Edge importance loss
+    edge_imp_loss = torch.tensor(0.0, device=device)
+    if edge_importance_target is not None:
+        if edge_mask is not None:
+            mask_e = edge_mask.float()
+            edge_imp_loss = (
+                ((edge_weights - edge_importance_target) ** 2 * mask_e)
+                .sum() / mask_e.sum().clamp(min=1.0)
+            )
+        else:
+            edge_imp_loss = F.mse_loss(edge_weights, edge_importance_target)
+        component_losses["edge_importance"] = edge_imp_loss
+        metrics["edge_weight_mae"] = float(
+            (edge_weights - edge_importance_target).abs().mean().item()
+        )
+
+    # Node confidence loss
+    node_conf_loss = torch.tensor(0.0, device=device)
+    if node_confidence_target is not None:
+        if node_mask is not None:
+            mask_n = node_mask.float()
+            conf_pred = graph_confidence.unsqueeze(-1).expand_as(node_confidence_target)
+            node_conf_loss = (
+                ((conf_pred - node_confidence_target) ** 2 * mask_n)
+                .sum() / mask_n.sum().clamp(min=1.0)
+            )
+        else:
+            node_conf_loss = F.mse_loss(
+                graph_confidence.unsqueeze(-1).expand_as(node_confidence_target),
+                node_confidence_target,
+            )
+        component_losses["node_confidence"] = node_conf_loss
+
+    # Total loss
+    total_loss = (
+        config.token_reconstruction_weight * recon_loss
+        + config.node_classification_weight * node_cls_loss
+        + config.edge_importance_weight * edge_imp_loss
+        + config.node_confidence_weight * node_conf_loss
+    )
+
+    metrics["graph_confidence_mean"] = float(graph_confidence.mean().item())
+    metrics["edge_weight_mean"] = float(edge_weights.mean().item())
+
+    return SeamLossResult(
+        total_loss=total_loss,
+        component_losses=component_losses,
+        metrics=metrics,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Loss registry
 # ---------------------------------------------------------------------------
 
@@ -751,6 +922,7 @@ SEAM_LOSS_REGISTRY: Dict[str, Any] = {
     "vision_backbone_projection": vision_backbone_projection_loss,
     "depth_metric_calibration": depth_metric_calibration_loss,
     "vjepa_temporal_alignment": vjepa_temporal_alignment_loss,
+    "scene_graph_transformer": scene_graph_transformer_loss,
 }
 
 
@@ -769,6 +941,7 @@ __all__ = [
     "DepthMetricCalibrationLossConfig",
     "EvidenceFusionLossConfig",
     "SAMCalibrationLossConfig",
+    "SceneGraphTransformerLossConfig",
     "VisionBackboneProjectionLossConfig",
     "VJEPATemporalAlignmentLossConfig",
     # Result
@@ -778,6 +951,7 @@ __all__ = [
     "evidence_fusion_loss",
     "get_seam_loss_fn",
     "sam_calibration_loss",
+    "scene_graph_transformer_loss",
     "SEAM_LOSS_REGISTRY",
     "vision_backbone_projection_loss",
     "vjepa_temporal_alignment_loss",

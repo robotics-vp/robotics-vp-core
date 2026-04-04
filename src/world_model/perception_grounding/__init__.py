@@ -133,10 +133,19 @@ from .compiler import (
     compile_perception_grounding_with_receipts,
     compile_perception_grounding_world_state,
 )
+from .annotation_export import (
+    AnnotationExportRecord,
+    export_annotation_record,
+    export_annotation_records_batch,
+    load_annotation_export_json,
+    save_annotation_export_json,
+)
 from .neural_seams import (
+    EDGE_TYPE_VOCAB,
     DepthMetricCalibrationSeam,
     EvidenceFusionSeam,
     SAMCalibrationSeam,
+    SceneGraphTransformerSeam,
     VisionBackboneProjectionSeam,
     VJEPATemporalAlignmentSeam,
     encode_provider_features,
@@ -156,6 +165,7 @@ from .seam_registry import (
 from .receipts import (
     DeploymentResourceReceipt,
     EvidenceFusionReceipt,
+    GraphTransformerShadowReceipt,
     GroundingCalibrationReceipt,
     InferenceHeadroomReceipt,
     PerceptionContributionReceipt,
@@ -219,6 +229,7 @@ __all__ = [
     # Receipts
     "DeploymentResourceReceipt",
     "EvidenceFusionReceipt",
+    "GraphTransformerShadowReceipt",
     "GroundingCalibrationReceipt",
     "InferenceHeadroomReceipt",
     "PerceptionContributionReceipt",
@@ -236,10 +247,18 @@ __all__ = [
     "PerceptionCompilationResult",
     "compile_perception_grounding_with_receipts",
     "compile_perception_grounding_world_state",
+    # Annotation export
+    "AnnotationExportRecord",
+    "export_annotation_record",
+    "export_annotation_records_batch",
+    "load_annotation_export_json",
+    "save_annotation_export_json",
     # Neural seams
     "DepthMetricCalibrationSeam",
+    "EDGE_TYPE_VOCAB",
     "EvidenceFusionSeam",
     "SAMCalibrationSeam",
+    "SceneGraphTransformerSeam",
     "VisionBackboneProjectionSeam",
     "VJEPATemporalAlignmentSeam",
     "encode_provider_features",

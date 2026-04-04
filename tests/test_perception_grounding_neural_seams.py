@@ -21,6 +21,7 @@ from src.world_model.perception_grounding import (
     EvidenceFusionSeam,
     PerceptionSeamRegistry,
     SAMCalibrationSeam,
+    SceneGraphTransformerSeam,
     SeamDescriptor,
     VisionBackboneProjectionSeam,
     VJEPATemporalAlignmentSeam,
@@ -342,13 +343,14 @@ class TestCreateDefaultRegistry:
     def test_creates_all_seam_types(self):
         registry = create_default_registry()
         seams = registry.list_seams()
-        assert len(seams) == 5
+        assert len(seams) == 6
         seam_types = {d.seam_type for d in seams.values()}
         assert "evidence_fusion" in seam_types
         assert "sam_calibration" in seam_types
         assert "vision_backbone_projection" in seam_types
         assert "depth_metric_calibration" in seam_types
         assert "vjepa_temporal_alignment" in seam_types
+        assert "scene_graph_transformer" in seam_types
 
 
 # ---------------------------------------------------------------------------
@@ -417,3 +419,268 @@ class TestResolveProviderAdapterHelper:
         assert result["helper_active"]
         assert result["promotion_stage"] == "demoted_to_shadow"
         assert result["helper_weight"] == 0.25
+
+
+# ---------------------------------------------------------------------------
+# Graph Transformer shadow path tests
+# ---------------------------------------------------------------------------
+
+
+class TestGraphTransformerShadowPath:
+    """Test the shadow execution of SceneGraphTransformerSeam in the compiler."""
+
+    def test_compiler_shadow_receipt_emitted(self):
+        """Shadow receipt appears in metadata when seam is provided."""
+        from src.world_model.perception_grounding.compiler import (
+            compile_perception_grounding_world_state,
+        )
+
+        seam = SceneGraphTransformerSeam(d_token=128, d_model=64, d_out=64, n_heads=2, d_ff=128, n_layers=1)
+        state = compile_perception_grounding_world_state(
+            episode_id="test_shadow",
+            task_id="shadow_test",
+            frame_index=0,
+            scene_graph_transformer_seam=seam,
+        )
+        shadow_receipt = state.metadata.get("graph_transformer_shadow_receipt")
+        assert shadow_receipt is not None
+        assert shadow_receipt["seam_id"] == "scene_graph_transformer_default"
+        assert shadow_receipt["version"] == "graph_transformer_shadow_receipt_v2"
+        assert "graph_confidence" in shadow_receipt
+        assert "edge_overlap_fraction" in shadow_receipt
+        assert "node_token_cosine_similarity" in shadow_receipt
+        assert "gate_score" in shadow_receipt
+        assert "promotion_eligible" in shadow_receipt
+        assert shadow_receipt["latency_ms"] >= 0.0
+
+    def test_compiler_no_shadow_without_seam(self):
+        """No shadow receipt when no seam is provided."""
+        from src.world_model.perception_grounding.compiler import (
+            compile_perception_grounding_world_state,
+        )
+
+        state = compile_perception_grounding_world_state(
+            episode_id="test_no_shadow",
+            task_id="no_shadow_test",
+        )
+        shadow_receipt = state.metadata.get("graph_transformer_shadow_receipt")
+        assert shadow_receipt is None
+
+    def test_shadow_receipt_in_compilation_result(self):
+        """Shadow receipt is extracted into typed receipt list."""
+        from src.world_model.perception_grounding.compiler import (
+            compile_perception_grounding_with_receipts,
+        )
+        from src.world_model.perception_grounding.receipts import (
+            GraphTransformerShadowReceipt,
+        )
+
+        seam = SceneGraphTransformerSeam(d_token=128, d_model=64, d_out=64, n_heads=2, d_ff=128, n_layers=1)
+        result = compile_perception_grounding_with_receipts(
+            episode_id="test_receipt_extraction",
+            task_id="receipt_test",
+            scene_graph_transformer_seam=seam,
+        )
+        shadow_receipts = [
+            r for r in result.receipts
+            if isinstance(r, GraphTransformerShadowReceipt)
+        ]
+        assert len(shadow_receipts) == 1
+        assert shadow_receipts[0].seam_id == "scene_graph_transformer_default"
+        assert 0.0 <= shadow_receipts[0].gate_score <= 1.0
+
+    def test_shadow_receipt_fields_valid(self):
+        """All comparison fields are numerically valid."""
+        from src.world_model.perception_grounding.compiler import (
+            compile_perception_grounding_world_state,
+        )
+
+        seam = SceneGraphTransformerSeam(d_token=128, d_model=64, d_out=64, n_heads=2, d_ff=128, n_layers=1)
+        state = compile_perception_grounding_world_state(
+            episode_id="test_shadow_fields",
+            task_id="field_test",
+            scene_graph_transformer_seam=seam,
+        )
+        r = state.metadata["graph_transformer_shadow_receipt"]
+        assert 0.0 <= r["graph_confidence"] <= 1.0
+        assert 0.0 <= r["mean_edge_weight"] <= 1.0
+        assert 0.0 <= r["edge_overlap_fraction"] <= 1.0
+        assert -1.0 <= r["node_token_cosine_similarity"] <= 1.0
+        assert 0.0 <= r["gate_score"] <= 1.0
+        assert r["node_count"] >= 0
+        assert r["param_count"] > 0
+
+    def test_promotion_requires_benchmark_evidence(self):
+        """Promotion is never granted from heuristic-similarity alone.
+
+        The plasticity gating discipline requires benchmark evidence
+        (annotation-export supervision, held-out label agreement,
+        downstream usefulness) before promotion_eligible can be True.
+        Shadow comparison metrics are diagnostic only.
+        """
+        from src.world_model.perception_grounding.compiler import (
+            compile_perception_grounding_world_state,
+        )
+
+        seam = SceneGraphTransformerSeam(d_token=128, d_model=64, d_out=64, n_heads=2, d_ff=128, n_layers=1)
+        state = compile_perception_grounding_world_state(
+            episode_id="test_promotion_gate",
+            task_id="promotion_gate_test",
+            scene_graph_transformer_seam=seam,
+        )
+        r = state.metadata["graph_transformer_shadow_receipt"]
+        # Without benchmark evidence, promotion must be denied
+        assert r["benchmark_evidence_present"] is False
+        assert r["promotion_eligible"] is False
+        # Shadow comparison metrics exist but are diagnostic only
+        assert "node_token_cosine_similarity" in r
+        assert "edge_overlap_fraction" in r
+        assert "edge_weight_correlation" in r
+        # gate_score reflects intrinsic quality only (graph_confidence)
+        assert 0.0 <= r["gate_score"] <= 1.0
+
+    def test_shadow_receipt_separates_comparison_from_promotion(self):
+        """Receipt explicitly separates shadow comparison from promotion evidence."""
+        from src.world_model.perception_grounding.receipts import (
+            GraphTransformerShadowReceipt,
+        )
+
+        import dataclasses
+        field_names = {f.name for f in dataclasses.fields(GraphTransformerShadowReceipt)}
+        # Promotion evidence fields must exist
+        assert "benchmark_evidence_present" in field_names
+        assert "annotation_supervision_score" in field_names
+        assert "held_out_label_agreement" in field_names
+        assert "downstream_usefulness_score" in field_names
+        assert "receipt_consistency" in field_names
+        # Shadow comparison fields must exist separately
+        assert "node_token_cosine_similarity" in field_names
+        assert "edge_overlap_fraction" in field_names
+        assert "edge_weight_correlation" in field_names
+
+
+# ---------------------------------------------------------------------------
+# Annotation export → SceneGraphSample converter tests
+# ---------------------------------------------------------------------------
+
+
+class TestAnnotationExportToSceneGraphSamples:
+    """Test the real-data unlock converter."""
+
+    def _make_annotation_record(self, n_objects=4, n_edges=3):
+        """Create a minimal AnnotationExportRecord for testing."""
+        from src.world_model.perception_grounding.annotation_export import (
+            AnnotationExportRecord,
+        )
+
+        all_categories = ["cup", "plate", "fork", "cup"]
+        all_confidences = [0.9, 0.8, 0.7, 0.85]
+        track_ids = [f"track_{i}" for i in range(n_objects)]
+
+        # Build edges that only reference valid track ids
+        edge_pairs = [(0, 1), (1, 2), (2, 3)]
+        edge_src = []
+        edge_tgt = []
+        edge_types_list = ["contact", "spatial_adjacency", "containment"]
+        edge_confs = [0.9, 0.7, 0.8]
+        for idx in range(min(n_edges, len(edge_pairs))):
+            s, t = edge_pairs[idx]
+            if s < n_objects and t < n_objects:
+                edge_src.append(track_ids[s])
+                edge_tgt.append(track_ids[t])
+        actual_edges = len(edge_src)
+
+        return AnnotationExportRecord(
+            record_id="test_annot_001",
+            scene_graph_id="graph_test",
+            episode_id="ep_test",
+            frame_index=0,
+            object_track_ids=track_ids,
+            object_tokens=[[float(j) / 10 for j in range(8)] for _ in range(n_objects)],
+            object_categories=all_categories[:n_objects],
+            object_confidences=all_confidences[:n_objects],
+            edge_source_ids=edge_src,
+            edge_target_ids=edge_tgt,
+            edge_types=edge_types_list[:actual_edges],
+            edge_confidences=edge_confs[:actual_edges],
+            edge_features=[[0.5, 0.3, 0.0, 0.0] for _ in range(actual_edges)],
+            object_class_labels={tid: cat for tid, cat in zip(track_ids, all_categories[:n_objects])},
+            object_annotation_confidences={tid: 0.85 for tid in track_ids},
+            teacher_alignment_score=0.75,
+            annotation_quality_score=0.8,
+        )
+
+    def test_basic_conversion(self):
+        from src.training.perception_seam_data import (
+            annotation_export_to_scene_graph_samples,
+        )
+
+        records = [self._make_annotation_record()]
+        samples = annotation_export_to_scene_graph_samples(records)
+        assert len(samples) == 1
+        s = samples[0]
+        assert s.node_features.shape[0] == 4
+        assert s.node_features.shape[1] == 128  # padded to d_token
+        assert s.edge_index.shape[0] == 3
+        assert s.edge_type.shape[0] == 3
+        assert s.edge_features.shape == (3, 64)  # padded to d_edge
+        assert s.node_labels is not None
+        assert s.edge_importance is not None
+        assert s.node_confidence_target is not None
+
+    def test_filters_too_few_objects(self):
+        from src.training.perception_seam_data import (
+            annotation_export_to_scene_graph_samples,
+        )
+
+        records = [self._make_annotation_record(n_objects=1, n_edges=0)]
+        samples = annotation_export_to_scene_graph_samples(records, min_objects=2)
+        assert len(samples) == 0
+
+    def test_dict_input(self):
+        """Converter works with dict records (JSON-loaded)."""
+        from src.training.perception_seam_data import (
+            annotation_export_to_scene_graph_samples,
+        )
+
+        record = self._make_annotation_record()
+        records = [record.to_dict()]
+        samples = annotation_export_to_scene_graph_samples(records)
+        assert len(samples) == 1
+
+    def test_category_vocab_auto_built(self):
+        from src.training.perception_seam_data import (
+            annotation_export_to_scene_graph_samples,
+        )
+
+        records = [self._make_annotation_record()]
+        samples = annotation_export_to_scene_graph_samples(records)
+        # Should have distinct labels for cup, plate, fork
+        labels = samples[0].node_labels.tolist()
+        assert len(set(labels)) >= 2  # at least 2 distinct categories
+
+    def test_edge_types_mapped(self):
+        from src.training.perception_seam_data import (
+            annotation_export_to_scene_graph_samples,
+        )
+        from src.world_model.perception_grounding.neural_seams import EDGE_TYPE_VOCAB
+
+        records = [self._make_annotation_record()]
+        samples = annotation_export_to_scene_graph_samples(records)
+        # "contact" should map to EDGE_TYPE_VOCAB["contact"]
+        assert samples[0].edge_type[0].item() == EDGE_TYPE_VOCAB["contact"]
+
+    def test_roundtrip_json(self):
+        """Records saved/loaded as JSON still convert correctly."""
+        import json
+
+        from src.training.perception_seam_data import (
+            annotation_export_to_scene_graph_samples,
+        )
+
+        record = self._make_annotation_record()
+        json_str = json.dumps(record.to_dict())
+        loaded = json.loads(json_str)
+        samples = annotation_export_to_scene_graph_samples([loaded])
+        assert len(samples) == 1
+        assert samples[0].node_features.shape == (4, 128)

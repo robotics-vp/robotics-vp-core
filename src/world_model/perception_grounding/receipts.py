@@ -288,9 +288,109 @@ class PerceptionContributionReceipt:
         }
 
 
+@dataclass(frozen=True)
+class GraphTransformerShadowReceipt:
+    """Shadow receipt for the SceneGraphTransformerSeam — Phase 2 plasticity gate.
+
+    Framing: Phase 2 shadow-runtime maturation.  The graph transformer seam
+    is a real shadow successor to the heuristic scene-graph path — a
+    Perception-owned canonical semantic-state refinement, not bridge
+    neuralization, not an Embodiment concern, not a transport-layer model.
+
+    The heuristic scene graph remains canonical for now.  The seam earns
+    promotion by **benchmark evidence** (annotation-export supervision,
+    held-out label agreement, downstream usefulness), not by imitating the
+    heuristic.  This implements selective consolidation / promotion gating
+    per the plasticity gating doctrine.
+
+    Field groups
+    ------------
+    - **Intrinsic seam quality**: the seam's own confidence and coherence.
+    - **Shadow comparison** (diagnostic only): disagreement monitoring
+      between heuristic and learned paths.  These are NOT promotion evidence.
+    - **Promotion evidence** (benchmark-gated): annotation-export supervision,
+      held-out label agreement, downstream usefulness.  Absent (zero + flag)
+      until benchmark data flows.
+    - **Promotion gate**: gate_score is meaningful only when
+      benchmark_evidence_present is True.  Without benchmark evidence,
+      promotion_eligible is always False.
+
+    Emitted every compilation pass when a graph transformer seam is
+    provided, regardless of promotion stage.
+    """
+
+    receipt_id: str
+    seam_id: str
+    promotion_stage: str  # heuristic_fallback | shadow_monitoring | benchmark_gated
+    posture: str  # disabled | auto | required
+
+    # --- Intrinsic seam quality ---
+    graph_confidence: float = 0.0
+    mean_edge_weight: float = 0.0
+
+    # --- Shadow comparison (diagnostic, NOT promotion evidence) ---
+    edge_overlap_fraction: float = 0.0
+    node_token_cosine_similarity: float = 0.0
+    edge_weight_correlation: float = 0.0
+    confidence_delta: float = 0.0
+    edge_count_heuristic: int = 0
+    edge_count_learned: int = 0
+    node_count: int = 0
+
+    # --- Promotion evidence (benchmark-gated) ---
+    # Populated only when real benchmark data is available.
+    benchmark_evidence_present: bool = False
+    annotation_supervision_score: float = 0.0
+    held_out_label_agreement: float = 0.0
+    downstream_usefulness_score: float = 0.0
+    receipt_consistency: float = 0.0
+
+    # --- Runtime ---
+    latency_ms: float = 0.0
+    param_count: int = 0
+
+    # --- Promotion gate ---
+    # gate_score reflects intrinsic quality without benchmark evidence.
+    # promotion_eligible is always False without benchmark evidence.
+    promotion_eligible: bool = False
+    gate_score: float = 0.0
+
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "graph_transformer_shadow_receipt_v2"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "seam_id": self.seam_id,
+            "promotion_stage": self.promotion_stage,
+            "posture": self.posture,
+            "graph_confidence": clip01(self.graph_confidence),
+            "mean_edge_weight": clip01(self.mean_edge_weight),
+            "edge_overlap_fraction": clip01(self.edge_overlap_fraction),
+            "node_token_cosine_similarity": float(self.node_token_cosine_similarity),
+            "edge_weight_correlation": float(self.edge_weight_correlation),
+            "confidence_delta": float(self.confidence_delta),
+            "edge_count_heuristic": int(self.edge_count_heuristic),
+            "edge_count_learned": int(self.edge_count_learned),
+            "node_count": int(self.node_count),
+            "benchmark_evidence_present": bool(self.benchmark_evidence_present),
+            "annotation_supervision_score": clip01(self.annotation_supervision_score),
+            "held_out_label_agreement": clip01(self.held_out_label_agreement),
+            "downstream_usefulness_score": clip01(self.downstream_usefulness_score),
+            "receipt_consistency": clip01(self.receipt_consistency),
+            "latency_ms": float(self.latency_ms),
+            "param_count": int(self.param_count),
+            "promotion_eligible": bool(self.promotion_eligible),
+            "gate_score": clip01(self.gate_score),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
 __all__ = [
     "DeploymentResourceReceipt",
     "EvidenceFusionReceipt",
+    "GraphTransformerShadowReceipt",
     "GroundingCalibrationReceipt",
     "InferenceHeadroomReceipt",
     "PerceptionContributionReceipt",
