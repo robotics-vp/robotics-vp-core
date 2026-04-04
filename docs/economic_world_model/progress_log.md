@@ -1,5 +1,19 @@
 # Economic World Model Progress Log
 
+## 2026-04-04 — Doctrine: Bio/Neuro Architecture Inspirations + Economic WM PINN Posture
+
+- **Created** `docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md`:
+  - Six bio/neuro organizational principles evaluated against the multi-WM topology: efference copy, active sensing, neuromodulation/allostasis, plasticity gating, motor synergies + interoception, immune-style anomaly governance
+  - Each candidate: exact WM insert point, architecture family, layer classification (reuses `neuralization_bridge_doctrine.md` taxonomy), typed surfaces, phase timing, explicit boundary discipline
+  - Cross-cutting neural architecture table consistent with existing bridge doctrine
+  - Sequencing section: preserve now (efference copy, active sensing, plasticity gating); defer until lower-WM maturity (regime broadcast / synergies); post–Sep-2026 (immune composition, hypernetwork regime composition)
+- **Added** PINN posture subsection to `doctrine_economic_wm_future_architecture.md`:
+  - Core stance: constraint-informed Economic submodule yes, PINN-shaped Economic backbone no
+  - Good placements: slow-manifold invariant residuals, meso-timescale reservoir-flow, battery/thermal/wear/queue evolution, counterfactual resource-transition rollouts, invariant regularization
+  - Bad placements: allocator, governance transport, meta-regal composition, WM-to-WM transport, anything implying clean PDE economics
+- **Added** minimal cross-references in `multi_wm_architecture_plan.md` and `docs/actuation_embodiment_world_model.md` (pointers only; no restatement of the bio note or subsystem catalogs)
+- **Anti-redundancy**: canonical topology, bridge taxonomy, embodiment decomposition, meta-regal structure, and Economic multi-timescale design stay in their existing docs
+
 ## 2026-04-04 — Phase 2 Perception / Grounding WM: Embodiment Shadow Consumer + Full Receipt Family + Subsystem Discipline
 
 - **Created** `src/world_model/perception_grounding/embodiment_shadow_consumer.py`:

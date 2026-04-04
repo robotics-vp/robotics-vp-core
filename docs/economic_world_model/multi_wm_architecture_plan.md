@@ -495,6 +495,10 @@ governance-pluralism posture.
 Full doctrine:
 `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`
 
+Bio/neuro **organizational** principles (insertion points, typed surfaces,
+sequencing—no brain-region ontology):
+`docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md`
+
 ## Architectural Position
 
 ### What already exists

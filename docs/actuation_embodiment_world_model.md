@@ -933,6 +933,13 @@ does not originate them.
 
 ---
 
+## Related Doctrine: Bio/Neuro Inspirations
+
+Organizational principles that land primarily on this WM are specified in
+`docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md`.
+That note owns candidates, typed surfaces, and boundaries—do not restate it
+here.
+
 ## Anti-Patterns
 
 Do not:

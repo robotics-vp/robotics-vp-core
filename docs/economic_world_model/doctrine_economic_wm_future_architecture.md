@@ -647,6 +647,101 @@ learned models versus simulator-backed modules.
 - only after the above are stable, connect into cross-WM meta-node
   neuralization
 
+## Constraint-Informed Submodules / PINN Posture
+
+Here *PINN-like* means **equation- or identity-constrained residuals**
+(conservation, balance, monotonicity) on learned predictors—not branding,
+not a requirement to pose economics as a PDE.
+
+### Core answer
+
+A PINN-like (physics-informed / equation-informed / constraint-informed)
+component **can** have a place inside the Economic WM. But the Economic WM
+should **not** be framed as a PINN-native monolith.
+
+The backbone should remain regime-aware state estimation / dynamics /
+allocation — switching-SSM-first (DS3M, RED-SDS) as already specified in
+the Internal Decomposition section above. PINNs are useful as **constraint-
+informed residual submodules** within that backbone, not as the backbone
+itself.
+
+The distinction: a PINN enforces known equations as structural constraints
+on a learned model. That is powerful when the Economic WM has conserved or
+monotone quantities that should be respected structurally rather than
+learned from scratch. But most of the Economic WM's dynamics are hybrid,
+regime-switching, and partially observed — not a clean closed PDE system.
+
+### Good candidate placements
+
+Where PINN-like constraint-informed modules fit inside the Economic WM:
+
+- **Slow-manifold consistency / invariant residual modeling**: The
+  `SlowManifoldProjection` interface enforces that fast receipt noise does
+  not reparameterize slow macro state. A PINN-style residual layer can
+  enforce known invariant relationships (e.g., energy conservation across
+  subsystems, monotone wear accumulation, budget balance identities) as
+  hard or soft constraints on the dynamics model's slow-manifold
+  predictions.
+- **Meso-timescale reservoir-flow transitions**: Battery depletion, thermal
+  accumulation, queue pressure evolution, and compute-budget draw-down
+  follow approximately known differential relationships with
+  regime-dependent parameters. A PINN-informed dynamics submodule can
+  encode these relationships and learn only the residual / regime-dependent
+  corrections.
+- **Battery / thermal / wear / queue / compute-budget evolution**: These
+  `ResourceReservoir` quantities have partially known physics (thermal
+  models, battery discharge curves, queue service models). Constraint-
+  informed prediction layers can use those known dynamics as structural
+  priors.
+- **Counterfactual resource-transition rollouts**: When the dynamics model
+  rolls out "what happens if sim budget is spent here?", the resource-
+  transition component can be PINN-constrained to respect balance and
+  conservation laws rather than learning them from data alone.
+- **Invariant regularization**: Regularization terms around conserved
+  quantities (energy budget balance), monotone quantities (cumulative wear),
+  and dissipation-like quantities (entropy production in queue/flow systems)
+  can structurally prevent the dynamics model from predicting physically
+  impossible economic state transitions.
+
+### Bad candidate placements
+
+Where PINN framing is actively wrong for the Economic WM:
+
+- **Allocator as a PINN**: The allocator's job is multi-objective
+  optimization under constraints, not equation-solving. PINN structure
+  would inappropriately rigidify the allocation policy.
+- **Downward governance shaping as a PINN**: Governance transport carries
+  budget envelopes, persistence annotations, and Pareto slices. These are
+  policy artifacts, not solutions to differential equations.
+- **Meta-regal composition as a PINN**: The inter-domain governance
+  composition problem is regime-sensitive Pareto adjudication, not
+  equation-constrained dynamics.
+- **WM-to-WM transport as a PINN**: Transport bridges preserve
+  representational structure through learned affine maps and contrastive
+  alignment. No known PDE governs this translation.
+- **Anything that would make economics look like a clean closed PDE world**:
+  The Economic WM models a nonequilibrium, regime-switching, partially
+  observed productive organism. The majority of its dynamics are
+  stochastic, multi-agent, and subject to discrete regime transitions that
+  are not PDE-governed.
+
+### Design stance
+
+**Constraint-informed Economic submodule: yes.**
+**PINN-shaped Economic backbone: no.**
+
+The PINN components should enter as bounded residual layers or
+regularization terms inside the dynamics model and state estimator — not as
+the architectural identity of the Economic WM. The backbone remains
+switching-SSM + distributional Pareto allocator + typed governance
+transport, with PINN-style constraint enforcement providing structural
+priors where the underlying dynamics are partially known.
+
+**Repo precedent:** the Embodiment WM uses analytic contact models as
+heuristic fallbacks inside a promotion-gated learned dynamics seam—the same
+division of labor: known structure where it holds, learned residual where it
+does not.
+
 ## Anti-patterns
 
 The future Economic WM must not collapse into:
