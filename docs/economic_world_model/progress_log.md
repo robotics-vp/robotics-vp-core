@@ -1804,3 +1804,55 @@
       - provider/runtime inventory compilation
       - replay/export surfaces
       - more downstream consumers
+
+### 2026-04-03: Perception Seam Training Infrastructure
+
+- Created complete seam training infrastructure for Phase 2 Perception / Grounding WM:
+
+  **Loss Functions Module** (`src/training/perception_seam_losses.py`):
+  - `evidence_fusion_loss`: held-out provider reconstruction + task correlation + availability contrastive
+  - `sam_calibration_loss`: calibrated confidence vs downstream quality + uncertainty correlation + prompt satisfaction
+  - `depth_metric_calibration_loss`: metric depth vs GT + uncertainty calibration + gradient preservation + scale consistency
+  - `vjepa_temporal_alignment_loss`: future state prediction + confidence calibration + temporal ordering + smoothness
+  - `vision_backbone_projection_loss`: object identity prediction + scene contrastive + cross-provider alignment
+  - Each loss returns `SeamLossResult` with total loss, component breakdown, and metrics
+
+  **Data Loaders Module** (`src/training/perception_seam_data.py`):
+  - `ProviderAgreementDataset`: base dataset for multi-provider observations
+  - `EvidenceFusionDataset` + `EvidenceFusionBatch`: held-out provider training data
+  - `SAMCalibrationDataset` + `SAMCalibrationBatch`: mask quality calibration data
+  - `DepthCalibrationDataset` + `DepthCalibrationBatch`: metric depth ground truth data
+  - `VJEPATemporalDataset` + `VJEPATemporalBatch`: temporal alignment training data
+  - Synthetic data generators for testing/bootstrapping each dataset type
+  - Factory functions: `create_evidence_fusion_loader`, `create_sam_calibration_loader`, etc.
+
+  **Trainer Module** (`src/training/perception_seam_trainer.py`):
+  - `PerceptionSeamTrainer`: full training orchestrator with:
+    - Gradient accumulation and mixed precision support
+    - Validation loop with early stopping
+    - Checkpoint saving via `PerceptionSeamRegistry`
+    - Benchmark gate evaluation for promotion decisions
+    - Receipt emission: `SeamTrainingStepReceipt`, `SeamValidationReceipt`, `BenchmarkGateReceipt`
+  - `SeamTrainingConfig`: LR scheduling, warmup, gradient clipping, promotion thresholds
+  - Convenience functions: `train_evidence_fusion_seam`, `train_sam_calibration_seam`, etc.
+
+  **Benchmark Gate Evaluation** (`src/training/perception_seam_benchmarks.py`):
+  - `EvidenceFusionBenchmark`: reconstruction accuracy, task correlation, provider dropout robustness
+  - `SAMCalibrationBenchmark`: ECE, uncertainty-error correlation, confidence-quality correlation
+  - `DepthCalibrationBenchmark`: abs-rel error, delta accuracy, uncertainty calibration
+  - `VJEPATemporalBenchmark`: prediction accuracy, confidence calibration, temporal consistency
+  - `BenchmarkGateResult`: overall score, per-metric breakdown, promotion decision
+  - `BenchmarkGateConfig`: promotion/demotion/shadow thresholds, robustness testing options
+
+  **Tests** (`tests/test_perception_seam_training.py`):
+  - 26 tests covering loss functions, data loaders, collation, and benchmark evaluation
+  - All tests pass
+
+- This closes the "CRITICAL GAP: Seam Training Infrastructure" identified in Phase 2 assessment
+- Seams can now be trained, validated, and promoted via benchmark gates
+- Receipt-backed training enables honest promotion decisions without manual intervention
+
+- Verification:
+  - `python3 -m compileall src/training/perception_seam_*.py -q`
+  - `python3 -m pytest tests/test_perception_seam_training.py tests/test_perception_grounding_neural_seams.py -v`
+  - result: `63 passed` (26 new + 37 existing)
