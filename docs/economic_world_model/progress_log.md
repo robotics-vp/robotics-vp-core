@@ -1,5 +1,43 @@
 # Economic World Model Progress Log
 
+## 2026-04-03 — Perception Seam Training Infrastructure + External Data Adapters
+
+- **Created** `src/training/perception_seam_losses.py`:
+  - Loss functions for all perception seam types: `evidence_fusion_loss`, `sam_calibration_loss`, `depth_metric_calibration_loss`, `vjepa_temporal_alignment_loss`, `vision_backbone_projection_loss`
+  - `SeamLossResult` dataclass with total loss, component breakdown, and training metrics
+  - Supervised/contrastive/predictive objectives (NOT direct RL)
+- **Created** `src/training/perception_seam_data.py`:
+  - Dataset classes: `ProviderAgreementDataset`, `EvidenceFusionDataset`, `SAMCalibrationDataset`, `DepthCalibrationDataset`, `VJEPATemporalDataset`
+  - Typed sample dataclasses: `MultiProviderSample`, `ProviderObservation`, `VJEPATemporalSample`
+  - Synthetic data generators for testing/verification
+  - Data loader factory functions with proper collation
+- **Created** `src/training/perception_seam_trainer.py`:
+  - `PerceptionSeamTrainer`: training orchestrator with gradient accumulation, validation, checkpointing
+  - Receipt emission: `SeamTrainingStepReceipt`, `SeamValidationReceipt`, `BenchmarkGateReceipt`
+  - Early stopping, LR scheduling, benchmark gate integration
+- **Created** `src/training/perception_seam_benchmarks.py`:
+  - Per-seam benchmark evaluators: `EvidenceFusionBenchmark`, `SAMCalibrationBenchmark`, `DepthCalibrationBenchmark`, `VJEPATemporalBenchmark`
+  - `BenchmarkGateResult` with promotion decision logic
+- **Created** `docs/economic_world_model/perception_external_data_roadmap.md`:
+  - GPU-honest classification of external data sources (DROID, Bridge V2, ALOHA, KITTI)
+  - 3-level classification: adapter-usable (no GPU) → prototype-trainable (dev GPU) → promotion-credible (GPU required)
+  - Doctrine updates for promotion credibility levels
+- **Created** `src/dataset_bridges/lerobot_perception_adapter.py`:
+  - `multi_provider_sample_from_lerobot_step`: LeRobot multi-camera step → `MultiProviderSample`
+  - `vjepa_temporal_sample_from_episode_window`: episode window → `VJEPATemporalSample`
+  - `FeatureExtractionConfig`: placeholder, flattened, or frozen_backbone strategies
+  - `discover_camera_keys`: auto-discovers camera keys from DROID/Bridge/ALOHA observation formats
+  - Dataset-level adapters for batch processing
+- **Created** `tests/test_perception_seam_training.py` (26 tests):
+  - Loss function correctness, data loader collation, benchmark evaluation
+- **Created** `tests/test_lerobot_perception_adapter.py` (43 tests):
+  - Camera key discovery for DROID/Bridge/ALOHA formats
+  - Feature extraction strategies on CPU
+  - Multi-provider sample conversion with realistic data shapes
+  - V-JEPA temporal sample extraction with sliding windows
+- This closes the "Seam Training Infrastructure" gap identified in Phase 2 planning
+- Adapter work is adapter-usable now (no GPU); prototype-trainable requires `droid_100` subset; promotion-credible training requires GPU
+
 ## 2026-04-03 — Provider Adapter Neural Seams (Phase 2 Implementation)
 
 - **Added** four provider adapter neural seams to `src/world_model/perception_grounding/neural_seams.py`:
