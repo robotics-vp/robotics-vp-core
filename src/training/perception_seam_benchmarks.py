@@ -185,11 +185,13 @@ class EvidenceFusionBenchmark:
 
         with torch.no_grad():
             for batch in eval_loader:
-                weights, confidence = seam(batch.provider_features)
+                # Seam takes 12-dim encoded metadata; raw features used for reconstruction
+                seam_in = batch.seam_input_features if hasattr(batch, "seam_input_features") else batch.provider_features
+                weights, confidence = seam(seam_in)
                 all_weights.append(weights)
                 all_confidences.append(confidence)
 
-                # Held-out reconstruction error
+                # Held-out reconstruction error (uses raw provider features)
                 held_out_pred = (weights.unsqueeze(-1) * batch.provider_features).sum(dim=1)
                 held_out_error = (held_out_pred - batch.held_out_features).pow(2).mean(dim=-1)
                 all_held_out_errors.append(held_out_error)
@@ -297,16 +299,18 @@ class EvidenceFusionBenchmark:
 
         with torch.no_grad():
             for batch in eval_loader:
+                seam_in = batch.seam_input_features if hasattr(batch, "seam_input_features") else batch.provider_features
                 # Original prediction
-                weights, _ = seam(batch.provider_features)
+                weights, _ = seam(seam_in)
                 held_out_pred = (weights.unsqueeze(-1) * batch.provider_features).sum(dim=1)
                 original_error = (held_out_pred - batch.held_out_features).pow(2).mean()
                 original_errors.append(original_error)
 
-                # Dropout prediction
+                # Dropout prediction — zero out both seam input and raw features
                 dropout_mask = torch.rand_like(batch.provider_availability.float()) > dropout_rate
+                masked_seam_in = seam_in * dropout_mask.unsqueeze(-1)
                 masked_features = batch.provider_features * dropout_mask.unsqueeze(-1)
-                weights_drop, _ = seam(masked_features)
+                weights_drop, _ = seam(masked_seam_in)
                 held_out_pred_drop = (weights_drop.unsqueeze(-1) * masked_features).sum(dim=1)
                 dropout_error = (held_out_pred_drop - batch.held_out_features).pow(2).mean()
                 dropout_errors.append(dropout_error)
@@ -335,13 +339,14 @@ class EvidenceFusionBenchmark:
 
         with torch.no_grad():
             for batch in eval_loader:
+                seam_in = batch.seam_input_features if hasattr(batch, "seam_input_features") else batch.provider_features
                 # Seam prediction
-                weights, _ = seam(batch.provider_features)
+                weights, _ = seam(seam_in)
                 seam_pred = (weights.unsqueeze(-1) * batch.provider_features).sum(dim=1)
                 seam_error = (seam_pred - batch.held_out_features).pow(2).mean()
                 seam_errors.append(seam_error)
 
-                # Heuristic prediction
+                # Heuristic prediction (operates on raw features)
                 heuristic_weights = heuristic(batch.provider_features)
                 heuristic_pred = (heuristic_weights.unsqueeze(-1) * batch.provider_features).sum(dim=1)
                 heuristic_error = (heuristic_pred - batch.held_out_features).pow(2).mean()

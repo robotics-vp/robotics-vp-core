@@ -158,7 +158,8 @@ class ProviderAgreementDataset(Dataset[MultiProviderSample]):
 class EvidenceFusionBatch:
     """Collated batch for evidence fusion seam training."""
 
-    provider_features: torch.Tensor  # (batch, N_providers, d_feature)
+    provider_features: torch.Tensor  # (batch, N_providers, d_feature) raw features for loss
+    seam_input_features: torch.Tensor  # (batch, N_providers, 12) encoded metadata for seam forward
     provider_availability: torch.Tensor  # (batch, N_providers) bool
     held_out_idx: torch.Tensor  # (batch,) int
     held_out_features: torch.Tensor  # (batch, d_feature)
@@ -192,14 +193,24 @@ class EvidenceFusionDataset(ProviderAgreementDataset):
         """Collate samples into a batch for training.
 
         Randomly selects one provider per sample to hold out.
+        Produces both raw features (for loss) and 12-dim encoded
+        metadata (for seam forward pass).
         """
+        from src.world_model.perception_grounding.neural_seams import (
+            PROVIDER_KIND_VOCAB,
+            NUM_PROVIDER_KINDS,
+            TRUTH_CLASS_SCORES,
+        )
+
         batch_size = len(samples)
 
         # Determine max providers across batch
         max_providers = max(s.n_providers for s in samples)
+        d_seam_input = NUM_PROVIDER_KINDS + 8  # 12
 
         # Initialize tensors
         provider_features = torch.zeros(batch_size, max_providers, d_feature)
+        seam_input_features = torch.zeros(batch_size, max_providers, d_seam_input)
         provider_availability = torch.zeros(batch_size, max_providers, dtype=torch.bool)
         held_out_idx = torch.zeros(batch_size, dtype=torch.long)
         held_out_features = torch.zeros(batch_size, d_feature)
@@ -217,6 +228,7 @@ class EvidenceFusionDataset(ProviderAgreementDataset):
 
             for j, provider in enumerate(sample.providers):
                 if j < max_providers:
+                    # Raw features for loss
                     feat = provider.features
                     if feat.shape[-1] < d_feature:
                         feat = torch.nn.functional.pad(
@@ -230,6 +242,19 @@ class EvidenceFusionDataset(ProviderAgreementDataset):
                     provider_features[i, j] = feat
                     provider_availability[i, j] = provider.availability_status == "available"
 
+                    # 12-dim encoded metadata for seam
+                    kind_idx = PROVIDER_KIND_VOCAB.get(provider.provider_kind, -1)
+                    kind_onehot = [0.0] * NUM_PROVIDER_KINDS
+                    if 0 <= kind_idx < NUM_PROVIDER_KINDS:
+                        kind_onehot[kind_idx] = 1.0
+                    avail = 1.0 if provider.availability_status == "available" else 0.0
+                    truth = TRUTH_CLASS_SCORES.get(provider.truth_class, 0.1)
+                    conf_val = float(provider.confidence.item()) if provider.confidence is not None else 0.0
+                    seam_input_features[i, j] = torch.tensor(
+                        kind_onehot + [avail, truth, conf_val, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        dtype=torch.float32,
+                    )
+
             held_out_idx[i] = hold_out_global_idx
             held_out_features[i] = provider_features[i, hold_out_global_idx]
 
@@ -242,6 +267,7 @@ class EvidenceFusionDataset(ProviderAgreementDataset):
 
         return EvidenceFusionBatch(
             provider_features=provider_features,
+            seam_input_features=seam_input_features,
             provider_availability=provider_availability,
             held_out_idx=held_out_idx,
             held_out_features=held_out_features,

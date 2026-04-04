@@ -394,10 +394,8 @@ class PerceptionSeamTrainer:
 
     def _compute_evidence_fusion_loss(self, batch: EvidenceFusionBatch) -> SeamLossResult:
         """Compute evidence fusion loss."""
-        from src.world_model.perception_grounding.neural_seams import encode_provider_features
-
-        # Forward pass
-        weights, confidence = self.seam(batch.provider_features)
+        # Forward pass: seam takes 12-dim encoded metadata, not raw features
+        weights, confidence = self.seam(batch.seam_input_features)
 
         # Compute loss
         return evidence_fusion_loss(
