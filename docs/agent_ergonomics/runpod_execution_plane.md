@@ -35,6 +35,33 @@ Verify with:
 ./scripts/runpod/ensure_cli.sh
 ```
 
+## Classification Axes
+
+A run should be classified along two axes:
+
+### 1. Run Class
+
+This answers: **what kind of machine work is this?**
+
+- `loop`
+- `provider`
+- `train`
+- `refactor`
+
+### 2. Epistemic Status
+
+This answers: **what inferential weight should this run carry?**
+
+- `smoke`
+- `proof_of_life`
+- `benchmark_candidate`
+- `promotion_candidate`
+- `deployment_candidate`
+
+A run is not fully described by `pod_class` alone. A `train` + `proof_of_life` run is not benchmark-credible. A `provider` + `smoke` run is just bring-up. A `promotion_candidate` run should normally feed a comparison artifact before any promotion claim is made.
+
+If `epistemic_status` is omitted, interpret the run conservatively as no stronger than `smoke`.
+
 ## Pod Classes
 
 | Class | GPU | Volume | Lifetime | Work | Artifacts |
@@ -95,11 +122,44 @@ Appends a cost snapshot to the run manifest.
 
 Or stop a specific pod: `runpodctl stop pod <pod_id>`.
 
-## Run Manifests
+## Run Manifests and Receipts
 
 Every remote run produces a manifest at `.agent/runs/<run_id>/manifest.json`. The schema is documented in [run_manifest_schema.md](run_manifest_schema.md).
 
-Manifests make remote runs agent-legible: any agent can inspect what ran, what it produced, and what it cost.
+Manifests make remote runs agent-legible: any agent can inspect what ran, what it produced, what inferential weight it should carry, and what it cost.
+
+At minimum, completed runs should preserve:
+
+- `gpu_class`
+- `wall_clock_seconds`
+- `estimated_cost_usd`
+- `artifact_size_bytes`
+- `storage_or_checkpoint_size_bytes`
+- `justified_itself`
+
+Example manifests:
+
+- `configs/runpod/examples/train_sac_manifest.json`
+- `configs/runpod/examples/provider_bringup_manifest.json`
+- `configs/runpod/examples/benchmark_candidate_training_manifest_v2.json`
+
+## Comparison Artifacts
+
+Launching runs is not the hard part. Comparing them honestly is.
+
+Meaningful run families should eventually produce a comparison artifact such as `results/run_registry/templates/run_comparison_template.md` with fields for:
+
+- baseline
+- candidate run(s)
+- what changed
+- what improved
+- what regressed
+- confidence level
+- promotion implication
+- roadmap implication
+- next recommended action
+
+A `benchmark_candidate` run should normally have a named baseline. A `promotion_candidate` run should not be treated as promotion-credible without a comparison artifact or equivalent receipt.
 
 ## Cost Management
 
@@ -108,6 +168,24 @@ Manifests make remote runs agent-legible: any agent can inspect what ran, what i
 3. **Clean up idle pods**: `cleanup_idle.sh` identifies pods that have been idle beyond a threshold and offers to stop them.
 4. **Prefer short-lived pods**: Use `provider` and `refactor` classes for quick validation, then terminate. Only `loop` and `train` justify long-lived pods.
 5. **Volume pruning**: Persistent volumes accumulate data. Periodically review and prune old checkpoints and replay buffers.
+
+## Queue Prioritization Posture
+
+As concurrent GPU windows multiply, runs should be sortable by more than timestamp.
+
+Prioritization-ready manifests should gradually expose:
+
+- `wm`
+- `subsystem`
+- `blocker`
+- `run_class`
+- `epistemic_status`
+- `expected_value`
+- `estimated_cost_usd`
+- `dependency_chain`
+- `urgency`
+
+This does not require a scheduler right now. It only requires preserving the fields needed for later scheduling discipline.
 
 ## Decision Tree
 
@@ -125,15 +203,6 @@ Is the task code-only (no GPU needed)?
     NO  --> Local (even if slow, it's cheaper)
 ```
 
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RUNPOD_API_KEY` | (none) | Required. RunPod API key for authentication. |
-| `RUNPOD_VOLUME_ID` | (none) | Network volume ID for persistent storage. Required for `loop` and `train`. |
-| `RUNPOD_TEMPLATE_ID` | (none) | Pod template ID. If unset, scripts use `Dockerfile.runpod` as the image reference. |
-| `RUNPOD_POD_TIMEOUT` | `14400` | Default pod timeout in seconds (4 hours). |
-
 ## Manual Steps That Cannot Be Automated
 
 The following require human action and cannot be performed by agents:
@@ -145,9 +214,22 @@ The following require human action and cannot be performed by agents:
 5. **Template creation from Dockerfile** — first-time setup of `Dockerfile.runpod` as a RunPod template
 6. **Cost approval for large runs** — agents should report estimated cost; humans approve
 
+## Stage-Appropriate Philosophy
+
+The intended posture remains:
+
+- enough structure for recurring multi-GPU work
+- comparison-friendly and decision-oriented records
+- no fake automation
+- no premature platform building
+
+The thin-wrapper + manifest + registry + skill model remains correct.
+
 ## Related Documents
 
 - [RunPod GPU Execution Skill](../../codex_skills/runpod-gpu-execution/SKILL.md)
 - [Run Manifest Schema](run_manifest_schema.md)
+- [Run Comparison Template](../../results/run_registry/templates/run_comparison_template.md)
 - [Example: SAC Training Manifest](../../configs/runpod/examples/train_sac_manifest.json)
 - [Example: Provider Bring-Up Manifest](../../configs/runpod/examples/provider_bringup_manifest.json)
+- [Example: Benchmark Candidate Manifest](../../configs/runpod/examples/benchmark_candidate_training_manifest_v2.json)

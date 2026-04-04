@@ -19,31 +19,51 @@ It complements but does not replace the nightly audit. The nightly audit is an i
 
 The nightly audit answers: "What is the single safest next step?" The companion answers: "Where are we actually stuck, what should we do about it, and are our docs honest?"
 
-## Output Types
+## Preferred Output Types
 
-### bottleneck_report
+The companion should prefer bounded artifacts over essays.
 
-Ranked table of roadmap bottlenecks with severity (high/medium/low), type (structural/external), and suggested resolution. Use when progress has stalled or priorities are unclear.
+### `ranked_next_actions`
 
-### next_actions
+Ranked list of 3-5 highest-leverage tasks. Each item should include:
 
-Ranked list of 3-5 highest-leverage tasks. Each item includes what to do, why now, what it unblocks, a verification command, and an explicit scope boundary. Use before planning sessions or after a tranche lands.
+- **What**
+- **Why now**
+- **Unblocks**
+- **Verify**
+- **Do NOT**
+- **Confidence**
+- **Blocking**
 
-### claim_audit
+### `bottleneck_report`
 
-Line-by-line comparison of doc claims against code/test/artifact reality. Each claim is marked `verified`, `unverified`, `blocked`, or `inferred`. Use when doc drift is suspected or before a phase closure review.
+Ranked table of roadmap bottlenecks with severity, type, and suggested resolution.
 
-### upstream_comparison
+### `claim_vs_code_audit`
 
-Structured comparison table for evaluating whether to adopt, adapt, or ignore an approach from an upstream project (LeRobot, Habitat, Feynman, etc.). Use when a specific upstream pattern is under consideration.
+Line-by-line comparison of doc claims against code/test/artifact reality. Each claim should be marked `verified`, `unverified`, `blocked`, or `inferred`.
 
-### experiment_matrix
+### `run_comparison_summary`
 
-Proposed experiment grid for a subsystem, including hypotheses, inputs, expected outputs, verification commands, and priority. Use when a subsystem needs empirical validation before committing to an approach.
+Bounded summary of a benchmark-, promotion-, or deployment-oriented run family. It should mirror the run comparison artifact shape:
 
-### refactor_recommendation
+- baseline
+- candidate run(s)
+- what changed
+- what improved
+- what regressed
+- confidence level
+- promotion implication
+- roadmap implication
+- next recommended action
 
-Specific refactor proposal with scope, motivation, before/after description, verification commands, risk assessment, and scope boundary. Use when structural debt is blocking progress.
+### Additional Supported Outputs
+
+- `upstream_comparison`
+- `experiment_matrix`
+- `refactor_recommendation`
+
+These remain valid, but the companion should default toward the four bounded output types above when possible.
 
 ## Integration with Execution Planes
 
@@ -60,27 +80,33 @@ The companion does not invoke Codex directly. It produces specs that the develop
 
 ### RunPod GPU Execution
 
-When a recommendation requires GPU resources (model inference, training runs, benchmark evaluation), the companion flags it as `type: external` and specifies:
+When a recommendation requires GPU resources (model inference, training runs, benchmark evaluation), the companion should flag:
 
-- What RunPod configuration is needed (GPU type, container image)
-- What script or command to run
-- What artifacts to collect
-- Where results should be written (`results/run_registry/`)
+- required `run_class`
+- expected `epistemic_status`
+- RunPod configuration needed (GPU type, container image)
+- script or command to run
+- artifacts to collect
+- where results should be written (`results/run_registry/`)
+- whether a comparison artifact should be expected on completion
 
 See `codex_skills/runpod-gpu-execution/` for the RunPod execution skill.
 
-## When to Invoke
+## Queue-Prioritization Awareness
 
-| Trigger | Recommended Output Types |
-|---------|-------------------------|
-| After a Codex tranche lands | `claim_audit`, `next_actions` |
-| Before a planning session | `bottleneck_report`, `next_actions` |
-| When progress stalls | `bottleneck_report`, `upstream_comparison` |
-| Weekly strategic review | `claim_audit`, `bottleneck_report` |
-| Before phase closure review | `claim_audit` |
-| Evaluating an upstream approach | `upstream_comparison` |
-| Subsystem needs empirical validation | `experiment_matrix` |
-| Structural debt blocking progress | `refactor_recommendation` |
+When reasoning across multiple runnable ideas, the companion should use or surface fields such as:
+
+- `wm`
+- `subsystem`
+- `blocker`
+- `run_class`
+- `epistemic_status`
+- `expected_value`
+- `estimated_cost_usd`
+- `dependency_chain`
+- `urgency`
+
+This does not make the companion a scheduler. It simply ensures that recommendations are queue-legible once there are multiple concurrent GPU windows.
 
 ## Example Companion Session
 
@@ -88,10 +114,11 @@ A typical session after a Codex tranche lands:
 
 1. Read the full Read First list from the skill definition.
 2. Run `python3 -m compileall src/ && pytest tests/ -v` to confirm repo state.
-3. Produce a `claim_audit` comparing the tranche's claimed outputs against actual code and tests.
-4. Produce `next_actions` ranking the 3-5 highest-leverage follow-up tasks.
-5. If any recommendation requires GPU resources, flag it with RunPod configuration.
-6. If any recommendation involves an upstream approach, produce an `upstream_comparison`.
+3. Produce a `claim_vs_code_audit` comparing the tranche's claimed outputs against actual code and tests.
+4. Produce `ranked_next_actions` ranking the 3-5 highest-leverage follow-up tasks.
+5. If any recommendation requires GPU resources, specify run class, epistemic status, and RunPod configuration.
+6. If any recommendation is benchmark- or promotion-oriented, state whether a comparison artifact should be emitted.
+7. If any recommendation involves an upstream approach, produce an `upstream_comparison`.
 
 The session output is a set of structured documents, not code changes. The developer or Codex acts on the recommendations.
 
@@ -101,4 +128,4 @@ The session output is a set of structured documents, not code changes. The devel
 - **Treating recommendations as mandates.** Recommendations are advisory. The developer decides priority based on full context.
 - **Ignoring phase sequencing.** The companion respects the phase exit rule. If it recommends Phase 3 work while Phase 2 is open, that recommendation must be clearly marked as spec-only, not implementation.
 - **Running the companion without reading the repo first.** The companion's value depends entirely on grounding in current repo state. Stale context produces stale recommendations.
-- **Producing unbounded output.** The companion produces ranked lists of 3-5 items. If the output grows beyond that, the companion is being used wrong.
+- **Producing elegant but non-actionable essays.** If the companion cannot reduce uncertainty into a bounded output shape, it should state what is missing rather than expand rhetorically.

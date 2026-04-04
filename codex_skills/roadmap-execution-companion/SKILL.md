@@ -41,10 +41,29 @@ Before proposing any action, read these in order:
    - **Confidence**: `high` / `medium` / `low` (based on how well the repo state supports the recommendation)
    - **Blocking**: `blocks-phase-exit` / `blocks-downstream` / `nice-to-have`
 9. Do not recommend work that is already done (check code and tests, not just docs) or work that is externally blocked (GPU, weights, sensor data) unless the recommendation is to document the blocker.
+10. Prefer bounded artifact outputs over elegant commentary. If uncertainty cannot yet be reduced into a bounded artifact shape, explicitly state what information is missing.
+11. When a recommendation implies remote execution, specify the expected `run_class` and `epistemic_status` so the resulting run is decision-legible rather than merely executable.
 
-## Output Types
+## Preferred Output Types
 
-### 1. `bottleneck_report`
+### 1. `ranked_next_actions`
+
+Ranked next 3-5 highest-leverage tasks.
+
+```
+## Ranked Next Actions (YYYY-MM-DD)
+
+### 1. [Action title]
+- **What**: ...
+- **Why now**: ...
+- **Unblocks**: ...
+- **Verify**: `command`
+- **Do NOT**: ...
+- **Confidence**: high | medium | low
+- **Blocking**: blocks-phase-exit | blocks-downstream | nice-to-have
+```
+
+### 2. `bottleneck_report`
 
 Ranked list of bottlenecks with severity and suggested resolution.
 
@@ -57,29 +76,12 @@ Ranked list of bottlenecks with severity and suggested resolution.
 | 2    | ...       | medium   | external   | ... |
 ```
 
-### 2. `next_actions`
-
-Ranked next 3-5 highest-leverage tasks.
-
-```
-## Next Actions (YYYY-MM-DD)
-
-### 1. [Action title]
-- **What**: ...
-- **Why now**: ...
-- **Unblocks**: ...
-- **Verify**: `command`
-- **Do NOT**: ...
-- **Confidence**: high | medium | low
-- **Blocking**: blocks-phase-exit | blocks-downstream | nice-to-have
-```
-
-### 3. `claim_audit`
+### 3. `claim_vs_code_audit`
 
 Comparison of doc claims vs code/test/artifact reality.
 
 ```
-## Claim Audit (YYYY-MM-DD)
+## Claim vs Code Audit (YYYY-MM-DD)
 
 | Claim (source doc) | Code/Test Evidence | Status |
 |--------------------|-------------------|--------|
@@ -87,48 +89,35 @@ Comparison of doc claims vs code/test/artifact reality.
 | "Y is wired" (progress_log.md) | no test, stub only | unverified |
 ```
 
-### 4. `upstream_comparison`
+### 4. `run_comparison_summary`
+
+Bounded summary of a benchmark-, promotion-, or deployment-oriented run family.
+
+```
+## Run Comparison Summary (YYYY-MM-DD)
+
+- **Baseline**: ...
+- **Candidate runs**: ...
+- **What changed**: ...
+- **What improved**: ...
+- **What regressed**: ...
+- **Confidence level**: low | medium | high
+- **Promotion implication**: ...
+- **Roadmap implication**: ...
+- **Next recommended action**: ...
+```
+
+### 5. `upstream_comparison`
 
 Structured comparison of an upstream approach vs repo-native approach.
 
-```
-## Upstream Comparison: [Topic]
-
-| Aspect | Upstream ([repo/project]) | Repo-Native | Verdict |
-|--------|--------------------------|-------------|---------|
-| ...    | ...                      | ...         | copy directly / adapt carefully / do not import |
-
-**Rationale**: ...
-**Action items**: ...
-```
-
-### 5. `experiment_matrix`
+### 6. `experiment_matrix`
 
 Proposed experiment matrix for a specific subsystem.
 
-```
-## Experiment Matrix: [Subsystem]
-
-| Experiment | Hypothesis | Inputs | Expected Output | Verify Command | Priority |
-|-----------|-----------|--------|----------------|---------------|----------|
-| ...       | ...       | ...    | ...            | ...           | ...      |
-```
-
-### 6. `refactor_recommendation`
+### 7. `refactor_recommendation`
 
 Specific refactor with verification commands.
-
-```
-## Refactor Recommendation: [Title]
-
-- **Scope**: files and modules affected
-- **Motivation**: why this refactor is needed now
-- **Before/After**: brief structural description
-- **Verify before**: `command` (confirm current state)
-- **Verify after**: `command` (confirm refactor is correct)
-- **Risk**: what could break
-- **Do NOT**: scope boundary
-```
 
 ## Invocation Pattern
 
@@ -138,6 +127,22 @@ Run this companion:
 - **Before planning sessions**: to surface the actual highest-leverage next work
 - **When bottleneck detection is needed**: when progress stalls or priorities are unclear
 - **Weekly strategic review**: to audit claims vs reality and adjust the roadmap
+
+## Queue-Prioritization Awareness
+
+When comparing multiple runnable ideas, prefer or surface fields such as:
+
+- `wm`
+- `subsystem`
+- `blocker`
+- `run_class`
+- `epistemic_status`
+- `expected_value`
+- `estimated_cost_usd`
+- `dependency_chain`
+- `urgency`
+
+These do not turn the companion into a scheduler. They make its outputs legible once there are multiple concurrent GPU windows.
 
 ## Verification
 

@@ -18,6 +18,27 @@ Use this skill when the task requires GPU hardware that is not available locally
 
 If in doubt: if the task needs `torch.cuda.is_available() == True` to succeed, use RunPod.
 
+## Classification Axes
+
+A run should be classified along two axes:
+
+### Run Class
+
+- `loop`
+- `provider`
+- `train`
+- `refactor`
+
+### Epistemic Status
+
+- `smoke`
+- `proof_of_life`
+- `benchmark_candidate`
+- `promotion_candidate`
+- `deployment_candidate`
+
+A run is not fully described by `pod_class` alone. If `epistemic_status` is omitted, interpret the run conservatively as no stronger than `smoke`.
+
 ## Pod Classes
 
 ### `loop` — Workcell Loop Runs
@@ -86,9 +107,27 @@ Verify readiness:
 
 Every RunPod execution must produce a run manifest at `.agent/runs/runpod-<timestamp>/manifest.json`. See `docs/agent_ergonomics/run_manifest_schema.md` for the schema.
 
-The manifest records: pod class, commit SHA, commands executed, artifact locations, cost, and status. This is how agents and humans trace what ran where.
+The manifest should record not only pod class and commands, but also epistemic status, cost/time fields, queue-prioritization fields where known, and whether the run justified itself.
 
-Example manifests: `configs/runpod/examples/train_sac_manifest.json`, `configs/runpod/examples/provider_bringup_manifest.json`.
+Example manifests: `configs/runpod/examples/train_sac_manifest.json`, `configs/runpod/examples/provider_bringup_manifest.json`, `configs/runpod/examples/benchmark_candidate_training_manifest_v2.json`.
+
+## Comparison Artifacts
+
+Launching runs is not the hard part. Comparing them cleanly is.
+
+Every meaningful run family should eventually yield a comparison artifact with fields like:
+
+- `baseline`
+- `candidate_runs`
+- `what_changed`
+- `what_improved`
+- `what_regressed`
+- `confidence_level`
+- `promotion_implication`
+- `roadmap_implication`
+- `next_recommended_action`
+
+Use `results/run_registry/templates/run_comparison_template.md` as the default shape.
 
 ## Verification Commands
 
@@ -114,3 +153,12 @@ runpodctl get pod
 4. **Volume hygiene**: Persistent volumes accumulate data. Monitor disk usage and prune old checkpoints/replays.
 5. **Commit before launch**: Always launch from a clean, committed state so the manifest `commit_sha` is meaningful.
 6. **No force-push from pods**: Pods are for execution, not for git operations that modify remote history.
+
+## Stage-Appropriate Philosophy
+
+- enough structure for recurring multi-GPU work
+- but not a giant orchestration platform
+- not fake automation
+- not premature serverless/platform building
+
+The thin-wrapper + manifest + registry + skill posture remains the correct level.
