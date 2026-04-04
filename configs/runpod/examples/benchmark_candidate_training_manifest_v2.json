@@ -1,0 +1,54 @@
+{
+  "run_id": "runpod-20260915-153000-bmk001",
+  "mode": "runpod",
+  "pod_class": "train",
+  "run_class": "train",
+  "epistemic_status": "benchmark_candidate",
+  "commit_sha": "abcdef1",
+  "branch": "codex/multi-wm-architecture-plan",
+  "task": "Perception seam training benchmark candidate on curated workcell slice",
+  "wm": "perception_grounding",
+  "subsystem": "evidence_fusion_seam",
+  "blocker": "Need disciplined comparison against heuristic-init seam and prior loss schedule",
+  "config_paths": [
+    "configs/training/perception_seam/default.yaml",
+    "configs/workcell/curated_slice_occlusion.yaml"
+  ],
+  "seeds": [0, 42, 137],
+  "image": "nvidia/cuda:12.1.0-runtime-ubuntu22.04",
+  "template": "robotics-vp-core-gpu",
+  "pod_id": null,
+  "volume_id": "vol-123456",
+  "commands": [
+    "pip install -r requirements-gpu.txt",
+    "python -m src.training.run_perception_seam --config configs/training/perception_seam/default.yaml --slice configs/workcell/curated_slice_occlusion.yaml"
+  ],
+  "artifact_paths": [
+    "results/run_registry/runpod-20260915-153000-bmk001/metrics/",
+    "results/run_registry/runpod-20260915-153000-bmk001/checkpoints/"
+  ],
+  "status": "pending",
+  "started_at": null,
+  "finished_at": null,
+  "cost_snapshot": {
+    "collected_at": null,
+    "gpu_hours": null,
+    "estimated_cost_usd": 18.0,
+    "note": "pre-run estimate"
+  },
+  "gpu_class": "A100-80GB",
+  "wall_clock_seconds": null,
+  "artifact_size_bytes": null,
+  "storage_or_checkpoint_size_bytes": null,
+  "expected_value": "medium-high: needed to determine whether seam training is benchmark-credible and promotion-worthy",
+  "estimated_cost_usd": 18.0,
+  "dependency_chain": [
+    "provider smoke passes",
+    "curated slice finalized",
+    "comparison baseline declared"
+  ],
+  "urgency": "high",
+  "justified_itself": null,
+  "rollback_notes": "Do not promote seam defaults from this run without a comparison artifact.",
+  "replay_notes": "Re-run with the same seeds and config paths after baseline receipt is recorded."
+}
