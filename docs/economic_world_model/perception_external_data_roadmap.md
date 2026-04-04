@@ -310,44 +310,57 @@ Options:
 
 ## Implementation Priorities
 
-### Question: Embodiment-facing consumer wiring vs external-data-backed training first?
+### Current Status (2026-04-03)
 
-**Recommendation: External-data adapter work first**, for these reasons:
+**Phase A (Adapter-usable) is complete:**
+- ✅ `MultiProviderSample` adapter from LeRobot multi-camera episodes
+- ✅ `VJEPATemporalSample` adapter for temporal window extraction
+- ✅ Schema correctness verified via integration tests (43 tests)
+- ⏳ KITTI adapter for depth seam — deferred (domain mismatch concern)
 
-1. **Adapter work requires no GPU**: Wire the data intake now, verify schemas work,
-   establish evaluation metrics. This is achievable immediately.
+### Phase 2 Priority Stack (Ordered)
 
-2. **Foundation before consumption**: If perception seams are trained only on synthetic data,
-   wiring them to Embodiment consumers tests the interface but not the usefulness. The
-   Embodiment WM would consume low-credibility perception outputs.
+Now that adapter work is done, the priority stack is:
 
-3. **Prototype-trainable for verification**: Small CPU proof-of-life on `droid_100`
-   (100 episodes) verifies the full pipeline works end-to-end before GPU investment.
+1. **Embodiment-facing shadow consumer** (highest priority)
+   - Biggest proving ground for Phase 2
+   - Until Perception outputs affect something embodiment-relevant, Phase 2 risks staying perception-internal
+   - This is where Perception stops being descriptive and starts being robot-useful
 
-4. **Promotion-credible training is GPU-era**: Meaningful training at scale to support
-   actual promotion decisions will wait for GPU availability. This is honest.
+2. **More receipt emission / provider truth**
+   - Remaining Perception receipts not yet live
+   - Keeps seam lifecycle and promotion legible
 
-5. **Depth seam remains blocked differently**: DepthMetricCalibrationSeam needs KITTI
-   adapter (no GPU) plus domain-appropriate training (GPU).
+3. **Prototype-train proof-of-life** (only if cheap)
+   - Tiny `droid_100` subset run to verify adapter → seam → trainer path is real
+   - NOT a big training push
+   - Just enough to confirm loss decreases on real data
 
-### Concrete next steps (GPU-honest)
+4. **Hold promotion claims**
+   - Structural path now exists
+   - Promotion-credible training remains a GPU-era event
+   - Be honest about this
 
-**Phase A: Adapter-usable now (no GPU)**
+### Caution: Adapter Comfort Zone
 
-1. Add `MultiProviderSample` adapter from LeRobot multi-camera episodes
-2. Add `VJEPATemporalSample` adapter for temporal window extraction
-3. Verify schema correctness: load `droid_100`, construct samples, verify shapes
-4. Add KITTI adapter for depth seam data intake (separate from training)
+Do not let the adapter layer become another comfort zone.
+
+It exists to serve:
+- seam training
+- downstream usefulness
+- promotion honesty
+
+It should NOT become its own mini-project.
+
+### Remaining GPU-era work
 
 **Phase B: Prototype-trainable (CPU / dev GPU)**
-
 1. Run EvidenceFusionSeam on `droid_100` (100 episodes) — verify loss decreases
 2. Run VJEPATemporalAlignmentSeam on `droid_100` temporal windows — verify loss decreases
 3. Establish baseline metrics for later comparison at scale
 4. Document what scale/data is needed for promotion-credible evaluation
 
 **Phase C: Promotion-credible (GPU required)**
-
 1. Scale to full DROID + Bridge datasets (GPU)
 2. Train to convergence with proper validation splits
 3. Run benchmark gates on held-out external data

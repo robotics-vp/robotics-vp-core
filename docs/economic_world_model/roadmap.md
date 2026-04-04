@@ -495,10 +495,15 @@ Current branch status:
 - the first shadow consumers are landed in:
   - `src/world_model/sim_synth_physics/adapters/semantic_inputs.py`
   - `src/vla/rollout_labeler.py`
-- the next best Phase 2 work is therefore:
-  - live receipt emission
-  - provider/runtime inventory truth
-  - additional downstream consumers
+- external data adapter pathway is now real (`lerobot_perception_adapter.py`)
+- seam training infrastructure is landed (losses, data loaders, trainer, benchmarks)
+- the next best Phase 2 work is therefore (in priority order):
+  1. **Embodiment-facing shadow consumer** — biggest proving ground; until Perception outputs affect something embodiment-relevant, Phase 2 risks staying perception-internal
+  2. **More receipt emission / provider truth** — remaining Perception receipts not yet live, keeps seam lifecycle and promotion legible
+  3. **Small prototype-train proof-of-life** (only if cheap) — tiny subset run on droid_100 to verify adapter → seam → trainer path is real; NOT a big training push
+  4. **Hold off on pretending promotion is near** — structural path exists, but promotion-credible training is still a GPU-era event
+
+**Caution**: Do not let the adapter layer become another comfort zone. It exists to serve seam training, downstream usefulness, and promotion honesty—not to become its own mini-project.
 
 This borrows the useful layering pattern from Habitat-style stacks:
 

@@ -1495,7 +1495,14 @@ Current branch status:
 - first shadow consumers are landed:
   - Sim / Synth semantic-context consumption
   - rollout-labeling / annotation consumption
-- the next Phase 2 cut is not more schema work; it is provider/runtime truth, receipt emission, and additional downstream consumption
+- external data adapter pathway landed (`lerobot_perception_adapter.py` + `perception_external_data_roadmap.md`)
+- seam training infrastructure landed (losses, datasets, trainer, benchmarks in `src/training/perception_seam_*.py`)
+- **Phase 2 priority stack (ordered)**:
+  1. **Embodiment-facing shadow consumer** — biggest proving ground; Perception must affect embodiment-relevant outputs to avoid staying perception-internal
+  2. **Receipt emission / provider truth** — remaining Perception receipts, seam lifecycle legibility
+  3. **Prototype-train proof-of-life** (cheap only) — tiny `droid_100` subset to verify adapter→seam→trainer path; not a training push
+  4. **Hold promotion claims** — structural path exists, promotion-credible training is GPU-era
+- **Caution**: adapter layer serves seam training and downstream usefulness, not its own mini-project
 
 #### Open-Vocabulary Concept Segmentation and Video Tracking
 
