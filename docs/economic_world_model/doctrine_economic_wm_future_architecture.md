@@ -373,6 +373,95 @@ Confirmed architecture patterns:
 The allocator should emit `ParetoFrontierSlice` objects with tail-risk
 metadata, not raw scalar weights.
 
+#### Discrete Receding-Horizon Allocation Solver (future sublane)
+
+**Status:** future import, not current implementation priority.
+
+A bounded **finite-set / combinatorial / receding-horizon allocation solver
+lane** may sit inside the Economic Allocator / Compiler for problems where
+the action space is naturally discrete or can be discretized into a small
+finite set. This lane is motivated by work on QUBO / Ising-formulated
+Model Predictive Path Integral (MPPI) control (Werthen-Brabants & Simoens,
+arXiv:2512.15533), which reformulates sampling-based MPC as Quadratic
+Unconstrained Binary Optimization suitable for Gibbs sampling on Ising
+machines.
+
+**What it is for:**
+
+- short-horizon discrete compute-budget routing
+- sim-budget routing under tight constraints
+- replay / training-slice selection with finite candidate sets
+- queue dispatch / backlog relief under finite action sets
+- operator-attention allocation across discrete alternatives
+- other combinatorial resource-routing decisions where action spaces are
+  naturally discrete or can be discretized without excessive quantization loss
+
+**Topological placement:**
+
+- **downstream of** `EconomicState`, `EconomicRegime`,
+  `SlowManifoldProjection`, and forecast outputs from the Economic Dynamics
+  Model
+- **inside / alongside** the Economic Allocator / Compiler as a bounded
+  optimization sublane for discrete short-horizon choices
+- **upstream of** downward typed allocation / shaping transport to lower WMs
+
+The estimator and dynamics model remain the primary upstream backbone. This
+lane does not replace the broader distributional Pareto allocation logic
+(`ParetoFrontierSlice`, `ShadowPriceField`, `AllocationEnvelope`). It is a
+compile/solve lane for discrete combinatorial subproblems that arise within
+the allocator's scope.
+
+**Surrounding neural architecture:**
+
+The Ising / QUBO solver lane is wrapped by, not a replacement for:
+
+- **DS3M / RED-SDS / regime-aware sequence models** as the primary Economic
+  State Estimator candidates (unchanged)
+- **regime-conditioned dynamics / counterfactual forecasting** upstream
+  (unchanged)
+- **distributional Pareto / risk-aware allocator logic** as the primary
+  allocation backbone (unchanged)
+- **shadow-price / augmented-Lagrangian resource pricing** for meso-timescale
+  constraint management (unchanged)
+
+Additional bounded architecture around this lane:
+
+- a typed task/resource graph or finite-set encoder for candidate discrete
+  actions (inputs to the QUBO formulation)
+- optionally, a small amortized warm-start proposer for nominal discrete
+  plans (reducing solver cold-start cost)
+- scenario-conditioned compile inputs from stress-test rollouts (the solver
+  receives frontier/risk context, not raw state)
+
+**What it is not:**
+
+- not the Economic WM's main neural architecture or optimizer
+- not a replacement for typed `ParetoFrontierSlice` / `ShadowPriceField` /
+  `AllocationEnvelope` surfaces
+- not a robot motor-control import; it is reinterpreted as a discrete
+  resource-routing solver inside an economic allocation context
+- not placed in the Economic State Estimator, Economic Dynamics Model,
+  Economic Governance / Reciprocity layer, or the meta-regal WM
+
+**Paper-specific limitations and bounded posture:**
+
+- **Nominal-trajectory dependence:** the QUBO formulation linearizes around a
+  nominal trajectory, introducing bias when the true optimum deviates
+  significantly from the nominal
+- **Discretization / quantization cost:** continuous action spaces must be
+  encoded into binary variables, with precision limited by bit budget and
+  problem size growing with the number of bits per dimension
+- **Finite-set bias:** the restricted discrete action set may exclude optimal
+  continuous solutions; suitable only where the action space is naturally
+  finite or where quantization loss is acceptable
+- **Hardware promise is future-facing and optional:** probabilistic-computing /
+  p-bit / Ising hardware is an interesting potential backend but should remain
+  a future optional acceleration target, not a current architecture dependency;
+  conventional sampling or simulated annealing suffices for evaluation
+- **Short-horizon suitability:** computational tractability decreases with
+  horizon length; this lane is appropriate for receding-horizon subproblems,
+  not long-range planning
+
 ### 4. Economic Governance / Reciprocity Layer
 
 Makes the Economic WM reciprocally coupled to lower WMs.

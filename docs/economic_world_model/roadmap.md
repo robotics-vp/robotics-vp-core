@@ -432,6 +432,21 @@ Borrow as **algorithmic patterns**, not worldview:
 
 Neuralization follows typed ontology and transport design, not precedes it.
 
+### Optional discrete allocation solver sublane (future, post Stage B/C/D)
+
+Once Stage B–D neuralization structures are real (neural state estimation,
+dynamics/forecasting, distributional Pareto allocator), evaluate an **optional
+finite-set receding-horizon allocation solver lane** inside the Economic
+Allocator / Compiler for discrete combinatorial routing problems
+(compute-budget routing, sim-budget dispatch, replay-slice selection, queue
+relief under finite action sets). Motivated by QUBO / Ising-formulated MPPI
+(arXiv:2512.15533). This lane is downstream of estimated state + forecast +
+frontier/risk structure. It does not replace the primary estimator, dynamics,
+or distributional Pareto allocator doctrine. Treat probabilistic-computing /
+Ising hardware as a future optional backend, not a current dependency. See
+`doctrine_economic_wm_future_architecture.md` § Discrete Receding-Horizon
+Allocation Solver for full placement and limitations.
+
 Full doctrine: `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`
 
 ## Future Meta-Regal-Node Superposition WM Posture
