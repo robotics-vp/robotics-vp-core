@@ -1802,13 +1802,22 @@ Current branch status:
 - first shadow consumers are landed:
   - Sim / Synth semantic-context consumption
   - rollout-labeling / annotation consumption
+- embodiment-facing shadow consumption is landed
 - external data adapter pathway landed (`lerobot_perception_adapter.py` + `perception_external_data_roadmap.md`)
 - seam training infrastructure landed (losses, datasets, trainer, benchmarks in `src/training/perception_seam_*.py`)
+- first bounded annotation-export successor lane is landed:
+  - `AnnotationBridgeProjectionSeam`
+  - annotation-export evaluation + provisional-evidence gating
+  - trainer wiring, registry wiring, and focused tests
+- persisted benchmark-evidence artifact contract is landed:
+  - object-token provenance preserved through annotation export
+  - graph transformer / annotation bridge / provider-adapter promotion paths accept persisted benchmark evidence
+  - heuristic object-token evidence is explicit non-promoting fallback rather than silent promotion evidence
 - **Phase 2 priority stack (ordered)**:
-  1. **Embodiment-facing shadow consumer** — biggest proving ground; Perception must affect embodiment-relevant outputs to avoid staying perception-internal
-  2. **Receipt emission / provider truth** — remaining Perception receipts, seam lifecycle legibility
-  3. **Prototype-train proof-of-life** (cheap only) — tiny `droid_100` subset to verify adapter→seam→trainer path; not a training push
-  4. **Hold promotion claims** — structural path exists, promotion-credible training is GPU-era
+  1. **Graph-transformer benchmark evidence production** — make non-provisional persisted evidence routine on the annotation-export path, not only structurally supported
+  2. **Runtime provider-backed token production** — source benchmark object tokens from real vision-backbone / V-JEPA outputs on the live path rather than mainly by explicit compile-time injection
+  3. **Provider-specific benchmark artifact producers** — add honest artifact lanes and trainer-manifest linkage for `vision_backbone_projection`, `sam_calibration`, `depth_metric_calibration`, and `vjepa_temporal_alignment`
+  4. **Hold promotion claims until dependency order is satisfied** — `vision_backbone_projection` before `scene_graph_transformer`, then `annotation_bridge_projection`, then provider calibrators
 - **Caution**: adapter layer serves seam training and downstream usefulness, not its own mini-project
 
 #### Open-Vocabulary Concept Segmentation and Video Tracking

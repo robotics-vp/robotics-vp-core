@@ -130,7 +130,8 @@ The right Habitat-level lessons are already in the branch:
 - deployment/headroom surfaces as lower-WM typed state
 
 No further Habitat copying is needed for Perception; the remaining work is
-neuralization and receipt emission.
+real benchmark-evidence production, runtime materialization of provider-backed
+token paths, and provider-specific calibration artifact generation.
 
 ### Sim / Synth / Physics WM (Phase 1.x) — biggest remaining opportunity
 
@@ -527,14 +528,16 @@ Current branch status:
 - external data adapter pathway is now real (`lerobot_perception_adapter.py`)
 - seam training infrastructure is landed (losses, data loaders, trainer, benchmarks)
 - **Landed 2026-04-04**: embodiment-facing shadow consumer (`embodiment_shadow_consumer.py`), full 8-receipt-type emission in compiler, 7-subsystem internal decomposition codified
+- **Landed 2026-04-08**: bounded annotation-export successor lane with `AnnotationBridgeProjectionSeam`, annotation-export evaluation, trainer wiring, and provisional-evidence gating
+- **Landed 2026-04-08**: persisted benchmark-evidence artifact contract with provenance-bearing annotation export and stricter promotion gating for graph transformer / annotation bridge / provider-adapter seams
 - 3 shadow consumers now wired: SimSynth, Annotation/VLA, Embodiment
 - full receipt family live: ProviderAvailability, EvidenceFusion, ProviderInvocation, GroundingCalibration, InferenceHeadroom, DeploymentResource, TemporalGrounding, PerceptionContribution
 - the next best Phase 2 work is therefore (in priority order):
-  1. ~~**Embodiment-facing shadow consumer**~~ ✓ landed
-  2. ~~**More receipt emission / provider truth**~~ ✓ landed (all 8 receipt types live)
-  3. **Small prototype-train proof-of-life** (only if cheap) — tiny subset run on droid_100 to verify adapter → seam → trainer path is real; NOT a big training push
-  4. **Provider contract bring-up** — SAM 3/3.1, DINOv2/SigLIP, V-JEPA 2, Depth typed contracts need real-or-unavailable posture with actual GPU execution (external blocker)
-  5. **Hold off on pretending promotion is near** — structural path exists, but promotion-credible training is still a GPU-era event
+  1. **Graph-transformer benchmark evidence production** — make non-provisional persisted evidence routine on the annotation-export path, not only structurally supported
+  2. **Runtime provider-backed token production** — source benchmark object tokens from real vision-backbone / V-JEPA outputs on the live path rather than mainly by explicit compile-time injection
+  3. **Provider-specific benchmark artifact producers** — add honest artifact lanes and trainer-manifest linkage for `vision_backbone_projection`, `sam_calibration`, `depth_metric_calibration`, and `vjepa_temporal_alignment`
+  4. **Provider contract bring-up** — SAM 3/3.1, DINOv2/SigLIP, V-JEPA 2, Depth typed contracts still need real-or-unavailable posture with actual GPU execution on real hosts
+  5. **Hold off on pretending promotion is near** — structural path exists, but promotion-credible training still depends on dependency-ordered benchmark evidence (`vision_backbone_projection` → `scene_graph_transformer` → `annotation_bridge_projection` → provider calibrators)
 
 **Caution**: Do not let the adapter layer become another comfort zone. It exists to serve seam training, downstream usefulness, and promotion honesty—not to become its own mini-project.
 

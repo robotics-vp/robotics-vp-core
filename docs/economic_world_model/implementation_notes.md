@@ -1,5 +1,70 @@
 # Economic World Model Implementation Notes
 
+## 2026-04-08 — Phase 2 Perception / Grounding: benchmark-evidence discipline is now load-bearing
+
+### What changed
+
+The Perception / Grounding WM no longer treats benchmark evidence as an
+untyped side dict around the seam path.
+
+This pass made three concrete corrections:
+
+- the annotation-export lane now has a real bounded neural successor:
+  - `AnnotationBridgeProjectionSeam`
+  - `annotation_bridge_projection_loss`
+  - trainer dispatch / registry wiring
+- annotation-export evaluation now preserves evidence provenance and refuses
+  promotion when the object-token source is still heuristic
+- graph transformer, annotation bridge, and provider-adapter promotion paths
+  now accept typed persisted benchmark-evidence artifacts rather than relying
+  on ambient in-memory mappings
+
+### Why this matters
+
+The important correction was not just “one more seam.”
+
+It was making the promotion contract honest along the whole lower-WM lane:
+
+- provider-backed object tokens are now preferred when benchmark/evaluation
+  logic needs token matrices
+- heuristic scene-graph tokens remain allowed only as explicit provisional
+  fallback
+- receipts and promotion resolvers now preserve that distinction instead of
+  silently treating heuristic evidence as promotion-grade
+- annotation export is now part of the promotion-evidence path, not only a
+  downstream labeling convenience
+
+This keeps the current Phase 2 posture aligned with the repo’s anti-fake-
+promotion rule: structural wiring is allowed to land before GPU-era training,
+but promotion cannot silently advance ahead of honest evidence.
+
+### Current Phase 2 subsystem posture
+
+- provider surface and canonical scene substrate are real and loop-facing
+- shadow consumers now exist for sim/synth, annotation/export, and embodiment
+- evidence routing / fusion has a first bounded neural seam
+- annotation bridge now has its own bounded projection seam and training lane
+- benchmark-evidence artifacts are now typed and persisted
+- promotion governance is stricter for:
+  - `scene_graph_transformer`
+  - `annotation_bridge_projection`
+  - provider-adapter seams
+
+### Honest remaining work
+
+The remaining bottleneck is no longer “missing seam scaffolding.”
+
+It is the absence of routine non-provisional artifact production upstream of
+promotion:
+
+1. graph-transformer benchmark evidence still needs a routine artifact
+   producer over the persisted annotation-export path
+2. benchmark object tokens should be produced by actual provider/runtime
+   outputs on the live path, not mainly by explicit compile-time inputs
+3. SAM / depth / V-JEPA provider calibrators still need their own benchmark
+   artifact producers and trainer-manifest linkage before promotion claims
+   become operational rather than structural
+
 ## 2026-04-03 — Phase 2 Reconciliation: semantic successor topology made explicit
 
 ### What changed

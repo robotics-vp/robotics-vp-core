@@ -1,5 +1,27 @@
 # Economic World Model Progress Log
 
+## 2026-04-08 — Phase 2 Perception / Grounding WM: Annotation-Bridge Lane + Persistent Benchmark Evidence
+
+- **Changed**: completed the first bounded annotation-export projection lane and tightened promotion discipline around it:
+  - added `AnnotationBridgeProjectionSeam` in `src/world_model/perception_grounding/neural_seams.py`
+  - added `annotation_bridge_projection_loss` and trainer dispatch support in `src/training/perception_seam_losses.py` and `src/training/perception_seam_trainer.py`
+  - added annotation-export seam evaluation in `src/training/perception_seam_data.py`, including explicit provisional gating when evidence is derived from heuristic object tokens rather than provider-backed features
+  - wired compiler shadow execution, receipt emission, and promotion resolution for the annotation bridge in `src/world_model/perception_grounding/compiler.py`, `receipts.py`, and `promotion.py`
+- **Changed**: turned benchmark evidence from ad hoc dicts into a typed persisted artifact:
+  - added `src/world_model/perception_grounding/benchmark_evidence.py`
+  - annotation exports now preserve object-token provenance (`source_kind`, `truth_class`, `provider_id`, provisional flag) in `src/world_model/perception_grounding/annotation_export.py`
+  - graph transformer, annotation bridge, and provider-adapter promotion logic now accepts persisted benchmark evidence and stays in shadow monitoring when evidence is missing or provisional
+  - compiler benchmark-token selection now prefers provider-backed sources and only falls back to heuristic scene-graph tokens under an explicit non-promoting posture
+- **Verification**:
+  - `python3 -m compileall src`
+  - `python3 -m ruff check src/world_model/perception_grounding/annotation_export.py src/world_model/perception_grounding/benchmark_evidence.py src/world_model/perception_grounding/compiler.py src/world_model/perception_grounding/promotion.py src/world_model/perception_grounding/receipts.py src/world_model/perception_grounding/__init__.py src/training/perception_seam_data.py tests/test_annotation_bridge_projection.py tests/test_perception_grounding_compiler.py tests/test_perception_grounding_neural_seams.py`
+  - `python3 -m pytest tests/test_annotation_bridge_projection.py tests/test_perception_grounding_compiler.py tests/test_perception_grounding_neural_seams.py tests/test_perception_grounding_world_model.py -q`
+  - result: `138 passed`
+- **Next recommended task**:
+  1. make graph-transformer benchmark evidence routine and non-provisional by generating it directly from persisted annotation-export artifacts rather than only supporting the artifact contract structurally
+  2. turn benchmark object-token sourcing into a real runtime artifact path from vision-backbone / V-JEPA provider outputs instead of relying on explicit compile-time injection
+  3. add provider-specific benchmark artifact producers and trainer-manifest linkage for `vision_backbone_projection`, `sam_calibration`, `depth_metric_calibration`, and `vjepa_temporal_alignment`, then promote in dependency order: vision backbone projection → scene graph transformer → annotation bridge projection → provider calibrators
+
 ## 2026-04-04 — Doctrine: Autoencoder / Codebook Posture (stack + Economic WM + Embodiment)
 
 - **Updated** `docs/economic_world_model/neuralization_bridge_doctrine.md`: new § Autoencoder / Codebook Posture Across the Stack—layer taxonomy table; Perception, Semantic→Economic (Perceiver primary; optional bounded auxiliaries only), Embodiment, Sim (light), explicit non-role for transport/meta-governance
