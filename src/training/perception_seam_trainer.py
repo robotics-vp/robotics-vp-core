@@ -60,6 +60,7 @@ from src.world_model.perception_grounding.receipts import (
 
 from .perception_seam_losses import (
     SeamLossResult,
+    annotation_bridge_projection_loss,
     evidence_fusion_loss,
     sam_calibration_loss,
     scene_graph_transformer_loss,
@@ -381,7 +382,9 @@ class PerceptionSeamTrainer:
         batch: Any,
     ) -> SeamLossResult:
         """Compute loss for a batch based on seam type."""
-        if self.seam_type == "evidence_fusion":
+        if self.seam_type == "annotation_bridge_projection":
+            return self._compute_annotation_bridge_loss(batch)
+        elif self.seam_type == "evidence_fusion":
             return self._compute_evidence_fusion_loss(batch)
         elif self.seam_type == "sam_calibration":
             return self._compute_sam_calibration_loss(batch)
@@ -478,6 +481,27 @@ class PerceptionSeamTrainer:
             object_identity_labels=batch.object_identity_labels,
             scene_labels=getattr(batch, "scene_labels", None),
             cross_provider_embeddings=getattr(batch, "cross_provider_embeddings", None),
+        )
+
+    def _compute_annotation_bridge_loss(self, batch: SceneGraphBatch) -> SeamLossResult:
+        """Compute annotation bridge projection loss.
+
+        Reuses SceneGraphBatch: node_features are the object tokens,
+        node_labels are the class targets.  confidence_target and
+        affordance_target may be absent (graceful degradation).
+        """
+        result = self.seam(
+            batch.node_features,
+            node_mask=batch.node_mask,
+        )
+        return annotation_bridge_projection_loss(
+            class_logits=result["class_logits"],
+            confidence=result["confidence"],
+            affordance_scores=result["affordance_scores"],
+            class_labels=batch.node_labels,
+            confidence_targets=getattr(batch, "node_confidence_target", None),
+            affordance_targets=getattr(batch, "affordance_targets", None),
+            node_mask=batch.node_mask,
         )
 
     def _compute_scene_graph_loss(self, batch: SceneGraphBatch) -> SeamLossResult:

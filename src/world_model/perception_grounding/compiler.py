@@ -18,6 +18,7 @@ from src.world_model.semantic_world_model import SemanticWorldModelBuilder
 
 from .common import clip01, mapping, stable_id, strings
 from .receipts import (
+    AnnotationBridgeShadowReceipt,
     DeploymentResourceReceipt,
     EvidenceFusionReceipt,
     GraphTransformerShadowReceipt,
@@ -29,6 +30,7 @@ from .receipts import (
     TemporalGroundingReceipt,
 )
 from .promotion import (
+    resolve_annotation_bridge_helper,
     resolve_evidence_fusion_helper,
     resolve_graph_transformer_helper,
     resolve_provider_adapter_helper,
@@ -840,6 +842,150 @@ def _run_graph_transformer_shadow(
     )
 
 
+def _run_annotation_bridge_shadow(
+    *,
+    state_id: str,
+    scene_graph: SceneGraphState,
+    seam: Any,
+    seam_id: str = "annotation_bridge_projection_default",
+    benchmark_signals: Mapping[str, Any],
+    benchmark_evidence: Optional[Mapping[str, Any]] = None,
+    evidence_source_provisional: bool = True,
+) -> Optional[AnnotationBridgeShadowReceipt]:
+    """Run AnnotationBridgeProjectionSeam in shadow mode.
+
+    Projects heuristic scene-graph object tokens through the annotation
+    bridge and emits a shadow receipt.  The heuristic annotation path
+    remains canonical; this function only observes and reports.
+
+    When ``evidence_source_provisional`` is True, the object tokens are
+    heuristic (not real provider-backed features), so any benchmark
+    evidence is marked provisional and cannot drive promotion.
+
+    Returns None if the seam forward pass fails.
+    """
+    import time
+
+    import torch
+
+    benchmark_evidence_payload = mapping(benchmark_evidence)
+    effective_provisional = bool(
+        benchmark_evidence_payload.get(
+            "evidence_source_provisional",
+            evidence_source_provisional,
+        )
+    )
+
+    bridge_helper = resolve_annotation_bridge_helper(
+        loading_posture="auto",
+        benchmark_signals=dict(benchmark_signals),
+        evidence_source_provisional=effective_provisional,
+    )
+    promotion_stage = str(bridge_helper.get("promotion_stage", "heuristic_fallback"))
+    posture = str(bridge_helper.get("posture", "auto"))
+
+    tracks = scene_graph.object_tracks
+    n_nodes = len(tracks)
+    if n_nodes == 0:
+        return None
+
+    d_token = getattr(seam, "d_token", 128)
+    node_features_list = []
+    for track in tracks:
+        tok = list(track.feature_token)
+        if len(tok) < d_token:
+            tok = tok + [0.0] * (d_token - len(tok))
+        node_features_list.append(tok[:d_token])
+    node_features = torch.tensor(node_features_list, dtype=torch.float32)
+
+    t0 = time.perf_counter()
+    try:
+        seam.eval()
+        with torch.no_grad():
+            result = seam(node_features)  # unbatched: (N, d_token)
+    except Exception:
+        return None
+    latency_ms = (time.perf_counter() - t0) * 1000.0
+
+    confidence = result["confidence"]  # (N,)
+
+    class_accuracy = 0.0
+    confidence_mae = 1.0
+    affordance_accuracy = 0.0
+
+    # Without ground-truth labels at compile time, class_accuracy stays 0.
+    # Confidence MAE: deviation from 0.5 (uninformative prior)
+    confidence_mae = float((confidence - 0.5).abs().mean().item())
+
+    # Benchmark evidence: populated externally by evaluate_seam_on_annotations.
+    # At compile time we leave these at zero.
+    benchmark_evidence_present = bool(
+        benchmark_evidence_payload.get("benchmark_evidence_present", False)
+    )
+    annotation_supervision_score = clip01(
+        _safe_float(benchmark_evidence_payload.get("annotation_supervision_score", 0.0))
+    )
+    held_out_label_agreement = clip01(
+        _safe_float(benchmark_evidence_payload.get("held_out_label_agreement", 0.0))
+    )
+    downstream_usefulness_score = clip01(
+        _safe_float(benchmark_evidence_payload.get("downstream_usefulness_score", 0.0))
+    )
+    receipt_consistency = clip01(
+        _safe_float(benchmark_evidence_payload.get("receipt_consistency", 0.0))
+    )
+    benchmark_gate_score = clip01(
+        0.4 * annotation_supervision_score
+        + 0.3 * held_out_label_agreement
+        + 0.2 * downstream_usefulness_score
+        + 0.1 * receipt_consistency
+    )
+
+    if benchmark_evidence_present:
+        gate_score = (
+            clip01(_safe_float(benchmark_evidence_payload["gate_score"]))
+            if "gate_score" in benchmark_evidence_payload
+            else benchmark_gate_score
+        )
+    else:
+        gate_score = clip01(float(confidence.mean().item()))
+
+    if benchmark_evidence_present and not effective_provisional:
+        promotion_eligible = bool(
+            benchmark_evidence_payload.get("promotion_eligible", gate_score >= 0.6)
+        )
+    else:
+        promotion_eligible = False
+
+    param_count = sum(p.numel() for p in seam.parameters() if p.requires_grad)
+
+    return AnnotationBridgeShadowReceipt(
+        receipt_id=f"annotation_bridge_shadow_{state_id}",
+        seam_id=seam_id,
+        promotion_stage=promotion_stage,
+        posture=posture,
+        class_accuracy=class_accuracy,
+        confidence_mae=confidence_mae,
+        affordance_accuracy=affordance_accuracy,
+        benchmark_evidence_present=benchmark_evidence_present,
+        evidence_source_provisional=effective_provisional,
+        annotation_supervision_score=annotation_supervision_score,
+        held_out_label_agreement=held_out_label_agreement,
+        downstream_usefulness_score=downstream_usefulness_score,
+        receipt_consistency=receipt_consistency,
+        latency_ms=latency_ms,
+        param_count=param_count,
+        promotion_eligible=promotion_eligible,
+        gate_score=gate_score,
+        metadata={
+            "seam_type": "annotation_bridge_projection",
+            "d_token": d_token,
+            "graph_id": scene_graph.graph_id,
+            "n_nodes": n_nodes,
+        },
+    )
+
+
 def _semantic_bridge_registry(
     *,
     state_id: str,
@@ -1270,6 +1416,10 @@ def compile_perception_grounding_world_state(
     vision_backbone_projection_seam: Optional[Any] = None,
     depth_metric_calibration_seam: Optional[Any] = None,
     vjepa_temporal_alignment_seam: Optional[Any] = None,
+    annotation_bridge_projection_seam: Optional[Any] = None,
+    annotation_bridge_projection_seam_id: str = "annotation_bridge_projection_default",
+    annotation_bridge_benchmark_evidence: Optional[Mapping[str, Any]] = None,
+    annotation_bridge_evidence_provisional: bool = True,
     # Provider adapter inputs (optional, passed to seams when available)
     sam_mask_features: Optional[Any] = None,
     sam_raw_confidence: Optional[Any] = None,
@@ -1423,6 +1573,19 @@ def compile_perception_grounding_world_state(
             if output is not None:
                 provider_adapter_outputs["vjepa_temporal_alignment"] = output
 
+    # --- Annotation Bridge Projection shadow path ---
+    annotation_bridge_shadow_receipt: Optional[AnnotationBridgeShadowReceipt] = None
+    if annotation_bridge_projection_seam is not None:
+        annotation_bridge_shadow_receipt = _run_annotation_bridge_shadow(
+            state_id=state_id,
+            scene_graph=scene_graph,
+            seam=annotation_bridge_projection_seam,
+            seam_id=annotation_bridge_projection_seam_id,
+            benchmark_signals=benchmark_payload,
+            benchmark_evidence=annotation_bridge_benchmark_evidence,
+            evidence_source_provisional=annotation_bridge_evidence_provisional,
+        )
+
     deployment_surface = deployment_resource_surface or DeploymentResourceSurface(
         surface_id=f"deployment_resource_{state_id}",
         deployment_posture="unavailable",
@@ -1525,6 +1688,11 @@ def compile_perception_grounding_world_state(
             "graph_transformer_shadow_receipt": (
                 graph_transformer_shadow_receipt.to_dict()
                 if graph_transformer_shadow_receipt is not None
+                else None
+            ),
+            "annotation_bridge_shadow_receipt": (
+                annotation_bridge_shadow_receipt.to_dict()
+                if annotation_bridge_shadow_receipt is not None
                 else None
             ),
             "provider_availability_receipts": [r.to_dict() for r in provider_avail_receipts],

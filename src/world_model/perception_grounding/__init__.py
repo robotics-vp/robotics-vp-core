@@ -141,6 +141,7 @@ from .annotation_export import (
     save_annotation_export_json,
 )
 from .neural_seams import (
+    AnnotationBridgeProjectionSeam,
     EDGE_TYPE_VOCAB,
     DepthMetricCalibrationSeam,
     EvidenceFusionSeam,
@@ -151,6 +152,7 @@ from .neural_seams import (
     encode_provider_features,
 )
 from .promotion import (
+    resolve_annotation_bridge_helper,
     resolve_evidence_fusion_helper,
     resolve_graph_transformer_helper,
     resolve_provider_adapter_helper,
@@ -163,6 +165,7 @@ from .seam_registry import (
     create_default_registry,
 )
 from .receipts import (
+    AnnotationBridgeShadowReceipt,
     DeploymentResourceReceipt,
     EvidenceFusionReceipt,
     GraphTransformerShadowReceipt,
@@ -227,6 +230,7 @@ __all__ = [
     "SemanticBridgeRegistry",
     "SimSynthSemanticBridgeState",
     # Receipts
+    "AnnotationBridgeShadowReceipt",
     "DeploymentResourceReceipt",
     "EvidenceFusionReceipt",
     "GraphTransformerShadowReceipt",
@@ -254,6 +258,7 @@ __all__ = [
     "load_annotation_export_json",
     "save_annotation_export_json",
     # Neural seams
+    "AnnotationBridgeProjectionSeam",
     "DepthMetricCalibrationSeam",
     "EDGE_TYPE_VOCAB",
     "EvidenceFusionSeam",
@@ -267,6 +272,7 @@ __all__ = [
     "SeamDescriptor",
     "create_default_registry",
     # Promotion
+    "resolve_annotation_bridge_helper",
     "resolve_evidence_fusion_helper",
     "resolve_graph_transformer_helper",
     "resolve_provider_adapter_helper",

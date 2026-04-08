@@ -97,6 +97,16 @@ class VJEPATemporalAlignmentLossConfig:
     smoothness_weight: float = 0.1
 
 
+@dataclass(frozen=True)
+class AnnotationBridgeProjectionLossConfig:
+    """Configuration for annotation bridge projection loss computation."""
+
+    class_weight: float = 1.0
+    confidence_weight: float = 0.5
+    affordance_weight: float = 0.3
+    label_smoothing: float = 0.1
+
+
 # ---------------------------------------------------------------------------
 # Loss result dataclass
 # ---------------------------------------------------------------------------
@@ -912,11 +922,125 @@ def scene_graph_transformer_loss(
 
 
 # ---------------------------------------------------------------------------
+# Annotation Bridge Projection Seam Loss
+# ---------------------------------------------------------------------------
+
+
+def annotation_bridge_projection_loss(
+    *,
+    class_logits: torch.Tensor,
+    confidence: torch.Tensor,
+    affordance_scores: torch.Tensor,
+    class_labels: torch.Tensor,
+    confidence_targets: Optional[torch.Tensor] = None,
+    affordance_targets: Optional[torch.Tensor] = None,
+    node_mask: Optional[torch.Tensor] = None,
+    config: Optional[AnnotationBridgeProjectionLossConfig] = None,
+) -> SeamLossResult:
+    """Compute loss for AnnotationBridgeProjectionSeam training.
+
+    Primary: class prediction accuracy (cross-entropy on class_logits).
+    Secondary: confidence calibration (BCE on confidence vs annotation quality).
+    Auxiliary: affordance prediction (BCE on affordance_scores vs targets).
+
+    Args:
+        class_logits: ``(batch, N, n_categories)`` — predicted class logits.
+        confidence: ``(batch, N)`` — predicted confidence in [0, 1].
+        affordance_scores: ``(batch, N, n_affordances)`` — predicted affordances.
+        class_labels: ``(batch, N)`` int — ground truth category indices.
+        confidence_targets: ``(batch, N)`` float — annotation quality targets.
+        affordance_targets: ``(batch, N, n_affordances)`` float — affordance targets.
+        node_mask: ``(batch, N)`` bool — True for valid nodes.
+        config: Loss weights.
+
+    Returns:
+        SeamLossResult with total loss and component breakdown.
+    """
+    if config is None:
+        config = AnnotationBridgeProjectionLossConfig()
+
+    device = class_logits.device
+    component_losses: Dict[str, torch.Tensor] = {}
+    metrics: Dict[str, float] = {}
+
+    B, N, C = class_logits.shape
+
+    # Flatten for loss computation
+    flat_logits = class_logits.reshape(B * N, C)
+    flat_labels = class_labels.reshape(B * N)
+
+    if node_mask is not None:
+        valid = node_mask.reshape(B * N)
+        flat_logits = flat_logits[valid]
+        flat_labels = flat_labels[valid]
+
+    # Class prediction loss
+    if flat_logits.size(0) > 0:
+        class_loss = F.cross_entropy(
+            flat_logits,
+            flat_labels.clamp(0, C - 1),
+            label_smoothing=config.label_smoothing,
+        )
+        preds = flat_logits.argmax(dim=-1)
+        accuracy = (preds == flat_labels).float().mean().item()
+        metrics["class_accuracy"] = accuracy
+    else:
+        class_loss = torch.tensor(0.0, device=device)
+    component_losses["class_prediction"] = class_loss
+
+    # Confidence calibration loss
+    conf_loss = torch.tensor(0.0, device=device)
+    if confidence_targets is not None:
+        flat_conf = confidence.reshape(B * N)
+        flat_conf_tgt = confidence_targets.reshape(B * N)
+        if node_mask is not None:
+            flat_conf = flat_conf[valid]
+            flat_conf_tgt = flat_conf_tgt[valid]
+        if flat_conf.size(0) > 0:
+            conf_loss = F.binary_cross_entropy(
+                flat_conf.clamp(1e-6, 1 - 1e-6),
+                flat_conf_tgt.clamp(0, 1),
+            )
+            metrics["confidence_mae"] = float(
+                (flat_conf - flat_conf_tgt).abs().mean().item()
+            )
+    component_losses["confidence_calibration"] = conf_loss
+
+    # Affordance prediction loss
+    aff_loss = torch.tensor(0.0, device=device)
+    if affordance_targets is not None:
+        flat_aff = affordance_scores.reshape(B * N, -1)
+        flat_aff_tgt = affordance_targets.reshape(B * N, -1)
+        if node_mask is not None:
+            flat_aff = flat_aff[valid]
+            flat_aff_tgt = flat_aff_tgt[valid]
+        if flat_aff.size(0) > 0:
+            aff_loss = F.binary_cross_entropy(
+                flat_aff.clamp(1e-6, 1 - 1e-6),
+                flat_aff_tgt.clamp(0, 1),
+            )
+    component_losses["affordance_prediction"] = aff_loss
+
+    total_loss = (
+        config.class_weight * class_loss
+        + config.confidence_weight * conf_loss
+        + config.affordance_weight * aff_loss
+    )
+
+    return SeamLossResult(
+        total_loss=total_loss,
+        component_losses=component_losses,
+        metrics=metrics,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Loss registry
 # ---------------------------------------------------------------------------
 
 
 SEAM_LOSS_REGISTRY: Dict[str, Any] = {
+    "annotation_bridge_projection": annotation_bridge_projection_loss,
     "evidence_fusion": evidence_fusion_loss,
     "sam_calibration": sam_calibration_loss,
     "vision_backbone_projection": vision_backbone_projection_loss,
@@ -938,6 +1062,7 @@ def get_seam_loss_fn(seam_type: str):
 
 __all__ = [
     # Config classes
+    "AnnotationBridgeProjectionLossConfig",
     "DepthMetricCalibrationLossConfig",
     "EvidenceFusionLossConfig",
     "SAMCalibrationLossConfig",
@@ -947,6 +1072,7 @@ __all__ = [
     # Result
     "SeamLossResult",
     # Loss functions
+    "annotation_bridge_projection_loss",
     "depth_metric_calibration_loss",
     "evidence_fusion_loss",
     "get_seam_loss_fn",

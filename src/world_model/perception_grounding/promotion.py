@@ -493,7 +493,108 @@ def resolve_provider_adapter_helper(
     }
 
 
+def resolve_annotation_bridge_helper(
+    *,
+    loading_posture: str,
+    benchmark_signals: Mapping[str, Any],
+    evidence_signals: Optional[Mapping[str, Any]] = None,
+    evidence_source_provisional: bool = True,
+) -> Dict[str, Any]:
+    """Resolve Annotation Bridge Projection helper posture.
+
+    The annotation bridge projection is the Perception-owned projection
+    from object tokens to annotation labels.  Same disabled|auto|required
+    posture pattern as other resolvers, with one additional constraint:
+
+    If ``evidence_source_provisional`` is True (default), benchmark
+    evidence was derived from heuristic object tokens, not real
+    provider-backed features.  Provisional evidence blocks promotion
+    regardless of benchmark gate score — the seam runs in shadow mode
+    only, emitting diagnostic receipts.
+    """
+    posture = str(loading_posture or "disabled")
+    benchmark_ready = bool(
+        benchmark_signals.get("ready", False)
+        or benchmark_signals.get("benchmark_eligible", False)
+    )
+    benchmark_gate = dict(benchmark_signals.get("benchmark_gate", {}) or {})
+
+    if posture == "disabled":
+        return {
+            "helper_active": False,
+            "promotion_stage": "heuristic_fallback",
+            "helper_weight": 0.0,
+            "posture": "disabled",
+            "evidence_source_provisional": evidence_source_provisional,
+        }
+
+    # Provisional evidence blocks promotion even if benchmark gate passes
+    effective_benchmark_ready = benchmark_ready and not evidence_source_provisional
+
+    if posture == "required":
+        if effective_benchmark_ready:
+            should_demote, reason = _check_demotion(
+                benchmark_gate, dict(evidence_signals or {})
+            )
+            if should_demote:
+                return {
+                    "helper_active": True,
+                    "promotion_stage": "demoted_to_shadow",
+                    "helper_weight": 0.25,
+                    "posture": "required",
+                    "demotion_reason": reason,
+                    "evidence_source_provisional": evidence_source_provisional,
+                }
+            return {
+                "helper_active": True,
+                "promotion_stage": "promoted",
+                "helper_weight": 1.0,
+                "posture": "required",
+                "evidence_source_provisional": evidence_source_provisional,
+            }
+        stage = "shadow_monitoring" if benchmark_ready else "required_but_not_ready"
+        return {
+            "helper_active": benchmark_ready,
+            "promotion_stage": stage,
+            "helper_weight": 0.0,
+            "posture": "required",
+            "evidence_source_provisional": evidence_source_provisional,
+        }
+
+    # auto
+    if effective_benchmark_ready:
+        should_demote, reason = _check_demotion(
+            benchmark_gate, dict(evidence_signals or {})
+        )
+        if should_demote:
+            return {
+                "helper_active": True,
+                "promotion_stage": "demoted_to_shadow",
+                "helper_weight": 0.25,
+                "posture": "auto",
+                "demotion_reason": reason,
+                "evidence_source_provisional": evidence_source_provisional,
+            }
+        return {
+            "helper_active": True,
+            "promotion_stage": "promoted",
+            "helper_weight": 1.0,
+            "posture": "auto",
+            "evidence_source_provisional": evidence_source_provisional,
+        }
+    # shadow_monitoring if benchmark data exists but is provisional
+    stage = "shadow_monitoring" if benchmark_ready else "heuristic_fallback"
+    return {
+        "helper_active": benchmark_ready,
+        "promotion_stage": stage,
+        "helper_weight": 0.0,
+        "posture": "auto",
+        "evidence_source_provisional": evidence_source_provisional,
+    }
+
+
 __all__ = [
+    "resolve_annotation_bridge_helper",
     "resolve_evidence_fusion_helper",
     "resolve_graph_transformer_helper",
     "resolve_provider_adapter_helper",

@@ -387,7 +387,87 @@ class GraphTransformerShadowReceipt:
         }
 
 
+@dataclass(frozen=True)
+class AnnotationBridgeShadowReceipt:
+    """Shadow receipt for the AnnotationBridgeProjectionSeam.
+
+    Same plasticity-gating pattern as GraphTransformerShadowReceipt.
+    The annotation bridge projection is a Perception-owned canonical
+    projection from object tokens to annotation labels (class, confidence,
+    affordance).
+
+    Promotion evidence is **benchmark-gated**: promotion_eligible is always
+    False when benchmark_evidence_present is False.
+
+    IMPORTANT — provisional evidence marking:
+    If ``evidence_source_provisional`` is True, the benchmark evidence was
+    derived from heuristic object tokens rather than real provider-backed
+    features.  Provisional evidence is diagnostic only and MUST NOT be
+    treated as honest promotion evidence.  When provisional,
+    ``promotion_eligible`` is forced False regardless of gate_score.
+    """
+
+    receipt_id: str
+    seam_id: str
+    promotion_stage: str  # heuristic_fallback | shadow_monitoring | benchmark_gated
+    posture: str  # disabled | auto | required
+
+    # --- Projection quality ---
+    class_accuracy: float = 0.0
+    confidence_mae: float = 1.0
+    affordance_accuracy: float = 0.0
+
+    # --- Promotion evidence (benchmark-gated) ---
+    benchmark_evidence_present: bool = False
+    evidence_source_provisional: bool = True  # True until real provider features
+    annotation_supervision_score: float = 0.0
+    held_out_label_agreement: float = 0.0
+    downstream_usefulness_score: float = 0.0
+    receipt_consistency: float = 0.0
+
+    # --- Runtime ---
+    latency_ms: float = 0.0
+    param_count: int = 0
+
+    # --- Promotion gate ---
+    promotion_eligible: bool = False
+    gate_score: float = 0.0
+
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "annotation_bridge_shadow_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        # Enforce: provisional evidence cannot promote
+        effective_eligible = (
+            self.promotion_eligible
+            and self.benchmark_evidence_present
+            and not self.evidence_source_provisional
+        )
+        return {
+            "receipt_id": self.receipt_id,
+            "seam_id": self.seam_id,
+            "promotion_stage": self.promotion_stage,
+            "posture": self.posture,
+            "class_accuracy": clip01(self.class_accuracy),
+            "confidence_mae": float(self.confidence_mae),
+            "affordance_accuracy": clip01(self.affordance_accuracy),
+            "benchmark_evidence_present": bool(self.benchmark_evidence_present),
+            "evidence_source_provisional": bool(self.evidence_source_provisional),
+            "annotation_supervision_score": clip01(self.annotation_supervision_score),
+            "held_out_label_agreement": clip01(self.held_out_label_agreement),
+            "downstream_usefulness_score": clip01(self.downstream_usefulness_score),
+            "receipt_consistency": clip01(self.receipt_consistency),
+            "latency_ms": float(self.latency_ms),
+            "param_count": int(self.param_count),
+            "promotion_eligible": effective_eligible,
+            "gate_score": clip01(self.gate_score),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
 __all__ = [
+    "AnnotationBridgeShadowReceipt",
     "DeploymentResourceReceipt",
     "EvidenceFusionReceipt",
     "GraphTransformerShadowReceipt",

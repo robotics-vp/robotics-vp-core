@@ -7,6 +7,7 @@ from src.evidence.belief_state import BeliefState
 from src.vision.backbone_stub import VisionBackboneStub
 from src.vision.interfaces import VisionFrame
 from src.world_model.perception_grounding import (
+    AnnotationBridgeProjectionSeam,
     EvidenceFusionSeam,
     PerceptionCompilationResult,
     compile_perception_grounding_with_receipts,
@@ -230,6 +231,44 @@ def test_compiler_backward_compat_without_seam() -> None:
     receipt_dict = state.metadata["evidence_fusion_receipt"]
     assert receipt_dict["fusion_method"] == "semantic_world_model_heuristic_fusion"
     assert receipt_dict["metadata"]["neural_seam_used"] is False
+
+
+def test_annotation_bridge_shadow_receipt_carries_benchmark_evidence() -> None:
+    seam = AnnotationBridgeProjectionSeam(
+        d_token=128,
+        d_hidden=64,
+        n_categories=8,
+        n_affordances=4,
+    )
+
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_annotation_bridge",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        benchmark_signals={"benchmark_eligible": True},
+        annotation_bridge_projection_seam=seam,
+        annotation_bridge_benchmark_evidence={
+            "benchmark_evidence_present": True,
+            "evidence_source_provisional": True,
+            "annotation_supervision_score": 0.91,
+            "held_out_label_agreement": 0.87,
+            "downstream_usefulness_score": 0.72,
+            "receipt_consistency": 0.88,
+            "gate_score": 0.86,
+            "promotion_eligible": True,
+        },
+    )
+
+    receipt = state.metadata["annotation_bridge_shadow_receipt"]
+    assert receipt is not None
+    assert receipt["benchmark_evidence_present"] is True
+    assert receipt["evidence_source_provisional"] is True
+    assert receipt["annotation_supervision_score"] == 0.91
+    assert receipt["held_out_label_agreement"] == 0.87
+    assert receipt["gate_score"] == 0.86
+    assert receipt["promotion_eligible"] is False
 
 
 def test_compiler_with_neural_seam_promoted() -> None:

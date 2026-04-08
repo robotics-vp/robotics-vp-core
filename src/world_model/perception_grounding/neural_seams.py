@@ -1133,6 +1133,121 @@ class SceneGraphTransformerSeam(nn.Module):
         }
 
 
+# ---------------------------------------------------------------------------
+# Annotation Bridge Projection Seam
+# ---------------------------------------------------------------------------
+
+
+class AnnotationBridgeProjectionSeam(nn.Module):
+    """Learned projection from object tokens to annotation labels.
+
+    Neural successor to heuristic annotation bridge passthrough.
+    Perception-owned canonical semantic-state refinement that produces
+    class labels, confidence, and affordance scores from the scene
+    graph's object tokens.
+
+    This is WM-native Perception projection — NOT bridge neuralization,
+    NOT an Embodiment concern, NOT a transport-layer model.  It is the
+    mechanism by which Perception's canonical object-token substrate
+    becomes training-usable annotation evidence.
+
+    Architecture: per-head 2-layer MLP with LayerNorm.
+    Capacity: ~500K-1M params (d_hidden=256, n_categories=16, n_affordances=8).
+    Promotion: disabled|auto|required via resolve_annotation_bridge_helper.
+    Training: annotation labeling accuracy + confidence calibration +
+    affordance prediction on annotation-export supervision data.
+    """
+
+    def __init__(
+        self,
+        d_token: int = 128,
+        d_hidden: int = 256,
+        n_categories: int = 16,
+        n_affordances: int = 8,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_token = d_token
+        self.d_hidden = d_hidden
+        self.n_categories = n_categories
+        self.n_affordances = n_affordances
+
+        self.class_head = nn.Sequential(
+            nn.Linear(d_token, d_hidden),
+            nn.LayerNorm(d_hidden),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_hidden, n_categories),
+        )
+        self.confidence_head = nn.Sequential(
+            nn.Linear(d_token, d_hidden // 2),
+            nn.GELU(),
+            nn.Linear(d_hidden // 2, 1),
+        )
+        self.affordance_head = nn.Sequential(
+            nn.Linear(d_token, d_hidden),
+            nn.LayerNorm(d_hidden),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_hidden, n_affordances),
+        )
+
+    def forward(
+        self,
+        object_tokens: torch.Tensor,
+        node_mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Project object tokens to annotation labels.
+
+        Args:
+            object_tokens: ``(batch, N, d_token)`` or ``(N, d_token)``
+            node_mask: ``(batch, N)`` or ``(N,)`` bool — True if valid.
+
+        Returns:
+            Dict with:
+                - class_logits: ``(batch, N, n_categories)``
+                - confidence: ``(batch, N)`` in [0, 1]
+                - affordance_scores: ``(batch, N, n_affordances)`` in [0, 1]
+        """
+        unbatched = object_tokens.dim() == 2
+        if unbatched:
+            object_tokens = object_tokens.unsqueeze(0)
+
+        class_logits = self.class_head(object_tokens)
+        confidence = torch.sigmoid(self.confidence_head(object_tokens).squeeze(-1))
+        affordance_scores = torch.sigmoid(self.affordance_head(object_tokens))
+
+        if unbatched:
+            class_logits = class_logits.squeeze(0)
+            confidence = confidence.squeeze(0)
+            affordance_scores = affordance_scores.squeeze(0)
+
+        return {
+            "class_logits": class_logits,
+            "confidence": confidence,
+            "affordance_scores": affordance_scores,
+        }
+
+    def param_count(self) -> int:
+        return sum(p.numel() for p in self.parameters())
+
+    def describe(self) -> Dict[str, Any]:
+        return {
+            "seam_type": "annotation_bridge_projection",
+            "d_token": self.d_token,
+            "d_hidden": self.d_hidden,
+            "n_categories": self.n_categories,
+            "n_affordances": self.n_affordances,
+            "param_count": self.param_count(),
+            "module_class": self.__class__.__name__,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
 class _GraphMessagePassingLayer(nn.Module):
     """Single message-passing layer with edge-conditioned attention.
 
@@ -1292,6 +1407,7 @@ def _edge_softmax(
 
 
 __all__ = [
+    "AnnotationBridgeProjectionSeam",
     "DepthMetricCalibrationSeam",
     "EDGE_TYPE_VOCAB",
     "EvidenceFusionSeam",

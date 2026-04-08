@@ -343,8 +343,9 @@ class TestCreateDefaultRegistry:
     def test_creates_all_seam_types(self):
         registry = create_default_registry()
         seams = registry.list_seams()
-        assert len(seams) == 6
+        assert len(seams) == 7
         seam_types = {d.seam_type for d in seams.values()}
+        assert "annotation_bridge_projection" in seam_types
         assert "evidence_fusion" in seam_types
         assert "sam_calibration" in seam_types
         assert "vision_backbone_projection" in seam_types

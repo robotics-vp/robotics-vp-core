@@ -30,6 +30,7 @@ import torch
 import torch.nn as nn
 
 from .neural_seams import (
+    AnnotationBridgeProjectionSeam,
     DepthMetricCalibrationSeam,
     EvidenceFusionSeam,
     SAMCalibrationSeam,
@@ -46,6 +47,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 SEAM_TYPES: Dict[str, Type[nn.Module]] = {
+    "annotation_bridge_projection": AnnotationBridgeProjectionSeam,
     "evidence_fusion": EvidenceFusionSeam,
     "sam_calibration": SAMCalibrationSeam,
     "vision_backbone_projection": VisionBackboneProjectionSeam,
@@ -56,6 +58,13 @@ SEAM_TYPES: Dict[str, Type[nn.Module]] = {
 
 # Default hyperparameters per seam type
 SEAM_DEFAULTS: Dict[str, Dict[str, Any]] = {
+    "annotation_bridge_projection": {
+        "d_token": 128,
+        "d_hidden": 256,
+        "n_categories": 16,
+        "n_affordances": 8,
+        "dropout": 0.1,
+    },
     "evidence_fusion": {
         "d_model": 32,
         "n_heads": 2,
@@ -424,6 +433,11 @@ def create_default_registry(
     registry.register_seam(
         "scene_graph_transformer",
         "scene_graph_transformer_default",
+        posture="disabled",
+    )
+    registry.register_seam(
+        "annotation_bridge_projection",
+        "annotation_bridge_projection_default",
         posture="disabled",
     )
 
