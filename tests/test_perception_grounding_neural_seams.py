@@ -11,7 +11,6 @@ Tests cover:
 from __future__ import annotations
 
 import tempfile
-from pathlib import Path
 
 import pytest
 import torch
@@ -22,11 +21,11 @@ from src.world_model.perception_grounding import (
     PerceptionSeamRegistry,
     SAMCalibrationSeam,
     SceneGraphTransformerSeam,
-    SeamDescriptor,
     VisionBackboneProjectionSeam,
     VJEPATemporalAlignmentSeam,
     create_default_registry,
     encode_provider_features,
+    resolve_graph_transformer_helper,
     resolve_provider_adapter_helper,
 )
 
@@ -389,6 +388,20 @@ class TestResolveProviderAdapterHelper:
         assert result["promotion_stage"] == "promoted"
         assert result["helper_weight"] == 1.0
 
+    def test_auto_provisional_artifact_stays_shadow(self):
+        result = resolve_provider_adapter_helper(
+            provider_kind="vision_backbone_projection",
+            loading_posture="auto",
+            benchmark_signals={"ready": True},
+            benchmark_evidence={
+                "benchmark_evidence_present": True,
+                "evidence_source_provisional": True,
+            },
+        )
+        assert result["helper_active"]
+        assert result["promotion_stage"] == "shadow_monitoring"
+        assert result["helper_weight"] == 0.0
+
     def test_required_not_ready(self):
         result = resolve_provider_adapter_helper(
             provider_kind="sam_calibration",
@@ -446,7 +459,7 @@ class TestGraphTransformerShadowPath:
         shadow_receipt = state.metadata.get("graph_transformer_shadow_receipt")
         assert shadow_receipt is not None
         assert shadow_receipt["seam_id"] == "scene_graph_transformer_default"
-        assert shadow_receipt["version"] == "graph_transformer_shadow_receipt_v2"
+        assert shadow_receipt["version"] == "graph_transformer_shadow_receipt_v3"
         assert "graph_confidence" in shadow_receipt
         assert "edge_overlap_fraction" in shadow_receipt
         assert "node_token_cosine_similarity" in shadow_receipt
@@ -550,6 +563,7 @@ class TestGraphTransformerShadowPath:
         field_names = {f.name for f in dataclasses.fields(GraphTransformerShadowReceipt)}
         # Promotion evidence fields must exist
         assert "benchmark_evidence_present" in field_names
+        assert "evidence_source_provisional" in field_names
         assert "annotation_supervision_score" in field_names
         assert "held_out_label_agreement" in field_names
         assert "downstream_usefulness_score" in field_names
@@ -558,6 +572,18 @@ class TestGraphTransformerShadowPath:
         assert "node_token_cosine_similarity" in field_names
         assert "edge_overlap_fraction" in field_names
         assert "edge_weight_correlation" in field_names
+
+    def test_graph_transformer_helper_shadow_when_artifact_is_provisional(self):
+        result = resolve_graph_transformer_helper(
+            loading_posture="auto",
+            benchmark_signals={"benchmark_eligible": True},
+            benchmark_evidence={
+                "benchmark_evidence_present": True,
+                "evidence_source_provisional": True,
+            },
+        )
+        assert result["helper_active"] is True
+        assert result["promotion_stage"] == "shadow_monitoring"
 
 
 # ---------------------------------------------------------------------------

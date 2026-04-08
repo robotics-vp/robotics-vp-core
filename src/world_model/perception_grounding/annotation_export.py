@@ -32,8 +32,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-import torch
-
 
 # ---------------------------------------------------------------------------
 # Annotation export record
@@ -65,6 +63,10 @@ class AnnotationExportRecord:
     object_tokens: List[List[float]] = field(default_factory=list)  # (N, d_token=128)
     object_categories: List[str] = field(default_factory=list)
     object_confidences: List[float] = field(default_factory=list)
+    object_token_source_kind: str = "heuristic_scene_graph"
+    object_token_truth_class: str = "heuristic_derived"
+    object_token_provider_id: str = ""
+    object_token_evidence_provisional: bool = True
     edge_source_ids: List[str] = field(default_factory=list)
     edge_target_ids: List[str] = field(default_factory=list)
     edge_types: List[str] = field(default_factory=list)
@@ -87,7 +89,7 @@ class AnnotationExportRecord:
     annotation_quality_score: float = 0.0
     source: str = "perception_compiler"
     metadata: Dict[str, Any] = field(default_factory=dict)
-    version: str = "annotation_export_record_v1"
+    version: str = "annotation_export_record_v2"
 
     @property
     def n_objects(self) -> int:
@@ -111,6 +113,12 @@ class AnnotationExportRecord:
             "object_tokens": [[float(v) for v in tok] for tok in self.object_tokens],
             "object_categories": list(self.object_categories),
             "object_confidences": [float(v) for v in self.object_confidences],
+            "object_token_source_kind": self.object_token_source_kind,
+            "object_token_truth_class": self.object_token_truth_class,
+            "object_token_provider_id": self.object_token_provider_id,
+            "object_token_evidence_provisional": bool(
+                self.object_token_evidence_provisional
+            ),
             "edge_source_ids": list(self.edge_source_ids),
             "edge_target_ids": list(self.edge_target_ids),
             "edge_types": list(self.edge_types),
@@ -173,6 +181,40 @@ def export_annotation_record(
     graph_id = getattr(scene_graph, "graph_id", "")
     episode_id = getattr(perception_state, "episode_id", "")
     frame_index = getattr(perception_state, "frame_index", 0)
+    state_metadata = dict(getattr(perception_state, "metadata", {}) or {})
+
+    def _normalize_object_tokens(
+        raw_tokens: Any,
+        *,
+        n_objects: int,
+    ) -> Optional[List[List[float]]]:
+        if raw_tokens is None:
+            return None
+        try:
+            if hasattr(raw_tokens, "detach"):
+                matrix = raw_tokens.detach().cpu().float()
+                if matrix.dim() == 3 and matrix.size(0) == 1:
+                    matrix = matrix.squeeze(0)
+                if matrix.dim() != 2 or matrix.size(0) != n_objects:
+                    return None
+                return [
+                    [float(v) for v in row.tolist()]
+                    for row in matrix
+                ]
+            if hasattr(raw_tokens, "tolist"):
+                raw_tokens = raw_tokens.tolist()
+            rows = list(raw_tokens)
+        except Exception:
+            return None
+        if len(rows) != n_objects:
+            return None
+        normalized: List[List[float]] = []
+        for row in rows:
+            try:
+                normalized.append([float(v) for v in list(row)])
+            except Exception:
+                return None
+        return normalized
 
     # Extract object tokens and metadata from scene graph
     object_track_ids: List[str] = []
@@ -187,6 +229,29 @@ def export_annotation_record(
         )
         object_categories.append(getattr(track, "object_category", ""))
         object_confidences.append(float(getattr(track, "confidence", 0.0)))
+
+    benchmark_token_source = dict(
+        state_metadata.get("benchmark_object_token_source", {}) or {}
+    )
+    benchmark_object_tokens = _normalize_object_tokens(
+        state_metadata.get("benchmark_object_tokens"),
+        n_objects=len(object_track_ids),
+    )
+    if benchmark_object_tokens is not None:
+        object_tokens = benchmark_object_tokens
+
+    object_token_source_kind = str(
+        benchmark_token_source.get("source_kind", "heuristic_scene_graph")
+    )
+    object_token_truth_class = str(
+        benchmark_token_source.get("truth_class", "heuristic_derived")
+    )
+    object_token_provider_id = str(
+        benchmark_token_source.get("provider_id", "")
+    )
+    object_token_evidence_provisional = bool(
+        benchmark_token_source.get("evidence_source_provisional", True)
+    )
 
     # Extract edges
     edge_source_ids: List[str] = []
@@ -295,6 +360,10 @@ def export_annotation_record(
         object_tokens=object_tokens,
         object_categories=object_categories,
         object_confidences=object_confidences,
+        object_token_source_kind=object_token_source_kind,
+        object_token_truth_class=object_token_truth_class,
+        object_token_provider_id=object_token_provider_id,
+        object_token_evidence_provisional=object_token_evidence_provisional,
         edge_source_ids=edge_source_ids,
         edge_target_ids=edge_target_ids,
         edge_types=edge_types,
@@ -366,7 +435,7 @@ def save_annotation_export_json(
         The path written to.
     """
     payload = {
-        "version": "annotation_export_v1",
+        "version": "annotation_export_v2",
         "record_count": len(records),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "records": [r.to_dict() for r in records],

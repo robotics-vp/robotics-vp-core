@@ -32,10 +32,18 @@ Dataset classes
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+
+from src.world_model.perception_grounding.benchmark_evidence import (
+    PerceptionBenchmarkEvidence,
+    build_perception_benchmark_evidence,
+    write_perception_benchmark_evidence,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1332,7 +1340,7 @@ def evaluate_seam_on_annotations(
     d_edge: int = 64,
     n_categories: int = 16,
     held_out_fraction: float = 0.2,
-    evidence_source_provisional: bool = True,
+    evidence_source_provisional: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Compute benchmark evidence from annotation-export data.
 
@@ -1347,13 +1355,15 @@ def evaluate_seam_on_annotations(
       label separability (same annotation lane, provider-calibration path)
 
     IMPORTANT — provisional evidence:
-    When ``evidence_source_provisional`` is True (default), the object
+    When ``evidence_source_provisional`` is True, the object
     tokens feeding the seam are heuristic (not real provider-backed
     features).  The returned evidence dict will include
     ``evidence_source_provisional: True`` and
     ``promotion_eligible: False`` — callers MUST NOT treat this as
-    honest promotion evidence.  Set ``evidence_source_provisional=False``
-    only when real provider features are confirmed upstream.
+    honest promotion evidence.  When the argument is ``None`` (default),
+    provenance is inferred from the annotation-export record fields and
+    falls back conservatively to provisional if no explicit provenance
+    was persisted.
 
     Returns:
         Dict with:
@@ -1365,6 +1375,95 @@ def evaluate_seam_on_annotations(
         - receipt_consistency: prediction consistency across samples
         - promotion_eligible: False when provisional, gate-scored otherwise
     """
+    def _record_value(record: Any, key: str, default: Any = None) -> Any:
+        if isinstance(record, dict):
+            return record.get(key, default)
+        return getattr(record, key, default)
+
+    def _infer_token_provenance(
+        records: Sequence[Any],
+    ) -> tuple[bool, str, str]:
+        if not records:
+            return True, "heuristic_derived", "heuristic_scene_graph"
+        provisional_flags: List[bool] = []
+        truth_classes: List[str] = []
+        source_kinds: List[str] = []
+        for record in records:
+            provisional_flags.append(
+                bool(
+                    _record_value(
+                        record,
+                        "object_token_evidence_provisional",
+                        True,
+                    )
+                )
+            )
+            truth_classes.append(
+                str(
+                    _record_value(
+                        record,
+                        "object_token_truth_class",
+                        "heuristic_derived",
+                    )
+                )
+            )
+            source_kinds.append(
+                str(
+                    _record_value(
+                        record,
+                        "object_token_source_kind",
+                        "heuristic_scene_graph",
+                    )
+                )
+            )
+        provisional = any(provisional_flags)
+        truth_class = (
+            truth_classes[0]
+            if len(set(truth_classes)) == 1
+            else "mixed"
+        )
+        source_kind = (
+            source_kinds[0]
+            if len(set(source_kinds)) == 1
+            else "mixed"
+        )
+        return provisional, truth_class, source_kind
+
+    def _centroid_accuracy(
+        features: torch.Tensor,
+        labels: torch.Tensor,
+    ) -> tuple[int, int]:
+        n_valid = min(features.size(0), labels.size(0))
+        if n_valid <= 0:
+            return 0, 0
+        valid_features = features[:n_valid]
+        valid_labels = labels[:n_valid]
+        unique_labels = torch.unique(valid_labels)
+        if unique_labels.numel() <= 0:
+            return 0, n_valid
+        centroids = torch.stack(
+            [
+                valid_features[valid_labels == label].mean(dim=0)
+                for label in unique_labels
+            ],
+            dim=0,
+        )
+        sims = F.cosine_similarity(
+            valid_features.unsqueeze(1),
+            centroids.unsqueeze(0),
+            dim=-1,
+        )
+        pred_indices = sims.argmax(dim=-1)
+        pred_labels = unique_labels[pred_indices]
+        correct = int((pred_labels == valid_labels).sum().item())
+        return correct, n_valid
+
+    inferred_provisional, evidence_truth_class, token_source_kind = (
+        _infer_token_provenance(annotation_records)
+    )
+    if evidence_source_provisional is None:
+        evidence_source_provisional = inferred_provisional
+
     samples = annotation_export_to_scene_graph_samples(
         annotation_records,
         d_token=d_token,
@@ -1377,6 +1476,9 @@ def evaluate_seam_on_annotations(
         return {
             "benchmark_evidence_present": False,
             "evidence_source_provisional": evidence_source_provisional,
+            "evidence_truth_class": evidence_truth_class,
+            "token_source_kind": token_source_kind,
+            "source_record_count": 0,
             "gate_score": 0.0,
             "promotion_eligible": False,
         }
@@ -1404,18 +1506,13 @@ def evaluate_seam_on_annotations(
                     tokens = result["refined_tokens"].squeeze(0)
                     graph_conf = float(result["graph_confidence"].item())
 
-                    # Linear-probe classification: cosine distance to centroids
                     if sample.node_labels is not None:
-                        n_valid = sample.node_features.size(0)
-                        for i in range(n_valid):
-                            total += 1
-                            # Simple argmax cosine similarity to label centroid
-                            # (accumulates across samples for micro-averaged accuracy)
-                        # Use prototype classification
-                        centroids: Dict[int, List[torch.Tensor]] = {}
-                        for i in range(tokens.size(0)):
-                            lbl = int(sample.node_labels[i].item())
-                            centroids.setdefault(lbl, []).append(tokens[i])
+                        batch_correct, batch_total = _centroid_accuracy(
+                            tokens,
+                            sample.node_labels,
+                        )
+                        correct += batch_correct
+                        total += batch_total
 
                     conf_deltas.append(graph_conf)
 
@@ -1437,12 +1534,15 @@ def evaluate_seam_on_annotations(
                     # Evaluate projected features for label separability
                     projected = seam(nf.squeeze(0))
                     if sample.node_labels is not None:
-                        n_valid = min(projected.size(0), sample.node_labels.size(0))
-                        total += n_valid
-                        # Label separability: intra-class distance < inter-class
-                        # Simplified: just count as "evaluated" — real metric
-                        # requires real backbone features
-                    conf_deltas.append(0.5)  # degraded-truth placeholder
+                        batch_correct, batch_total = _centroid_accuracy(
+                            projected,
+                            sample.node_labels,
+                        )
+                        correct += batch_correct
+                        total += batch_total
+                    conf_deltas.append(
+                        float(projected.norm(dim=-1).mean().clamp(0.0, 1.0).item())
+                    )
 
         accuracy = correct / max(1, total) if total > 0 else 0.0
         consistency = 1.0 - (
@@ -1477,6 +1577,9 @@ def evaluate_seam_on_annotations(
     return {
         "benchmark_evidence_present": True,
         "evidence_source_provisional": evidence_source_provisional,
+        "evidence_truth_class": evidence_truth_class,
+        "token_source_kind": token_source_kind,
+        "source_record_count": len(samples),
         "annotation_supervision_score": annotation_supervision_score,
         "held_out_label_agreement": held_out_label_agreement,
         "downstream_usefulness_score": downstream_usefulness_score,
@@ -1484,6 +1587,44 @@ def evaluate_seam_on_annotations(
         "gate_score": gate_score,
         "promotion_eligible": promotion_eligible,
     }
+
+
+def evaluate_and_persist_seam_on_annotations(
+    *,
+    seam: "torch.nn.Module",
+    seam_type: str,
+    annotation_records: Sequence[Any],
+    output_path: Optional[str | Path] = None,
+    source_artifact_path: Optional[str | Path] = None,
+    benchmark_subsystem_key: Optional[str] = None,
+    evidence_metadata: Optional[Dict[str, Any]] = None,
+    d_token: int = 128,
+    d_edge: int = 64,
+    n_categories: int = 16,
+    held_out_fraction: float = 0.2,
+    evidence_source_provisional: Optional[bool] = None,
+) -> PerceptionBenchmarkEvidence:
+    """Evaluate a seam on annotation exports and persist benchmark evidence."""
+    metrics = evaluate_seam_on_annotations(
+        seam=seam,
+        seam_type=seam_type,
+        annotation_records=annotation_records,
+        d_token=d_token,
+        d_edge=d_edge,
+        n_categories=n_categories,
+        held_out_fraction=held_out_fraction,
+        evidence_source_provisional=evidence_source_provisional,
+    )
+    evidence = build_perception_benchmark_evidence(
+        subsystem_key=benchmark_subsystem_key or seam_type,
+        metrics=metrics,
+        source_record_count=int(metrics.get("source_record_count", len(annotation_records))),
+        source_artifact_path=source_artifact_path,
+        metadata=evidence_metadata,
+    )
+    if output_path is not None:
+        write_perception_benchmark_evidence(output_path, evidence)
+    return evidence
 
 
 __all__ = [
@@ -1526,4 +1667,5 @@ __all__ = [
     "annotation_export_to_scene_graph_samples",
     # Benchmark evaluation
     "evaluate_seam_on_annotations",
+    "evaluate_and_persist_seam_on_annotations",
 ]

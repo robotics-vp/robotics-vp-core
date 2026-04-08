@@ -16,6 +16,7 @@ import numpy as np
 from src.evidence.belief_state import BeliefState
 from src.world_model.semantic_world_model import SemanticWorldModelBuilder
 
+from .benchmark_evidence import coerce_perception_benchmark_evidence_payload
 from .common import clip01, mapping, stable_id, strings
 from .receipts import (
     AnnotationBridgeShadowReceipt,
@@ -260,6 +261,155 @@ def _dense_token(values: Sequence[float], target_dim: int = 8) -> list[float]:
     return [float(v) for v in padded]
 
 
+def _coerce_token_matrix(
+    raw_tokens: Any,
+    *,
+    n_nodes: int,
+    d_token: int,
+) -> Optional[list[list[float]]]:
+    if raw_tokens is None or n_nodes <= 0:
+        return None
+    try:
+        if hasattr(raw_tokens, "detach"):
+            matrix = raw_tokens.detach().cpu().float()
+            if matrix.dim() == 3 and matrix.size(0) == 1:
+                matrix = matrix.squeeze(0)
+            if matrix.dim() != 2 or int(matrix.size(0)) != n_nodes:
+                return None
+            rows = matrix.tolist()
+        elif isinstance(raw_tokens, np.ndarray):
+            matrix = np.asarray(raw_tokens, dtype=np.float32)
+            if matrix.ndim == 3 and matrix.shape[0] == 1:
+                matrix = matrix[0]
+            if matrix.ndim != 2 or int(matrix.shape[0]) != n_nodes:
+                return None
+            rows = matrix.tolist()
+        else:
+            rows = list(raw_tokens)
+            if len(rows) != n_nodes:
+                return None
+    except Exception:
+        return None
+
+    normalized: list[list[float]] = []
+    for row in rows:
+        try:
+            values = [float(v) for v in list(row)]
+        except Exception:
+            return None
+        if len(values) < d_token:
+            values = values + [0.0] * (d_token - len(values))
+        normalized.append(values[:d_token])
+    return normalized
+
+
+def _resolve_benchmark_object_tokens(
+    *,
+    scene_graph: SceneGraphState,
+    d_token: int,
+    explicit_tokens: Optional[Any] = None,
+    explicit_source: Optional[Mapping[str, Any]] = None,
+    provider_adapter_outputs: Optional[Mapping[str, Any]] = None,
+) -> tuple[list[list[float]], dict[str, Any]]:
+    """Select the benchmark token matrix for annotation/export evidence.
+
+    Preference order:
+    1. Explicit provider-backed tokens passed by the caller
+    2. Vision backbone projection output (if available and shape-compatible)
+    3. V-JEPA temporal alignment output reduced over time
+    4. Heuristic scene-graph tokens (provisional)
+    """
+    tracks = list(scene_graph.object_tracks)
+    n_nodes = len(tracks)
+    heuristic_tokens = [
+        _dense_token(getattr(track, "feature_token", []), target_dim=d_token)
+        for track in tracks
+    ]
+    heuristic_source = {
+        "source_kind": "heuristic_scene_graph",
+        "truth_class": "heuristic_derived",
+        "provider_id": "",
+        "provider_kind": "heuristic_scene_graph",
+        "evidence_source_provisional": True,
+        "token_count": n_nodes,
+    }
+    if n_nodes <= 0:
+        return heuristic_tokens, heuristic_source
+
+    explicit_matrix = _coerce_token_matrix(
+        explicit_tokens,
+        n_nodes=n_nodes,
+        d_token=d_token,
+    )
+    if explicit_matrix is not None:
+        return explicit_matrix, {
+            **heuristic_source,
+            "source_kind": str(
+                mapping(explicit_source).get(
+                    "source_kind",
+                    "explicit_provider_object_tokens",
+                )
+            ),
+            "truth_class": str(
+                mapping(explicit_source).get("truth_class", "provider_backed")
+            ),
+            "provider_id": str(mapping(explicit_source).get("provider_id", "")),
+            "provider_kind": str(
+                mapping(explicit_source).get("provider_kind", "external_provider")
+            ),
+            "evidence_source_provisional": bool(
+                mapping(explicit_source).get("evidence_source_provisional", False)
+            ),
+        }
+
+    outputs = dict(provider_adapter_outputs or {})
+    vision_matrix = _coerce_token_matrix(
+        outputs.get("vision_backbone_projection"),
+        n_nodes=n_nodes,
+        d_token=d_token,
+    )
+    if vision_matrix is not None:
+        return vision_matrix, {
+            **heuristic_source,
+            "source_kind": "vision_backbone_projection",
+            "truth_class": "provider_backed",
+            "provider_id": "dinov2_vit_l_14",
+            "provider_kind": "vision_backbone_projection",
+            "evidence_source_provisional": False,
+        }
+
+    temporal_output = outputs.get("vjepa_temporal_alignment")
+    if isinstance(temporal_output, Mapping) and "temporal_aligned" in temporal_output:
+        temporal_tokens = temporal_output["temporal_aligned"]
+        try:
+            if hasattr(temporal_tokens, "detach"):
+                matrix = temporal_tokens.detach().cpu().float()
+                if matrix.dim() == 4 and matrix.size(0) == 1:
+                    matrix = matrix.squeeze(0)
+                if matrix.dim() == 3:
+                    matrix = matrix.mean(dim=0)
+            else:
+                matrix = temporal_tokens
+            temporal_matrix = _coerce_token_matrix(
+                matrix,
+                n_nodes=n_nodes,
+                d_token=d_token,
+            )
+        except Exception:
+            temporal_matrix = None
+        if temporal_matrix is not None:
+            return temporal_matrix, {
+                **heuristic_source,
+                "source_kind": "vjepa_temporal_alignment",
+                "truth_class": "provider_backed",
+                "provider_id": "vjepa2",
+                "provider_kind": "vjepa_temporal_alignment",
+                "evidence_source_provisional": False,
+            }
+
+    return heuristic_tokens, heuristic_source
+
+
 def _track_feature_token(
     *,
     object_id: str,
@@ -436,6 +586,7 @@ def _invoke_provider_adapter_seam(
     seam: Any,
     seam_input: Any,
     benchmark_signals: Mapping[str, Any],
+    benchmark_evidence: Optional[Mapping[str, Any]] = None,
 ) -> Tuple[Optional[Any], ProviderInvocationReceipt]:
     """Invoke a provider adapter seam and emit an invocation receipt.
 
@@ -456,21 +607,36 @@ def _invoke_provider_adapter_seam(
         provider_kind=provider_kind,
         loading_posture="auto",
         benchmark_signals=benchmark_signals,
+        benchmark_evidence=benchmark_evidence,
     )
     promotion_stage = str(helper_status.get("promotion_stage", "raw_provider_output"))
+    benchmark_evidence_payload = mapping(benchmark_evidence)
 
-    # If not promoted or no seam, return fallback receipt
-    if promotion_stage != "promoted" or seam is None:
+    invoke_mode = (
+        "promoted"
+        if promotion_stage == "promoted"
+        else "shadow"
+        if promotion_stage in {"shadow_monitoring", "demoted_to_shadow"}
+        else "skipped"
+    )
+
+    # If not invokable or no seam, return fallback receipt
+    if invoke_mode == "skipped" or seam is None:
         return None, ProviderInvocationReceipt(
             receipt_id=f"provider_invocation_{provider_id}_{state_id}",
             provider_id=provider_id,
             provider_kind=provider_kind,
             invocation_status="skipped",
             fallback_used=True,
-            fallback_reason="seam_not_promoted" if seam is not None else "seam_not_available",
+            fallback_reason=(
+                "seam_not_promoted"
+                if seam is not None
+                else "seam_not_available"
+            ),
             metadata={
                 "promotion_stage": promotion_stage,
                 "helper_status": dict(helper_status),
+                "benchmark_evidence": benchmark_evidence_payload,
             },
         )
 
@@ -521,8 +687,10 @@ def _invoke_provider_adapter_seam(
         fallback_reason=fallback_reason,
         metadata={
             "promotion_stage": promotion_stage,
+            "invocation_mode": invoke_mode,
             "seam_type": type(seam).__name__ if seam else "none",
             "helper_status": dict(helper_status),
+            "benchmark_evidence": benchmark_evidence_payload,
         },
     )
 
@@ -671,6 +839,9 @@ def _run_graph_transformer_shadow(
     graph_helper: Mapping[str, Any],
     seam: Any,
     seam_id: str = "scene_graph_transformer_default",
+    benchmark_evidence: Optional[Mapping[str, Any]] = None,
+    object_token_matrix: Optional[Sequence[Sequence[float]]] = None,
+    object_token_source: Optional[Mapping[str, Any]] = None,
 ) -> Optional[GraphTransformerShadowReceipt]:
     """Run SceneGraphTransformerSeam in shadow mode alongside the heuristic graph.
 
@@ -688,6 +859,8 @@ def _run_graph_transformer_shadow(
 
     promotion_stage = str(graph_helper.get("promotion_stage", "heuristic_fallback"))
     posture = str(graph_helper.get("posture", "auto"))
+    benchmark_evidence_payload = mapping(benchmark_evidence)
+    token_source_payload = mapping(object_token_source)
 
     # Build seam inputs from the heuristic scene graph
     tracks = scene_graph.object_tracks
@@ -698,15 +871,25 @@ def _run_graph_transformer_shadow(
     if n_nodes == 0:
         return None
 
-    # Node features: use the d=8 feature tokens from the heuristic graph,
-    # padded to d_token expected by the seam
+    # Node features: prefer shared benchmark/provider-backed tokens when
+    # available, else fall back to the heuristic scene-graph tokens.
     d_token = getattr(seam, "d_token", 128)
-    node_features_list = []
-    for track in tracks:
-        tok = list(track.feature_token)
-        if len(tok) < d_token:
-            tok = tok + [0.0] * (d_token - len(tok))
-        node_features_list.append(tok[:d_token])
+    node_features_list = (
+        _coerce_token_matrix(
+            object_token_matrix,
+            n_nodes=n_nodes,
+            d_token=d_token,
+        )
+        if object_token_matrix is not None
+        else None
+    )
+    if node_features_list is None:
+        node_features_list = []
+        for track in tracks:
+            tok = list(track.feature_token)
+            if len(tok) < d_token:
+                tok = tok + [0.0] * (d_token - len(tok))
+            node_features_list.append(tok[:d_token])
     node_features = torch.tensor(node_features_list, dtype=torch.float32)
 
     # Build edge index and edge types from heuristic edges
@@ -790,21 +973,47 @@ def _run_graph_transformer_shadow(
     # supervision, held-out label agreement, downstream usefulness).
     # Until benchmark data flows, gate_score reflects intrinsic quality
     # only and promotion_eligible is always False.
-    benchmark_evidence_present = False
-    annotation_supervision_score = 0.0
-    held_out_label_agreement = 0.0
-    downstream_usefulness_score = 0.0
-    receipt_consistency = 0.0
+    benchmark_evidence_present = bool(
+        benchmark_evidence_payload.get("benchmark_evidence_present", False)
+    )
+    evidence_source_provisional = bool(
+        benchmark_evidence_payload.get("evidence_source_provisional", False)
+    )
+    annotation_supervision_score = clip01(
+        _safe_float(
+            benchmark_evidence_payload.get("annotation_supervision_score", 0.0)
+        )
+    )
+    held_out_label_agreement = clip01(
+        _safe_float(
+            benchmark_evidence_payload.get("held_out_label_agreement", 0.0)
+        )
+    )
+    downstream_usefulness_score = clip01(
+        _safe_float(
+            benchmark_evidence_payload.get("downstream_usefulness_score", 0.0)
+        )
+    )
+    receipt_consistency = clip01(
+        _safe_float(benchmark_evidence_payload.get("receipt_consistency", 0.0))
+    )
 
     if benchmark_evidence_present:
-        gate_score = clip01(
+        intrinsic_gate = clip01(
             0.3 * graph_confidence
             + 0.3 * annotation_supervision_score
             + 0.2 * held_out_label_agreement
             + 0.1 * downstream_usefulness_score
             + 0.1 * receipt_consistency
         )
-        promotion_eligible = gate_score >= 0.6
+        gate_score = (
+            clip01(_safe_float(benchmark_evidence_payload["gate_score"]))
+            if "gate_score" in benchmark_evidence_payload
+            else intrinsic_gate
+        )
+        promotion_eligible = bool(
+            benchmark_evidence_payload.get("promotion_eligible", gate_score >= 0.6)
+        ) and not evidence_source_provisional
     else:
         gate_score = clip01(graph_confidence)
         promotion_eligible = False
@@ -826,6 +1035,7 @@ def _run_graph_transformer_shadow(
         edge_count_learned=n_valid_edges,
         node_count=n_nodes,
         benchmark_evidence_present=benchmark_evidence_present,
+        evidence_source_provisional=evidence_source_provisional,
         annotation_supervision_score=annotation_supervision_score,
         held_out_label_agreement=held_out_label_agreement,
         downstream_usefulness_score=downstream_usefulness_score,
@@ -838,6 +1048,12 @@ def _run_graph_transformer_shadow(
             "seam_type": "scene_graph_transformer",
             "d_token": d_token,
             "graph_id": scene_graph.graph_id,
+            "token_source_kind": str(
+                token_source_payload.get("source_kind", "heuristic_scene_graph")
+            ),
+            "token_truth_class": str(
+                token_source_payload.get("truth_class", "heuristic_derived")
+            ),
         },
     )
 
@@ -850,13 +1066,16 @@ def _run_annotation_bridge_shadow(
     seam_id: str = "annotation_bridge_projection_default",
     benchmark_signals: Mapping[str, Any],
     benchmark_evidence: Optional[Mapping[str, Any]] = None,
+    object_token_matrix: Optional[Sequence[Sequence[float]]] = None,
+    object_token_source: Optional[Mapping[str, Any]] = None,
     evidence_source_provisional: bool = True,
 ) -> Optional[AnnotationBridgeShadowReceipt]:
     """Run AnnotationBridgeProjectionSeam in shadow mode.
 
-    Projects heuristic scene-graph object tokens through the annotation
-    bridge and emits a shadow receipt.  The heuristic annotation path
-    remains canonical; this function only observes and reports.
+    Projects shared benchmark/provider-backed object tokens when available
+    (else heuristic scene-graph tokens) through the annotation bridge and
+    emits a shadow receipt. The heuristic annotation path remains canonical;
+    this function only observes and reports.
 
     When ``evidence_source_provisional`` is True, the object tokens are
     heuristic (not real provider-backed features), so any benchmark
@@ -869,16 +1088,26 @@ def _run_annotation_bridge_shadow(
     import torch
 
     benchmark_evidence_payload = mapping(benchmark_evidence)
+    token_source_payload = mapping(object_token_source)
     effective_provisional = bool(
         benchmark_evidence_payload.get(
             "evidence_source_provisional",
-            evidence_source_provisional,
+            token_source_payload.get(
+                "evidence_source_provisional",
+                evidence_source_provisional,
+            ),
         )
     )
+    if not benchmark_evidence_payload:
+        benchmark_evidence_payload = {
+            "benchmark_evidence_present": False,
+            "evidence_source_provisional": effective_provisional,
+        }
 
     bridge_helper = resolve_annotation_bridge_helper(
         loading_posture="auto",
         benchmark_signals=dict(benchmark_signals),
+        benchmark_evidence=benchmark_evidence_payload,
         evidence_source_provisional=effective_provisional,
     )
     promotion_stage = str(bridge_helper.get("promotion_stage", "heuristic_fallback"))
@@ -890,12 +1119,22 @@ def _run_annotation_bridge_shadow(
         return None
 
     d_token = getattr(seam, "d_token", 128)
-    node_features_list = []
-    for track in tracks:
-        tok = list(track.feature_token)
-        if len(tok) < d_token:
-            tok = tok + [0.0] * (d_token - len(tok))
-        node_features_list.append(tok[:d_token])
+    node_features_list = (
+        _coerce_token_matrix(
+            object_token_matrix,
+            n_nodes=n_nodes,
+            d_token=d_token,
+        )
+        if object_token_matrix is not None
+        else None
+    )
+    if node_features_list is None:
+        node_features_list = []
+        for track in tracks:
+            tok = list(track.feature_token)
+            if len(tok) < d_token:
+                tok = tok + [0.0] * (d_token - len(tok))
+            node_features_list.append(tok[:d_token])
     node_features = torch.tensor(node_features_list, dtype=torch.float32)
 
     t0 = time.perf_counter()
@@ -982,6 +1221,12 @@ def _run_annotation_bridge_shadow(
             "d_token": d_token,
             "graph_id": scene_graph.graph_id,
             "n_nodes": n_nodes,
+            "token_source_kind": str(
+                token_source_payload.get("source_kind", "heuristic_scene_graph")
+            ),
+            "token_truth_class": str(
+                token_source_payload.get("truth_class", "heuristic_derived")
+            ),
         },
     )
 
@@ -1412,14 +1657,18 @@ def compile_perception_grounding_world_state(
     evidence_fusion_seam: Optional[Any] = None,
     scene_graph_transformer_seam: Optional[Any] = None,
     scene_graph_transformer_seam_id: str = "scene_graph_transformer_default",
+    scene_graph_transformer_benchmark_evidence: Optional[Any] = None,
     sam_calibration_seam: Optional[Any] = None,
     vision_backbone_projection_seam: Optional[Any] = None,
     depth_metric_calibration_seam: Optional[Any] = None,
     vjepa_temporal_alignment_seam: Optional[Any] = None,
     annotation_bridge_projection_seam: Optional[Any] = None,
     annotation_bridge_projection_seam_id: str = "annotation_bridge_projection_default",
-    annotation_bridge_benchmark_evidence: Optional[Mapping[str, Any]] = None,
+    annotation_bridge_benchmark_evidence: Optional[Any] = None,
     annotation_bridge_evidence_provisional: bool = True,
+    provider_adapter_benchmark_evidence: Optional[Mapping[str, Any]] = None,
+    benchmark_object_tokens: Optional[Any] = None,
+    benchmark_object_token_source: Optional[Mapping[str, Any]] = None,
     # Provider adapter inputs (optional, passed to seams when available)
     sam_mask_features: Optional[Any] = None,
     sam_raw_confidence: Optional[Any] = None,
@@ -1434,7 +1683,8 @@ def compile_perception_grounding_world_state(
     Provider adapter seams are invoked when:
     - The seam is provided (not None)
     - The corresponding input data is provided
-    - The seam's promotion posture is "promoted" based on benchmark signals
+    - The subsystem is either promoted or in shadow monitoring based on
+      benchmark signals plus persistent benchmark evidence
 
     When invoked, seams emit ProviderInvocationReceipt to the receipts list.
     """
@@ -1446,6 +1696,16 @@ def compile_perception_grounding_world_state(
         metadata=metadata,
     )
     benchmark_payload = mapping(benchmark_signals)
+    graph_benchmark_evidence = coerce_perception_benchmark_evidence_payload(
+        scene_graph_transformer_benchmark_evidence
+    )
+    annotation_benchmark_evidence = coerce_perception_benchmark_evidence_payload(
+        annotation_bridge_benchmark_evidence
+    )
+    provider_benchmark_evidence = {
+        str(key): coerce_perception_benchmark_evidence_payload(value)
+        for key, value in dict(provider_adapter_benchmark_evidence or {}).items()
+    }
     semantic_builder = SemanticWorldModelBuilder()
     semantic_state = semantic_builder.build_from_runtime_fusion(
         episode_id=episode_id,
@@ -1464,19 +1724,12 @@ def compile_perception_grounding_world_state(
     graph_helper = resolve_graph_transformer_helper(
         loading_posture="auto",
         benchmark_signals=benchmark_payload,
+        benchmark_evidence=(
+            graph_benchmark_evidence
+            or {"benchmark_evidence_present": False}
+        ),
     )
     scene_graph = _scene_graph(semantic_state, graph_helper)
-
-    # --- Graph Transformer shadow path ---
-    graph_transformer_shadow_receipt: Optional[GraphTransformerShadowReceipt] = None
-    if scene_graph_transformer_seam is not None:
-        graph_transformer_shadow_receipt = _run_graph_transformer_shadow(
-            state_id=state_id,
-            scene_graph=scene_graph,
-            graph_helper=graph_helper,
-            seam=scene_graph_transformer_seam,
-            seam_id=scene_graph_transformer_seam_id,
-        )
 
     provider_surface = _provider_surface(
         state_id=state_id,
@@ -1516,6 +1769,10 @@ def compile_perception_grounding_world_state(
             seam=sam_calibration_seam,
             seam_input=seam_input,
             benchmark_signals=benchmark_payload,
+            benchmark_evidence=(
+                provider_benchmark_evidence.get("sam_calibration")
+                or {"benchmark_evidence_present": False}
+            ),
         )
         provider_adapter_receipts.append(receipt)
         if output is not None:
@@ -1530,6 +1787,10 @@ def compile_perception_grounding_world_state(
             seam=vision_backbone_projection_seam,
             seam_input=backbone_features,
             benchmark_signals=benchmark_payload,
+            benchmark_evidence=provider_benchmark_evidence.get(
+                "vision_backbone_projection"
+            )
+            or {"benchmark_evidence_present": False},
         )
         provider_adapter_receipts.append(receipt)
         if output is not None:
@@ -1545,6 +1806,10 @@ def compile_perception_grounding_world_state(
             seam=depth_metric_calibration_seam,
             seam_input=seam_input,
             benchmark_signals=benchmark_payload,
+            benchmark_evidence=provider_benchmark_evidence.get(
+                "depth_metric_calibration"
+            )
+            or {"benchmark_evidence_present": False},
         )
         provider_adapter_receipts.append(receipt)
         if output is not None:
@@ -1568,10 +1833,37 @@ def compile_perception_grounding_world_state(
                 seam=vjepa_temporal_alignment_seam,
                 seam_input=(vjepa_tokens, wm_tokens),
                 benchmark_signals=benchmark_payload,
+                benchmark_evidence=provider_benchmark_evidence.get(
+                    "vjepa_temporal_alignment"
+                )
+                or {"benchmark_evidence_present": False},
             )
             provider_adapter_receipts.append(receipt)
             if output is not None:
                 provider_adapter_outputs["vjepa_temporal_alignment"] = output
+
+    graph_d_token = getattr(scene_graph_transformer_seam, "d_token", 128)
+    benchmark_object_token_matrix, benchmark_object_source = _resolve_benchmark_object_tokens(
+        scene_graph=scene_graph,
+        d_token=graph_d_token,
+        explicit_tokens=benchmark_object_tokens,
+        explicit_source=benchmark_object_token_source,
+        provider_adapter_outputs=provider_adapter_outputs,
+    )
+
+    # --- Graph Transformer shadow path ---
+    graph_transformer_shadow_receipt: Optional[GraphTransformerShadowReceipt] = None
+    if scene_graph_transformer_seam is not None:
+        graph_transformer_shadow_receipt = _run_graph_transformer_shadow(
+            state_id=state_id,
+            scene_graph=scene_graph,
+            graph_helper=graph_helper,
+            seam=scene_graph_transformer_seam,
+            seam_id=scene_graph_transformer_seam_id,
+            benchmark_evidence=graph_benchmark_evidence or None,
+            object_token_matrix=benchmark_object_token_matrix,
+            object_token_source=benchmark_object_source,
+        )
 
     # --- Annotation Bridge Projection shadow path ---
     annotation_bridge_shadow_receipt: Optional[AnnotationBridgeShadowReceipt] = None
@@ -1582,7 +1874,9 @@ def compile_perception_grounding_world_state(
             seam=annotation_bridge_projection_seam,
             seam_id=annotation_bridge_projection_seam_id,
             benchmark_signals=benchmark_payload,
-            benchmark_evidence=annotation_bridge_benchmark_evidence,
+            benchmark_evidence=annotation_benchmark_evidence or None,
+            object_token_matrix=benchmark_object_token_matrix,
+            object_token_source=benchmark_object_source,
             evidence_source_provisional=annotation_bridge_evidence_provisional,
         )
 
@@ -1685,6 +1979,13 @@ def compile_perception_grounding_world_state(
             "evidence_fusion_receipt": evidence_fusion_receipt.to_dict(),
             "provider_adapter_receipts": [r.to_dict() for r in provider_adapter_receipts],
             "provider_adapter_outputs_available": list(provider_adapter_outputs.keys()),
+            "benchmark_object_tokens": benchmark_object_token_matrix,
+            "benchmark_object_token_source": benchmark_object_source,
+            "benchmark_evidence_artifacts": {
+                "scene_graph_transformer": graph_benchmark_evidence,
+                "annotation_bridge_projection": annotation_benchmark_evidence,
+                "provider_adapters": provider_benchmark_evidence,
+            },
             "graph_transformer_shadow_receipt": (
                 graph_transformer_shadow_receipt.to_dict()
                 if graph_transformer_shadow_receipt is not None

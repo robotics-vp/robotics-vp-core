@@ -42,10 +42,53 @@ def _check_demotion(
     return False, ""
 
 
+def _benchmark_evidence_status(
+    *,
+    benchmark_signals: Mapping[str, Any],
+    benchmark_evidence: Optional[Mapping[str, Any]] = None,
+    default_provisional: bool = False,
+) -> Dict[str, Any]:
+    """Resolve benchmark readiness with optional persistent evidence.
+
+    Backward compatibility:
+    - When ``benchmark_evidence`` is omitted, legacy ``benchmark_signals``
+      behavior is preserved.
+    - When benchmark evidence is provided, promotion requires that evidence
+      to be present and non-provisional; otherwise the helper may still run
+      in ``shadow_monitoring`` but cannot promote.
+    """
+    signal_ready = bool(
+        benchmark_signals.get("ready", False)
+        or benchmark_signals.get("benchmark_eligible", False)
+    )
+    payload = dict(benchmark_evidence or {})
+    artifact_provided = benchmark_evidence is not None and bool(payload)
+    benchmark_evidence_present = bool(
+        payload.get("benchmark_evidence_present", False)
+    )
+    provisional = bool(
+        payload.get("evidence_source_provisional", default_provisional)
+    )
+    shadow_ready = signal_ready or benchmark_evidence_present
+    if artifact_provided:
+        promotion_ready = shadow_ready and benchmark_evidence_present and not provisional
+    else:
+        promotion_ready = signal_ready and not provisional
+    return {
+        "artifact_provided": artifact_provided,
+        "signal_ready": signal_ready,
+        "shadow_ready": shadow_ready,
+        "promotion_ready": promotion_ready,
+        "benchmark_evidence_present": benchmark_evidence_present,
+        "evidence_source_provisional": provisional,
+    }
+
+
 def resolve_graph_transformer_helper(
     *,
     loading_posture: str,
     benchmark_signals: Mapping[str, Any],
+    benchmark_evidence: Optional[Mapping[str, Any]] = None,
     evidence_signals: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Resolve Graph Transformer helper posture.
@@ -58,10 +101,12 @@ def resolve_graph_transformer_helper(
     - ``required``: must use learned graph transformer or fail
     """
     posture = str(loading_posture or "disabled")
-    benchmark_ready = bool(
-        benchmark_signals.get("ready", False)
-        or benchmark_signals.get("benchmark_eligible", False)
+    evidence_status = _benchmark_evidence_status(
+        benchmark_signals=benchmark_signals,
+        benchmark_evidence=benchmark_evidence,
     )
+    benchmark_ready = bool(evidence_status["promotion_ready"])
+    shadow_ready = bool(evidence_status["shadow_ready"])
     benchmark_gate = dict(benchmark_signals.get("benchmark_gate", {}) or {})
 
     if posture == "disabled":
@@ -91,6 +136,13 @@ def resolve_graph_transformer_helper(
                 "helper_weight": 1.0,
                 "posture": "required",
             }
+        if shadow_ready:
+            return {
+                "helper_active": True,
+                "promotion_stage": "shadow_monitoring",
+                "helper_weight": 0.0,
+                "posture": "required",
+            }
         return {
             "helper_active": False,
             "promotion_stage": "required_but_not_ready",
@@ -115,6 +167,13 @@ def resolve_graph_transformer_helper(
             "helper_active": True,
             "promotion_stage": "promoted",
             "helper_weight": 1.0,
+            "posture": "auto",
+        }
+    if shadow_ready:
+        return {
+            "helper_active": True,
+            "promotion_stage": "shadow_monitoring",
+            "helper_weight": 0.0,
             "posture": "auto",
         }
     return {
@@ -397,6 +456,7 @@ def resolve_provider_adapter_helper(
     provider_kind: str,
     loading_posture: str,
     benchmark_signals: Mapping[str, Any],
+    benchmark_evidence: Optional[Mapping[str, Any]] = None,
     evidence_signals: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Resolve a provider adapter neural seam's promotion posture.
@@ -417,10 +477,12 @@ def resolve_provider_adapter_helper(
     - ``required``: must use learned adapter or fail
     """
     posture = str(loading_posture or "disabled")
-    benchmark_ready = bool(
-        benchmark_signals.get("ready", False)
-        or benchmark_signals.get("benchmark_eligible", False)
+    evidence_status = _benchmark_evidence_status(
+        benchmark_signals=benchmark_signals,
+        benchmark_evidence=benchmark_evidence,
     )
+    benchmark_ready = bool(evidence_status["promotion_ready"])
+    shadow_ready = bool(evidence_status["shadow_ready"])
     benchmark_gate = dict(benchmark_signals.get("benchmark_gate", {}) or {})
 
     base = {"provider_kind": str(provider_kind)}
@@ -455,6 +517,14 @@ def resolve_provider_adapter_helper(
                 "helper_weight": 1.0,
                 "posture": "required",
             }
+        if shadow_ready:
+            return {
+                **base,
+                "helper_active": True,
+                "promotion_stage": "shadow_monitoring",
+                "helper_weight": 0.0,
+                "posture": "required",
+            }
         return {
             **base,
             "helper_active": False,
@@ -484,6 +554,14 @@ def resolve_provider_adapter_helper(
             "helper_weight": 1.0,
             "posture": "auto",
         }
+    if shadow_ready:
+        return {
+            **base,
+            "helper_active": True,
+            "promotion_stage": "shadow_monitoring",
+            "helper_weight": 0.0,
+            "posture": "auto",
+        }
     return {
         **base,
         "helper_active": False,
@@ -497,6 +575,7 @@ def resolve_annotation_bridge_helper(
     *,
     loading_posture: str,
     benchmark_signals: Mapping[str, Any],
+    benchmark_evidence: Optional[Mapping[str, Any]] = None,
     evidence_signals: Optional[Mapping[str, Any]] = None,
     evidence_source_provisional: bool = True,
 ) -> Dict[str, Any]:
@@ -513,10 +592,14 @@ def resolve_annotation_bridge_helper(
     only, emitting diagnostic receipts.
     """
     posture = str(loading_posture or "disabled")
-    benchmark_ready = bool(
-        benchmark_signals.get("ready", False)
-        or benchmark_signals.get("benchmark_eligible", False)
+    evidence_status = _benchmark_evidence_status(
+        benchmark_signals=benchmark_signals,
+        benchmark_evidence=benchmark_evidence,
+        default_provisional=evidence_source_provisional,
     )
+    benchmark_ready = bool(evidence_status["promotion_ready"])
+    shadow_ready = bool(evidence_status["shadow_ready"])
+    effective_provisional = bool(evidence_status["evidence_source_provisional"])
     benchmark_gate = dict(benchmark_signals.get("benchmark_gate", {}) or {})
 
     if posture == "disabled":
@@ -525,14 +608,11 @@ def resolve_annotation_bridge_helper(
             "promotion_stage": "heuristic_fallback",
             "helper_weight": 0.0,
             "posture": "disabled",
-            "evidence_source_provisional": evidence_source_provisional,
+            "evidence_source_provisional": effective_provisional,
         }
 
-    # Provisional evidence blocks promotion even if benchmark gate passes
-    effective_benchmark_ready = benchmark_ready and not evidence_source_provisional
-
     if posture == "required":
-        if effective_benchmark_ready:
+        if benchmark_ready:
             should_demote, reason = _check_demotion(
                 benchmark_gate, dict(evidence_signals or {})
             )
@@ -543,26 +623,26 @@ def resolve_annotation_bridge_helper(
                     "helper_weight": 0.25,
                     "posture": "required",
                     "demotion_reason": reason,
-                    "evidence_source_provisional": evidence_source_provisional,
+                    "evidence_source_provisional": effective_provisional,
                 }
             return {
                 "helper_active": True,
                 "promotion_stage": "promoted",
                 "helper_weight": 1.0,
                 "posture": "required",
-                "evidence_source_provisional": evidence_source_provisional,
+                "evidence_source_provisional": effective_provisional,
             }
-        stage = "shadow_monitoring" if benchmark_ready else "required_but_not_ready"
+        stage = "shadow_monitoring" if shadow_ready else "required_but_not_ready"
         return {
-            "helper_active": benchmark_ready,
+            "helper_active": shadow_ready,
             "promotion_stage": stage,
             "helper_weight": 0.0,
             "posture": "required",
-            "evidence_source_provisional": evidence_source_provisional,
+            "evidence_source_provisional": effective_provisional,
         }
 
     # auto
-    if effective_benchmark_ready:
+    if benchmark_ready:
         should_demote, reason = _check_demotion(
             benchmark_gate, dict(evidence_signals or {})
         )
@@ -573,23 +653,23 @@ def resolve_annotation_bridge_helper(
                 "helper_weight": 0.25,
                 "posture": "auto",
                 "demotion_reason": reason,
-                "evidence_source_provisional": evidence_source_provisional,
+                "evidence_source_provisional": effective_provisional,
             }
         return {
             "helper_active": True,
             "promotion_stage": "promoted",
             "helper_weight": 1.0,
             "posture": "auto",
-            "evidence_source_provisional": evidence_source_provisional,
+            "evidence_source_provisional": effective_provisional,
         }
     # shadow_monitoring if benchmark data exists but is provisional
-    stage = "shadow_monitoring" if benchmark_ready else "heuristic_fallback"
+    stage = "shadow_monitoring" if shadow_ready else "heuristic_fallback"
     return {
-        "helper_active": benchmark_ready,
+        "helper_active": shadow_ready,
         "promotion_stage": stage,
         "helper_weight": 0.0,
         "posture": "auto",
-        "evidence_source_provisional": evidence_source_provisional,
+        "evidence_source_provisional": effective_provisional,
     }
 
 

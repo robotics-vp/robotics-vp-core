@@ -13,6 +13,11 @@ from src.world_model.perception_grounding import (
     compile_perception_grounding_with_receipts,
     compile_perception_grounding_world_state,
     encode_provider_features,
+    export_annotation_record,
+)
+from src.world_model.perception_grounding.benchmark_evidence import (
+    build_perception_benchmark_evidence,
+    write_perception_benchmark_evidence,
 )
 from src.world_model.perception_grounding.receipts import EvidenceFusionReceipt
 from src.world_model.semantic_coverage_graph import (
@@ -269,6 +274,110 @@ def test_annotation_bridge_shadow_receipt_carries_benchmark_evidence() -> None:
     assert receipt["held_out_label_agreement"] == 0.87
     assert receipt["gate_score"] == 0.86
     assert receipt["promotion_eligible"] is False
+
+
+def test_annotation_export_prefers_provider_backed_benchmark_tokens() -> None:
+    base_state = compile_perception_grounding_world_state(
+        episode_id="ep_export_tokens_base",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+    )
+    n_objects = base_state.scene_graph.object_count
+    provider_tokens = [
+        [0.25] * 128 if idx % 2 == 0 else [0.75] * 128
+        for idx in range(n_objects)
+    ]
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_export_tokens",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        benchmark_object_tokens=provider_tokens,
+        benchmark_object_token_source={
+            "source_kind": "explicit_provider_object_tokens",
+            "truth_class": "provider_backed",
+            "provider_id": "backbone_provider",
+            "provider_kind": "vision_backbone_projection",
+            "evidence_source_provisional": False,
+        },
+    )
+
+    record = export_annotation_record(state)
+    assert record is not None
+    assert record.object_tokens == provider_tokens
+    assert record.object_token_source_kind == "explicit_provider_object_tokens"
+    assert record.object_token_truth_class == "provider_backed"
+    assert record.object_token_evidence_provisional is False
+
+
+def test_graph_transformer_shadow_receipt_loads_persistent_benchmark_evidence(tmp_path) -> None:
+    evidence = build_perception_benchmark_evidence(
+        subsystem_key="scene_graph_transformer",
+        metrics={
+            "benchmark_evidence_present": True,
+            "evidence_source_provisional": False,
+            "evidence_truth_class": "provider_backed",
+            "token_source_kind": "explicit_provider_object_tokens",
+            "annotation_supervision_score": 0.84,
+            "held_out_label_agreement": 0.81,
+            "downstream_usefulness_score": 0.69,
+            "receipt_consistency": 0.9,
+            "gate_score": 0.82,
+            "promotion_eligible": True,
+        },
+        source_record_count=10,
+    )
+    evidence_path = tmp_path / "graph_transformer_benchmark_evidence.json"
+    write_perception_benchmark_evidence(evidence_path, evidence)
+
+    from src.world_model.perception_grounding import SceneGraphTransformerSeam
+
+    base_state = compile_perception_grounding_world_state(
+        episode_id="ep_graph_evidence_base",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+    )
+    n_objects = base_state.scene_graph.object_count
+    graph_seam = SceneGraphTransformerSeam(
+        d_token=128,
+        d_model=64,
+        d_out=64,
+        n_heads=2,
+        d_ff=128,
+        n_layers=1,
+    )
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_graph_evidence",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        benchmark_signals={"benchmark_eligible": True},
+        scene_graph_transformer_seam=graph_seam,
+        scene_graph_transformer_benchmark_evidence=str(evidence_path),
+        benchmark_object_tokens=[
+            [0.1] * 128 if idx % 2 == 0 else [0.2] * 128
+            for idx in range(n_objects)
+        ],
+        benchmark_object_token_source={
+            "source_kind": "explicit_provider_object_tokens",
+            "truth_class": "provider_backed",
+            "evidence_source_provisional": False,
+        },
+    )
+
+    receipt = state.metadata["graph_transformer_shadow_receipt"]
+    assert receipt is not None
+    assert receipt["version"] == "graph_transformer_shadow_receipt_v3"
+    assert receipt["benchmark_evidence_present"] is True
+    assert receipt["evidence_source_provisional"] is False
+    assert receipt["promotion_eligible"] is True
+    assert receipt["metadata"]["token_source_kind"] == "explicit_provider_object_tokens"
 
 
 def test_compiler_with_neural_seam_promoted() -> None:

@@ -140,6 +140,13 @@ from .annotation_export import (
     load_annotation_export_json,
     save_annotation_export_json,
 )
+from .benchmark_evidence import (
+    PERCEPTION_BENCHMARK_EVIDENCE_SCHEMA_VERSION,
+    PerceptionBenchmarkEvidence,
+    build_perception_benchmark_evidence,
+    load_perception_benchmark_evidence,
+    write_perception_benchmark_evidence,
+)
 from .neural_seams import (
     AnnotationBridgeProjectionSeam,
     EDGE_TYPE_VOCAB,
@@ -257,6 +264,12 @@ __all__ = [
     "export_annotation_records_batch",
     "load_annotation_export_json",
     "save_annotation_export_json",
+    # Benchmark evidence
+    "PERCEPTION_BENCHMARK_EVIDENCE_SCHEMA_VERSION",
+    "PerceptionBenchmarkEvidence",
+    "build_perception_benchmark_evidence",
+    "load_perception_benchmark_evidence",
+    "write_perception_benchmark_evidence",
     # Neural seams
     "AnnotationBridgeProjectionSeam",
     "DepthMetricCalibrationSeam",

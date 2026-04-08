@@ -22,6 +22,11 @@ from src.world_model.perception_grounding.receipts import (
 from src.world_model.perception_grounding.promotion import (
     resolve_annotation_bridge_helper,
 )
+from src.world_model.perception_grounding.benchmark_evidence import (
+    build_perception_benchmark_evidence,
+    load_perception_benchmark_evidence,
+    write_perception_benchmark_evidence,
+)
 from src.world_model.perception_grounding.seam_registry import (
     SEAM_TYPES,
     SEAM_DEFAULTS,
@@ -33,6 +38,7 @@ from src.training.perception_seam_losses import (
 )
 from src.training.perception_seam_data import (
     evaluate_seam_on_annotations,
+    evaluate_and_persist_seam_on_annotations,
 )
 
 
@@ -328,3 +334,91 @@ class TestEvaluateSeamOnAnnotations:
         assert "gate_score" in result
         # promotion_eligible depends on gate_score — either True or False is valid
         assert "promotion_eligible" in result
+
+    def test_infers_non_provisional_from_record_provenance(self):
+        seam = AnnotationBridgeProjectionSeam(d_token=128, n_categories=16)
+        records = self._make_annotation_records(10)
+        for record in records:
+            record["object_token_evidence_provisional"] = False
+            record["object_token_truth_class"] = "provider_backed"
+            record["object_token_source_kind"] = "vision_backbone_projection"
+        result = evaluate_seam_on_annotations(
+            seam=seam,
+            seam_type="annotation_bridge_projection",
+            annotation_records=records,
+        )
+        assert result["evidence_source_provisional"] is False
+        assert result["evidence_truth_class"] == "provider_backed"
+        assert result["token_source_kind"] == "vision_backbone_projection"
+
+
+class TestPerceptionBenchmarkEvidenceArtifact:
+    def test_roundtrip_json(self, tmp_path):
+        evidence = build_perception_benchmark_evidence(
+            subsystem_key="annotation_bridge_projection",
+            metrics={
+                "benchmark_evidence_present": True,
+                "evidence_source_provisional": False,
+                "evidence_truth_class": "provider_backed",
+                "token_source_kind": "vision_backbone_projection",
+                "annotation_supervision_score": 0.91,
+                "held_out_label_agreement": 0.88,
+                "downstream_usefulness_score": 0.73,
+                "receipt_consistency": 0.86,
+                "gate_score": 0.87,
+                "promotion_eligible": True,
+            },
+            source_record_count=12,
+            source_artifact_path=tmp_path / "annotation_export.json",
+        )
+        path = tmp_path / "annotation_bridge_benchmark_evidence.json"
+        digest = write_perception_benchmark_evidence(path, evidence)
+        loaded = load_perception_benchmark_evidence(path)
+
+        assert digest
+        assert loaded.subsystem_key == "annotation_bridge_projection"
+        assert loaded.evidence_source_provisional is False
+        assert loaded.token_source_kind == "vision_backbone_projection"
+        assert loaded.promotion_eligible is True
+
+    def test_evaluate_and_persist_wrapper(self, tmp_path):
+        seam = AnnotationBridgeProjectionSeam(d_token=128, n_categories=16)
+        records = []
+        for i in range(5):
+            records.append(
+                {
+                    "episode_id": f"ep_{i}",
+                    "frame_index": i,
+                    "object_token_evidence_provisional": False,
+                    "object_token_truth_class": "provider_backed",
+                    "object_token_source_kind": "vision_backbone_projection",
+                    "objects": [
+                        {
+                            "track_id": f"obj_{j}",
+                            "class_label": f"class_{j % 4}",
+                            "bbox": [0.1, 0.1, 0.5, 0.5],
+                            "confidence": 0.9,
+                        }
+                        for j in range(3)
+                    ],
+                    "relations": [
+                        {
+                            "source_track_id": "obj_0",
+                            "target_track_id": "obj_1",
+                            "relation_type": "near",
+                            "confidence": 0.8,
+                        }
+                    ],
+                }
+            )
+        output_path = tmp_path / "annotation_bridge_benchmark_evidence.json"
+        evidence = evaluate_and_persist_seam_on_annotations(
+            seam=seam,
+            seam_type="annotation_bridge_projection",
+            annotation_records=records,
+            output_path=output_path,
+            benchmark_subsystem_key="annotation_bridge_projection",
+        )
+        assert output_path.exists()
+        assert evidence.subsystem_key == "annotation_bridge_projection"
+        assert evidence.evidence_source_provisional is False

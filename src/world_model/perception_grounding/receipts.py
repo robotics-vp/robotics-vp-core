@@ -315,6 +315,12 @@ class GraphTransformerShadowReceipt:
       benchmark_evidence_present is True.  Without benchmark evidence,
       promotion_eligible is always False.
 
+    IMPORTANT — provisional evidence marking:
+    If ``evidence_source_provisional`` is True, the benchmark evidence was
+    derived from heuristic object tokens rather than provider-backed tokens.
+    Provisional evidence can support shadow monitoring, but MUST NOT
+    produce promotion_eligible=True.
+
     Emitted every compilation pass when a graph transformer seam is
     provided, regardless of promotion stage.
     """
@@ -340,6 +346,7 @@ class GraphTransformerShadowReceipt:
     # --- Promotion evidence (benchmark-gated) ---
     # Populated only when real benchmark data is available.
     benchmark_evidence_present: bool = False
+    evidence_source_provisional: bool = False
     annotation_supervision_score: float = 0.0
     held_out_label_agreement: float = 0.0
     downstream_usefulness_score: float = 0.0
@@ -356,9 +363,14 @@ class GraphTransformerShadowReceipt:
     gate_score: float = 0.0
 
     metadata: Dict[str, Any] = field(default_factory=dict)
-    version: str = "graph_transformer_shadow_receipt_v2"
+    version: str = "graph_transformer_shadow_receipt_v3"
 
     def to_dict(self) -> Dict[str, Any]:
+        effective_eligible = (
+            self.promotion_eligible
+            and self.benchmark_evidence_present
+            and not self.evidence_source_provisional
+        )
         return {
             "receipt_id": self.receipt_id,
             "seam_id": self.seam_id,
@@ -374,13 +386,14 @@ class GraphTransformerShadowReceipt:
             "edge_count_learned": int(self.edge_count_learned),
             "node_count": int(self.node_count),
             "benchmark_evidence_present": bool(self.benchmark_evidence_present),
+            "evidence_source_provisional": bool(self.evidence_source_provisional),
             "annotation_supervision_score": clip01(self.annotation_supervision_score),
             "held_out_label_agreement": clip01(self.held_out_label_agreement),
             "downstream_usefulness_score": clip01(self.downstream_usefulness_score),
             "receipt_consistency": clip01(self.receipt_consistency),
             "latency_ms": float(self.latency_ms),
             "param_count": int(self.param_count),
-            "promotion_eligible": bool(self.promotion_eligible),
+            "promotion_eligible": bool(effective_eligible),
             "gate_score": clip01(self.gate_score),
             "metadata": mapping(self.metadata),
             "version": self.version,
