@@ -1130,12 +1130,76 @@ Reserved type families (existing + planned):
 
 - `SimSynthPhysicsWorldState` — top-level canonical state
 - `SimulationAgenda`, `SimulationJobSpec` — agenda subsystem
+- `TaskMeasurementSurface`, `SceneHierarchyState` — task/scene/materialization
 - `PhysicsContextState`, `PhysicsAdaptationPolicyState` — fidelity/calibration
 - `BackendExecutionBindingState` — backend subsystem
 - `DiffusionConditioningState`, `BranchRenderProviderState` — render/diffusion
+- `DifferentiablePhysicsProviderState`, `SurrogatePhysicsProviderState`,
+  `SurrogateRolloutForecast` — differentiable/surrogate physics lanes
 - `SyntheticBranchPlan`, `Gen2SimAdmissionState` — branch planning/admission
 - `SimulationOutcomeReceipt`, `PhysicsCalibrationReceipt`,
-  `PhysicsAdaptationReceipt`, `BackendExecutionBindingReceipt` — receipts
+  `PhysicsAdaptationReceipt`, `BackendExecutionBindingReceipt`,
+  `SimRealGapReceipt`, `BackendMismatchReceipt`, `SurrogatePhysicsReceipt`,
+  `SurrogateCalibrationReceipt`, `InverseDesignProposalReceipt` — receipts
+
+#### Provider-Family Placement and Ownership Rules
+
+The Sim / Synth / Physics WM should treat simulation providers as a reusable
+family rather than as one-off imports. The governing split is:
+
+- the WM owns simulation agenda, provider-neutral physics context, scene and
+  materialization intent, branch planning/admission, realism/calibration/yield
+  evaluation, and replay/training exports
+- provider adapters own asset/config translation, runtime binding, capability
+  declaration, telemetry harvesting, and provider-specific transport bridges
+- fidelity, materialization, calibration, and surrogate lanes own backend
+  routing, paired-provider composition, system-ID/randomization policy,
+  surrogate preview, and verification policy
+- providers may span multiple subsystems, but they never own WM truth
+
+Provider-family placement inside the 10-subsystem topology:
+
+- **Newton** belongs primarily across Subsystems 1, 6, and 8, with mismatch and
+  calibration evidence consumed by Subsystem 9. It should be understood as a
+  physics-fidelity provider, backend adapter, and differentiable rollout /
+  calibration lane. It should affect `PhysicsContextState`,
+  `PhysicsAdaptationPolicyState`, `BackendExecutionBindingState`,
+  `DifferentiablePhysicsProviderState`, `PhysicsCalibrationReceipt`,
+  `PhysicsAdaptationReceipt`, `SimRealGapReceipt`, and
+  `BackendMismatchReceipt`. It should not own `SimulationAgenda`,
+  `SyntheticBranchPlan`, scene/materialization truth, or embodiment remapping.
+- **UnrealRoboticsLab** belongs primarily in Subsystem 3 with a paired lane in
+  Subsystem 7, mediated through Subsystem 1. It should be treated as a paired
+  backend+render provider with strong scene/materialization value, not merely
+  as "another simulator." It should affect `SceneHierarchyState`,
+  `BranchRenderProviderState`, `BackendExecutionBindingState`,
+  `BackendRuntimeBridgeReceipt`, and `SimulationOutcomeReceipt`. It should not
+  own agenda compilation, branch admission, calibration policy, or deployment
+  adaptation.
+- **WinDiNet-like diffusion surrogates** belong primarily in Subsystem 8, with
+  direct consumers in Subsystems 4, 5, and 10. They should be treated as
+  bounded surrogate-physics / inverse-design sublanes: fast approximate forward
+  models for branch scoring, differentiable surrogate lanes for inverse
+  proposals, and later calibration aides. They should affect
+  `SurrogatePhysicsProviderState`, `SurrogateRolloutForecast`,
+  `SurrogatePhysicsReceipt`, `SurrogateCalibrationReceipt`,
+  `InverseDesignProposalReceipt`, `SyntheticBranchPlan`,
+  `Gen2SimAdmissionState`, and `SimulationOutcomeReceipt`. They should not own
+  runtime physics authority, scene truth, branch admission authority, or
+  embodiment transfer logic.
+- **Isaac Lab / Isaac Sim / Isaac Gym / Unitree Isaac Gym** belong primarily in
+  Subsystem 1, with task/scene ties into Subsystems 2 and 3 and calibration
+  consequences in Subsystem 6. Their core role is runtime/task/backend hosting,
+  not surrogate physics or render-only ownership.
+- **Holosoma** belongs primarily as an embodiment-targeted execution/runtime
+  provider under Subsystem 1 with downstream impact on transfer evaluation. It
+  is not the owner of general scene materialization, surrogate physics, or
+  branch generation.
+- **Habitat-style scene pipelines** belong as reusable patterns across
+  Subsystems 2, 3, and 4: room/scene priors, asset composition, embodied scene
+  semantics, and navigation/environment layout generation should compile into
+  `TaskMeasurementSurface`, `SceneHierarchyState`, and `SyntheticBranchPlan`
+  rather than becoming a separate ontology or master environment abstraction.
 
 #### Neural Structure Candidates by Subsystem
 
@@ -1179,6 +1243,24 @@ promotion posture, benchmark-gated promotion.
   synthetic-vs-real alignment), Embodiment bridge (physics-to-control
   transfer quality), Economic bridge (resource-to-yield accounting)
 
+#### Sim-to-Embodiment Transfer Boundary (Sim-Side Ownership)
+
+On the Sim / Synth / Physics side, this WM should own:
+
+- embodiment-facing simulation assumptions and the regime metadata attached to
+  a simulated branch
+- morphology/backend mismatch state on the simulation side
+- transfer/calibration receipts and rollout-conditioned adaptation candidates
+- slow-loop transfer summaries, promotion evidence, and backend-quality trends
+
+This WM should emit those surfaces through typed receipts such as
+`PhysicsCalibrationReceipt`, `PhysicsAdaptationReceipt`, `SimRealGapReceipt`,
+`BackendMismatchReceipt`, and `SimulationOutcomeReceipt`. The Embodiment /
+Actuation WM should remain the owner of kinematic remapping, retargeting,
+capability filtering, deployment-side drift handling, and local embodiment
+adaptation. The later WM-transport layer should consume these typed bridge
+objects; it should not replace them with a premature mother-latent.
+
 #### Robostack / G1 Contribution
 
 This WM is the primary engine for **scalable synthetic data generation**.
@@ -1213,7 +1295,12 @@ explicitly tied to the subsystem decomposition above:
 - measurement surfaces → Subsystem 2
 - articulated/sensor config → Subsystem 3 (Scene/Asset)
 - scene hierarchy → Subsystem 3
+- room/scene priors and asset composition → Subsystem 3
+- embodied scene semantics as shared scene hierarchy → Subsystem 3, consumed by
+  Perception and recompiled into Embodiment-local affordance/contact views
 - camera geometry / view-warp → Subsystem 3 + Subsystem 7
+- navigation/environment layout generation → Subsystem 4 (Branch
+  Planner/Evaluator)
 - vectorized runtime/eval → Subsystem 1 (Backend/Runtime)
 - play/benchmark harnesses → Subsystem 2
 - differentiable physics → Subsystem 8

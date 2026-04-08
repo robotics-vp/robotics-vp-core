@@ -552,6 +552,89 @@ allocative authority.
 
 ---
 
+## Sim / Synth / Physics Transfer Boundary
+
+The most important transfer example is kinematic remapping, but the boundary is
+broader than that. This interface is where simulated branch assumptions meet
+deployment embodiment truth.
+
+### Ownership split
+
+The Sim / Synth / Physics WM should own:
+
+- embodiment-facing simulation assumptions and the backend/fidelity regime used
+  to produce a branch
+- morphology/backend mismatch state on the simulation side
+- transfer/calibration receipts and rollout-conditioned adaptation candidates
+- slow-loop deployment metadata, transfer summaries, and promotion evidence
+
+The Embodiment / Actuation WM should own:
+
+- kinematic remapping
+- retargeting
+- capability filtering
+- deployment-side drift handling
+- local embodiment adaptation
+
+This keeps remap and deployment adaptation body-local while letting Sim /
+Synth / Physics remain the owner of the simulation-side assumptions and
+evidence.
+
+### Broader remap classes
+
+| Remap / transfer class | Primary owner | Role |
+|---|---|---|
+| Morphology remap | Inverse-Dynamics / Retargeting Lane + Capability State Surface | Map source-body trajectories and policies into target-body feasible traces |
+| Actuator / control-space remap | Inverse-Dynamics / Retargeting Lane + Joint Skill / Action Proposal Head | Convert policy/action representations into embodiment-native control chunks |
+| Sensor / render / domain remap | Sim / Synth / Physics WM primary | Translate scene/render/domain assumptions into transfer-risk and branch-conditioning evidence |
+| Timing / latency / control-rate remap | Embodiment WM fast/runtime side with Sim assumptions as inputs | Reconcile simulated control cadence with deployment execution realities |
+| Contact / friction / dynamics calibration remap | Shared: Sim proposes, Embodiment validates | Push system-ID/calibration candidates from sim and compare them against realized traces |
+| Environment / scene abstraction remap | Sim / Synth / Physics WM to Embodiment contact/affordance consumers | Convert scene/layout abstractions into body-local actionable structure |
+| Capability-envelope remap | Capability State Surface + Drift / Calibration / Cost Evaluator | Narrow simulated feasibility claims to the currently valid deployment envelope |
+
+### Bounded learned seams
+
+Sim / Synth / Physics-side learned seams should stay bounded and advisory-to-
+promotable:
+
+- backend mismatch estimator
+- transfer-success predictor
+- morphology-conditioned rollout scorer
+- surrogate-physics / inverse-design scorer
+- calibration parameter proposer
+
+Embodiment-side learned seams should stay body-local and execution-facing:
+
+- retargeting / remap seam
+- action-space remap or inverse-dynamics seam
+- local capability adaptation seam
+- calibration / drift evaluator
+- deployment degradation predictor
+
+None of these seams should become a replacement ontology or a cross-WM
+mother-latent.
+
+### Timescales and bridge surfaces
+
+The boundary should operate across the same fast / mid / slow loop hierarchy as
+the rest of the Embodiment WM:
+
+- **Fast exchange**: compact execution constraints, active capability envelope,
+  safety posture, and latency class from Embodiment; compact adaptation
+  candidates from Sim. These must not block the inner control loop.
+- **Mid-loop exchange**: `SimulationOutcomeReceipt`,
+  `PhysicsAdaptationReceipt`, `SimRealGapReceipt`, and
+  `BackendMismatchReceipt` from Sim; `EmbodimentDriftSummary`,
+  `CalibrationTargetSet`, and realized mismatch traces from Embodiment.
+- **Slow-loop exchange**: stable remap tables, transfer summaries, backend
+  quality trends, promotion evidence, and deployment-side drift baselines.
+
+These are the surfaces the future WM-transport layer should later consume as
+typed bridge objects. Transport should not become the first owner of remapping,
+drift handling, or transfer truth.
+
+---
+
 ## What We Borrow from External Architectures
 
 Imported architectures enter this stack as bounded, promotable, typed,

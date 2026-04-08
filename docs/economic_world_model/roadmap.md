@@ -208,6 +208,54 @@ These may involve selective code borrowing or provider integration:
 Each requires a scoping evaluation: what to borrow, what to adapt, what to
 ignore. Do not bulk-import.
 
+#### Integrated Sim / Synth / Physics provider and boundary pass
+
+This reopenable Phase 1.x lane should be treated as one coherent Sim / Synth /
+Physics update, not as separate Newton / Unreal / Habitat / surrogate waves.
+
+**Near-term doctrine (docs/contracts first)**:
+
+- make provider-family placement explicit in the Sim / Synth / Physics WM
+  owning doc:
+  - Newton → Subsystems 1/6/8/9 as physics-fidelity +
+    differentiable-calibration provider family
+  - UnrealRoboticsLab → Subsystems 3/7 mediated by 1 as paired
+    backend+render/materialization provider
+  - WinDiNet-like lanes → Subsystem 8 with Subsystems 4/5/10 consumers as
+    surrogate-physics / inverse-design sublane
+  - Habitat-style scene priors, asset composition, and layout generation →
+    Subsystems 2/3/4 rather than a separate ontology
+- reserve common typed surfaces across this family:
+  `TaskMeasurementSurface`, `SceneHierarchyState`,
+  `DifferentiablePhysicsProviderState`, `SurrogatePhysicsProviderState`,
+  `SimRealGapReceipt`, `BackendMismatchReceipt`,
+  `SurrogatePhysicsReceipt`, `SurrogateCalibrationReceipt`
+- keep the constitutional rule: providers may span multiple subsystems, but
+  never own WM truth
+
+**Later Phase 1.x evaluation / bring-up**:
+
+- evaluate Newton as a solver-backed fidelity and differentiable calibration
+  lane alongside MuJoCo-style backends
+- evaluate UnrealRoboticsLab first as a MuJoCo-paired high-fidelity
+  materialization provider, while keeping the contract pairable toward
+  Isaac-family physics later
+- evaluate Isaac Lab, Isaac Sim, Isaac Gym, Unitree Isaac Gym, and Holosoma
+  against the same provider contracts instead of bespoke one-off wiring
+- keep Habitat-style room/scene/layout learnings inside the provider/back-end
+  pattern rather than creating a Habitat-native environment layer
+
+**Later calibration / transfer / deployment follow-on**:
+
+- keep WinDiNet-like lanes bounded to surrogate preview, branch scoring,
+  inverse-design proposal, and later surrogate-vs-backend calibration
+- route sim-real gap, backend mismatch, and calibration receipts into the
+  Sim↔Embodiment transfer boundary rather than into transport-specific doctrine
+- Phase 4A and 4E should later make timing, control-rate, degraded-mode, and
+  communication consequences real
+- Phase 6 should later learn over those typed transfer/calibration surfaces,
+  not invent them from scratch
+
 #### GPU/runtime-blocked adoption items (requires hardware/assets)
 
 These are real but blocked by external resources:
@@ -246,6 +294,12 @@ Lab (embodiment-aware sim), and TD-MPC2 (bounded latent planning) should
 enter as bounded, promotion-gated, receipt-emitting seams inside the
 Embodiment WM — not as replacement ontologies. See
 `docs/actuation_embodiment_world_model.md` for the borrowing discipline.
+
+The same Phase 3 prep should now explicitly include the Sim↔Embodiment transfer
+boundary: Sim / Synth / Physics owns simulation assumptions, backend-mismatch
+state, and transfer/calibration receipts; Embodiment owns remap/retarget,
+capability filtering, and deployment-side adaptation. Later transport work
+should consume those typed surfaces rather than becoming their first owner.
 
 ### Economic WM and Transport / Meta-Node — not a Habitat concern
 

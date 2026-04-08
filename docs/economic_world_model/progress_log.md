@@ -1988,3 +1988,18 @@
   - `python3 -m compileall src/training/perception_seam_*.py -q`
   - `python3 -m pytest tests/test_perception_seam_training.py tests/test_perception_grounding_neural_seams.py -v`
   - result: `63 passed` (26 new + 37 existing)
+
+### 2026-04-08: Integrated Sim / Synth / Physics doctrinal pass
+
+- Updated the owning docs only:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md`
+  - `docs/economic_world_model/roadmap.md`
+  - `docs/actuation_embodiment_world_model.md`
+- Unified Newton, UnrealRoboticsLab, Habitat-style scene/materialization
+  learnings, and WinDiNet-style surrogate physics into one Sim / Synth /
+  Physics Phase 1.x doctrine pass instead of separate architecture waves.
+- Made the Sim↔Embodiment transfer boundary explicit while keeping provider
+  doctrine in Sim / Synth and remap/deployment adaptation ownership in
+  Embodiment.
+- Scope stayed docs-only: no code changes and no new standalone architecture
+  docs.

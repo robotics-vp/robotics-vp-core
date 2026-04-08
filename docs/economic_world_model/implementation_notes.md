@@ -2816,3 +2816,14 @@ New package `src/world_model/perception_grounding/` following the exact pattern 
   - add the next consumer tranche so the bridge family expands beyond:
     - one Sim / Synth context consumer
     - one annotation consumer
+
+- 2026-04-08 Sim / Synth / Physics doctrine note:
+  - provider-family placement now lives in the existing owning docs rather than
+    in new standalone notes:
+    - `multi_wm_architecture_plan.md` owns Newton / UnrealRoboticsLab /
+      WinDiNet / Habitat-style placement inside the 10-subsystem topology
+    - `roadmap.md` owns the single integrated Phase 1.x follow-on
+    - `actuation_embodiment_world_model.md` owns only the explicit
+      Sim↔Embodiment transfer boundary
+  - this intentionally avoids duplicating provider doctrine in Embodiment or
+    transport docs
