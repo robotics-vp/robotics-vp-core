@@ -2020,3 +2020,25 @@
   - no SAC-centered repo pivot
   - no code changes
   - no fake claim that real-robot online RL is the current bottleneck
+
+### 2026-04-08: UE5 / Unreal provider-family doctrine pass
+
+- Added `docs/economic_world_model/doctrine_unreal_ue5_provider_posture.md`
+  as the owning doctrine note for UE5 / Unreal posture inside Ixion.
+- Updated the existing owning docs so UE5 is legible as a major Sim / Synth /
+  Physics provider family without becoming the stack ontology:
+  - `multi_wm_architecture_plan.md`
+  - `roadmap.md`
+  - `actuation_embodiment_world_model.md`
+  - `implementation_notes.md`
+- Tightened the doctrine around:
+  - UE5 capability placement by subsystem
+  - hybrid backend posture
+  - provider-not-truth-owner boundaries
+  - sensor/timing and transfer-boundary implications for Embodiment
+  - later headless / cloud / industrial twin execution posture
+- Kept the tranche additive and staged:
+  - no WM ordering rewrite
+  - no Unreal-centered repo pivot
+  - no code changes
+  - no fake active backlog items where no honest runtime entrypoint exists yet

@@ -2888,3 +2888,81 @@ rewriting the stack around real-robot finetuning prematurely.
   - emits: per-window and per-episode adaptation receipts
   - why later: this should come only after the stack has honest on-robot loop
     receipts and replay export discipline
+
+## Future UE5 / Unreal provider-family tranche
+
+This is future provider/runtime work, not a reason to pull implementation
+priority away from the current lower-WM bottlenecks. The point of reserving
+these targets now is to make UE5 legible as a bounded provider family inside
+the Sim / Synth / Physics WM.
+
+- `src/world_model/sim_synth_physics/providers/ue5_scene_provider.py`
+  - ownership: Sim / Synth / Physics WM Scene / Asset / Materialization Layer
+  - contracts: `UESceneMaterializationState`, `UEAssetContentContract`
+  - consumes: `SceneHierarchyState`, asset manifests, branch scene intent,
+    deployment-matched digital-twin refs
+  - emits: scene-materialization state and asset-readiness receipts
+  - honest blocker class: UE5 project/runtime layout, asset roots,
+    photogrammetry/digital-twin inputs, GPU host when materialization becomes
+    real
+
+- `src/world_model/sim_synth_physics/providers/ue5_render_provider.py`
+  - ownership: Render / Diffusion / Materialization Lane
+  - contracts: `UEPhotorealRenderReceipt`, `UESimRealVisualAlignmentReceipt`
+  - consumes: `BranchRenderProviderState`, branch plans, camera/sensor configs,
+    realism targets
+  - emits: photoreal render receipts, visual-alignment receipts, materialized
+    artifact refs
+  - honest blocker class: GPU host, UE5 runtime/headless render support,
+    calibrated material/light profiles
+
+- `src/world_model/sim_synth_physics/providers/ue5_sensor_provider.py`
+  - ownership: Sim / Synth provider/runtime surface with downstream
+    Perception/Embodiment consumers
+  - contracts: `UESensorSimulationContract`, `UESensorSimulationReceipt`
+  - consumes: scene/materialization state, sensor suite config, timing/noise
+    policy, branch evaluation context
+  - emits: simulated sensor bundles plus timing/noise/synchronization receipts
+  - honest blocker class: plugin/runtime availability, calibrated sensor models,
+    GPU host, middleware-specific sensor exporters
+
+- `src/world_model/sim_synth_physics/providers/ue5_randomization_provider.py`
+  - ownership: Fidelity / Randomization / Calibration Allocator
+  - contracts: `UERandomizationPolicyState`, `UEPCGLayoutGenerationReceipt`
+  - consumes: WM-owned randomization policy, coverage targets, scene/layout
+    families, asset contracts
+  - emits: randomized-scene receipts, PCG layout generation receipts, coverage
+    metadata
+  - honest blocker class: UE PCG/plugin availability, asset libraries,
+    calibrated layout/randomization policies
+
+- `src/world_model/sim_synth_physics/providers/ue5_digital_twin_ingest.py`
+  - ownership: Scene / Asset / Materialization Layer with Task/Measurement
+    consequences
+  - contracts: `UEDigitalTwinIngestReceipt`,
+    `UEDigitalTwinRegistrationContract`
+  - consumes: photogrammetry, SLAM point clouds, LiDAR-supported
+    reconstruction outputs, registration/pose exports
+  - emits: digital-twin ingest receipts, deployment-matched regression
+    environment refs, pose/registration provenance
+  - honest blocker class: RealityScan/CLI or equivalent pipeline access, site
+    captures, registration truth, Linux/remote-command runtime
+
+- `src/world_model/sim_synth_physics/providers/ue5_middleware_bridge.py`
+  - ownership: Backend / Runtime / Provider Surface
+  - contracts: `UEMiddlewareBridgeContract`, `UEHybridBackendBindingState`
+  - consumes: backend runtime bridge state, transport profile, ROS / ROS2 /
+    gRPC posture, companion-compute assumptions
+  - emits: bridge contracts, middleware readiness receipts, hybrid backend
+    binding state
+  - honest blocker class: ROS2/plugin availability, gRPC bridge/runtime
+    support, packaged UE robotics project, host networking and deployment
+    topology
+
+- backlog hooks, not immediate pressure:
+  - if a later GPU/runtime tranche wants UE work, the first honest targets are:
+    headless render/materialization smoke, digital-twin ingest smoke, sensor
+    simulation smoke, randomization/PCG smoke, middleware/hybrid-backend
+    evaluation
+  - these belong in non-training GPU/runtime backlogs only once there is a real
+    wrapper script or runtime entrypoint to point at, not as fake active work

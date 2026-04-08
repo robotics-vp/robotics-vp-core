@@ -136,6 +136,13 @@ No further Habitat copying is needed for Perception; the remaining work is
 real benchmark-evidence production, runtime materialization of provider-backed
 token paths, and provider-specific calibration artifact generation.
 
+UE5 / Unreal outputs should later be treated as strong Phase 2 inputs rather
+than as a replacement ontology: photoreal scene renders, synthetic sensor
+streams, render-time labels, and deployment-matched digital-twin captures can
+become useful Perception-WM training and evaluation corpora once the Sim /
+Synth provider/runtime lanes and receipts are real enough to produce them
+honestly.
+
 ### Sim / Synth / Physics WM (Phase 1.x) — biggest remaining opportunity
 
 This is where the most Habitat-derived learning still sits. It should be
@@ -259,6 +266,59 @@ Physics update, not as separate Newton / Unreal / Habitat / surrogate waves.
 - Phase 6 should later learn over those typed transfer/calibration surfaces,
   not invent them from scratch
 
+#### UE5 / Unreal provider-family posture
+
+See `docs/economic_world_model/doctrine_unreal_ue5_provider_posture.md`.
+
+UE5 / Unreal should be treated as a major Sim / Synth / Physics provider
+family for:
+
+- scene materialization
+- branch rendering
+- digital-twin generation and ingest
+- synthetic-data generation
+- sensor simulation
+- randomization and PCG-driven variation
+
+This remains doctrine under the current topology, not a topology rewrite and
+not a reason to divert current branch priorities into "build Unreal now."
+
+**Adoption staging rule**:
+
+1. docs and contracts first
+2. provider/runtime lanes second
+3. branch/materialization/sensor receipts third
+4. headless/cloud recurring generation later
+5. deployment twin / HIL / teleop / industrial usage last
+
+**Near-term Phase 1.x doctrine**:
+
+- reserve UE5 / Unreal as a provider family spanning scene/materialization,
+  render, sensors, digital twins, randomization, and middleware-connected
+  runtime
+- keep hybrid backend posture explicit: UE for realism, rendering, sensors,
+  digital twins, and large-scene variation; MuJoCo / Bullet / Newton /
+  AGX-like lanes where they are the more honest contact/control choice
+- keep the anti-overfit rule explicit: UE5 is not the stack ontology, not the
+  controller owner, and not the owner of scene truth
+
+**Later Phase 1.x evaluation / bring-up**:
+
+- UE5 headless branch rendering and synthetic-data generation
+- UE-backed digital-twin ingest for deployment-matched regression scenes
+- UE sensor-simulation lanes and timing/noise/synchronization receipts
+- UE PCG / randomization lanes for clutter, occlusion, weather, and layout
+  variation
+- UE hybrid-backend evaluation paired with MuJoCo-style or Newton-style lanes
+
+**Later follow-on**:
+
+- Phase 4A / 4B / 4E reserve UE middleware, sensor-simulation, and companion
+  bridge lanes as concrete enablers once those phases open
+- Phase 8 weekly GPU operations can later include headless UE generation,
+  validation, and industrial-twin runs once the corresponding provider/runtime
+  lanes and receipts are real
+
 #### Future sim-to-online stabilization doctrine
 
 See `docs/economic_world_model/doctrine_sim_to_online_stabilization.md`.
@@ -339,6 +399,11 @@ That embodiment-side transfer truth should later include realized post-transfer
 drift, action-feasibility degradation, control-rate / latency mismatch, and
 local recovery posture as typed replay/exportable receipts rather than as
 ambient deployment notes.
+
+UE-backed simulation assumptions and sensor/timing profiles should later help
+precondition humanoid/mobile readiness here, but they should remain inputs into
+Embodiment-local truth rather than replacements for remap, action-feasibility,
+latency-divergence, or degradation ownership.
 
 ### Economic WM and Transport / Meta-Node — not a Habitat concern
 
@@ -713,6 +778,11 @@ Recommended sub-phases after training starts:
   tracked explicitly rather than tuned informally
 - January 1, 2027 through March 31, 2027: benchmark and calibration season, especially for perception temporal state, whole-body sim execution, backend truth, and promotion gates
 - April 1, 2027 through June 30, 2027: pre-purchase hardening for Unitree G1 readiness, including safety-adjacent middleware, embodiment contracts, whole-body replay, and hardware-facing adapter discipline
+- when those later deployment-enabler phases open, UE middleware and sensor
+  simulation should be treated as concrete Phase 4A / 4B / 4E candidate lanes:
+  real-time control-loop separation still owns the rate split, the sensor-fusion
+  shim still owns fusion consequences, and companion middleware still owns the
+  transport consequences
 - July 2027: purchase/integration window where the honest blockers should mostly be hardware, data, calibration, GPUs, and benchmark evidence rather than missing canonical plumbing
 - July 1, 2027 through August 31, 2027: turn first-hardware bring-up into a recurring robot loop with replay capture, degraded-mode handling, operator/recovery traces, and training-export discipline
 - By September 30, 2027: the G1 control loop should be sustainably autonomous enough to keep running, collecting data, and improving without recurrent architecture churn
@@ -730,6 +800,9 @@ Phase C: Production-loop runtime after the major WM layers are mature
   - promotion / redeployment
 - keep burning down the explicit run/training/provider backlogs until there are no important external or internal model lanes sitting unused
 - only after that backlog burn-down becomes routine should latency, inference throughput, and deployment cost become the dominant optimization target
+- later Phase 8 execution may include headless UE-based synthetic generation,
+  sensor-validation runs, digital-twin regression runs, and industrial/workcell
+  twin validation loops once those lanes have honest provider/runtime receipts
 
 Weekly operating model from September 1, 2026 onward:
 

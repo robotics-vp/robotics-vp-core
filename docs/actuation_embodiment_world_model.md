@@ -584,6 +584,14 @@ This keeps remap and deployment adaptation body-local while letting Sim /
 Synth / Physics remain the owner of the simulation-side assumptions and
 evidence.
 
+UE-backed simulation assumptions should enter this boundary the same way any
+other sim-side provider family does:
+
+- as scene / render / sensor / timing assumptions emitted by Sim / Synth /
+  Physics
+- as transfer-risk and calibration evidence
+- not as ownership over body truth or controller truth
+
 ### Broader remap classes
 
 | Remap / transfer class | Primary owner | Role |
@@ -640,6 +648,20 @@ These are the surfaces the future WM-transport layer should later consume as
 typed bridge objects. Transport should not become the first owner of remapping,
 drift handling, or transfer truth.
 
+### UE-backed simulation inputs
+
+When UE5 / Unreal is the upstream provider family, the Embodiment side should
+be able to consume:
+
+- UE-backed sensor and synchronization profiles
+- simulated latency and control-rate assumptions
+- visual-domain and digital-twin transfer summaries
+- middleware-connected runtime assumptions when they materially affect
+  deployment timing or degraded-mode posture
+
+Those remain inputs into Embodiment-local adaptation. Unreal does not become
+the owner of body truth, action feasibility, or control truth.
+
 ### Candidate typed transfer receipts
 
 The embodiment side of this boundary should later emit explicit deployment-side
@@ -653,6 +675,14 @@ transfer receipts such as:
   recovery posture, and whether local adaptation preserved useful prior
 - `ControllerLatencyMismatchReceipt` — observed control-rate / latency /
   actuator-response divergence relative to the simulated cadence
+- `SensorTimingMismatchReceipt` — divergence between simulated sensor timing /
+  synchronization assumptions and deployment reality
+- `SimulationToEmbodimentTransferReceipt` — compact receipt linking the
+  sim-side transfer assumptions actually consumed by Embodiment to the
+  deployment-side adaptation posture
+- `EmbodimentLatencyDivergenceReceipt` — embodiment-local timing and control
+  divergence summary when the deployed loop no longer matches the simulated
+  cadence or middleware assumptions
 
 These receipts should feed replay/training export, Sim / Synth / Physics
 calibration feedback, and later Economic WM consumption. They should not make

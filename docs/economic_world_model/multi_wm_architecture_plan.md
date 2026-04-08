@@ -1141,6 +1141,10 @@ Reserved type families (existing + planned):
 - `PhysicsContextState`, `PhysicsAdaptationPolicyState` — fidelity/calibration
 - `BackendExecutionBindingState` — backend subsystem
 - `DiffusionConditioningState`, `BranchRenderProviderState` — render/diffusion
+- `UESceneMaterializationState`, `UEAssetContentContract`,
+  `UEHybridBackendBindingState`, `UERandomizationPolicyState`,
+  `UESensorSimulationContract`, `UEMiddlewareBridgeContract` — UE5/Unreal
+  provider-family contracts
 - `DifferentiablePhysicsProviderState`, `SurrogatePhysicsProviderState`,
   `SurrogateRolloutForecast` — differentiable/surrogate physics lanes
 - `ReplayMixturePolicy`, `WarmStartPolicy`, `ActorCriticUpdateSchedule`,
@@ -1150,6 +1154,9 @@ Reserved type families (existing + planned):
   `PhysicsAdaptationReceipt`, `BackendExecutionBindingReceipt`,
   `SimRealGapReceipt`, `BackendMismatchReceipt`, `SurrogatePhysicsReceipt`,
   `SurrogateCalibrationReceipt`, `InverseDesignProposalReceipt`,
+  `UEPhotorealRenderReceipt`, `UESensorSimulationReceipt`,
+  `UEDigitalTwinIngestReceipt`, `UEPCGLayoutGenerationReceipt`,
+  `UESimRealVisualAlignmentReceipt`,
   `CheckpointCompletenessReceipt`, `TransferStabilityReceipt`,
   `OnlineAdaptationEpisodeReceipt` — receipts
 
@@ -1179,10 +1186,26 @@ Provider-family placement inside the 10-subsystem topology:
   `PhysicsAdaptationReceipt`, `SimRealGapReceipt`, and
   `BackendMismatchReceipt`. It should not own `SimulationAgenda`,
   `SyntheticBranchPlan`, scene/materialization truth, or embodiment remapping.
-- **UnrealRoboticsLab** belongs primarily in Subsystem 3 with a paired lane in
-  Subsystem 7, mediated through Subsystem 1. It should be treated as a paired
-  backend+render provider with strong scene/materialization value, not merely
-  as "another simulator." It should affect `SceneHierarchyState`,
+- **UE5 / Unreal** should be treated as a broad provider family spanning
+  Subsystems 1, 2, 3, 5, 6, and 7. Its core value is not "simulator" in the
+  narrow sense, but paired scene/materialization, photoreal render, sensor
+  simulation, digital-twin ingest, randomization, and middleware-connected
+  runtime support. It should affect `UESceneMaterializationState`,
+  `UEAssetContentContract`, `UEPhotorealRenderReceipt`,
+  `UESimRealVisualAlignmentReceipt`, `UESensorSimulationContract`,
+  `UESensorSimulationReceipt`, `UEDigitalTwinIngestReceipt`,
+  `UERandomizationPolicyState`, `UEPCGLayoutGenerationReceipt`,
+  `UEMiddlewareBridgeContract`, `UEHybridBackendBindingState`,
+  `SceneHierarchyState`, `TaskMeasurementSurface`,
+  `BranchRenderProviderState`, `BackendExecutionBindingState`, and
+  `SimulationOutcomeReceipt`. It should not own canonical scene truth, branch
+  admission, transfer valuation, embodiment control truth, or deployment
+  adaptation.
+- **UnrealRoboticsLab** should be read as one concrete member of that UE5 /
+  Unreal provider family. It belongs primarily in Subsystem 3 with a paired
+  lane in Subsystem 7, mediated through Subsystem 1. It should be treated as a
+  paired backend+render provider with strong scene/materialization value, not
+  merely as "another simulator." It should affect `SceneHierarchyState`,
   `BranchRenderProviderState`, `BackendExecutionBindingState`,
   `BackendRuntimeBridgeReceipt`, and `SimulationOutcomeReceipt`. It should not
   own agenda compilation, branch admission, calibration policy, or deployment
@@ -1211,6 +1234,33 @@ Provider-family placement inside the 10-subsystem topology:
   semantics, and navigation/environment layout generation should compile into
   `TaskMeasurementSurface`, `SceneHierarchyState`, and `SyntheticBranchPlan`
   rather than becoming a separate ontology or master environment abstraction.
+
+#### UE5 Capability Placement by Subsystem
+
+UE5 / Unreal is important precisely because it spans multiple subsystems
+without becoming the owner of the WM itself.
+
+| UE5 capability family | Primary subsystem home | Typed surfaces / receipts | Ownership rule |
+|---|---|---|---|
+| Photoreal rendering (`Nanite`, `Lumen`, ray tracing) | 3 + 7 + 5 | `UESceneMaterializationState`, `UEPhotorealRenderReceipt`, `UESimRealVisualAlignmentReceipt` | improves realism and sim-real evaluation; does not become scene truth owner |
+| UE-native or paired physics (`Chaos`, AGX-like pairings) | 1 + 6 + 5 | `UEHybridBackendBindingState`, `PhysicsCalibrationReceipt`, `PhysicsAdaptationReceipt` | expected to participate in hybrid backend posture, not as sole physics truth |
+| Digital twin ingest (`RealityScan`, photogrammetry, SLAM, LiDAR) | 3 + 2 + 5 | `UEDigitalTwinIngestReceipt`, `UEAssetContentContract`, `TaskMeasurementSurface` | compiles deployment-matched regression environments; does not own grounding truth |
+| Synthetic data / labels | 2 + 4 + 7 | `UESensorSimulationReceipt`, `SimulationOutcomeReceipt`, branch evaluation receipts | generates synthetic corpora and labels; valuation remains WM/Economic-owned |
+| Domain randomization / PCG / Fab / Quixel | 6 + 4 + 3 | `UERandomizationPolicyState`, `UEPCGLayoutGenerationReceipt`, `UEAssetContentContract` | executes randomization plan; WM still owns randomization policy |
+| Sensor simulation (RGB/HDR, depth, LiDAR, radar, thermal, IMU, GPS, sonar) | 1 + 2 + 7 with downstream Perception/Embodiment consumers | `UESensorSimulationContract`, `UESensorSimulationReceipt`, future timing/synchronization receipts | sensor provider lane, not Perception truth owner |
+| ROS / ROS2 / gRPC / middleware bridges | 1 | `UEMiddlewareBridgeContract`, `BackendRuntimeBridgeReceipt` | important for later deployment-enabler phases; not current topology driver |
+| Headless / cloud / hybrid full-loop execution | 1 + 4 + 7 | `UEHeadlessExecutionContract`, `UEHybridBackendBindingState`, validation receipts | execution-scale provider lane, not WM governance owner |
+| Industry 4.0 / facility twins / HIL / teleop prep | 3 + 2 with later Phase 4 and Embodiment consequences | industrial twin receipts, operator-training / fallback readiness receipts | deployment scenario generator, not embodiment or economic owner |
+
+Hybrid backend posture should be considered expected:
+
+- UE5 for world realism, rendering, sensors, digital twins, and large-scene
+  variation
+- MuJoCo / Bullet / Newton / AGX-like lanes for contact/control regimes where
+  they are more appropriate
+
+The constitutional rule remains the same: providers may span many subsystems,
+but they never own WM truth.
 
 #### Neural Structure Candidates by Subsystem
 
@@ -1263,6 +1313,8 @@ On the Sim / Synth / Physics side, this WM should own:
   a simulated branch
 - domain-randomization regime and the simulation-side fidelity assumptions that
   shaped the transferred policy or branch
+- UE-backed scene, render, sensor, and timing assumptions when those are part
+  of the simulated branch or transfer evidence
 - morphology/backend mismatch state on the simulation side
 - calibration proposals, transfer-risk summaries, and rollout-conditioned
   adaptation candidates
