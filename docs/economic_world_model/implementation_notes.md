@@ -2827,3 +2827,64 @@ New package `src/world_model/perception_grounding/` following the exact pattern 
       Sim↔Embodiment transfer boundary
   - this intentionally avoids duplicating provider doctrine in Embodiment or
     transport docs
+
+## Future sim-to-online stabilization tranche
+
+This is future work, not the current repo bottleneck. The point of reserving it
+now is to make later sim-to-online stabilization legible and typed without
+rewriting the stack around real-robot finetuning prematurely.
+
+- `src/training/sim_to_online/manifest.py`
+  - ownership: training-manifest layer under the existing multi-WM topology
+  - typed objects: `ReplayMixturePolicy`, `WarmStartPolicy`,
+    `ActorCriticUpdateSchedule`, `SimOnlineTrainingWindow`
+  - consumes: Sim / Synth / Physics transfer receipts and replay provenance,
+    Embodiment deployment-side transfer receipts
+  - emits: training-window manifests and provenance-bearing run metadata
+  - why later: current priority is lower-WM structural and provider truth, not
+    active real-robot online adaptation
+
+- `src/training/sim_to_online/replay_mixture.py`
+  - ownership: training-data composition policy, not WM truth ownership
+  - typed objects: replay-mixture selectors and provenance-aware mixture specs
+  - consumes: retained simulation data, retained prior real data, and online
+    adaptation windows
+  - emits: replay-mixture decisions / diagnostics tied to training windows
+  - why later: only becomes honest once real online windows and transfer
+    receipts exist
+
+- `src/training/sim_to_online/checkpoint_receipts.py`
+  - ownership: resume / restore integrity doctrine
+  - typed objects: `CheckpointCompletenessReceipt`
+  - consumes: checkpoint payloads, optimizer/target-network state, scheduler or
+    entropy/temperature state where relevant
+  - emits: completeness receipts and resume-risk summaries
+  - why later: needed when there is an actual online adaptation loop to resume
+
+- `src/training/sim_to_online/update_schedule.py`
+  - ownership: future training-schedule policy for online adaptation
+  - typed objects: `ActorCriticUpdateSchedule`
+  - consumes: training-window context, transfer-stability evidence,
+    embodiment-side deployment drift
+  - emits: explicit update-schedule records and schedule-related diagnostics
+  - why later: not a current repo-wide algorithm decision and should not become
+    premature SAC doctrine
+
+- `src/training/sim_to_online/transfer_stability.py`
+  - ownership: transfer-stability evaluation layer
+  - typed objects: `TransferStabilityReceipt`
+  - consumes: `SimRealGapReceipt`, `PhysicsAdaptationReceipt`,
+    `BackendMismatchReceipt`, `DeploymentTransferDriftReceipt`,
+    `ActionFeasibilityDegradationReceipt`
+  - emits: transfer-stability summaries for replay/training/economic consumers
+  - why later: depends on both sim-side and embodiment-side transfer truth being
+    real first
+
+- `src/training/sim_to_online/window_runner.py`
+  - ownership: asynchronous episodic real-hardware adaptation runner
+  - typed objects: `SimOnlineTrainingWindow`, `OnlineAdaptationEpisodeReceipt`
+  - consumes: bounded replay windows, checkpoint-completeness status, update
+    schedules, transfer-stability state
+  - emits: per-window and per-episode adaptation receipts
+  - why later: this should come only after the stack has honest on-robot loop
+    receipts and replay export discipline

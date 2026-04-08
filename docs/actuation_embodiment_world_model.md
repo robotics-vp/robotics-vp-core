@@ -573,7 +573,11 @@ The Embodiment / Actuation WM should own:
 - kinematic remapping
 - retargeting
 - capability filtering
+- realized post-transfer mismatch
+- deployment-side action-feasibility degradation
+- control-rate / latency / actuator response divergence
 - deployment-side drift handling
+- local recovery / degradation posture
 - local embodiment adaptation
 
 This keeps remap and deployment adaptation body-local while letting Sim /
@@ -587,7 +591,7 @@ evidence.
 | Morphology remap | Inverse-Dynamics / Retargeting Lane + Capability State Surface | Map source-body trajectories and policies into target-body feasible traces |
 | Actuator / control-space remap | Inverse-Dynamics / Retargeting Lane + Joint Skill / Action Proposal Head | Convert policy/action representations into embodiment-native control chunks |
 | Sensor / render / domain remap | Sim / Synth / Physics WM primary | Translate scene/render/domain assumptions into transfer-risk and branch-conditioning evidence |
-| Timing / latency / control-rate remap | Embodiment WM fast/runtime side with Sim assumptions as inputs | Reconcile simulated control cadence with deployment execution realities |
+| Timing / latency / control-rate remap | Embodiment WM fast/runtime side with Sim assumptions as inputs | Reconcile simulated control cadence, controller latency, and actuator response with deployment execution realities |
 | Contact / friction / dynamics calibration remap | Shared: Sim proposes, Embodiment validates | Push system-ID/calibration candidates from sim and compare them against realized traces |
 | Environment / scene abstraction remap | Sim / Synth / Physics WM to Embodiment contact/affordance consumers | Convert scene/layout abstractions into body-local actionable structure |
 | Capability-envelope remap | Capability State Surface + Drift / Calibration / Cost Evaluator | Narrow simulated feasibility claims to the currently valid deployment envelope |
@@ -625,13 +629,34 @@ the rest of the Embodiment WM:
 - **Mid-loop exchange**: `SimulationOutcomeReceipt`,
   `PhysicsAdaptationReceipt`, `SimRealGapReceipt`, and
   `BackendMismatchReceipt` from Sim; `EmbodimentDriftSummary`,
-  `CalibrationTargetSet`, and realized mismatch traces from Embodiment.
+  `CalibrationTargetSet`, `DeploymentTransferDriftReceipt`,
+  `ActionFeasibilityDegradationReceipt`, `ControllerLatencyMismatchReceipt`,
+  and realized mismatch traces from Embodiment.
 - **Slow-loop exchange**: stable remap tables, transfer summaries, backend
-  quality trends, promotion evidence, and deployment-side drift baselines.
+  quality trends, promotion evidence, deployment-side drift baselines, and
+  `EmbodimentTransferOutcomeReceipt` summaries.
 
 These are the surfaces the future WM-transport layer should later consume as
 typed bridge objects. Transport should not become the first owner of remapping,
 drift handling, or transfer truth.
+
+### Candidate typed transfer receipts
+
+The embodiment side of this boundary should later emit explicit deployment-side
+transfer receipts such as:
+
+- `DeploymentTransferDriftReceipt` — realized post-transfer mismatch, local
+  drift sources, and comparison against the sim-side assumptions
+- `ActionFeasibilityDegradationReceipt` — degradation in reachable, stable, or
+  safe action space after deployment
+- `EmbodimentTransferOutcomeReceipt` — bounded summary of transfer outcome,
+  recovery posture, and whether local adaptation preserved useful prior
+- `ControllerLatencyMismatchReceipt` — observed control-rate / latency /
+  actuator-response divergence relative to the simulated cadence
+
+These receipts should feed replay/training export, Sim / Synth / Physics
+calibration feedback, and later Economic WM consumption. They should not make
+the Economic WM the first owner of transfer mechanics.
 
 ---
 

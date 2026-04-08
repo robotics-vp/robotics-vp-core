@@ -12,6 +12,9 @@
 - Sequence work so each stage leaves behind reusable docs, schemas, tests, and automation hooks.
 - Treat video-world-model work as a subset of economic-world-model readiness: geometry/evidence/governance first, rendering and training second.
 - Do not overfit the stack to one paper architecture. Keep predictor, planner, context, and rollout configuration modular.
+- Treat sim-to-online stabilization lessons from individual papers as future
+  training-loop doctrine under the current WM topology, not as topology drivers
+  or phase-ordering overrides.
 - Treat a tranche as incomplete until it is wired into at least one already-executed path. For the current subset that means the Stage-1 video loop, rollout labeling, shadow runtime, replay ingest, or another live path must emit the new artifacts.
 - For any new WM or enabling subsystem, ship bounded learned seams and `disabled|auto|required` promotion posture from the first landing; keep heuristics only as explicit priors/fallbacks with receipts, not as temporary hidden owners that will later require a heuristic-purge rewrite.
 - For any new WM or enabling subsystem, bias against literal stub defaults: use real-or-unavailable provider contracts, make `stub` explicit-only for smoke/scaffolding, and record planning-only fallback truth when weights/GPU/assets are the actual blocker.
@@ -256,6 +259,37 @@ Physics update, not as separate Newton / Unreal / Habitat / surrogate waves.
 - Phase 6 should later learn over those typed transfer/calibration surfaces,
   not invent them from scratch
 
+#### Future sim-to-online stabilization doctrine
+
+See `docs/economic_world_model/doctrine_sim_to_online_stabilization.md`.
+
+This is a future training/execution doctrine under the current Ixion topology,
+not a topology driver and not a reason to recenter the repo on SAC or on
+real-robot finetuning.
+
+**What should be reserved now at the doc/contract level**:
+
+- replay-mixture doctrine that distinguishes retained simulation data, retained
+  prior real data, and new online data rather than flattening them into one
+  buffer story
+- typed warm-start buffer policies for cases where prior data is not retained
+- transfer-instability receipts rather than vague "transfer worked / failed"
+- checkpoint-completeness requirements for resume and deployment restart
+- actor/critic asymmetry as a future training-manifest field, not a repo-wide
+  algorithm decree
+- asynchronous episodic real-hardware update discipline keyed to receipts,
+  windows, and replay export
+
+**Where it belongs later**:
+
+- Sim / Synth / Physics owns simulation-side transfer assumptions, replay
+  provenance, transfer-risk summaries, and training-worthiness under transfer
+  instability
+- Embodiment / Actuation owns deployment-side realized drift, action-feasibility
+  degradation, remap posture, and recovery posture
+- Economic WM later consumes transfer cost/stability/yield evidence, but does
+  not become the owner of transfer mechanics
+
 #### GPU/runtime-blocked adoption items (requires hardware/assets)
 
 These are real but blocked by external resources:
@@ -300,6 +334,11 @@ boundary: Sim / Synth / Physics owns simulation assumptions, backend-mismatch
 state, and transfer/calibration receipts; Embodiment owns remap/retarget,
 capability filtering, and deployment-side adaptation. Later transport work
 should consume those typed surfaces rather than becoming their first owner.
+
+That embodiment-side transfer truth should later include realized post-transfer
+drift, action-feasibility degradation, control-rate / latency mismatch, and
+local recovery posture as typed replay/exportable receipts rather than as
+ambient deployment notes.
 
 ### Economic WM and Transport / Meta-Node — not a Habitat concern
 
@@ -668,6 +707,10 @@ Phase B: September 1, 2026 to September 30, 2027
 Recommended sub-phases after training starts:
 
 - September 1, 2026 through December 31, 2026: first lower-WM training season, receipt accumulation, provider bring-up, and replay/corpus expansion
+- when real loop runs start, treat sim-to-online stabilization as a first-class
+  benchmark/evidence problem: replay-mixture policy, warm-start policy,
+  checkpoint completeness, update schedule, and transfer stability should be
+  tracked explicitly rather than tuned informally
 - January 1, 2027 through March 31, 2027: benchmark and calibration season, especially for perception temporal state, whole-body sim execution, backend truth, and promotion gates
 - April 1, 2027 through June 30, 2027: pre-purchase hardening for Unitree G1 readiness, including safety-adjacent middleware, embodiment contracts, whole-body replay, and hardware-facing adapter discipline
 - July 2027: purchase/integration window where the honest blockers should mostly be hardware, data, calibration, GPUs, and benchmark evidence rather than missing canonical plumbing
@@ -700,6 +743,9 @@ Weekly operating model from September 1, 2026 onward:
 - do not skip directly to fine-tuning when the corresponding loop-run or provider-truth lane is still weak
 - do not spread one weekly A100 budget across too many WMs at once; finish a concrete sub-module tranche, record receipts and gates, then move to the next sub-module
 - after hardware arrives, keep the same cadence on robot-origin loops: run, capture receipts, export corpus, train/fine-tune, redeploy bounded changes, then repeat
+- for real-hardware adaptation, prefer asynchronous episodic training windows
+  with explicit transfer receipts over pretending that per-step synchronous
+  optimization is the governing doctrine
 
 Mechanics-first advancement rule:
 

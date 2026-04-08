@@ -1057,10 +1057,13 @@ Owns sim-to-real transfer quality estimation, domain-gap scoring, and realism
 evaluation for synthetic outputs. Determines whether a synthetic branch is
 physically plausible enough for downstream training. This subsystem becomes
 critical during the GPU-era revisit when real Isaac/Unitree execution produces
-ground-truth sim-real comparisons.
+ground-truth sim-real comparisons. It should also own explicit
+transfer-instability evidence under deployment shift, including the distinction
+between retained prior data, retained simulation data, and new online
+adaptation windows when later real-hardware adaptation begins.
 
-Typed outputs: `SimRealGapReceipt`, transfer quality scores, realism
-confidence per branch.
+Typed outputs: `SimRealGapReceipt`, `TransferStabilityReceipt`, replay-mixture
+provenance summaries, transfer quality scores, realism confidence per branch.
 
 **6. Fidelity / Randomization / Calibration Allocator**
 
@@ -1112,11 +1115,15 @@ Owns branch admission scoring, training-worthiness evaluation, yield
 prediction, and economic-contribution estimation. Determines whether a
 synthetic branch actually improves the stack under compute and governance
 constraints. Maps to existing `gen2sim_admission.py`, `inferential.py`,
-`training_corpus.py`.
+`training_corpus.py`. During later sim-to-online work, this subsystem should
+also distinguish training-worthiness under transfer instability, retained-prior
+data versus online-data provenance, and whether a transfer window is preserving
+or eroding the useful prior.
 
 Typed outputs: `Gen2SimAdmissionState`, `Gen2SimAdmissionReceipt`,
-inferential learnability scores, training-yield estimates, synthetic-branch
-epiplexity estimates.
+inferential learnability scores, training-yield estimates,
+transfer-stability-aware yield estimates, synthetic-branch epiplexity
+estimates.
 
 #### Typed State / Receipt / Interface Surfaces
 
@@ -1136,11 +1143,15 @@ Reserved type families (existing + planned):
 - `DiffusionConditioningState`, `BranchRenderProviderState` — render/diffusion
 - `DifferentiablePhysicsProviderState`, `SurrogatePhysicsProviderState`,
   `SurrogateRolloutForecast` — differentiable/surrogate physics lanes
+- `ReplayMixturePolicy`, `WarmStartPolicy`, `ActorCriticUpdateSchedule`,
+  `SimOnlineTrainingWindow` — future sim-to-online training discipline
 - `SyntheticBranchPlan`, `Gen2SimAdmissionState` — branch planning/admission
 - `SimulationOutcomeReceipt`, `PhysicsCalibrationReceipt`,
   `PhysicsAdaptationReceipt`, `BackendExecutionBindingReceipt`,
   `SimRealGapReceipt`, `BackendMismatchReceipt`, `SurrogatePhysicsReceipt`,
-  `SurrogateCalibrationReceipt`, `InverseDesignProposalReceipt` — receipts
+  `SurrogateCalibrationReceipt`, `InverseDesignProposalReceipt`,
+  `CheckpointCompletenessReceipt`, `TransferStabilityReceipt`,
+  `OnlineAdaptationEpisodeReceipt` — receipts
 
 #### Provider-Family Placement and Ownership Rules
 
@@ -1237,7 +1248,8 @@ promotion posture, benchmark-gated promotion.
   grounding quality), Embodiment / Actuation WM (body constraints, action
   feasibility), Economic WM (resource budgets, priority allocation)
 - **Emits to**: Economic WM (branch yield receipts, resource consumption),
-  replay/training corpus (synthetic branches, receipts, provenance),
+  replay/training corpus (synthetic branches, receipts, replay-mixture
+  provenance, retained-prior-vs-online provenance),
   Perception WM (synthetic-vs-real semantic alignment needs)
 - **Bridge contracts**: Perception bridge (object preservation,
   synthetic-vs-real alignment), Embodiment bridge (physics-to-control
@@ -1249,17 +1261,48 @@ On the Sim / Synth / Physics side, this WM should own:
 
 - embodiment-facing simulation assumptions and the regime metadata attached to
   a simulated branch
+- domain-randomization regime and the simulation-side fidelity assumptions that
+  shaped the transferred policy or branch
 - morphology/backend mismatch state on the simulation side
-- transfer/calibration receipts and rollout-conditioned adaptation candidates
+- calibration proposals, transfer-risk summaries, and rollout-conditioned
+  adaptation candidates
 - slow-loop transfer summaries, promotion evidence, and backend-quality trends
 
 This WM should emit those surfaces through typed receipts such as
 `PhysicsCalibrationReceipt`, `PhysicsAdaptationReceipt`, `SimRealGapReceipt`,
 `BackendMismatchReceipt`, and `SimulationOutcomeReceipt`. The Embodiment /
 Actuation WM should remain the owner of kinematic remapping, retargeting,
-capability filtering, deployment-side drift handling, and local embodiment
+capability filtering, realized local drift, deployment mismatch,
+action-feasibility degradation, recovery posture, and local embodiment
 adaptation. The later WM-transport layer should consume these typed bridge
 objects; it should not replace them with a premature mother-latent.
+
+#### Future Sim-to-Online Training Discipline (Reserved Surfaces)
+
+Later real-hardware adaptation should remain inside the existing topology. It
+should become legible through typed manifests and receipts rather than through
+ambient experiment notes or an SAC-centered rewrite of the stack.
+
+Reserve the following future surface family:
+
+- `ReplayMixturePolicy` — provenance-aware retained-prior-data versus online
+  data policy
+- `WarmStartPolicy` — pre-update collection posture when retained prior data is
+  unavailable
+- `CheckpointCompletenessReceipt` — exact resume / restore completeness,
+  including optimizer and target-network style state when relevant
+- `ActorCriticUpdateSchedule` — future update-asymmetry and slower-policy
+  schedule fields
+- `TransferStabilityReceipt` — whether online adaptation is preserving or
+  eroding transfer quality
+- `SimOnlineTrainingWindow` — bounded adaptation/training window tied to the
+  receipts and replay sources it used
+- `OnlineAdaptationEpisodeReceipt` — per-episode adaptation outcome record for
+  later replay/export and benchmark comparison
+
+These are future typed surfaces. Reserving them now is not a call to build the
+full online RL loop immediately and is not a claim that online adaptation is
+the current bottleneck.
 
 #### Robostack / G1 Contribution
 

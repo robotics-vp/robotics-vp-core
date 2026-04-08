@@ -2003,3 +2003,20 @@
   Embodiment.
 - Scope stayed docs-only: no code changes and no new standalone architecture
   docs.
+
+### 2026-04-08: Sim-to-online stabilization doctrine pass
+
+- Added `docs/economic_world_model/doctrine_sim_to_online_stabilization.md` to
+  record what Ixion borrows from the sim-to-online RL paper and what it
+  explicitly does not borrow.
+- Updated the owning docs so future sim-to-online stabilization work is legible
+  inside the current topology:
+  - `roadmap.md`
+  - `multi_wm_architecture_plan.md`
+  - `actuation_embodiment_world_model.md`
+  - `implementation_notes.md`
+- Kept the pass additive and downstream-facing:
+  - no topology rewrite
+  - no SAC-centered repo pivot
+  - no code changes
+  - no fake claim that real-robot online RL is the current bottleneck
