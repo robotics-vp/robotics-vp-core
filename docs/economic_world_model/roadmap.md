@@ -380,6 +380,13 @@ typed outputs of those subsystems. When Phase 3 begins, the first tranches
 should follow the repo's established pattern: typed state contracts → shadow
 compiler → downstream consumers → receipt emission → bounded neural seams.
 
+Phase 2 remains the current implementation center. But because the Phase 1 Sim
+/ Synth / Physics burden has since been expanded through additional
+provider-family, transfer-boundary, and runtime/materialization obligations,
+Phase 3 should not begin immediately upon Phase 2 closure. After Phase 2, the
+roadmap returns to Phase 1 to finish the remaining Phase 1 additions, and only
+then proceeds to Phase 3.
+
 Useful contract ideas from Habitat include articulated-agent config discipline,
 sensor schema, and action-space normalization. Additionally, external
 architecture borrowing from V-JEPA 2 (local dynamics), LeRobot/ACT (action
