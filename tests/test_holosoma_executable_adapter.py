@@ -44,4 +44,3 @@ def test_holosoma_executable_adapter_request_marks_motion_train() -> None:
     assert request["supports_local_runtime_binding"] is True
     assert request["missing_preconditions"] == []
     assert request["env_overrides"]["HOLOSOMA_MOTION_TRAIN_ENABLED"] == "1"
-

@@ -1594,7 +1594,7 @@ Do start with bounded learned helper seams in Phase 1A / 1B itself rather than a
 - branch-value / branch-yield prediction
 - physics-calibration confidence prediction
 
-For this phase, heuristics are only acceptable as explicit priors with fallback semantics and receipt traces. 
+For this phase, heuristics are only acceptable as explicit priors with fallback semantics and receipt traces.
 
 Epiplexity should be used here both architecturally and functionally:
 - architecturally, to inform how synthetic branch structure is represented and ranked
@@ -2745,7 +2745,7 @@ Each lower WM owns bounded learned modules that predict local contribution, beca
 
 ### Cross-WM Datapack Composition Network
 
-A dedicated **Datapack Composition Network** (or Mereotopological Datapack Encoder) aggregates source slices, transformation lineage, temporal order, WM crossing history, validation/admission history, lower-WM contribution vectors, and active objective context. 
+A dedicated **Datapack Composition Network** (or Mereotopological Datapack Encoder) aggregates source slices, transformation lineage, temporal order, WM crossing history, validation/admission history, lower-WM contribution vectors, and active objective context.
 
 This must be a **heterogeneous graph / set / temporal structure**, not a flat MLP:
 - Graph for part-whole and lineage edges (e.g., derived-from, temporally-precedes, emitted-by-WM, validated-by, admitted-to, contributed-to-datapack, consumed-by-training-run).

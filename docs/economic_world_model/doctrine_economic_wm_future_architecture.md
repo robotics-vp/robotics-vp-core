@@ -763,7 +763,7 @@ Where bounded AE/codebook modules help **without** becoming the backbone:
 
 ### Design stance
 
-**Bounded auxiliary / manifold-compression role: yes.**  
+**Bounded auxiliary / manifold-compression role: yes.**
 **Economic-WM backbone: no.**
 
 ### Relationship to other model families

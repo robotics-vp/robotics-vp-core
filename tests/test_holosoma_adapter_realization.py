@@ -86,4 +86,3 @@ def test_build_holosoma_adapter_realization_for_local_backend_factory() -> None:
     assert realization["realization_status"] == "local_backend_factory_ready"
     assert realization["backend_name"] == LOCAL_BACKEND_NAME
     assert realization["factory_entrypoint"] == LOCAL_BACKEND_FACTORY
-

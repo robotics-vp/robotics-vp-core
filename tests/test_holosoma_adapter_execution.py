@@ -64,4 +64,3 @@ def test_finalize_holosoma_adapter_execution_builds_receipt() -> None:
     assert execution["adapter_status"] == "external_launch_completed"
     assert receipt.adapter_status == "external_launch_completed"
     assert receipt.execution_path == "external_launch"
-

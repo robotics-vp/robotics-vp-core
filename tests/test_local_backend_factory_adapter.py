@@ -68,4 +68,3 @@ def test_materialize_local_backend_factory_invocation_returns_result(monkeypatch
 
     assert backend is sentinel
     assert result["result_status"] == "local_backend_materialized"
-

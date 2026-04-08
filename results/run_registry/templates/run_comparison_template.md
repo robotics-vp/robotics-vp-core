@@ -14,15 +14,15 @@ Use this template for any run family that has moved beyond pure smoke or proof-o
 
 ## What Changed
 
-- 
+-
 
 ## What Improved
 
-- 
+-
 
 ## What Regressed
 
-- 
+-
 
 ## Confidence Level
 
@@ -42,15 +42,15 @@ Use this template for any run family that has moved beyond pure smoke or proof-o
 
 ## Promotion Implication
 
-- 
+-
 
 ## Roadmap Implication
 
-- 
+-
 
 ## Next Recommended Action
 
-- 
+-
 
 ## Doctrine Notes
 
