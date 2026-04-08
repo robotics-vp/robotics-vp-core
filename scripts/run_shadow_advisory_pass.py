@@ -77,6 +77,9 @@ def main() -> None:
     budget_json_path = output_root / "adaptation_budget.json"
     scorer_preconditions_path = output_root / "semantic_runtime_scorer_preconditions.json"
     scorer_work_orders_path = output_root / "semantic_runtime_scorer_work_orders.json"
+    inferential_summary_path = output_root / "inferential_learnability_summary.json"
+    inferential_admission_path = output_root / "inferential_admission_contract.json"
+    inferential_work_orders_path = output_root / "inferential_work_orders.json"
     json_path.write_text(json.dumps(advisory, indent=2, sort_keys=True), encoding="utf-8")
     md_path.write_text(_advisory_markdown(advisory), encoding="utf-8")
     queue_json_path.write_text(json.dumps(advisory["live_queue_selection"], indent=2, sort_keys=True), encoding="utf-8")
@@ -87,6 +90,18 @@ def main() -> None:
     )
     scorer_work_orders_path.write_text(
         json.dumps(advisory["semantic_runtime_scorer_work_orders"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    inferential_summary_path.write_text(
+        json.dumps(advisory["inferential_learnability_summary"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    inferential_admission_path.write_text(
+        json.dumps(advisory["inferential_admission_contract"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    inferential_work_orders_path.write_text(
+        json.dumps({"work_orders": advisory["inferential_work_orders"]}, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     print(json.dumps(advisory["summary"], indent=2, sort_keys=True))
@@ -102,6 +117,7 @@ def _advisory_markdown(advisory: dict) -> str:
         f"- Receipt labels: {advisory['summary']['receipt_label_coverage']['total_labels']}",
         f"- Semantic runtime scorer ready: {advisory['summary']['semantic_runtime_scorer_ready']}",
         f"- Semantic runtime fallback active: {advisory['summary']['semantic_runtime_scorer_fallback_active']}",
+        f"- Learnability contracts: {advisory['summary']['inferential_learnability_summary']['contract_count']}",
         "",
         "## Episode Decisions",
     ]

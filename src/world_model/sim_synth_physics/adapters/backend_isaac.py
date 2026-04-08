@@ -1,0 +1,162 @@
+"""Isaac / Unitree-target binding helpers for the sim/synth/physics WM."""
+
+from __future__ import annotations
+
+import importlib.util
+from typing import Any, Dict, Mapping
+
+from .isaac_unitree_deployment import build_isaac_unitree_deployment_contract
+from .isaac_unitree_runtime_pack import build_isaac_unitree_runtime_pack
+from ..asset_manifest import (
+    available_assets_for_hardware_class,
+    extract_robot_asset_manifest,
+    missing_assets_for_hardware_class,
+    normalize_robot_asset_manifest,
+    required_assets_for_hardware_class,
+    recommended_assets_for_hardware_class,
+)
+from ..common import mapping
+from ..runtime_layouts import (
+    describe_isaac_policy_contract,
+    describe_isaac_runtime_layouts,
+)
+from ..runtime_targets import describe_isaac_runtime_targets
+
+
+def _has_module(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is not None
+    except Exception:
+        return False
+
+
+def _asset_lists(embodiment_context: Mapping[str, Any]) -> tuple[list[str], list[str], list[str]]:
+    target_hardware_class = "unitree_g1_r1_class"
+    required = required_assets_for_hardware_class(target_hardware_class)
+    runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
+    available = available_assets_for_hardware_class(
+        target_hardware_class,
+        embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+    )
+    missing = missing_assets_for_hardware_class(
+        target_hardware_class,
+        embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+    )
+    return required, available, missing
+
+
+def build_isaac_backend_binding(
+    *,
+    physics_context: Mapping[str, Any],
+    adaptation_policy: Mapping[str, Any],
+    embodiment_context: Mapping[str, Any],
+) -> Dict[str, Any]:
+    isaacsim_available = _has_module("isaacsim") or _has_module("omni.isaac.kit")
+    isaacgym_available = _has_module("isaacgym")
+    isaaclab_backend_available = _has_module("src.motor_backend.workcell_isaaclab_backend")
+    shadow_backend_available = True
+    required_assets, available_assets, missing_assets = _asset_lists(embodiment_context)
+    manifest = extract_robot_asset_manifest(embodiment_context)
+    runtime_target_contract = describe_isaac_runtime_targets(embodiment_context)
+    normalized_manifest = normalize_robot_asset_manifest(
+        embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+    )
+    runtime_layout_contract = describe_isaac_runtime_layouts(embodiment_context)
+    policy_contract = describe_isaac_policy_contract(embodiment_context)
+    deployment_contract = build_isaac_unitree_deployment_contract(
+        embodiment_context=embodiment_context,
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        normalized_asset_manifest=normalized_manifest,
+    )
+    upstream_runtime_pack = build_isaac_unitree_runtime_pack(
+        runtime_target_contract=runtime_target_contract,
+        runtime_layout_contract=runtime_layout_contract,
+        policy_contract=policy_contract,
+        deployment_contract=deployment_contract,
+        normalized_robot_asset_manifest=normalized_manifest,
+    )
+    adapter_ready = (
+        shadow_backend_available
+        or isaaclab_backend_available
+        or isaacsim_available
+        or isaacgym_available
+    )
+    external_launch_ready = bool(
+        deployment_contract.get("sim_launch_ready", False)
+        or deployment_contract.get("teleop_launch_ready", False)
+        or deployment_contract.get("lerobot_eval_ready", False)
+        or deployment_contract.get("physical_deploy_ready", False)
+    )
+    binding_status = "integration_pending"
+    if isaaclab_backend_available and not missing_assets:
+        binding_status = "runtime_ready"
+    elif external_launch_ready and not missing_assets:
+        binding_status = "external_launch_ready"
+    elif external_launch_ready:
+        binding_status = "external_launch_assets_missing"
+    elif isaaclab_backend_available:
+        binding_status = "runtime_assets_missing"
+    elif adapter_ready and not missing_assets:
+        binding_status = "shadow_ready"
+    elif adapter_ready:
+        binding_status = "assets_missing"
+    return {
+        "binding_name": "isaac_unitree_execution_binding_v1",
+        "binding_status": binding_status,
+        "executor_entrypoint": (
+            "src.motor_backend.factory:make_motor_backend"
+            if isaaclab_backend_available
+            else "src.envs.physics.backend_factory:make_backend"
+        ),
+        "executor_kind": (
+            "motor_backend_factory" if isaaclab_backend_available else "physics_backend_factory"
+        ),
+        "observation_adapter_entrypoint": "src.env.isaac_adapter:IsaacAdapter",
+        "supports_training": bool(adapter_ready),
+        "supports_evaluation": bool(adapter_ready),
+        "supports_deploy_handle": bool(isaaclab_backend_available),
+        "target_runtime_stack": ["isaacsim", "isaacgym", "unitree_sdk2"],
+        "asset_profile": "unitree_humanoid_shadow_assets",
+        "required_assets": required_assets,
+        "available_assets": available_assets,
+        "missing_assets": missing_assets,
+        "metadata": {
+            "engine_type": "isaac",
+            "fidelity_tier": str(physics_context.get("fidelity_tier", "")),
+            "domain_randomization_profile": str(
+                adaptation_policy.get("domain_randomization_profile", "")
+            ),
+            "system_identification_profile": str(
+                adaptation_policy.get("system_identification_profile", "")
+            ),
+            "shadow_backend_available": shadow_backend_available,
+            "isaacsim_available": isaacsim_available,
+            "isaacgym_available": isaacgym_available,
+            "isaaclab_backend_available": isaaclab_backend_available,
+            "concrete_runtime_available": bool(
+                isaaclab_backend_available or isaacsim_available or isaacgym_available
+            ),
+            "external_launch_ready": external_launch_ready,
+            "runtime_backend_name": "workcell_isaaclab" if isaaclab_backend_available else "",
+            "required_asset_contracts": required_assets,
+            "recommended_asset_contracts": recommended_assets_for_hardware_class(
+                "unitree_g1_r1_class"
+            ),
+            "runtime_target_contract": runtime_target_contract,
+            "runtime_layout_contract": runtime_layout_contract,
+            "policy_contract": policy_contract,
+            "deployment_contract": deployment_contract,
+            "upstream_runtime_pack": upstream_runtime_pack,
+            "normalized_asset_manifest": normalized_manifest,
+            "raw_asset_manifest": manifest,
+            "embodiment_context": mapping(embodiment_context),
+        },
+    }
+
+
+__all__ = ["build_isaac_backend_binding"]

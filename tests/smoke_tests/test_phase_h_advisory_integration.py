@@ -450,11 +450,17 @@ def test_phase_h_activation_plan_uses_execution_preconditions():
             "blocking_preconditions": {},
             "satisfied_preconditions": {},
         },
+        input_receipt_context={
+            "work_orders": [{"receipt_kind": "inferential_execution_work_order_v1", "ready": True}],
+        },
         subject_id="phase_h_test",
     )
 
+    assert plan["receipt_kind"] == "phase_h_activation_receipt_v1"
+    assert plan["authority_class"] == "remain_advisory"
     assert plan["execution_mode"] == "preconditioned_routing"
     assert plan["activation_plan"]["sampler_plan"]["max_delta_pct"] == MAX_ROUTING_DELTA
+    assert plan["input_receipt_context"]["consumed_receipt_kinds"] == ["inferential_execution_work_order_v1"]
     assert plan["activation_work_order"]["ready"] is True
     print("✓ Phase H activation plan promotes when execution preconditions are ready")
 

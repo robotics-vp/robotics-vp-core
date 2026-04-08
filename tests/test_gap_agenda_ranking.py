@@ -58,6 +58,7 @@ def test_compile_simulation_agenda_uses_promoted_gap_ranker() -> None:
     assert agenda[0]["ranking_policy"] == "heuristic_plus_learned_gap_ranker"
     assert agenda[0]["metadata"]["agenda_helper_status"]["promotion_stage"] == "promoted"
     assert agenda[0]["metadata"]["score_trace"]["learned_score"] == 1.0
+    assert agenda[0]["metadata"]["score_trace"]["inferential_signal_yield_score"] > 0.0
 
 
 def test_gap_driven_diffusion_prompts_preserve_helper_provenance() -> None:
@@ -67,9 +68,17 @@ def test_gap_driven_diffusion_prompts_preserve_helper_provenance() -> None:
         gap_ranker_mode="auto",
     )
 
-    assert prompts[0].routing_context["agenda_ranking_policy"] == "heuristic_plus_learned_gap_ranker"
-    assert prompts[0].routing_context["agenda_helper_status"]["promotion_stage"] == "promoted"
-    assert prompts[0].governed_hypotheses[0]["metadata"]["agenda_score_trace"]["learned_score"] == 1.0
+    prompt = next(
+        item
+        for item in prompts
+        if item.routing_context["missing_skill_edges"][0]["to"] == "collision"
+    )
+
+    assert prompt.routing_source == "sim_synth_physics_world_state"
+    assert prompt.routing_context["agenda_ranking_policy"] == "heuristic_plus_learned_gap_ranker"
+    assert prompt.routing_context["agenda_helper_status"]["promotion_stage"] == "promoted"
+    assert prompt.routing_context["inferential_learnability_contract"]["subject_kind"] == "synthetic_branch_plan"
+    assert prompt.governed_hypotheses[0]["metadata"]["agenda_score_trace"]["learned_score"] == 1.0
 
 
 def test_compile_simulation_agenda_required_mode_demands_ready_ranker() -> None:

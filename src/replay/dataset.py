@@ -8,6 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src.economics.inferential_contract import (
+    build_inferential_learnability_contract,
+    coerce_inferential_learnability_contract,
+    summarize_inferential_learnability_contracts,
+)
 from src.replay.ingest import (
     REPLAY_SCHEMA_VERSION,
     ingest_rollout_bundle,
@@ -218,7 +223,7 @@ class ReplayDatasetBuilder:
         windows_by_episode: Dict[str, List[ReplayWindowRecord]] = {}
         for row in windows:
             windows_by_episode.setdefault(row.episode_id, []).append(row)
-        execution_preconditions = [
+        execution_precondition_reports = [
             build_replay_execution_preconditions(
                 episode,
                 steps=steps_by_episode.get(episode.episode_id, []),
@@ -228,18 +233,72 @@ class ReplayDatasetBuilder:
         ]
         reports_by_episode = {
             report.subject_id: report
-            for report in execution_preconditions
+            for report in execution_precondition_reports
         }
-        episodes = [
-            replace(
-                episode,
-                metadata={
-                    **dict(episode.metadata),
-                    "execution_preconditions": reports_by_episode[episode.episode_id].to_dict(),
-                },
+        enriched_contracts = []
+        enriched_episodes = []
+        for episode in episodes:
+            execution_report = reports_by_episode[episode.episode_id]
+            execution_preconditions = execution_report.to_dict()
+            existing_contract = coerce_inferential_learnability_contract(
+                episode.metadata.get("inferential_learnability_contract")
             )
-            for episode in episodes
-        ]
+            if existing_contract is None:
+                future_signals = dict(execution_preconditions.get("metadata", {}).get("future_training_signals", {}) or {})
+                quality_score = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
+                pricing_confidence = float(episode.pricing_summary.get("confidence", 0.0) or 0.0)
+                epi_delta = float(
+                    episode.datapack_summary.get(
+                        "delta_epi_per_flop",
+                        episode.datapack_summary.get("delta_epi_vs_baseline", 0.0),
+                    )
+                    or 0.0
+                )
+                epi_conf = float(episode.datapack_summary.get("epi_confidence", 0.0) or 0.0)
+                existing_contract = build_inferential_learnability_contract(
+                    subject_id=episode.episode_id,
+                    subject_kind="replay_episode",
+                    datapack_id=str(
+                        episode.metadata.get("datapack_id")
+                        or episode.datapack_summary.get("datapack_id")
+                        or episode.episode_id
+                    ),
+                    frontier_gain=float(
+                        episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0
+                    ),
+                    epiplexity_delta=epi_delta,
+                    epiplexity_confidence=epi_conf,
+                    transfer_score=max(
+                        0.0,
+                        1.0 - float(episode.condition_vector.get("ood_risk_level", 0.0) or 0.0),
+                    ),
+                    data_quality=quality_score,
+                    provenance_quality=pricing_confidence,
+                    trust_score=pricing_confidence,
+                    overlay_joined=bool(episode.metadata.get("epiplexity_overlay_joined", False)),
+                    benchmark_eligible=bool(future_signals.get("benchmark_eligible", False)),
+                    semantic_grounding_non_heuristic=bool(
+                        future_signals.get("semantic_grounding_non_heuristic", False)
+                    ),
+                    promotion_trace_complete=bool(
+                        future_signals.get("promotion_trace_complete", False)
+                    ),
+                    budget_settlement_live=bool(
+                        future_signals.get("budget_settlement_live", False)
+                    ),
+                    metadata={
+                        "source": "replay_dataset_builder",
+                        "source_domain": episode.source_domain,
+                    },
+                )
+            metadata = {
+                **dict(episode.metadata),
+                "execution_preconditions": execution_preconditions,
+                "inferential_learnability_contract": existing_contract.to_dict(),
+            }
+            enriched_contracts.append(existing_contract)
+            enriched_episodes.append(replace(episode, metadata=metadata))
+        episodes = enriched_episodes
         run_ids = sorted({row.run_id for row in episodes})
         skill_modes = sorted({row.skill_mode for row in episodes} | {row.skill_mode for row in steps})
         obs_dim = max((len(row.obs_vector) for row in steps), default=0)
@@ -286,7 +345,12 @@ class ReplayDatasetBuilder:
             metadata={
                 "sources": list(self._metadata_rows),
                 "schema_compatibility": [row.to_dict() for row in compatibility],
-                "execution_precondition_summary": summarize_replay_execution_preconditions(execution_preconditions),
+                "execution_precondition_summary": summarize_replay_execution_preconditions(
+                    execution_precondition_reports
+                ),
+                "inferential_learnability_summary": summarize_inferential_learnability_contracts(
+                    [row.to_dict() for row in enriched_contracts]
+                ),
             },
             artifact_schema_fingerprint=build_artifact_schema_fingerprint(artifact_payload),
             provenance_summary={

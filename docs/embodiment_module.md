@@ -1,5 +1,14 @@
 # Embodiment Module (v1)
 
+> **Architectural context**: This module is an embryonic implementation of the
+> broader **Embodiment / Actuation World Model** defined in
+> `docs/actuation_embodiment_world_model.md`. The artifacts emitted here
+> (EmbodimentProfile, AffordanceGraph, SkillSegments, CostBreakdown,
+> ValueAttribution, DriftReport, CalibrationTargets) are early typed outputs
+> of the six Embodiment WM subsystems. As the Embodiment WM matures, these
+> should become frozen-dataclass typed state objects with full provenance,
+> receipt emission, and downstream consumption wiring.
+
 The Embodiment module is a deterministic, CPU-first node that converts SceneTracks + MHN + SemanticFusion into
 entropy-reducing, semantically rich datapack artifacts. It does **not** change reward weights; it emits
 non-blocking diagnostics and economics-facing attribution hooks.

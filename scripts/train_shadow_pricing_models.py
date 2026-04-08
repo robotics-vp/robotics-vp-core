@@ -80,10 +80,16 @@ def _select_episode_ids(dataset, args: argparse.Namespace, output_root: Path, re
     queue_path = output_root / "live_queue_selection.json"
     scorer_preconditions_path = output_root / "semantic_runtime_scorer_preconditions.json"
     scorer_work_orders_path = output_root / "semantic_runtime_scorer_work_orders.json"
+    inferential_summary_path = output_root / "inferential_learnability_summary.json"
+    inferential_admission_path = output_root / "inferential_admission_contract.json"
+    inferential_work_orders_path = output_root / "inferential_work_orders.json"
     _write_json(advisory_path, advisory)
     _write_json(queue_path, advisory["live_queue_selection"])
     _write_json(scorer_preconditions_path, advisory["semantic_runtime_scorer_preconditions"])
     _write_json(scorer_work_orders_path, {"work_orders": advisory["semantic_runtime_scorer_work_orders"]})
+    _write_json(inferential_summary_path, advisory["inferential_learnability_summary"])
+    _write_json(inferential_admission_path, advisory["inferential_admission_contract"])
+    _write_json(inferential_work_orders_path, {"work_orders": advisory["inferential_work_orders"]})
 
     descriptors = [replay_episode_to_rl_episode_descriptor(episode) for episode in dataset.episodes]
     config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}
@@ -122,6 +128,9 @@ def _select_episode_ids(dataset, args: argparse.Namespace, output_root: Path, re
         "live_queue_selection": str(queue_path),
         "semantic_runtime_scorer_preconditions": str(scorer_preconditions_path),
         "semantic_runtime_scorer_work_orders": str(scorer_work_orders_path),
+        "inferential_learnability_summary": str(inferential_summary_path),
+        "inferential_admission_contract": str(inferential_admission_path),
+        "inferential_work_orders": str(inferential_work_orders_path),
         "queue_dispatch_comparison": str(dispatch_path),
         "sampler_policy_receipt": str(sampler_policy_receipt_path),
     }, advisory, dispatch
@@ -281,6 +290,18 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
             promotion_policy_snapshot=promotion_policy.to_dict(),
             source_domain_coverage=build_source_domain_coverage(dataset),
             receipt_label_coverage=receipt_bundle.coverage_summary(),
+            inferential_learnability_summary=dict(
+                advisory.get("inferential_learnability_summary", {}) or {}
+            ),
+            inferential_admission_summary=dict(
+                advisory.get("inferential_admission_contract", {}).get("summary", {}) or {}
+            ),
+            inferential_work_order_summary=dict(
+                advisory.get("inferential_admission_contract", {})
+                .get("summary", {})
+                .get("work_order_summary", {})
+                or advisory.get("adaptation_budget", {}).get("summary", {})
+            ),
             artifact_schema_compatibility=list(dataset.manifest.metadata.get("schema_compatibility", []) or []),
             metadata={
                 "queue_selection_mode": args.queue_selection_mode,
@@ -295,6 +316,9 @@ def _run_training(args: argparse.Namespace, runner: Optional[RegalTrainingRunner
         runner.register_artifact("live_queue_selection", queue_paths["live_queue_selection"])
         runner.register_artifact("semantic_runtime_scorer_preconditions", queue_paths["semantic_runtime_scorer_preconditions"])
         runner.register_artifact("semantic_runtime_scorer_work_orders", queue_paths["semantic_runtime_scorer_work_orders"])
+        runner.register_artifact("inferential_learnability_summary", queue_paths["inferential_learnability_summary"])
+        runner.register_artifact("inferential_admission_contract", queue_paths["inferential_admission_contract"])
+        runner.register_artifact("inferential_work_orders", queue_paths["inferential_work_orders"])
         runner.register_artifact("queue_dispatch_comparison", queue_paths["queue_dispatch_comparison"])
         runner.register_artifact("sampler_policy_receipt", queue_paths["sampler_policy_receipt"])
         runner.register_artifact("regal_promotion_eval", promotion_paths["json"])

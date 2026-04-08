@@ -24,7 +24,6 @@ from src.objectives.economic_objective import EconomicObjectiveSpec, load_econom
 from src.ontology.datapack_registry import register_datapack_configs
 from src.ontology.query import find_datapacks, find_scenarios
 from src.ontology.store import OntologyStore
-from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 from src.orchestrator.schedule import BudgetExceeded, acquire_run_budget, release_run_budget
 from src.orchestrator.semantic_policy import (
     DatapackSelectionDecision,
@@ -41,6 +40,11 @@ from src.orchestrator.semantic_policy import (
 from src.orchestrator.semantic_fusion_runner import run_semantic_fusion_for_rollouts
 from src.scenarios.metadata import ScenarioMetadata, build_scenario_metadata
 from src.vla.rollout_labeler import label_rollouts_with_vla
+from src.world_model.sim_synth_physics import (
+    SimulationJobSpec,
+    SimSynthPhysicsRuntime,
+    SimSynthPhysicsRuntimeConfig,
+)
 
 if TYPE_CHECKING:
     from src.ontology.models import Robot
@@ -912,44 +916,7 @@ def get_recent_runs(
 # Coverage-gap-driven simulation agenda (Phase C)
 # ==============================================================================
 
-@dataclass(frozen=True)
-class SimulationAgendaItem:
-    """Single ranked simulation job compiled from semantic coverage deficits."""
-
-    rank: int
-    task_family: str
-    env_backend: str
-    skill_edge: str  # e.g. "hrl:grasp_handle -> hrl:open_with_clearance"
-    risk_family: str
-    object_family: str
-    objective_preset: str
-    data_collection_intent: str  # explore | exploit | validate
-    coverage_gap_score: float
-    economic_priority: float
-    trust_priority: float
-    readiness: float
-    ranking_policy: str
-    rationale: str
-    metadata: dict[str, Any] | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "rank": self.rank,
-            "task_family": self.task_family,
-            "env_backend": self.env_backend,
-            "skill_edge": self.skill_edge,
-            "risk_family": self.risk_family,
-            "object_family": self.object_family,
-            "objective_preset": self.objective_preset,
-            "data_collection_intent": self.data_collection_intent,
-            "coverage_gap_score": self.coverage_gap_score,
-            "economic_priority": self.economic_priority,
-            "trust_priority": self.trust_priority,
-            "readiness": self.readiness,
-            "ranking_policy": self.ranking_policy,
-            "rationale": self.rationale,
-            "metadata": dict(self.metadata or {}),
-        }
+SimulationAgendaItem = SimulationJobSpec
 
 
 def compile_simulation_agenda(
@@ -963,13 +930,16 @@ def compile_simulation_agenda(
     default_objective: str = "balanced",
     gap_ranker: Any = None,
     gap_ranker_mode: Literal["disabled", "auto", "required"] = "auto",
+    backend_selector: Any = None,
+    backend_selector_mode: Literal["disabled", "auto", "required"] = "auto",
+    branch_planner: Any = None,
+    branch_planner_mode: Literal["disabled", "auto", "required"] = "auto",
 ) -> list[dict[str, Any]]:
     """Compile a ranked simulation agenda from the semantic coverage graph.
 
-    Instead of selecting simulation runs by tag/objective hint alone,
-    this function builds a ranked list of simulation jobs from the
-    coverage graph's missing edges and returns them as a
-    ``simulation_agenda_v1`` artifact.
+    This function now delegates agenda ownership to the canonical
+    sim/synth/physics world-model compiler and returns the legacy agenda
+    artifact view for downstream compatibility.
 
     Parameters
     ----------
@@ -985,86 +955,22 @@ def compile_simulation_agenda(
     -------
     list of dict (``simulation_agenda_v1`` items)
     """
-    ranked_gaps = rank_gaps_for_agenda(
-        economic_weight=economic_weight,
-        trust_weight=trust_weight,
-        readiness_weight=readiness_weight,
-        limit=limit,
-        coverage_graph=coverage_graph,
-        gap_ranker=gap_ranker,
-        gap_ranker_mode=gap_ranker_mode,
-    )
-
-    agenda: list[dict[str, Any]] = []
-    for rank_idx, ranked_gap in enumerate(ranked_gaps):
-        gap = ranked_gap.gap
-        if bool(getattr(gap, "metadata", {}).get("governance_blocked", False)):
-            continue
-        src_node = coverage_graph.node_by_id(gap.source_id)
-        tgt_node = coverage_graph.node_by_id(gap.target_id)
-        src_label = src_node.label if src_node else gap.source_id
-        tgt_label = tgt_node.label if tgt_node else gap.target_id
-
-        # Infer task family from the source node
-        task_family = "unknown"
-        if src_node and src_node.node_type == "task":
-            task_family = src_node.label
-
-        # Infer env backend from target node metadata or default
-        env_backend = default_backend
-        if tgt_node and tgt_node.node_type == "backend":
-            env_backend = tgt_node.label
-
-        # Infer risk/object families from target nodes
-        risk_family = ""
-        object_family = ""
-        if tgt_node:
-            if tgt_node.node_type == "risk_family":
-                risk_family = tgt_node.label
-            elif tgt_node.node_type == "object_family":
-                object_family = tgt_node.label
-
-        # Determine data collection intent
-        if gap.economic_priority > 0.7:
-            intent = "exploit"
-        elif gap.trust_priority < 0.3:
-            intent = "validate"
-        else:
-            intent = "explore"
-
-        item = SimulationAgendaItem(
-            rank=rank_idx + 1,
-            task_family=task_family,
-            env_backend=env_backend,
-            skill_edge=f"{src_label} -> {tgt_label}",
-            risk_family=risk_family,
-            object_family=object_family,
-            objective_preset=default_objective,
-            data_collection_intent=intent,
-            coverage_gap_score=ranked_gap.ranking_score,
-            economic_priority=gap.economic_priority,
-            trust_priority=gap.trust_priority,
-            readiness=gap.promotion_readiness,
-            ranking_policy=ranked_gap.ranking_policy,
-            rationale=(
-                f"Missing {gap.edge_type}: {gap.source_id} → {gap.target_id}"
-                + (
-                    f" | wm_validation_pressure={float(getattr(gap, 'metadata', {}).get('wm_validation_pressure', 0.0)):.2f}"
-                    if float(getattr(gap, "metadata", {}).get("wm_validation_pressure", 0.0)) > 0.0
-                    else ""
-                )
-            ),
-            metadata={
-                "agenda_helper_status": dict(ranked_gap.helper_status),
-                "score_trace": {
-                    "heuristic_score": ranked_gap.heuristic_score,
-                    "heuristic_score_norm": ranked_gap.heuristic_score_norm,
-                    "learned_score": ranked_gap.learned_score,
-                    "learned_score_norm": ranked_gap.learned_score_norm,
-                    "ranking_score": ranked_gap.ranking_score,
-                },
-            },
+    runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(
+            economic_weight=economic_weight,
+            trust_weight=trust_weight,
+            readiness_weight=readiness_weight,
+            agenda_limit=limit,
+            default_backend=default_backend,
+            default_objective=default_objective,
+            gap_ranker_mode=gap_ranker_mode,
+            backend_selector_mode=backend_selector_mode,
+            branch_planner_mode=branch_planner_mode,
         )
-        agenda.append(item.to_dict())
-
-    return agenda
+    )
+    return runtime.compile_legacy_agenda(
+        coverage_graph,
+        gap_ranker=gap_ranker,
+        backend_selector=backend_selector,
+        branch_planner=branch_planner,
+    )

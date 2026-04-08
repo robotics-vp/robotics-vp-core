@@ -8,11 +8,24 @@ from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from src.evidence.benchmark_gating import collect_benchmark_gating_signals
 from src.evidence.preconditions import build_execution_preconditions
-from src.evidence.scene_tracks_truth import scene_tracks_truth_from_metadata
-from src.evidence.teacher_trace import TeacherStep, TeacherTrace, save_teacher_trace_json
+from src.evidence.scene_tracks_truth import (
+    build_scene_tracks_provider_truth,
+    scene_tracks_truth_from_metadata,
+)
+from src.evidence.teacher_trace import (
+    TeacherStep,
+    TeacherTrace,
+    build_teacher_provider_truth,
+    save_teacher_trace_json,
+)
 from src.motor_backend.datapacks import DatapackConfig, MotionClipSpec
 from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
 from src.sima2.semantic_primitive_extractor import extract_primitives_from_rollout
+from src.world_model.perception_grounding import (
+    compile_perception_grounding_world_state,
+    export_annotation_record,
+    save_annotation_export_json,
+)
 from src.vla.semantic_evidence import (
     build_vla_semantic_evidence_payload,
     save_vla_semantic_evidence_npz,
@@ -110,6 +123,19 @@ def label_rollouts_with_vla(
             if vla_action_error:
                 vla_error_reason = vla_action_error
 
+        perception_grounding_state = _compile_episode_perception_grounding_state(
+            episode=episode,
+            task_id=episode.metadata.task_id,
+            instruction=base_datapack.objective_hint or base_datapack.description or "",
+            trajectory_payload=trajectory_payload,
+            semantic_tags=sorted(episode_tags),
+            vla_action=vla_action,
+        )
+        if perception_grounding_state is not None:
+            episode_tags.update(
+                _annotation_tags_from_perception_state(perception_grounding_state)
+            )
+
         artifact_refs = _write_vla_semantic_evidence_sidecar(
             episode=episode,
             semantic_tags=sorted(episode_tags),
@@ -119,6 +145,15 @@ def label_rollouts_with_vla(
             instruction=base_datapack.objective_hint or base_datapack.description or "",
             vla_error_reason=vla_error_reason,
         )
+
+        # Write annotation export sidecar for scene-graph training
+        annotation_export_ref = _write_annotation_export_sidecar(
+            episode=episode,
+            perception_grounding_state=perception_grounding_state,
+        )
+        if annotation_export_ref:
+            artifact_refs["annotation_export_ref"] = annotation_export_ref
+
         episode_labeling_rows.append(
             _build_episode_labeling_row(
                 episode=episode,
@@ -129,8 +164,10 @@ def label_rollouts_with_vla(
                 teacher_envelope=teacher_envelope,
                 vla_error_reason=vla_error_reason,
                 artifact_refs=artifact_refs,
+                perception_grounding_state=perception_grounding_state,
             )
         )
+        derived_tags.update(episode_tags)
 
         if derived_objective_hint is None:
             derived_objective_hint = _derive_objective_hint(primitives, episode.metrics)
@@ -233,6 +270,66 @@ def _extract_scene_tracks_payload(payload: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _compile_episode_perception_grounding_state(
+    *,
+    episode: EpisodeRollout,
+    task_id: str,
+    instruction: str,
+    trajectory_payload: Any,
+    semantic_tags: Sequence[str],
+    vla_action: Optional[Mapping[str, Any]],
+) -> Optional[Any]:
+    scene_tracks = _extract_scene_tracks_payload(trajectory_payload)
+    if scene_tracks is None:
+        return None
+    vla_semantic_evidence = build_vla_semantic_evidence_payload(
+        scene_tracks=scene_tracks,
+        vla_payload=vla_action,
+        semantic_tags=list(semantic_tags),
+        instruction=instruction,
+    )
+    return compile_perception_grounding_world_state(
+        episode_id=episode.metadata.episode_id,
+        task_id=task_id,
+        semantic_tags=list(semantic_tags),
+        scene_tracks_payload=scene_tracks,
+        vla_semantic_evidence=vla_semantic_evidence,
+        metadata={
+            "trajectory_path": str(episode.trajectory_path),
+            "source": "vla_rollout_labeler",
+        },
+    )
+
+
+def _annotation_tags_from_perception_state(perception_grounding_state: Optional[Any]) -> list[str]:
+    if perception_grounding_state is None:
+        return []
+    registry = getattr(perception_grounding_state, "semantic_bridge_registry", None)
+    annotation_bridge = (
+        None if registry is None else getattr(registry, "annotation_bridge", None)
+    )
+    if annotation_bridge is None:
+        return []
+    tags: set[str] = set()
+    for label in dict(getattr(annotation_bridge, "object_class_labels", {}) or {}).values():
+        normalized = str(label).strip().lower().replace(" ", "_")
+        if normalized:
+            tags.add(f"object:{normalized}")
+    for labels in dict(getattr(annotation_bridge, "object_event_labels", {}) or {}).values():
+        tags.update(str(label) for label in list(labels or []) if str(label).strip())
+    tags.update(
+        str(tag)
+        for tag in list(getattr(annotation_bridge, "failure_interpretation_tags", []) or [])
+        if str(tag).strip()
+    )
+    tags.update(
+        str(tag)
+        for tag in list(getattr(annotation_bridge, "recovery_interpretation_tags", []) or [])
+        if str(tag).strip()
+    )
+    return sorted(tags)
+
+
 def _write_vla_semantic_evidence_sidecar(
     *,
     episode: EpisodeRollout,
@@ -317,6 +414,18 @@ def _write_vla_semantic_evidence_sidecar(
                 "teacher_contract_ref": teacher_contract_ref,
                 "teacher_action_ref": teacher_action_ref,
             },
+            provider_truth=(
+                dict(getattr(teacher_envelope, "provider_truth", {}) or {})
+                or dict(getattr(teacher_contract, "provider_truth", {}) or {})
+                or build_teacher_provider_truth(
+                    provider_id=teacher_contract.teacher_id if teacher_contract is not None else "openvla",
+                    provider_name=teacher_contract.model_name if teacher_contract is not None else "openvla",
+                    available=bool(vla_action.get("vla_available", False)) if isinstance(vla_action, Mapping) else False,
+                    backend_selected=_teacher_backend_selected(teacher_contract),
+                    fallback_mode=str(vla_error_reason or ""),
+                    confidence=float(vla_action.get("confidence", 0.0)) if isinstance(vla_action, Mapping) else 0.0,
+                )
+            ),
         )
         teacher_trace_path = episode.trajectory_path.with_name(
             f"{episode.trajectory_path.stem}_teacher_trace_v1.json"
@@ -347,6 +456,40 @@ def _write_vla_semantic_evidence_sidecar(
     return {}
 
 
+def _write_annotation_export_sidecar(
+    *,
+    episode: EpisodeRollout,
+    perception_grounding_state: Optional[Any],
+) -> str:
+    """Write annotation export record as sidecar JSON.
+
+    Converts the perception grounding state's scene graph + annotation bridge
+    into a training-ready AnnotationExportRecord and writes it alongside the
+    episode trajectory.
+
+    Returns:
+        Path to the sidecar file, or empty string if export was not possible.
+    """
+    if perception_grounding_state is None:
+        return ""
+    try:
+        record = export_annotation_record(
+            perception_grounding_state,
+            source="vla_rollout_labeler",
+            metadata={"trajectory_path": str(episode.trajectory_path)},
+        )
+        if record is None or record.n_objects == 0:
+            return ""
+        export_path = episode.trajectory_path.with_name(
+            f"{episode.trajectory_path.stem}_annotation_export_v1.json"
+        )
+        save_annotation_export_json(export_path, [record])
+        return str(export_path)
+    except Exception as exc:
+        logger.warning("Failed to write annotation export sidecar: %s", exc)
+        return ""
+
+
 def _build_episode_labeling_row(
     *,
     episode: EpisodeRollout,
@@ -357,13 +500,28 @@ def _build_episode_labeling_row(
     teacher_envelope: Optional[TeacherActionEnvelope],
     vla_error_reason: Optional[str],
     artifact_refs: Mapping[str, Any],
+    perception_grounding_state: Optional[Any] = None,
 ) -> dict[str, Any]:
     episode_metadata_payload = _load_episode_metadata_payload(episode)
     scene_tracks_payload = _extract_scene_tracks_payload(trajectory_payload)
     scene_tracks_metadata = _scene_tracks_metadata(trajectory_payload, episode_metadata_payload)
     scene_tracks_truth = scene_tracks_truth_from_metadata(scene_tracks_metadata)
+    scene_tracks_provider_truth = build_scene_tracks_provider_truth(scene_tracks_metadata)
     teacher_backend = _teacher_backend_selected(teacher_contract)
     vision_backend = _teacher_vision_backend_selected(teacher_contract)
+    teacher_provider_truth = (
+        dict(getattr(teacher_envelope, "provider_truth", {}) or {})
+        or dict(getattr(teacher_contract, "provider_truth", {}) or {})
+        or build_teacher_provider_truth(
+            provider_id=teacher_contract.teacher_id if teacher_contract is not None else "openvla",
+            provider_name=teacher_contract.model_name if teacher_contract is not None else "openvla",
+            available=bool(teacher_envelope is not None and teacher_envelope.available),
+            backend_selected=teacher_backend,
+            fallback_mode=str(vla_error_reason or ""),
+            confidence=float(getattr(teacher_envelope, "confidence", 0.0) or 0.0),
+            metadata={"vision_backbone_selected": vision_backend},
+        )
+    )
     grounded_track_object_count = _grounded_track_object_count(
         trajectory_payload=trajectory_payload,
         scene_tracks_payload=scene_tracks_payload,
@@ -393,6 +551,12 @@ def _build_episode_labeling_row(
     artifact_map["trajectory_path"] = str(episode.trajectory_path)
     if scene_tracks_payload is not None and not artifact_map.get("scene_tracks_ref"):
         artifact_map["scene_tracks_ref"] = str(episode.trajectory_path)
+    annotation_bridge = None
+    if perception_grounding_state is not None:
+        registry = getattr(perception_grounding_state, "semantic_bridge_registry", None)
+        annotation_bridge = (
+            None if registry is None else getattr(registry, "annotation_bridge", None)
+        )
     return {
         "episode_id": episode.metadata.episode_id,
         "task_id": episode.metadata.task_id,
@@ -403,15 +567,34 @@ def _build_episode_labeling_row(
         "teacher_runtime_backend_selected": teacher_backend,
         "teacher_runtime_live": teacher_available,
         "teacher_confidence": teacher_confidence,
+        "teacher_provider_truth": teacher_provider_truth,
         "vision_backbone_selected": vision_backend,
         "scene_tracks_backend": str(scene_tracks_truth.get("scene_tracks_backend", "") or ""),
         "scene_tracks_non_stub": bool(scene_tracks_truth.get("scene_tracks_non_stub", False)),
+        "scene_tracks_provider_truth": scene_tracks_provider_truth,
         "semantic_grounding_non_heuristic": bool(
             scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
         ),
         "semantic_grounding_mode": semantic_grounding_mode,
         "semantic_memory_grounded": semantic_memory_grounded,
         "grounded_track_object_count": grounded_track_object_count,
+        "perception_grounding_state_id": str(
+            getattr(perception_grounding_state, "state_id", "")
+        ),
+        "perception_scene_object_count": int(
+            getattr(getattr(perception_grounding_state, "scene_graph", None), "object_count", 0)
+            or 0
+        ),
+        "perception_annotation_bridge_ready": bool(annotation_bridge is not None),
+        "perception_annotation_tags": _annotation_tags_from_perception_state(
+            perception_grounding_state
+        ),
+        "perception_annotation_failure_tags": list(
+            getattr(annotation_bridge, "failure_interpretation_tags", []) or []
+        ),
+        "perception_annotation_recovery_tags": list(
+            getattr(annotation_bridge, "recovery_interpretation_tags", []) or []
+        ),
         "vla_error_reason": str(vla_error_reason or ""),
         "artifact_refs": artifact_map,
     }
@@ -435,12 +618,21 @@ def _aggregate_labeling_metadata(
     grounded_track_object_count = sum(
         int(_safe_float(row.get("grounded_track_object_count", 0.0), 0.0)) for row in rows
     )
+    perception_scene_object_count_mean = _mean(
+        [row.get("perception_scene_object_count", 0.0) for row in rows]
+    )
+    perception_annotation_bridge_fraction = _fraction_true(
+        rows,
+        "perception_annotation_bridge_ready",
+    )
     teacher_confidence_mean = _mean([row.get("teacher_confidence", 0.0) for row in rows])
     teacher_live_fraction = _fraction_true(rows, "teacher_runtime_live")
     scene_tracks_real_fraction = _fraction_true(rows, "scene_tracks_non_stub")
     semantic_grounding_fraction = _fraction_true(rows, "semantic_grounding_non_heuristic")
     semantic_tag_count_mean = _mean([row.get("semantic_tag_count", 0.0) for row in rows])
     artifact_refs = _aggregate_artifact_refs(rows)
+    teacher_provider_truth = _prefer_provider_truth(rows, "teacher_provider_truth")
+    scene_tracks_provider_truth = _prefer_provider_truth(rows, "scene_tracks_provider_truth")
     benchmark_payload = {
         "scene_tracks_backend": scene_tracks_backend,
         "teacher_runtime_backend_selected": teacher_backend,
@@ -450,6 +642,8 @@ def _aggregate_labeling_metadata(
         ),
         "semantic_memory_grounded": grounded_track_object_count > 0 or semantic_grounding_fraction > 0.0,
         "grounded_track_object_count": grounded_track_object_count,
+        "perception_scene_object_count_mean": perception_scene_object_count_mean,
+        "perception_annotation_bridge_fraction": perception_annotation_bridge_fraction,
     }
     benchmark_signals = collect_benchmark_gating_signals(benchmark_payload)
     readiness = build_execution_preconditions(
@@ -511,8 +705,10 @@ def _aggregate_labeling_metadata(
         "vla_tags": list(vla_tags),
         "risk_levels": list(risk_levels),
         "teacher_runtime_backend_selected": teacher_backend,
+        "teacher_provider_truth": teacher_provider_truth,
         "vision_backbone_selected": vision_backend,
         "scene_tracks_backend": scene_tracks_backend,
+        "scene_tracks_provider_truth": scene_tracks_provider_truth,
         "semantic_grounding_mode": (
             "non_heuristic" if semantic_grounding_fraction > 0.0 else "heuristic_fallback"
         ),
@@ -520,12 +716,15 @@ def _aggregate_labeling_metadata(
             grounded_track_object_count > 0 or semantic_grounding_fraction > 0.0
         ),
         "grounded_track_object_count": grounded_track_object_count,
+        "perception_scene_object_count_mean": perception_scene_object_count_mean,
+        "perception_annotation_bridge_fraction": perception_annotation_bridge_fraction,
         "benchmark_signals": benchmark_signals,
         "execution_preconditions": readiness.to_dict(),
         "future_training_signals": {
             "teacher_runtime_live": teacher_live_fraction > 0.0,
             "scene_tracks_non_stub": scene_tracks_real_fraction > 0.0,
             "semantic_grounding_non_heuristic": semantic_grounding_fraction > 0.0,
+            "perception_annotation_bridge_ready": perception_annotation_bridge_fraction > 0.0,
             "benchmark_eligible": bool(benchmark_signals.get("benchmark_eligible", False)),
         },
         "future_training_artifacts": artifact_refs,
@@ -620,6 +819,10 @@ def _scene_tracks_summary_payload(scene_tracks_payload: Optional[Dict[str, Any]]
 def _teacher_backend_selected(teacher_contract: Optional[TeacherAdapterContract]) -> str:
     if teacher_contract is None:
         return ""
+    provider_truth = dict(getattr(teacher_contract, "provider_truth", {}) or {})
+    backend = str(provider_truth.get("backend_selected", "") or "").strip()
+    if backend:
+        return backend
     metadata = dict(getattr(teacher_contract, "metadata", {}) or {})
     backend_status = metadata.get("backend_status")
     if isinstance(backend_status, Mapping):
@@ -635,6 +838,12 @@ def _teacher_backend_selected(teacher_contract: Optional[TeacherAdapterContract]
 def _teacher_vision_backend_selected(teacher_contract: Optional[TeacherAdapterContract]) -> str:
     if teacher_contract is None:
         return ""
+    provider_truth = dict(getattr(teacher_contract, "provider_truth", {}) or {})
+    provider_meta = provider_truth.get("metadata")
+    if isinstance(provider_meta, Mapping):
+        backend = str(provider_meta.get("vision_backbone_selected", "") or "").strip()
+        if backend:
+            return backend
     metadata = dict(getattr(teacher_contract, "metadata", {}) or {})
     backend_status = metadata.get("backend_status")
     if isinstance(backend_status, Mapping):
@@ -688,6 +897,19 @@ def _artifact_completeness(artifact_refs: Mapping[str, Sequence[str]]) -> float:
     required = ("teacher_contract_ref", "teacher_trace_ref", "vla_semantic_evidence_ref")
     satisfied = sum(1 for key in required if artifact_refs.get(key))
     return float(satisfied) / float(len(required))
+
+
+def _prefer_provider_truth(rows: Sequence[Mapping[str, Any]], key: str) -> Dict[str, Any]:
+    for row in rows:
+        payload = row.get(key)
+        if isinstance(payload, Mapping) and payload:
+            if str(payload.get("backend_selected", "") or "") == "real":
+                return dict(payload)
+    for row in rows:
+        payload = row.get(key)
+        if isinstance(payload, Mapping) and payload:
+            return dict(payload)
+    return {}
 
 
 def _fraction_true(rows: Sequence[Mapping[str, Any]], key: str) -> float:
@@ -788,6 +1010,18 @@ def _fallback_teacher_contract(
             "backend_policy": str(backend_policy),
             "backend_selected": "disabled" if not enabled else "unavailable",
         },
+        provider_truth=build_teacher_provider_truth(
+            provider_id="openvla",
+            provider_name=os.getenv("OPENVLA_MODEL_NAME") or os.getenv("OPENVLA_MODEL") or "openvla/openvla-7b",
+            available=False,
+            backend_selected="disabled" if not enabled else "unavailable",
+            fallback_mode=str(availability_reason or ("disabled" if not enabled else "unavailable")),
+            confidence=0.0,
+            metadata={
+                "backend_policy": str(backend_policy),
+                "failure_reason": str(availability_reason),
+            },
+        ),
     )
 
 
@@ -848,7 +1082,12 @@ def _try_openvla_action(
             model_name=teacher_contract.model_name,
             instruction=instruction,
             failure_mode=str(teacher_contract.metadata.get("availability_reason", "teacher_unavailable")),
-            metadata={"contract_id": teacher_contract.contract_id},
+            metadata={
+                "contract_id": teacher_contract.contract_id,
+                "backend_selected": _teacher_backend_selected(teacher_contract),
+                "backend_policy": str(teacher_contract.metadata.get("backend_policy", "")),
+                "vision_backbone_selected": _teacher_vision_backend_selected(teacher_contract),
+            },
         )
         return unavailable, unavailable.failure_mode
     frame = _load_first_frame(episode)
@@ -858,7 +1097,12 @@ def _try_openvla_action(
             model_name=teacher_contract.model_name,
             instruction=instruction,
             failure_mode="missing_frame",
-            metadata={"contract_id": teacher_contract.contract_id},
+            metadata={
+                "contract_id": teacher_contract.contract_id,
+                "backend_selected": _teacher_backend_selected(teacher_contract),
+                "backend_policy": str(teacher_contract.metadata.get("backend_policy", "")),
+                "vision_backbone_selected": _teacher_vision_backend_selected(teacher_contract),
+            },
         )
         return missing_frame, "missing_frame"
     try:
@@ -872,7 +1116,12 @@ def _try_openvla_action(
             model_name=teacher_contract.model_name,
             instruction=instruction,
             failure_mode=str(exc),
-            metadata={"contract_id": teacher_contract.contract_id},
+            metadata={
+                "contract_id": teacher_contract.contract_id,
+                "backend_selected": _teacher_backend_selected(teacher_contract),
+                "backend_policy": str(teacher_contract.metadata.get("backend_policy", "")),
+                "vision_backbone_selected": _teacher_vision_backend_selected(teacher_contract),
+            },
         )
         return unavailable, str(exc)
 

@@ -37,6 +37,10 @@ def test_inferential_training_gate_adapt_collect_review():
     assert adapt.recommended_training_mode == "offline_td3_bc_shadow"
     assert "inferential_reward" in adapt.artifact_summary
     assert adapt.artifact_summary["inferential_reward"]["expected_gain"] >= adapt.expected_gain - 1e-9
+    assert adapt.receipt_kind == "inferential_training_decision_v1"
+    assert adapt.authority_class == "work_order"
+    assert adapt.decision_scope == "training_admission_and_data_collection"
+    assert adapt.reward_math_mutation is False
 
     collect = gate.evaluate(_candidate(uncertainty=0.8, ood_score=0.7))
     assert collect.decision == "collect_more_data"
@@ -71,3 +75,4 @@ def test_inferential_training_gate_promotes_signal_yield_support():
     inferential = decision.artifact_summary["inferential_reward"]
     assert inferential["signal_yield"]["epiplexity_term"] > 0.0
     assert inferential["signal_yield"]["score"] > 0.0
+    assert decision.to_dict()["authority_class"] == "work_order"

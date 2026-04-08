@@ -291,6 +291,9 @@ class RegalTrainingRunner:
         promotion_policy_snapshot: Optional[Mapping[str, Any]] = None,
         source_domain_coverage: Optional[Mapping[str, Any]] = None,
         receipt_label_coverage: Optional[Mapping[str, Any]] = None,
+        inferential_learnability_summary: Optional[Mapping[str, Any]] = None,
+        inferential_admission_summary: Optional[Mapping[str, Any]] = None,
+        inferential_work_order_summary: Optional[Mapping[str, Any]] = None,
         artifact_schema_compatibility: Optional[List[Mapping[str, Any]]] = None,
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> None:
@@ -306,6 +309,9 @@ class RegalTrainingRunner:
             "promotion_policy_snapshot": dict(promotion_policy_snapshot or {}),
             "source_domain_coverage": dict(source_domain_coverage or {}),
             "receipt_label_coverage": dict(receipt_label_coverage or {}),
+            "inferential_learnability_summary": dict(inferential_learnability_summary or {}),
+            "inferential_admission_summary": dict(inferential_admission_summary or {}),
+            "inferential_work_order_summary": dict(inferential_work_order_summary or {}),
             "artifact_schema_compatibility": [
                 dict(row) for row in (artifact_schema_compatibility or [])
             ],
@@ -503,6 +509,15 @@ class RegalTrainingRunner:
             source_domain_coverage=dict(self._training_runtime_context.get("source_domain_coverage", {}) or {}),
             receipt_label_coverage=dict(self._training_runtime_context.get("receipt_label_coverage", {}) or {}),
             artifact_paths=dict(sorted(self._runtime_artifacts.items())),
+            inferential_learnability_summary=dict(
+                self._training_runtime_context.get("inferential_learnability_summary", {}) or {}
+            ),
+            inferential_admission_summary=dict(
+                self._training_runtime_context.get("inferential_admission_summary", {}) or {}
+            ),
+            inferential_work_order_summary=dict(
+                self._training_runtime_context.get("inferential_work_order_summary", {}) or {}
+            ),
             checkpoint_registry_path=checkpoint_registry_path,
             checkpoint_registry_digest=checkpoint_registry_sha,
             promotion_evidence_path=self._runtime_artifacts.get("regal_promotion_eval"),

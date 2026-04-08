@@ -114,5 +114,7 @@ def test_semantic_fusion_runner_smoke(tmp_path) -> None:
 
     evidence_payload = json.loads(evidence_bus_path.read_text())
     assert any(record["kind"] == "teacher_trace" for record in evidence_payload["records"])
+    teacher_payload = json.loads(teacher_trace_path.read_text())
+    assert teacher_payload["provider_truth"]["authority_class"] == "canonical_metadata"
     world_model_payload = json.loads(semantic_world_model_path.read_text())
     assert world_model_payload["topology"]["grounded_track_object_count"] >= 2

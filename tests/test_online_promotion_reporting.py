@@ -88,9 +88,11 @@ def test_online_promotion_reporting_includes_coverage_and_error_summaries(tmp_pa
     assert report.receipt_label_coverage["source_domain_counts"]["training_run"] >= 4
     assert report.node_reports[0].coverage["episode_count"] == 1
     assert "trace_ready_episode_count" in report.node_reports[0].coverage
+    assert "control_plane_context_summary" in report.summary
     assert "by_source_domain" in report.node_reports[0].disagreement_slices
     assert "count" in report.node_reports[0].false_positive_summary
     assert "count" in report.node_reports[0].false_negative_summary
     assert paths["json"]
     markdown = (output_dir / "regal_promotion_eval.md").read_text(encoding="utf-8")
     assert "Coverage:" in markdown
+    assert "Control-plane context coverage:" in markdown

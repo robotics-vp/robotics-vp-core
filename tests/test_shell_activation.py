@@ -152,10 +152,20 @@ def test_semantic_orchestrator_emits_preconditioned_routing_plan():
 def test_pipeline_manager_preview_emits_stage_activation_plan():
     manager = create_default_pipeline_manager()
     manager.config["execution_precondition_summary"] = _ready_execution_summary()
+    manager.config["input_receipt_context"] = {
+        "work_orders": [{"receipt_kind": "inferential_execution_work_order_v1"}],
+        "canonical_metadata_receipts": [{"receipt_kind": "orchestrator_control_plane_context_v1"}],
+    }
 
     preview = manager.preview_next_iteration()
 
+    assert preview["receipt_kind"] == "pipeline_stage_activation_receipt_v1"
+    assert preview["authority_class"] == "remain_advisory"
     assert preview["execution_mode"] == "preconditioned_iteration"
+    assert preview["input_receipt_context"]["consumed_receipt_kinds"] == [
+        "inferential_execution_work_order_v1",
+        "orchestrator_control_plane_context_v1",
+    ]
     assert preview["activation_work_order"] is not None
     assert preview["activation_work_order"]["ready"] is True
     assert len(preview["stage_activation_plan"]["stages"]) == 5

@@ -1,4 +1,4 @@
-"""Additive live queue-selection shim that consumes advisory outputs."""
+"""Bounded live queue-selection and dispatch contracts for training-time routing."""
 from __future__ import annotations
 
 import json
@@ -15,13 +15,16 @@ from src.utils.config_digest import sha256_json
 
 @dataclass(frozen=True)
 class QueueSelectionEntry:
-    """Queue entry emitted from advisory-only signals."""
+    """Queue entry emitted as bounded queue-input metadata."""
 
     episode_id: str
     queue_name: str
     priority_score: float
     tags: list[str]
     replay_action: str
+    authority_class: str = "bounded_authority_input"
+    decision_scope: str = "training_distribution_only"
+    reward_math_mutation: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -39,6 +42,9 @@ class QueueSelectionEntry:
             "priority_score": float(self.priority_score),
             "tags": list(self.tags),
             "replay_action": self.replay_action,
+            "authority_class": self.authority_class,
+            "decision_scope": self.decision_scope,
+            "reward_math_mutation": bool(self.reward_math_mutation),
             "metadata": dict(self.metadata),
         }
 
@@ -97,6 +103,9 @@ class QueueDispatchDecision:
     influence_source: str
     dispatch_policy_source: str = "heuristic_fallback"
     dispatch_promotion_stage: str = "heuristic_fallback"
+    authority_class: str = "observational_only"
+    decision_scope: str = "training_distribution_only"
+    reward_math_mutation: bool = False
     reasons: list[str] = field(default_factory=list)
     evidence: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -118,10 +127,21 @@ class QueueDispatchDecision:
             "influence_source": self.influence_source,
             "dispatch_policy_source": self.dispatch_policy_source,
             "dispatch_promotion_stage": self.dispatch_promotion_stage,
+            "authority_class": self.authority_class,
+            "decision_scope": self.decision_scope,
+            "reward_math_mutation": bool(self.reward_math_mutation),
             "reasons": list(self.reasons),
             "evidence": dict(self.evidence),
             "metadata": dict(self.metadata),
         }
+
+
+def _dispatch_authority_class(mode: QueueDispatchMode) -> str:
+    if mode in {QueueDispatchMode.BOUNDED_REWEIGHT, QueueDispatchMode.PROMOTED_GATE_ELIGIBLE}:
+        return "bounded_authority"
+    if mode == QueueDispatchMode.ADVISORY_REORDER:
+        return "ordering_only"
+    return "observational_only"
 
 
 def build_live_queue_selection(
@@ -140,11 +160,15 @@ def build_live_queue_selection(
                 tags=[str(value) for value in episode.get("replay_queue_tags", []) or []],
                 replay_action=str(episode.get("replay_action", "holdout")),
                 metadata={
+                    "authority_class": "bounded_authority_input",
+                    "decision_scope": "training_distribution_only",
+                    "reward_math_mutation": False,
                     "deploy_recommendation": episode.get("deploy_recommendation"),
                     "pricing_recommendation": episode.get("pricing_recommendation"),
                     "datapack_recommendation": episode.get("datapack_recommendation"),
                     "signal_yield_score": episode.get("signal_yield_score"),
                     "inferential_signal_yield": episode.get("inferential_signal_yield"),
+                    "inferential_learnability_contract": episode.get("inferential_learnability_contract"),
                     "semantic_runtime_score": episode.get("semantic_runtime_score"),
                     "inferential_budget_decision": episode.get("inferential_budget_decision"),
                     "execution_preconditions": episode.get("execution_preconditions"),
@@ -156,6 +180,9 @@ def build_live_queue_selection(
                         "sampling_recommendation": dict(episode.get("sampling_recommendation", {}) or {}),
                         "receipt_feedback": dict(episode.get("receipt_feedback", {}) or {}),
                         "inferential_signal_yield": episode.get("inferential_signal_yield"),
+                        "inferential_learnability_contract": dict(
+                            episode.get("inferential_learnability_contract", {}) or {}
+                        ),
                         "semantic_runtime_score": dict(episode.get("semantic_runtime_score", {}) or {}),
                         "execution_preconditions": dict(episode.get("execution_preconditions", {}) or {}),
                         "execution_work_orders": [
@@ -176,9 +203,15 @@ def build_live_queue_selection(
         )
     entries = sorted(entries, key=lambda entry: (-entry.priority_score, entry.episode_id))
     payload = {
+        "receipt_kind": "live_queue_selection_input_v1",
+        "authority_class": "bounded_authority_input",
+        "decision_scope": "training_distribution_only",
+        "reward_math_mutation": False,
         "queue_name": queue_name,
         "entries": [entry.to_dict() for entry in entries],
         "summary": {
+            "receipt_kind": "live_queue_selection_input_v1",
+            "authority_class": "bounded_authority_input",
             "num_entries": len(entries),
             "top_episode_id": entries[0].episode_id if entries else None,
             "queue_digest": sha256_json([entry.to_dict() for entry in entries]),
@@ -197,6 +230,7 @@ def apply_live_queue_selection(
     """Apply bounded queue influence to an episode pool without mutating reward math."""
     dispatch_config = config or QueueDispatchConfig()
     mode = _normalize_mode(dispatch_config.mode)
+    authority_class = _dispatch_authority_class(mode)
     if mode == QueueDispatchMode.DISABLED:
         entries = [
             QueueDispatchDecision(
@@ -213,13 +247,22 @@ def apply_live_queue_selection(
                 dropped=False,
                 promotion_stage="compare_only",
                 influence_source="heuristic",
+                authority_class=authority_class,
                 reasons=["queue_dispatch_disabled"],
                 evidence={},
-                metadata={},
+                metadata={
+                    "authority_class": authority_class,
+                    "decision_scope": "training_distribution_only",
+                    "reward_math_mutation": False,
+                },
             ).to_dict()
             for index, row in enumerate(episodes)
         ]
         return {
+            "receipt_kind": "queue_dispatch_receipt_v1",
+            "authority_class": authority_class,
+            "decision_scope": "training_distribution_only",
+            "reward_math_mutation": False,
             "mode": mode.value,
             "entries": entries,
             "ordered_episode_ids": [row["episode_id"] for row in entries],
@@ -227,6 +270,8 @@ def apply_live_queue_selection(
             "adjusted_queue_order": [row["episode_id"] for row in entries],
             "reweight_factors": {row["episode_id"]: 1.0 for row in entries},
             "summary": {
+                "receipt_kind": "queue_dispatch_receipt_v1",
+                "authority_class": authority_class,
                 "num_entries": len(entries),
                 "num_reweighted": 0,
                 "num_dropped": 0,
@@ -341,11 +386,15 @@ def apply_live_queue_selection(
                 influence_source=influence_source,
                 dispatch_policy_source=dispatch_policy_source,
                 dispatch_promotion_stage=dispatch_promotion_stage,
+                authority_class=authority_class,
                 reasons=reasons,
                 evidence=evidence,
                 metadata={
                     **metadata,
                     "mode": mode.value,
+                    "authority_class": authority_class,
+                    "decision_scope": "training_distribution_only",
+                    "reward_math_mutation": False,
                     "base_weight_source": "explicit" if base_weights else "descriptor",
                     "dispatch_policy_source": dispatch_policy_source,
                     "dispatch_promotion_stage": dispatch_promotion_stage,
@@ -376,6 +425,7 @@ def apply_live_queue_selection(
                 influence_source=decision.influence_source,
                 dispatch_policy_source=decision.dispatch_policy_source,
                 dispatch_promotion_stage=decision.dispatch_promotion_stage,
+                authority_class=decision.authority_class,
                 reasons=list(decision.reasons),
                 evidence=dict(decision.evidence),
                 metadata=dict(decision.metadata),
@@ -393,6 +443,10 @@ def apply_live_queue_selection(
         if not decision.dropped
     ]
     payload = {
+        "receipt_kind": "queue_dispatch_receipt_v1",
+        "authority_class": authority_class,
+        "decision_scope": "training_distribution_only",
+        "reward_math_mutation": False,
         "mode": mode.value,
         "entries": entries,
         "ordered_episode_ids": adjusted_queue_order,
@@ -403,6 +457,8 @@ def apply_live_queue_selection(
             for decision in finalized
         },
         "summary": {
+            "receipt_kind": "queue_dispatch_receipt_v1",
+            "authority_class": authority_class,
             "num_entries": len(finalized),
             "num_reweighted": sum(
                 1 for decision in finalized

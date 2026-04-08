@@ -6,6 +6,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
+from src.economics.inferential_contract import (
+    build_inferential_learnability_contract,
+    summarize_inferential_learnability_contracts,
+)
 from src.economics.inferential_reward import compile_signal_yield
 from src.economics.inferential_training_gate import InferentialTrainingCandidate, InferentialTrainingGate
 from src.epiplexity.metadata import (
@@ -267,6 +271,7 @@ def build_shadow_advisory_output(
 
     episode_outputs: list[Dict[str, Any]] = []
     budget_candidates: list[InferentialTrainingCandidate] = []
+    inferential_contract_rows: list[Dict[str, Any]] = []
     execution_preconditions_by_episode: Dict[str, Dict[str, Any]] = {
         episode.episode_id: dict(episode.metadata.get("execution_preconditions", {}) or {})
         for episode in dataset.episodes
@@ -314,6 +319,8 @@ def build_shadow_advisory_output(
             or extract_epiplexity_summary_metric(epiplexity_overlay, metric="epi_per_flop")
             or 0.0
         )
+        execution_preconditions = execution_preconditions_by_episode.get(episode.episode_id, {})
+        future_signals = dict(execution_preconditions.get("metadata", {}).get("future_training_signals", {}) or {})
         hard_flags = sum(1 for flag in episode.constraint_flags if str(flag.get("severity", "")) == "hard")
         deployment_label = deployment_by_episode.get(episode.episode_id)
         deployment_receipt = receipt_by_episode.get(episode.episode_id)
@@ -341,6 +348,35 @@ def build_shadow_advisory_output(
             data_quality=data_quality,
             provenance_quality=provenance_quality,
         )
+        inferential_contract = build_inferential_learnability_contract(
+            subject_id=episode.episode_id,
+            subject_kind="replay_episode",
+            datapack_id=datapack_id,
+            frontier_gain=frontier_gain,
+            epiplexity_delta=epi_delta,
+            epiplexity_confidence=epi_conf,
+            transfer_score=transfer_score,
+            data_quality=data_quality,
+            provenance_quality=provenance_quality,
+            trust_score=float(pricing_result.applied_output.get("confidence", pricing_result.applied_output.get("trust_score", 0.5)) or 0.5),
+            overlay_joined=bool(epiplexity_overlay),
+            benchmark_eligible=bool(future_signals.get("benchmark_eligible", False)),
+            semantic_grounding_non_heuristic=bool(
+                future_signals.get("semantic_grounding_non_heuristic", False)
+            ),
+            promotion_trace_complete=bool(future_signals.get("promotion_trace_complete", False)),
+            budget_settlement_live=bool(future_signals.get("budget_settlement_live", False)),
+            signal_yield=signal_yield,
+            metadata={
+                "source": "shadow_advisory",
+                "source_domain": episode.source_domain,
+                "objective_profile_id": str(
+                    episode.metadata.get("objective_profile_id", "balanced_contract")
+                ),
+                "epi_per_flop": epi_per_flop,
+            },
+        )
+        inferential_contract_rows.append(inferential_contract.to_dict())
         semantic_runtime_score = None
         if semantic_runtime_package is not None:
             runtime_row = build_semantic_runtime_learning_row(
@@ -445,6 +481,7 @@ def build_shadow_advisory_output(
             signal_yield_score=signal_yield.score,
             metadata={
                 "pricing_delta": learned_pricing_delta,
+                "datapack_id": datapack_id,
                 "realized_gain": (
                     float(adaptation_label.realized_gain)
                     if adaptation_label is not None
@@ -462,6 +499,25 @@ def build_shadow_advisory_output(
                 ),
                 "signal_yield": signal_yield.to_dict(),
                 "epiplexity_overlay": epiplexity_overlay or None,
+                "epiplexity_overlay_joined": bool(epiplexity_overlay),
+                "inferential_metadata": {
+                    "datapack_id": datapack_id,
+                    "overlay_joined": bool(epiplexity_overlay),
+                    "benchmark_eligible": bool(future_signals.get("benchmark_eligible", False)),
+                    "semantic_grounding_non_heuristic": bool(
+                        future_signals.get("semantic_grounding_non_heuristic", False)
+                    ),
+                    "promotion_trace_complete": bool(
+                        future_signals.get("promotion_trace_complete", False)
+                    ),
+                    "budget_settlement_live": bool(
+                        future_signals.get("budget_settlement_live", False)
+                    ),
+                    "summary_present": bool(
+                        abs(float(epi_delta)) > 1e-12 or abs(float(epi_conf)) > 1e-12 or bool(epiplexity_overlay)
+                    ),
+                },
+                "inferential_learnability_contract": inferential_contract.to_dict(),
             },
         )
         budget_candidates.append(candidate)
@@ -473,12 +529,14 @@ def build_shadow_advisory_output(
                 "sampling_priority_score": sampling.priority_score,
                 "signal_yield_score": signal_yield.score,
                 "inferential_signal_yield": signal_yield.to_dict(),
+                "inferential_learnability_contract": inferential_contract.to_dict(),
                 "epiplexity_evidence": {
                     "datapack_id": datapack_id,
                     "delta_epi_vs_baseline": epi_delta,
                     "epi_per_flop": epi_per_flop,
                     "confidence": epi_conf,
                     "overlay_joined": bool(epiplexity_overlay),
+                    "learnability_class": inferential_contract.learnability_class,
                 },
                 "slice_weight_multiplier": slice_weight_multiplier,
                 "replay_queue_tags": sampling.queue_tags,
@@ -537,7 +595,7 @@ def build_shadow_advisory_output(
                         else None
                     ),
                 },
-                "execution_preconditions": execution_preconditions_by_episode.get(episode.episode_id, {}),
+                "execution_preconditions": execution_preconditions,
             }
         )
 
@@ -547,9 +605,15 @@ def build_shadow_advisory_output(
         candidates=budget_candidates,
         execution_preconditions=execution_preconditions_by_episode,
     )
+    inferential_admission_contract = dict(budget_artifact.admission_contract or {})
     decisions_by_episode: Dict[str, Dict[str, Any]] = {
         str(row.get("artifact_summary", {}).get("episode_id", candidate.episode_id)): row
         for row, candidate in zip(budget_artifact.decisions, budget_candidates)
+    }
+    admission_rows_by_episode: Dict[str, Dict[str, Any]] = {
+        str(row.get("episode_id", "")): dict(row)
+        for row in list(inferential_admission_contract.get("episode_decisions", []) or [])
+        if isinstance(row, dict)
     }
     work_orders_by_episode: Dict[str, list[Dict[str, Any]]] = defaultdict(list)
     for work_order in budget_artifact.work_orders:
@@ -557,6 +621,7 @@ def build_shadow_advisory_output(
     for episode_output, candidate in zip(episode_outputs, budget_candidates):
         budget_decision = decisions_by_episode.get(candidate.episode_id) or gate.evaluate(candidate).to_dict()
         episode_output["inferential_budget_decision"] = budget_decision
+        episode_output["inferential_admission"] = admission_rows_by_episode.get(candidate.episode_id, {})
         episode_output["collect_more_data"] = budget_decision["decision"] == "collect_more_data"
         episode_output["retrain"] = budget_decision["decision"] == "adapt_now"
         episode_output["execution_work_orders"] = work_orders_by_episode.get(candidate.episode_id, [])
@@ -610,6 +675,12 @@ def build_shadow_advisory_output(
             or output["advisor_evaluation"]["policy_alignment"] is not None
         ),
     }
+    summary["inferential_learnability_summary"] = summarize_inferential_learnability_contracts(
+        inferential_contract_rows
+    )
+    summary["inferential_admission_summary"] = dict(
+        (budget_artifact.admission_contract or {}).get("summary", {}) or {}
+    )
     payload: Dict[str, Any] = {
         "summary": summary,
         "episodes": episode_outputs,
@@ -621,6 +692,9 @@ def build_shadow_advisory_output(
         "semantic_runtime_scorer_preconditions": scorer_preconditions,
         "semantic_runtime_scorer_work_orders": scorer_work_orders,
         "adaptation_budget": budget_artifact.to_dict(),
+        "inferential_learnability_summary": dict(summary["inferential_learnability_summary"]),
+        "inferential_admission_contract": inferential_admission_contract,
+        "inferential_work_orders": [dict(row) for row in budget_artifact.work_orders],
         "adaptation_work_orders": [
             row for row in budget_artifact.work_orders
             if row.get("order_type") == "adaptation_training"

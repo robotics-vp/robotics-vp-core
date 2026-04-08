@@ -36,7 +36,12 @@ def test_promotion_reporting_emits_sidecars(tmp_path):
     assert report.summary["node_count"] >= 5
     assert report.receipt_label_coverage["total_labels"] > 0
     assert report.summary["trace_ready_episode_count"] == dataset.manifest.num_episodes
+    assert "control_plane_context_summary" in report.summary
+    assert "teacher_provider_truth_summary" in report.summary
+    assert "scene_tracks_provider_truth_summary" in report.summary
+    assert report.summary["inferential_learnability_summary"]["contract_count"] == dataset.manifest.num_episodes
     assert report.node_reports[0].coverage["trace_ready_episode_count"] == dataset.manifest.num_episodes
+    assert "control_plane_context_episode_count" in report.node_reports[0].coverage
     assert paths["json"]
     assert paths["markdown"]
     assert any(key.startswith("sidecar::") for key in paths)
@@ -69,4 +74,5 @@ def test_promotion_reporting_accepts_work_order_evidence(tmp_path):
     )
 
     assert report.summary["work_order_count"] == len(work_orders)
+    assert report.summary["work_order_ready_count"] >= 0
     assert report.node_reports[0].downstream_usefulness["executable_work_orders"] >= 0

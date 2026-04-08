@@ -39,9 +39,11 @@ def test_replay_dataset_builds_from_shadow_run(tmp_path):
     assert loaded.steps[0].metadata["runtime_packet_id"].startswith("runtime_")
     assert loaded.steps[0].metadata["event_refs"]
     assert loaded.windows[0].metadata["decision_refs"]
+    assert loaded.episodes[0].metadata["inferential_learnability_contract"]["subject_kind"] == "replay_episode"
     assert bundle.manifest.metadata["sources"][0]["runtime_packet_count"] == 2
     assert bundle.manifest.metadata["sources"][0]["event_count"] >= 10
     assert bundle.manifest.metadata["sources"][0]["decision_count"] >= 8
+    assert bundle.manifest.metadata["inferential_learnability_summary"]["contract_count"] == 2
 
 
 def test_replay_dataset_builds_from_workcell_episode_log(tmp_path):
@@ -147,17 +149,66 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
         ),
         encoding="utf-8",
     )
+    control_plane_context_path = episode_dir / "ep_rollout_001_control_plane_context_v1.json"
+    control_plane_context_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "orchestrator_control_plane_context_v1",
+                "receipt_kind": "orchestrator_control_plane_context_v1",
+                "authority_class": "canonical_metadata",
+                "decision_scope": "semantic_runtime_control_plane",
+                "reward_math_mutation": False,
+                "meta_node_weights": {"risk_triage": 0.6},
+                "focus_objective_presets": ["balanced_contract"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     metadata_path = episode_dir / "metadata.json"
     metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata_payload["scene_tracks_path"] = str(scene_tracks_path.relative_to(tmp_path))
     metadata_payload["semantic_world_model_path"] = str(semantic_world_model_path.relative_to(tmp_path))
     metadata_payload["runtime_packet_path"] = str(runtime_packet_path.relative_to(tmp_path))
     metadata_payload["selection_summary_path"] = str(selection_summary_path.relative_to(tmp_path))
+    metadata_payload["control_plane_context_path"] = str(control_plane_context_path.relative_to(tmp_path))
     metadata_payload["event_spine_path"] = str(event_spine_path.relative_to(tmp_path))
     metadata_payload["decision_ledger_path"] = str(decision_ledger_path.relative_to(tmp_path))
     metadata_payload["runtime_packet_id"] = "runtime_ep_rollout_001"
     metadata_payload["event_refs"] = ["event_rollout_001"]
     metadata_payload["decision_refs"] = ["decision_rollout_001"]
+    metadata_payload["scene_tracks_provider_truth"] = {
+        "provider_id": "scene_tracks",
+        "provider_kind": "scene_tracks_runtime",
+        "provider_name": "scene_tracks",
+        "advisory_only": True,
+        "available": True,
+        "backend_selected": "passthrough",
+        "fallback_mode": "passthrough",
+        "availability_class": "passthrough_backend",
+        "calibration_class": "camera_params_present",
+        "grounding_class": "passthrough",
+        "confidence": 0.2,
+        "authority_class": "canonical_metadata",
+        "decision_scope": "external_provider_status",
+        "reward_math_mutation": False,
+    }
+    metadata_payload["teacher_provider_truth"] = {
+        "provider_id": "openvla",
+        "provider_kind": "teacher_runtime",
+        "provider_name": "openvla",
+        "advisory_only": True,
+        "available": False,
+        "backend_selected": "disabled",
+        "fallback_mode": "disabled",
+        "availability_class": "disabled",
+        "calibration_class": "not_applicable",
+        "grounding_class": "not_applicable",
+        "confidence": 0.0,
+        "authority_class": "canonical_metadata",
+        "decision_scope": "external_provider_status",
+        "reward_math_mutation": False,
+    }
     metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
 
     dataset_dir = tmp_path / "replay_rollout_dataset"
@@ -170,13 +221,20 @@ def test_replay_dataset_builds_from_rollout_bundle_with_provenance(tmp_path):
     assert bundle.episodes[0].provenance["semantic_world_model_ref"] == str(semantic_world_model_path.resolve())
     assert bundle.episodes[0].provenance["runtime_packet_ref"] == str(runtime_packet_path.resolve())
     assert bundle.episodes[0].provenance["selection_summary_ref"] == str(selection_summary_path.resolve())
+    assert bundle.episodes[0].provenance["control_plane_context_ref"] == str(
+        control_plane_context_path.resolve()
+    )
     assert bundle.episodes[0].provenance["event_spine_ref"] == str(event_spine_path.resolve())
     assert bundle.episodes[0].provenance["decision_ledger_ref"] == str(decision_ledger_path.resolve())
     assert bundle.episodes[0].metadata["execution_preconditions"]["ready"] is True
     assert bundle.episodes[0].metadata["scene_tracks_non_stub"] is False
     assert bundle.episodes[0].metadata["semantic_memory_grounded"] is True
     assert bundle.episodes[0].metadata["semantic_grounding_non_heuristic"] is False
+    assert bundle.episodes[0].metadata["scene_tracks_provider_truth"]["grounding_class"] == "passthrough"
+    assert bundle.episodes[0].metadata["teacher_provider_truth"]["availability_class"] == "disabled"
     assert bundle.episodes[0].metadata["selection_summary"]["selected_ids"] == ["dp_rollout"]
+    assert bundle.episodes[0].metadata["control_plane_context"]["receipt_kind"] == "orchestrator_control_plane_context_v1"
+    assert bundle.episodes[0].metadata["inferential_learnability_contract"]["subject_id"] == "ep_rollout_001"
     assert bundle.manifest.metadata["schema_compatibility"][0]["compatible"] is True
 
 

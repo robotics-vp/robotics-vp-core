@@ -1,8 +1,8 @@
 """
-Episode sampling scaffolding (advisory-only).
+Episode sampling scaffolding with bounded training-distribution authority.
 
-Stage 3 extends the simple Stage 1 → RL descriptor conversion with an
-advisory sampler that can balance tiers, prioritize frontier datapacks,
+Stage 3 extends the simple Stage 1 → RL descriptor conversion with a
+bounded sampler that can balance tiers, prioritize frontier datapacks,
 and weight by economic urgency without modifying reward math or training
 algorithms.
 """
@@ -16,6 +16,10 @@ import hashlib
 from src.objectives.compiler import ObjectiveCompiler
 from src.objectives.profile import ObjectiveProfile
 from src.objectives.tensor import ObjectiveTensor
+from src.economics.inferential_contract import (
+    build_inferential_learnability_contract,
+    coerce_inferential_learnability_contract,
+)
 from src.orchestrator.queue_selection import (
     QueueDispatchConfig,
     QueueDispatchMode,
@@ -120,6 +124,13 @@ def _descriptor_signal_yield(
     return float(signal_yield.score), float(replay_weight)
 
 
+def _sampler_receipt_authority_class(queue_dispatch: Optional[Dict[str, Any]]) -> str:
+    dispatch_authority = str((queue_dispatch or {}).get("authority_class", "") or "")
+    if dispatch_authority:
+        return dispatch_authority
+    return "bounded_authority"
+
+
 def _summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase: str) -> Dict[str, Any]:
     """Compact, JSON-safe summary of condition inputs for logging."""
     tag_items = [f"{str(k)}:{float(v):.4f}" for k, v in sorted(tags.items(), key=lambda kv: str(kv[0]))]
@@ -214,7 +225,8 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         except Exception:
             data_quality_signal = float(trust_score)
 
-    # Epiplexity signals (advisory only)
+    # Epiplexity learnability stays canonical metadata for training distribution,
+    # while reward math remains unchanged.
     delta_epi = extract_epiplexity_summary_metric(datapack, metric="delta_epi_vs_baseline") or 0.0
     epi_per_flop = extract_epiplexity_summary_metric(datapack, metric="epi_per_flop") or 0.0
     epi_conf = extract_epiplexity_summary_confidence(datapack) or 0.0
@@ -226,6 +238,26 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         provenance_quality=float(trust_score),
         trust_score=float(trust_score),
     )
+    learnability_contract = coerce_inferential_learnability_contract(
+        getattr(datapack, "inferential_learnability_contract", None)
+    )
+    if learnability_contract is None:
+        learnability_contract = build_inferential_learnability_contract(
+            subject_id=str(datapack.episode_id or datapack.pack_id),
+            subject_kind="datapack",
+            datapack_id=str(datapack.pack_id),
+            frontier_gain=max(0.0, float(delta_J)),
+            epiplexity_delta=float(delta_epi),
+            epiplexity_confidence=float(epi_conf),
+            data_quality=data_quality_signal,
+            provenance_quality=float(trust_score),
+            trust_score=float(trust_score),
+            overlay_joined=bool(datapack.epiplexity_summary),
+            summary_present=bool(datapack.epiplexity_summary),
+            metadata={"source": "datapack_descriptor"},
+        )
+    signal_yield_score = float(learnability_contract.signal_yield.get("score", signal_yield_score))
+    inferential_replay_weight = float(learnability_contract.inferential_replay_weight)
 
     # Episode length heuristic (can be overridden by env defaults)
     episode_length = 1000  # Default
@@ -262,6 +294,7 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         "epi_confidence": float(epi_conf),
         "signal_yield_score": float(signal_yield_score),
         "inferential_replay_weight": float(inferential_replay_weight),
+        "inferential_learnability_contract": learnability_contract.to_dict(),
         "embodiment_drift_score": embodiment_drift_score if embodiment_drift_score is not None else 0.0,
         "embodiment_physically_impossible_contacts": embodiment_impossible_contacts or 0,
         "embodiment_trust_override_candidate": bool(embodiment_trust_override)
@@ -314,15 +347,38 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
     )
     epi_conf = float(episode.datapack_summary.get("epi_confidence", 0.0) or 0.0)
     transfer_score = max(0.0, 1.0 - float(episode.condition_vector.get("ood_risk_level", 0.0) or 0.0))
-    signal_yield_score, inferential_replay_weight = _descriptor_signal_yield(
-        frontier_gain=frontier_gain,
-        epiplexity_delta=epi_delta,
-        epiplexity_confidence=epi_conf,
-        transfer_score=transfer_score,
-        data_quality=quality_score,
-        provenance_quality=pricing_confidence,
-        trust_score=pricing_confidence,
+    execution_preconditions = dict(episode.metadata.get("execution_preconditions", {}) or {})
+    future_signals = dict(execution_preconditions.get("metadata", {}).get("future_training_signals", {}) or {})
+    learnability_contract = coerce_inferential_learnability_contract(
+        episode.metadata.get("inferential_learnability_contract")
     )
+    if learnability_contract is None:
+        learnability_contract = build_inferential_learnability_contract(
+            subject_id=episode.episode_id,
+            subject_kind="replay_episode",
+            datapack_id=str(
+                episode.metadata.get("datapack_id")
+                or episode.datapack_summary.get("datapack_id")
+                or episode.episode_id
+            ),
+            frontier_gain=frontier_gain,
+            epiplexity_delta=epi_delta,
+            epiplexity_confidence=epi_conf,
+            transfer_score=transfer_score,
+            data_quality=quality_score,
+            provenance_quality=pricing_confidence,
+            trust_score=pricing_confidence,
+            benchmark_eligible=bool(future_signals.get("benchmark_eligible", False)),
+            semantic_grounding_non_heuristic=bool(
+                future_signals.get("semantic_grounding_non_heuristic", False)
+            ),
+            promotion_trace_complete=bool(future_signals.get("promotion_trace_complete", False)),
+            budget_settlement_live=bool(future_signals.get("budget_settlement_live", False)),
+            overlay_joined=bool(episode.metadata.get("epiplexity_overlay_joined", False)),
+            metadata={"source": "replay_episode_descriptor"},
+        )
+    signal_yield_score = float(learnability_contract.signal_yield.get("score", 0.0))
+    inferential_replay_weight = float(learnability_contract.inferential_replay_weight)
     descriptor = {
         "pack_id": episode.episode_id,
         "episode_id": episode.episode_id,
@@ -353,11 +409,15 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
         "delta_J": float(episode.econ_tensor_summary.get("axes", {}).get("value_earned", 0.0) or 0.0),
         "sampling_weight": max(0.1, 1.0 + frontier_gain),
         "w_embodiment": 1.0,
-        "w_epi": max(0.0, frontier_gain),
+        "w_epi": max(
+            0.0,
+            float(learnability_contract.epiplexity_delta) * float(learnability_contract.epiplexity_confidence),
+        ),
         "delta_epi_per_flop": epi_delta,
         "epi_confidence": epi_conf,
         "signal_yield_score": float(signal_yield_score),
         "inferential_replay_weight": float(inferential_replay_weight),
+        "inferential_learnability_contract": learnability_contract.to_dict(),
         "episode_length": int(episode.total_steps),
         "tags": {
             "source": episode.source_domain,
@@ -371,9 +431,9 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
             "quality_score": quality_score,
             "pricing_confidence": pricing_confidence,
             "signal_yield_score": float(signal_yield_score),
+            "learnability_class": learnability_contract.learnability_class,
         },
     }
-    execution_preconditions = dict(episode.metadata.get("execution_preconditions", {}) or {})
     if execution_preconditions:
         descriptor["unified_quality_weight"] = max(0.0, float(execution_preconditions.get("readiness_score", 1.0)))
         descriptor["unified_quality_eligible"] = bool(execution_preconditions.get("ready", True))
@@ -675,6 +735,12 @@ class DataPackRLSampler:
             )
         dispatch["ordered_descriptors"] = ordered_descriptors
         self.last_queue_dispatch_artifact = dispatch
+        self.last_sampler_policy_artifact = self._build_sampler_policy_receipt(
+            selected=selected,
+            strategy_name=strategy_name,
+            queue_dispatch=dispatch,
+        )
+        dispatch["sampler_policy_receipt"] = copy.deepcopy(self.last_sampler_policy_artifact)
         return dispatch
 
     def _select_strategy(self, strategy: Optional[str]) -> str:
@@ -1383,12 +1449,23 @@ class DataPackRLSampler:
                     "target_source": "receipt_feedback" if has_receipt_feedback else "heuristic_bootstrap",
                     "metadata": {
                         "has_receipt_feedback": has_receipt_feedback,
+                        "queue_dispatch_authority_class": str(
+                            dispatch_decision.get(
+                                "authority_class",
+                                (queue_dispatch or {}).get("authority_class", "observational_only"),
+                            )
+                            or "observational_only"
+                        ),
                         "queue_dispatch_decision": dispatch_decision,
                     },
                 }
             )
         receipt = {
             "schema_version": "sampler_policy_receipt_v1",
+            "receipt_kind": "sampler_policy_receipt_v1",
+            "authority_class": _sampler_receipt_authority_class(queue_dispatch),
+            "decision_scope": "training_distribution_only",
+            "reward_math_mutation": False,
             "receipt_id": f"sampler_policy_{strategy_name}_{len(selected)}",
             "target_source": target_source,
             "heuristic_selected_strategy": str(

@@ -116,6 +116,8 @@ def test_apply_live_queue_selection_uses_queue_policy_helper(tmp_path: Path) -> 
     )
 
     entry_map = {row["episode_id"]: row for row in dispatch["entries"]}
+    assert dispatch["authority_class"] == "bounded_authority"
     assert entry_map["ep_high"]["dispatch_policy_source"] == "heuristic_plus_learned_helper"
+    assert entry_map["ep_high"]["authority_class"] == "bounded_authority"
     assert entry_map["ep_high"]["evidence"]["queue_policy_trace"]["helper_weight"] == pytest.approx(0.12)
     assert entry_map["ep_high"]["adjusted_weight"] >= entry_map["ep_low"]["adjusted_weight"]

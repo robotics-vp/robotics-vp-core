@@ -1,6 +1,1013 @@
 # Economic World Model Progress Log
 
+## 2026-04-08 — Phase 2 Perception / Grounding WM: Annotation-Bridge Lane + Persistent Benchmark Evidence
+
+- **Changed**: completed the first bounded annotation-export projection lane and tightened promotion discipline around it:
+  - added `AnnotationBridgeProjectionSeam` in `src/world_model/perception_grounding/neural_seams.py`
+  - added `annotation_bridge_projection_loss` and trainer dispatch support in `src/training/perception_seam_losses.py` and `src/training/perception_seam_trainer.py`
+  - added annotation-export seam evaluation in `src/training/perception_seam_data.py`, including explicit provisional gating when evidence is derived from heuristic object tokens rather than provider-backed features
+  - wired compiler shadow execution, receipt emission, and promotion resolution for the annotation bridge in `src/world_model/perception_grounding/compiler.py`, `receipts.py`, and `promotion.py`
+- **Changed**: turned benchmark evidence from ad hoc dicts into a typed persisted artifact:
+  - added `src/world_model/perception_grounding/benchmark_evidence.py`
+  - annotation exports now preserve object-token provenance (`source_kind`, `truth_class`, `provider_id`, provisional flag) in `src/world_model/perception_grounding/annotation_export.py`
+  - graph transformer, annotation bridge, and provider-adapter promotion logic now accepts persisted benchmark evidence and stays in shadow monitoring when evidence is missing or provisional
+  - compiler benchmark-token selection now prefers provider-backed sources and only falls back to heuristic scene-graph tokens under an explicit non-promoting posture
+- **Verification**:
+  - `python3 -m compileall src`
+  - `python3 -m ruff check src/world_model/perception_grounding/annotation_export.py src/world_model/perception_grounding/benchmark_evidence.py src/world_model/perception_grounding/compiler.py src/world_model/perception_grounding/promotion.py src/world_model/perception_grounding/receipts.py src/world_model/perception_grounding/__init__.py src/training/perception_seam_data.py tests/test_annotation_bridge_projection.py tests/test_perception_grounding_compiler.py tests/test_perception_grounding_neural_seams.py`
+  - `python3 -m pytest tests/test_annotation_bridge_projection.py tests/test_perception_grounding_compiler.py tests/test_perception_grounding_neural_seams.py tests/test_perception_grounding_world_model.py -q`
+  - result: `138 passed`
+- **Next recommended task**:
+  1. make graph-transformer benchmark evidence routine and non-provisional by generating it directly from persisted annotation-export artifacts rather than only supporting the artifact contract structurally
+  2. turn benchmark object-token sourcing into a real runtime artifact path from vision-backbone / V-JEPA provider outputs instead of relying on explicit compile-time injection
+  3. add provider-specific benchmark artifact producers and trainer-manifest linkage for `vision_backbone_projection`, `sam_calibration`, `depth_metric_calibration`, and `vjepa_temporal_alignment`, then promote in dependency order: vision backbone projection → scene graph transformer → annotation bridge projection → provider calibrators
+
+## 2026-04-04 — Doctrine: Autoencoder / Codebook Posture (stack + Economic WM + Embodiment)
+
+- **Updated** `docs/economic_world_model/neuralization_bridge_doctrine.md`: new § Autoencoder / Codebook Posture Across the Stack—layer taxonomy table; Perception, Semantic→Economic (Perceiver primary; optional bounded auxiliaries only), Embodiment, Sim (light), explicit non-role for transport/meta-governance
+- **Updated** `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`: § Autoencoder / Manifold-Compression Posture (bounded auxiliary yes, backbone no; DS3M/RED-SDS primary preserved); placements before slow projection, motifs, meso/slow summarization; explicit non-replacements for estimator/dynamics/allocator/governance/transport/meta-regal; staged neuralization + research-bucket notes that AE research is auxiliary to A/B
+- **Updated** `docs/actuation_embodiment_world_model.md`: short § Autoencoder / Codebook Use Inside Embodiment—supports inverse/retargeting/ACT/diffusion lanes, does not replace them
+- **Left** `multi_wm_architecture_plan.md` unchanged (avoid redundant topology restatement; bridge + Economic + Embodiment docs own the delta)
+
+## 2026-04-04 — Doctrine: Bio/Neuro Architecture Inspirations + Economic WM PINN Posture
+
+- **Created** `docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md`:
+  - Six bio/neuro organizational principles evaluated against the multi-WM topology: efference copy, active sensing, neuromodulation/allostasis, plasticity gating, motor synergies + interoception, immune-style anomaly governance
+  - Each candidate: exact WM insert point, architecture family, layer classification (reuses `neuralization_bridge_doctrine.md` taxonomy), typed surfaces, phase timing, explicit boundary discipline
+  - Cross-cutting neural architecture table consistent with existing bridge doctrine
+  - Sequencing section: preserve now (efference copy, active sensing, plasticity gating); defer until lower-WM maturity (regime broadcast / synergies); post–Sep-2026 (immune composition, hypernetwork regime composition)
+- **Added** PINN posture subsection to `doctrine_economic_wm_future_architecture.md`:
+  - Core stance: constraint-informed Economic submodule yes, PINN-shaped Economic backbone no
+  - Good placements: slow-manifold invariant residuals, meso-timescale reservoir-flow, battery/thermal/wear/queue evolution, counterfactual resource-transition rollouts, invariant regularization
+  - Bad placements: allocator, governance transport, meta-regal composition, WM-to-WM transport, anything implying clean PDE economics
+- **Added** minimal cross-references in `multi_wm_architecture_plan.md` and `docs/actuation_embodiment_world_model.md` (pointers only; no restatement of the bio note or subsystem catalogs)
+- **Anti-redundancy**: canonical topology, bridge taxonomy, embodiment decomposition, meta-regal structure, and Economic multi-timescale design stay in their existing docs
+
+## 2026-04-04 — Phase 2 Perception / Grounding WM: Embodiment Shadow Consumer + Full Receipt Family + Subsystem Discipline
+
+- **Created** `src/world_model/perception_grounding/embodiment_shadow_consumer.py`:
+  - `EmbodimentShadowSurface`: typed perception→embodiment shadow surface with per-object action relevance (reachability, obstruction, affordance feasibility, contact preconditions, misalignment risk), scene-level summaries, body-object engagement, resource/deployment readiness, provider truth posture, evidence quality for embodiment trust
+  - `ObjectActionRelevance`: per-object body-relevant action summary
+  - `EmbodimentShadowConsumptionReceipt`: receipt for each shadow consumption pass
+  - `consume_perception_for_embodiment()`: typed consumer entry point
+  - Shadow/advisory posture only — no control authority, no planner sovereignty
+  - Reduced-quality but honest behavior when providers are unavailable
+  - Shaped by `docs/actuation_embodiment_world_model.md` doctrine (6-subsystem Embodiment WM)
+- **Deepened** receipt emission in `compiler.py`:
+  - Compiler now emits **all 8 receipt types** live on every compilation pass:
+    `ProviderAvailabilityReceipt`, `EvidenceFusionReceipt`, `ProviderInvocationReceipt`, `GroundingCalibrationReceipt`, `InferenceHeadroomReceipt`, `DeploymentResourceReceipt`, `TemporalGroundingReceipt`, `PerceptionContributionReceipt`
+  - `compile_perception_grounding_with_receipts()` now extracts and returns full receipt family
+  - Provider availability receipts cover all known providers with honest truth-class and install status
+  - Deployment resource receipt identifies concrete bottlenecks (compute, battery, thermal, posture)
+  - Grounding calibration receipt computes cross-provider agreement and spatial/temporal accuracy
+  - Perception contribution receipt packages episode-level quality for future Economic WM consumption
+- **Codified** internal subsystem decomposition in `__init__.py` module docstring:
+  - 7 named subsystems: Object/Track Persistence, Scene Graph/Relation State, Temporal Grounding, Evidence Routing/Fusion, Affordance/Action-Relevance Bridge Surface, Provider/Runtime/Deployment-Resource Truth, Replay/Export/Bridge Registry Surfaces
+  - Each subsystem documented with: canonical typed state owned, receipts emitted, neural successor path (architecture + capacity + training objective), downstream consumers, and explicit "NOT" boundary
+  - Boundary rules enforced: no mother-latent, no provider-owned truth, no bridge-becomes-downstream-WM, no economic pre-collapse, no ungoverned fast→slow leakage
+- **Created** `tests/test_embodiment_shadow_consumer.py` (20 tests):
+  - Embodiment shadow consumer: typed output, per-object relevance, scene summaries, body-object engagement, resource readiness, provider truth, evidence quality, shadow posture, receipt completeness, serialization roundtrip, reduced-quality empty state, no sovereignty assertion
+  - Full receipt family: all 8 receipt types present, provider availability covers all providers, grounding calibration metrics, deployment bottleneck identification, temporal persistence metrics, perception contribution for Economic WM, metadata completeness
+  - Integration: compile → receipt family → embodiment shadow consumer end-to-end pipeline
+- **No regressions**: all 97 existing perception/grounding tests pass, 20 new tests pass (117 total)
+- **Phase 2 status**: 3 shadow consumers now wired (SimSynth, Annotation/VLA, Embodiment). Full receipt family live. Internal subsystem discipline codified. Maturity remains `shadow_runtime`.
+
+## 2026-04-03 — WM Decomposition Standard Baseline + Sim/Synth/Physics GPU-Era Revisit Target + Execution Plane Standup
+
+- **Updated** `docs/economic_world_model/multi_wm_architecture_plan.md`:
+  - Expanded the Sim / Synth / Physics WM section (Recommended WM Set §3) from a sparse purpose/gaps summary to a full 10-subsystem decomposition with typed interfaces, neural structure candidates, timescale hierarchy, topological placement, and robostack/G1 contribution
+  - Ten named subsystems: backend/runtime/provider surface, task/measurement/episode layer, scene/asset/materialization layer, branch planner/evaluator, sim-real gap/realism evaluator, fidelity/randomization/calibration allocator, render/diffusion/materialization lane, differentiable-physics provider lane, drift/calibration/backend mismatch evaluator, training-worthiness/synthetic-yield evaluator
+  - Added Phase 1.x GPU-Era Subsystem Decomposition Revisit section between Phase 1 and Phase 2, explicitly marking the future standard without reopening Phase 1 implementation
+  - Tied Habitat-derived adoption items to specific subsystems
+- **Updated** `docs/economic_world_model/roadmap.md`:
+  - Added GPU-era decomposition revisit callout to the Sim/Synth/Physics Habitat adoption track
+  - Added WM Section Decomposition Standard section referencing the 9-point readiness template
+- **Updated** `ROADMAP_STAGES_2_5.md`:
+  - Added Multi-WM Decomposition Standard note explaining that all WM sections are now held to richer subsystem decomposition standards
+- **Updated** `README.md`:
+  - Expanded Sim/Synth/Physics WM description to list the 10 internal subsystems
+  - Added paragraph on the multi-WM roadmap's movement toward canonical ownership, subsystem decomposition, typed receipts, and bounded neural seams
+- **Created** RunPod execution plane: `codex_skills/runpod-gpu-execution/SKILL.md`, `docs/agent_ergonomics/runpod_execution_plane.md`, `scripts/runpod/` (ensure_cli, launch_pod, exec_remote, sync_up, sync_down, collect_billing, cleanup_idle)
+- **Created** run manifest schema: `docs/agent_ergonomics/run_manifest_schema.md`, `configs/runpod/examples/`, `results/run_registry/README.md`
+- **Created** roadmap execution companion: `codex_skills/roadmap-execution-companion/SKILL.md`, `docs/agent_ergonomics/roadmap_execution_companion.md`
+- **Created** Feynman integration posture: `docs/agent_ergonomics/feynman_integration_posture.md`
+- **Updated** `AGENTS.md` with execution plane guidance (local vs Codex cloud vs RunPod) and run manifest recording
+- This re-baselines the standard for future WM roadmap sections and establishes the Sep 2026 execution model
+
+## 2026-04-03 — Perception Seam Training Infrastructure + External Data Adapters
+
+- **Created** `src/training/perception_seam_losses.py`:
+  - Loss functions for all perception seam types: `evidence_fusion_loss`, `sam_calibration_loss`, `depth_metric_calibration_loss`, `vjepa_temporal_alignment_loss`, `vision_backbone_projection_loss`
+  - `SeamLossResult` dataclass with total loss, component breakdown, and training metrics
+  - Supervised/contrastive/predictive objectives (NOT direct RL)
+- **Created** `src/training/perception_seam_data.py`:
+  - Dataset classes: `ProviderAgreementDataset`, `EvidenceFusionDataset`, `SAMCalibrationDataset`, `DepthCalibrationDataset`, `VJEPATemporalDataset`
+  - Typed sample dataclasses: `MultiProviderSample`, `ProviderObservation`, `VJEPATemporalSample`
+  - Synthetic data generators for testing/verification
+  - Data loader factory functions with proper collation
+- **Created** `src/training/perception_seam_trainer.py`:
+  - `PerceptionSeamTrainer`: training orchestrator with gradient accumulation, validation, checkpointing
+  - Receipt emission: `SeamTrainingStepReceipt`, `SeamValidationReceipt`, `BenchmarkGateReceipt`
+  - Early stopping, LR scheduling, benchmark gate integration
+- **Created** `src/training/perception_seam_benchmarks.py`:
+  - Per-seam benchmark evaluators: `EvidenceFusionBenchmark`, `SAMCalibrationBenchmark`, `DepthCalibrationBenchmark`, `VJEPATemporalBenchmark`
+  - `BenchmarkGateResult` with promotion decision logic
+- **Created** `docs/economic_world_model/perception_external_data_roadmap.md`:
+  - GPU-honest classification of external data sources (DROID, Bridge V2, ALOHA, KITTI)
+  - 3-level classification: adapter-usable (no GPU) → prototype-trainable (dev GPU) → promotion-credible (GPU required)
+  - Doctrine updates for promotion credibility levels
+- **Created** `src/dataset_bridges/lerobot_perception_adapter.py`:
+  - `multi_provider_sample_from_lerobot_step`: LeRobot multi-camera step → `MultiProviderSample`
+  - `vjepa_temporal_sample_from_episode_window`: episode window → `VJEPATemporalSample`
+  - `FeatureExtractionConfig`: placeholder, flattened, or frozen_backbone strategies
+  - `discover_camera_keys`: auto-discovers camera keys from DROID/Bridge/ALOHA observation formats
+  - Dataset-level adapters for batch processing
+- **Created** `tests/test_perception_seam_training.py` (26 tests):
+  - Loss function correctness, data loader collation, benchmark evaluation
+- **Created** `tests/test_lerobot_perception_adapter.py` (43 tests):
+  - Camera key discovery for DROID/Bridge/ALOHA formats
+  - Feature extraction strategies on CPU
+  - Multi-provider sample conversion with realistic data shapes
+  - V-JEPA temporal sample extraction with sliding windows
+- This closes the "Seam Training Infrastructure" gap identified in Phase 2 planning
+- Adapter work is adapter-usable now (no GPU); prototype-trainable requires `droid_100` subset; promotion-credible training requires GPU
+
+## 2026-04-03 — Provider Adapter Neural Seams (Phase 2 Implementation)
+
+- **Added** four provider adapter neural seams to `src/world_model/perception_grounding/neural_seams.py`:
+  - `SAMCalibrationSeam` (~500K-2M params): calibrates SAM mask confidence, epistemic uncertainty, prompt satisfaction
+  - `VisionBackboneProjectionSeam` (~1M params): 2-layer MLP projecting DINOv2/SigLIP features to WM token space
+  - `DepthMetricCalibrationSeam` (~500K-1M params): learns scale/shift for metric depth + per-pixel uncertainty
+  - `VJEPATemporalAlignmentSeam` (~2-5M params): cross-attention aligning V-JEPA temporal predictions to WM object tokens
+- **Created** `src/world_model/perception_grounding/seam_registry.py`:
+  - `PerceptionSeamRegistry` class: manages seam lifecycle (register, load, save, unload)
+  - `SeamDescriptor` dataclass: tracks seam state (posture, checkpoint path, param count)
+  - `create_default_registry()` factory: pre-registers all standard seam types
+  - Checkpoint persistence and device placement support
+- **Added** `resolve_provider_adapter_helper()` to `promotion.py`:
+  - Resolver for per-provider adapter seams with `disabled|auto|required` posture
+  - Demotion logic on evidence failure or benchmark gate revocation
+- **Updated** `__init__.py`:
+  - Exports all new seams, registry classes, and resolver function
+- **Created** `tests/test_perception_grounding_neural_seams.py`:
+  - 37 tests covering forward pass, batching, param counts, registry operations, promotion logic
+- **Wired** seams into compiler in `compiler.py`:
+  - Added `_invoke_provider_adapter_seam()` helper with receipt emission
+  - Compiler accepts optional seam parameters (sam_calibration_seam, vision_backbone_projection_seam, etc.)
+  - Compiler accepts optional provider inputs (sam_mask_features, backbone_features, depth_map, vjepa_tokens, etc.)
+  - Seams invoked when promoted + inputs available; skipped otherwise
+  - `ProviderInvocationReceipt` emitted for each seam invocation with status, latency, quality
+  - `compile_perception_grounding_with_receipts()` returns all receipts including provider adapter receipts
+- **Documented** training objectives for all seams in module docstring:
+  - Each seam has primary, secondary, and auxiliary supervised objectives
+  - Objectives are supervised/contrastive/predictive, NOT direct RL on task reward
+  - Checkpoint governance via `PerceptionSeamRegistry`
+- This completes the highest-leverage Phase 2 implementation work identified
+- Next: seam training infrastructure, additional downstream consumers, benchmark gates
+
+## 2026-04-03 — WM Section Readiness Standard + Scalable Imitation-Learning Pipelines
+
+- **Added** WM Section Readiness Standard to `multi_wm_architecture_plan.md`:
+  - 9-point template for all future WM sections (canonical mission, subsystem decomposition, typed surfaces, neural candidates, hyperparameter governance, topological placement, timescale hierarchy, robostack contribution, phase sequencing honesty)
+  - Standard ensures all WM sections meet the decomposition rigor present in Economic WM and Embodiment/Actuation WM plans
+  - Distinguishes inactive-but-structurally-rigorous vs vague "figure it out later" posture
+- **Added** scalable imitation-learning pipelines to Embodiment/Actuation WM:
+  - Ownership placement in Inverse-Dynamics/Retargeting Lane (Subsystem 4) and Joint Skill/Action Proposal Head (Subsystem 5)
+  - Typed artifacts: DemonstrationIngestReceipt, RetargetingTraceBundle, ActionRecoveryReceipt, DatapackQualityReceipt, ImitationPriorSnapshot, ImitationDriftReceipt
+  - Model families: ACT-style chunking, LeRobot interfaces, diffusion policy, inverse-dynamics heads, retargeting networks
+  - Hyperparameter governance by WM constraints (DoF, contact richness, safety envelope, task family)
+  - 5-stage promotion ladder: scripted fallback → imitation shadow → imitation advisory → benchmark-gated promotion → production recurrent
+- **Updated** `docs/actuation_embodiment_world_model.md`:
+  - Expanded Subsystem 4 (Inverse-Dynamics Lane) with imitation-learning pipeline functions and typed artifacts
+  - Expanded Subsystem 5 (Action Proposal Head) with imitation integration and promotion ladder
+  - New dedicated "Scalable Imitation-Learning Pipelines" section with full doctrine
+  - Added UMI/Retargeting Patterns to "What We Borrow" section
+- **Updated** `multi_wm_architecture_plan.md` Phase 3 section:
+  - Added "Scalable Imitation-Learning Pipelines" subsection
+  - Updated OSS dependency map with imitation learning deps (ACT, LeRobot, Diffusion Policy, UMI)
+- **Updated** `.agent/claude_copilot.md`:
+  - Changed implementation priority from Phase 1 (Sim/Synth/Physics) to Phase 2 (Perception/Grounding)
+  - Phase 1 declared structurally closed on 2026-04-02; remaining blockers are external
+  - Updated watch list and anti-patterns for Phase 2 focus
+- All changes are doc-only and Phase 2-compatible (spec sharpening for Phase 3 target, not phase transition)
+
+## 2026-04-03 — Embodiment / Actuation WM Specification (Doc-Only Pass)
+
+- **Created** `docs/actuation_embodiment_world_model.md`:
+  - Full canonical WM spec: mission, six core subsystems, typed interfaces, external-architecture borrowing logic, timescale hierarchy, real-robot-readiness mapping, phase sequencing, anti-patterns
+  - Clarifies how our multi-WM topology differs from "single predictive model" framing
+  - Specifies six subsystems: capability/embodiment state surface, contact/affordance graph builder, local contact dynamics model, inverse-dynamics/retargeting lane, joint skill/action proposal head, drift/calibration/cost evaluator
+  - Proposes 8 typed interfaces: EmbodimentState, ContactAffordanceGraph, LocalDynamicsQuery/Forecast, InverseRetargetTrace, ActionProposalBundle, EmbodimentDriftSummary, CalibrationTargetSet, EmbodimentCostVector
+  - Maps existing embryonic artifacts (EmbodimentProfile_v1 through CalibrationTargets_v1) to their producing WM subsystems
+  - Documents borrowing logic for V-JEPA 2, LeRobot/ACT, Diffusion Policy, Isaac Lab, TD-MPC2 — all entering as bounded seams, not ontology replacements
+  - Three-timescale hierarchy: fast inner loop (proprio/contact), mid-level (action chunks/dynamics), slow supervisory (selection/economics/governance)
+  - Concrete readiness targets mapped to workcell task catalog (bin picking, peg-in-hole, fastener installation, kitting, tool change)
+- **Modified** `README.md`: sharpened Embodiment WM entry with six-subsystem summary and doc reference
+- **Modified** `ROADMAP_STAGES_2_5.md`: added Embodiment WM context block referencing full spec
+- **Modified** `docs/embodiment_module.md`: added architectural context linking to Embodiment WM spec, explaining existing artifacts as embryonic WM outputs
+- **Modified** `docs/motor_backends.md`: added architectural context connecting motor backends to Embodiment WM execution layer
+- **Modified** `docs/isaac_integration_outline.md`: added architectural context for Isaac Lab as a bounded motor backend, not master ontology
+- **Modified** `docs/economic_world_model/multi_wm_architecture_plan.md`: updated section 2 with six-subsystem summary, existing artifact mapping, gap list; updated Phase 3 section with typed interface targets and doc reference
+- **Modified** `docs/economic_world_model/roadmap.md`: expanded Phase 3 preparatory section with full borrowing discipline and doc reference
+- All changes are doc-only and Phase 2-compatible (spec sharpening for later phase target, not phase transition)
+
+## 2026-04-03 — First Bounded Neural Seam + Receipt Emission (Claude Implementation Pass)
+
+- **Created** `src/world_model/perception_grounding/neural_seams.py`:
+  - `EvidenceFusionSeam(torch.nn.Module)` — real set-attention module (2-head MHA, d_model=32, ~10-50K params)
+  - Replaces hardcoded 0.55/0.25/0.15/0.05 evidence weights at `promoted` promotion stage
+  - `encode_provider_features()` — typed feature encoder for provider kind/availability/truth/belief signals
+  - `heuristic_init()` classmethod, `describe()` metadata, `param_count()` introspection
+- **Modified** `src/world_model/perception_grounding/compiler.py`:
+  - `_evidence_routing()` now branches on `promotion_stage`:
+    - `"heuristic_fallback"` → existing hardcoded weighted fusion
+    - `"promoted"` + seam provided → neural seam forward pass
+    - graceful fallback on neural seam error
+  - `EvidenceFusionReceipt` emitted on every compilation (both paths)
+  - `compile_perception_grounding_world_state()` accepts optional `evidence_fusion_seam=`
+  - New `PerceptionCompilationResult(state, receipts)` dataclass
+  - New `compile_perception_grounding_with_receipts()` function
+- **Modified** `tests/test_perception_grounding_compiler.py`:
+  - 9 new tests covering neural seam forward pass, batched input, masking, backward compatibility, promoted path, fallback behavior, receipt emission, compile_with_receipts, and seam introspection
+- **Verification**: 12/12 compiler tests pass, 48/48 perception grounding tests pass, 1412/1412 full suite tests pass, compile clean
+- **Significance**: This is the first time the Perception / Grounding WM has a real `torch.nn.Module` behind the promotion posture. The anti-heuristic-without-neuralization standard is now satisfied at the evidence fusion surface. Heuristic fusion is explicitly transitional with a real neural successor codepath.
+
+## 2026-04-03 — Economic WM + Meta-Regal-Node + Embodiment Doctrine Pass
+
+- **Created** `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`:
+  - Economic WM framed as typed allocator-governor for productive flow / dissipation / allocation
+  - Not scalar reward head, dashboard, PnL tracker, or mother-latent
+  - Multi-timescale design: fast/meso/slow-adiabatic variable split
+  - Asymmetric upward/downward transport
+  - Four-component internal decomposition: state estimator → dynamics → allocator → governance
+  - Staged neuralization: typed ontology → neural estimation → dynamics → allocator → local compilers
+  - Quant-inspired algorithmic imports: coherent risk, distributional Pareto, regime switching, risk budgeting, stress testing, execution-cost awareness
+  - Superstatistics posture: keep multi-timescale and regime-mixing ideas, do not keep vague temperature metaphors
+  - Research buckets: regime-aware state estimation, risk-aware Pareto allocation, superstatistical abstractions, adiabatic control, differentiable simulation coupling
+  - Sovereignty clarification: Economic WM is first-class contributor, not sole governor
+  - Intra-domain vs inter-domain Pareto distinction made explicit
+- **Created** `docs/economic_world_model/doctrine_meta_regal_node_wm.md`:
+  - Meta-regal-node WM as the governance-pluralism composition layer
+  - Three governance levels: subsystem/local, domain governance, meta-governance
+  - Two kinds of Pareto: intra-domain (within Economic WM) vs inter-domain (across governance nodes)
+  - What the meta-layer must model: governance state, composition modes (Pareto/lexicographic/veto/advisory/confidence-weighted), transport (conflict/override/failure receipts)
+  - Governance pluralism principle: no single domain ontology can silently redefine others
+  - Staged neuralization: governance node neuralization before meta-composition learning
+  - Anti-patterns: no governance collapse, no scalar governance score, no opaque meta-controller
+- **Updated** `multi_wm_architecture_plan.md`:
+  - Executive conclusion updated: Economic WM is first-class contributor, not sole sovereign
+  - New "Future Economic WM Architecture" section with sovereignty clarification
+  - Phase 7 rewritten as "Meta-Regal-Node Superposition / Control WM" with domain-governance composition, inter-domain Pareto, governance-pluralism principle
+  - Meta-node section (#5) rewritten with three governance levels, two Pareto kinds, superposition rationale
+  - Habitat adoption track refined to 3-tier classification (design-pattern / code candidate / GPU-blocked)
+- **Updated** `roadmap.md`:
+  - Future Economic WM section with sovereignty clarification
+  - Future meta-regal-node section with governance pluralism, inter-domain Pareto
+  - Anti-heuristic rule strengthened: "necessary but not sufficient" test added
+  - New "Embodiment-Facing Subsystem Usefulness Rule" section
+  - Habitat adoption track refined to 3-tier classification
+- **Updated** `neuralization_bridge_doctrine.md`:
+  - Level 5 rewritten from "Meta-Node Governance" to "Meta-Regal-Node Governance" with inter-domain composition, governance-pluralism, confidence-aware node weighting
+- **Updated** `phase2_closure_standard.md`:
+  - Anti-heuristic-without-neuralization section (from prior pass)
+- **Updated** `doctrine_provider_dataset_resource_surfaces.md`:
+  - Cross-WM resource surface scope (from prior pass)
+- **Updated** `claude_to_comment_on.md`:
+  - Embodiment-facing usefulness pressure added to robust-subsystem read
+  - Economic WM and meta-regal-node doctrine summaries added
+  - Clean current-state handoff artifact for next Codex tranche
+- **Tests**: no code changes; 1422 passed, 0 failures (docs-only pass)
+
+## 2026-04-03 — Architectural Review + Anti-Heuristic / Habitat Doctrine Updates
+
+- **Reviewed** Codex's Tranche 2.1 (shadow compiler + first downstream consumers):
+  - compiler is real: compiles canonical state from scene tracks, belief state, VLA semantic evidence
+  - two downstream consumers wired: sim-synth semantic_inputs.py + rollout_labeler.py
+  - semantic bridge family compiled and consumed for sim-synth and annotation bridges
+  - assessment: genuine early `shadow_runtime`, not schema decoration
+- **Identified** remaining Category A items:
+  - receipts typed but not emitted by compiler (clearest remaining gap)
+  - provider contracts disconnected from compiler (ad-hoc string inference, not contract registry)
+  - evidence fusion always uses hardcoded weights regardless of promotion stage
+  - embodiment bridge compiled but orphaned (no downstream consumer)
+  - dimensional regime markers missing (heuristic d=8, not yet self-documenting)
+- **Added** anti-heuristic-without-neuralization rule to:
+  - `roadmap.md`: explicit rule that structural preparation is necessary but not sufficient; bounded neural seams should begin as real codepaths once substrate is honest enough
+  - `phase2_closure_standard.md`: new section naming earliest neural seams (evidence fusion, annotation bridge, provider calibration heads)
+- **Added** Habitat extraction posture to:
+  - `roadmap.md`: per-WM Habitat absorption status; Sim/Synth/Physics identified as biggest remaining opportunity
+  - `multi_wm_architecture_plan.md`: new "Habitat Extraction Posture" section with named adoption track items for Sim/Synth/Physics
+  - `doctrine_provider_dataset_resource_surfaces.md`: cross-WM resource surface scope (not Perception-only)
+- **Updated** `claude_to_comment_on.md` with corrected Tranche 2.2 framing:
+  - Priority 1: receipt emission + promotion-gate wiring
+  - Priority 2: provider contract → compiler connection
+  - Priority 3: embodiment shadow consumer skeleton
+  - Priority 4: dimensional regime + bridge input source markers
+  - Priority 5: first bounded neural seam implementation (evidence fusion, annotation bridge, provider calibration)
+  - Habitat reminder for Sim/Synth/Physics adoption track
+- **Tests**: 48 passed, compile clean
+
+## 2026-04-03 — Phase 2 Reconciliation: Semantic Bridges + Provider/Resource Surfaces
+
+- **Reconciled** the locally created Phase 2 Perception / Grounding WM package into a coherent current-state tranche instead of leaving the branch in a half-landed state.
+- **Integrated** `SemanticBridgeRegistry` into `PerceptionGroundingWorldState`, so the semantic successor stack is now part of the canonical top-level Perception WM state rather than an adjacent orphan module.
+- **Added** Habitat-inspired but WM-native lower-WM surfaces in `src/world_model/perception_grounding/state.py`:
+  - `ProviderSurfaceState`
+  - `DatasetSurfaceState`
+  - `TaskMeasurementSurface`
+  - `DeploymentResourceSurface`
+  - `ComputeEnvelopeState`
+  - `InferenceCapacityState`
+  - `BatteryState`
+  - `ThermalState`
+- **Added** typed receipts in `src/world_model/perception_grounding/receipts.py`:
+  - `ProviderAvailabilityReceipt`
+  - `InferenceHeadroomReceipt`
+  - `DeploymentResourceReceipt`
+- **Verified** the semantic successor posture:
+  - `resolve_semantic_bridge_helper()` is now covered by tests
+  - all four bridge families are now represented in registry serialization coverage
+  - `src/vla/semantic_vla.py` scaffolding posture is now covered by tests, including successor metadata
+  - focused compile + lint + perception-grounding regression now pass on the reconciled Phase 2 package
+- **Added doctrine**:
+  - `docs/economic_world_model/doctrine_provider_dataset_resource_surfaces.md`
+  - refined `docs/economic_world_model/doctrine_semantic_bridge_successor.md`
+  - refined Phase 2 wording in `multi_wm_architecture_plan.md` and `roadmap.md`
+- **Current status**:
+  - Phase 1 remains structurally closed enough and should not be reopened without new external runtime/assets or a direct contradiction
+  - Phase 2 is now the active implementation center with a cleaner semantic successor posture
+  - remaining Phase 2 blockers are still mostly compiler/runtime/adapters/downstream wiring, not schema/doctrine ambiguity
+
+## 2026-04-02 — Phase 2 Kickoff: Perception / Grounding WM Tranche 2.0
+
+- **Phase transition**: Phase 1 Sim/Synth/Physics WM declared structurally closed. Zero Category A items. Remaining blockers are external GPU/runtime/asset items recorded in `phase1_external_gpu_runtime_backlog.md`.
+- **Created**: `docs/economic_world_model/phase2_closure_standard.md` — Category A/B/C closure framework for Phase 2
+- **Created**: `docs/economic_world_model/phase1_external_gpu_runtime_backlog.md` — explicit pre-training prerequisites
+- **Created**: `src/world_model/perception_grounding/` package with:
+  - `state.py`: 6 canonical state types (ObjectTrackState, SceneEdge, SceneGraphState, TemporalGroundingState, EvidenceRoutingState, PerceptionGroundingWorldState)
+  - `receipts.py`: 5 receipt types (ProviderInvocation, GroundingCalibration, EvidenceFusion, TemporalGrounding, PerceptionContribution)
+  - `provider_contracts.py`: 6 provider contract types (base, SAM 3/3.1, DINOv2/SigLIP, V-JEPA 2, Depth, Registry)
+  - `promotion.py`: 3 helper resolvers (graph_transformer, temporal_grounding, evidence_fusion) with shared demotion
+- **Created**: `tests/test_perception_grounding_world_model.py` — 33 tests, all passing
+- **Updated**: `claude_to_comment_on.md` with Phase 2 status, neuralization map, and next tranche recommendation
+- **Neuralization specified**: Full subsystem map with neural structure, capacity bands, governing WM, promotion posture, and downstream consumers for all 7 perception subsystems
+- **Maturity**: `schema_only` — state types exist and serialize; no compiler or runtime yet
+
+## 2026-04-02
+
+- Changed: finished a late-Phase-1 closure pass over the remaining local/runtime/install honesty seams:
+  - `src/world_model/sim_synth_physics/runtime_launch.py` now treats `asset::...` host-preflight blockers as launch blockers instead of filtering them out
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now preserves:
+    - runtime-layout install-ready / install-partial / install-blocked profiles
+    - host-preflight ready / verified component sets
+    - launch missing preconditions and notes
+  - `src/world_model/sim_synth_physics/training_corpus.py` now preserves the same stronger local evidence in backend-selector and branch-planner rows
+- Why this matters:
+  - before this tranche, the branch could still preserve blocked truth in runtime bindings while letting the launch surface or trainer rows look cleaner than the real host state
+  - now launch, work-order, and training surfaces agree about blocked local runtime/install/asset truth
+  - this closes the last meaningful internal pseudo-readiness seam found in the late Phase-1 audit
+- Host audit summary:
+  - `scripts/scan_phase1_runtime_layouts.py` now reports both backend lanes as blocked on this host
+  - no relevant Isaac/Unitree/Holosoma env vars are set
+  - no external `isaaclab`, `unitree_sdk2py`, or `holosoma` Python modules are importable
+  - no external Isaac/Unitree/Holosoma runtime roots were found in the common local clone directories the branch audits
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, `python3 scripts/scan_phase1_runtime_layouts.py --output-path /tmp/phase1_runtime_scan_final.json`, and `git diff --check` passed (results: `17 passed`, `50 passed`).
+- Status summary:
+  - audited Phase-1 Category A count is now `0` across the closure surfaces touched in this pass
+  - the remaining blocker set is now honestly external on this host:
+    - real Isaac/Unitree installs/assets/checkpoints
+    - real Holosoma runtime/motion/policy/retargeting assets
+    - real GPU-backed GGDS / LDM / video materialization
+
+- Changed: made `scripts/scan_phase1_runtime_layouts.py` a real repo-root Phase-1 host-reality probe instead of a scan that only worked cleanly under pytest import conditions:
+  - the script now inserts repo root into `sys.path` before importing `src.*`
+  - it now emits `scan_summary` for both Isaac/Unitree and Holosoma lanes, including:
+    - usable / install-ready / install-partial / install-blocked profiles
+    - selected policy / deploy / runtime-report refs and sources
+    - selected verified / partial target ids
+    - host-preflight blockers
+- Why this matters:
+  - Phase 1 is now close enough to the external-runtime frontier that the host-reality scan itself needs to be a trustworthy CLI surface, not just a test-import helper
+  - this tranche converts another vague Category B statement into an explicit local report
+  - on the current host, the scan now says both lanes are blocked with zero usable profiles rather than leaving that truth implicit across many receipts
+- Verification: `python3 -m compileall scripts/scan_phase1_runtime_layouts.py tests/test_scan_phase1_runtime_layouts.py -q`, `python3 -m ruff check scripts/scan_phase1_runtime_layouts.py tests/test_scan_phase1_runtime_layouts.py`, `python3 -m pytest -q tests/test_scan_phase1_runtime_layouts.py`, `python3 scripts/scan_phase1_runtime_layouts.py --output-path /tmp/phase1_runtime_scan_20260402.json`, and `git diff --check` passed (result: `1 passed`).
+- Status summary:
+  - the Phase-1 host scan is now closed as an internal tooling honesty gap
+  - Category B is now easier to read directly from a local host report instead of inferring it from dispersed runtime-pack/binding artifacts
+
+- Changed: made selected-ref validation operational in Phase-1 downstream consumers instead of leaving it as receipt-only metadata:
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now refuses to mark `satisfied_by_external_runtime_outcomes` when `selected_ref_validation` reports mismatched or missing selected refs
+  - mismatched/missing selected-runtime components now become explicit runtime preconditions on the work order path
+  - `src/world_model/sim_synth_physics/training_corpus.py` now stops preferring `external_runtime_outcome_receipt` as the backend-selector target source when the harvested outputs fail selected-ref validation
+- Why this matters:
+  - before this tranche, the branch could correctly record a selected-ref mismatch and still operationally treat the outcome as satisfactory
+  - now the mismatch truth actually changes completion posture and trainer-source selection
+  - this removes another pseudo-readiness seam without adding a new ladder rung
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed (result: `8 passed`).
+- Status summary:
+  - the audited selected-ref validation consumer path has no new Category A gap
+  - Category B is again narrowed toward actual external-runtime/install/GPU blockers rather than internal misuse of harvested outputs
+
+- Changed: explicitly closed the lingering Tier 3.4 / 3.5 verification ambiguity on the audited Phase-1 path:
+  - added `tests/test_sim_synth_phase1_verification.py`
+  - Tier 3.4 coverage now directly checks:
+    - `build_simulation_job_inferential_contract()`
+    - `benchmark_provenance_quality()`
+    - `agenda_score_with_inferential_prior()`
+    - `build_branch_plan_inferential_contract()`
+  - Tier 3.5 coverage now directly checks:
+    - `compile_physics_adaptation_policy()`
+    - humanoid randomization axes and calibration targets
+    - `build_physics_adaptation_receipt()`
+    - `build_physics_calibration_receipt()`
+    - reaction to route status and runtime evidence
+- Why this matters:
+  - those items were no longer substantively mysterious, but they were still being carried as unresolved Category C because they had not been directly re-audited
+  - the explicit audit now shows the current path is structurally sound there
+  - the honest remainder is even more clearly external runtime/install/assets/GPU reality rather than unclassified Phase-1-local behavior
+- Verification: `python3 -m compileall tests/test_sim_synth_phase1_verification.py -q`, `python3 -m ruff check tests/test_sim_synth_phase1_verification.py`, and `python3 -m pytest -q tests/test_sim_synth_phase1_verification.py` passed (result: `4 passed`).
+- Status summary:
+  - Tier 3.4 is closed on the audited path
+  - Tier 3.5 is closed on the audited path
+  - Category C unresolved count is now `0` on the current closure sheet
+
+- Changed: tightened Phase-1 runtime-outcome honesty so harvested outputs are now checked against the selected runtime refs instead of only being counted/classified:
+  - `src/world_model/sim_synth_physics/runtime_bundles.py` now passes runtime-binding truth into the output-contract build path
+  - `src/world_model/sim_synth_physics/runtime_outcomes.py` now:
+    - carries expected selected policy / deploy-config / runtime-report refs in the output contract
+    - includes exact selected refs in harvest sources when those local artifacts exist
+    - emits `selected_ref_validation` in the output summary / outcome receipt
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `training_corpus.py` now preserve selected-ref validation status in execution-facing and trainer-facing artifacts
+- Why this matters:
+  - before this tranche, a runtime lane could harvest outputs successfully without saying whether those outputs matched the chosen runtime policy/report surfaces
+  - now “runtime outputs harvested” and “selected runtime refs matched” are distinct but adjacent truths
+  - this removes another pseudo-readiness seam and pushes the honest remainder further toward real external runtime/install/GPU reality
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_outcomes.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_bundles.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_outcomes.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_bundles.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_bundles.py`, and `git diff --check` passed (result: `12 passed`).
+- Status summary:
+  - the audited selected-output validation cluster has no new Category A gap
+  - Category B is now more explicitly about whether real runtime artifacts exist at all, not whether harvested outputs can be matched back to the selected runtime surfaces once they do
+
+- Changed: tightened Phase-1 checkpoint / deploy-config / runtime-report selection so verified local artifacts now outrank merely earlier candidates in runtime-pack and binding selection:
+  - `src/world_model/sim_synth_physics/ref_evidence.py` now exposes reusable candidate-evidence selection/summarization helpers
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py` now:
+    - choose `primary_policy_ref`, `primary_deploy_config_ref`, and `primary_runtime_report_ref` from the best verified local candidate when available
+    - preserve `*_ref_source`
+    - preserve candidate-evidence summaries for policy / deploy / runtime-report surfaces
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py` now preserve the selected ref source on the binding path instead of silently inheriting first-candidate ordering
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `training_corpus.py` now carry that upstream/selected ref evidence into execution-facing and trainer-facing artifacts
+- Why this matters:
+  - the branch previously had stronger install/profile truth, but the concrete checkpoint/report/deploy ref could still quietly depend on candidate ordering
+  - verified local runtime artifacts now win over earlier missing candidates without inventing a new ladder rung
+  - this removes another repo-local ambiguity and pushes the honest remainder further toward actual external install/runtime/GPU reality
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/ref_evidence.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/ref_evidence.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py`, `python3 -m pytest -q tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed (result: `20 passed`).
+- Status summary:
+  - the audited ref-selection cluster has no new Category A gap
+  - Category B is now even more clearly about whether the local runtime/install/checkpoint reality actually exists, not whether the WM picks the strongest local artifact once it does
+
+- Changed: promoted `usable_profiles` into the Phase-1 runtime-layout contract and threaded that stronger profile truth through downstream artifacts:
+  - `src/world_model/sim_synth_physics/runtime_layouts.py` now emits:
+    - `usable_profiles`
+    - `install_ready_profiles`
+    - `install_partial_profiles`
+    - `install_blocked_profiles`
+  - `src/world_model/sim_synth_physics/runtime_bundles.py` now prefers `usable_profiles` for profile selection/ordering while still preserving the broader `ready_profiles` surface
+  - `src/world_model/sim_synth_physics/runtime_bridge.py`, `runtime_work_orders.py`, `compiler.py`, and `training_corpus.py` now preserve `runtime_layout_usable_profiles` so downstream execution/training surfaces do not need to reconstruct “usable” from weaker root-exists semantics
+- Why this matters:
+  - the branch previously had the stronger profile truth, but only implicitly in deployment/runtime-pack logic
+  - now the layout contract itself exposes that truth, and the rest of the Phase-1 runtime path can consume it honestly
+  - this removes another pseudo-readiness seam without adding a new runtime rung
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_bridge.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/compiler.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_bridge.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/compiler.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check` passed (result: `56 passed`).
+- Status summary:
+  - the audited usable-profile propagation cluster has no new Category A gap
+  - Category B is now even more clearly about real local installs/assets/checkpoints/GPU/provider reality rather than internal profile-truth reconstruction
+
+- Changed: tightened Phase-1 profile/target/policy selection so deployment/runtime-pack readiness is now driven by usable profiles, verified targets, and real local checkpoint-bearing roots instead of raw existing roots:
+  - `src/world_model/sim_synth_physics/runtime_layouts.py` now selects policy roots across multiple candidates more honestly, so an explicit-but-empty policy root no longer outranks a discovered runtime root that actually contains checkpoints
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py` and `src/world_model/sim_synth_physics/adapters/holosoma_deployment.py` now use usable profiles plus verified targets rather than `ready_profiles`/`ready_target_ids` path-existence posture
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py` now preserve `runtime_target_preflight_status`, verified target ids, and usable-profile preference instead of treating raw target existence as enough runtime-pack evidence
+- Why this matters:
+  - install-blocked runtime profiles no longer count as deployable just because the repo root exists
+  - empty explicit policy roots no longer hide discovered local checkpoint banks
+  - the remaining blocker is pushed further toward real local runtime/install/assets/checkpoints/GPU reality rather than internal profile-selection optimism
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py src/world_model/sim_synth_physics/adapters/holosoma_deployment.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_deployment.py tests/test_holosoma_deployment.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_isaac_unitree_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py src/world_model/sim_synth_physics/adapters/holosoma_deployment.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_deployment.py tests/test_holosoma_deployment.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_isaac_unitree_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_deployment.py tests/test_holosoma_deployment.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py`, and `git diff --check` passed (result: `39 passed`).
+- Status summary:
+  - the audited profile/target/policy selection cluster has no new Category A gap
+  - Category B is now narrower and more concrete: real local installs/assets/checkpoints and GPU-backed provider/runtime reality
+
+- Changed: tightened Phase-1 target-preflight truth so runtime-target existence is no longer treated as enough on the selected-target binding path:
+  - `src/world_model/sim_synth_physics/runtime_targets.py` now emits install-shape verification metadata for runtime targets:
+    - `verification_status`
+    - `verified`
+    - `matched_markers`
+    - `missing_markers`
+    - `primary_marker_ref`
+  - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py` and `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py` now consume that selected-target evidence directly and emit:
+    - `selected_verified_target_ids`
+    - `selected_partial_target_ids`
+    - selected-target evidence that can block host preflight even when a target root exists
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` and `src/world_model/sim_synth_physics/training_corpus.py` now preserve that selected-target truth instead of flattening it back into pack-level readiness
+- Why this matters:
+  - empty SDK, asset, motion, or retargeting roots no longer look launch-ready just because the path exists
+  - the branch can now distinguish:
+    - selected target exists and is install-shaped
+    - selected target exists but is only partial
+    - selected target is still missing
+  - this removes another fake-readiness seam without changing the broader runtime ladder or forcing churn through `ready_target_ids`
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/ref_evidence.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_targets.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/ref_evidence.py src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py src/world_model/sim_synth_physics/runtime_work_orders.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_runtime_targets.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_scan_phase1_runtime_layouts.py`, and `git diff --check` passed (results: `46 passed`, `22 passed`).
+- Status summary:
+  - the audited target-preflight cluster has no new Category A gap
+  - the remaining blocker is even more clearly real local runtime/install/assets/checkpoints/GPU reality rather than missing internal verification surfaces
+
+- Changed: closed the Tier 3.6 shadow-execution honesty gap and tightened Tier 3.3 branch-planner fallback truth on the active Phase-1 verification path:
+  - `src/world_model/sim_synth_physics/shadow_execution.py` now consumes selected runtime-binding surfaces when deriving Isaac shadow env-configs and Holosoma shadow work orders
+  - shadow receipts now explicitly record `shadow_runtime_binding_consumed` and preserve selected profile / launch root / policy ref / motion-source truth inside the materialized artifacts themselves rather than only sibling receipt metadata
+  - Holosoma shadow preconditions now include selected binding host-preflight and selected-profile install gaps, deduped against existing missing-asset signals
+  - `src/world_model/sim_synth_physics/synthetic_branches.py` now records whether the branch helper actually controlled the plan or only contributed a trace:
+    - `branch_helper_resolution`
+    - `branch_helper_resolution_reason`
+    - `branch_helper_payload_applied`
+  - `src/world_model/sim_synth_physics/training_corpus.py` now preserves that control truth in branch-planner trainer rows instead of forcing downstream consumers to infer fallback from mixed generation-mode and trace fields
+- Why this matters:
+  - the shadow lane no longer claims deeper runtime-ladder honesty while still deriving most of its execution inputs from generic context alone
+  - a learned branch-planner trace no longer looks like active control when the heuristic path actually retained authority because the helper was shadow-candidate, demoted, or unavailable
+  - this is another Phase-1-local reduction in fake readiness without adding a new ladder rung
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/shadow_execution.py src/world_model/sim_synth_physics/synthetic_branches.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/shadow_execution.py src/world_model/sim_synth_physics/synthetic_branches.py src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed (result: `33 passed`).
+- Status summary:
+  - Tier 3.6 is now closed on the audited path
+  - Tier 3.3 fallback honesty is materially closed on the audited path
+  - remaining explicit verification items still needing deliberate classification are Tier 3.4 and Tier 3.5
+
+- Changed: closed Tier 3.2 (promotion/demotion machinery) Category A gap — Claude-authored implementation:
+  - `src/world_model/sim_synth_physics/promotion.py`: added `_check_demotion()` and `evidence_signals` parameter to `resolve_helper()`
+  - `src/world_model/sim_synth_physics/backend_selector_runtime.py`: threaded evidence-based demotion through both direct-loaded and package-loaded paths
+  - `src/world_model/sim_synth_physics/branch_planner_runtime.py`: same demotion threading
+  - Added 7 new tests covering demotion triggers (evidence_failure, benchmark_gate_revoked, failure_rate), no-demotion on healthy evidence, and all three resolver types
+  - Fixed stale test expectation in `test_holosoma_binding_records_runtime_target_contract`: updated to accept `pack_partial` (honest result from install-hardened code)
+- Why this matters:
+  - previously, a promoted helper stayed promoted forever regardless of subsequent evidence — this was a structural completeness gap
+  - demoted helpers get weight 0.25 (shadow_candidate level), so compiler/calibration/branch consumers correctly fall back to heuristic behavior
+  - three demotion triggers: `benchmark_gate_revoked`, `evidence_failure`, `recent_failure_rate > threshold`
+  - `demoted_to_shadow` is a fourth internal promotion stage, not a new mode
+- Verification: `python3 -m compileall`, `python3 -m pytest tests/test_sim_synth_physics_world_model.py` and full Phase 1 suite: 61 passed, 0 failed
+- Status summary:
+  - Tier 3.2 is now structurally closed
+  - remaining unverified Tier 3 items: 3.1, 3.3, 3.4, 3.5, 3.6
+  - highest-risk next: 3.6 (shadow execution ladder threading), 3.1 (render provider receipts), 3.3 (branch planner fallback receipts)
+
+- Changed: pushed the active Phase-1 Category B edge further toward real local host/runtime evidence:
+  - added `src/world_model/sim_synth_physics/local_runtime_discovery.py`
+  - `runtime_targets.py` now supports targeted autodiscovery of common local upstream repo roots for Isaac/Unitree and Holosoma lanes when embodiment/env roots are not explicitly wired
+  - `runtime_layouts.py` now uses the same targeted autodiscovery and allows policy-contract fallback to discovered runtime roots when those roots contain real checkpoints/configs/reports
+- Why this matters:
+  - hosts with real local clones/checkpoints can now be consumed more honestly without requiring every relevant env var to be pre-wired first
+  - the branch stays real-or-unavailable because missing roots still remain explicit; autodiscovery only closes the “real clone exists locally but the WM cannot see it yet” gap
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_launch.py`, and `git diff --check` passed (result: `30 passed`).
+- Status summary:
+  - the branch is better at consuming actual local clone/install/checkpoint reality
+  - the dominant remainder is now even more clearly the presence or absence of real installs/assets/checkpoints/GPU, not a missing host-discovery seam
+
+- Changed: consumed the richer Phase-1 upstream runtime evidence against more concrete local host/runtime reality without adding a new ladder rung:
+  - added `src/world_model/sim_synth_physics/ref_evidence.py`
+  - Isaac and Holosoma runtime bindings now emit selected-surface evidence plus `host_preflight_status`
+  - Isaac host preflight now distinguishes declared-only asset refs from locally verified asset refs at the binding level rather than only inside the upstream runtime pack
+  - Holosoma bindings now prefer locally existing motion sources when selecting motion-train/runtime surfaces instead of carrying missing motion refs forward as if they were equally selected
+  - `runtime_launch.py` now consumes non-asset host-preflight gaps, while work orders and training rows preserve the fuller host-preflight truth
+- Why this matters:
+  - the branch can now distinguish:
+    - contract-ready
+    - locally verified enough to launch
+    - still blocked by local host/runtime/install reality
+  - this removes another pseudo-readiness seam without inventing a new runtime rung
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py`, `python3 -m pytest -q tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_launch.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check` passed (result: `46 passed`).
+- Status summary:
+  - another internal honesty gap is closed on the active Phase-1 runtime-binding cluster
+  - the remainder is increasingly actual host/runtime/assets/checkpoints/GPU reality rather than missing local evidence classification
+
+- Changed: normalized `docs/economic_world_model/claude_to_comment_on.md` back into a single current-state handoff artifact instead of an accreted stack of tranche notes.
+- Why this matters:
+  - the collaboration artifact is easier to read as current branch truth
+  - historical tranche detail now stays where it belongs:
+    - `docs/economic_world_model/progress_log.md`
+    - `docs/economic_world_model/implementation_notes.md`
+  - this makes it harder to confuse audited-cluster closure with total Phase-1 closure
+- Verification: `git diff --check` passed. This was a docs-only cleanup pass.
+
+- Changed: closed the remaining compiler-side Category A cluster from the active Phase-1 Tier 1 / Tier 3 verification pass:
+  - `src/world_model/sim_synth_physics/state.py` now carries `physics_execution_contract` inside `SimSynthPhysicsWorldState`
+  - `src/world_model/sim_synth_physics/compiler.py` now compiles that contract with the configured fallback backend and emits a compiler-owned receipt inventory / runtime-depth projection
+  - `src/world_model/sim_synth_physics/runtime.py` now reuses the compiled execution contract instead of rebuilding it on the happy path
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the compiled execution contract and compiler-owned receipt inventory into backend-selector and branch-planner rows
+- Why this matters:
+  - backend routing is now canonical compiled state, not only runtime reconstruction
+  - the compiler now exposes what it already knows about the deeper runtime ladder instead of leaving that truth implicit until runtime artifacts appear
+  - trainer/export rows no longer flatten away the new compiler-side closure
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed (result: `26 passed`).
+- Status summary:
+  - audited compiler-side Category A count for the active closure spec is now `0`
+  - the dominant remainder is now increasingly honest Category B:
+    - real Isaac / Unitree runtime, assets, checkpoints
+    - real Holosoma host/runtime, motion/retargeting assets, policies
+    - real GPU-backed GGDS / LDM materialization
+- Next recommended task: keep Phase 1 as the implementation center and use the now-compiled closure surfaces to harden concrete Isaac/Unitree and Holosoma evidence lanes rather than pivoting upward prematurely.
+
+- Changed: hardened `scripts/economic_world_model/nightly_audit.py` task selection so verification failures are prioritized over scaffold discovery:
+  - added `_verification_repair_task(...)` and made `_next_task(...)` consume verification results before evaluating additive candidates
+  - when `agent_verify` fails, the audit now recommends `agent_verify_regression` (targeting `CLAUDE.md`, `scripts/agent/verify.sh`, and `AGENTS.md`) instead of incorrectly reporting “No missing additive step detected”
+  - for non-`agent_verify` failures, the audit now emits a generic `verification_regression` remediation task
+- Changed: expanded `tests/test_economic_world_model_nightly_audit.py` with verification-priority coverage:
+  - added tests proving `agent_verify` failure outranks scaffold tasks
+  - added tests proving generic verification failure still outranks scaffold tasks
+  - updated existing `_next_task(...)` tests for the new verification-aware signature
+- Verification: `python3 -m pytest -q tests/test_economic_world_model_nightly_audit.py`, `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md`, `python3 -m compileall src/`, and `python3 -m pytest tests/ -v` (result: 1329 passed, 3 skipped).
+- Status summary: nightly audit now correctly reports verification remediation as the top next step under failing gates, improving autonomous task selection honesty.
+- Next recommended task: resolve the `agent_verify` failure (`CLAUDE.md` shim mismatch) before attempting additional roadmap wiring.
+
+- Changed: ran the Phase 1 Sim / Synth / Physics Tier 1 / Tier 3 verification pass and closed the biggest remaining internal receipt-chain gaps without adding new runtime-ladder rungs:
+  - added `gen2sim_admission_receipt_v1` and threaded it through the runtime result, artifact emission, and training-corpus harvest path
+  - updated `shadow_execution.py` so backend shadow receipts now carry the deeper runtime-ladder truth already compiled in Tier 2:
+    - runtime execution
+    - adapter mediation
+    - adapter realization
+    - launch status
+    - harvested outcome status
+    - `shadow_harvest_mode`
+  - updated `training_corpus.py` so branch-planner rows now preserve:
+    - gen2sim receipt ids/counts
+    - adaptation receipt ids
+    - calibration receipt ids/scores
+    - shadow execution ids/status
+- Why this matters:
+  - Phase 1 is more honest now: `gen2sim` is no longer state-only, shadow execution no longer bypasses the deeper runtime lane, and branch-planner export is no longer flatter than backend-selector export
+  - the remaining open Phase 1 gaps are narrower and more clearly split between internal compiler work and honestly external runtime/assets/GPU blockers
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_runtime_launch.py`, and `git diff --check` passed (results: `30 passed`, `10 passed`).
+- Status summary: Tier 1 / Tier 3 verification reduced Phase 1 Category A findings to a narrow compiler-side cluster:
+  - `PhysicsExecutionContract` is still not a canonical compiled-state artifact
+  - deeper runtime-binding truth is still clearer in runtime artifacts than in the compiled world state
+- Next recommended task: keep Phase 1 as the implementation center and close that remaining compiler-side cluster before claiming structural closure; Perception prep is now allowed only as a secondary parallel activity.
+
+## 2026-03-27
+
+- Changed: pushed the Phase-1 backend lane past “launch spec only” and into canonical external-launch evidence:
+  - `src/world_model/sim_synth_physics/runtime_launch.py` now builds `backend_runtime_launch_receipt_v1` artifacts over prepared or executed upstream runtime launches
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now records those launch receipts whenever the Isaac/Unitree or Holosoma lane stops at an external launch path, and can optionally execute the launch command through the WM runtime instead of leaving that step entirely outside the loop
+  - `src/world_model/sim_synth_physics/runtime.py` now surfaces the launch receipt in the loop result, loop summary, training feedback manifest, runtime evidence, and artifact set
+  - `scripts/run_phase1_runtime_launch.py` now emits the launch receipt explicitly, including an optional pure receipt artifact
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the launch receipt so backend-selector and branch-planner corpora can distinguish:
+    - planning-only
+    - external launch attempted
+    - shadow runtime
+    - concrete runtime
+- Why this matters:
+  - the Phase-1 backend lane can now remember that an upstream Isaac/Unitree or Holosoma runtime was actually launched, not just that a command string existed
+  - that is another step toward the honest remainder we want: external roots/assets/policies/GPU become the blocker, not missing receipt wiring between WM planning and upstream runtime execution
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_phase1_runtime_launch.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_phase1_runtime_launch.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed.
+
+- Changed: refined the multi-WM roadmap so inferential compute capacity and concrete battery state are now treated as early lower-WM resource contracts rather than late economic-only abstractions:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now says compute / battery should enter first as canonical embodiment/deployment state, then become allocatable economic-WM budget objects, then only later become transport/meta-node governance inputs
+  - Phase 3 now explicitly calls for `ComputeEnvelopeState` / `BatteryState`-style canonical state, resource forecasting, placement/QoS receipts, and resource-aware learned seams
+  - Phase 3.5 now explicitly requires onboard/companion compute and battery-budget assumptions in the G1/R1 capacity audit
+  - Phase 4A / 4E now explicitly make control-rate, offload, placement, and degraded-mode consequences real instead of treating compute and battery as background commentary
+  - Phase 5 now explicitly turns compute and battery into allocatable economic budget objects for inference, routing, simulation, diffusion, data collection, and conservation
+- Changed: updated `docs/economic_world_model/roadmap.md` and `docs/economic_world_model/humanoid_target_readiness.md` to match:
+  - the roadmap now carries a staged RL doctrine for these resources:
+    - lower-WM prediction / calibration
+    - bounded local allocation
+    - economic cross-resource tradeoffs
+    - only later meta-node Pareto policy
+  - the humanoid-readiness checklist and benchmark matrix now include compute-envelope / placement budgeting, concrete battery-state contracts, and compute-pressure degradation as explicit readiness surfaces
+- Why this matters:
+  - it keeps compute and battery from showing up first as vague “energy” or “econ tensor” concerns
+  - it also gives the roadmap a better anti-fake-standup rule: lower WMs and deployment layers must make these constraints real before higher layers are allowed to optimize over them
+- Verification: `git diff --check` passed. This was a docs-only refinement.
+
+- Changed: made the remaining Phase-1 runtime-root / policy gap more operational by teaching the WM to recognize OSS-shaped runtime layouts and policy banks:
+  - added `src/world_model/sim_synth_physics/runtime_layouts.py` plus `scripts/scan_phase1_runtime_layouts.py`
+  - Isaac/Unitree lanes now detect layout and policy posture for `IsaacLab`, `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, `xr_teleoperate`, and Unitree asset/policy roots instead of flattening everything into a generic runtime-target bit
+  - Holosoma lanes now detect repo, motion-bank, policy-bank, and retargeting-bundle posture as canonical backend metadata
+  - backend bindings, bridge receipts, runtime work orders, and host-capability scans now preserve `runtime_layout_contract`, `policy_contract`, ready profiles, and policy-readiness truth
+- Why this matters:
+  - the honest remainder is now narrowed from “some runtime roots are missing” to “which concrete repo/profile/policy surface is missing on this host”
+  - that is the right Phase-1 direction if we want the remaining blockers to become real roots/assets/policies/GPU instead of fuzzy adapter debt
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_runtime_work_orders.py`, and `git diff --check` passed.
+
+- Changed: turned those runtime-layout signals into WM-owned runtime bundles and launch specs instead of leaving them as discovery metadata only:
+  - added `src/world_model/sim_synth_physics/runtime_bundles.py`
+  - added `src/world_model/sim_synth_physics/runtime_launch.py` plus `scripts/run_phase1_runtime_launch.py`
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now emits `backend_runtime_bundle_v1` and `backend_launch_spec_v1` artifacts for Isaac/Unitree and Holosoma lanes whenever the WM materializes a runtime request
+  - runtime work orders now preserve those launch specs and append the preferred launch command to `command_hints`, so work orders point at an actual upstream-shaped bring-up path rather than only naming missing preconditions
+  - when roots, assets, and policies are ready but no in-process backend bridge exists yet, the runtime can now emit `runtime_launch_prepared` instead of pretending the only blocker is a missing local module
+  - the launch profiles are intentionally inspired by real OSS runtime shapes such as `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, `IsaacLab`, and Holosoma, while staying inside the WM’s typed-contract posture
+- Why this matters:
+  - the Phase-1 backend lane now owns not just “what is missing” but “what should be launched next when the host is ready”
+  - this is a material step toward the honest stopping condition the roadmap wants: concrete roots, assets, and policies become the blocker, not missing launch/bundle plumbing inside the repo
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_runtime_work_orders.py`, and `git diff --check` passed.
+
+- Changed: made the new backend bridge contract operational by emitting WM-owned backend runtime work orders:
+  - `src/world_model/sim_synth_physics/runtime_work_orders.py` now compiles typed runtime bring-up work orders from the bridge receipt, runtime receipt, and robot-asset receipt
+  - `src/world_model/sim_synth_physics/runtime.py` now writes `backend_runtime_work_orders.json` and threads work-order ids/statuses into loop summaries and training-feedback manifests
+  - those work orders link directly to `scripts/NON_TRAINING_GPU_RUN_BACKLOG.json`, so the WM now names the concrete Isaac/Unitree or Holosoma runtime task to run later instead of only naming missing targets/assets abstractly
+- Why this matters:
+  - the Phase-1 backend lane now emits an executor-facing artifact, not just readiness descriptors
+  - this narrows the remaining gap further toward actual host/runtime/GPU availability and away from missing planning-to-operations wiring
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_runtime_work_orders.py`, and `git diff --check` passed.
+
+- Changed: added a typed backend runtime bridge contract inside the Phase-1 sim/synth/physics WM:
+  - `src/world_model/sim_synth_physics/runtime_bridge.py` now compiles `BackendRuntimeBridgeState` from backend binding, robot-asset contract, embodiment control constraints, and runtime-target readiness
+  - the runtime now emits `backend_runtime_bridge_receipt_v1`, writes it into the loop artifact set, and threads its ids/status into outcome receipts, loop summaries, and training-feedback manifests
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests that receipt so backend-selector and branch-planner rows preserve bridge transport/readiness/authority truth instead of reconstructing it later
+- Why this matters:
+  - backend binding is no longer the last typed stop before runtime; the WM now explicitly owns the slow-loop to runtime bridge contract
+  - Isaac/Unitree and Holosoma lanes can now name planner-vs-servo rates, transport profile, IO/telemetry contracts, safety channels, and missing runtime targets as canonical receipt truth
+  - this is another Phase-1 shift from “described integration” to “owned integration contract”, which is the right direction before the remaining blockers become fully external runtime/assets/GPU constraints
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`, and `git diff --check` passed.
+
+- Changed: turned the Phase-1 backend runtime seam from request metadata into a WM-owned concrete runtime receipt path:
+  - added `src/world_model/sim_synth_physics/backend_runtime_execution.py`
+  - `src/world_model/sim_synth_physics/runtime.py` now emits `backend_runtime_execution_receipt_v1` for requested Isaac/Holosoma lanes, even when the main execution contract still falls back
+  - when a real runtime module and policy id are present, the WM now prefers concrete `evaluate_policy(...)` execution through existing Isaac Lab / Holosoma backend seams and records rollout/metrics artifacts instead of stopping at shadow/work-order sidecars
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests that runtime receipt so backend-selector training can distinguish planning-only, shadow-runtime, and concrete-runtime bundles
+- Changed: pushed the Phase-1 render-provider seam past pure work orders when real source artifacts and non-stub providers exist:
+  - `src/world_model/sim_synth_physics/render_materialization.py` now materializes NAG counterfactual datapacks when a real source LSD episode and non-stub renderer path are available
+  - it now materializes GGDS scene outputs when a real source Gaussian scene and concretely initialized optimizer are available
+  - otherwise the WM stays on explicit work-order receipts with named preconditions instead of silently dropping into stub render defaults
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, and `git diff --check` passed.
+- Blocked: the remaining explicit Phase-1 gap is now even more clearly runtime/assets/policy/GPU constrained:
+  - real Isaac Lab / Isaac Sim / Unitree runtime module plus assets and policies
+  - real Holosoma host/runtime plus policy/data availability
+  - real GGDS renderer/LDM initialization and source-scene corpus at scale
+
+- Changed: preserved robot-asset readiness through the sim/synth training-corpus path:
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests `robot_asset_contract_receipt_v1`
+  - backend-selector and branch-planner training rows now carry asset-contract refs, readiness score, and missing-asset signals instead of dropping that hardware-readiness truth at export time
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
+- Changed: made the new robot-asset contract load-bearing inside backend materialization:
+  - `src/world_model/sim_synth_physics/shadow_execution.py` now writes backend-local robot-asset, calibration, and IO sidecars for Isaac and Holosoma shadow materialization paths
+  - backend shadow receipts now carry `robot_asset_contract_id`, sidecar refs, calibration contracts, observation contracts, and action contracts
+  - `src/world_model/sim_synth_physics/runtime_evidence.py` and `src/world_model/sim_synth_physics/calibration.py` now react to missing-asset counts from those sidecars instead of treating asset readiness as a separate passive signal
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
+- Changed: pulled Unitree/humanoid asset readiness into a canonical Phase-1 contract:
+  - added `src/world_model/sim_synth_physics/asset_contracts.py`
+  - `src/world_model/sim_synth_physics/compiler.py` now emits `RobotAssetContractState` on the WM state
+  - `src/world_model/sim_synth_physics/runtime.py` now emits `robot_asset_contract_receipt_v1` and threads it into outcome/training/loop-summary artifacts
+  - the sim/synth loop can now name concrete required assets, calibration contracts, observation contracts, and action contracts for hardware-target backends instead of only surfacing generic missing-asset strings
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
+- Changed: pushed Phase-1 physics adaptation/calibration receipts closer to real runtime evidence:
+  - `src/world_model/sim_synth_physics/runtime_evidence.py` now summarizes backend shadow execution, render materialization, and branch-outcome evidence
+  - `src/world_model/sim_synth_physics/calibration.py` now folds that evidence into adaptation/calibration readiness metadata and scores instead of relying only on plan-time route/fidelity heuristics
+  - `src/world_model/sim_synth_physics/runtime.py` now rebuilds those receipts after backend/render/outcome materialization so the emitted loop artifacts reflect actual WM loop evidence
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
+- Changed: pushed the Phase-1 sim/synth backend/materialization loop further past compile-time-only ownership:
+  - `src/world_model/sim_synth_physics/shadow_execution.py` now materializes explicit Holosoma shadow work orders in addition to Isaac shadow execution, so Holosoma-target planning windows emit WM-owned backend receipts and artifacts rather than stopping at binding metadata
+  - `src/world_model/sim_synth_physics/render_materialization.py` now writes branch/provider artifacts for LSD scene configs and NAG/GGDS work orders, and `src/world_model/sim_synth_physics/runtime.py` now threads those artifacts into render-provider receipts, outcome receipts, and the training-feedback manifest
+  - `src/world_model/sim_synth_physics/training_corpus.py` now carries render materialization status/mode/artifact refs into branch-planner training rows instead of flattening everything back to provider-kind only
+  - the honest remaining Phase-1 gaps are now narrower: concrete Holosoma runtime execution, real Isaac/Unitree asset execution, and concrete NAG/GGDS renderer/LDM execution
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_isaac_backend_shadow_contract.py`, and `git diff --check` passed.
+
+- Changed: pushed the sim/synth/physics WM further into backend-runtime ownership instead of leaving Isaac as a dead class:
+  - `src/envs/physics/isaac_backend.py` now provides an explicit shadow-contract backend with reset/step/media/summary/state APIs backed by `IsaacAdapter`
+  - `src/world_model/sim_synth_physics/runtime.py` now emits `backend_shadow_execution_receipt_v1` for Isaac-target planning windows and writes shadow execution artifacts into the WM loop output
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests that receipt so backend-selector training rows can distinguish planning-only bundles from shadow-runtime bundles
+  - the Phase-1 docs/backlog now describe the honest remaining gap as concrete Isaac Sim / Isaac Gym / Unitree asset execution rather than a literal backend stub
+- Verification: targeted `compileall`, targeted `ruff check`, `pytest -q tests/test_isaac_backend_shadow_contract.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`, JSON validation for `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`, and `git diff --check` passed.
+
+- Changed: tightened the roadmap doctrine against "WM stands up as logging only":
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now defines a mechanics-first WM readiness rule and a maturity ladder from `schema_only` through `production_recurrent`
+  - the doctrine now explicitly treats neuralization as part of scalable mechanics rather than as a separate later luxury
+  - the rule now explicitly requires all relevant downstream consumers for the future hardware-ready loop, not merely one consumer, before a WM can count as structurally real
+  - `docs/economic_world_model/roadmap.md` and `docs/economic_world_model/humanoid_target_readiness.md` now mirror that rule so later phases cannot be declared complete on logging/demo-only behavior
+- Verification: `git diff --check` passed. This was a docs-only roadmap tightening pass.
+
+- Changed: added an explicit Phase 8 to the long-range planning docs:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now names a production-loop runtime / weekly GPU operations phase after the WM and meta-node phases
+  - `docs/economic_world_model/roadmap.md` now describes the same endgame as Phase C: external dataset aggregation, loop runs, corpus export, training, fine-tuning, benchmarking, promotion/redeployment, then latency/inference focus
+  - `docs/economic_world_model/humanoid_target_readiness.md` now connects the post-September-2027 posture to recurring GPU/Runpod execution and backlog exhaustion rather than leaving it as an implied next step
+- Verification: `git diff --check` passed. This was a docs-only roadmap extension.
+
+- Changed: tightened the long-range Unitree target in the planning docs:
+  - July 2027 now remains the purchase / initial integration milestone
+  - September 30, 2027 is now the explicit stronger target for sustainably autonomous G1 operation
+  - the docs now say that by that date the control loop should be running repeatedly, collecting replay/telemetry/governance receipts, and feeding recurring improvement cycles rather than still behaving like a one-off bring-up effort
+- Changed: aligned the roadmap consequences of that stronger target:
+  - `docs/economic_world_model/roadmap.md` now extends the post-September 2026 execution program through September 2027
+  - `docs/economic_world_model/humanoid_target_readiness.md` now adds the post-purchase conversion window from July through August 2027 and the September 2027 autonomy bar
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now makes the same target explicit so lower-WM and deployment-enabler phases are judged against recurring on-robot loop readiness, not just pre-purchase structure
+- Verification: `git diff --check` passed. This was a docs-only target-tightening pass.
+
+- Changed: refined the dated pre-G1 roadmap into an explicit weekly operating model after training begins:
+  - starting September 1, 2026, the docs now assume a weekly A100-backed program
+  - work is explicitly described as sub-module by sub-module inside each WM
+  - each weekly pass now follows the order: loop runs, receipt/corpus export, training runs, then fine-tuning only where the gates justify it
+  - the initial order of attack is now written as sim/synth/physics first, then perception/grounding, then embodiment/actuation, then economic-WM consolidation, then local meta-node neuralization and later meta-node superposition/control
+- Verification: `git diff --check` passed. This was a docs-only scheduling refinement.
+- Next recommended task: turn that weekly A100 doctrine into a WM-by-WM execution table with named sub-modules, target loop runs, target trainers, and entry/exit gates for each week of the first September-to-December training season.
+
+- Changed: turned the pre-G1 roadmap into a dated program assumption instead of an undated aspiration:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now assumes serious multi-WM training starts on September 1, 2026 and says the current architecture should have its plumbing laid by August 31, 2026
+  - `docs/economic_world_model/roadmap.md` now splits the work into a plumbing-first window through August 31, 2026 and a training/calibration/Unitree-hardening window from September 1, 2026 through July 2027
+  - `docs/economic_world_model/humanoid_target_readiness.md` now frames July 2027 as a pre-purchase readiness window where remaining blockers should be hardware/data/calibration/benchmark limits, not missing canonical plumbing
+- Verification: `git diff --check` passed. This was a docs-only scheduling refinement.
+- Next recommended task: translate the August 31, 2026 plumbing deadline into a per-WM checklist with explicit `must_be_real_by_sep_2026` items for sim/synth/physics, perception/grounding, embodiment/actuation, and economic-WM ingestion.
+
+- Changed: updated the WM architecture docs and model-shaped backlogs so V-JEPA 2 is no longer treated as a vague future ingredient for only one stack slice:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md` now places V-JEPA 2 explicitly in both the Phase-1 sim/synth/physics WM and the later Phase-2 perception/grounding WM
+  - `docs/economic_world_model/roadmap.md` now says to prefer upstream `facebookresearch/vjepa2` bring-up where that is faster and more honest than local reimplementation, while keeping it behind typed provider/runtime contracts and receipts
+  - `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json`, `scripts/LOOP_RUN_BACKLOG.json`, and `scripts/TRAINING_MIGRATION_BACKLOG.json` now carry explicit V-JEPA 2 bring-up, loop-run, and fine-tuning backlog items for both WM lanes
+  - `docs/economic_world_model/full_stack_training_backlog.md` now records the same split on the fine-tuning/training side instead of leaving it as architecture prose only
+- Verification: `python3 -m json.tool scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json >/dev/null`, `python3 -m json.tool scripts/LOOP_RUN_BACKLOG.json >/dev/null`, `python3 -m json.tool scripts/TRAINING_MIGRATION_BACKLOG.json >/dev/null`, and `git diff --check` passed. This was a docs/backlog refinement.
+- Next recommended task: when the first V-JEPA 2 runtime wrapper lands, emit provider-truth, calibration, and benchmark-gate receipts directly into the sim/synth/physics and perception/grounding WM state surfaces rather than normalizing it as a generic latent helper.
+
+- Changed: converted the live Stage-1 diffusion path from an actively used stub class into a real runtime/provider contract:
+  - added `src/diffusion/video_diffusion_runtime.py`
+  - `scripts/run_stage1_pipeline.py` and `src/orchestrator/diffusion_requests.py` now call `VideoDiffusionRuntime` rather than instantiating the stub directly
+  - the runtime now records explicit provider truth (`real`, `heuristic_fallback`, `disabled`, `stub`) and materialization posture on every proposal/datapack/admission record instead of leaving diffusion status implicit
+  - `auto` now means governed planning with honest planning-only fallback when no real diffusers checkpoint is locally available; `real` is strict real-or-unavailable
+- Changed: tightened another model-stub seam in `scripts/train_ggds_on_lsd_vector_scenes.py`:
+  - the GGDS training harness no longer silently defaults to a dummy LDM in `auto`
+  - smoke use now requires explicit `--backend-policy stub`
+  - the script now emits LDM provider truth into its summary and raises honestly when no real backend is configured
+- Changed: added `scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json` and updated `scripts/LOOP_RUN_BACKLOG.json` / `scripts/TRAINING_MIGRATION_BACKLOG.json` so remaining model-shaped gaps are tracked as real bring-up/fine-tune/training work with OSS targets rather than as vague future cleanup:
+  - governed video diffusion
+  - GGDS/LDM renderer stack
+  - vision backbone stub replacement
+  - semantic VLA placeholder replacement
+  - Isaac/Unitree execution bring-up
+- Changed: strengthened the cross-phase doctrine in `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md`:
+  - no new WM or enabling phase should default to literal stubs when a real-or-unavailable provider contract is possible
+  - `stub` should be explicit-only for smoke/scaffolding
+  - the normal target posture is real runtime/provider plumbing with GPU/weights/assets as the honest blocker
+- Verification: `python3 -m compileall src/diffusion src/orchestrator/diffusion_requests.py scripts/run_stage1_pipeline.py scripts/train_ggds_on_lsd_vector_scenes.py tests/test_video_diffusion_runtime.py tests/test_video_diffusion_stub_routing.py tests/test_stage1_pipeline_governed.py tests/test_lsd_integration.py -q`, `python3 -m ruff check src/diffusion src/orchestrator/diffusion_requests.py scripts/run_stage1_pipeline.py scripts/train_ggds_on_lsd_vector_scenes.py tests/test_video_diffusion_runtime.py tests/test_video_diffusion_stub_routing.py tests/test_stage1_pipeline_governed.py tests/test_lsd_integration.py`, `python3 -m pytest -q tests/test_video_diffusion_runtime.py tests/test_video_diffusion_stub_routing.py tests/test_stage1_pipeline_governed.py`, `python3 -m pytest -q tests/test_lsd_integration.py::TestGGDSTraining::test_dummy_ldm tests/test_lsd_integration.py::TestGGDSTraining::test_load_ldm_auto_does_not_silently_stub`, `python3 -m json.tool scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json >/dev/null`, `python3 -m json.tool scripts/LOOP_RUN_BACKLOG.json >/dev/null`, `python3 -m json.tool scripts/TRAINING_MIGRATION_BACKLOG.json >/dev/null`, and `git diff --check` passed.
+- Blocked: `tests/test_lsd_integration.py::TestGGDSTraining::test_ggds_smoke` did not complete promptly after this change-set, so I did not claim a full-file pass for the older LSD integration harness.
+
+- Changed: refined `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` so the repo now says explicitly that multi-WM work must rerun the deterministic-prior / heuristic audit inside each WM boundary rather than assuming the earlier heuristic purge finished the job globally.
+- Changed: the docs now frame the earlier heuristic pass correctly:
+  - it was a high-value repo-wide sweep over the live stack
+  - it was not a substitute for per-WM review once new canonical WM boundaries are introduced
+  - each WM tranche now needs its own explicit disposition of deterministic owners vs fallback priors vs learned/runtime-package seams
+- Verification: `git diff --check` passed. This was a docs-only refinement.
+- Next recommended task: as each new WM tranche lands, add a short per-WM heuristic-review checklist and receipt of what was kept as fallback prior vs neuralized seam so the doctrine stays operational.
+
+- Changed: refined `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` so the ontology story is explicit and no longer easy to blur:
+  - operational / module-level ontology is now named as the in-stack cybernetic digital-twin layer for entities, tasks, datapacks, events, provenance, governance hooks, and module/runtime state
+  - WM-transport ontology is now named separately as the typed semantic/governance contract for adjacent-WM interoperability
+  - the docs now say explicitly that the isomorphic tensor / transport bridge is the differentiable realization of the WM-transport contract, not a replacement for ontology and not a reason to collapse everything into one symbolic or latent mother-layer
+- Changed: made the RL / training roles explicit for both ontology layers:
+  - operational ontology training is framed around module-to-ontology fidelity, event/state prediction, temporal consistency, uncertainty calibration, provenance quality, and governance satisfaction
+  - WM-transport ontology training is framed around WM-to-ontology-to-WM translation quality, topology/causal/dependency preservation, synchronized-loop success, and decomposed bridge-only vs downstream-only vs joint gains
+  - both layers are tied to completed-loop/postmortem quality, governance satisfaction, counterfactual improvement, and downstream yield rather than to immediate takeover of frozen core reward math
+- Changed: made current-state honesty explicit in the roadmap docs:
+  - today the repo mostly has operational ontology substrate/plumbing
+  - it does not yet have a fully neural ontology layer
+  - it does not yet have a full WM-transport ontology implementation
+  - sequencing remains lower WMs first, then economic-WM consolidation, then ontology-mediated WM transport
+- Verification: `git diff --check` passed. This was a docs-only refinement.
+- Next recommended task: when the next lower-WM tranche lands, thread the operational/module ontology language into its state contracts and receipts directly, while keeping the WM-transport ontology reserved for the later adjacent-WM bridge phase.
+
 ## 2026-03-26
+
+- Changed: completed the follow-on `sim_synth_physics` helper-package tranche and started the advisory pivot for that subsystem:
+  - added real trainer/export/runtime-package lanes for the WM backend selector and branch planner:
+    - `scripts/train_sim_synth_backend_selector.py`
+    - `scripts/train_sim_synth_branch_planner.py`
+    - `src/world_model/sim_synth_physics/backend_selector.py`
+    - `src/world_model/sim_synth_physics/backend_selector_runtime.py`
+    - `src/world_model/sim_synth_physics/branch_planner.py`
+    - `src/world_model/sim_synth_physics/branch_planner_runtime.py`
+  - the live compiler/runtime wrappers now accept those helper packages through the real WM/runtime path instead of leaving them as detached training utilities:
+    - `src/world_model/sim_synth_physics/compiler.py`
+    - `src/orchestrator/semantic_simulation.py`
+    - `src/orchestrator/diffusion_requests.py`
+    - `src/orchestrator/coverage_loop.py`
+  - helper packages now resolve package-relative checkpoints and carry explicit target-hardware/subsystem-posture metadata, so the emitted artifacts are closer to production-shaped packages than local-path training leftovers
+  - the trainer/export lane now also accepts canonical WM runtime receipt bundles rather than only pre-shaped row datasets:
+    - `src/world_model/sim_synth_physics/training_corpus.py` projects `SimSynthPhysicsWorldState`, calibration receipts, and simulation-outcome receipts into backend-selector and branch-planner rows
+    - the training scripts now emit a compiled dataset artifact even when the source input was runtime receipts, which is the right direction for a real subsystem corpus lane
+  - fixed a real contract mismatch while landing that path: the branch-planner runtime context now includes `heuristic_generation_mode`, so the trained feature contract matches live inference instead of silently degrading
+- Changed: started the advisory follow-up for this subsystem by tightening the doctrine in `docs/economic_world_model/advisory_purge_wiring_plan.md`: sim/synth backend and branch helper lanes are now part of the bounded-authority bucket rather than another advisory-shaped planning seam.
+- Changed: tightened the subsystem doctrine in the core planning docs so each WM is treated as a damn-near-production-ready subsystem target with honest remaining blockers:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md`
+  - `docs/economic_world_model/roadmap.md`
+  - `docs/economic_world_model/humanoid_target_readiness.md`
+  - the explicit target remains Unitree G1/R1-class readiness, and the remaining blockers are named as data, GPUs, calibration truth, benchmark evidence, and Unitree-class assets rather than missing neural/package/runtime scaffolding
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py src/orchestrator/diffusion_requests.py src/orchestrator/coverage_loop.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py src/orchestrator/diffusion_requests.py src/orchestrator/coverage_loop.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_coverage_compilation.py tests/test_gap_agenda_ranking.py tests/test_coverage_loop.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py`, and `git diff --check` passed.
+- Blocked: honest promotion blockers for this subsystem are now clearer:
+  - Unitree-class sim adapters and robot assets
+  - grounded whole-body replay and branch corpora
+  - calibration receipts for contact-rich whole-body behavior
+  - GPU budget for materially larger helper training/eval
+  - G1/R1-class benchmark evidence for promotion beyond `auto`
+- Next recommended task: wire the compiled receipt-derived datasets into real artifact harvesters and branch-execution paths so the backend-selector and branch-planner corpora are sourced from live sim receipts by default rather than only by manual receipt-bundle export.
+
+- Changed: completed the next `sim_synth_physics` tranche by threading the canonical inferential learnability contract into WM-owned agenda ranking, synthetic-branch planning, gen2sim admission, and diffusion ordering:
+  - `src/world_model/sim_synth_physics/compiler.py` now assigns inferential learnability contracts to simulation jobs and branch plans, uses them as bounded ranking priors, and includes job/branch inferential summaries in WM metadata
+  - `src/world_model/sim_synth_physics/diffusion_contracts.py` now preserves inferential contracts and diffusion-priority scores on WM-owned diffusion plans instead of treating branch admission as a side note
+  - `DiffusionConditioningState` and `Gen2SimAdmissionState` now carry admissible-vs-blocked branch splits plus inferential summaries so diffusion/render budgeting is sourced from the WM rather than implicit orchestration defaults
+  - `src/orchestrator/coverage_loop.py` now surfaces the WM inferential summaries in its runtime summary so downstream readiness and replay consumers can see the new planning truth explicitly
+- Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` to make the cross-phase rule explicit that epiplexity-based inferential learnability should be carried by downstream WMs as canonical typed metadata once they affect replay, admission, simulation, diffusion, or training selection.
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/coverage_loop.py src/orchestrator/diffusion_requests.py tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/coverage_loop.py src/orchestrator/diffusion_requests.py tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py tests/test_coverage_loop.py`, and `git diff --check` passed.
+- Next recommended task: add the first real trainer/export/runtime-package contracts for WM backend-selector and branch-planner helpers, then feed branch-outcome receipts back into the new inferential summaries instead of leaving them as one-pass priors.
+
+- Changed: completed the first code tranche from `docs/economic_world_model/advisory_purge_wiring_plan.md`. Added `src/economics/inferential_contract.py` as the shared canonical learnability/admission contract, then wired it through:
+  - `src/replay/dataset.py` for per-episode `inferential_learnability_contract` plus manifest-level `inferential_learnability_summary`
+  - `src/orchestrator/shadow_advisory.py` for inferential learnability summaries and canonical inferential work-order emission
+  - `src/orchestrator/adaptation_budgeting.py` for shared inferential execution-work-order construction
+  - `src/rl/episode_sampling.py` so replay descriptors can consume the canonical inferential contract instead of recomputing solely from scattered summary fields
+  - `src/regality/promotion_reporting.py` so promotion evidence can now see learnability-class density directly
+  - `src/training/training_manifest.py` and `src/training/regal_training_runner.py` so canonical training manifests persist inferential learnability and inferential work-order summaries
+- Changed: the main shadow-training entrypoints now write and register explicit inferential artifacts instead of burying them inside `shadow_advisory.json` only:
+  - `scripts/train_shadow_offline_rl.py`
+  - `scripts/train_shadow_replay_policy.py`
+  - `scripts/train_shadow_pricing_models.py`
+  - `scripts/train_sac_with_ontology_logging.py`
+  - `scripts/run_shadow_advisory_pass.py`
+- Changed: updated `docs/epiplexity.md` so it reflects the newly landed current state; replay and training now have a canonical inferential contract layer even though broader learnability promotion is still incomplete.
+- Verification: `python3 -m compileall src/economics/inferential_contract.py src/economics/inferential_training_gate.py src/orchestrator/adaptation_budgeting.py src/orchestrator/shadow_advisory.py src/orchestrator/queue_selection.py src/replay/dataset.py src/replay/receipt_ingest.py src/regality/promotion_reporting.py src/rl/episode_sampling.py src/training/training_manifest.py src/training/regal_training_runner.py scripts/train_shadow_offline_rl.py scripts/train_shadow_replay_policy.py scripts/train_shadow_pricing_models.py scripts/train_sac_with_ontology_logging.py scripts/run_shadow_advisory_pass.py tests/test_inferential_contract.py tests/test_replay_dataset.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/test_promotion_reporting.py -q`, `python3 -m ruff check src/economics/inferential_contract.py src/economics/inferential_training_gate.py src/orchestrator/adaptation_budgeting.py src/orchestrator/shadow_advisory.py src/orchestrator/queue_selection.py src/replay/dataset.py src/replay/receipt_ingest.py src/regality/promotion_reporting.py src/rl/episode_sampling.py src/training/training_manifest.py src/training/regal_training_runner.py scripts/train_shadow_offline_rl.py scripts/train_shadow_replay_policy.py scripts/train_shadow_pricing_models.py scripts/train_sac_with_ontology_logging.py scripts/run_shadow_advisory_pass.py tests/test_inferential_contract.py tests/test_replay_dataset.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/test_promotion_reporting.py`, `python3 -m pytest -q tests/test_inferential_contract.py tests/test_inferential_training_gate.py tests/test_replay_dataset.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/test_promotion_reporting.py tests/test_queue_dispatch_policy.py tests/test_queue_dispatch_integration.py tests/test_online_queue_dispatch_integration.py tests/test_online_promotion_reporting.py`, and `git diff --check` passed.
+- Next recommended task: take the second advisory tranche by reclassifying live queue/curriculum/orchestration outputs from "advisory-only" to explicit bounded-authority receipts, then thread the inferential learnability contract into synthetic-branch admission and sim/diffusion agenda ranking.
+
+- Changed: started Phase 1A / 1B from `docs/economic_world_model/multi_wm_architecture_plan.md` by landing the first canonical `src/world_model/sim_synth_physics/` package. The new additive WM boundary now owns:
+  - typed `SimSynthPhysicsWorldState`
+  - WM-owned `SimulationAgenda` / `SimulationJobSpec`
+  - `PhysicsContextState`
+  - `DiffusionConditioningState`
+  - `SyntheticBranchPlan`
+  - `Gen2SimAdmissionState`
+  - canonical receipt contracts for calibration and simulation outcomes
+- Changed: moved live simulation-agenda compilation out of `src/orchestrator/semantic_simulation.py` and into the new WM compiler/runtime boundary. The orchestration surface now consumes the WM-owned agenda contract and returns the legacy agenda view only for compatibility.
+- Changed: wired bounded learned seams into the new WM boundary from the start instead of leaving them as a later cleanup:
+  - agenda ranking continues to use the existing promoted/shadow gap-ranker path
+  - backend/fidelity selection now has a benchmark-gated learned-helper seam
+  - synthetic branch planning now has a benchmark-gated learned-helper seam
+  - both seams record helper status, promotion stage, and trace receipts while keeping heuristics as explicit priors/fallbacks
+- Changed: moved gap-driven diffusion prompt compilation onto the WM-owned state instead of recomputing it inside orchestration helpers:
+  - added `src/world_model/sim_synth_physics/diffusion_contracts.py` as the WM-owned diffusion contract layer
+  - `src/orchestrator/diffusion_requests.py` now adapts WM-owned diffusion plans instead of re-ranking coverage gaps locally
+  - `src/orchestrator/coverage_loop.py` now compiles one `SimSynthPhysicsWorldState` and derives both the simulation agenda and diffusion prompts from that shared state surface
+- Changed: this means the current live control plane no longer has separate agenda-vs-diffusion gap compilers drifting apart inside the coverage loop; diffusion conditioning is now sourced from `DiffusionConditioningState` plus WM-owned branch plans and physics context.
+- Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` to make the repo rule explicit across future WMs and enabler phases:
+  - no new WM should land as a heuristic-only island
+  - bounded learned seams, promotion posture, and receipt traces should exist from the first tranche
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py src/orchestrator/diffusion_requests.py src/orchestrator/coverage_loop.py tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py src/orchestrator/diffusion_requests.py src/orchestrator/coverage_loop.py tests/test_sim_synth_physics_world_model.py tests/test_gap_agenda_ranking.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_coverage_compilation.py tests/test_gap_agenda_ranking.py tests/test_coverage_loop.py`, and `git diff --check` passed.
+- Next recommended task: add package-loading runtime shims plus first trainer/export contracts for the new backend-selector and branch-planner seams, then start routing backend-quality and branch-outcome receipts into replay/training artifacts.
+
+- Changed: added `docs/economic_world_model/advisory_purge_wiring_plan.md` as the advisory counterpart to the earlier heuristic/sidecar sweep. The new document:
+  - narrows the repo-wide advisory doctrine
+  - separates surfaces that should remain advisory from surfaces that should become canonical metadata, preconditions, work orders, bounded authority, or later benchmark-gated successors
+  - ranks the current advisory gaps with epiplexity / inferential signal-yield / inferential work-order promotion as the top remaining tranche
+  - updates the architectural posture on frozen Phase B math: keep it as the rollback anchor now, but do not treat it as philosophically immutable forever once successor layers earn replacement through evidence
+- Changed: updated `docs/epiplexity.md` so the current posture is explicit: epiplexity remains bounded and non-reward-changing today, but it is now documented as the likely future canonical learnability class rather than a permanently advisory overlay.
+- Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` and `docs/economic_world_model/roadmap.md` to reflect the same doctrine shift. The multi-WM plan now says internal WM-to-WM state and receipts should not stay culturally advisory once they affect runtime or training, and the roadmap now encodes the same narrower advisory rule plus the benchmark-gated successor stance on frozen Phase B math.
+- Verification: `git diff --check` passed. This was a docs-only advisory doctrine pass; no code paths changed.
+- Next recommended task: execute the new top tranche in code by promoting epiplexity / inferential signal-yield from overlay-shaped evidence into canonical learnability metadata and executor-facing inferential work-order contracts across replay, training manifests, and benchmark reporting.
+
+- Changed: added `docs/economic_world_model/humanoid_target_readiness.md` as the concrete follow-on artifact for the new G1/R1-facing plan. It turns the hardware-target discussion into:
+  - an explicit readiness checklist
+  - a benchmark matrix
+  - a repo-grounded gap map
+  - a model-capacity review target list
+  - a Unitree sim-env integration checklist
+  - companion-compute / comms / calibration / teleop fallback requirements
+- Changed: linked that readiness artifact back into `docs/economic_world_model/multi_wm_architecture_plan.md` so the humanoid-target sections now point to a concrete checklist instead of only future intent.
+- Verification: `git diff --check` passed. This was a docs-only planning pass; no code paths changed.
+- Next recommended task: when the repo returns from planning to implementation, use `docs/economic_world_model/humanoid_target_readiness.md` as the acceptance checklist for the eventual Unitree sim integration and embodiment-contract refit work.
+
+- Changed: added `docs/economic_world_model/multi_wm_architecture_plan.md` as the new multi-stage architecture plan for the next world-model stack. The document makes the topology explicit:
+  - perception / grounding WM
+  - embodiment / actuation WM
+  - sim / synth / physics WM
+  - economic WM over those lower WMs
+  - meta-node superposition / control WM above the economic WM
+- Changed: made the sequencing rule explicit instead of leaving it implicit in cross-window discussion. The plan argues for:
+  - building the sim / synth / physics WM next
+  - treating the cross-WM “isomorphic transport” idea as middleware between adjacent canonical WMs rather than as a premature mother-latent
+  - delaying deep economic-WM neuralization and the later meta-node WM until lower WMs emit stable canonical state
+  - requiring a dedicated local meta-node neuralization / robustness tranche before any overarching meta-node superposition WM
+- Changed: documented the concrete Phase 1 module structure for the sim / synth / physics WM, including its proposed package boundary, typed state objects, runtime flow, receipt surfaces, OSS-provider posture, and the current repo files that should be absorbed into that boundary instead of continuing to own agenda compilation independently.
+- Changed: extended the plan with explicit G1/R1-class hardware implications instead of treating humanoid readiness as an afterthought. The plan now calls out:
+  - a future model-capacity audit for lower-WM and submodule models
+  - the fact that current workcell/tabletop envs are useful skill islands but not sufficient humanoid-readiness proxies
+  - an explicit later sim-env integration lane for Unitree G1/R1-class simulation
+  - the need to refit observation/action contracts around proprioception, IMU, force/torque, whole-body state, latency, and spatial state
+  - explicit future phases for companion-compute / communication middleware and operator / teleop / recovery fallback
+  - robot asset and calibration management as a first-class future concern
+  - a humanoid-specific benchmark taxonomy rather than only stronger workcell benchmarks
+  - a dedicated later phase for humanoid target capacity and environment refit before claiming real hardware-readiness
+- Changed: added named future phases with explicit preconditions for:
+  - perception / grounding WM
+  - embodiment / actuation WM
+  - humanoid target capacity and environment refit
+  - real-time servo vs governance loop separation
+  - sensor-fusion shim
+  - physical safety layer
+  - spatial state / SLAM integration
+  - economic-WM consolidation
+  - cross-WM typed transport bridges
+  - local meta-node neuralization / robustness
+  - the later meta-node superposition / control WM
+- Verification: `git diff --check` passed. This was a docs-only planning pass; no code paths changed.
+- Next recommended task: start Phase 1A / 1B from the new plan by defining the `sim_synth_physics` package boundary and moving simulation/diffusion/branch-agenda ownership out of scattered orchestrator surfaces into that canonical WM layer.
 
 - Changed: completed the `PipelineManager` stage-activation helper pass. `src/orchestrator/pipeline_stage_policy.py` now defines an explicit feature/target contract over pipeline history, execution-precondition truth, progress trends, and stage outcomes; `src/orchestrator/pipeline_stage_policy_training.py` now trains a bounded helper over real `PipelineManager` state receipts; and `scripts/train_pipeline_stage_policy.py` now emits canonical dataset/precondition/package/runtime artifacts under `RegalTrainingRunner`.
 - Changed: the pipeline shell now affects the real runtime boundary rather than only a static preview. `src/orchestrator/pipeline_stage_policy_runtime.py` now loads bounded helper packages with `disabled|auto|required` semantics, and `src/orchestrator/pipeline_manager.py` now reorders stage-activation plans by bounded learned priority, lets the helper influence next-iteration config flags, and preserves `policy_source`, `promotion_stage`, and `stage_policy_trace` receipts for future learning.
@@ -448,3 +1455,536 @@
 - Changed: narrowed the remaining non-GPU mandate blockers to density/promotion rather than missing plumbing. The semantic runtime scorer, semantic feedback adapter, and semantic WM refiner are now real helper lanes in the live loop, but they stay benchmark-gated until replay and coverage-artifact density rises beyond the current shadow/bootstrap substrate.
 - Verification: `python3 -m compileall scripts/train_semantic_runtime_scorers.py src/orchestrator/semantic_runtime_scorer_runtime.py src/orchestrator/shadow_advisory.py tests/test_train_semantic_runtime_scorers.py tests/test_receipt_ingest.py scripts/train_semantic_feedback_adapters.py scripts/train_semantic_wm_refiner.py src/world_model/feedback_topology_adapters.py src/world_model/feedback_topology_runtime.py src/world_model/semantic_wm_refiner_runtime.py src/orchestrator/coverage_loop.py src/orchestrator/pipeline_manager.py tests/test_train_semantic_feedback_adapters.py tests/test_train_semantic_wm_refiner.py -q`, `python3 -m ruff check scripts/train_semantic_runtime_scorers.py src/orchestrator/semantic_runtime_scorer_runtime.py src/orchestrator/shadow_advisory.py tests/test_train_semantic_runtime_scorers.py tests/test_receipt_ingest.py scripts/train_semantic_feedback_adapters.py scripts/train_semantic_wm_refiner.py src/world_model/feedback_topology_adapters.py src/world_model/feedback_topology_runtime.py src/world_model/semantic_wm_refiner_runtime.py src/orchestrator/coverage_loop.py src/orchestrator/pipeline_manager.py tests/test_train_semantic_feedback_adapters.py tests/test_train_semantic_wm_refiner.py`, `python3 -m pytest -q tests/test_train_semantic_runtime_scorers.py tests/test_receipt_ingest.py tests/test_train_semantic_feedback_adapters.py tests/test_train_semantic_wm_refiner.py tests/test_coverage_loop.py tests/test_semantic_gap_closure.py tests/test_semantic_wm_refiner.py`, and `git diff --check`.
 - Blocked: the honest remainder here is data, not missing runtime wiring. Semantic runtime scorer promotion still needs execution-ready / semantic-grounded replay density; feedback adapter and WM-refiner promotion still need repeated coverage-loop artifacts; real grounded vision promotion still needs GPU + SAM3D.
+
+- Changed: hardened the new sim/synth helper runtime-package seams. `scripts/train_sim_synth_backend_selector.py` and `scripts/train_sim_synth_branch_planner.py` now emit relocatable package refs instead of baking in absolute artifact paths, `src/world_model/sim_synth_physics/backend_selector_runtime.py` / `src/world_model/sim_synth_physics/branch_planner_runtime.py` now resolve relative checkpoints against the package location, and loaded helpers now preserve `package_id`, `package_path`, `promotion_stage`, and subsystem metadata all the way into WM inference.
+- Changed: added end-to-end package-loading coverage in `tests/test_sim_synth_physics_world_model.py`, proving that canonical sim/synth runtime packages can be reloaded outside their training directory and still drive backend selection and branch planning through the WM boundary.
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py`, and `git diff --check`.
+- Blocked: no code-path blocker remains in this helper seam; the honest remainder is still corpus density and eventual benchmark-gated promotion of the helpers.
+
+- Changed: started the advisory-purge follow-through on the live training-distribution surfaces. `src/orchestrator/queue_selection.py` no longer describes queue entries and dispatch receipts as advisory-only; it now emits explicit `authority_class`, `decision_scope`, `reward_math_mutation`, and `receipt_kind` fields for both queue-selection inputs and queue-dispatch outputs.
+- Changed: `src/rl/episode_sampling.py` and `src/rl/sac.py` now preserve that bounded-authority classification through sampler-policy receipts, `dispatch_queue(...)`, and online replay sampling artifacts, so queue/curriculum influence stops degrading back into anonymous metadata once it reaches runtime training and replay.
+- Verification: `python3 -m compileall src/orchestrator/queue_selection.py src/rl/episode_sampling.py src/rl/sac.py tests/test_econ_regal_sampling.py tests/test_queue_dispatch_integration.py tests/test_online_queue_dispatch_integration.py tests/test_sampler_policy.py tests/test_queue_dispatch_policy.py tests/test_train_sampler_policy.py -q`, `python3 -m ruff check src/orchestrator/queue_selection.py src/rl/episode_sampling.py src/rl/sac.py tests/test_econ_regal_sampling.py tests/test_queue_dispatch_integration.py tests/test_online_queue_dispatch_integration.py tests/test_sampler_policy.py tests/test_queue_dispatch_policy.py tests/test_train_sampler_policy.py`, `python3 -m pytest -q tests/test_econ_regal_sampling.py tests/test_queue_dispatch_integration.py tests/test_online_queue_dispatch_integration.py tests/test_sampler_policy.py tests/test_queue_dispatch_policy.py tests/test_train_sampler_policy.py`, and `git diff --check`.
+- Blocked: this narrows the doctrine gap, but it does not yet fully neuralize orchestration-level bounded authority. The remaining advisory cleanup is still above the queue/sampler layer in orchestration and higher-shell control surfaces.
+
+## 2026-03-27
+
+- Changed: continued Phase 1 sim/synth/physics implementation by turning backend execution from a descriptor-only concept into a WM-owned binding surface:
+  - added concrete backend-binding modules in `src/world_model/sim_synth_physics/adapters/backend_pybullet.py`, `backend_holosoma.py`, and `backend_isaac.py`
+  - added `src/world_model/sim_synth_physics/backend_bindings.py` plus `BackendExecutionBindingState` / `backend_execution_binding_receipt_v1`, so the WM now emits executor entrypoints, observation-adapter entrypoints, runtime stack, asset profiles, and missing-asset truth for the selected backend
+  - the Isaac / Unitree-target path still stays honest: it now carries explicit asset readiness for robot description, joint mapping, sensor extrinsics, and actuator-latency profiles instead of pretending that “isaac” is already executable
+- Changed: deepened the NAG/LSD/GGDS provider seam from provider-kind selection into materialization configuration:
+  - `src/world_model/sim_synth_physics/render_providers.py` now resolves materialization entrypoints, provider config payloads, and `materialization_status` for NAG counterfactual generation and GGDS scene texturing
+  - `BranchRenderProviderState` and `render_provider_receipt_v1` now preserve materialization entrypoints and config instead of only provider-kind/status metadata
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests backend-binding receipts and the richer render-provider receipts so those contracts survive into downstream trainer datasets
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_nag_lsd_integration.py`, and `git diff --check`.
+- Blocked: this keeps shrinking the implementable Phase 1 gap list, but the main honest blockers are still concrete external assets/execution rather than missing WM ownership:
+  - real Isaac Sim / Isaac Gym execution through the new binding seam
+  - Unitree robot assets and calibration sidecars
+  - richer Holosoma runtime asset binding on an actual host
+  - concrete GGDS/LDM execution on a host with the required rendering stack
+
+- Changed: continued Phase 1 sim/synth/physics WM implementation with typed backend-adapter, physics-adaptation, and branch/render-provider ownership:
+  - added `src/world_model/sim_synth_physics/backend_adapters.py` so backend routing now resolves explicit adapter descriptors for PyBullet, Holosoma, and the still-honest Isaac/Unitree target gap instead of treating backend names as flat strings
+  - added `src/world_model/sim_synth_physics/randomization.py` and extended `state.py`, `physics_contracts.py`, `receipts.py`, `compiler.py`, `calibration.py`, and `runtime.py` so the WM now compiles `PhysicsAdaptationPolicyState`, emits `physics_adaptation_receipt_v1`, and threads domain-randomization / system-identification / robot-asset targets into live loop artifacts rather than leaving them implicit
+  - added `src/world_model/sim_synth_physics/render_providers.py` and extended branch planning / diffusion / runtime receipts so NAG / LSD / GGDS materialization is now routed through WM-owned `BranchRenderProviderState` contracts and `render_provider_receipt_v1` artifacts instead of sitting only as adjacent provider code
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the new adaptation/provider receipts and projects them into backend-selector / branch-planner rows, which closes another Phase 1 gap between WM-owned receipts and downstream training datasets
+  - `scripts/run_sim_synth_physics_loop.py` and the sim/synth tests now preserve and verify the new receipt surfaces end-to-end
+- Changed: updated `docs/economic_world_model/multi_wm_architecture_plan.md` so Phase 1 explicitly includes backend-adapter ownership, physics adaptation policy/receipt ownership, and WM-owned NAG/LSD/GGDS provider contracts before the phase can be considered exhausted apart from GPU/data/asset limits.
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/diffusion_requests.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/diffusion_requests.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py`, and `git diff --check`.
+- Blocked: Phase 1 is narrower but still not externally blocked yet. The remaining explicit in-phase work is now:
+  - real Isaac Sim / Isaac Gym execution adapters and Unitree robot assets behind the new backend contract
+  - richer Holosoma execution/runtime asset binding under the same contract
+  - concrete GGDS/LDM execution and richer NAG/LSD materialization under the new WM-owned render-provider seam
+  - real GPU-backed grounded video state for perception-conditioned sim
+
+- Changed: finished the external-provider doctrine cleanup for the remaining teacher / SceneTracks seams so provider status is now canonical metadata while provider outputs stay advisory:
+  - added `src/evidence/provider_truth.py` as the shared `external_provider_truth_v1` contract for provider availability, fallback, calibration class, and grounding class
+  - `src/vla/teacher_runtime.py` and `src/evidence/teacher_trace.py` now emit `provider_truth` on teacher contracts, teacher action envelopes, and teacher traces, including backend, fallback, and vision-backbone metadata
+  - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` and `src/evidence/scene_tracks_truth.py` now emit/preserve `scene_tracks_provider_truth`, so passthrough/stub/real grounding class is carried as canonical metadata instead of being reverse-engineered later
+  - `src/vla/rollout_labeler.py` and `src/replay/ingest.py` now preserve teacher and SceneTracks provider truth into datapack/replay metadata, which closes the doctrine gap where downstream consumers could see advisory predictions without reliable provider-status truth
+- Verification: `python3 -m compileall src/evidence/provider_truth.py src/evidence/teacher_trace.py src/evidence/scene_tracks_truth.py src/vla/teacher_runtime.py src/vla/rollout_labeler.py src/vision/scene_ir_tracker/io/scene_tracks_runner.py src/replay/ingest.py tests/test_teacher_runtime.py tests/test_rollout_labeler.py tests/test_scene_tracks_truth.py tests/test_semantic_fusion_orchestrator_smoke.py tests/test_replay_dataset.py tests/integration/test_scene_tracks_from_workcell_datapack.py -q`, `python3 -m ruff check src/evidence/provider_truth.py src/evidence/teacher_trace.py src/evidence/scene_tracks_truth.py src/vla/teacher_runtime.py src/vla/rollout_labeler.py src/vision/scene_ir_tracker/io/scene_tracks_runner.py src/replay/ingest.py tests/test_teacher_runtime.py tests/test_rollout_labeler.py tests/test_scene_tracks_truth.py tests/test_semantic_fusion_orchestrator_smoke.py tests/test_replay_dataset.py tests/integration/test_scene_tracks_from_workcell_datapack.py`, `python3 -m pytest -q tests/test_teacher_runtime.py tests/test_rollout_labeler.py tests/test_scene_tracks_truth.py tests/test_semantic_fusion_orchestrator_smoke.py tests/test_replay_dataset.py tests/integration/test_scene_tracks_from_workcell_datapack.py`, and `git diff --check`.
+- Blocked: this closes the provider-status truth gap, but it does not create real grounded data where the host cannot. Real non-passthrough SceneTracks promotion is still blocked on GPU + SAM3D and grounded-data receipt density.
+
+- Changed: completed the remaining shell-level advisory cleanup for this mandate without prematurely promoting the shells to sovereign control:
+  - `src/phase_h/advisory_integration.py`, `src/phase_h/controller.py`, and `src/phase_h/economic_learner.py` now carry explicit shell receipt fields (`receipt_kind`, `authority_class`, `decision_scope`, `reward_math_mutation`) and preserve `input_receipt_context` so Phase H budget/routing shells consume canonical execution/precondition/work-order context rather than only free-form summaries
+  - `src/orchestrator/pipeline_manager.py` now builds and propagates typed input receipt context into iteration activation plans, preview reports, and emitted work-order metadata, so the top shell stops flattening canonical receipts back into anonymous advisory state
+  - `src/rl/curriculum.py` is now explicitly treated as bounded training-distribution authority instead of “purely advisory”, and `sample_batch(...)` now emits `curriculum_dispatch_receipt_v1`
+  - added `tests/test_curriculum.py` and expanded the Phase H / pipeline-shell tests so the new receipt context and authority typing are covered
+- Verification: `python3 -m compileall src/phase_h/advisory_integration.py src/phase_h/controller.py src/phase_h/economic_learner.py src/orchestrator/pipeline_manager.py src/rl/curriculum.py tests/test_curriculum.py tests/smoke_tests/test_phase_h_advisory_integration.py tests/smoke_tests/test_economic_learner_bounds.py tests/test_shell_activation.py tests/test_pipeline_stage_policy.py -q`, `python3 -m ruff check src/phase_h/advisory_integration.py src/phase_h/controller.py src/phase_h/economic_learner.py src/orchestrator/pipeline_manager.py src/rl/curriculum.py tests/test_curriculum.py tests/smoke_tests/test_phase_h_advisory_integration.py tests/smoke_tests/test_economic_learner_bounds.py tests/test_shell_activation.py tests/test_pipeline_stage_policy.py`, `python3 -m pytest -q tests/test_curriculum.py tests/smoke_tests/test_phase_h_advisory_integration.py tests/smoke_tests/test_economic_learner_bounds.py tests/test_shell_activation.py tests/test_pipeline_stage_policy.py`, and `git diff --check`.
+- Blocked: the higher shells are now more honest about what they consume and emit, but they still remain intentionally non-sovereign. The honest remainder is not contract ambiguity anymore; it is whether later lower-WM receipts and benchmark evidence ever justify promoting any shell beyond bounded planning/work-order generation.
+
+- Changed: promoted inferential admission out of advisory-only summaries and into a canonical emitted contract. `src/economics/inferential_contract.py` now defines `inferential_admission_contract_v1`, `src/economics/inferential_training_gate.py` now emits typed work-order-class decisions, and `src/orchestrator/adaptation_budgeting.py` / `src/orchestrator/shadow_advisory.py` now carry per-episode admission rows plus an aggregate admission contract instead of only adaptation-budget rollups.
+- Changed: threaded that contract through the canonical training runtime. `src/training/regal_training_runner.py` and `src/training/training_manifest.py` now preserve `inferential_admission_summary`, while `scripts/train_shadow_replay_policy.py`, `scripts/train_shadow_offline_rl.py`, `scripts/train_shadow_pricing_models.py`, `scripts/train_sac_with_ontology_logging.py`, and `scripts/run_shadow_advisory_pass.py` now emit/register `inferential_admission_contract.json` beside the existing learnability/work-order artifacts.
+- Changed: promoted epiplexity-based learnability into datapack-owned canonical metadata. `src/valuation/datapack_schema.py` now carries `inferential_learnability_contract`, `src/valuation/datapack_repo.py` now attaches or preserves that contract when datapacks are loaded and epiplexity overlays are applied, and `src/rl/episode_sampling.py` now preserves the canonical contract in RL descriptors instead of re-deriving learnability purely from local summary fields.
+- Verification: `python3 -m compileall src/economics/inferential_contract.py src/economics/inferential_training_gate.py src/orchestrator/adaptation_budgeting.py src/orchestrator/shadow_advisory.py src/training/training_manifest.py src/training/regal_training_runner.py src/valuation/datapack_schema.py src/valuation/datapack_repo.py src/rl/episode_sampling.py scripts/train_shadow_replay_policy.py scripts/train_shadow_offline_rl.py scripts/train_shadow_pricing_models.py scripts/train_sac_with_ontology_logging.py scripts/run_shadow_advisory_pass.py tests/test_inferential_contract.py tests/test_inferential_training_gate.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/epiplexity/test_curated_slices_portable.py -q`, `python3 -m ruff check src/economics/inferential_contract.py src/economics/inferential_training_gate.py src/orchestrator/adaptation_budgeting.py src/orchestrator/shadow_advisory.py src/training/training_manifest.py src/training/regal_training_runner.py src/valuation/datapack_schema.py src/valuation/datapack_repo.py src/rl/episode_sampling.py scripts/train_shadow_replay_policy.py scripts/train_shadow_offline_rl.py scripts/train_shadow_pricing_models.py scripts/train_sac_with_ontology_logging.py scripts/run_shadow_advisory_pass.py tests/test_inferential_contract.py tests/test_inferential_training_gate.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/epiplexity/test_curated_slices_portable.py`, `python3 -m pytest -q tests/test_inferential_contract.py tests/test_inferential_training_gate.py tests/test_receipt_ingest.py tests/test_training_manifest.py tests/test_shadow_advisory_pass.py tests/epiplexity/test_curated_slices_portable.py tests/test_replay_dataset.py`, and `git diff --check`.
+- Blocked: the next advisory purge cut is now clearly the internal orchestrator companion receipts: `semantic_fusion_runner`, `runtime_backbone`, Stage-1 pipeline emissions, and replay ingest still need a canonical control-plane context artifact so bounded internal selectors stop falling back to sidecar semantics.
+- Changed: closed that next advisory gap with a companion `orchestrator_control_plane_context_v1` artifact. `src/semantic/runtime_backbone.py` now emits a canonical control-plane context beside `semantic_world_model`, `semantic_snapshot`, and `orchestrator_advisory`, carrying meta-node weights, focus presets, benchmark signals, execution preconditions, semantic-runtime truth, and typed authority metadata.
+- Changed: threaded the new control-plane context through the main producers and consumers. `scripts/run_stage1_pipeline.py`, `src/orchestrator/semantic_fusion_runner.py`, and `scripts/bootstrap_semantic_workcell_loop.py` now write/preserve `*_control_plane_context_v1.json`, while `src/replay/ingest.py` now discovers `control_plane_context_path`, preserves the artifact ref in provenance, and hydrates the parsed context into replay episode metadata.
+- Verification: `python3 -m compileall src/semantic/runtime_backbone.py src/orchestrator/semantic_fusion_runner.py scripts/run_stage1_pipeline.py scripts/bootstrap_semantic_workcell_loop.py src/replay/ingest.py tests/test_semantic_fusion_emit_flag.py tests/test_stage1_pipeline_governed.py tests/integration/test_bootstrap_semantic_workcell_loop.py tests/test_replay_dataset.py tests/test_semantic_world_model_backbone.py -q`, `python3 -m ruff check src/semantic/runtime_backbone.py src/orchestrator/semantic_fusion_runner.py scripts/run_stage1_pipeline.py scripts/bootstrap_semantic_workcell_loop.py src/replay/ingest.py tests/test_semantic_fusion_emit_flag.py tests/test_stage1_pipeline_governed.py tests/integration/test_bootstrap_semantic_workcell_loop.py tests/test_replay_dataset.py tests/test_semantic_world_model_backbone.py`, `python3 -m pytest -q tests/test_semantic_fusion_emit_flag.py tests/test_stage1_pipeline_governed.py tests/integration/test_bootstrap_semantic_workcell_loop.py tests/test_replay_dataset.py tests/test_semantic_world_model_backbone.py`, and `git diff --check`.
+- Blocked: the remaining advisory cleanup is now higher than the semantic-runtime companion artifacts. The next likely buckets are external-provider doctrine cleanup and higher-shell orchestration surfaces that still consume preview/advisory blobs instead of canonical receipts.
+- Changed: added an explicit anti-regression guardrail for the advisory/receipt doctrine. `scripts/check_canonical_receipt_contracts.py` now scans the main internal control-plane packages and fails when internal receipt emitters carry `receipt_kind` without the full canonical authority fields (`authority_class`, `decision_scope`, `reward_math_mutation`) or when provider-truth surfaces are present without the canonical provider-truth contract path. `scripts/run_full_repo_verification.py` now runs that checker by default unless `--skip-contract-checks` is passed.
+- Changed: finished the default-path sim/synth corpus hardening so the backend-selector and branch-planner trainers can build their datasets from live WM receipt directories instead of only from manually pre-bundled receipt exports:
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests `sim_synth_physics_world_state_v1`, `physics_calibration_receipt_v1`, and `simulation_outcome_receipt_v1` files directly from receipt directories and assembles canonical bundles with de-duplication by `state_id`
+  - `scripts/train_sim_synth_backend_selector.py` and `scripts/train_sim_synth_branch_planner.py` now accept `--receipt-dir`, auto-harvest receipt bundles when no explicit dataset or receipt bundle is passed, and record `receipt_source_kind`, `receipt_dirs`, and `receipt_bundle_count` in their dataset summaries
+  - `src/world_model/sim_synth_physics/__init__.py` now exposes the new harvester without forcing eager compiler/runtime imports, which also fixed a real circular-import bug between the sim/synth WM package and orchestrator imports
+- Changed: surfaced the newly canonical advisory-replacement classes in promotion/readiness reporting. `src/regality/promotion_reporting.py` now reports:
+  - `work_order_ready_count`
+  - `control_plane_context_summary`
+  - `teacher_provider_truth_summary`
+  - `scene_tracks_provider_truth_summary`
+  - per-node control-plane / provider-truth episode counts
+  This makes the doctrine operational in readiness reports rather than leaving it buried in artifacts.
+- Verification: `python3 -m compileall scripts/check_canonical_receipt_contracts.py scripts/run_full_repo_verification.py src/world_model/sim_synth_physics/training_corpus.py src/world_model/sim_synth_physics/__init__.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py src/regality/promotion_reporting.py tests/test_canonical_receipt_contracts.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_promotion_reporting.py tests/test_online_promotion_reporting.py -q`, `python3 -m ruff check scripts/check_canonical_receipt_contracts.py scripts/run_full_repo_verification.py src/world_model/sim_synth_physics/training_corpus.py src/world_model/sim_synth_physics/__init__.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py src/regality/promotion_reporting.py tests/test_canonical_receipt_contracts.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_promotion_reporting.py tests/test_online_promotion_reporting.py`, `python3 -m pytest -q tests/test_canonical_receipt_contracts.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_promotion_reporting.py tests/test_online_promotion_reporting.py`, `python3 scripts/check_canonical_receipt_contracts.py`, and `git diff --check`.
+- Blocked: this closes the remaining non-GPU contract-hygiene gap inside the already-wired loop, but honest promotion remains constrained by receipt density and grounded-data availability rather than missing contracts. The next additive work should be keeping these checks on every new helper or WM boundary so the repo does not regress into anonymous advisory blobs.
+- Changed: started concrete Phase 1 sim/synth/physics WM ownership transfer beyond compile-only state:
+  - added typed economic and embodiment input adapters in `src/world_model/sim_synth_physics/adapters/economic_inputs.py` and `src/world_model/sim_synth_physics/adapters/embodiment_inputs.py`, so the WM no longer treats those lanes as raw passthrough mappings
+  - added `src/world_model/sim_synth_physics/physics_contracts.py`, `src/world_model/sim_synth_physics/backend_router.py`, and `src/world_model/sim_synth_physics/calibration.py` so backend routing, fallback honesty, and calibration quality are now first-class WM-owned contracts instead of implicit metadata
+  - expanded `src/world_model/sim_synth_physics/runtime.py` from a compile-only facade into a WM-owned compile/run boundary that can:
+    - compile legacy agenda views for compatibility
+    - compile diffusion plans from the same runtime boundary
+    - execute a planning window into canonical `physics_execution_contract`, `physics_calibration_receipt`, `simulation_outcome_receipts`, and `sim_synth_training_feedback` artifacts
+  - `src/orchestrator/semantic_simulation.py` and `src/orchestrator/diffusion_requests.py` now call through those runtime entrypoints instead of open-coding the same config/compile flow
+  - added WM-owned entry scripts:
+    - `scripts/compile_sim_synth_physics_plan.py`
+    - `scripts/run_sim_synth_physics_loop.py`
+- Changed: the Phase 1 posture is now explicit in the architecture docs. `docs/economic_world_model/multi_wm_architecture_plan.md` now states that no later phase should start while the current phase still has implementable ownership/runtime/adapter/package gaps, and that Phase 1 specifically should keep pushing toward real Isaac Sim / Isaac Gym / Unitree-class adapter functionality rather than normalizing PyBullet fallback.
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py src/orchestrator/diffusion_requests.py scripts/compile_sim_synth_physics_plan.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/semantic_simulation.py src/orchestrator/diffusion_requests.py scripts/compile_sim_synth_physics_plan.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py`, and `git diff --check`.
+- Blocked: Phase 1 is now further along the honest-complete-subsystem path, but the remaining explicit gaps are still real and still in-phase:
+  - real Isaac Sim / Isaac Gym adapter implementation
+  - Unitree-class sim-env integration behind typed backend routing
+  - richer Holosoma adapter behavior
+  - domain-randomization and system-ID policy
+  - NAG / LSD / GGDS productionization
+  - grounded GPU-backed perception-conditioned sim
+- Changed: continued the next in-phase ownership transfer by absorbing synthetic branch generation and gen2sim admission further into the sim/synth/physics WM:
+  - added `src/world_model/sim_synth_physics/synthetic_branches.py` as the WM-owned home for:
+    - local synthetic branch rollout/gating helpers
+    - branch gap labeling
+    - branch-plan compilation
+    - synthetic branch corpus metadata construction
+  - added `src/world_model/sim_synth_physics/gen2sim_admission.py` as the WM-owned home for:
+    - compilation of `Gen2SimAdmissionState`
+    - local synthetic branch corpus gen2sim assessment rows and summaries
+  - `src/world_model/sim_synth_physics/compiler.py` now calls through those modules instead of keeping branch-plan compilation and gen2sim admission logic inline
+  - `scripts/collect_local_synthetic_branches.py` is now a thinner WM worker: it still loads the stable world model and trust-net locally, but it no longer owns the branch rollout/gating rules or gen2sim corpus assessment logic
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/collect_local_synthetic_branches.py tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/collect_local_synthetic_branches.py tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_sim_synth_branch_helpers.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py tests/test_gap_agenda_ranking.py tests/test_coverage_compilation.py tests/test_gen2sim_validity.py`, and `git diff --check`.
+- Blocked: this narrows the script-owned branch gap, but the remaining explicit Phase 1 blockers are still the same honest ones:
+  - real Isaac Sim / Isaac Gym backend implementation
+  - Unitree-class sim-env integration
+  - richer Holosoma execution contract
+  - domain-randomization and system-identification policy
+  - NAG / LSD / GGDS productionization
+  - grounded GPU-backed perception-conditioned sim
+- Changed: pushed the next concrete Phase 1 backend-runtime tranche so the WM gets closer to a real humanoid execution substrate instead of just request/receipt scaffolding:
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now supports a real Holosoma train-or-eval split:
+    - evaluate an existing runtime policy when a policy id exists
+    - train from motion datapacks / direct motion clips when a policy id does not exist but a motion source bundle does
+    - emit honest `runtime_training_completed` status instead of pretending a missing policy blocks the lane when the runtime can actually train
+  - `src/world_model/sim_synth_physics/runtime_evidence.py` and `src/world_model/sim_synth_physics/calibration.py` now treat concrete runtime training as real runtime evidence, so adaptation/calibration receipts react to train-path execution instead of only eval-path execution
+  - added `src/world_model/sim_synth_physics/asset_manifest.py` and threaded it through `adapters/backend_isaac.py`, `asset_contracts.py`, `backend_runtime_execution.py`, `adapters/backend_holosoma.py`, and `shadow_execution.py`
+  - Unitree-target asset manifests are now normalized into canonical hardware contracts (`unitree_robot_description`, `whole_body_joint_map`, camera/IMU/force-torque calibration, actuator latency, joint limits, safety watchdog) instead of being treated as arbitrary manifest keys
+  - the resulting robot-asset contract now honestly unions backend-specific requirements with Unitree-class hardware requirements, which makes backend readiness reflect real humanoid control prerequisites rather than a thin manifest
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`, `python3 -m json.tool scripts/FOUNDATION_MODEL_BRINGUP_BACKLOG.json >/dev/null`, and `git diff --check`.
+- Blocked: this removes another structural Phase 1 excuse, but the remaining blockers are still concrete runtime/asset realities:
+  - a real Isaac Lab / Isaac Sim / Unitree backend module and assets
+  - real Holosoma host/runtime plus motion data and reward/retargeting context
+  - real GGDS/LDM and grounded video materialization on GPU
+- Changed: pushed the next Phase 1 runtime-materialization tranche so backend bring-up is operationally queueable rather than just documented:
+  - added `src/world_model/sim_synth_physics/runtime_targets.py` and threaded it through the Isaac and Holosoma backend bindings plus backend runtime materialization
+  - runtime bindings and runtime-request artifacts now carry explicit runtime-target contracts for Isaac/Unitree/Holosoma roots, SDKs, and asset trees, so missing host/repo/runtime pieces are named directly in canonical metadata and sidecars
+  - extended `src/orchestrator/loop_run_backlog.py` host capability detection to cover `diffusers`, Isaac runtime modules, Holosoma, and Unitree runtime roots, which makes GPU/runtime bring-up assessment more honest
+  - added `scripts/local_holosoma_smoke.py` as a real non-training Holosoma evaluation smoke
+  - added `scripts/NON_TRAINING_GPU_RUN_BACKLOG.json`, `src/orchestrator/non_training_gpu_run_backlog.py`, and `scripts/scan_non_training_gpu_run_backlog.py` so non-training GPU runs live in their own explicit queue instead of being mixed into the training backlog
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics src/orchestrator/loop_run_backlog.py src/orchestrator/non_training_gpu_run_backlog.py scripts/local_holosoma_smoke.py scripts/scan_non_training_gpu_run_backlog.py tests/test_sim_synth_runtime_targets.py tests/test_non_training_gpu_run_backlog.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics src/orchestrator/loop_run_backlog.py src/orchestrator/non_training_gpu_run_backlog.py scripts/local_holosoma_smoke.py scripts/scan_non_training_gpu_run_backlog.py tests/test_sim_synth_runtime_targets.py tests/test_non_training_gpu_run_backlog.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_non_training_gpu_run_backlog.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py tests/test_loop_run_backlog.py`, `python3 -m json.tool scripts/NON_TRAINING_GPU_RUN_BACKLOG.json >/dev/null`, and `git diff --check`.
+- Blocked: the remaining Phase 1 backend/runtime blockers are now more clearly “missing external runtime roots, SDKs, assets, GPUs, or checkpoints” rather than missing inventory of those surfaces inside the WM.
+- Changed: pushed the next Phase 1 external-runtime tranche so upstream runtime launches now feed canonical WM outcome evidence rather than terminating at `launch_completed` / `launch_failed`:
+  - added `src/world_model/sim_synth_physics/runtime_outcomes.py`
+  - the WM now compiles `backend_runtime_output_contract_v1` from runtime bundles/launch specs and harvests upstream outputs into `backend_runtime_outcome_receipt_v1`
+  - this is currently shaped around the upstream layouts we explicitly want to support:
+    - `unitree_sim_isaaclab`
+    - `unitree_rl_gym`
+    - `HumanoidVerse`
+    - `xr_teleoperate`
+    - Holosoma repo / motion bank / policy bank / retargeting roots
+  - `backend_runtime_execution.py` now threads that receipt into runtime execution metadata and artifact emission
+  - `runtime.py`, `runtime_evidence.py`, `runtime_work_orders.py`, `training_corpus.py`, `run_sim_synth_physics_loop.py`, and `run_phase1_runtime_launch.py` now preserve/use that truth end to end
+  - practical effect:
+    - the WM can distinguish `launch_not_executed`, `runtime_outputs_missing`, and `runtime_outputs_harvested`
+    - runtime work orders can now be `satisfied_by_external_runtime_outcomes`
+    - calibration/adaptation receipts now react to harvested upstream runtime evidence instead of only in-process runtime completion
+    - backend-selector and branch-planner corpora now preserve external-runtime outcome ids/status/counts rather than only launch status
+- Changed: deepened the concrete runtime-root / asset / policy posture using upstream repo conventions instead of only root existence:
+  - `runtime_layouts.py` now surfaces deploy/policy/data candidates per profile
+  - `runtime_targets.py` now includes additional optional Unitree-adjacent roots such as:
+    - `unitree_sdk2_python_root`
+    - `teleimager_root`
+    - `unitree_il_lerobot_root`
+  - `runtime_bundles.py` now carries the WM-owned output contract directly so launch artifacts and the full WM runtime speak the same upstream-runtime contract
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_phase1_runtime_launch.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_phase1_runtime_launch.py scripts/run_sim_synth_physics_loop.py tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, `python3 -m pytest -q tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`, and `git diff --check`.
+- Blocked: the honest remainder is now even more clearly external-runtime/GPU reality rather than missing WM plumbing:
+  - actual Isaac Lab / Isaac Sim / Unitree execution adapters and assets
+  - actual Holosoma host/runtime/policy/motion/retargeting assets
+  - actual GGDS / video-diffusion materialization on GPU
+## 2026-04-01
+
+- Changed: pushed the next concrete Isaac/Unitree runtime-execution mediation cut so the WM now owns not just the executable-adapter request but the consumer over that request:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_consumer.py`
+  - `runtime_bundles.py` now emits `backend_executable_adapter_consumer_v1` beside `backend_executable_adapter_request_v1`
+  - the consumer names:
+    - consumer mode
+    - consumer status
+    - local-python-bridge vs external-launch responsibility
+    - remaining preconditions
+  - `runtime_launch.py` now consumes that consumer surface during launch preparation instead of flattening the adapter mediation into generic launch metadata
+  - `backend_runtime_execution.py` now writes and preserves the consumer artifact/metadata inside the live Phase-1 runtime path
+  - `scripts/run_isaac_unitree_executable_adapter.py` now exposes both request and consumer
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_consumer.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/backend_runtime_execution.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_executable_consumer.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_consumer.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/backend_runtime_execution.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_executable_consumer.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_isaac_unitree_executable_consumer.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: this is a meaningful Phase-1 closure step, but it is still consumer mediation, not full execution realization:
+  - a concrete Isaac Lab / Isaac Sim / Unitree adapter still needs to consume this consumer surface against real upstream runtime/assets
+  - Holosoma still needs an equivalent runtime-execution deepening
+  - GPU-backed GGDS / video materialization remains outstanding
+
+- Changed: pushed the next concrete Phase 1 Isaac/Unitree executable-adapter cut so the WM does more than emit generic launch commands:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py`
+  - `runtime_bundles.py` now emits `backend_executable_adapter_request_v1` for Isaac/Unitree bundles and launch specs, carrying:
+    - deployment mode
+    - adapter entrypoint
+    - robot variant / placement class
+    - required target ids and required asset ids
+    - normalized asset refs
+    - calibration / observation / action contract ids
+    - output expectations
+    - environment overrides for the executable lane
+  - `runtime_launch.py` now treats that executable-adapter request as a load-bearing part of launch preparation instead of leaving the Unitree specifics implied only by command strings
+  - added `scripts/run_isaac_unitree_executable_adapter.py` as a dedicated WM-facing runner over the existing launch artifacts
+  - the result is that the Isaac/Unitree lane now has a concrete executable-adapter surface even when the remaining blocker is still the upstream runtime/assets/GPU rather than local repo logic
+- Changed: updated the Phase-1 master docs so the executable-adapter request is now an explicit part of the acceptance posture for the external-runtime lane:
+  - `docs/economic_world_model/multi_wm_architecture_plan.md`
+  - `docs/economic_world_model/roadmap.md`
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/backend_runtime_execution.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_executable_adapter.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/adapters/isaac_unitree_executable_adapter.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/backend_runtime_execution.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_executable_adapter.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py`, `python3 -m pytest -q tests/test_isaac_unitree_executable_adapter.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: this is another structural closure step, but Phase 1 still honestly needs:
+  - a concrete Isaac Lab / Isaac Sim / Unitree executable adapter that can consume these requests against real upstream runtime/assets
+  - deeper Holosoma runtime execution under the same contract quality
+  - GPU-backed GGDS / video materialization
+
+- Changed: reconciled branch-truth doctrine for the active multi-WM implementation arc:
+  - landed the previously local-only tranche/doctrine/collaboration artifacts:
+    - `docs/economic_world_model/neuralization_bridge_doctrine.md`
+    - `docs/economic_world_model/codex_tranche_sim_synth_closure.md`
+    - `docs/economic_world_model/codex_tranche_perception_wm_schema.md`
+    - `.agent/claude_copilot.md`
+    - `CLAUDE.md` now includes the Claude copilot doctrine entrypoint
+  - this makes the branch’s effective operating posture explicit in git rather than leaving the active/held tranche split and Codex/Claude collaboration doctrine as local-only state
+- Changed: completed the next highest-leverage Phase 1 Isaac/Unitree contract cut:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py`
+  - `backend_isaac.py` now emits a real `deployment_contract` and can distinguish:
+    - `runtime_ready`
+    - `external_launch_ready`
+    - `external_launch_assets_missing`
+    - older shadow/assets-missing states
+  - `runtime_targets.py`, `runtime_layouts.py`, `runtime_bundles.py`, `runtime_bridge.py`, `runtime_launch.py`, `runtime_outcomes.py`, and `backend_runtime_execution.py` now understand:
+    - `unitree_lerobot`
+    - XR teleop + `sdk2_python` / `teleimager`
+    - deployment-contract-aware preferred-profile selection
+    - richer external-launch transport profiles and output harvesting
+  - the main practical fix is that the WM now treats Unitree teleop / LeRobot / external launch posture as explicit runtime reality instead of flattening everything into generic Isaac shadow status
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py src/world_model/sim_synth_physics/adapters/backend_isaac.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_bridge.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/runtime_outcomes.py src/world_model/sim_synth_physics/backend_runtime_execution.py tests/test_isaac_unitree_deployment.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics/adapters/isaac_unitree_deployment.py src/world_model/sim_synth_physics/adapters/backend_isaac.py src/world_model/sim_synth_physics/adapters/__init__.py src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/runtime_layouts.py src/world_model/sim_synth_physics/runtime_bundles.py src/world_model/sim_synth_physics/runtime_bridge.py src/world_model/sim_synth_physics/runtime_launch.py src/world_model/sim_synth_physics/runtime_outcomes.py src/world_model/sim_synth_physics/backend_runtime_execution.py tests/test_isaac_unitree_deployment.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_isaac_unitree_deployment.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: Phase 1 remains the active implementation center of gravity. The honest remainder is still external runtime, assets, GPU, and provider maturity:
+  - real Isaac Lab / Isaac Sim / Unitree executable adapters and assets
+  - real Holosoma host/runtime + motion/policy/retargeting assets
+  - GGDS / video-diffusion GPU materialization
+
+- Changed: completed the next Phase 1 Isaac/Unitree execution-mediation cut so the runtime lane no longer jumps straight from consumer selection to generic launch status:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_execution.py`
+  - the new layer emits `backend_executable_adapter_execution_v1` over the existing request/consumer pair and distinguishes:
+    - `local_bridge_ready`
+    - `local_bridge_missing`
+    - `local_bridge_handed_off`
+    - `external_launch_ready`
+    - `external_launch_completed`
+    - `external_launch_failed`
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now writes and preserves that mediation artifact plus a new `backend_runtime_adapter_receipt_v1` inside the live Phase 1 runtime path
+  - `src/world_model/sim_synth_physics/runtime.py` now surfaces the adapter receipt as a first-class loop artifact, carries it into loop summaries and training feedback, and preserves the distinction between executable mediation, launch, and harvested outcomes
+  - `src/world_model/sim_synth_physics/training_corpus.py` now harvests the adapter receipt into backend-selector and branch-planner rows, so downstream training surfaces can see adapter readiness/execution-path truth instead of inferring everything from launch status
+  - `scripts/run_isaac_unitree_executable_adapter.py` now emits adapter execution plus adapter receipt alongside the existing launch report
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_isaac_unitree_adapter_execution.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: this is another real Phase-1 closure step, but the remaining honest gap is still the final executable realization, not more contract naming:
+  - a concrete Isaac Lab / Isaac Sim / Unitree adapter still needs to consume the new request/consumer/adapter-execution chain against real upstream runtime/assets
+  - Holosoma still needs equivalent runtime-execution mediation and receipt depth
+  - GGDS / video-diffusion still need GPU-backed materialization
+
+- Changed: pushed the next concrete Isaac/Unitree realization cut so the local runtime lane no longer relies on an implicit backend-factory jump:
+  - added `src/world_model/sim_synth_physics/adapters/isaac_unitree_adapter_realization.py`
+  - the Isaac/Unitree lane now emits `backend_executable_adapter_realization_v1`, which distinguishes:
+    - `local_backend_factory`
+    - `external_launch_delegate`
+    - blocked realization
+  - this is intentionally not the final hardware adapter; it is the typed surface that says how the current branch concretely realizes the adapter chain today
+  - `src/world_model/sim_synth_physics/backend_runtime_execution.py` now rebuilds that realization after adapter-execution finalization, preserves it in runtime metadata, and writes `backend_runtime_adapter_realization.json`
+  - `src/world_model/sim_synth_physics/runtime.py` now promotes that realization to a root-level loop artifact instead of leaving it nested only inside metadata
+  - `src/world_model/sim_synth_physics/training_corpus.py` now preserves realization path/status into backend-selector and branch-planner rows, so downstream training surfaces can tell “external delegate” from “local backend factory” rather than inferring from launch state alone
+  - `scripts/run_isaac_unitree_executable_adapter.py` now emits the same realization surface alongside request / consumer / execution / launch artifacts
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, `python3 -m pytest -q tests/test_isaac_unitree_adapter_execution.py tests/test_isaac_unitree_adapter_realization.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`, and `git diff --check`.
+- Blocked: the honest remainder is narrower again, but still real:
+  - a final concrete Isaac Lab / Isaac Sim / Unitree adapter implementation still needs to consume the new request / consumer / execution / realization chain against real upstream runtime/assets
+  - Holosoma still needs the same realization depth
+  - GGDS / video-diffusion still need GPU-backed materialization
+
+- Changed: pushed the next Phase 1 runtime-materialization tranche across both backend lanes so the local-runtime seam is explicit instead of being partly implicit and partly backend-specific:
+  - added `src/world_model/sim_synth_physics/adapters/local_backend_factory_adapter.py`
+  - the branch now emits a typed local backend-factory invocation/result surface over executable-adapter realization, so explicit local adapter materialization is no longer hidden inside a direct `make_motor_backend(...)` jump
+  - `backend_runtime_execution.py` now uses that explicit invocation/result surface before concrete runtime evaluation/training for both Isaac/Unitree and Holosoma
+  - local materialization truth is now preserved into adapter receipt metadata and downstream corpus rows, so replay/training surfaces can tell “local adapter was attempted and materialized” from “local path was only contract-shaped”
+- Changed: brought Holosoma up one major structural rung so it no longer lags Isaac/Unitree as a special-case runtime lane:
+  - added:
+    - `src/world_model/sim_synth_physics/adapters/holosoma_executable_adapter.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_executable_consumer.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_adapter_execution.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_adapter_realization.py`
+  - `runtime_bundles.py` now emits executable-adapter request/consumer surfaces for Holosoma too
+  - `backend_runtime_execution.py` now emits Holosoma adapter execution / realization / receipt metadata instead of leaving Holosoma as a concrete-runtime special case beside the typed lane
+  - the Holosoma motion-train path now explicitly drops `policy_checkpoint` when train-from-motion is the real bounded mode, so the adapter ladder stays honest instead of blocking a valid local training lane
+- Verification: `python3 -m compileall src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_local_backend_factory_adapter.py tests/test_holosoma_executable_adapter.py tests/test_holosoma_adapter_execution.py tests/test_holosoma_adapter_realization.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q`, `python3 -m ruff check src/world_model/sim_synth_physics scripts/run_isaac_unitree_executable_adapter.py tests/test_local_backend_factory_adapter.py tests/test_holosoma_executable_adapter.py tests/test_holosoma_adapter_execution.py tests/test_holosoma_adapter_realization.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`, `python3 -m pytest -q tests/test_local_backend_factory_adapter.py tests/test_holosoma_executable_adapter.py tests/test_holosoma_adapter_execution.py tests/test_holosoma_adapter_realization.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`, and `git diff --check`.
+- Blocked: Phase 1 is now closer to the right honest remainder:
+  - actual Isaac Lab / Isaac Sim / Unitree upstream runtime/assets/policies
+  - actual Holosoma host/runtime/motion/policy/retargeting assets
+  - GPU-backed GGDS / video materialization
+
+- Changed: pushed the next backend-specific closure tranche so upstream runtime surfaces stop living only as implicit repo roots and start becoming canonical runtime-pack truth inside the Phase 1 WM:
+  - added:
+    - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_pack.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_deployment.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_runtime_pack.py`
+  - `backend_isaac.py` now emits an explicit Isaac/Unitree upstream runtime pack over runtime targets, runtime layouts, deployment modes, policy-bank surfaces, telemetry surfaces, and normalized robot-asset refs
+  - `backend_holosoma.py` now emits both a Holosoma deployment contract and a Holosoma upstream runtime pack, and it no longer treats retargeting / reward-overlay / policy surfaces as universally required for all Holosoma modes
+  - `runtime_bundles.py`, `runtime_bridge.py`, `runtime.py`, `runtime_work_orders.py`, and `training_corpus.py` now preserve upstream runtime-pack truth as load-bearing metadata rather than leaving it stranded beside bindings
+  - `scripts/scan_phase1_runtime_layouts.py` now exports deployment contracts plus upstream runtime packs for both backends, so Phase 1 runtime scanning can name pack-ready vs pack-partial vs pack-blocked posture directly
+- Changed: this removes another fake-readiness seam:
+  - the WM can now say whether the Isaac/Unitree or Holosoma lane has a real upstream runtime/profile/policy/asset pack available
+  - Holosoma can now distinguish `sim_eval`, `motion_train`, and `retarget_eval` instead of pretending one universal asset posture
+  - downstream corpus/work-order surfaces now preserve pack status and missing components, so later training or GPU bring-up does not need to rediscover them from scattered roots
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_pack.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_runtime_launch.py`
+- Blocked: the honest Phase 1 remainder is narrower again and increasingly external:
+  - real Isaac Lab / Isaac Sim / Unitree runtime packs still need the actual upstream repos/assets/policies behind them
+  - real Holosoma runtime packs still need actual host/runtime/motion/policy/retargeting assets
+  - GPU-backed GGDS / video materialization still remains external-runtime / checkpoint / host work
+
+- Changed: pushed the next Phase 1 closure rung so upstream runtime packs now feed a typed runtime-binding layer instead of being consumed as loose pack metadata:
+  - added:
+    - `src/world_model/sim_synth_physics/adapters/isaac_unitree_runtime_binding.py`
+    - `src/world_model/sim_synth_physics/adapters/holosoma_runtime_binding.py`
+  - `runtime_bundles.py` now emits `runtime_binding` and writes `backend_runtime_binding.json`
+  - `runtime_launch.py`, `runtime_work_orders.py`, `runtime.py`, `training_corpus.py`, `scripts/scan_phase1_runtime_layouts.py`, and `scripts/run_isaac_unitree_executable_adapter.py` now preserve runtime-binding status, selected surfaces, and mode-relevant missing components
+  - this removes a real fake-readiness seam: pack-level gaps are no longer blindly inherited as execution blockers when the selected local mode is already satisfied by explicit policy refs or motion datapacks
+- Changed: fixed the Holosoma local concrete-runtime path so `motion_train` no longer mutates a stale `sim_eval` request in place:
+  - `backend_runtime_execution.py` now rebuilds the Holosoma executable-adapter request from the patched runtime binding when train-from-motion is the honest local mode
+  - local Holosoma eval can now run with an explicit policy ref even when external repo/launch roots are absent
+  - local Holosoma train-from-motion can now run with datapacks / inline clips without inheriting irrelevant `policy_surface` blockers
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py scripts/run_isaac_unitree_executable_adapter.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py`
+  - `python3 -m pytest -q tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_runtime_work_orders.py`
+  - result: `44 passed`
+  - `git diff --check`
+- Blocked: the remaining honest Phase 1 gap is now even more external:
+  - real Isaac/Unitree upstream runtime, assets, checkpoints, and host setup still need to sit behind the new runtime-pack -> runtime-binding -> adapter ladder
+  - real Holosoma host/runtime/motion/retargeting assets still need to sit behind the same ladder
+  - GPU-backed GGDS / video materialization is still outside the current host
+
+- Changed: closed the next concrete-runtime evidence gap so local backend execution no longer falls back to launch-shaped truth:
+  - `runtime_outcome_parsers.py` now classifies rollout `trajectory` artifacts as dataset capture surfaces before generic motion-dataset classification, so local runtime rollouts count as trainer/replay-ready dataset evidence
+  - `runtime_outcomes.py` now supports explicit local runtime artifact harvest and can emit `backend_runtime_outcome_receipt_v1` without a launch receipt, with `harvest_mode=local_runtime_execution`
+  - `backend_runtime_execution.py` now harvests policy / metrics / rollout artifacts directly after successful concrete local execution and writes:
+    - `backend_runtime_output_contract.json`
+    - `backend_runtime_output_summary.json`
+    - `backend_runtime_outcome_receipt.json`
+  - this means the concrete local Isaac/Unitree and Holosoma paths now preserve policy / dataset / metrics surface readiness as canonical outcome truth instead of leaving that evidence implicit in runtime-execution metadata
+- Changed: fixed a real fake-readiness bug on the Isaac/Unitree local bridge lane:
+  - `isaac_unitree_runtime_binding.py` now filters out stale upstream-pack/runtime-profile gaps when the selected local `sim_eval` path already has the concrete local requirements it actually needs
+  - `isaac_unitree_executable_adapter.py` now takes binding-selected missing components as primary request truth and only supplements them with still-missing required robot assets or policy state
+  - consequence: a real local Isaac bridge with policy ref + SDK root + asset root is no longer blocked by irrelevant external-pack placeholders before it reaches the backend factory
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_physics_world_model.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_outcomes.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest -q tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_scripts.py`
+  - `git diff --check`
+  - result: `26 passed` and `5 passed`
+- Blocked: the remaining honest Phase 1 backend gap is increasingly external rather than receipt-chain-local:
+  - real Isaac/Unitree upstream runtime/assets/checkpoints still need to sit behind the now-honest local concrete evidence path
+  - real Holosoma host/runtime/motion/policy/retargeting assets still need to sit behind the same path
+  - GPU-backed GGDS / video materialization remains external host/model work
+
+- Changed: pushed the next “real upstream evidence” Phase-1 closure tranche across both backend lanes:
+  - `runtime_layouts.py` now emits profile-level evidence instead of only root/candidate names:
+    - repo git metadata when a runtime root is a real local clone
+    - deploy / policy / data candidate counts
+    - primary deploy / policy / data refs
+  - `describe_isaac_policy_contract(...)` and `describe_holosoma_policy_contract(...)` now emit:
+    - primary checkpoint ref
+    - primary deploy-config ref
+    - primary runtime-report ref
+    - candidate-record inventories and counts
+  - `isaac_unitree_runtime_pack.py` now carries selected profile evidence plus declared-vs-verified asset truth:
+    - `verified_asset_ids`
+    - `declared_only_asset_ids`
+    - `asset_evidence_summary`
+  - `holosoma_runtime_pack.py` now carries selected profile evidence plus motion-source existence truth:
+    - `existing_motion_sources`
+    - `missing_motion_sources`
+  - `runtime_work_orders.py` and `training_corpus.py` now preserve that evidence into work-order metadata and trainer rows, so downstream consumers no longer see only `pack_ready/partial` but also the exact primary refs and evidence density behind that status
+- Changed: this removes another Phase-1 pseudo-readiness seam:
+  - “runtime pack ready” no longer only means root/candidate presence
+  - “asset present” for Isaac no longer means only “manifest key existed”
+  - local/runtime consumers now preserve which upstream surfaces are concrete and which are only declared
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_scan_phase1_runtime_layouts.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_work_orders.py tests/test_scan_phase1_runtime_layouts.py`
+  - `python3 -m pytest -q tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_launch.py tests/test_isaac_unitree_executable_adapter.py tests/test_holosoma_executable_adapter.py`
+  - `git diff --check`
+- Blocked: the honest remainder is narrower again:
+  - the branch now has richer evidence about upstream runtime roots/checkpoints/assets, but it still needs the actual upstream runtimes/assets/checkpoints on host
+  - Holosoma still needs actual host/runtime/motion/retargeting/provider assets behind those evidence surfaces
+  - GPU-backed materialization still remains external
+
+- Changed: pushed the next Category-B Phase 1 install-evidence tranche so runtime profiles now carry explicit install/preflight truth rather than only root/candidate truth:
+  - `runtime_layouts.py` now emits per-profile install evidence:
+    - selected install entrypoint paths
+    - matched/missing entrypoints
+    - primary entrypoint ref
+    - install preflight status
+    - install missing/verified components
+  - Isaac/Unitree and Holosoma upstream runtime packs now preserve that profile-level install truth, including a `profile_install_by_id` map so downstream consumers can reason about whichever profile is actually selected rather than only the pack’s preferred profile
+  - Isaac/Unitree and Holosoma runtime bindings now use the selected profile’s install truth when computing:
+    - `runtime_profile_surface`
+    - selected-profile missing components
+    - host-preflight requirements
+  - this removed a real false-blocker seam on the Holosoma motion-train lane: when the branch selects `holosoma_motion_bank`, it no longer inherits `holosoma_repo` install gaps like `profile_entrypoint`
+- Changed: trainer/work-order surfaces now preserve the stronger install truth:
+  - `training_corpus.py` now exports upstream/runtime-binding profile install status, selected primary entrypoint refs, and selected profile install-missing components
+  - `runtime_work_orders.py` now preserves the same fields so runtime bring-up tasks can distinguish:
+    - root discovered but install-blocked
+    - selected profile install-ready
+    - host-preflight blocked for an actually selected surface
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_runtime_layouts.py tests/test_scan_phase1_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_layouts.py tests/test_scan_phase1_runtime_layouts.py tests/test_isaac_unitree_runtime_pack.py tests/test_holosoma_runtime_pack.py tests/test_isaac_unitree_runtime_binding.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py`
+  - result: `34 passed`
+
+- Changed: proved that Phase 1 can still move meaningfully without a GPU once real public upstream roots are present on host:
+  - pulled public runtime roots onto `/Users/amarmurray/code` for the Isaac/Unitree lane (`IsaacLab`, `unitree_sim_isaaclab`, `unitree_rl_gym`, `HumanoidVerse`, `xr_teleoperate`, `unitree_IL_lerobot`, `unitree_sdk2`, `unitree_models`) and for the Holosoma lane (`holosoma`)
+  - the host scan now sees real local Isaac/Unitree runtime roots plus verified `unitree_sdk2_root` and `unitree_asset_root`
+  - the Holosoma lane now consumes repo-derived motion/policy/retargeting subroots directly from the cloned repo and reaches `host_preflight_status=preflight_ready`
+  - explicit deployment context now outranks background autodiscovery, so local public clones add evidence without hijacking requested Isaac profile/bridge selection
+- Changed: closed two real non-GPU internal incompleteness items:
+  - Holosoma policy selection no longer mistakes retargeting demo `.pt` files for runtime policy
+  - Holosoma motion/retargeting surfaces no longer require manual restatement when they already exist under a real local repo
+- Verification:
+  - `python3 -m compileall src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_scan_phase1_runtime_layouts.py -q`
+  - `python3 -m ruff check src/world_model/sim_synth_physics scripts/scan_phase1_runtime_layouts.py tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_scan_phase1_runtime_layouts.py`
+  - `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_layouts.py tests/test_holosoma_deployment.py tests/test_holosoma_runtime_pack.py tests/test_holosoma_runtime_binding.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_runtime_launch.py tests/test_sim_synth_runtime_work_orders.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_scan_phase1_runtime_layouts.py`
+  - `python3 scripts/scan_phase1_runtime_layouts.py --output-path /tmp/phase1_runtime_scan_post_holosoma_fix.json`
+  - result: `80 passed`
+
+- Additional non-GPU Unitree asset-normalization pass:
+  - `src/world_model/sim_synth_physics/asset_manifest.py` now derives verified local Unitree asset surfaces from already-discovered public roots rather than waiting for a hand-authored manifest.
+  - Verified/derived surfaces now include:
+    - `unitree_robot_description`
+    - `whole_body_joint_map`
+    - `joint_limit_profile`
+    - recommended:
+      - `control_frequency_profile`
+      - `teleop_recovery_contract`
+  - The derivation is intentionally conservative:
+    - it uses real local files from `unitree_models`, `unitree_rl_gym`, `HumanoidVerse`, `unitree_sim_isaaclab`, and `xr_teleoperate`
+    - it does not count loose README prose or generic control-loop mentions as `actuator_latency_profile` or `safety_watchdog_profile`
+  - The live host scan after this pass now reports:
+    - `verified_asset_count = 5` on the Isaac/Unitree runtime pack
+    - remaining Isaac host-preflight blockers:
+      - `asset::actuator_latency_profile`
+      - `asset::safety_watchdog_profile`
+  - This narrowed the useful non-GPU Phase-1 remainder again: public repos helped materially, and the remaining Isaac asset blockers are now the two contract surfaces that still lack clean public artifacts.
+
+- Phase 2 Perception / Grounding first functional compiler tranche:
+  - `src/world_model/perception_grounding/compiler.py` now compiles `PerceptionGroundingWorldState` from real upstream inputs already present in-repo:
+    - scene tracks
+    - belief state
+    - VLA semantic evidence
+    - existing semantic-world-model heuristic grounding
+  - the compiled state now owns:
+    - canonical scene graph
+    - temporal grounding state
+    - evidence routing state
+    - provider/dataset/task/deployment-resource surfaces
+    - semantic bridge registry with first heuristic bridge outputs
+  - the semantic bridge family is no longer only declared:
+    - Sim / Synth semantic bridge now feeds sim-synth semantic input context and inferential summary fields
+    - annotation / evidence semantic bridge now feeds rollout-labeler tags and labeling metadata
+  - `VisionBackboneStub` and `HeuristicVisionEncoderPolicy` now expose typed provider/advisory posture instead of remaining ambient placeholder consumers
+  - closure effect:
+    - Phase 2 is no longer just a schema/receipt shell
+    - the Perception / Grounding WM is now starting to behave like a loop-facing subsystem at `shadow_runtime`
+    - remaining internal work is now the next honest cluster:
+      - live provider/deployment/headroom receipt emission
+      - provider/runtime inventory compilation
+      - replay/export surfaces
+      - more downstream consumers
+
+### 2026-04-03: Perception Seam Training Infrastructure
+
+- Created complete seam training infrastructure for Phase 2 Perception / Grounding WM:
+
+  **Loss Functions Module** (`src/training/perception_seam_losses.py`):
+  - `evidence_fusion_loss`: held-out provider reconstruction + task correlation + availability contrastive
+  - `sam_calibration_loss`: calibrated confidence vs downstream quality + uncertainty correlation + prompt satisfaction
+  - `depth_metric_calibration_loss`: metric depth vs GT + uncertainty calibration + gradient preservation + scale consistency
+  - `vjepa_temporal_alignment_loss`: future state prediction + confidence calibration + temporal ordering + smoothness
+  - `vision_backbone_projection_loss`: object identity prediction + scene contrastive + cross-provider alignment
+  - Each loss returns `SeamLossResult` with total loss, component breakdown, and metrics
+
+  **Data Loaders Module** (`src/training/perception_seam_data.py`):
+  - `ProviderAgreementDataset`: base dataset for multi-provider observations
+  - `EvidenceFusionDataset` + `EvidenceFusionBatch`: held-out provider training data
+  - `SAMCalibrationDataset` + `SAMCalibrationBatch`: mask quality calibration data
+  - `DepthCalibrationDataset` + `DepthCalibrationBatch`: metric depth ground truth data
+  - `VJEPATemporalDataset` + `VJEPATemporalBatch`: temporal alignment training data
+  - Synthetic data generators for testing/bootstrapping each dataset type
+  - Factory functions: `create_evidence_fusion_loader`, `create_sam_calibration_loader`, etc.
+
+  **Trainer Module** (`src/training/perception_seam_trainer.py`):
+  - `PerceptionSeamTrainer`: full training orchestrator with:
+    - Gradient accumulation and mixed precision support
+    - Validation loop with early stopping
+    - Checkpoint saving via `PerceptionSeamRegistry`
+    - Benchmark gate evaluation for promotion decisions
+    - Receipt emission: `SeamTrainingStepReceipt`, `SeamValidationReceipt`, `BenchmarkGateReceipt`
+  - `SeamTrainingConfig`: LR scheduling, warmup, gradient clipping, promotion thresholds
+  - Convenience functions: `train_evidence_fusion_seam`, `train_sam_calibration_seam`, etc.
+
+  **Benchmark Gate Evaluation** (`src/training/perception_seam_benchmarks.py`):
+  - `EvidenceFusionBenchmark`: reconstruction accuracy, task correlation, provider dropout robustness
+  - `SAMCalibrationBenchmark`: ECE, uncertainty-error correlation, confidence-quality correlation
+  - `DepthCalibrationBenchmark`: abs-rel error, delta accuracy, uncertainty calibration
+  - `VJEPATemporalBenchmark`: prediction accuracy, confidence calibration, temporal consistency
+  - `BenchmarkGateResult`: overall score, per-metric breakdown, promotion decision
+  - `BenchmarkGateConfig`: promotion/demotion/shadow thresholds, robustness testing options
+
+  **Tests** (`tests/test_perception_seam_training.py`):
+  - 26 tests covering loss functions, data loaders, collation, and benchmark evaluation
+  - All tests pass
+
+- This closes the "CRITICAL GAP: Seam Training Infrastructure" identified in Phase 2 assessment
+- Seams can now be trained, validated, and promoted via benchmark gates
+- Receipt-backed training enables honest promotion decisions without manual intervention
+
+- Verification:
+  - `python3 -m compileall src/training/perception_seam_*.py -q`
+  - `python3 -m pytest tests/test_perception_seam_training.py tests/test_perception_grounding_neural_seams.py -v`
+  - result: `63 passed` (26 new + 37 existing)

@@ -663,6 +663,7 @@ def _run_single_workcell_episode(
     metadata_payload["semantic_world_model_path"] = sidecar_paths["semantic_world_model_path"]
     metadata_payload["semantic_snapshot_path"] = sidecar_paths["semantic_snapshot_path"]
     metadata_payload["orchestrator_advisory_path"] = sidecar_paths["orchestrator_advisory_path"]
+    metadata_payload["control_plane_context_path"] = sidecar_paths["control_plane_context_path"]
     metadata_payload["scene_tracks_backend"] = backend_selected
     metadata_payload["scene_tracks_training_eligible"] = bool(
         scene_tracks_truth.get("scene_tracks_training_eligible", False)
@@ -697,6 +698,7 @@ def _run_single_workcell_episode(
         "scene_tracks_quality": float(scene_tracks_result.quality.quality_score),
         "scene_ir_quality": float(scene_tracks_result.scene_ir_quality),
         "semantic_world_model_path": sidecar_paths["semantic_world_model_path"],
+        "control_plane_context_path": sidecar_paths["control_plane_context_path"],
         "backend_selected": backend_selected,
         "grounded_track_object_count": int(world_model.topology.get("grounded_track_object_count", 0)),
         "semantic_density_score": float(scene_tracks_summary.get("semantic_density_score", 0.0) or 0.0),

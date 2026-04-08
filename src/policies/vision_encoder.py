@@ -3,6 +3,9 @@ Heuristic VisionEncoderPolicy wrapping the deterministic VisionBackboneStub.
 """
 from typing import Any, List, Sequence
 
+from src.world_model.perception_grounding.provider_contracts import (
+    VisionBackboneProviderContract,
+)
 from src.policies.interfaces import VisionEncoderPolicy
 from src.vision.backbone_stub import VisionBackboneStub
 from src.vision.interfaces import VisionFrame, VisionLatent
@@ -13,6 +16,9 @@ class HeuristicVisionEncoderPolicy(VisionEncoderPolicy):
         self._encoder = VisionBackboneStub(model_name=model_name, latent_dim=latent_dim)
         self.mode = "stub"
         self.backbone_name = model_name
+
+    def describe_provider_contract(self) -> VisionBackboneProviderContract:
+        return self._encoder.describe_provider_contract()
 
     def encode(self, frame: Any) -> VisionLatent:
         if isinstance(frame, VisionFrame):

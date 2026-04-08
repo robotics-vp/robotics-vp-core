@@ -41,7 +41,7 @@ def make_backend(
 
     Raises:
         ValueError: If engine_type is unknown or required args are missing
-        NotImplementedError: If Isaac backend is requested (stub only)
+        NotImplementedError: If the selected backend cannot satisfy its contract
 
     Examples:
         # Wrap existing PyBullet environment
@@ -103,7 +103,8 @@ def make_backend(
         return PyBulletBackend(env=env, env_name=env_name, summarize_fn=summarize_fn)
 
     elif engine_type == "isaac":
-        # Isaac backend is currently a stub - will raise NotImplementedError
+        # Isaac backend is an explicit shadow-contract backend until real Isaac/Unitree
+        # runtime assets are available on the host.
         return IsaacBackend(
             env_config=env_config,
             num_envs=num_envs,
@@ -155,18 +156,18 @@ def get_backend_info(engine_type: str) -> Dict[str, Any]:
             ],
         },
         "isaac": {
-            "status": "stub",
-            "description": "Isaac Gym / Isaac Lab physics engine (not yet implemented)",
+            "status": "shadow_contract",
+            "description": "Isaac Gym / Isaac Lab shadow-contract backend with canonical observation/media summaries",
             "requirements": ["isaacgym", "torch"],
             "features": [
-                "Parallel environment execution (vectorized)",
-                "GPU-based physics",
-                "High-performance training",
-                "Tensor-based observations/actions",
+                "Parallel environment slots (vectorized API)",
+                "Canonical IsaacAdapter observations/media/energy summaries",
+                "Deterministic shadow execution for replay/export plumbing",
+                "Future insertion point for Isaac Sim / Isaac Gym / Unitree assets",
             ],
             "use_cases": [
-                "Large-scale policy training",
-                "Sim-to-real transfer",
+                "Adapter and receipt integration",
+                "Shadow sim-contract validation",
             ],
         },
     }
@@ -175,4 +176,3 @@ def get_backend_info(engine_type: str) -> Dict[str, Any]:
         raise ValueError(f"Unknown engine_type '{engine_type}'")
 
     return info[engine_type]
-

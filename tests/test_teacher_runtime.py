@@ -69,8 +69,10 @@ def test_teacher_runtime_serialization_round_trip(tmp_path: Path) -> None:
     loaded_envelope = load_teacher_action_envelope_json(envelope_path)
 
     assert loaded_contract.contract_id == contract.contract_id
+    assert loaded_contract.provider_truth["authority_class"] == "canonical_metadata"
     assert loaded_envelope.failure_mode == "teacher_missing"
     assert loaded_envelope.available is False
+    assert loaded_envelope.provider_truth["availability_class"] in {"teacher_missing", "unavailable"}
 
 
 def test_openvla_teacher_runtime_reports_unavailable_predictions() -> None:
@@ -83,9 +85,11 @@ def test_openvla_teacher_runtime_reports_unavailable_predictions() -> None:
     assert envelope.available is False
     assert envelope.failure_mode == "teacher_missing"
     assert envelope.provenance["contract_id"] == contract.contract_id
+    assert contract.provider_truth["backend_selected"] == "unavailable"
     assert contract.metadata["execution_preconditions"]["ready"] is False
     assert contract.metadata["backend_status"]["backend_selected"] == "unavailable"
     assert envelope.metadata["execution_preconditions"]["ready"] is False
+    assert envelope.provider_truth["authority_class"] == "canonical_metadata"
     assert "object:drawer" in TeacherActionEnvelope.unavailable(
         teacher_id="openvla",
         model_name="dummy/openvla",
@@ -109,3 +113,5 @@ def test_openvla_teacher_runtime_enriches_semantic_hints() -> None:
     assert "drawer" in vla_payload["object_refs"]
     assert "open" in vla_payload["affordance_hints"]
     assert envelope.metadata["backend_selected"] == "real"
+    assert envelope.provider_truth["backend_selected"] == "real"
+    assert envelope.provider_truth["availability_class"] == "real_backend"

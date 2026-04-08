@@ -78,6 +78,7 @@ def test_online_sampler_and_replay_buffer_apply_bounded_queue_influence(tmp_path
 
     dispatch = sampler.dispatch_queue(batch_size=3, seed=0, strategy="balanced")
     assert dispatch["original_queue_order"][0] != dispatch["adjusted_queue_order"][0]
+    assert dispatch["authority_class"] == "bounded_authority"
     assert dispatch["entries"][0]["promotion_stage"] == "advisory"
     assert dispatch["entries"][0]["influence_source"] == "heuristic"
 
@@ -121,6 +122,7 @@ def test_online_sampler_and_replay_buffer_apply_bounded_queue_influence(tmp_path
     assert counts["ep_high"] > counts["ep_low"]
     artifact = agent.get_last_sampling_artifact()
     assert artifact is not None
+    assert artifact["authority_class"] == "bounded_authority"
     assert artifact["original_queue_order"]
     assert artifact["adjusted_queue_order"]
     assert artifact["reweight_factors"]["ep_high"] > artifact["reweight_factors"]["ep_low"]

@@ -194,6 +194,10 @@ class EconomicLearner:
 
         # 5. Generate report
         summary = {
+            "receipt_kind": "phase_h_budget_cycle_v1",
+            "authority_class": "remain_advisory",
+            "decision_scope": "phase_h_budget_coordination",
+            "reward_math_mutation": False,
             "episode_count": episode_count,
             "total_budget_usd": self.total_budget_usd,
             "skill_count": len(self.skills),
@@ -201,8 +205,11 @@ class EconomicLearner:
             "budgets": {sid: b.to_dict() for sid, b in self.budgets.items()},
         }
         execution_summary = self.config.get("execution_precondition_summary")
+        input_receipt_context = self.config.get("input_receipt_context")
         if isinstance(execution_summary, dict) and execution_summary:
             summary["execution_precondition_summary"] = execution_summary
+        if isinstance(input_receipt_context, dict) and input_receipt_context:
+            summary["input_receipt_context"] = dict(input_receipt_context)
 
         shell_activation = evaluate_shell_activation_backlog(
             execution_summary if isinstance(execution_summary, dict) else {},
@@ -241,6 +248,9 @@ class EconomicLearner:
                 metadata={
                     "activation_id": activation.get("activation_id"),
                     "episode_count": episode_count,
+                    "consumed_receipt_kinds": list(
+                        summary.get("input_receipt_context", {}).get("consumed_receipt_kinds", [])
+                    ),
                 },
             ).to_dict()
         if future_training:

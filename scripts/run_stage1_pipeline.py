@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Stage 1 Pipeline: Real Video → Diffusion → VLA Distillation → DataPackMeta
+Stage 1 Pipeline: Real Video → Diffusion Planning → VLA Distillation → DataPackMeta
 
 Connects:
 1. Video references (real demonstrations)
-2. Diffusion stub (augmented clips based on semantic tags)
+2. Governed diffusion runtime (augmented-clip plans based on semantic tags)
 3. VLA controller (skill plan generation)
 4. DataPackMeta creation (for downstream RL training)
 
-No GPU, no actual generation - just structural correctness.
+No GPU-backed video materialization is required for the planning path, but the
+runtime now reports explicit provider truth instead of pretending a stub is a
+real backend.
 """
 
 import argparse
@@ -26,10 +28,7 @@ if __package__ is None or __package__ == "":
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
-from src.diffusion.real_video_diffusion_stub import (
-    VideoDiffusionStub,
-    DiffusionProposal,
-)
+from src.diffusion import DiffusionProposal, VideoDiffusionRuntime, VideoDiffusionRuntimeConfig
 from src.evidence import (
     EvidenceBus,
     EvidenceRecord,
@@ -52,7 +51,10 @@ from src.valuation.datapack_schema import (
 )
 from src.regal.gen_plausibility import RegalGenPlausibilityNode
 from src.regal.base import RegalDecision
-from src.semantic.runtime_backbone import SemanticRuntimeBackbone
+from src.semantic.runtime_backbone import (
+    SemanticRuntimeBackbone,
+    build_orchestrator_control_plane_context,
+)
 from src.world_model import GovernedVideoWorldModel, SemanticWorldModelBuilder
 from src.world_model.governed_video_supervision import build_governed_video_supervision_bundle
 from src.vision.reconstruction import (
@@ -531,6 +533,7 @@ def write_stage1_sidecars(
     semantic_world_model_path = sidecar_dir / f"{episode_id}_semantic_world_model_v1.json"
     semantic_snapshot_path = sidecar_dir / f"{episode_id}_semantic_snapshot_v1.json"
     orchestrator_advisory_path = sidecar_dir / f"{episode_id}_orchestrator_advisory_v1.json"
+    control_plane_context_path = sidecar_dir / f"{episode_id}_control_plane_context_v1.json"
     evidence_bus_path.write_text(json.dumps(evidence_bus.to_dict(), indent=2))
     belief_state_path.write_text(json.dumps(belief_state.to_dict(), indent=2))
     snapshot_path.write_text(json.dumps(snapshot.to_dict(), indent=2))
@@ -546,6 +549,21 @@ def write_stage1_sidecars(
     semantic_world_model_path.write_text(json.dumps(semantic_world_model.to_dict(), indent=2))
     semantic_snapshot_path.write_text(json.dumps(semantic_snapshot.to_dict(), indent=2))
     orchestrator_advisory_path.write_text(json.dumps(orchestrator_advisory.to_json(), indent=2))
+    control_plane_context_path.write_text(
+        json.dumps(
+            build_orchestrator_control_plane_context(
+                semantic_world_model=semantic_world_model,
+                semantic_snapshot=semantic_snapshot,
+                orchestrator_advisory=orchestrator_advisory,
+                artifact_refs={
+                    "semantic_world_model_path": str(semantic_world_model_path),
+                    "semantic_snapshot_path": str(semantic_snapshot_path),
+                    "orchestrator_advisory_path": str(orchestrator_advisory_path),
+                },
+            ),
+            indent=2,
+        )
+    )
     sidecar_paths = {
         "evidence_bus_path": str(evidence_bus_path),
         "belief_state_path": str(belief_state_path),
@@ -554,6 +572,7 @@ def write_stage1_sidecars(
         "semantic_world_model_path": str(semantic_world_model_path),
         "semantic_snapshot_path": str(semantic_snapshot_path),
         "orchestrator_advisory_path": str(orchestrator_advisory_path),
+        "control_plane_context_path": str(control_plane_context_path),
     }
     metadata = video_ref.get("metadata", {})
     if not isinstance(metadata, dict):
@@ -687,7 +706,7 @@ def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
 def generate_diffusion_proposals(
     video_ref: Dict[str, Any],
     semantic_tags: List[str],
-    diffusion_stub: VideoDiffusionStub,
+    diffusion_runtime: VideoDiffusionRuntime,
     world_model: GovernedVideoWorldModel,
     belief_state: Any,
     objective_preset: str = "balanced",
@@ -725,7 +744,7 @@ def generate_diffusion_proposals(
         "constraint_pressure": float(len(dict(constraint_set.get("hard_bounds", {}) or {}))) / 6.0,
         "governed_hypotheses": [hypothesis.to_dict() for hypothesis in hypotheses],
     }
-    proposals = diffusion_stub.propose_augmented_clips(
+    proposals = diffusion_runtime.propose_augmented_clips(
         episode_id=video_ref["episode_id"],
         media_refs=[video_ref["video_path"]],
         semantic_tags=semantic_tags,
@@ -923,6 +942,9 @@ def create_datapack_from_pipeline(
             "meta_node_weights": getattr(orchestrator_advisory, "meta_node_weights", {}),
             "diffusion_routing_source": diffusion_proposal.routing_source,
             "diffusion_routing_score": diffusion_proposal.routing_score,
+            "diffusion_backend_selected": diffusion_proposal.diffusion_backend_selected,
+            "diffusion_backend_policy": diffusion_proposal.diffusion_backend_policy,
+            "diffusion_materialization_mode": diffusion_proposal.diffusion_materialization_mode,
             "benchmark_admission_mode": (
                 dict(execution_work_order or {}).get("recommended_mode", "shadow_stage1_datapack")
             ),
@@ -940,6 +962,10 @@ def create_datapack_from_pipeline(
                 "routing_score": diffusion_proposal.routing_score,
                 "source_hypothesis_id": diffusion_proposal.source_hypothesis_id,
                 "benchmark_gate_ready": diffusion_proposal.benchmark_gate_ready,
+                "diffusion_backend_selected": diffusion_proposal.diffusion_backend_selected,
+                "diffusion_backend_policy": diffusion_proposal.diffusion_backend_policy,
+                "diffusion_materialization_mode": diffusion_proposal.diffusion_materialization_mode,
+                "diffusion_provider_truth": dict(diffusion_proposal.diffusion_provider_truth or {}),
             },
         },
     )
@@ -954,6 +980,9 @@ def run_stage1_pipeline(
     output_dir: str = "results/stage1_pipeline",
     video_manifest: Optional[str] = None,
     plausibility_node: Optional[RegalGenPlausibilityNode] = None,
+    diffusion_backend_policy: str = "auto",
+    diffusion_model_ref: Optional[str] = None,
+    diffusion_device: str = "cuda",
 ) -> Dict[str, Any]:
     """
     Run full Stage 1 pipeline.
@@ -964,7 +993,13 @@ def run_stage1_pipeline(
     os.makedirs(output_dir, exist_ok=True)
 
     # Initialize components
-    diffusion_stub = VideoDiffusionStub()
+    diffusion_runtime = VideoDiffusionRuntime(
+        VideoDiffusionRuntimeConfig(
+            model_ref=str(diffusion_model_ref or ""),
+            device=str(diffusion_device or "cuda"),
+            backend_policy=str(diffusion_backend_policy or "auto"),
+        )
+    )
     vla_planner = VLATransformerPlanner()
     plausibility_node = plausibility_node or RegalGenPlausibilityNode()
     world_model = GovernedVideoWorldModel()
@@ -998,7 +1033,7 @@ def run_stage1_pipeline(
         proposals, snapshot, hypotheses, constraint_set, routing_context = generate_diffusion_proposals(
             video_ref,
             semantic_tags,
-            diffusion_stub,
+            diffusion_runtime,
             world_model,
             belief_state,
             objective_preset,
@@ -1184,6 +1219,10 @@ def run_stage1_pipeline(
                 "routing_source": proposal.routing_source,
                 "routing_score": float(proposal.routing_score),
                 "source_hypothesis_id": proposal.source_hypothesis_id,
+                "diffusion_backend_selected": proposal.diffusion_backend_selected,
+                "diffusion_backend_policy": proposal.diffusion_backend_policy,
+                "diffusion_materialization_mode": proposal.diffusion_materialization_mode,
+                "diffusion_provider_truth": dict(proposal.diffusion_provider_truth or {}),
                 "diffusion_routing_context": dict(routing_context),
                 "video_state_id": snapshot.state_id,
                 "counterfactual_eval_id": supervision_bundle.counterfactual_eval.eval_id,
@@ -1237,6 +1276,9 @@ def run_stage1_pipeline(
                 "diffusion_routing_source": proposal.routing_source,
                 "diffusion_routing_score": float(proposal.routing_score),
                 "source_hypothesis_id": proposal.source_hypothesis_id,
+                "diffusion_backend_selected": proposal.diffusion_backend_selected,
+                "diffusion_backend_policy": proposal.diffusion_backend_policy,
+                "diffusion_materialization_mode": proposal.diffusion_materialization_mode,
             }
             datapack.episode_metrics["execution_preconditions"] = execution_preconditions.to_dict()
             datapack.episode_metrics["execution_work_order"] = work_order.to_dict()
@@ -1245,6 +1287,12 @@ def run_stage1_pipeline(
             datapack.episode_metrics["vision_backbone_selected"] = _vision_backbone_selected(video_ref)
             datapack.episode_metrics["teacher_runtime_backend_selected"] = _teacher_runtime_backend_selected(video_ref)
             datapack.episode_metrics["diffusion_routing_score"] = float(proposal.routing_score)
+            datapack.episode_metrics["diffusion_backend_selected"] = proposal.diffusion_backend_selected
+            datapack.episode_metrics["diffusion_backend_policy"] = proposal.diffusion_backend_policy
+            datapack.episode_metrics["diffusion_materialization_mode"] = proposal.diffusion_materialization_mode
+            datapack.episode_metrics["diffusion_provider_truth"] = dict(
+                proposal.diffusion_provider_truth or {}
+            )
             print(f"      DataPack: {datapack.pack_id}")
             print(f"      Tier: {datapack.attribution.tier}, Trust: {datapack.attribution.trust_score:.3f}")
 
@@ -1269,6 +1317,8 @@ def run_stage1_pipeline(
                 "benchmark_gate": benchmark_gate.to_dict(),
                 "routing_source": proposal.routing_source,
                 "routing_score": float(proposal.routing_score),
+                "diffusion_backend_selected": proposal.diffusion_backend_selected,
+                "diffusion_backend_policy": proposal.diffusion_backend_policy,
                 "blocked": False,
             })
 
@@ -1310,6 +1360,7 @@ def run_stage1_pipeline(
     avg_novelty = 0.0
     augmentation_types = {}
     routing_sources = {}
+    diffusion_backends = {}
 
     completed_entries = [entry for entry in pipeline_log if not entry.get("blocked")]
     for entry in completed_entries:
@@ -1320,6 +1371,8 @@ def run_stage1_pipeline(
         augmentation_types[aug_type] = augmentation_types.get(aug_type, 0) + 1
         routing_source = str(entry.get("routing_source", "unknown"))
         routing_sources[routing_source] = routing_sources.get(routing_source, 0) + 1
+        diffusion_backend = str(entry.get("diffusion_backend_selected", "unknown"))
+        diffusion_backends[diffusion_backend] = diffusion_backends.get(diffusion_backend, 0) + 1
 
     if completed_entries:
         avg_trust /= len(completed_entries)
@@ -1350,6 +1403,7 @@ def run_stage1_pipeline(
         "avg_novelty": avg_novelty,
         "augmentation_type_distribution": augmentation_types,
         "routing_source_distribution": routing_sources,
+        "diffusion_backend_distribution": diffusion_backends,
         "objective_preset": objective_preset,
         "proposal_admission_log": str(admission_log_path),
     }
@@ -1370,6 +1424,25 @@ def main():
                         choices=["balanced", "throughput", "safety", "energy_saver"])
     parser.add_argument("--output-dir", type=str, default="results/stage1_pipeline")
     parser.add_argument("--video-manifest", type=str, default=None, help="Optional JSON/JSONL manifest of real video references")
+    parser.add_argument(
+        "--diffusion-backend-policy",
+        type=str,
+        default="auto",
+        choices=["auto", "real", "disabled", "stub"],
+        help="Real-or-unavailable policy for the diffusion materialization provider.",
+    )
+    parser.add_argument(
+        "--diffusion-model-ref",
+        type=str,
+        default=None,
+        help="Optional local/cached diffusers model ref for real video diffusion bring-up.",
+    )
+    parser.add_argument(
+        "--diffusion-device",
+        type=str,
+        default="cuda",
+        help="Device to use when a real diffusion provider is available.",
+    )
     args = parser.parse_args()
 
     print("=" * 70)
@@ -1386,6 +1459,9 @@ def main():
         objective_preset=args.objective_preset,
         output_dir=args.output_dir,
         video_manifest=args.video_manifest,
+        diffusion_backend_policy=args.diffusion_backend_policy,
+        diffusion_model_ref=args.diffusion_model_ref,
+        diffusion_device=args.diffusion_device,
     )
 
     print("\n" + "=" * 70)

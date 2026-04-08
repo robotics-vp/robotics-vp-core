@@ -74,14 +74,19 @@ def test_rollout_labeler_stub_without_openvla(monkeypatch, tmp_path: Path):
     teacher_contract = json.loads(teacher_contract_path.read_text())
     assert teacher_contract["available"] is False
     assert teacher_contract["metadata"]["availability_reason"] == "openvla_disabled"
+    assert teacher_contract["provider_truth"]["authority_class"] == "canonical_metadata"
+    assert teacher_contract["provider_truth"]["availability_class"] == "disabled"
     teacher_action = json.loads(teacher_action_path.read_text())
     assert teacher_action["available"] is False
     assert teacher_action["failure_mode"] == "openvla_disabled"
+    assert teacher_action["provider_truth"]["authority_class"] == "canonical_metadata"
     teacher_trace = json.loads(teacher_trace_path.read_text())
     assert teacher_trace["advisory_only"] is True
+    assert teacher_trace["provider_truth"]["authority_class"] == "canonical_metadata"
     assert labeled[0].metadata["execution_preconditions"]["ready"] is False
     assert labeled[0].metadata["future_training_signals"]["semantic_grounding_non_heuristic"] is False
     assert labeled[0].metadata["teacher_runtime_backend_selected"] == "disabled"
+    assert labeled[0].metadata["teacher_provider_truth"]["availability_class"] == "disabled"
 
 
 def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):
@@ -119,6 +124,7 @@ def test_rollout_labeler_openvla_error_fallback(monkeypatch, tmp_path: Path):
     teacher_action = json.loads(teacher_action_path.read_text())
     assert teacher_contract["metadata"]["availability_reason"] == "boom"
     assert teacher_action["failure_mode"] == "boom"
+    assert teacher_action["provider_truth"]["authority_class"] == "canonical_metadata"
 
 
 def test_rollout_labeler_preserves_structured_teacher_semantics(monkeypatch, tmp_path: Path):
@@ -195,8 +201,100 @@ def test_rollout_labeler_preserves_structured_teacher_semantics(monkeypatch, tmp
     assert teacher_trace["metadata"]["affordance_hints"] == ["open"]
     assert teacher_trace["metadata"]["risk_hints"] == ["fragility"]
     assert "object:drawer" in teacher_trace["metadata"]["semantic_tags"]
+    assert teacher_trace["provider_truth"]["backend_selected"] == "real"
     assert labeled[0].metadata["scene_tracks_backend"] == "real"
+    assert labeled[0].metadata["scene_tracks_provider_truth"]["grounding_class"] == "non_heuristic_grounded"
     assert labeled[0].metadata["semantic_grounding_mode"] == "non_heuristic"
     assert labeled[0].metadata["grounded_track_object_count"] == 2
     assert labeled[0].metadata["future_training_signals"]["teacher_runtime_live"] is True
     assert labeled[0].metadata["execution_preconditions"]["ready"] is True
+
+
+def test_rollout_labeler_consumes_perception_grounding_annotation_bridge(
+    monkeypatch, tmp_path: Path
+):
+    import src.vla.rollout_labeler as labeler
+
+    class _Runtime:
+        def describe_contract(self):
+            return TeacherAdapterContract(
+                teacher_id="openvla",
+                model_name="dummy/openvla",
+                modality="action_semantics",
+                advisory_only=True,
+                available=True,
+            )
+
+        def predict_action(self, image, instruction):
+            return TeacherActionEnvelope(
+                teacher_id="openvla",
+                model_name="dummy/openvla",
+                instruction=instruction,
+                available=True,
+                action={"dx": 0.2, "gripper": 0.4, "vla_available": 1.0, "confidence": 0.85},
+                confidence=0.85,
+                failure_mode="teacher_available",
+                semantic_tags=["object:drawer", "affordance:open"],
+                object_refs=["drawer"],
+                affordance_hints=["open"],
+                risk_hints=["fragility"],
+            )
+
+    monkeypatch.setenv("OPENVLA_ENABLE", "1")
+    monkeypatch.setattr(labeler, "_get_openvla_teacher_runtime", lambda: (_Runtime(), None))
+
+    base = DatapackConfig(
+        id="dp_base",
+        description="Open the drawer and avoid the vase",
+        motion_clips=[MotionClipSpec(path="data/clip.npz")],
+        tags=["humanoid"],
+    )
+    rollout = EpisodeRollout(
+        metadata=EpisodeMetadata(
+            episode_id="ep2",
+            task_id="task_b",
+            robot_family="G1",
+            seed=None,
+            env_params={},
+        ),
+        trajectory_path=tmp_path / "trajectory.npz",
+    )
+    poses_r = np.stack([np.stack([np.eye(3), np.eye(3)]), np.stack([np.eye(3), np.eye(3)])]).astype(np.float32)
+    np.savez_compressed(
+        rollout.trajectory_path,
+        trajectory={
+            "scene_tracks_backend": "real",
+            "semantic_memory_grounded": True,
+            "scene_tracks_v1": {
+                "scene_tracks_v1/version": np.array(["v1"], dtype="U8"),
+                "scene_tracks_v1/track_ids": np.array(["drawer_track", "vase_track"], dtype="U32"),
+                "scene_tracks_v1/entity_types": np.array([0, 0], dtype=np.int32),
+                "scene_tracks_v1/class_ids": np.array([0, 1], dtype=np.int32),
+                "scene_tracks_v1/class_names": np.array(["drawer", "vase"], dtype="U32"),
+                "scene_tracks_v1/poses_R": poses_r,
+                "scene_tracks_v1/poses_t": np.array(
+                    [[[0.0, 0.0, 0.0], [0.3, 0.0, 0.0]], [[0.02, 0.0, 0.0], [0.32, 0.0, 0.0]]],
+                    dtype=np.float32,
+                ),
+                "scene_tracks_v1/scales": np.ones((2, 2), dtype=np.float32),
+                "scene_tracks_v1/visibility": np.array([[1.0, 0.9], [1.0, 0.9]], dtype=np.float32),
+                "scene_tracks_v1/occlusion": np.array([[0.0, 0.1], [0.0, 0.1]], dtype=np.float32),
+                "scene_tracks_v1/ir_loss": np.zeros((2, 2), dtype=np.float32),
+                "scene_tracks_v1/converged": np.ones((2, 2), dtype=bool),
+                "scene_tracks_v1/summary_json": np.array(
+                    ['{"quality_score":0.9,"topology":{"grounded_track_object_count":2,"track_count":2,"temporal_stability":0.8}}'],
+                    dtype="U256",
+                ),
+            },
+        },
+    )
+    bundle = RolloutBundle(scenario_id="scenario_perception_bridge", episodes=[rollout])
+
+    labeled = labeler.label_rollouts_with_vla(bundle, base_datapack=base)
+
+    assert labeled
+    assert "object:vase" in labeled[0].tags
+    assert labeled[0].metadata["future_training_signals"]["perception_annotation_bridge_ready"] is True
+    assert labeled[0].metadata["perception_annotation_bridge_fraction"] > 0.0
+    assert labeled[0].metadata["perception_scene_object_count_mean"] >= 2.0
+    assert labeled[0].metadata["episodes"][0]["perception_annotation_bridge_ready"] is True

@@ -60,8 +60,8 @@ from src.hrl.skill_graph import SkillGraph
 from src.envs.primitive_inventory import for_env, list_registered_env_ids
 from src.orchestrator.fill_path_routing import route_fill_paths
 from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
-from src.orchestrator.semantic_simulation import compile_simulation_agenda
-from src.orchestrator.diffusion_requests import build_diffusion_prompt_from_coverage_gaps
+from src.orchestrator.diffusion_requests import build_diffusion_prompts_from_world_state
+from src.world_model.sim_synth_physics import SimSynthPhysicsRuntime, SimSynthPhysicsRuntimeConfig
 
 
 def _clip01(value: float) -> float:
@@ -463,6 +463,10 @@ def run_coverage_loop(
     diffusion_limit: int = 10,
     gap_ranker: Any = None,
     gap_ranker_mode: Literal["disabled", "auto", "required"] = "auto",
+    backend_selector: Any = None,
+    backend_selector_mode: Literal["disabled", "auto", "required"] = "auto",
+    branch_planner: Any = None,
+    branch_planner_mode: Literal["disabled", "auto", "required"] = "auto",
     fill_path_policy: Any = None,
     fill_path_policy_mode: Literal["disabled", "auto", "required"] = "auto",
     write_artifacts: bool = False,
@@ -710,23 +714,46 @@ def run_coverage_loop(
         summary["feedback_loop"]["learned_graph_mutation_count"] = int(refiner_summary.get("learned_graph_mutation_count", 0))
         summary["feedback_loop"]["learned_overlay_pressure"] = float(refiner_summary.get("learned_overlay_pressure", 0.0))
 
-    # Step 6: Compile simulation agenda
-    sim_agenda = compile_simulation_agenda(
-        coverage_graph,
-        economic_weight=economic_weight,
-        trust_weight=trust_weight,
-        readiness_weight=readiness_weight,
-        limit=sim_agenda_limit,
-        gap_ranker=gap_ranker,
-        gap_ranker_mode=gap_ranker_mode,
+    # Step 6: Compile WM-owned simulation and diffusion state once
+    sim_synth_runtime = SimSynthPhysicsRuntime(
+        SimSynthPhysicsRuntimeConfig(
+            economic_weight=economic_weight,
+            trust_weight=trust_weight,
+            readiness_weight=readiness_weight,
+            agenda_limit=max(int(sim_agenda_limit), int(diffusion_limit)),
+            gap_ranker_mode=gap_ranker_mode,
+            backend_selector_mode=backend_selector_mode,
+            branch_planner_mode=branch_planner_mode,
+        )
     )
+    sim_synth_world_state = sim_synth_runtime.compile_world_state(
+        coverage_graph,
+        economic_context=econ_signals,
+        embodiment_context={"env_names": list(resolved_envs)},
+        gap_ranker=gap_ranker,
+        backend_selector=backend_selector,
+        branch_planner=branch_planner,
+    )
+    sim_agenda = sim_synth_world_state.simulation_agenda.to_legacy_items()[:sim_agenda_limit]
+    summary["sim_synth_physics_state_id"] = sim_synth_world_state.state_id
+    summary["sim_synth_physics_backend"] = sim_synth_world_state.physics_context.backend
+    summary["sim_synth_physics_selection_policy"] = sim_synth_world_state.physics_context.selection_policy
+    summary["sim_synth_job_inferential_summary"] = dict(
+        sim_synth_world_state.metadata.get("job_inferential_summary", {}) or {}
+    )
+    summary["sim_synth_branch_inferential_summary"] = dict(
+        sim_synth_world_state.metadata.get("branch_inferential_summary", {}) or {}
+    )
+    if sim_synth_world_state.diffusion_conditioning is not None:
+        summary["sim_synth_diffusion_render_budget"] = int(
+            sim_synth_world_state.diffusion_conditioning.render_budget
+        )
 
     # Step 7: Compile gap-driven diffusion prompts
-    gap_prompts = build_diffusion_prompt_from_coverage_gaps(
-        coverage_graph,
+    gap_prompts = build_diffusion_prompts_from_world_state(
+        sim_synth_world_state,
+        coverage_graph=coverage_graph,
         limit=diffusion_limit,
-        gap_ranker=gap_ranker,
-        gap_ranker_mode=gap_ranker_mode,
     )
     diffusion_dicts = [p.to_dict() for p in gap_prompts]
 

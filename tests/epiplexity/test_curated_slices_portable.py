@@ -119,3 +119,4 @@ def test_curated_slices_portable(tmp_path, monkeypatch):
 
     reloaded = DataPackRepo(base_dir=str(tmp_path)).load_all("drawer_vase")
     assert any(dp.epiplexity_summary for dp in reloaded)
+    assert any(dp.inferential_learnability_contract for dp in reloaded)

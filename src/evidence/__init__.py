@@ -14,6 +14,11 @@ from src.evidence.preconditions import (
     build_execution_work_order,
     summarize_execution_preconditions,
 )
+from src.evidence.provider_truth import (
+    ExternalProviderTruth,
+    build_external_provider_truth,
+    coerce_external_provider_truth,
+)
 from src.evidence.scene_tracks_truth import normalize_scene_tracks_truth
 from src.evidence.teacher_trace import (
     TeacherStep,
@@ -28,14 +33,17 @@ __all__ = [
     "EvidenceRecord",
     "ExecutionPreconditionsReport",
     "ExecutionWorkOrder",
+    "ExternalProviderTruth",
     "PreconditionCheck",
     "TeacherStep",
     "TeacherTrace",
     "belief_state_from_evidence_bus",
     "build_benchmark_gate_report",
+    "build_external_provider_truth",
     "build_execution_preconditions",
     "build_execution_work_order",
     "collect_benchmark_gating_signals",
+    "coerce_external_provider_truth",
     "load_teacher_trace_json",
     "normalize_scene_tracks_truth",
     "save_teacher_trace_json",

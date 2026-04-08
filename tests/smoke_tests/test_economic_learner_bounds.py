@@ -123,14 +123,23 @@ class EconomicLearnerBoundsTests(unittest.TestCase):
             "blocking_preconditions": {},
             "satisfied_preconditions": {},
         }
+        config["input_receipt_context"] = {
+            "consumed_receipt_kinds": ["orchestrator_control_plane_context_v1"],
+        }
         learner = EconomicLearner(config)
         learner.add_skill(_make_skill("budget_skill", SkillStatus.TRAINING.value))
 
         summary = learner.run_cycle(10)
 
         self.assertIsNotNone(summary)
+        self.assertEqual(summary["receipt_kind"], "phase_h_budget_cycle_v1")
+        self.assertEqual(summary["authority_class"], "remain_advisory")
         self.assertEqual(summary["execution_mode"], "budget_activation")
         self.assertTrue(summary["budget_activation_work_order"]["ready"])
+        self.assertEqual(
+            summary["budget_activation_work_order"]["metadata"]["consumed_receipt_kinds"],
+            ["orchestrator_control_plane_context_v1"],
+        )
         self.assertIn("future_training_backlog", summary["budget_activation"])
 
 

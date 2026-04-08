@@ -14,6 +14,7 @@ from src.constraints.constraint_set import ConstraintSet
 from src.economics.functor import ObjectiveEconFunctor
 from src.economics.pricing_sentinel import PricingSentinel, PricingTickInput
 from src.economics.value_ledger import summarize_econ_tensor
+from src.evidence.provider_truth import coerce_external_provider_truth
 from src.evidence.scene_tracks_truth import normalize_scene_tracks_truth
 from src.envs.workcell_env.base import EpisodeLog
 from src.motor_backend.rollout_capture import finalize_rollout_bundle
@@ -664,6 +665,7 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "semantic_world_model_path",
         "semantic_snapshot_path",
         "orchestrator_advisory_path",
+        "control_plane_context_path",
         "teacher_trace_path",
         "vla_semantic_evidence_path",
         "semantic_fusion_path",
@@ -722,6 +724,10 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
             f"{episode_id}_orchestrator_advisory_v1.json",
             "*_orchestrator_advisory_v1.json",
         ],
+        "control_plane_context_path": [
+            f"{episode_id}_control_plane_context_v1.json",
+            "*_control_plane_context_v1.json",
+        ],
         "teacher_trace_path": [
             f"{episode_id}_teacher_trace_v1.json",
             "*_teacher_trace_v1.json",
@@ -760,6 +766,7 @@ def _scene_tracks_rollout_metadata(
     metadata_payload: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     payload = dict(metadata_payload or {})
+    provider_truth = coerce_external_provider_truth(payload.get("scene_tracks_provider_truth"))
     semantic_summary = payload.get("scene_tracks_semantic_summary", {})
     if not isinstance(semantic_summary, Mapping):
         semantic_summary = {}
@@ -802,7 +809,26 @@ def _scene_tracks_rollout_metadata(
             truth.get("semantic_grounding_non_heuristic", False)
         ),
         "semantic_density_score": float(semantic_summary.get("semantic_density_score", 0.0) or 0.0),
+        "scene_tracks_provider_truth": provider_truth,
     }
+
+
+def _teacher_provider_truth_rollout_metadata(
+    teacher_trace_path: Optional[str],
+    *,
+    metadata_payload: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload = dict(metadata_payload or {})
+    inline_truth = coerce_external_provider_truth(payload.get("teacher_provider_truth"))
+    if inline_truth:
+        return inline_truth
+    if not teacher_trace_path:
+        return {}
+    try:
+        trace_payload = _load_json(Path(teacher_trace_path))
+    except Exception:
+        return {}
+    return coerce_external_provider_truth(trace_payload.get("provider_truth"))
 
 
 def _semantic_world_model_rollout_summary(semantic_world_model_path: Optional[str]) -> Dict[str, Any]:
@@ -854,6 +880,24 @@ def _selection_summary_rollout_metadata(
     return dict(sidecar_payload or {})
 
 
+def _control_plane_context_rollout_metadata(
+    control_plane_context_path: Optional[str],
+    *,
+    metadata_payload: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload = dict(metadata_payload or {})
+    inline_context = payload.get("control_plane_context")
+    if isinstance(inline_context, Mapping):
+        return dict(inline_context)
+    if not control_plane_context_path:
+        return {}
+    try:
+        sidecar_payload = _load_json(Path(control_plane_context_path))
+    except Exception:
+        return {}
+    return dict(sidecar_payload or {}) if isinstance(sidecar_payload, Mapping) else {}
+
+
 def ingest_rollout_bundle(
     rollout_root: str | Path,
     *,
@@ -894,8 +938,16 @@ def ingest_rollout_bundle(
             artifact_refs.get("scene_tracks_path"),
             metadata_payload=raw_rollout_metadata,
         )
+        teacher_provider_truth = _teacher_provider_truth_rollout_metadata(
+            artifact_refs.get("teacher_trace_path"),
+            metadata_payload=raw_rollout_metadata,
+        )
         selection_summary = _selection_summary_rollout_metadata(
             artifact_refs.get("selection_summary_path"),
+            metadata_payload=raw_rollout_metadata,
+        )
+        control_plane_context = _control_plane_context_rollout_metadata(
+            artifact_refs.get("control_plane_context_path"),
             metadata_payload=raw_rollout_metadata,
         )
         semantic_world_model_summary = _semantic_world_model_rollout_summary(
@@ -941,7 +993,9 @@ def ingest_rollout_bundle(
                 else {},
                 "scene_tracks_non_stub": bool(scene_tracks_metadata.get("scene_tracks_non_stub", False)),
                 "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
+                "scene_tracks_provider_truth": dict(scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}),
                 "scene_tracks_training_eligible": bool(scene_tracks_metadata.get("scene_tracks_training_eligible", False)),
+                "teacher_provider_truth": dict(teacher_provider_truth or {}),
                 "semantic_memory_grounded": bool(
                     semantic_world_model_summary.get("topology", {}).get("grounded_track_object_count", 0)
                     or scene_tracks_metadata.get("semantic_grounding_ready", False)
@@ -965,6 +1019,7 @@ def ingest_rollout_bundle(
                 "future_training_signals": dict(raw_rollout_metadata.get("future_training_signals", {}) or {}),
                 "semantic_world_model_summary": semantic_world_model_summary,
                 "selection_summary": dict(selection_summary or {}),
+                "control_plane_context": dict(control_plane_context or {}),
             }
             episode_payload["provenance"] = {
                 **dict(episode_payload.get("provenance", {}) or {}),
@@ -981,7 +1036,9 @@ def ingest_rollout_bundle(
             step_payload["metadata"] = {
                 **dict(step_payload.get("metadata", {}) or {}),
                 "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
+                "scene_tracks_provider_truth": dict(scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}),
                 "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+                "teacher_provider_truth": dict(teacher_provider_truth or {}),
                 "runtime_packet_id": str(raw_rollout_metadata.get("runtime_packet_id", "")),
             }
             step_payload["provenance"] = {
@@ -999,7 +1056,9 @@ def ingest_rollout_bundle(
             window_payload["metadata"] = {
                 **dict(window_payload.get("metadata", {}) or {}),
                 "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
+                "scene_tracks_provider_truth": dict(scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}),
                 "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+                "teacher_provider_truth": dict(teacher_provider_truth or {}),
                 "runtime_packet_id": str(raw_rollout_metadata.get("runtime_packet_id", "")),
             }
             window_payload["provenance"] = {

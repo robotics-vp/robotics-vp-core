@@ -3,7 +3,7 @@ Physics-based Simulation Environments
 
 This module contains physics-enabled environments for:
 - PyBullet (CPU-friendly, easy prototyping) ✅ IMPLEMENTED
-- Isaac Gym (GPU-accelerated, high-throughput) - TODO
+- Isaac Gym / Isaac Sim shadow-contract backend now present; real asset/runtime binding remains TODO
 - MuJoCo (high-quality contact physics) - TODO
 
 All physics envs:
@@ -15,7 +15,7 @@ All physics envs:
 Physics Backend Abstraction Layer:
 - PhysicsBackend: Abstract base class for engine-agnostic interface
 - PyBulletBackend: Wrapper for existing PyBullet environments
-- IsaacBackend: Stub for future Isaac Gym integration
+- IsaacBackend: Explicit shadow-contract backend for future Isaac Gym / Isaac Sim integration
 - make_backend(): Factory function to create backends
 """
 

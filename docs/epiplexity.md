@@ -5,7 +5,25 @@ Epiplexity is a compute-bounded proxy for learnable structure. Under a fixed com
 - `S_T_proxy`: learnable structure (prequential improvement)
 - `H_T_proxy`: residual entropy (final NLL proxy)
 
-These diagnostics are advisory: they inform data valuation, representation selection, and orchestrator scheduling without changing reward math.
+These diagnostics currently operate as bounded inferential overlays: they inform data valuation, representation selection, replay weighting, and orchestrator scheduling without changing legacy reward math.
+
+The target posture is narrower than "purely advisory forever":
+
+- full probe runs and experimental diagnostics should remain sidecars
+- portable epiplexity summaries should graduate into canonical learnability metadata
+- learnability class should later help drive training admission, adaptation work orders, and promotion evidence
+
+So the current repo posture is:
+
+- advisory / bounded today
+- candidate canonical learnability class later
+
+The first concrete promotion step has now landed:
+
+- replay episodes can carry `inferential_learnability_contract`
+- replay manifests can summarize learnability-class density
+- shadow/adaptation paths can emit canonical inferential work-order artifacts
+- training runtime manifests can persist inferential learnability and work-order summaries
 
 ## Key Components
 - `EpiplexityTracker`: runs probe learners, caches absolute runs, records compute accounting (`flops_estimate`), and derives baseline-relative deltas only at read time.
@@ -21,6 +39,11 @@ Epiplexity results are stored in datapack metadata:
 - `data/datapacks/epiplexity_overlays.jsonl`: additive overlay sidecar loaded automatically by `DataPackRepo`
 
 By default, only summaries are attached to datapacks; full per-run details live in the cache (`artifacts/epiplexity_cache/`). To store full runs in datapack metadata, pass `--store-full-runs` to the CLI (debug only).
+
+The canonical downstream carrier is now the inferential contract layer rather than raw overlay inspection alone:
+
+- `inferential_learnability_contract` on replay episodes
+- `inferential_learnability_summary` on replay and training manifests
 
 ## CLI
 Run a synthetic evaluation:
@@ -68,4 +91,11 @@ When enabled (`config/pipeline.yaml`):
 - `orchestrator.epi_budget_id` selects which compute budget to read
 - `orchestrator.epi_repr_id` optionally pins a representation; otherwise the datapack’s `_default` selector is used
 
-The semantic orchestrator surfaces this as an advisory scheduling term.
+The semantic orchestrator currently surfaces this as a bounded scheduling term.
+
+Longer term, the economic-world-model roadmap intends epiplexity to do more than scheduling. Once replay/datapack/train-manifest contracts carry an explicit learnability class, the same signal should be able to participate in:
+
+- training admissibility
+- adaptation / recollection work orders
+- sim/synth agenda ranking
+- promotion evidence

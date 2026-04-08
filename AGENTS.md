@@ -133,6 +133,41 @@ When the task is part of the economic-world-model readiness initiative:
 | `src/world_model/` | Stable Phase B baseline plus additive successor scaffolding |
 | `src/hrl/`, `src/vla/`, `src/sima/` | Phase C scaffolding |
 
+## Execution Planes
+
+The repo has three execution planes. Choose based on what the task requires.
+
+| Plane | Use for | Avoid for |
+|-------|---------|-----------|
+| **Local** | Lightweight edits, fast verification, deterministic checks, docs, compile+test, smoke tests | GPU-backed training, heavy provider bring-up, large-scale sim |
+| **Codex cloud** | Code-only parallel work, scans, reviews, docs, additive scaffolding, multi-file refactors | GPU-backed work, long-running experiments, anything requiring CUDA |
+| **RunPod** | GPU-backed provider bring-up, replay generation, eval loops, training runs, heavy refactor validation on GPU/dependency stacks | Docs-only work, lightweight edits, anything that doesn't need GPU |
+
+### When to use RunPod
+
+Use the RunPod execution plane (`codex_skills/runpod-gpu-execution/SKILL.md`) when:
+
+- the task requires GPU (training, provider bring-up, CUDA-dependent validation)
+- the task requires dependencies not available locally (Isaac Lab, large model weights)
+- the task is long-running (>30min) and would block local development
+
+Pod classes: `loop` (workcell replay), `provider` (model bring-up), `train` (SAC/seam training), `refactor` (GPU-backed validation).
+
+### When to use the roadmap execution companion
+
+Use the roadmap execution companion (`codex_skills/roadmap-execution-companion/SKILL.md`) when:
+
+- you need to identify the next highest-leverage work
+- you need to audit whether doc claims match code/test/artifact reality
+- you need to compare an upstream approach to the repo-native approach
+- you are planning a new tranche or reviewing a completed one
+
+### Recording remote runs
+
+Every remote run (Codex cloud or RunPod) must record a manifest in `.agent/runs/<run_id>/manifest.json` with: run_id, mode, pod_class, commit_sha, branch, task, commands, artifact_paths, status, timestamps, and cost_snapshot. See `docs/agent_ergonomics/run_manifest_schema.md`.
+
+Do not make false claims about remote execution. If a run did not happen, do not imply it did.
+
 ## Getting Help
 
 - Check `docs/` for detailed documentation

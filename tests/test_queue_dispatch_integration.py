@@ -57,6 +57,7 @@ def test_apply_live_queue_selection_bounded_reweight_and_drop():
             allow_slice_removal_on_integrity_failure=True,
         ),
     )
+    assert dispatch["authority_class"] == "bounded_authority"
     assert dispatch["summary"]["num_reweighted"] >= 1
     assert dispatch["summary"]["num_dropped"] == 1
     assert dispatch["ordered_episode_ids"][0] == "ep_high"
@@ -78,5 +79,7 @@ def test_sampler_dispatch_queue_consumes_live_queue_selection():
     )
     dispatch = sampler.dispatch_queue(batch_size=3, seed=0, strategy="balanced")
     assert dispatch["mode"] == "bounded_reweight"
+    assert dispatch["authority_class"] == "bounded_authority"
     assert dispatch["ordered_episode_ids"][0] == "ep_c"
     assert sampler.last_queue_dispatch_artifact is not None
+    assert sampler.last_sampler_policy_artifact["authority_class"] == "bounded_authority"
