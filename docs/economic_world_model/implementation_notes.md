@@ -2966,3 +2966,39 @@ the Sim / Synth / Physics WM.
     evaluation
   - these belong in non-training GPU/runtime backlogs only once there is a real
     wrapper script or runtime entrypoint to point at, not as fake active work
+
+## 2026-04-09 — Nightly pass: agent verify regression closure
+
+### What was built
+
+- Introduced a canonical Claude shim template at
+  `scripts/agent/claude_shim_template.md`.
+- Switched both shim enforcement surfaces to this single source:
+  - `scripts/agent/verify.sh`
+  - `scripts/agent/bootstrap.sh`
+- Added `tests/test_agent_shim_template.py` to prevent future drift between the
+  template and `CLAUDE.md`, and to assert the copilot shim import remains
+  explicit.
+
+### Why this was the highest-value additive step
+
+- The nightly audit had selected `agent_verify_regression` as the top safe task
+  because baseline repository verification was failing.
+- Restoring `agent_verify` correctness is a gating prerequisite before selecting
+  additional roadmap scaffolding.
+- This is additive hardening only: no frozen Phase B baseline math, checkpoint,
+  trust net, `w_econ` lattice, or lambda controller logic was touched.
+
+### Verification
+
+- `./scripts/agent/verify.sh` → pass
+- `python3 -m compileall src/` → pass
+- `python3 -m pytest -q tests/test_agent_shim_template.py tests/test_economic_world_model_nightly_audit.py` → pass (`9 passed`)
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` → pass
+
+### Current status and next task
+
+- Refreshed nightly audit now reports `status: ok` with no failing verification
+  checks.
+- Current next task posture is `docs_only` (no higher-priority missing additive
+  scaffold detected on this scan).

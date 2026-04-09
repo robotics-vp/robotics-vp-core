@@ -44,14 +44,13 @@ echo "Repository: $REPO_ROOT"
 echo ""
 
 # Expected CLAUDE.md shim content
-EXPECTED_SHIM='# Claude Code entrypoint
-@AGENTS.md
-@.agent/skills.md
-@.agent/sandbox.md
-@.agent/auth.md
-@.agent/mcp.md
-@.agent/codex.md
-@.agent/inference_speed.md'
+SHIM_TEMPLATE_PATH="$REPO_ROOT/scripts/agent/claude_shim_template.md"
+if [ -f "$SHIM_TEMPLATE_PATH" ]; then
+    EXPECTED_SHIM=$(cat "$SHIM_TEMPLATE_PATH")
+else
+    echo -e "${RED}Missing shim template: scripts/agent/claude_shim_template.md${NC}"
+    exit 1
+fi
 
 FIXES=0
 

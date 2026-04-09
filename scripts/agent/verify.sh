@@ -43,14 +43,17 @@ check_warn() {
 }
 
 # Expected CLAUDE.md shim content (exact match required)
-EXPECTED_SHIM='# Claude Code entrypoint
-@AGENTS.md
-@.agent/skills.md
-@.agent/sandbox.md
-@.agent/auth.md
-@.agent/mcp.md
-@.agent/codex.md
-@.agent/inference_speed.md'
+SHIM_TEMPLATE_PATH="$REPO_ROOT/scripts/agent/claude_shim_template.md"
+if [ -f "$SHIM_TEMPLATE_PATH" ]; then
+    EXPECTED_SHIM=$(cat "$SHIM_TEMPLATE_PATH")
+else
+    check_fail "Shim template not found at scripts/agent/claude_shim_template.md"
+    echo ""
+    echo "=== Summary ==="
+    echo ""
+    echo -e "${RED}Failed with $ERRORS error(s) and $WARNINGS warning(s)${NC}"
+    exit 1
+fi
 
 echo "=== Core Files ==="
 echo ""

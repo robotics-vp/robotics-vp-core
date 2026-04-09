@@ -2042,3 +2042,30 @@
   - no Unreal-centered repo pivot
   - no code changes
   - no fake active backlog items where no honest runtime entrypoint exists yet
+
+### 2026-04-09: Nightly verification hardening (CLAUDE shim template)
+
+- Completed the nightly-selected additive task `agent_verify_regression` by
+  removing shim drift between `CLAUDE.md` and agent scripts.
+- Added a canonical shim template:
+  - `scripts/agent/claude_shim_template.md`
+  - includes `@.agent/claude_copilot.md` so the current collaboration posture is
+    explicitly represented in the enforced shim.
+- Updated both agent ergonomics scripts to consume the canonical template
+  instead of duplicated inline shim strings:
+  - `scripts/agent/verify.sh`
+  - `scripts/agent/bootstrap.sh`
+- Added regression tests:
+  - `tests/test_agent_shim_template.py`
+  - asserts `CLAUDE.md` matches the canonical template and the copilot import is
+    present.
+- Verification run for this tranche:
+  - `./scripts/agent/verify.sh` (pass)
+  - `python3 -m compileall src/` (pass)
+  - `python3 -m pytest -q tests/test_agent_shim_template.py tests/test_economic_world_model_nightly_audit.py` (pass; `9 passed`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (pass)
+- Refreshed nightly audit status is now `ok`, with all verification gates
+  passing.
+- Next recommended task from the refreshed audit:
+  - `docs_only`: no missing additive scaffold detected; keep nightly verification
+    and docs refresh only until a higher-priority gap appears.
