@@ -625,6 +625,26 @@ Only after A-D: compile allocator outputs into local reward-shaping /
 governance knobs for lower WMs. Preserve explicit provenance of which shaping
 came from which macro signal.
 
+### Bounded adaptive seams and abstention heads
+
+Later Economic-WM-local learned seams may borrow from In-Place TTT and HALO,
+but only in a bounded way:
+
+- In-Place-TTT-style fast adaptation is admissible only inside already-owned
+  meso-timescale estimator / allocator sublanes, with typed reset and
+  persistence boundaries; it must not rewrite `SlowManifoldProjection`,
+  regime identity, or slow invariants directly.
+- HALO-like bounded confidence / abstention is admissible for local anomaly
+  critics, training-eligibility heads, and "insufficient evidence" receipt
+  classifiers; it is not a stack-wide geometry doctrine.
+- Economic influence on lower WMs should eventually arrive through bounded
+  envelopes, fields, admissibility shaping, or other typed conditioning
+  signals, not through direct subsystem micromanagement.
+
+WM-local shaping networks come before true hypernetworks; true
+hypernetwork-like parameter generation is only admissible after subsystem
+ownership, receipts, and neural maturity are already real.
+
 **Rule:** neuralization follows typed ontology and transport design, not
 precedes it.
 

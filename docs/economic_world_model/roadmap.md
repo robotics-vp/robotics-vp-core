@@ -223,6 +223,21 @@ ignore. Do not bulk-import.
 This reopenable Phase 1.x lane should be treated as one coherent Sim / Synth /
 Physics update, not as separate Newton / Unreal / Habitat / surrogate waves.
 
+Also preserve a narrow SIM1 rule:
+
+- borrow lane-specific tactics from SIM1 only as concrete provider/runtime
+  tactics under our WM doctrine
+- do not let SIM1's deformable-manipulation data engine become the ontology or
+  architecture template for the Sim / Synth / Physics WM
+- the useful tactics are:
+  - real runnable provider lanes with explicit bring-up and smoke discipline
+  - `generate -> smooth -> replay -> filter` branch materialization
+  - explicit reject filtering and typed reject receipts
+  - replay-validity / task-consistency checks for branch-validity and
+    sim-real-gap evaluation
+  - optional render/materialization as a downstream lane, not the WM's
+    sovereign center
+
 **Near-term doctrine (docs/contracts first)**:
 
 - make provider-family placement explicit in the Sim / Synth / Physics WM

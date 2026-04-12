@@ -463,6 +463,12 @@ domain-specific governance nodes in favor of a monolithic safety layer. A
 system that generates so many suspicion receipts that the escalation channel
 becomes noise.
 
+**Local calibrated-head note.** HALO-like bounded geometric confidence can be
+a useful shaping rule for per-domain anomaly heads or receipt critics that
+must say "insufficient evidence" rather than force a positive anomaly label.
+Use this only as a local head-level abstention discipline; do not let
+classifier geometry become the ontology of governance.
+
 ## Cross-Cutting Neural Architecture Table
 
 This table uses the layer classification taxonomy from

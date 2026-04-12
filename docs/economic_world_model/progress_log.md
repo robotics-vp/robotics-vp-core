@@ -1,5 +1,98 @@
 # Economic World Model Progress Log
 
+## 2026-04-12 — Doctrine: admissible borrowings from In-Place TTT and HALO
+
+- **Changed**:
+  - updated `docs/economic_world_model/multi_wm_architecture_plan.md` with a
+    new doctrine subsection on admissible neural-shaping borrowings from
+    In-Place TTT and HALO
+  - added a future-facing `WM-local shaping networks` note in the same
+    architecture doc, explicitly as a far-future admissible direction rather
+    than an implementation commitment
+  - updated
+    `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`
+    with a short multi-timescale reinforcement covering bounded adaptive
+    seams, abstention heads, and envelope-shaped downstream influence
+  - updated
+    `docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md`
+    with a local anomaly-head abstention note
+- **Why this matters**:
+  - this records what can be borrowed from external neural methods without
+    letting them become architecture templates or new master ontologies
+  - it sharpens the repo's doctrine around subsystem-local plasticity,
+    calibrated abstention, slow-versus-fast separation, and bounded future
+    shaping networks
+  - it preserves typed ownership, typed receipts, topological separation, and
+    promotion discipline while making later subsystem-native neural seams more
+    concrete
+- **Verification**:
+  - targeted docs check via `git diff --check -- docs/economic_world_model/multi_wm_architecture_plan.md docs/economic_world_model/doctrine_economic_wm_future_architecture.md docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md docs/economic_world_model/progress_log.md docs/economic_world_model/implementation_notes.md`
+
+## 2026-04-12 — Sim / Synth / Physics WM: SIM1 tactic note (docs-only)
+
+- **Changed**:
+  - updated `docs/economic_world_model/multi_wm_architecture_plan.md` with a
+    short doctrine-safe note on lane-specific tactics worth borrowing from
+    SIM1 while keeping SIM1 explicitly subordinate to our architecture
+  - updated `docs/economic_world_model/roadmap.md` with the matching
+    Phase 1.x roadmap reminder
+  - tactics called out:
+    - real runnable provider/runtime lane discipline
+    - physics-aligned world instantiation for physics-sensitive lanes
+    - staged `generate -> smooth -> replay -> filter` branch production
+    - explicit admission/reject filtering with typed reject receipts
+    - replay-validity / task-consistency checks for drift and mismatch
+    - render/materialization as downstream lane, not sovereign center
+    - replay/export discipline and training-worthiness gating
+- **Why this matters**:
+  - this sharpens the Sim / Synth / Physics WM with concrete lane tactics
+    without letting an external deformable-data engine define our ontology,
+    ownership boundaries, or receipt structure
+- **Verification**:
+  - targeted docs check via `git diff --check -- docs/economic_world_model/multi_wm_architecture_plan.md docs/economic_world_model/roadmap.md docs/economic_world_model/progress_log.md docs/economic_world_model/implementation_notes.md`
+
+## 2026-04-12 — Nightly audit date-parse hardening (additive verification scaffold)
+
+- **Changed**:
+  - hardened `scripts/economic_world_model/nightly_audit.py` progress-log date parsing so nightly selection reads dated headings that include trailing titles (for example `## YYYY-MM-DD — ...`) and level-3 dated headings used in historical notes.
+  - added regression coverage in `tests/test_economic_world_model_nightly_audit.py` for:
+    - dated H2 headings with suffix text
+    - dated H3 headings with suffix text
+  - refreshed nightly audit artifacts:
+    - `artifacts/economic_world_model/nightly_audit_summary.json`
+    - `artifacts/economic_world_model/nightly_audit_summary.md`
+- **Verification**:
+  - `python3 -m pytest -q tests/test_economic_world_model_nightly_audit.py` (`8 passed`)
+  - `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall scripts/economic_world_model -q` (pass)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (pass; status `ok`)
+  - embedded verification in audit remained green: `./scripts/agent/verify.sh`, compileall, targeted runtime/econ pytest bundle
+- **Next recommended task**:
+  1. keep nightly docs + verification refresh cadence while `next_task.id` remains `audit_only`
+  2. when a safe additive task appears, prioritize live-path sidecar/contract emission before detached helper additions
+
+## 2026-04-11 — Nightly audit refresh (docs-only, no safe additive scaffold)
+
+- **Changed**:
+  - refreshed nightly audit artifacts:
+    - `artifacts/economic_world_model/nightly_audit_summary.json`
+    - `artifacts/economic_world_model/nightly_audit_summary.md`
+  - recorded the current nightly posture as docs-only with no code-scaffold
+    delta in this pass.
+- **Verification**:
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md`
+  - audit result: `status: ok`, `safe for automatic execution: no`,
+    `next task classification: docs_only`
+  - embedded verification in audit: `./scripts/agent/verify.sh` (pass),
+    `python3 -m compileall src scripts/economic_world_model -q` (pass),
+    targeted runtime/econ pytest bundle (pass)
+- **Next recommended task**:
+  1. keep nightly docs + verification refresh cadence until the audit reports a
+     concrete safe additive scaffold
+  2. when a safe task appears, prioritize live-path sidecar/contract emission
+     over detached helper-only additions
+  3. keep governed video-world-model ordering intact: real-video grounding and
+     teacher-runtime hardening before training-backlog expansion
+
 ## 2026-04-08 — Phase 2 Perception / Grounding WM: Annotation-Bridge Lane + Persistent Benchmark Evidence
 
 - **Changed**: completed the first bounded annotation-export projection lane and tightened promotion discipline around it:

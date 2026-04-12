@@ -384,6 +384,142 @@ Cross-WM dependency rule:
 - a higher WM should not treat a lower WM as canonical just because the lower WM reached `schema_only`, `logging_only`, or a pretty demo
 - for future full-loop and hardware-ready use, lower WM state should be considered mature only once the lower layer has crossed `bounded_runtime_authority` and its relevant downstream consumers are actually wired
 
+## Admissible Neural-Shaping Borrowings: In-Place TTT and HALO
+
+In-Place TTT and HALO are not architecture templates for this stack. They are
+admissible only as **local neural-shaping patterns** inside already-owned WM
+subsystems, after the owning WM and its typed surfaces are structurally real.
+
+### In-Place TTT: bounded subsystem-local adaptive seams
+
+Borrow the pattern of **small in-place fast-weight seams inside already
+necessary subsystem modules**, rather than introducing a new monolithic
+adaptive layer.
+
+Useful ideas:
+
+- bounded local plasticity
+- chunk-wise / meso-timescale adaptation instead of per-step thrash
+- local adaptation objectives aligned to subsystem function
+- typed reset / persistence boundaries so fast adaptation does not silently
+  leak across episodes, calibration windows, embodiment changes, or regime
+  changes
+
+This fits the existing requirement that each WM define:
+
+- ownership boundary
+- subsystem decomposition
+- topological placement
+- fast / mid / slow timescale hierarchy
+- what belongs in learned seams versus typed control / constraint logic
+
+Likely insertion points by WM:
+
+- **Sim / Synth / Physics WM**: backend routing, branch admission,
+  calibration, synthetic-yield scoring, branch-to-training feedback
+- **Perception / Grounding WM**: local evidence-fusion confidence and provider
+  reliability adaptation
+- **Embodiment / Actuation WM**: later residual correction, latency
+  compensation, and local disturbance adaptation, only after embodiment
+  ownership is real
+- **Economic WM**: meso-timescale estimator / allocator sublanes only; do not
+  let fast adaptive seams rewrite slow manifold or regime state directly
+- **Meta-governance surfaces**: mostly as a negative lesson; preserve slow
+  sovereign invariants and typed escalation boundaries
+
+Use In-Place TTT as a model for where bounded adaptive memory can live inside
+subsystems; do not let fast local plasticity collapse the repo's typed WM
+boundaries or violate slow / near-adiabatic control structure.
+
+### HALO: local geometric abstention and bounded confidence
+
+Borrow HALO as a **local geometric confidence / abstention discipline** for
+subsystem heads, critics, and admission surfaces, not as a global
+representational ontology.
+
+Useful ideas:
+
+- bounded geometric confidence rather than unconstrained norm-driven
+  confidence
+- explicit abstain / reject region instead of forced positive classification
+- better local OOD / anomaly / disagreement handling
+- local classifier-head shaping, not a global latent-geometry doctrine
+
+Likely insertion points by WM / subsystem:
+
+- **Sim / Synth / Physics WM**: Gen2Sim admission, branch realism /
+  training-worthiness heads, backend-binding confidence, physics mismatch
+  critics
+- **Perception / Grounding WM**: provider disagreement scorers,
+  grounding-confidence heads, unresolved-entity / unresolved-track critics
+- **Embodiment / Actuation WM**: action admissibility, skill-selector OOD
+  rejection, interoceptive anomaly heads
+- **Economic WM**: local anomaly / inconsistency critics on receipt sets,
+  training-eligibility classifiers, and "insufficient evidence to allocate
+  confidently" heads
+- **Governance / meta-regal surfaces**: domain-local anomaly and escalation
+  critics, not one monolithic governance classifier
+
+Use HALO-like geometric abstention and bounded confidence in local subsystem
+heads where calibrated rejection matters; do not elevate HALO into a
+stack-wide latent geometry doctrine.
+
+### Combined doctrinal synthesis
+
+In-Place TTT and HALO solve different problems. In-Place TTT is mainly a
+pattern for temporal plasticity: where small fast adaptive state should live
+without violating multi-timescale WM decomposition. HALO is mainly a pattern
+for geometric confidence: how subsystem heads can express abstention,
+calibrated admission, and anomaly suspicion without overconfident norm
+inflation. In vpcore, the first belongs inside bounded subsystem-local
+adaptive seams; the second belongs at subsystem boundaries, critics, and
+receipt-emitting heads.
+
+### Do Not Overfit
+
+- do not import either project as a new master ontology
+- do not flatten neighboring WMs into one adaptive latent
+- do not let fast adaptive seams bypass typed receipts or typed transport
+- do not let classifier geometry become the topology of the full stack
+- preserve canonical typed state, ownership boundaries, promotion discipline,
+  and honest real-or-unavailable runtime posture
+
+### Future WM-local shaping networks
+
+After a canonical WM has mature typed state, stable subsystem ownership, real
+learned subsystem seams, and sufficient receipt / data coverage, it may later
+gain a **WM-local shaping network** that compiles WM-local state, adjacent
+subsystem receipts, economic allocation fields, and meta-regal admissibility
+envelopes into bounded conditioning signals for that WM's internal learned
+subsystems.
+
+At this stage, this should be understood as a family of:
+
+- WM-local modulators
+- conditioners
+- regime compilers
+- adaptive parameter fields
+- bounded shaping networks
+
+Only later, and only where justified by subsystem maturity and data, might
+some of these become true hypernetworks in the stricter sense.
+
+Guardrails:
+
+- the shaping network does not replace subsystem ownership
+- it does not collapse neighboring WMs into one latent
+- it does not let the Economic WM or meta-regal layers directly micromanage
+  subsystem parameters
+- it should emit bounded conditioning fields, envelopes, or modulation
+  signals rather than unconstrained global rewrites
+- slow cross-WM governance must remain separated from fast subsystem
+  adaptation
+- this is a future architecture note, not an implementation-phase commitment
+
+WM-local shaping networks come before true hypernetworks; true
+hypernetwork-like parameter generation is only admissible after subsystem
+ownership, receipts, and neural maturity are already real.
+
 ## Habitat Extraction Posture
 
 The stack has borrowed useful design patterns from Habitat-style codebases.
@@ -1174,6 +1310,46 @@ family rather than as one-off imports. The governing split is:
   routing, paired-provider composition, system-ID/randomization policy,
   surrogate preview, and verification policy
 - providers may span multiple subsystems, but they never own WM truth
+
+#### Lane-Specific Tactics Worth Borrowing from SIM1
+
+Borrow narrow lane tactics from SIM1 where useful, but do not let a
+deformable-manipulation data engine define the ontology or architecture of the
+Sim / Synth / Physics WM.
+
+Treat SIM1 as a source of practical provider-lane tactics, not as an
+architecture template for this stack. The Sim / Synth / Physics WM must remain
+broader and must retain canonical typed state, receipts, replay/training
+exports, provider ownership, calibration, admission, and feedback into
+training. Useful tactics to borrow should be framed under our own functional
+ownership areas:
+
+- **Provider/runtime lane discipline**:
+  emphasize real runnable provider lanes, explicit install/runtime bring-up,
+  smoke tests, and honest `real-or-unavailable` posture.
+- **Physics-aligned world instantiation**:
+  for physics-sensitive lanes only, prefer metric-consistent,
+  calibration-aware instantiation over purely visual synthesis when deformable
+  or contact-sensitive scenes are involved.
+- **Staged synthetic branch production**:
+  use a practical `generate -> smooth -> replay -> filter` pattern for branch
+  materialization before corpus admission. Synthetic branches should not go
+  directly from proposal to training corpus.
+- **Admission and reject filtering**:
+  keep explicit quality, reachability, and filter stages, and require typed
+  reject receipts rather than silent discard.
+- **Calibration / drift / mismatch evaluation**:
+  use replay validity and task/physics consistency checks as inspiration for
+  sim-real-gap and branch-validity evaluators.
+- **Optional render/materialization lane**:
+  keep photoreal rendering downstream of the WM's sovereign state and
+  admission logic rather than treating rendering as the center of the system.
+- **Replay/export discipline**:
+  preserve replayable artifact layouts and explicit downstream export paths
+  while keeping our own typed contracts and ontology sovereign.
+- **Synthetic-yield / training-worthiness scoring**:
+  require generated branches to survive replay, filtering, and quality checks
+  before promotion into training-facing corpora.
 
 Provider-family placement inside the 10-subsystem topology:
 

@@ -1,5 +1,41 @@
 # Economic World Model Implementation Notes
 
+## 2026-04-11 — Nightly pass: audit-only execution, no safe scaffold delta
+
+### What changed
+
+- re-ran the nightly audit and refreshed:
+  - `artifacts/economic_world_model/nightly_audit_summary.json`
+  - `artifacts/economic_world_model/nightly_audit_summary.md`
+- confirmed the audit-selected next task is still:
+  - `id: audit_only`
+  - `classification: docs_only`
+  - `execute_now: false`
+
+### Why this was the highest-value additive step
+
+- the roadmap skill explicitly requires refreshing audit truth before taking new
+  execution actions.
+- this run's audit did not surface a higher-priority missing additive scaffold
+  that is safe to execute automatically.
+- preserving that skip discipline avoids speculative churn and keeps frozen
+  zones untouched while verification remains green.
+
+### Verification
+
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` → pass
+- audit-embedded checks:
+  - `./scripts/agent/verify.sh` → pass
+  - `python3 -m compileall src scripts/economic_world_model -q` → pass
+  - `python3 -m pytest -q tests/test_runtime_packets.py tests/embodiment/test_registry.py tests/test_objective_runtime_builder.py tests/test_constraint_set.py tests/test_pricing_sentinel.py tests/test_value_ledger.py` → pass
+
+### Current status and next task
+
+- current nightly posture remains `docs_only` until the audit reports a safe,
+  concrete additive scaffold.
+- next recommended task remains unchanged: prioritize live-path sidecar wiring
+  and governed-video preconditions before any training-lane expansion.
+
 ## 2026-04-08 — Phase 2 Perception / Grounding: benchmark-evidence discipline is now load-bearing
 
 ### What changed
@@ -3002,3 +3038,110 @@ the Sim / Synth / Physics WM.
   checks.
 - Current next task posture is `docs_only` (no higher-priority missing additive
   scaffold detected on this scan).
+
+## 2026-04-12 — Nightly audit parser hardening
+
+### What was built
+
+- Updated `scripts/economic_world_model/nightly_audit.py` so
+  `_progress_latest_date()` accepts dated markdown headings with trailing
+  descriptive text and heading levels `##` through `######`.
+- Added/updated nightly-audit parser regression tests in
+  `tests/test_economic_world_model_nightly_audit.py`:
+  - H2 dated heading with suffix text
+  - H3 dated heading with suffix text
+- Refreshed nightly audit artifacts after the parser change:
+  - `artifacts/economic_world_model/nightly_audit_summary.json`
+  - `artifacts/economic_world_model/nightly_audit_summary.md`
+
+### Why this was the highest-value additive step
+
+- The nightly audit was under-reporting `progress_log_latest` because it only
+  matched headings that were exactly `## YYYY-MM-DD`.
+- This weakened drift/readiness signal quality and could incorrectly frame
+  backlog freshness decisions.
+- Hardening this parser is additive verification infrastructure: no frozen
+  Phase B baseline math, checkpoint assets, trust-net, `w_econ`, or lambda
+  controller logic was touched.
+
+### Verification
+
+- `python3 -m pytest -q tests/test_economic_world_model_nightly_audit.py`
+  (`8 passed`)
+- `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall scripts/economic_world_model -q` (pass)
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (pass)
+
+### Current status and next task
+
+- Refreshed nightly audit remains `status: ok`.
+- `progress_log_latest` now resolves to `2026-04-11`, matching the current top
+  dated entry format.
+- Next recommended task remains `audit_only` / `docs_only` until the audit
+  surfaces a concrete safe additive scaffold.
+
+## 2026-04-12 — Sim / Synth / Physics WM: SIM1 tactic note (docs-only)
+
+### What was built
+
+- Added a short SIM1-derived tactic note to
+  `docs/economic_world_model/multi_wm_architecture_plan.md` under the Sim /
+  Synth / Physics WM provider-family section.
+- Added a matching roadmap reminder in
+  `docs/economic_world_model/roadmap.md` under the reopenable Phase 1.x
+  provider-and-boundary pass.
+- Kept the note explicitly subordinate to repo doctrine: SIM1 is treated as a
+  source of narrow provider-lane tactics, not as an architecture template or
+  ontology for this stack.
+
+### Why this matters
+
+- The useful borrowing is practical and local to existing Sim / Synth /
+  Physics ownership areas:
+  - runnable provider/runtime bring-up discipline
+  - metric-consistent, calibration-aware world instantiation for
+    physics-sensitive lanes
+  - staged `generate -> smooth -> replay -> filter` branch materialization
+  - explicit reject filtering with typed reject receipts
+  - replay-validity / task-consistency checks for mismatch evaluation
+  - render/materialization as a downstream lane rather than sovereign center
+  - replay/export discipline and training-worthiness gating
+- This keeps our canonical typed state, receipts, replay/training exports,
+  provider ownership, calibration, admission, and training feedback posture
+  sovereign while still capturing a concrete external tactic source.
+
+### Verification
+
+- `git diff --check -- docs/economic_world_model/multi_wm_architecture_plan.md docs/economic_world_model/roadmap.md docs/economic_world_model/progress_log.md docs/economic_world_model/implementation_notes.md`
+
+## 2026-04-12 — Doctrine: In-Place TTT / HALO admissible borrowings
+
+### What was built
+
+- Added a new doctrine subsection to
+  `docs/economic_world_model/multi_wm_architecture_plan.md` covering:
+  - In-Place TTT as a bounded subsystem-local fast-adaptation pattern
+  - HALO as a local geometric confidence / abstention pattern
+  - a combined synthesis paragraph
+  - explicit anti-overfit guardrails
+  - a far-future `WM-local shaping networks` note
+- Added a short reinforcing note to
+  `docs/economic_world_model/doctrine_economic_wm_future_architecture.md`
+  tying those borrowings back to slow / meso / fast separation and bounded
+  downstream shaping envelopes.
+- Added a short local anomaly-head abstention note to
+  `docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md`.
+
+### Why this matters
+
+- This makes explicit that external neural methods can inform **subsystem
+  shaping** without becoming top-level architecture templates for vpcore.
+- The resulting doctrine is more concrete about where bounded adaptive memory
+  is admissible, where calibrated abstention belongs, and why neither should
+  bypass typed WM boundaries, typed receipts, or slow governance structure.
+- The future shaping-network note also clarifies the sequencing:
+  WM-local modulators and conditioning fields may become admissible only after
+  subsystem ownership, receipts, and neural maturity are already real.
+
+### Verification
+
+- `git diff --check -- docs/economic_world_model/multi_wm_architecture_plan.md docs/economic_world_model/doctrine_economic_wm_future_architecture.md docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md docs/economic_world_model/progress_log.md docs/economic_world_model/implementation_notes.md`
