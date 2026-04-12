@@ -22,7 +22,7 @@ def test_progress_latest_date_uses_most_recent_heading(monkeypatch) -> None:
         "_read_text",
         lambda _: "\n".join(
             [
-                "## 2026-03-26",
+                "## 2026-03-26 — nightly refresh",
                 "latest-first-entry",
                 "## 2026-03-24",
                 "older-entry",
@@ -30,6 +30,23 @@ def test_progress_latest_date_uses_most_recent_heading(monkeypatch) -> None:
         ),
     )
     assert module._progress_latest_date() == "2026-03-26"
+
+
+def test_progress_latest_date_accepts_level3_date_heading(monkeypatch) -> None:
+    module = _load_audit_module()
+    monkeypatch.setattr(
+        module,
+        "_read_text",
+        lambda _: "\n".join(
+            [
+                "## 2026-03-24",
+                "older-entry",
+                "### 2026-04-09: verification hardening",
+                "newer-entry",
+            ]
+        ),
+    )
+    assert module._progress_latest_date() == "2026-04-09"
 
 
 def test_event_spine_spec_not_pending_when_code_and_docs_are_present(monkeypatch) -> None:
