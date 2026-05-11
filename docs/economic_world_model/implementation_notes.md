@@ -1,5 +1,56 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-11 - Phase 2 provider-adapter benchmark evidence emitter
+
+### What changed
+
+- `benchmark_evidence_emitter.py` now has a provider-adapter evidence path for:
+  - `vision_backbone_projection`
+  - `sam_calibration`
+  - `depth_metric_calibration`
+  - `vjepa_temporal_alignment`
+- `scripts/emit_perception_provider_adapter_benchmark_evidence.py` exposes the
+  path as a CLI. It accepts a JSON payload containing one provider invocation
+  receipt, a list of receipts, or a Perception state metadata payload with
+  `provider_adapter_receipts`.
+- the emitter builds `perception_benchmark_evidence_v1` from receipt aggregates:
+  success count, fallback count, output quality, output-token presence, latency
+  budget posture, and receipt consistency.
+- optional inputs are linked in evidence metadata:
+  - provider-adapter checkpoint ref/status
+  - `training_runtime_manifest_v1` path, digest, run id, training kind, and
+    artifact keys
+  - external metric-report path/digest for held-out, non-provisional benchmark
+    scores
+- receipt-only evidence remains provisional by default. Non-provisional evidence
+  must come from an explicit override or metric report, so provider invocation
+  success cannot silently become promotion-grade benchmark proof.
+
+### Why this was the right next Phase 2 step
+
+The compiler can now consume receipt-backed provider tokens, and annotation /
+graph benchmark evidence can be emitted from persisted annotation exports. The
+remaining missing piece was a provider-specific artifact lane for the adapters
+themselves. This change gives each provider adapter a repeatable
+evidence-emission path while preserving the important distinction between
+runtime receipts and held-out benchmark evidence.
+
+This is still not GPU provider bring-up. It creates the local artifact and
+manifest-linking discipline needed for future DINO/SigLIP, SAM, depth, and
+V-JEPA runs to become promotion inputs without turning receipt success into
+sovereign truth.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/perception_grounding/benchmark_evidence_emitter.py src/world_model/perception_grounding/__init__.py scripts/emit_perception_provider_adapter_benchmark_evidence.py tests/test_provider_adapter_benchmark_evidence_emitter.py` ->
+  pass
+- `python3 -m pytest tests/test_provider_adapter_benchmark_evidence_emitter.py -q` ->
+  `3 passed`
+- `python3 -m compileall src/world_model/perception_grounding scripts/emit_perception_provider_adapter_benchmark_evidence.py tests/test_provider_adapter_benchmark_evidence_emitter.py -q` ->
+  pass
+- `python3 -m compileall src/ && python3 -m pytest tests/ -v` ->
+  `1610 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-11 - Phase 2 runtime provider-token path
 
 ### What changed

@@ -1,5 +1,39 @@
 # Economic World Model Progress Log
 
+## 2026-05-11 - Phase 2: provider-adapter benchmark evidence emitter
+
+- **Changed**:
+  - extended `src/world_model/perception_grounding/benchmark_evidence_emitter.py`
+    with provider-adapter benchmark evidence emission for
+    `vision_backbone_projection`, `sam_calibration`,
+    `depth_metric_calibration`, and `vjepa_temporal_alignment`
+  - added `scripts/emit_perception_provider_adapter_benchmark_evidence.py` so
+    provider-adapter evidence can be emitted from persisted
+    `ProviderInvocationReceipt` payloads
+  - linked optional `training_runtime_manifest_v1` and external metric-report
+    references into emitted evidence metadata instead of changing the manifest
+    schema
+  - exported the provider-adapter emitter from the Perception / Grounding
+    package and added focused tests for receipt-only provisional evidence,
+    non-provisional metric reports, and the CLI path
+- **Why this matters**:
+  - this closes the provider-specific benchmark artifact-producer gap without
+    overstating readiness: receipt-only evidence stays provisional by default
+    and records `promotion_claim: not_implied_by_emitter`
+  - provider adapter promotion inputs are now inspectable and repeatable across
+    DINO/SigLIP projection, SAM calibration, depth calibration, and V-JEPA
+    temporal alignment
+  - Phase 2 remains the active implementation center. This does not bring up
+    real GPU providers and does not claim provider-adapter promotion; it creates
+    the artifact lane those future provider/GPU runs can feed.
+- **Verification**:
+  - `python3 -m ruff check src/world_model/perception_grounding/benchmark_evidence_emitter.py src/world_model/perception_grounding/__init__.py scripts/emit_perception_provider_adapter_benchmark_evidence.py tests/test_provider_adapter_benchmark_evidence_emitter.py` (pass)
+  - `python3 -m pytest tests/test_provider_adapter_benchmark_evidence_emitter.py -q`
+    (`3 passed`)
+  - `python3 -m compileall src/world_model/perception_grounding scripts/emit_perception_provider_adapter_benchmark_evidence.py tests/test_provider_adapter_benchmark_evidence_emitter.py -q` (pass)
+  - `python3 -m compileall src/ && python3 -m pytest tests/ -v`
+    (`1610 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-11 - Phase 2: receipt-backed runtime provider tokens
 
 - **Changed**:

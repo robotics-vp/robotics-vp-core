@@ -150,7 +150,10 @@ from .benchmark_evidence import (
 from .benchmark_evidence_emitter import (
     ANNOTATION_BENCHMARK_SEAM_TYPES,
     AnnotationBenchmarkEvidenceEmission,
+    PROVIDER_ADAPTER_BENCHMARK_SEAM_TYPES,
+    ProviderAdapterBenchmarkEvidenceEmission,
     emit_annotation_benchmark_evidence,
+    emit_provider_adapter_benchmark_evidence,
 )
 from .neural_seams import (
     AnnotationBridgeProjectionSeam,
@@ -273,9 +276,12 @@ __all__ = [
     "PERCEPTION_BENCHMARK_EVIDENCE_SCHEMA_VERSION",
     "ANNOTATION_BENCHMARK_SEAM_TYPES",
     "AnnotationBenchmarkEvidenceEmission",
+    "PROVIDER_ADAPTER_BENCHMARK_SEAM_TYPES",
+    "ProviderAdapterBenchmarkEvidenceEmission",
     "PerceptionBenchmarkEvidence",
     "build_perception_benchmark_evidence",
     "emit_annotation_benchmark_evidence",
+    "emit_provider_adapter_benchmark_evidence",
     "load_perception_benchmark_evidence",
     "write_perception_benchmark_evidence",
     # Neural seams

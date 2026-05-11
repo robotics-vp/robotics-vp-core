@@ -331,6 +331,12 @@ The first routine benchmark-evidence producer is now landed:
   `annotation_bridge_projection`.
 - The emitter preserves token provenance and checkpoint reference status. It
   explicitly records that producing the artifact does not imply promotion.
+- The provider-adapter evidence producer is now landed as well:
+  `scripts/emit_perception_provider_adapter_benchmark_evidence.py` aggregates
+  `ProviderInvocationReceipt` artifacts for `vision_backbone_projection`,
+  `sam_calibration`, `depth_metric_calibration`, and `vjepa_temporal_alignment`.
+  It can link a `training_runtime_manifest_v1` and an external held-out metric
+  report, but receipt-only evidence remains provisional by default.
 
 This moves the first priority from "structurally supported" to "routinely
 emittable." It does not change the promotion posture: non-provisional
@@ -357,6 +363,10 @@ Now that adapter work is done, the priority stack is:
    - Failed, skipped, or shape-incompatible runtime adapter outputs remain
      heuristic/provisional token evidence, which keeps annotation-export and
      benchmark artifacts from overstating provider truth
+   - **Landed 2026-05-11**: provider-adapter benchmark evidence can now be
+     emitted from provider invocation receipts and linked to training manifests
+     / metric reports. This makes the provider-adapter promotion input path
+     inspectable without treating runtime success as held-out benchmark proof.
 
 3. **Prototype-train proof-of-life** (only if cheap)
    - Tiny `droid_100` subset run to verify adapter → seam → trainer path is real
