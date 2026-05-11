@@ -1,5 +1,42 @@
 # Economic World Model Progress Log
 
+## 2026-05-11 - Doctrine: GR00T / VIRAL / DoorMan borrowing pass
+
+- **Changed**:
+  - created
+    `docs/economic_world_model/doctrine_groot_visualsim2real_borrowings.md`
+    to map GR00T-VisualSim2Real patterns into Ixion without treating GR00T
+    as topology, ontology, or Isaac sovereignty
+  - updated `docs/economic_world_model/roadmap.md` with a GR00T borrowing
+    track under the external architecture / sim-to-online / embodiment-prep
+    area
+  - updated `docs/economic_world_model/multi_wm_architecture_plan.md` with
+    GR00T as an admissible external-pattern source for teacher/student seams,
+    typed run manifests, domain-randomization receipts, dataset-reset
+    profiles, eval/export gates, and Sim-to-Embodiment transfer receipts
+  - updated `docs/economic_world_model/perception_external_data_roadmap.md`
+    with Phase 2 deployable observation discipline: camera bundles,
+    egocentric profiles, extrinsics randomization receipts,
+    observation-delay/degraded-observation surfaces, and visual augmentation
+    provenance
+  - updated `docs/actuation_embodiment_world_model.md` with a GR00T / VIRAL /
+    DoorMan subsection under external architecture borrowings
+  - lightly cross-referenced future teacher/student sim-to-real fields in
+    `docs/agent_ergonomics/run_manifest_schema.md`
+- **Why this matters**:
+  - GR00T is valuable as a concrete sim-to-real training/eval/config plant,
+    but the repo needs those patterns routed through existing WMs, receipts,
+    manifests, and promotion gates
+  - the pass preserves Phase 2 Perception / Grounding as the active
+    implementation center while making the later Phase 1.x Sim / Synth /
+    Physics return legible after Phase 2
+  - it keeps Isaac Lab / Isaac Sim as backend/provider lanes, not owners of
+    truth, and keeps PPO/DAgger/ResNet/ONNX as examples rather than stack-wide
+    mandates
+- **Verification**:
+  - `python3 -m compileall src/` (pass)
+  - `python3 -m pytest tests/ -v` (`1601 passed, 3 skipped, 24 warnings`)
+
 ## 2026-04-12 — Doctrine: admissible borrowings from In-Place TTT and HALO
 
 - **Changed**:

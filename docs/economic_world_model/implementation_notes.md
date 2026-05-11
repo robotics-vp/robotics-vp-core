@@ -1,5 +1,59 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-11 - GR00T / VIRAL / DoorMan borrowing doctrine
+
+### What changed
+
+- added a standalone GR00T-VisualSim2Real borrowing note that treats GR00T /
+  VIRAL / DoorMan as a concrete sim-to-real training/eval/config discipline,
+  not as Ixion topology
+- mapped portable patterns across WMs:
+  - composable experiment specs
+  - privileged teacher to deployable student lanes
+  - domain-randomization provenance
+  - dataset-reset curricula
+  - eval/checkpoint/export gates
+  - callback/measurement/receipt emitters
+  - run-ledger discipline
+- mapped the same patterns across the six Embodiment / Actuation subsystems
+- updated roadmap and multi-WM docs to keep the later Phase 1.x
+  Sim/Synth/Physics return explicit after Phase 2
+- updated Perception / Grounding docs so Phase 2 can borrow deployable
+  observation discipline now without shifting implementation priority
+- added a light run-manifest cross-reference for future teacher/student and
+  sim-to-real profile refs
+
+### Why this was the right shape
+
+The external repo is operationally useful because it shows a working plant:
+Hydra-composed experiments, privileged-state teacher PPO, vision DAgger
+students, RGB-delay stress, camera extrinsics randomization,
+demonstration-seeded resets, checkpoint/eval/export flow, and W&B/callback
+measurement loops.
+
+The safe extraction is to encode those as typed contracts and receipts under
+the existing WM topology. The unsafe extraction would be to make GR00T, Isaac,
+PPO, DAgger, ResNet, ONNX, or G1 task primitives into stack ontology.
+
+### Current sequencing
+
+- Phase 2 Perception / Grounding remains the active implementation center.
+- Phase 2 can borrow camera-bundle, egocentric-sensor,
+  extrinsics-randomization, degraded-observation, and augmentation-provenance
+  discipline now.
+- After Phase 2, the roadmap returns to Sim / Synth / Physics Phase 1.x
+  because additional provider-family, transfer-boundary,
+  runtime/materialization, and run-manifest obligations were added after Phase
+  1 structural closure.
+- Phase 3 Embodiment should then consume the same teacher/student,
+  dataset-reset, eval/export, and G1-facing config discipline through its six
+  subsystems.
+
+### Verification
+
+- `python3 -m compileall src/` -> pass
+- `python3 -m pytest tests/ -v` -> `1601 passed, 3 skipped, 24 warnings`
+
 ## 2026-04-11 — Nightly pass: audit-only execution, no safe scaffold delta
 
 ### What changed

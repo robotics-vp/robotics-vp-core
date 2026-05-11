@@ -78,6 +78,24 @@ A run should be classified along two axes:
 }
 ```
 
+### Future Sim-to-Real Training References
+
+The GR00T / VIRAL / DoorMan borrowing doctrine may later extend manifests
+with optional references for teacher/student and sim-to-real runs. These are
+future docs-only field reservations, not current required schema fields:
+
+- `teacher_checkpoint_ref`
+- `student_checkpoint_ref`
+- `domain_randomization_profile_ref`
+- `dataset_reset_profile_ref`
+- `eval_export_gate_ref`
+
+See
+`docs/economic_world_model/doctrine_groot_visualsim2real_borrowings.md` for
+the borrowing posture. The run manifest remains the ledger anchor; external
+experiment directories, W&B runs, checkpoint files, and export artifacts should
+attach to it rather than replacing it.
+
 ### Field Details
 
 | Field | Type | Required | Description |

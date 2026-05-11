@@ -365,6 +365,37 @@ real-robot finetuning.
 - Economic WM later consumes transfer cost/stability/yield evidence, but does
   not become the owner of transfer mechanics
 
+#### GR00T / VIRAL / DoorMan borrowing track
+
+See
+`docs/economic_world_model/doctrine_groot_visualsim2real_borrowings.md`.
+
+GR00T-VisualSim2Real should be treated as an adoption track for
+training/eval/config/promotion discipline, not topology. Its useful lessons
+are composable experiment specs, privileged teacher to deployable student
+seams, domain-randomization provenance, dataset-reset curricula,
+eval/checkpoint/export gates, callback/measurement emitters, and run-ledger
+discipline.
+
+This does not move the repo away from Phase 2. Phase 2 Perception /
+Grounding remains the active implementation center. Phase 2 may borrow
+deployable observation discipline now: camera observation bundles,
+egocentric sensor profiles, extrinsics-randomization receipts,
+observation-delay or degraded-observation surfaces, and visual augmentation
+provenance. The current Phase 2 ordering remains intact: embodiment-facing
+usefulness first, provider truth and receipt emission second, cheap bounded
+prototype-train proof-of-life only where useful, and no promotion claims
+until benchmark/GPU evidence exists.
+
+GR00T is most relevant to the later Phase 1.x Sim / Synth / Physics return
+and Phase 3 Embodiment prep. After Phase 2, the roadmap returns to
+Sim/Synth/Physics Phase 1.x because additional provider-family,
+transfer-boundary, runtime/materialization, and run-manifest obligations were
+added after Phase 1 structural closure. That later return should use GR00T
+patterns to make randomized-sim, teacher/student training, dataset-reset,
+eval/export, and Sim-to-Embodiment transfer receipts legible under Ixion's
+existing WM topology.
+
 #### GPU/runtime-blocked adoption items (requires hardware/assets)
 
 These are real but blocked by external resources:

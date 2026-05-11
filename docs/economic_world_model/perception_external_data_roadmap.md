@@ -341,6 +341,43 @@ Now that adapter work is done, the priority stack is:
    - Promotion-credible training remains a GPU-era event
    - Be honest about this
 
+### GR00T-Style Deployable Observation Discipline
+
+GR00T / VIRAL / DoorMan is useful for Phase 2 only as observation and receipt
+discipline right now. It should not change Phase 2 ordering or pull the repo
+back into Phase 1 implementation.
+
+Borrow the following patterns for Perception / Grounding:
+
+- **Camera observation bundles**: record modality, resolution, camera role,
+  timing, provider truth, and downstream seam consumer for each camera stream.
+- **Egocentric sensor profiles**: reserve humanoid-facing wrist/head/body
+  camera profiles as deployable observation surfaces, even when current data
+  still comes from DROID, Bridge, ALOHA, KITTI, or local workcell sources.
+- **Extrinsics-randomization receipts**: camera pose perturbations should be
+  emitted as calibration/randomization provenance, not hidden augmentation.
+- **Observation-delay / degraded-observation surfaces**: RGB delay, dropped
+  frames, degraded depth, and latency profiles should become benchmark axes for
+  deployable Perception seams.
+- **Visual augmentation provenance**: brightness, contrast, hue, saturation,
+  blur, noise, depth scaling, dropout, and quantization should be attached to
+  training/eval evidence when used.
+
+Tie this to the current Phase 2 stack:
+
+- embodiment-facing shadow consumption remains the highest priority lens; the
+  point of observation discipline is to make Perception outputs more useful to
+  downstream body/contact/action consumers, not to build a perception-internal
+  benchmark garden.
+- provider truth and receipt emission remain second; every borrowed
+  observation/randomization/degradation profile must preserve real,
+  unavailable, stub, or fallback truth.
+- prototype-train proof-of-life remains cheap and bounded; a tiny real-data
+  or synthetic-observation stress run can verify plumbing, but it is not a
+  promotion event.
+- promotion claims remain held until dependency-ordered benchmark artifacts
+  and GPU-era evidence exist.
+
 ### Caution: Adapter Comfort Zone
 
 Do not let the adapter layer become another comfort zone.

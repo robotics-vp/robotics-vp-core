@@ -761,6 +761,46 @@ motor backend integration (`IsaacBackend`).
 not become the master environment ontology. Our WM boundaries remain
 separate.
 
+### GR00T / VIRAL / DoorMan
+
+**What we borrow**: Concrete sim-to-real training plant discipline for
+humanoid loco-manipulation: privileged teacher to deployable student
+training, typed experiment/config surfaces, camera observation and delay
+profiles, domain randomization, dataset-reset curricula, eval/checkpoint/export
+gates, and G1-facing robot/action-space configuration hygiene.
+
+**Where it enters**:
+
+- Capability / Embodiment State Surface: G1-style joint/action-space,
+  primitive-action, sensor, camera, and deployment-profile discipline.
+- Contact / Affordance Graph Builder: sim-trained contact/affordance teacher
+  traces as evidence for reachability, grasp/hold feasibility, obstruction,
+  slip, and stage transition labels.
+- Local Contact Dynamics Model: privileged teacher rollouts, randomized
+  physics/contact settings, and delayed/degraded observation tests as bounded
+  training/eval slices.
+- Inverse-Dynamics / Retargeting Lane: reset-from-dataset and
+  demonstration-curriculum profiles for teleop, sim, video, and later real
+  robot traces.
+- Joint Skill / Action Proposal Head: deployable student/action-proposal
+  heads distilled from teacher traces, gated by deployment observation
+  profiles and benchmark evidence.
+- Drift / Calibration / Cost Evaluator: sim-real gap, backend mismatch,
+  observation-delay sensitivity, randomization provenance, export artifact
+  refs, and runtime/economic cost receipts.
+
+**Promotion posture**: GR00T-style teacher/student lanes are future Phase 1.x
+and Phase 3 surfaces. They should be typed, receipt-emitting,
+benchmark-gated, and subordinate to the six Embodiment subsystems. Export
+artifacts such as ONNX are deployment candidates only after eval/export gates
+pass.
+
+**What we explicitly do NOT import**: GR00T task primitives, PPO, DAgger,
+ResNet, ONNX, or Isaac Lab as the primitive ontology of this WM. They are
+examples of training/config/export discipline, not replacements for
+CapabilityState, ContactAffordanceGraph, LocalDynamicsForecast,
+RetargetingTraceBundle, ActionProposalBundle, or EmbodimentDriftSummary.
+
 ### TD-MPC2
 
 **What we borrow**: Bounded short-horizon latent dynamics + planning for

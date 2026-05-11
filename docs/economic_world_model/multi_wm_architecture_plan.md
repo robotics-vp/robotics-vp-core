@@ -1411,6 +1411,57 @@ Provider-family placement inside the 10-subsystem topology:
   `TaskMeasurementSurface`, `SceneHierarchyState`, and `SyntheticBranchPlan`
   rather than becoming a separate ontology or master environment abstraction.
 
+#### GR00T / VIRAL / DoorMan Pattern Borrowing Lane
+
+GR00T-VisualSim2Real is an admissible external-pattern source for the
+training/eval/config/promotion layer. It should sit beside the Habitat,
+SIM1, UE5 / Unreal, and sim-to-online doctrine as a concrete sim-to-real
+training plant, not as a topology replacement.
+
+The portable patterns are:
+
+- **Teacher/student seams**: privileged sim teachers may train or label
+  deployable students, but the teacher privileges, student observation
+  profile, checkpoint refs, and promotion posture must be explicit.
+- **Typed run manifests**: training/eval/export runs should attach to the
+  existing run ledger with WM, subsystem, epistemic status, config paths,
+  checkpoint refs, and artifact paths.
+- **Domain-randomization receipts**: randomization over camera extrinsics,
+  lighting, materials, physics parameters, control delay, image/depth
+  augmentation, and observation degradation should become a typed profile
+  plus receipt rather than hidden simulator metadata.
+- **Dataset reset profiles**: demonstration-seeded resets and curriculum
+  progression should be a named `DatasetResetProfile`, with source clips,
+  sampling policy, curriculum ratio, target embodiment, and provenance.
+- **Evaluation/export gates**: checkpoint existence and ONNX-style export are
+  not promotion evidence by themselves. They become useful only when tied to
+  task metrics, degraded-observation tests, sim-real gap evidence, and
+  deployment artifact refs.
+- **Sim-to-Embodiment transfer receipts**: teacher checkpoint, student
+  checkpoint, randomization profile, dataset reset profile, eval/export gate,
+  backend mismatch, and realized deployment drift should be carried through
+  typed transfer receipts.
+
+Concrete future contract names reserved by this lane:
+
+- `TrainingRunManifest`
+- `TeacherStudentTrainingManifest`
+- `DomainRandomizationProfile`
+- `DatasetResetProfile`
+- `EvalExportGate`
+- `SimRealGapReceipt`
+- `EmbodimentDriftReceipt`
+- `PerceptionCalibrationReceipt`
+- `EconomicRunReceipt`
+
+Phase 2 remains the implementation center. In Phase 2, the admissible
+GR00T-derived borrowings are observation and receipt discipline: camera
+observation bundles, egocentric sensor profiles, extrinsics-randomization
+receipts, RGB-delay / degraded-observation surfaces, and visual augmentation
+provenance for Perception / Grounding benchmark evidence. The heavier
+teacher/student sim-to-real training loop belongs to the later Phase 1.x
+Sim / Synth / Physics revisit and Phase 3 Embodiment prep.
+
 #### UE5 Capability Placement by Subsystem
 
 UE5 / Unreal is important precisely because it spans multiple subsystems
