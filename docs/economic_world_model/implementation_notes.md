@@ -1,5 +1,48 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-11 - Phase 2 runtime provider-token path
+
+### What changed
+
+- `compile_perception_grounding_world_state(...)` now lets successful runtime
+  provider adapter outputs feed benchmark object tokens:
+  - `vision_backbone_projection` output from `dinov2_vit_l_14`
+  - `vjepa_temporal_alignment` output from `vjepa2`, reduced over temporal steps
+- the token source becomes `provider_backed` only when the corresponding
+  `ProviderInvocationReceipt` reports `invocation_status: success` and
+  `fallback_used: false`
+- failed, skipped, missing-receipt, or shape-incompatible provider outputs fall
+  back to `heuristic_scene_graph` tokens with provisional evidence
+- the provider surface now distinguishes live runtime provider inputs from the
+  `vision_backbone_stub` posture and records `runtime_provider_inputs` metadata
+  for SAM calibration, DINO/SigLIP projection, depth calibration, and V-JEPA
+  temporal alignment
+- default V-JEPA WM object tokens are padded to the seam's declared
+  `d_wm_token`, so the temporal alignment seam can run from compiled scene graph
+  tokens without an explicit `wm_object_tokens` argument
+
+### Why this was the right next Phase 2 step
+
+The previous tranche made persisted annotation-export benchmark evidence
+routine. The next bottleneck was token provenance: benchmark object tokens still
+mostly entered through explicit compile-time injection. This change makes the
+live compiler path capable of using provider/runtime tensors, but only with a
+successful invocation receipt attached.
+
+This is not provider bring-up and not a promotion claim. Real DINOv2/SigLIP,
+SAM, depth, and V-JEPA execution still needs GPU/provider work and benchmark
+artifact density. The structural gain is that when those outputs are available,
+annotation export and benchmark evidence can carry receipt-backed runtime truth.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/perception_grounding/compiler.py tests/test_perception_grounding_compiler.py` ->
+  pass
+- `python3 -m pytest tests/test_perception_grounding_compiler.py -q` ->
+  `18 passed`
+- `python3 -m compileall src/ && python3 -m pytest tests/ -v` ->
+  `1607 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-11 - Phase 2 benchmark evidence emitter
 
 ### What changed

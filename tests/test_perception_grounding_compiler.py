@@ -10,6 +10,8 @@ from src.world_model.perception_grounding import (
     AnnotationBridgeProjectionSeam,
     EvidenceFusionSeam,
     PerceptionCompilationResult,
+    VisionBackboneProjectionSeam,
+    VJEPATemporalAlignmentSeam,
     compile_perception_grounding_with_receipts,
     compile_perception_grounding_world_state,
     encode_provider_features,
@@ -80,6 +82,19 @@ def _belief_state() -> BeliefState:
         provenance={},
         metadata={},
     )
+
+
+def _provider_adapter_benchmark_evidence() -> dict[str, object]:
+    return {
+        "benchmark_evidence_present": True,
+        "evidence_source_provisional": False,
+        "annotation_supervision_score": 0.86,
+        "held_out_label_agreement": 0.82,
+        "downstream_usefulness_score": 0.74,
+        "receipt_consistency": 0.9,
+        "gate_score": 0.84,
+        "promotion_eligible": True,
+    }
 
 
 def _coverage_graph() -> SemanticCoverageGraph:
@@ -311,6 +326,161 @@ def test_annotation_export_prefers_provider_backed_benchmark_tokens() -> None:
     assert record.object_token_source_kind == "explicit_provider_object_tokens"
     assert record.object_token_truth_class == "provider_backed"
     assert record.object_token_evidence_provisional is False
+
+
+def test_runtime_vision_backbone_projection_tokens_feed_annotation_export() -> None:
+    base_state = compile_perception_grounding_world_state(
+        episode_id="ep_runtime_backbone_tokens_base",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+    )
+    n_objects = base_state.scene_graph.object_count
+    seam = VisionBackboneProjectionSeam(
+        d_backbone=4,
+        d_hidden=8,
+        d_out=128,
+        dropout=0.0,
+    )
+    seam.eval()
+
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_runtime_backbone_tokens",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        benchmark_signals={"benchmark_eligible": True},
+        vision_backbone_projection_seam=seam,
+        backbone_features=torch.ones((n_objects, 4), dtype=torch.float32),
+        provider_adapter_benchmark_evidence={
+            "vision_backbone_projection": _provider_adapter_benchmark_evidence()
+        },
+    )
+
+    source = state.metadata["benchmark_object_token_source"]
+    assert source["source_kind"] == "vision_backbone_projection"
+    assert source["truth_class"] == "provider_backed"
+    assert source["provider_id"] == "dinov2_vit_l_14"
+    assert source["provider_invocation_status"] == "success"
+    assert source["provider_output_token_count"] == state.scene_graph.object_count
+    assert source["evidence_source_provisional"] is False
+    assert "provider_invocation_receipt_id" in source
+
+    provider_surface = state.provider_surface
+    assert "dinov2_vit_l_14" in provider_surface.provider_ids
+    assert "vision_backbone_stub" not in provider_surface.provider_ids
+    assert provider_surface.provider_truth_class["dinov2_vit_l_14"] == "provider_backed"
+    assert (
+        provider_surface.metadata["runtime_provider_inputs"][
+            "vision_backbone_projection"
+        ]["seam_present"]
+        is True
+    )
+
+    receipt = next(
+        r
+        for r in state.metadata["provider_adapter_receipts"]
+        if r["provider_kind"] == "vision_backbone_projection"
+    )
+    assert receipt["invocation_status"] == "success"
+    assert receipt["fallback_used"] is False
+    assert receipt["metadata"]["runtime_provider_backed"] is True
+
+    record = export_annotation_record(state)
+    assert record is not None
+    assert record.object_token_source_kind == "vision_backbone_projection"
+    assert record.object_token_truth_class == "provider_backed"
+    assert record.object_token_evidence_provisional is False
+
+
+def test_runtime_vjepa_alignment_tokens_feed_annotation_export_without_explicit_wm_tokens() -> None:
+    seam = VJEPATemporalAlignmentSeam(
+        d_vjepa=4,
+        d_wm_token=16,
+        d_model=16,
+        d_out=128,
+        n_heads=4,
+        d_ff=32,
+        n_temporal_steps=2,
+        dropout=0.0,
+    )
+    seam.eval()
+
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_runtime_vjepa_tokens",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        benchmark_signals={"benchmark_eligible": True},
+        vjepa_temporal_alignment_seam=seam,
+        vjepa_tokens=torch.ones((2, 3, 4), dtype=torch.float32),
+        provider_adapter_benchmark_evidence={
+            "vjepa_temporal_alignment": _provider_adapter_benchmark_evidence()
+        },
+    )
+
+    source = state.metadata["benchmark_object_token_source"]
+    assert source["source_kind"] == "vjepa_temporal_alignment"
+    assert source["truth_class"] == "provider_backed"
+    assert source["provider_id"] == "vjepa2"
+    assert source["provider_invocation_status"] == "success"
+    assert source["provider_output_token_count"] == state.scene_graph.object_count
+    assert source["evidence_source_provisional"] is False
+    assert "vjepa2" in state.provider_surface.provider_ids
+
+    record = export_annotation_record(state)
+    assert record is not None
+    assert record.object_token_source_kind == "vjepa_temporal_alignment"
+    assert record.object_token_truth_class == "provider_backed"
+    assert record.object_token_evidence_provisional is False
+
+
+def test_failed_runtime_provider_projection_does_not_claim_provider_backed_tokens() -> None:
+    class BrokenVisionProjection:
+        def __call__(self, backbone_features: torch.Tensor) -> torch.Tensor:
+            raise RuntimeError("projection failed")
+
+    base_state = compile_perception_grounding_world_state(
+        episode_id="ep_runtime_provider_failure_base",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+    )
+    n_objects = base_state.scene_graph.object_count
+    state = compile_perception_grounding_world_state(
+        episode_id="ep_runtime_provider_failure",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+        benchmark_signals={"benchmark_eligible": True},
+        vision_backbone_projection_seam=BrokenVisionProjection(),
+        backbone_features=torch.ones((n_objects, 4), dtype=torch.float32),
+        provider_adapter_benchmark_evidence={
+            "vision_backbone_projection": _provider_adapter_benchmark_evidence()
+        },
+    )
+
+    source = state.metadata["benchmark_object_token_source"]
+    assert source["source_kind"] == "heuristic_scene_graph"
+    assert source["truth_class"] == "heuristic_derived"
+    assert source["evidence_source_provisional"] is True
+
+    receipt = next(
+        r
+        for r in state.metadata["provider_adapter_receipts"]
+        if r["provider_kind"] == "vision_backbone_projection"
+    )
+    assert receipt["invocation_status"] == "error"
+    assert receipt["fallback_used"] is True
+    assert receipt["metadata"]["runtime_provider_backed"] is False
+    assert "vision_backbone_projection" not in state.metadata[
+        "provider_adapter_outputs_available"
+    ]
 
 
 def test_graph_transformer_shadow_receipt_loads_persistent_benchmark_evidence(tmp_path) -> None:

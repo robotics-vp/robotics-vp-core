@@ -1,5 +1,39 @@
 # Economic World Model Progress Log
 
+## 2026-05-11 - Phase 2: receipt-backed runtime provider tokens
+
+- **Changed**:
+  - tightened the Perception / Grounding compiler's benchmark-token source
+    selection so runtime `vision_backbone_projection` and
+    `vjepa_temporal_alignment` outputs become `provider_backed` annotation/export
+    evidence only when the matching `ProviderInvocationReceipt` reports
+    `success` without fallback
+  - expanded the provider surface to replace the vision stub with
+    `dinov2_vit_l_14` when real backbone features are supplied, and to expose
+    live SAM, depth, and V-JEPA input/seam posture in
+    `runtime_provider_inputs`
+  - padded default V-JEPA WM object tokens to the seam's declared
+    `d_wm_token`, so temporal alignment can run from scene-graph object tokens
+    without explicit caller-provided WM tokens
+  - added focused compiler tests for successful DINO projection token export,
+    successful V-JEPA temporal token export, and failed projection fallback
+- **Why this matters**:
+  - this closes the next named Phase 2 gap after benchmark-evidence emission:
+    benchmark object tokens are no longer mainly an explicit compile-time
+    injection path
+  - provider-backed token provenance is now receipt-backed runtime truth, not a
+    topology claim; failed/skipped seams still produce heuristic/provisional
+    evidence and cannot promote annotation or graph evidence by accident
+  - Phase 2 remains the active implementation center. This does not bring up
+    real GPU DINOv2/V-JEPA providers or claim promotion readiness; it makes the
+    compiler path honest when those provider tensors are supplied.
+- **Verification**:
+  - `python3 -m ruff check src/world_model/perception_grounding/compiler.py tests/test_perception_grounding_compiler.py` (pass)
+  - `python3 -m pytest tests/test_perception_grounding_compiler.py -q`
+    (`18 passed`)
+  - `python3 -m compileall src/ && python3 -m pytest tests/ -v`
+    (`1607 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-11 - Phase 2: annotation-export benchmark evidence emitter
 
 - **Changed**:

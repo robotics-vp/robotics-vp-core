@@ -349,9 +349,14 @@ Now that adapter work is done, the priority stack is:
 2. **More receipt emission / provider truth**
    - Remaining Perception receipts not yet live
    - Keeps seam lifecycle and promotion legible
-   - Immediate next target: runtime provider-backed token production, so
-     benchmark object tokens come from live vision-backbone / V-JEPA provider
-     outputs rather than mainly explicit compile-time injection
+   - **Landed 2026-05-11**: runtime provider-backed token production now has a
+     compiler path for `vision_backbone_projection` and
+     `vjepa_temporal_alignment`: benchmark object tokens may come from live
+     provider adapter outputs only when the matching `ProviderInvocationReceipt`
+     reports success without fallback
+   - Failed, skipped, or shape-incompatible runtime adapter outputs remain
+     heuristic/provisional token evidence, which keeps annotation-export and
+     benchmark artifacts from overstating provider truth
 
 3. **Prototype-train proof-of-life** (only if cheap)
    - Tiny `droid_100` subset run to verify adapter → seam → trainer path is real

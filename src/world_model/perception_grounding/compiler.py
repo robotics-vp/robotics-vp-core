@@ -96,6 +96,10 @@ def _infer_provider_ids(
     scene_tracks_payload: Optional[Any],
     vla_semantic_evidence: Optional[Any],
     teacher_trace: Optional[Any],
+    sam_mask_features: Optional[Any] = None,
+    backbone_features: Optional[Any] = None,
+    depth_map: Optional[Any] = None,
+    vjepa_tokens: Optional[Any] = None,
 ) -> list[str]:
     providers: list[str] = []
     if scene_tracks_payload is not None:
@@ -104,7 +108,16 @@ def _infer_provider_ids(
         providers.append("vla_semantic_evidence")
     if teacher_trace is not None:
         providers.append("teacher_trace")
-    providers.append("vision_backbone_stub")
+    if sam_mask_features is not None:
+        providers.append("sam_3_1")
+    if backbone_features is not None:
+        providers.append("dinov2_vit_l_14")
+    else:
+        providers.append("vision_backbone_stub")
+    if depth_map is not None:
+        providers.append("depth_anything_v2")
+    if vjepa_tokens is not None:
+        providers.append("vjepa2")
     return providers
 
 
@@ -114,38 +127,86 @@ def _provider_surface(
     scene_tracks_payload: Optional[Any],
     vla_semantic_evidence: Optional[Any],
     teacher_trace: Optional[Any],
+    sam_mask_features: Optional[Any] = None,
+    sam_calibration_seam: Optional[Any] = None,
+    backbone_features: Optional[Any] = None,
+    vision_backbone_projection_seam: Optional[Any] = None,
+    depth_map: Optional[Any] = None,
+    depth_metric_calibration_seam: Optional[Any] = None,
+    vjepa_tokens: Optional[Any] = None,
+    vjepa_temporal_alignment_seam: Optional[Any] = None,
 ) -> ProviderSurfaceState:
     provider_ids = _infer_provider_ids(
         scene_tracks_payload=scene_tracks_payload,
         vla_semantic_evidence=vla_semantic_evidence,
         teacher_trace=teacher_trace,
+        sam_mask_features=sam_mask_features,
+        backbone_features=backbone_features,
+        depth_map=depth_map,
+        vjepa_tokens=vjepa_tokens,
     )
     provider_kinds = {
         "scene_tracks": "scene_tracks",
         "vla_semantic_evidence": "teacher_semantics",
         "teacher_trace": "teacher_trace",
+        "sam_3_1": "concept_segmentation",
+        "dinov2_vit_l_14": "vision_backbone",
         "vision_backbone_stub": "vision_backbone",
+        "depth_anything_v2": "metric_depth",
+        "vjepa2": "temporal_prediction",
     }
     provider_availability = {
-        provider_id: (
-            "available"
-            if provider_id != "vision_backbone_stub" or True
-            else "unavailable"
-        )
+        provider_id: "available"
         for provider_id in provider_ids
     }
     provider_truth_class = {
         "scene_tracks": "provider_backed",
         "vla_semantic_evidence": "advisory_evidence",
         "teacher_trace": "advisory_evidence",
+        "sam_3_1": "provider_backed",
+        "dinov2_vit_l_14": "provider_backed",
         "vision_backbone_stub": "stub_smoke_only",
+        "depth_anything_v2": "provider_backed",
+        "vjepa2": "provider_backed",
     }
     sensor_modalities = {
         "scene_tracks": ["rgb", "depth", "pose"],
         "vla_semantic_evidence": ["semantic_tokens"],
         "teacher_trace": ["action_semantics"],
+        "sam_3_1": ["rgb", "mask_features"],
+        "dinov2_vit_l_14": ["rgb", "visual_latents"],
         "vision_backbone_stub": ["rgb"],
+        "depth_anything_v2": ["rgb", "depth"],
+        "vjepa2": ["rgb_sequence", "temporal_latents"],
     }
+    runtime_provider_inputs = {
+        "sam_calibration": {
+            "provider_id": "sam_3_1",
+            "input_present": sam_mask_features is not None,
+            "seam_present": sam_calibration_seam is not None,
+        },
+        "vision_backbone_projection": {
+            "provider_id": "dinov2_vit_l_14",
+            "input_present": backbone_features is not None,
+            "seam_present": vision_backbone_projection_seam is not None,
+        },
+        "depth_metric_calibration": {
+            "provider_id": "depth_anything_v2",
+            "input_present": depth_map is not None,
+            "seam_present": depth_metric_calibration_seam is not None,
+        },
+        "vjepa_temporal_alignment": {
+            "provider_id": "vjepa2",
+            "input_present": vjepa_tokens is not None,
+            "seam_present": vjepa_temporal_alignment_seam is not None,
+        },
+    }
+    live_provider_ids = [
+        provider_id
+        for provider_id in provider_ids
+        if provider_truth_class.get(provider_id) == "provider_backed"
+        and provider_id != "scene_tracks"
+    ]
     return ProviderSurfaceState(
         surface_id=f"provider_surface_{state_id}",
         provider_ids=provider_ids,
@@ -173,8 +234,14 @@ def _provider_surface(
         provider_batch_capacity=max(1, len(provider_ids)),
         provider_latency_budget_ms=40.0,
         metadata={
-            "provider_surface_mode": "heuristic_compiled",
+            "provider_surface_mode": (
+                "runtime_observation_compiled"
+                if live_provider_ids
+                else "heuristic_compiled"
+            ),
             "load_bearing_sources": provider_ids,
+            "live_provider_ids": live_provider_ids,
+            "runtime_provider_inputs": runtime_provider_inputs,
         },
     )
 
@@ -303,6 +370,36 @@ def _coerce_token_matrix(
     return normalized
 
 
+def _receipt_supports_provider_tokens(
+    receipt: Optional[ProviderInvocationReceipt],
+) -> bool:
+    return bool(
+        receipt is not None
+        and receipt.invocation_status == "success"
+        and not receipt.fallback_used
+    )
+
+
+def _provider_token_source_from_receipt(
+    *,
+    heuristic_source: Mapping[str, Any],
+    source_kind: str,
+    receipt: ProviderInvocationReceipt,
+) -> dict[str, Any]:
+    return {
+        **dict(heuristic_source),
+        "source_kind": source_kind,
+        "truth_class": "provider_backed",
+        "provider_id": receipt.provider_id,
+        "provider_kind": receipt.provider_kind,
+        "evidence_source_provisional": False,
+        "provider_invocation_receipt_id": receipt.receipt_id,
+        "provider_invocation_status": receipt.invocation_status,
+        "provider_output_quality_score": receipt.output_quality_score,
+        "provider_output_token_count": receipt.output_token_count,
+    }
+
+
 def _resolve_benchmark_object_tokens(
     *,
     scene_graph: SceneGraphState,
@@ -310,6 +407,7 @@ def _resolve_benchmark_object_tokens(
     explicit_tokens: Optional[Any] = None,
     explicit_source: Optional[Mapping[str, Any]] = None,
     provider_adapter_outputs: Optional[Mapping[str, Any]] = None,
+    provider_adapter_receipts: Optional[Sequence[ProviderInvocationReceipt]] = None,
 ) -> tuple[list[list[float]], dict[str, Any]]:
     """Select the benchmark token matrix for annotation/export evidence.
 
@@ -363,20 +461,34 @@ def _resolve_benchmark_object_tokens(
         }
 
     outputs = dict(provider_adapter_outputs or {})
+    receipts_by_kind = {
+        receipt.provider_kind: receipt
+        for receipt in list(provider_adapter_receipts or [])
+    }
+    rejected_provider_outputs: list[dict[str, Any]] = []
     vision_matrix = _coerce_token_matrix(
         outputs.get("vision_backbone_projection"),
         n_nodes=n_nodes,
         d_token=d_token,
     )
     if vision_matrix is not None:
-        return vision_matrix, {
-            **heuristic_source,
-            "source_kind": "vision_backbone_projection",
-            "truth_class": "provider_backed",
-            "provider_id": "dinov2_vit_l_14",
-            "provider_kind": "vision_backbone_projection",
-            "evidence_source_provisional": False,
-        }
+        receipt = receipts_by_kind.get("vision_backbone_projection")
+        if _receipt_supports_provider_tokens(receipt):
+            assert receipt is not None
+            return vision_matrix, _provider_token_source_from_receipt(
+                heuristic_source=heuristic_source,
+                source_kind="vision_backbone_projection",
+                receipt=receipt,
+            )
+        rejected_provider_outputs.append(
+            {
+                "source_kind": "vision_backbone_projection",
+                "reason": "missing_successful_provider_invocation_receipt",
+                "receipt_id": getattr(receipt, "receipt_id", ""),
+                "invocation_status": getattr(receipt, "invocation_status", ""),
+                "fallback_used": bool(getattr(receipt, "fallback_used", True)),
+            }
+        )
 
     temporal_output = outputs.get("vjepa_temporal_alignment")
     if isinstance(temporal_output, Mapping) and "temporal_aligned" in temporal_output:
@@ -398,15 +510,29 @@ def _resolve_benchmark_object_tokens(
         except Exception:
             temporal_matrix = None
         if temporal_matrix is not None:
-            return temporal_matrix, {
-                **heuristic_source,
-                "source_kind": "vjepa_temporal_alignment",
-                "truth_class": "provider_backed",
-                "provider_id": "vjepa2",
-                "provider_kind": "vjepa_temporal_alignment",
-                "evidence_source_provisional": False,
-            }
+            receipt = receipts_by_kind.get("vjepa_temporal_alignment")
+            if _receipt_supports_provider_tokens(receipt):
+                assert receipt is not None
+                return temporal_matrix, _provider_token_source_from_receipt(
+                    heuristic_source=heuristic_source,
+                    source_kind="vjepa_temporal_alignment",
+                    receipt=receipt,
+                )
+            rejected_provider_outputs.append(
+                {
+                    "source_kind": "vjepa_temporal_alignment",
+                    "reason": "missing_successful_provider_invocation_receipt",
+                    "receipt_id": getattr(receipt, "receipt_id", ""),
+                    "invocation_status": getattr(receipt, "invocation_status", ""),
+                    "fallback_used": bool(getattr(receipt, "fallback_used", True)),
+                }
+            )
 
+    if rejected_provider_outputs:
+        heuristic_source = {
+            **heuristic_source,
+            "rejected_provider_outputs": rejected_provider_outputs,
+        }
     return heuristic_tokens, heuristic_source
 
 
@@ -648,6 +774,7 @@ def _invoke_provider_adapter_seam(
     fallback_reason = ""
     output_quality = 0.0
     output_token_count = 0
+    output_shape_summary: dict[str, list[int]] = {}
 
     try:
         import torch
@@ -657,14 +784,38 @@ def _invoke_provider_adapter_seam(
 
         # Extract quality/token count from output if available
         if isinstance(output, dict):
+            output_shape_summary = {
+                str(key): [int(dim) for dim in value.shape]
+                for key, value in output.items()
+                if hasattr(value, "shape")
+            }
             if "calibrated_confidence" in output:
                 output_quality = clip01(float(output["calibrated_confidence"].mean().item()))
             elif "temporal_confidence" in output:
                 output_quality = clip01(float(output["temporal_confidence"].mean().item()))
             else:
                 output_quality = 0.7  # Default for successful projection
+            token_tensor = None
+            for token_key in (
+                "temporal_aligned",
+                "object_tokens",
+                "calibrated_confidence",
+            ):
+                if token_key in output:
+                    token_tensor = output[token_key]
+                    break
+            if hasattr(token_tensor, "shape"):
+                shape = token_tensor.shape
+                if len(shape) >= 3:
+                    output_token_count = int(shape[-2])
+                elif len(shape) >= 1:
+                    output_token_count = int(shape[0])
         elif hasattr(output, "shape"):
-            output_token_count = int(output.shape[0] if output.dim() >= 1 else 1)
+            output_shape_summary = {"output": [int(dim) for dim in output.shape]}
+            if output.dim() >= 3 and int(output.shape[0]) == 1:
+                output_token_count = int(output.shape[1])
+            else:
+                output_token_count = int(output.shape[0] if output.dim() >= 1 else 1)
             output_quality = 0.7
 
     except Exception as e:
@@ -691,6 +842,10 @@ def _invoke_provider_adapter_seam(
             "seam_type": type(seam).__name__ if seam else "none",
             "helper_status": dict(helper_status),
             "benchmark_evidence": benchmark_evidence_payload,
+            "output_shape_summary": output_shape_summary,
+            "runtime_provider_backed": bool(
+                invocation_status == "success" and not fallback_used
+            ),
         },
     )
 
@@ -783,6 +938,17 @@ def _evidence_routing(
             contributions["teacher_trace"] = 0.15
         if "vision_backbone_stub" in provider_ids:
             contributions["vision_backbone_stub"] = 0.05
+        for provider_id in provider_ids:
+            if provider_id in contributions:
+                continue
+            provider_kind = str(provider_surface.provider_kinds.get(provider_id, ""))
+            truth_class = str(provider_surface.provider_truth_class.get(provider_id, ""))
+            if provider_kind == "vision_backbone":
+                contributions[provider_id] = 0.10
+            elif provider_kind == "temporal_prediction":
+                contributions[provider_id] = 0.08
+            elif truth_class == "provider_backed":
+                contributions[provider_id] = 0.05
         contribution_total = sum(contributions.values()) or 1.0
         normalized = {
             key: value / contribution_total
@@ -1736,6 +1902,14 @@ def compile_perception_grounding_world_state(
         scene_tracks_payload=scene_tracks_payload,
         vla_semantic_evidence=vla_semantic_evidence,
         teacher_trace=teacher_trace,
+        sam_mask_features=sam_mask_features,
+        sam_calibration_seam=sam_calibration_seam,
+        backbone_features=backbone_features,
+        vision_backbone_projection_seam=vision_backbone_projection_seam,
+        depth_map=depth_map,
+        depth_metric_calibration_seam=depth_metric_calibration_seam,
+        vjepa_tokens=vjepa_tokens,
+        vjepa_temporal_alignment_seam=vjepa_temporal_alignment_seam,
     )
     evidence_helper = resolve_evidence_fusion_helper(
         loading_posture="auto",
@@ -1821,8 +1995,14 @@ def compile_perception_grounding_world_state(
         wm_tokens = wm_object_tokens
         if wm_tokens is None and scene_graph.object_tracks:
             import torch
+            d_wm_token = int(
+                getattr(vjepa_temporal_alignment_seam, "d_wm_token", 128) or 128
+            )
             wm_tokens = torch.tensor(
-                [track.feature_token for track in scene_graph.object_tracks],
+                [
+                    _dense_token(track.feature_token, target_dim=d_wm_token)
+                    for track in scene_graph.object_tracks
+                ],
                 dtype=torch.float32,
             )
         if wm_tokens is not None:
@@ -1849,6 +2029,7 @@ def compile_perception_grounding_world_state(
         explicit_tokens=benchmark_object_tokens,
         explicit_source=benchmark_object_token_source,
         provider_adapter_outputs=provider_adapter_outputs,
+        provider_adapter_receipts=provider_adapter_receipts,
     )
 
     # --- Graph Transformer shadow path ---
