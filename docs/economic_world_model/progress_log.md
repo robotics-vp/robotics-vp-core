@@ -1,5 +1,36 @@
 # Economic World Model Progress Log
 
+## 2026-05-11 - Phase 2: annotation-export benchmark evidence emitter
+
+- **Changed**:
+  - added `src/world_model/perception_grounding/benchmark_evidence_emitter.py`
+    to turn persisted `annotation_export_v2` files into typed
+    `perception_benchmark_evidence_v1` artifacts
+  - added `scripts/emit_perception_annotation_benchmark_evidence.py` so
+    scene-graph transformer and annotation-bridge benchmark evidence can be
+    emitted repeatably from the CLI
+  - exported the new emitter from the Perception / Grounding package
+  - added focused tests covering provider-backed evidence, provisional
+    heuristic-token blocking, and the CLI path
+  - updated the Phase 2 roadmap notes so the next priority is now runtime
+    provider-backed token production, followed by provider-specific benchmark
+    artifact producers
+- **Why this matters**:
+  - this closes the first named Phase 2 gap after the annotation-export and
+    benchmark-evidence contracts: benchmark evidence is no longer only a data
+    class or an in-memory evaluator, it has a routine persisted artifact path
+  - the emitter preserves token provenance, checkpoint reference status, and an
+    explicit `promotion_claim: not_implied_by_emitter` marker, so fresh or
+    provisional runs cannot masquerade as promotion-grade evidence
+  - Phase 2 remains the active implementation center; this is evidence
+    production for Perception / Grounding, not a topology change or a Phase 1.x
+    diversion
+- **Verification**:
+  - `python3 -m compileall src/world_model/perception_grounding scripts/emit_perception_annotation_benchmark_evidence.py tests/test_perception_benchmark_evidence_emitter.py -q` (pass)
+  - `python3 -m ruff check src/world_model/perception_grounding/benchmark_evidence_emitter.py scripts/emit_perception_annotation_benchmark_evidence.py tests/test_perception_benchmark_evidence_emitter.py src/world_model/perception_grounding/__init__.py` (pass)
+  - `python3 -m pytest -q tests/test_perception_benchmark_evidence_emitter.py tests/test_annotation_bridge_projection.py tests/test_perception_grounding_compiler.py tests/test_perception_grounding_neural_seams.py tests/test_embodiment_shadow_consumer.py` (`113 passed`)
+  - `python3 -m compileall src/ && python3 -m pytest tests/ -v` (`1604 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-11 - Doctrine: GR00T / VIRAL / DoorMan borrowing pass
 
 - **Changed**:

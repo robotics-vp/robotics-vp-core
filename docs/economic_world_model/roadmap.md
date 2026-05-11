@@ -741,14 +741,14 @@ Current branch status:
 - **Landed 2026-04-04**: embodiment-facing shadow consumer (`embodiment_shadow_consumer.py`), full 8-receipt-type emission in compiler, 7-subsystem internal decomposition codified
 - **Landed 2026-04-08**: bounded annotation-export successor lane with `AnnotationBridgeProjectionSeam`, annotation-export evaluation, trainer wiring, and provisional-evidence gating
 - **Landed 2026-04-08**: persisted benchmark-evidence artifact contract with provenance-bearing annotation export and stricter promotion gating for graph transformer / annotation bridge / provider-adapter seams
+- **Landed 2026-05-11**: routine persisted annotation-export benchmark-evidence emitter (`benchmark_evidence_emitter.py` plus `scripts/emit_perception_annotation_benchmark_evidence.py`) for scene-graph transformer and annotation-bridge evidence artifacts
 - 3 shadow consumers now wired: SimSynth, Annotation/VLA, Embodiment
 - full receipt family live: ProviderAvailability, EvidenceFusion, ProviderInvocation, GroundingCalibration, InferenceHeadroom, DeploymentResource, TemporalGrounding, PerceptionContribution
 - the next best Phase 2 work is therefore (in priority order):
-  1. **Graph-transformer benchmark evidence production** — make non-provisional persisted evidence routine on the annotation-export path, not only structurally supported
-  2. **Runtime provider-backed token production** — source benchmark object tokens from real vision-backbone / V-JEPA outputs on the live path rather than mainly by explicit compile-time injection
-  3. **Provider-specific benchmark artifact producers** — add honest artifact lanes and trainer-manifest linkage for `vision_backbone_projection`, `sam_calibration`, `depth_metric_calibration`, and `vjepa_temporal_alignment`
-  4. **Provider contract bring-up** — SAM 3/3.1, DINOv2/SigLIP, V-JEPA 2, Depth typed contracts still need real-or-unavailable posture with actual GPU execution on real hosts
-  5. **Hold off on pretending promotion is near** — structural path exists, but promotion-credible training still depends on dependency-ordered benchmark evidence (`vision_backbone_projection` → `scene_graph_transformer` → `annotation_bridge_projection` → provider calibrators)
+  1. **Runtime provider-backed token production** — source benchmark object tokens from real vision-backbone / V-JEPA outputs on the live path rather than mainly by explicit compile-time injection
+  2. **Provider-specific benchmark artifact producers** — add honest artifact lanes and trainer-manifest linkage for `vision_backbone_projection`, `sam_calibration`, `depth_metric_calibration`, and `vjepa_temporal_alignment`
+  3. **Provider contract bring-up** — SAM 3/3.1, DINOv2/SigLIP, V-JEPA 2, Depth typed contracts still need real-or-unavailable posture with actual GPU execution on real hosts
+  4. **Hold off on pretending promotion is near** — structural path exists, but promotion-credible training still depends on dependency-ordered benchmark evidence (`vision_backbone_projection` → `scene_graph_transformer` → `annotation_bridge_projection` → provider calibrators)
 
 **Caution**: Do not let the adapter layer become another comfort zone. It exists to serve seam training, downstream usefulness, and promotion honesty—not to become its own mini-project.
 

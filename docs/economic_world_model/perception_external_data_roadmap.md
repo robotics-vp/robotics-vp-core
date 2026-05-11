@@ -318,6 +318,25 @@ Options:
 - ✅ Schema correctness verified via integration tests (43 tests)
 - ⏳ KITTI adapter for depth seam — deferred (domain mismatch concern)
 
+### Phase 2 Evidence Production Update (2026-05-11)
+
+The first routine benchmark-evidence producer is now landed:
+
+- `src/world_model/perception_grounding/benchmark_evidence_emitter.py`
+  loads persisted `annotation_export_v2` JSON, evaluates a supported Perception
+  seam, and writes `perception_benchmark_evidence_v1`.
+- `scripts/emit_perception_annotation_benchmark_evidence.py` exposes the same
+  path as a CLI for repeatable local or remote runs.
+- Supported seams are currently `scene_graph_transformer` and
+  `annotation_bridge_projection`.
+- The emitter preserves token provenance and checkpoint reference status. It
+  explicitly records that producing the artifact does not imply promotion.
+
+This moves the first priority from "structurally supported" to "routinely
+emittable." It does not change the promotion posture: non-provisional
+provider-backed tokens and GPU-era benchmark scale are still required before
+promotion claims are credible.
+
 ### Phase 2 Priority Stack (Ordered)
 
 Now that adapter work is done, the priority stack is:
@@ -330,6 +349,9 @@ Now that adapter work is done, the priority stack is:
 2. **More receipt emission / provider truth**
    - Remaining Perception receipts not yet live
    - Keeps seam lifecycle and promotion legible
+   - Immediate next target: runtime provider-backed token production, so
+     benchmark object tokens come from live vision-backbone / V-JEPA provider
+     outputs rather than mainly explicit compile-time injection
 
 3. **Prototype-train proof-of-life** (only if cheap)
    - Tiny `droid_100` subset run to verify adapter → seam → trainer path is real
