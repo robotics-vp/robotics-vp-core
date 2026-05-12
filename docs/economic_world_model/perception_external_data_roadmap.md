@@ -369,9 +369,26 @@ Now that adapter work is done, the priority stack is:
      inspectable without treating runtime success as held-out benchmark proof.
 
 3. **Prototype-train proof-of-life** (only if cheap)
-   - Tiny `droid_100` subset run to verify adapter → seam → trainer path is real
+   - **Landed 2026-05-11**: local CPU EvidenceFusion proof-of-life now emits
+     a persistent checkpoint, metric report, provisional benchmark evidence,
+     training runtime manifest, and explicit loss-decrease proof from synthetic
+     multi-provider samples
+   - **Landed 2026-05-11**: the same EvidenceFusion proof script can run a
+     DROID-shaped mock LeRobot adapter path (`--data-source mock_lerobot_droid`)
+     to verify adapter → seam → trainer → manifest/evidence plumbing without
+     external data
+   - **Landed 2026-05-11**: local CPU `VJEPATemporalAlignmentSeam`
+     proof-of-life now emits the same typed artifact family for synthetic
+     temporal windows and for a DROID-shaped mock LeRobot temporal adapter path
+   - **Landed 2026-05-11**: both proof scripts can now consume a local
+     LeRobot-like JSON/JSONL row bundle (`--data-source local_lerobot_rows`),
+     which makes the next tiny DROID / Bridge external-data proof a local file
+     execution problem instead of a missing contract problem
+   - Remaining cheap step: tiny real-data subset run to verify external-data
+     adapter → seam → trainer path is real for at least one camera-fusion seam
+     and one temporal seam, such as `droid_100`
    - NOT a big training push
-   - Just enough to confirm loss decreases on real data
+   - Just enough to confirm loss decreases without claiming promotion
 
 4. **Hold promotion claims**
    - Structural path now exists
@@ -409,9 +426,10 @@ Tie this to the current Phase 2 stack:
 - provider truth and receipt emission remain second; every borrowed
   observation/randomization/degradation profile must preserve real,
   unavailable, stub, or fallback truth.
-- prototype-train proof-of-life remains cheap and bounded; a tiny real-data
-  or synthetic-observation stress run can verify plumbing, but it is not a
-  promotion event.
+- prototype-train proof-of-life remains cheap and bounded; local synthetic,
+  mock-LeRobot, and local row-bundle proofs for EvidenceFusion and V-JEPA
+  temporal alignment verify plumbing, but the next tiny real-data run is still
+  not a promotion event.
 - promotion claims remain held until dependency-ordered benchmark artifacts
   and GPU-era evidence exist.
 

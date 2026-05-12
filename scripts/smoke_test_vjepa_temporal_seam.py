@@ -1,24 +1,13 @@
 #!/usr/bin/env python3
-"""Proof-of-life smoke test for the perception seam training pipeline.
+"""Proof-of-life smoke test for the V-JEPA temporal seam training pipeline.
 
-Exercises the full path: synthetic data -> EvidenceFusionSeam -> trainer ->
-validation -> benchmark gate -> typed proof artifacts.
+Exercises the full path: temporal samples -> VJEPATemporalAlignmentSeam ->
+trainer -> benchmark gate -> typed proof artifacts.
 
 This script does NOT require GPU, real providers, or external datasets.
-It uses synthetic samples or DROID-shaped mock LeRobot episodes to verify that
-the local training pipeline compiles, runs forward/backward, emits receipts,
-and produces structured artifacts.
-
-Usage::
-
-    python3 scripts/smoke_test_perception_seam_training.py [--steps N] [--artifact-dir DIR]
-
-Produces::
-
-    artifacts/perception_seam_proof_of_life.json
-    artifacts/perception_seam_metric_report.json
-    artifacts/perception_seam_benchmark_evidence.json
-    artifacts/training_runtime_manifest.json
+It uses synthetic temporal samples or DROID-shaped mock LeRobot episodes to
+verify that the local training pipeline compiles, runs forward/backward, emits
+receipts, and produces structured artifacts.
 """
 
 from __future__ import annotations
@@ -34,26 +23,26 @@ from pathlib import Path
 
 import torch
 
-# Ensure repo root is on sys.path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.dataset_bridges.lerobot_perception_adapter import (
-    FeatureExtractionConfig,
-    LeRobotPerceptionAdapterConfig,
-    adapt_lerobot_episodes_for_evidence_fusion,
+from scripts.perception_proof_of_life_utils import (
+    load_lerobot_episodes_from_path,
+    make_mock_lerobot_episode,
 )
+from src.dataset_bridges.lerobot_perception_adapter import (
+    LeRobotPerceptionAdapterConfig,
+    adapt_lerobot_episodes_for_vjepa_temporal,
+)
+from src.training.perception_seam_benchmarks import VJEPATemporalBenchmark
 from src.training.perception_seam_data import (
-    MultiProviderSample,
-    create_evidence_fusion_loader,
-    generate_synthetic_evidence_fusion_samples,
+    VJEPATemporalSample,
+    create_vjepa_temporal_loader,
+    generate_synthetic_vjepa_temporal_samples,
 )
 from src.training.perception_seam_trainer import (
     PerceptionSeamTrainer,
     SeamTrainingConfig,
-)
-from src.training.perception_seam_benchmarks import (
-    EvidenceFusionBenchmark,
 )
 from src.training.training_manifest import (
     TRAINING_RUNTIME_MANIFEST_SCHEMA_VERSION,
@@ -65,74 +54,70 @@ from src.world_model.perception_grounding.benchmark_evidence import (
     build_perception_benchmark_evidence,
     write_perception_benchmark_evidence,
 )
-from src.world_model.perception_grounding.seam_registry import (
-    PerceptionSeamRegistry,
-)
-from scripts.perception_proof_of_life_utils import (
-    load_lerobot_episodes_from_path,
-    make_mock_lerobot_episode,
-)
+from src.world_model.perception_grounding.seam_registry import PerceptionSeamRegistry
+
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s  %(message)s",
 )
-logger = logging.getLogger("perception_seam_proof_of_life")
+logger = logging.getLogger("vjepa_temporal_seam_proof_of_life")
 
 
-def _load_evidence_fusion_samples(
+def _load_temporal_samples(
     *,
     data_source: str,
     seed: int,
     lerobot_rows_path: str | Path | None = None,
     max_episodes: int = 4,
     max_steps_per_episode: int | None = None,
-) -> tuple[list[MultiProviderSample], dict[str, object]]:
+) -> tuple[list[VJEPATemporalSample], dict[str, object]]:
     if data_source == "synthetic":
-        samples = generate_synthetic_evidence_fusion_samples(
-            n_samples=200,
-            n_providers=4,
-            d_feature=128,
+        samples = generate_synthetic_vjepa_temporal_samples(
+            n_samples=120,
+            n_temporal_steps=4,
+            n_objects=10,
+            d_vjepa=1024,
+            d_wm=128,
+            d_out=128,
             seed=seed,
         )
         return samples, {
-            "dataset_kind": "synthetic_evidence_fusion",
+            "dataset_kind": "synthetic_vjepa_temporal",
             "data_source": "synthetic",
-            "source_domain_counts": {"synthetic_evidence_fusion": len(samples)},
-            "provider_count": 4,
-            "feature_strategy": "synthetic_generator",
+            "source_domain_counts": {"synthetic_vjepa_temporal": len(samples)},
+            "temporal_window_size": 4,
+            "provider_count": 1,
             "mock_data": False,
         }
     if data_source == "mock_lerobot_droid":
         episodes = [
             make_mock_lerobot_episode(
                 episode_idx=episode_idx,
-                num_steps=max_steps_per_episode or 50,
+                num_steps=max_steps_per_episode or 24,
                 seed=seed,
                 camera_format="droid",
             )
             for episode_idx in range(max_episodes)
         ]
         adapter_config = LeRobotPerceptionAdapterConfig(
-            feature_config=FeatureExtractionConfig(
-                strategy="placeholder",
-                d_feature=128,
-            ),
-            step_stride=1,
+            temporal_window_size=4,
+            temporal_stride=4,
+            n_objects=10,
+            d_vjepa=1024,
+            d_wm=128,
+            d_out=128,
         )
-        samples = adapt_lerobot_episodes_for_evidence_fusion(
-            episodes,
-            adapter_config,
-        )
+        samples = adapt_lerobot_episodes_for_vjepa_temporal(episodes, adapter_config)
         return samples, {
-            "dataset_kind": "mock_lerobot_droid",
+            "dataset_kind": "mock_lerobot_droid_vjepa_temporal",
             "data_source": "mock_lerobot_droid",
             "source_domain_counts": {"mock_lerobot_droid": len(samples)},
             "episode_count": len(episodes),
-            "steps_per_episode": 50,
+            "steps_per_episode": 24,
+            "temporal_window_size": 4,
+            "temporal_stride": 4,
             "provider_count": 3,
-            "camera_format": "droid",
-            "feature_strategy": "placeholder",
             "mock_data": True,
             "not_external_dataset": True,
         }
@@ -147,29 +132,28 @@ def _load_evidence_fusion_samples(
             max_steps_per_episode=max_steps_per_episode,
         )
         adapter_config = LeRobotPerceptionAdapterConfig(
-            feature_config=FeatureExtractionConfig(
-                strategy="placeholder",
-                d_feature=128,
-            ),
-            step_stride=1,
+            temporal_window_size=4,
+            temporal_stride=4,
+            n_objects=10,
+            d_vjepa=1024,
+            d_wm=128,
+            d_out=128,
         )
-        samples = adapt_lerobot_episodes_for_evidence_fusion(
-            episodes,
-            adapter_config,
-        )
+        samples = adapt_lerobot_episodes_for_vjepa_temporal(episodes, adapter_config)
         source_domain_counts: dict[str, int] = {}
         for episode, _steps in episodes:
             source_domain_counts[episode.source_domain] = (
                 source_domain_counts.get(episode.source_domain, 0) + 1
             )
         return samples, {
-            "dataset_kind": "local_lerobot_rows_evidence_fusion",
+            "dataset_kind": "local_lerobot_rows_vjepa_temporal",
             "data_source": "local_lerobot_rows",
             "source_domain_counts": source_domain_counts,
             "episode_count": len(episodes),
             "max_steps_per_episode": max_steps_per_episode,
+            "temporal_window_size": 4,
+            "temporal_stride": 4,
             "provider_count": 0,
-            "feature_strategy": "placeholder",
             "mock_data": False,
             "not_external_dataset": False,
             "lerobot_rows_path": str(Path(lerobot_rows_path).resolve()),
@@ -178,7 +162,7 @@ def _load_evidence_fusion_samples(
 
 
 def run_proof_of_life(
-    max_steps: int = 80,
+    max_steps: int = 40,
     artifact_dir: str | Path | None = None,
     *,
     seed: int = 42,
@@ -187,18 +171,13 @@ def run_proof_of_life(
     max_episodes: int = 4,
     max_steps_per_episode: int | None = None,
 ) -> dict:
-    """Run end-to-end proof-of-life for EvidenceFusionSeam training.
-
-    Returns:
-        Summary dict written to the artifact JSON.
-    """
     artifact_dir = Path(artifact_dir or REPO_ROOT / "artifacts").resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    artifact_path = artifact_dir / "perception_seam_proof_of_life.json"
-    metric_report_path = artifact_dir / "perception_seam_metric_report.json"
-    benchmark_evidence_path = artifact_dir / "perception_seam_benchmark_evidence.json"
-    receipts_path = artifact_dir / "perception_seam_proof_of_life_receipts.json"
-    registry_summary_path = artifact_dir / "perception_seam_registry_summary.json"
+    artifact_path = artifact_dir / "vjepa_temporal_seam_proof_of_life.json"
+    metric_report_path = artifact_dir / "vjepa_temporal_metric_report.json"
+    benchmark_evidence_path = artifact_dir / "vjepa_temporal_benchmark_evidence.json"
+    receipts_path = artifact_dir / "vjepa_temporal_proof_of_life_receipts.json"
+    registry_summary_path = artifact_dir / "vjepa_temporal_registry_summary.json"
     manifest_path = artifact_dir / "training_runtime_manifest.json"
     checkpoint_dir = artifact_dir / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -207,84 +186,83 @@ def run_proof_of_life(
     started_at = datetime.now(timezone.utc).isoformat()
     torch.manual_seed(seed)
 
-    # -- 1. Generate/load local proof data -------------------------------
-    logger.info("Preparing %s multi-provider samples...", data_source)
-    all_samples, data_summary = _load_evidence_fusion_samples(
+    logger.info("Preparing %s temporal samples...", data_source)
+    all_samples, data_summary = _load_temporal_samples(
         data_source=data_source,
         seed=seed,
         lerobot_rows_path=lerobot_rows_path,
         max_episodes=max_episodes,
         max_steps_per_episode=max_steps_per_episode,
     )
-    torch.manual_seed(seed)
-    # 80/20 train/val split
     split = int(0.8 * len(all_samples))
     train_samples = all_samples[:split]
     val_samples = all_samples[split:]
 
-    train_loader = create_evidence_fusion_loader(
+    train_loader = create_vjepa_temporal_loader(
         train_samples,
-        batch_size=16,
+        batch_size=8,
         shuffle=True,
-        d_feature=128,
+        n_temporal_steps=4,
+        max_objects=32,
     )
-    val_loader = create_evidence_fusion_loader(
+    val_loader = create_vjepa_temporal_loader(
         val_samples,
-        batch_size=16,
+        batch_size=8,
         shuffle=False,
-        d_feature=128,
+        n_temporal_steps=4,
+        max_objects=32,
     )
     logger.info(
-        f"  train={len(train_samples)} samples / {len(train_loader)} batches, "
-        f"val={len(val_samples)} samples / {len(val_loader)} batches"
+        "  train=%s samples / %s batches, val=%s samples / %s batches",
+        len(train_samples),
+        len(train_loader),
+        len(val_samples),
+        len(val_loader),
     )
 
-    # -- 2. Set up registry + seam --------------------------------------
     registry = PerceptionSeamRegistry(checkpoint_dir=checkpoint_dir)
     registry.register_seam(
-        seam_type="evidence_fusion",
-        seam_id="fusion_proof_of_life",
+        seam_type="vjepa_temporal_alignment",
+        seam_id="vjepa_temporal_proof_of_life",
         posture="auto",
     )
-    seam = registry.load_seam("fusion_proof_of_life")
+    seam = registry.load_seam("vjepa_temporal_proof_of_life")
     param_count = sum(p.numel() for p in seam.parameters() if p.requires_grad)
-    logger.info(f"  EvidenceFusionSeam loaded: {param_count:,} trainable params")
+    logger.info(
+        "  VJEPATemporalAlignmentSeam loaded: %s trainable params", f"{param_count:,}"
+    )
 
-    # -- 3. Configure and run trainer -----------------------------------
     config = SeamTrainingConfig(
         learning_rate=3e-4,
         weight_decay=0.01,
-        batch_size=16,
+        batch_size=8,
         max_steps=max_steps,
-        max_epochs=100,  # max_steps stops us first
+        max_epochs=100,
         gradient_accumulation_steps=1,
         val_check_interval=10,
         checkpoint_interval=max_steps,
         early_stopping_patience=999,
         benchmark_gate_interval=max_steps,
         promotion_threshold=0.6,
-        log_interval=5,
+        log_interval=10,
         lr_scheduler="none",
         warmup_steps=0,
         device="cpu",
     )
-
     trainer = PerceptionSeamTrainer(
         registry=registry,
-        seam_id="fusion_proof_of_life",
+        seam_id="vjepa_temporal_proof_of_life",
         config=config,
     )
     initial_val_loss, initial_val_components, initial_val_metrics = trainer._validate(
         val_loader
     )
-
     logger.info(
-        f"Starting training for {max_steps} steps "
-        f"(initial_val_loss={initial_val_loss:.4f})..."
+        "Starting training for %s steps (initial_val_loss=%.4f)...",
+        max_steps,
+        initial_val_loss,
     )
     summary = trainer.fit(train_loader, val_loader)
-    logger.info("Training complete.")
-
     final_val_loss, final_val_components, final_val_metrics = trainer._validate(
         val_loader
     )
@@ -293,15 +271,14 @@ def run_proof_of_life(
     loss_improvement_fraction = loss_improvement / max(abs(initial_val_loss), 1e-9)
     loss_decreased = loss_improvement > 0.0
 
-    # -- 4. Run standalone benchmark evaluation -------------------------
-    benchmark = EvidenceFusionBenchmark()
+    benchmark = VJEPATemporalBenchmark()
     bench_result = benchmark.evaluate(seam, val_loader)
     logger.info(
-        f"Benchmark gate: score={bench_result.overall_score:.4f}, "
-        f"passed={bench_result.overall_passed}"
+        "Benchmark gate: score=%.4f, passed=%s",
+        bench_result.overall_score,
+        bench_result.overall_passed,
     )
 
-    # -- 5. Assemble typed proof artifacts ------------------------------
     elapsed = time.time() - t0
     ended_at = datetime.now(timezone.utc).isoformat()
 
@@ -310,7 +287,7 @@ def run_proof_of_life(
         json.dumps(registry.summary(), indent=2, sort_keys=True, default=str),
         encoding="utf-8",
     )
-    descriptor = registry.get_descriptor("fusion_proof_of_life")
+    descriptor = registry.get_descriptor("vjepa_temporal_proof_of_life")
     checkpoint_path = Path(descriptor.checkpoint_path).resolve() if descriptor else None
     checkpoint_digest = (
         sha256_file(checkpoint_path)
@@ -320,8 +297,8 @@ def run_proof_of_life(
 
     metric_report = {
         "schema_version": "perception_seam_metric_report_v1",
-        "seam_type": "evidence_fusion",
-        "seam_id": "fusion_proof_of_life",
+        "seam_type": "vjepa_temporal_alignment",
+        "seam_id": "vjepa_temporal_proof_of_life",
         "run_kind": f"local_cpu_{data_source}_proof_of_life",
         "evidence_source_provisional": True,
         "promotion_eligible": False,
@@ -359,7 +336,7 @@ def run_proof_of_life(
         "benchmark_evidence_present": True,
         "evidence_source_provisional": True,
         "evidence_truth_class": f"{data_source}_proof_of_life",
-        "token_source_kind": f"{data_source}_multi_provider",
+        "token_source_kind": f"{data_source}_temporal_windows",
         "source_record_count": len(val_samples),
         "annotation_supervision_score": max(0.0, min(1.0, loss_improvement_fraction)),
         "held_out_label_agreement": float(bench_result.overall_score),
@@ -369,12 +346,12 @@ def run_proof_of_life(
         "promotion_eligible": False,
     }
     benchmark_evidence = build_perception_benchmark_evidence(
-        subsystem_key="evidence_fusion",
+        subsystem_key="vjepa_temporal_alignment",
         metrics=evidence_metrics,
         source_record_count=len(val_samples),
         source_artifact_path=metric_report_path,
         metadata={
-            "emitter": "perception_seam_proof_of_life_smoke",
+            "emitter": "vjepa_temporal_seam_proof_of_life_smoke",
             "metric_report_path": str(metric_report_path),
             "metric_report_digest": sha256_file(metric_report_path),
             "training_manifest_path": str(manifest_path),
@@ -398,11 +375,10 @@ def run_proof_of_life(
         "checkpoint": str(checkpoint_path) if checkpoint_path else "",
         "registry_summary": str(registry_summary_path),
     }
-
     config_snapshot = asdict(config)
     plan_snapshot = {
-        "script": "scripts/smoke_test_perception_seam_training.py",
-        "seam_type": "evidence_fusion",
+        "script": "scripts/smoke_test_vjepa_temporal_seam.py",
+        "seam_type": "vjepa_temporal_alignment",
         "run_kind": f"local_cpu_{data_source}_proof_of_life",
         "max_steps": max_steps,
         "seed": seed,
@@ -418,12 +394,12 @@ def run_proof_of_life(
     manifest = TrainingRuntimeManifest(
         schema_version=TRAINING_RUNTIME_MANIFEST_SCHEMA_VERSION,
         run_id=(
-            f"perception_seam_proof_of_life_{data_source}_seed_{seed}_steps_{max_steps}"
+            f"vjepa_temporal_proof_of_life_{data_source}_seed_{seed}_steps_{max_steps}"
         ),
-        training_kind="perception_seam_proof_of_life",
+        training_kind="perception_vjepa_temporal_proof_of_life",
         status="completed",
         seed=seed,
-        plan_id="phase2_evidence_fusion_local_proof_of_life",
+        plan_id="phase2_vjepa_temporal_local_proof_of_life",
         plan_sha=sha256_json(plan_snapshot),
         started_at=started_at,
         ended_at=ended_at,
@@ -437,7 +413,7 @@ def run_proof_of_life(
             "val_samples": len(val_samples),
         },
         objective_profile_snapshot={
-            "objective": "evidence_fusion_loss",
+            "objective": "vjepa_temporal_alignment_loss",
             "device": config.device,
             "max_steps": max_steps,
         },
@@ -488,7 +464,7 @@ def run_proof_of_life(
         "proof_of_life": True,
         "promotion_eligible": False,
         "promotion_claim": "explicitly_held",
-        "seam_type": "evidence_fusion",
+        "seam_type": "vjepa_temporal_alignment",
         "param_count": param_count,
         "max_steps": max_steps,
         "seed": seed,
@@ -508,12 +484,12 @@ def run_proof_of_life(
             "promotion_decision": bench_result.promotion_decision,
             "metrics": [
                 {
-                    "name": m.name,
-                    "value": m.value,
-                    "threshold": m.threshold,
-                    "passed": m.passed,
+                    "name": metric.name,
+                    "value": metric.value,
+                    "threshold": metric.threshold,
+                    "passed": metric.passed,
                 }
-                for m in bench_result.metrics
+                for metric in bench_result.metrics
             ],
         },
         "receipts": {
@@ -557,30 +533,29 @@ def run_proof_of_life(
         "device": config.device,
         "torch_version": torch.__version__,
     }
-
     artifact_path.write_text(
         json.dumps(artifact, indent=2, sort_keys=True, default=str),
         encoding="utf-8",
     )
-    logger.info(f"Artifact written to {artifact_path}")
-    logger.info(f"Metric report written to {metric_report_path}")
-    logger.info(f"Benchmark evidence written to {benchmark_evidence_path}")
-    logger.info(f"Training manifest written to {manifest_path}")
-    logger.info(f"Full receipts written to {receipts_path}")
-    logger.info(f"Elapsed: {elapsed:.1f}s")
+    logger.info("Artifact written to %s", artifact_path)
+    logger.info("Metric report written to %s", metric_report_path)
+    logger.info("Benchmark evidence written to %s", benchmark_evidence_path)
+    logger.info("Training manifest written to %s", manifest_path)
+    logger.info("Full receipts written to %s", receipts_path)
+    logger.info("Elapsed: %.1fs", elapsed)
 
     return artifact
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Perception seam training proof-of-life smoke test",
+        description="V-JEPA temporal seam training proof-of-life smoke test",
     )
     parser.add_argument(
         "--steps",
         type=int,
-        default=80,
-        help="Number of training steps (default: 80)",
+        default=40,
+        help="Number of training steps (default: 40)",
     )
     parser.add_argument(
         "--seed",
@@ -600,7 +575,7 @@ def main() -> None:
         default="synthetic",
         help=(
             "Local proof data source. mock_lerobot_droid exercises the "
-            "LeRobot adapter path without requiring external data; "
+            "LeRobot temporal adapter path without requiring external data; "
             "local_lerobot_rows consumes a local LeRobot-like JSON/JSONL row "
             "bundle."
         ),
@@ -640,9 +615,8 @@ def main() -> None:
         max_steps_per_episode=args.max_steps_per_episode,
     )
 
-    # Print summary
     print("\n" + "=" * 60)
-    print("PROOF-OF-LIFE SUMMARY")
+    print("V-JEPA TEMPORAL PROOF-OF-LIFE SUMMARY")
     print("=" * 60)
     print(f"  Seam type:      {artifact['seam_type']}")
     print(f"  Param count:    {artifact['param_count']:,}")

@@ -1,5 +1,74 @@
 # Economic World Model Progress Log
 
+## 2026-05-11 - Phase 2: local perception proof-of-life artifacts
+
+- **Changed**:
+  - fixed a fresh-process import cycle between
+    `src.training.perception_seam_data` and the Perception / Grounding package
+    export path by making annotation benchmark evaluation import lazy inside
+    `benchmark_evidence_emitter.py`
+  - upgraded `scripts/smoke_test_perception_seam_training.py` from a loose JSON
+    smoke into a local CPU EvidenceFusion proof-of-life producer that emits:
+    - persistent seam checkpoint under the chosen artifact directory
+    - `perception_seam_metric_report_v1`
+    - provisional `perception_benchmark_evidence_v1`
+    - `training_runtime_manifest_v1`
+    - full training / validation / benchmark receipts
+  - added `scripts/perception_proof_of_life_utils.py` to generate
+    deterministic DROID-shaped mock LeRobot replay episodes for local adapter
+    verification
+  - added a `--require-loss-decrease` guard and explicit initial / best /
+    final validation loss accounting
+  - added a `--data-source mock_lerobot_droid` mode that generates DROID-shaped
+    mock LeRobot episodes, passes them through the LeRobot perception adapter,
+    and then trains EvidenceFusion locally without requiring external data
+  - added `scripts/smoke_test_vjepa_temporal_seam.py`, a matching local CPU
+    proof-of-life lane for `VJEPATemporalAlignmentSeam` that emits the same
+    typed artifact family and supports synthetic or mock-LeRobot temporal
+    windows
+  - both proof scripts now accept `--data-source local_lerobot_rows` plus a
+    local JSON/JSONL LeRobot-like row bundle path, so a tiny external-data
+    proof can reuse the same adapter → seam → trainer → manifest path without
+    requiring a new dependency stack first
+  - added focused tests for the fresh import path and typed artifact emission
+    for both EvidenceFusion and V-JEPA temporal proof scripts
+- **Why this matters**:
+  - this lands the cheap local Phase 2 prototype-train proof-of-life lane
+    without spending GPU budget and without pretending promotion is near
+  - the local runs now prove that both the EvidenceFusion and V-JEPA temporal
+    seams can train through the real trainer path and emit manifest/evidence
+    artifacts in the same vocabulary later GPU/provider runs will use
+  - the new local row-bundle intake path makes the next cheap external-data
+    proof executable from a local LeRobot export without turning HuggingFace
+    or GPU bring-up into a prerequisite for Phase 2 local progress
+  - the emitted evidence remains synthetic, provisional, and explicitly
+    `promotion_eligible: false`; a real `droid_100` / provider-backed run is
+    still future work
+- **Local run**:
+  - `python3 scripts/smoke_test_perception_seam_training.py --steps 80 --artifact-dir artifacts/phase2_local_proof_of_life/evidence_fusion_80 --require-loss-decrease`
+    produced an ignored local artifact bundle with initial validation loss
+    `1.1481`, best validation loss `1.0016`, `16` training receipts, `8`
+    validation receipts, `1` benchmark receipt, and provisional benchmark
+    evidence
+  - `python3 scripts/smoke_test_perception_seam_training.py --steps 40 --data-source mock_lerobot_droid --artifact-dir artifacts/phase2_local_proof_of_life/mock_lerobot_droid_40 --require-loss-decrease`
+    exercised the LeRobot adapter path with DROID-shaped mock data; initial
+    validation loss was `1.1966`, best validation loss was `1.1252`, with `8`
+    training receipts, `4` validation receipts, and `1` benchmark receipt
+  - `python3 scripts/smoke_test_vjepa_temporal_seam.py --steps 40 --data-source synthetic --artifact-dir artifacts/phase2_local_proof_of_life/vjepa_temporal_synth_40 --require-loss-decrease`
+    produced a local temporal proof bundle with initial validation loss
+    `114.1529`, best validation loss `72.8604`, `4` training receipts, `4`
+    validation receipts, and `1` benchmark receipt
+  - `python3 scripts/smoke_test_vjepa_temporal_seam.py --steps 30 --data-source mock_lerobot_droid --artifact-dir artifacts/phase2_local_proof_of_life/vjepa_temporal_mock_lerobot_30 --require-loss-decrease`
+    exercised the LeRobot adapter temporal path with DROID-shaped mock data;
+    initial validation loss was `169.5367`, best validation loss was
+    `128.8715`, with `3` training receipts, `3` validation receipts, and `1`
+    benchmark receipt
+- **Verification**:
+  - `python3 -m ruff check scripts/perception_proof_of_life_utils.py scripts/smoke_test_perception_seam_training.py scripts/smoke_test_vjepa_temporal_seam.py src/world_model/perception_grounding/benchmark_evidence_emitter.py tests/test_perception_seam_proof_of_life_smoke.py tests/test_vjepa_temporal_proof_of_life_smoke.py` (pass)
+  - `python3 -m ruff format --check scripts/perception_proof_of_life_utils.py scripts/smoke_test_perception_seam_training.py scripts/smoke_test_vjepa_temporal_seam.py src/world_model/perception_grounding/benchmark_evidence_emitter.py tests/test_perception_seam_proof_of_life_smoke.py tests/test_vjepa_temporal_proof_of_life_smoke.py` (pass)
+  - `python3 -m pytest tests/test_perception_seam_proof_of_life_smoke.py tests/test_vjepa_temporal_proof_of_life_smoke.py tests/test_lerobot_perception_adapter.py tests/test_perception_seam_training.py tests/test_perception_benchmark_evidence_emitter.py tests/test_provider_adapter_benchmark_evidence_emitter.py -q`
+    (`81 passed`)
+
 ## 2026-05-11 - Phase 2: provider-adapter benchmark evidence emitter
 
 - **Changed**:

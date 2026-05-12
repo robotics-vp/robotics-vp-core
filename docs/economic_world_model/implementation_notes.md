@@ -1,5 +1,94 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-11 - Phase 2 local perception proof-of-life artifacts
+
+### What changed
+
+- `benchmark_evidence_emitter.py` no longer imports
+  `evaluate_seam_on_annotations` at module import time. The import is now local
+  to `emit_annotation_benchmark_evidence(...)`, which keeps fresh-process
+  `src.training.perception_seam_data` imports from cycling through package
+  `__init__` before the training-data module is initialized.
+- `scripts/smoke_test_perception_seam_training.py` now emits typed local proof
+  artifacts:
+  - `perception_seam_proof_of_life_v2`
+  - `perception_seam_metric_report_v1`
+  - provisional `perception_benchmark_evidence_v1`
+  - `training_runtime_manifest_v1`
+  - persistent checkpoint and registry summary under the artifact directory
+  - full training / validation / benchmark receipts
+- `scripts/perception_proof_of_life_utils.py` now provides deterministic
+  DROID-shaped mock LeRobot replay episodes so local adapter verification does
+  not have to duplicate mock episode construction across proof scripts.
+- the script records initial, final, and best validation loss and can enforce
+  improvement with `--require-loss-decrease`.
+- `--data-source mock_lerobot_droid` now creates DROID-shaped mock LeRobot
+  episodes, converts them through `adapt_lerobot_episodes_for_evidence_fusion`,
+  and trains the same EvidenceFusion seam. This is adapter-path proof only; it
+  is still mock data, not external `droid_100`.
+- `scripts/smoke_test_vjepa_temporal_seam.py` now provides the same local proof
+  pattern for `VJEPATemporalAlignmentSeam`, including synthetic and
+  mock-LeRobot temporal windows, typed artifact emission, and provisional
+  benchmark evidence.
+- both proof scripts now accept `--data-source local_lerobot_rows` plus a
+  local JSON/JSONL LeRobot-like row bundle, so a tiny real-data export can
+  drive the same proof path without introducing a HuggingFace dependency
+  requirement into the local environment first.
+- tests now cover both the original fresh-process import failure and the typed
+  artifact bundles produced by the local EvidenceFusion and V-JEPA proof
+  scripts.
+
+### Why this was the right local Phase 2 step
+
+GPU/provider bring-up is intentionally paused. The useful local move was to
+prove that two different Phase 2 seams can produce durable evidence and
+manifest artifacts without creating a promotion claim. This gives the later
+real-data / GPU runs a contract-shaped landing zone while staying honest about
+the current evidence class.
+
+The produced evidence is synthetic and provisional. It is useful as plumbing
+proof, not benchmark proof.
+
+The new `local_lerobot_rows` path narrows the next gap: once a tiny DROID or
+Bridge row export exists locally, the proof scripts can consume it directly.
+That still does not make the result promotion-grade, but it turns the
+external-data prototype step into an execution problem instead of a missing
+contract problem.
+
+### Local run
+
+- `python3 scripts/smoke_test_perception_seam_training.py --steps 80 --artifact-dir artifacts/phase2_local_proof_of_life/evidence_fusion_80 --require-loss-decrease`
+- result: initial validation loss `1.1481`, best validation loss `1.0016`,
+  `loss_decreased: true`, `16` training receipts, `8` validation receipts, `1`
+  benchmark receipt
+- output bundle: ignored under `artifacts/phase2_local_proof_of_life/evidence_fusion_80/`
+- `python3 scripts/smoke_test_perception_seam_training.py --steps 40 --data-source mock_lerobot_droid --artifact-dir artifacts/phase2_local_proof_of_life/mock_lerobot_droid_40 --require-loss-decrease`
+- result: initial validation loss `1.1966`, best validation loss `1.1252`,
+  `loss_decreased: true`, `8` training receipts, `4` validation receipts, `1`
+  benchmark receipt
+- output bundle: ignored under `artifacts/phase2_local_proof_of_life/mock_lerobot_droid_40/`
+- `python3 scripts/smoke_test_vjepa_temporal_seam.py --steps 40 --data-source synthetic --artifact-dir artifacts/phase2_local_proof_of_life/vjepa_temporal_synth_40 --require-loss-decrease`
+- result: initial validation loss `114.1529`, best validation loss `72.8604`,
+  `loss_decreased: true`, `4` training receipts, `4` validation receipts, `1`
+  benchmark receipt
+- output bundle: ignored under `artifacts/phase2_local_proof_of_life/vjepa_temporal_synth_40/`
+- `python3 scripts/smoke_test_vjepa_temporal_seam.py --steps 30 --data-source mock_lerobot_droid --artifact-dir artifacts/phase2_local_proof_of_life/vjepa_temporal_mock_lerobot_30 --require-loss-decrease`
+- result: initial validation loss `169.5367`, best validation loss `128.8715`,
+  `loss_decreased: true`, `3` training receipts, `3` validation receipts, `1`
+  benchmark receipt
+- output bundle: ignored under `artifacts/phase2_local_proof_of_life/vjepa_temporal_mock_lerobot_30/`
+- focused tests now also exercise `--data-source local_lerobot_rows` for both
+  proof scripts using a temporary LeRobot-like JSONL bundle
+
+### Verification
+
+- `python3 -m ruff check scripts/perception_proof_of_life_utils.py scripts/smoke_test_perception_seam_training.py scripts/smoke_test_vjepa_temporal_seam.py src/world_model/perception_grounding/benchmark_evidence_emitter.py tests/test_perception_seam_proof_of_life_smoke.py tests/test_vjepa_temporal_proof_of_life_smoke.py` ->
+  pass
+- `python3 -m ruff format --check scripts/perception_proof_of_life_utils.py scripts/smoke_test_perception_seam_training.py scripts/smoke_test_vjepa_temporal_seam.py src/world_model/perception_grounding/benchmark_evidence_emitter.py tests/test_perception_seam_proof_of_life_smoke.py tests/test_vjepa_temporal_proof_of_life_smoke.py` ->
+  pass
+- `python3 -m pytest tests/test_perception_seam_proof_of_life_smoke.py tests/test_vjepa_temporal_proof_of_life_smoke.py tests/test_lerobot_perception_adapter.py tests/test_perception_seam_training.py tests/test_perception_benchmark_evidence_emitter.py tests/test_provider_adapter_benchmark_evidence_emitter.py -q` ->
+  `81 passed`
+
 ## 2026-05-11 - Phase 2 provider-adapter benchmark evidence emitter
 
 ### What changed

@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from src.training.perception_seam_data import evaluate_seam_on_annotations
 from src.training.training_manifest import load_training_runtime_manifest
 from src.utils.config_digest import sha256_file
 
@@ -366,6 +365,8 @@ def emit_annotation_benchmark_evidence(
     instance when no checkpoint is supplied; the output remains a benchmark
     artifact only and does not imply promotion.
     """
+    from src.training.perception_seam_data import evaluate_seam_on_annotations
+
     if seam_type not in ANNOTATION_BENCHMARK_SEAM_TYPES:
         supported = ", ".join(sorted(ANNOTATION_BENCHMARK_SEAM_TYPES))
         raise ValueError(
