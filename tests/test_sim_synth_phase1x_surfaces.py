@@ -50,6 +50,10 @@ def test_phase1x_surfaces_compile_from_local_context() -> None:
     assert state.task_measurements.benchmark_gate_ready is True
     assert state.task_measurements.vector_env_count == 4
     assert state.task_measurements.measurement_window_steps == 32
+    assert state.simulator_backend_contract is not None
+    assert state.simulator_backend_contract.supported_task_families == ["unknown"]
+    assert state.task_definition_contract is not None
+    assert state.task_definition_contract.required_measurements == state.task_measurements.measurement_names
     assert state.scene_hierarchy is not None
     assert state.scene_hierarchy.scene_id == "drawer_vase_scene_a"
     assert state.scene_hierarchy.hierarchy_levels == ["scene", "surface", "object"]

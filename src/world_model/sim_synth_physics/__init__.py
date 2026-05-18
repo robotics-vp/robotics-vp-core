@@ -36,11 +36,14 @@ from .phase1x_receipts import (
     build_sim_real_gap_receipt,
     build_surrogate_calibration_receipt,
     build_surrogate_physics_receipt,
+    build_task_measurement_receipt,
 )
 from .phase1x_surfaces import (
     compile_differentiable_physics_provider_state,
     compile_scene_hierarchy_state,
+    compile_simulator_backend_contract_state,
     compile_surrogate_physics_provider_state,
+    compile_task_definition_contract_state,
     compile_task_measurement_surface,
 )
 from .physics_contracts import PhysicsExecutionContract
@@ -61,6 +64,7 @@ from .receipts import (
     SimulationOutcomeReceipt,
     SurrogateCalibrationReceipt,
     SurrogatePhysicsReceipt,
+    TaskMeasurementReceipt,
 )
 from .runtime_bridge import (
     build_backend_runtime_bridge_receipt,
@@ -97,9 +101,11 @@ from .state import (
     PhysicsContextState,
     RobotAssetContractState,
     SceneHierarchyState,
+    SimulatorBackendContractState,
     SimSynthPhysicsWorldState,
     SurrogatePhysicsProviderState,
     SyntheticBranchPlan,
+    TaskDefinitionContractState,
     TaskMeasurementSurface,
 )
 from .synthetic_branches import (
@@ -147,6 +153,7 @@ __all__ = [
     "RobotAssetContractState",
     "SceneHierarchyState",
     "SimRealGapReceipt",
+    "SimulatorBackendContractState",
     "SimSynthPhysicsLoopResult",
     "SimSynthPhysicsRuntime",
     "SimSynthPhysicsRuntimeConfig",
@@ -158,6 +165,8 @@ __all__ = [
     "SurrogatePhysicsProviderState",
     "SurrogatePhysicsReceipt",
     "SyntheticBranchPlan",
+    "TaskDefinitionContractState",
+    "TaskMeasurementReceipt",
     "TaskMeasurementSurface",
     "VectorizedSimBatchResult",
     "VectorizedSimRunner",
@@ -169,6 +178,7 @@ __all__ = [
     "build_sim_real_gap_receipt",
     "build_surrogate_calibration_receipt",
     "build_surrogate_physics_receipt",
+    "build_task_measurement_receipt",
     "compile_robot_asset_contract",
     "compile_backend_runtime_bridge",
     "describe_holosoma_policy_contract",
@@ -208,9 +218,11 @@ __all__ = [
     "compile_gap_driven_diffusion_plans",
     "compile_differentiable_physics_provider_state",
     "compile_scene_hierarchy_state",
+    "compile_simulator_backend_contract_state",
     "harvest_sim_synth_receipt_bundles",
     "harvest_backend_runtime_outcomes",
     "compile_surrogate_physics_provider_state",
+    "compile_task_definition_contract_state",
     "compile_task_measurement_surface",
 ]
 

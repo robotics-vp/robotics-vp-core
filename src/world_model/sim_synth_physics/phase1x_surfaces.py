@@ -7,12 +7,15 @@ from typing import Any, Mapping, Optional, Sequence
 
 from .common import mapping, safe_float, stable_id, strings
 from .state import (
+    BackendExecutionBindingState,
     DifferentiablePhysicsProviderState,
     PhysicsContextState,
     RobotAssetContractState,
     SceneHierarchyState,
+    SimulatorBackendContractState,
     SurrogatePhysicsProviderState,
     SyntheticBranchPlan,
+    TaskDefinitionContractState,
     TaskMeasurementSurface,
 )
 
@@ -181,6 +184,78 @@ def compile_scene_hierarchy_state(
     )
 
 
+def compile_simulator_backend_contract_state(
+    jobs: Sequence[Any],
+    *,
+    physics_context: PhysicsContextState,
+    backend_execution_binding: BackendExecutionBindingState,
+) -> SimulatorBackendContractState:
+    """Compile the simulator half of the simulator / task protocol split."""
+
+    task_families = sorted(
+        {
+            str(getattr(job, "task_family", "") or "")
+            for job in jobs
+            if str(getattr(job, "task_family", "") or "")
+        }
+    )
+    payload = {
+        "backend": physics_context.backend,
+        "binding_id": backend_execution_binding.binding_id,
+        "task_families": task_families,
+    }
+    return SimulatorBackendContractState(
+        contract_id=stable_id("simulator_backend_contract", payload),
+        backend=physics_context.backend,
+        simulator_family=(
+            str(backend_execution_binding.metadata.get("adapter_descriptor", {}).get("simulator_family", ""))
+            or str(physics_context.metadata.get("backend_adapter", {}).get("simulator_family", ""))
+        ),
+        fidelity_tier=physics_context.fidelity_tier,
+        executor_entrypoint=backend_execution_binding.executor_entrypoint,
+        observation_adapter_entrypoint=backend_execution_binding.observation_adapter_entrypoint,
+        runtime_status=backend_execution_binding.binding_status,
+        supported_task_families=task_families,
+        metadata={
+            "physics_context_id": physics_context.context_id,
+            "backend_execution_binding_id": backend_execution_binding.binding_id,
+            "selection_policy": physics_context.selection_policy,
+        },
+    )
+
+
+def compile_task_definition_contract_state(
+    jobs: Sequence[Any],
+    *,
+    task_measurements: TaskMeasurementSurface,
+) -> TaskDefinitionContractState:
+    """Compile the task half of the simulator / task protocol split."""
+
+    top_job = jobs[0] if jobs else None
+    task_family = "unknown" if top_job is None else str(getattr(top_job, "task_family", "unknown"))
+    objective_preset = "balanced" if top_job is None else str(
+        getattr(top_job, "objective_preset", "balanced")
+    )
+    payload = {
+        "task_family": task_family,
+        "objective_preset": objective_preset,
+        "episode_refs": list(task_measurements.episode_refs),
+    }
+    return TaskDefinitionContractState(
+        contract_id=stable_id("task_definition_contract", payload),
+        task_family=task_family,
+        objective_preset=objective_preset,
+        episode_refs=list(task_measurements.episode_refs),
+        required_measurements=list(task_measurements.measurement_names),
+        reset_protocol="episode_reset_then_measurement_reset",
+        update_protocol="step_update_then_measurement_update",
+        metadata={
+            "task_measurement_surface_id": task_measurements.surface_id,
+            "job_count": len(jobs),
+        },
+    )
+
+
 def compile_differentiable_physics_provider_state(
     physics_context: PhysicsContextState,
     branch_plans: Sequence[SyntheticBranchPlan],
@@ -275,6 +350,8 @@ def compile_surrogate_physics_provider_state(
 __all__ = [
     "compile_differentiable_physics_provider_state",
     "compile_scene_hierarchy_state",
+    "compile_simulator_backend_contract_state",
     "compile_surrogate_physics_provider_state",
+    "compile_task_definition_contract_state",
     "compile_task_measurement_surface",
 ]

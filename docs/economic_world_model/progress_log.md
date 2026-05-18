@@ -1,6 +1,6 @@
 # Economic World Model Progress Log
 
-## 2026-05-18 - Phase 1.x re-entry tranche: shared surfaces, transfer receipts, geometry, and batch runner
+## 2026-05-18 - Phase 1.x re-entry tranche: shared surfaces, task protocol, transfer receipts, geometry, and batch runner
 
 - **Changed**:
   - made the previously reserved Phase 1.x shared surface family concrete in
@@ -10,6 +10,7 @@
     - `DifferentiablePhysicsProviderState`
     - `SurrogatePhysicsProviderState`
   - added the paired bounded receipt family:
+    - `TaskMeasurementReceipt`
     - `SimRealGapReceipt`
     - `BackendMismatchReceipt`
     - `SurrogatePhysicsReceipt`
@@ -17,6 +18,9 @@
   - wired those surfaces into `SimSynthPhysicsWorldState`, compiler artifact
     refs, receipt inventory, runtime loop results, training-feedback manifests,
     and emitted runtime artifact files
+  - made the Habitat-style simulator/task split explicit with:
+    - `SimulatorBackendContractState`
+    - `TaskDefinitionContractState`
   - added CPU-local camera geometry utilities under
     `src/world_model/sim_synth_physics/utils/camera_geometry.py`
   - added `VectorizedSimRunner` / `VectorizedSimBatchResult` as an honest
@@ -25,6 +29,8 @@
   - the Phase 1.x return leg is no longer merely a docs reservation; the first
     cross-subsystem joints now exist in code and serialize through the live
     compiler/runtime path
+  - the sim→task→measurement handoff is now explicit rather than inferred from
+    agenda and backend fields after the fact
   - the transfer/surrogate receipts are deliberately bounded and honest
     (`estimated`, `contract_reserved`, `not_calibrated`) while RunPod and real
     provider evidence remain absent

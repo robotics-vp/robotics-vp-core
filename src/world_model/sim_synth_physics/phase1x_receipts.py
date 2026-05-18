@@ -12,6 +12,7 @@ from .receipts import (
     SimRealGapReceipt,
     SurrogateCalibrationReceipt,
     SurrogatePhysicsReceipt,
+    TaskMeasurementReceipt,
 )
 from .state import SimSynthPhysicsWorldState
 
@@ -58,6 +59,43 @@ def build_sim_real_gap_receipt(
             "route_status": execution_contract.route_status,
             "requested_backend": execution_contract.requested_backend,
             "runtime_evidence": runtime_evidence,
+        },
+    )
+
+
+def build_task_measurement_receipt(
+    world_state: SimSynthPhysicsWorldState,
+) -> TaskMeasurementReceipt:
+    """Emit the first live receipt from the task / measurement protocol."""
+
+    surface = world_state.task_measurements
+    task_contract = world_state.task_definition_contract
+    surface_id = "" if surface is None else str(surface.surface_id)
+    task_definition_contract_id = "" if task_contract is None else str(task_contract.contract_id)
+    task_family = "unknown" if surface is None else str(surface.task_family)
+    payload = {
+        "state_id": world_state.state_id,
+        "surface_id": surface_id,
+        "task_definition_contract_id": task_definition_contract_id,
+    }
+    return TaskMeasurementReceipt(
+        receipt_id=stable_id("task_measurement_receipt", payload),
+        surface_id=surface_id,
+        task_definition_contract_id=task_definition_contract_id,
+        task_family=task_family,
+        benchmark_gate_ready=False if surface is None else bool(surface.benchmark_gate_ready),
+        measurement_values={} if surface is None else dict(surface.measurement_values),
+        measurement_status={} if surface is None else dict(surface.measurement_status),
+        metadata={
+            "world_state_id": world_state.state_id,
+            "simulator_backend_contract_id": (
+                ""
+                if world_state.simulator_backend_contract is None
+                else world_state.simulator_backend_contract.contract_id
+            ),
+            "measurement_dependencies": (
+                {} if surface is None else dict(surface.measurement_dependencies)
+            ),
         },
     )
 
@@ -172,4 +210,5 @@ __all__ = [
     "build_sim_real_gap_receipt",
     "build_surrogate_calibration_receipt",
     "build_surrogate_physics_receipt",
+    "build_task_measurement_receipt",
 ]

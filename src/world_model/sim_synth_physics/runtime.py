@@ -22,6 +22,7 @@ from .phase1x_receipts import (
     build_sim_real_gap_receipt,
     build_surrogate_calibration_receipt,
     build_surrogate_physics_receipt,
+    build_task_measurement_receipt,
 )
 from .physics_contracts import PhysicsExecutionContract
 from .promotion import HelperMode
@@ -45,6 +46,7 @@ from .receipts import (
     SimulationOutcomeReceipt,
     SurrogateCalibrationReceipt,
     SurrogatePhysicsReceipt,
+    TaskMeasurementReceipt,
 )
 from .runtime_evidence import summarize_runtime_evidence
 from .runtime_bridge import build_backend_runtime_bridge_receipt
@@ -81,6 +83,7 @@ class SimSynthPhysicsLoopResult:
     robot_asset_contract_receipt: RobotAssetContractReceipt
     backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt
     physics_calibration_receipt: PhysicsCalibrationReceipt
+    task_measurement_receipt: TaskMeasurementReceipt
     sim_real_gap_receipt: SimRealGapReceipt
     backend_mismatch_receipt: BackendMismatchReceipt
     surrogate_physics_receipt: SurrogatePhysicsReceipt
@@ -135,6 +138,7 @@ class SimSynthPhysicsLoopResult:
                 else self.backend_shadow_execution_receipt.to_dict()
             ),
             "physics_calibration_receipt": self.physics_calibration_receipt.to_dict(),
+            "task_measurement_receipt": self.task_measurement_receipt.to_dict(),
             "sim_real_gap_receipt": self.sim_real_gap_receipt.to_dict(),
             "backend_mismatch_receipt": self.backend_mismatch_receipt.to_dict(),
             "surrogate_physics_receipt": self.surrogate_physics_receipt.to_dict(),
@@ -174,6 +178,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "backend_runtime_outcome_receipt": root / "backend_runtime_outcome_receipt.json",
         "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
         "physics_calibration_receipt": root / "physics_calibration_receipt.json",
+        "task_measurement_receipt": root / "task_measurement_receipt.json",
         "sim_real_gap_receipt": root / "sim_real_gap_receipt.json",
         "backend_mismatch_receipt": root / "backend_mismatch_receipt.json",
         "surrogate_physics_receipt": root / "surrogate_physics_receipt.json",
@@ -481,6 +486,7 @@ def _build_training_feedback_manifest(
     backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
     backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
     calibration_receipt: PhysicsCalibrationReceipt,
+    task_measurement_receipt: TaskMeasurementReceipt,
     sim_real_gap_receipt: SimRealGapReceipt,
     backend_mismatch_receipt: BackendMismatchReceipt,
     surrogate_physics_receipt: SurrogatePhysicsReceipt,
@@ -570,6 +576,7 @@ def _build_training_feedback_manifest(
             else backend_shadow_execution_receipt.receipt_id
         ),
         "physics_calibration_receipt_id": calibration_receipt.receipt_id,
+        "task_measurement_receipt_id": task_measurement_receipt.receipt_id,
         "sim_real_gap_receipt_id": sim_real_gap_receipt.receipt_id,
         "backend_mismatch_receipt_id": backend_mismatch_receipt.receipt_id,
         "surrogate_physics_receipt_id": surrogate_physics_receipt.receipt_id,
@@ -1033,6 +1040,7 @@ class SimSynthPhysicsRuntime:
             adaptation_receipt=adaptation_receipt,
             runtime_evidence=runtime_evidence,
         )
+        task_measurement_receipt = build_task_measurement_receipt(world_state)
         sim_real_gap_receipt = build_sim_real_gap_receipt(
             world_state,
             execution_contract,
@@ -1069,6 +1077,7 @@ class SimSynthPhysicsRuntime:
             backend_runtime_outcome_receipt,
             backend_shadow_execution_receipt,
             calibration_receipt,
+            task_measurement_receipt,
             sim_real_gap_receipt,
             backend_mismatch_receipt,
             surrogate_physics_receipt,
@@ -1091,6 +1100,7 @@ class SimSynthPhysicsRuntime:
             backend_runtime_outcome_receipt=backend_runtime_outcome_receipt,
             backend_shadow_execution_receipt=backend_shadow_execution_receipt,
             physics_calibration_receipt=calibration_receipt,
+            task_measurement_receipt=task_measurement_receipt,
             sim_real_gap_receipt=sim_real_gap_receipt,
             backend_mismatch_receipt=backend_mismatch_receipt,
             surrogate_physics_receipt=surrogate_physics_receipt,
@@ -1193,6 +1203,10 @@ class SimSynthPhysicsRuntime:
             _write_json(
                 artifact_paths["physics_calibration_receipt"],
                 calibration_receipt.to_dict(),
+            )
+            _write_json(
+                artifact_paths["task_measurement_receipt"],
+                task_measurement_receipt.to_dict(),
             )
             _write_json(
                 artifact_paths["sim_real_gap_receipt"],

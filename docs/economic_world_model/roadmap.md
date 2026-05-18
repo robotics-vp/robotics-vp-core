@@ -171,6 +171,9 @@ These require no Habitat code import. They are contract/architecture patterns:
   — clean sim→task→measurement→episode protocol)
   → **implementation target**: runtime adapter (`SimulatorBackend` /
   `TaskDefinition` contract pair in Sim/Synth WM)
+- **landed locally on 2026-05-18**: explicit
+  `SimulatorBackendContractState` / `TaskDefinitionContractState` pair plus
+  first live `TaskMeasurementReceipt`
 - Articulated embodiment + sensor config schema borrowing
   (source: `habitat.articulated_agents` + `habitat_sim.physics` URDF/SDF)
   → **implementation target**: provider contract (`EmbodimentConfig` in

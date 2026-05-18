@@ -165,14 +165,16 @@ Current re-entry status after the Phase 2 pocket:
      `TaskMeasurementSurface`, `SceneHierarchyState`,
      `DifferentiablePhysicsProviderState`, `SurrogatePhysicsProviderState`
    - paired receipt family:
-     `SimRealGapReceipt`, `BackendMismatchReceipt`,
+     `TaskMeasurementReceipt`, `SimRealGapReceipt`, `BackendMismatchReceipt`,
      `SurrogatePhysicsReceipt`, `SurrogateCalibrationReceipt`
+   - simulator/task contract pair:
+     `SimulatorBackendContractState`, `TaskDefinitionContractState`
    - local `camera_geometry.py` utilities
    - local `VectorizedSimRunner` batch facade
 3. next best local follow-on should deepen use of these surfaces rather than
-   inventing another ontology: task/measurement receipt production, scene
-   hierarchy consumers, or transfer-evidence consumers are now the cleanest
-   candidates while external GPU/provider work remains blocked
+   inventing another ontology: scene-hierarchy consumers or transfer-evidence
+   consumers are now the cleanest candidates while external GPU/provider work
+   remains blocked
 
 ### Habitat-derived Sim/Synth/Physics adoption track reminder
 

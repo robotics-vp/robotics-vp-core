@@ -27,7 +27,9 @@ from .gen2sim_admission import compile_gen2sim_admission_state
 from .phase1x_surfaces import (
     compile_differentiable_physics_provider_state,
     compile_scene_hierarchy_state,
+    compile_simulator_backend_contract_state,
     compile_surrogate_physics_provider_state,
+    compile_task_definition_contract_state,
     compile_task_measurement_surface,
 )
 from .promotion import HelperMode, infer_backend_payload
@@ -40,9 +42,11 @@ from .state import (
     PhysicsAdaptationPolicyState,
     PhysicsContextState,
     SceneHierarchyState,
+    SimulatorBackendContractState,
     SimSynthPhysicsWorldState,
     SurrogatePhysicsProviderState,
     SyntheticBranchPlan,
+    TaskDefinitionContractState,
     TaskMeasurementSurface,
 )
 from .synthetic_branches import compile_synthetic_branch_plans
@@ -71,6 +75,7 @@ RUNTIME_OWNED_RECEIPTS = [
     "backend_runtime_outcome_receipt_v1",
     "backend_shadow_execution_receipt_v1",
     "physics_calibration_receipt_v1",
+    "task_measurement_receipt_v1",
     "sim_real_gap_receipt_v1",
     "backend_mismatch_receipt_v1",
     "surrogate_physics_receipt_v1",
@@ -560,6 +565,8 @@ def _compile_receipt_inventory(
     backend_execution_binding: Any,
     backend_runtime_bridge: Any,
     task_measurements: TaskMeasurementSurface,
+    simulator_backend_contract: SimulatorBackendContractState,
+    task_definition_contract: TaskDefinitionContractState,
     scene_hierarchy: SceneHierarchyState,
     differentiable_physics_provider: DifferentiablePhysicsProviderState,
     surrogate_physics_provider: SurrogatePhysicsProviderState,
@@ -598,6 +605,8 @@ def _compile_receipt_inventory(
                 "" if backend_runtime_bridge is None else str(backend_runtime_bridge.bridge_id)
             ),
             "task_measurement_surface_id": task_measurements.surface_id,
+            "simulator_backend_contract_id": simulator_backend_contract.contract_id,
+            "task_definition_contract_id": task_definition_contract.contract_id,
             "scene_hierarchy_id": scene_hierarchy.hierarchy_id,
             "differentiable_physics_provider_id": (
                 differentiable_physics_provider.provider_id
@@ -704,6 +713,15 @@ def compile_sim_synth_physics_world_state(
         physics_context=physics_context,
         benchmark_signals=benchmark_payload,
     )
+    simulator_backend_contract = compile_simulator_backend_contract_state(
+        jobs,
+        physics_context=physics_context,
+        backend_execution_binding=backend_execution_binding,
+    )
+    task_definition_contract = compile_task_definition_contract_state(
+        jobs,
+        task_measurements=task_measurements,
+    )
     scene_hierarchy = compile_scene_hierarchy_state(
         jobs,
         robot_asset_contract=robot_asset_contract,
@@ -763,6 +781,8 @@ def compile_sim_synth_physics_world_state(
         "backend_execution_binding_id": backend_execution_binding.binding_id,
         "robot_asset_contract_id": robot_asset_contract.contract_id,
         "task_measurement_surface_id": task_measurements.surface_id,
+        "simulator_backend_contract_id": simulator_backend_contract.contract_id,
+        "task_definition_contract_id": task_definition_contract.contract_id,
         "scene_hierarchy_id": scene_hierarchy.hierarchy_id,
         "differentiable_physics_provider_id": differentiable_physics_provider.provider_id,
         "surrogate_physics_provider_id": surrogate_physics_provider.provider_id,
@@ -777,6 +797,8 @@ def compile_sim_synth_physics_world_state(
         "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
         "robot_asset_contract_id": robot_asset_contract.contract_id,
         "task_measurement_surface_id": task_measurements.surface_id,
+        "simulator_backend_contract_id": simulator_backend_contract.contract_id,
+        "task_definition_contract_id": task_definition_contract.contract_id,
         "scene_hierarchy_id": scene_hierarchy.hierarchy_id,
         "differentiable_physics_provider_id": differentiable_physics_provider.provider_id,
         "surrogate_physics_provider_id": surrogate_physics_provider.provider_id,
@@ -791,6 +813,8 @@ def compile_sim_synth_physics_world_state(
         backend_execution_binding=backend_execution_binding,
         robot_asset_contract=robot_asset_contract,
         task_measurements=task_measurements,
+        simulator_backend_contract=simulator_backend_contract,
+        task_definition_contract=task_definition_contract,
         scene_hierarchy=scene_hierarchy,
         differentiable_physics_provider=differentiable_physics_provider,
         surrogate_physics_provider=surrogate_physics_provider,
@@ -827,6 +851,8 @@ def compile_sim_synth_physics_world_state(
         backend_execution_binding=backend_execution_binding,
         backend_runtime_bridge=backend_runtime_bridge,
         task_measurements=task_measurements,
+        simulator_backend_contract=simulator_backend_contract,
+        task_definition_contract=task_definition_contract,
         scene_hierarchy=scene_hierarchy,
         differentiable_physics_provider=differentiable_physics_provider,
         surrogate_physics_provider=surrogate_physics_provider,

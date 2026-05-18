@@ -381,6 +381,38 @@ class SimRealGapReceipt:
 
 
 @dataclass(frozen=True)
+class TaskMeasurementReceipt:
+    """Live measurement receipt emitted from the task-definition contract."""
+
+    receipt_id: str
+    surface_id: str
+    task_definition_contract_id: str
+    task_family: str
+    benchmark_gate_ready: bool
+    measurement_values: Dict[str, float] = field(default_factory=dict)
+    measurement_status: Dict[str, str] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "task_measurement_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "surface_id": self.surface_id,
+            "task_definition_contract_id": self.task_definition_contract_id,
+            "task_family": self.task_family,
+            "benchmark_gate_ready": bool(self.benchmark_gate_ready),
+            "measurement_values": {
+                str(key): float(value) for key, value in self.measurement_values.items()
+            },
+            "measurement_status": {
+                str(key): str(value) for key, value in self.measurement_status.items()
+            },
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class BackendMismatchReceipt:
     """Backend-to-backend mismatch estimate for the active runtime route."""
 

@@ -182,6 +182,64 @@ class TaskMeasurementSurface:
 
 
 @dataclass(frozen=True)
+class SimulatorBackendContractState:
+    """Provider-neutral runtime contract exposed by the selected simulator lane."""
+
+    contract_id: str
+    backend: str
+    simulator_family: str
+    fidelity_tier: str
+    executor_entrypoint: str
+    observation_adapter_entrypoint: str
+    runtime_status: str
+    supported_task_families: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "simulator_backend_contract_state_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "contract_id": self.contract_id,
+            "backend": self.backend,
+            "simulator_family": self.simulator_family,
+            "fidelity_tier": self.fidelity_tier,
+            "executor_entrypoint": self.executor_entrypoint,
+            "observation_adapter_entrypoint": self.observation_adapter_entrypoint,
+            "runtime_status": self.runtime_status,
+            "supported_task_families": strings(self.supported_task_families),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
+class TaskDefinitionContractState:
+    """Explicit task / episode contract layered over the simulator backend."""
+
+    contract_id: str
+    task_family: str
+    objective_preset: str
+    episode_refs: list[str] = field(default_factory=list)
+    required_measurements: list[str] = field(default_factory=list)
+    reset_protocol: str = "episode_reset"
+    update_protocol: str = "step_update"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "task_definition_contract_state_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "contract_id": self.contract_id,
+            "task_family": self.task_family,
+            "objective_preset": self.objective_preset,
+            "episode_refs": strings(self.episode_refs),
+            "required_measurements": strings(self.required_measurements),
+            "reset_protocol": self.reset_protocol,
+            "update_protocol": self.update_protocol,
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class SceneHierarchyState:
     """Typed scene / region / object hierarchy for materialization."""
 
@@ -483,6 +541,8 @@ class SimSynthPhysicsWorldState:
     backend_execution_binding: Optional[BackendExecutionBindingState] = None
     robot_asset_contract: Optional[RobotAssetContractState] = None
     task_measurements: Optional[TaskMeasurementSurface] = None
+    simulator_backend_contract: Optional[SimulatorBackendContractState] = None
+    task_definition_contract: Optional[TaskDefinitionContractState] = None
     scene_hierarchy: Optional[SceneHierarchyState] = None
     differentiable_physics_provider: Optional[DifferentiablePhysicsProviderState] = None
     surrogate_physics_provider: Optional[SurrogatePhysicsProviderState] = None
@@ -522,6 +582,16 @@ class SimSynthPhysicsWorldState:
             ),
             "task_measurements": (
                 self.task_measurements.to_dict() if self.task_measurements is not None else None
+            ),
+            "simulator_backend_contract": (
+                self.simulator_backend_contract.to_dict()
+                if self.simulator_backend_contract is not None
+                else None
+            ),
+            "task_definition_contract": (
+                self.task_definition_contract.to_dict()
+                if self.task_definition_contract is not None
+                else None
             ),
             "scene_hierarchy": (
                 self.scene_hierarchy.to_dict() if self.scene_hierarchy is not None else None

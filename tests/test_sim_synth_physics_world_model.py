@@ -117,6 +117,13 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
     assert world_state.robot_asset_contract.asset_profile == "tabletop_workcell_assets"
     assert world_state.task_measurements is not None
     assert world_state.task_measurements.measurement_status["promotion_readiness"] == "shadow_only"
+    assert world_state.simulator_backend_contract is not None
+    assert world_state.simulator_backend_contract.backend == world_state.physics_context.backend
+    assert world_state.task_definition_contract is not None
+    assert (
+        world_state.task_definition_contract.required_measurements
+        == world_state.task_measurements.measurement_names
+    )
     assert world_state.scene_hierarchy is not None
     assert world_state.scene_hierarchy.materialization_status in {
         "asset_contract_ready",
@@ -172,6 +179,14 @@ def test_world_state_to_dict_round_trips_core_phase1_state() -> None:
     assert round_tripped["backend_execution_binding"]["binding_id"] == world_state.backend_execution_binding.binding_id
     assert round_tripped["robot_asset_contract"]["contract_id"] == world_state.robot_asset_contract.contract_id
     assert round_tripped["task_measurements"]["surface_id"] == world_state.task_measurements.surface_id
+    assert (
+        round_tripped["simulator_backend_contract"]["contract_id"]
+        == world_state.simulator_backend_contract.contract_id
+    )
+    assert (
+        round_tripped["task_definition_contract"]["contract_id"]
+        == world_state.task_definition_contract.contract_id
+    )
     assert round_tripped["scene_hierarchy"]["hierarchy_id"] == world_state.scene_hierarchy.hierarchy_id
     assert (
         round_tripped["differentiable_physics_provider"]["provider_id"]
@@ -846,6 +861,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
         "shadow_executed_with_asset_gaps",
     }
     assert result.physics_calibration_receipt.metadata["explicit_gap_kind"] == "missing_backend_adapter"
+    assert result.task_measurement_receipt.surface_id == result.world_state.task_measurements.surface_id
     assert result.sim_real_gap_receipt.status == "estimated"
     assert result.sim_real_gap_receipt.gap_score > 0.0
     assert result.backend_mismatch_receipt.status == "mismatch_estimated"
@@ -927,6 +943,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "backend_shadow_execution" / "isaac" / "backend_calibration_sidecar.json").exists()
     assert (tmp_path / "backend_shadow_execution" / "isaac" / "backend_io_contract_sidecar.json").exists()
     assert (tmp_path / "physics_calibration_receipt.json").exists()
+    assert (tmp_path / "task_measurement_receipt.json").exists()
     assert (tmp_path / "sim_real_gap_receipt.json").exists()
     assert (tmp_path / "backend_mismatch_receipt.json").exists()
     assert (tmp_path / "surrogate_physics_receipt.json").exists()

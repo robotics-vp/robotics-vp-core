@@ -6,10 +6,13 @@
 
 - Added live Phase 1.x typed state under `src/world_model/sim_synth_physics/`:
   - `TaskMeasurementSurface`
+  - `SimulatorBackendContractState`
+  - `TaskDefinitionContractState`
   - `SceneHierarchyState`
   - `DifferentiablePhysicsProviderState`
   - `SurrogatePhysicsProviderState`
 - Added the first paired transfer / surrogate receipt family:
+  - `TaskMeasurementReceipt`
   - `SimRealGapReceipt`
   - `BackendMismatchReceipt`
   - `SurrogatePhysicsReceipt`
@@ -18,6 +21,8 @@
   artifact refs, and the compiled receipt inventory.
 - The runtime now emits the paired receipts into loop results, serialized
   artifact files, and training-feedback manifests.
+- The Habitat-style sim→task→measurement protocol is now an explicit contract
+  pair instead of an inference over loosely adjacent fields.
 - Added CPU-local geometry helpers:
   - `camera_intrinsics_from_fov(...)`
   - `compose_transforms(...)`
