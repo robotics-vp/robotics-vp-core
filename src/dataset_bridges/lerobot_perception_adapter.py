@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 import torch
 
@@ -45,6 +45,7 @@ from src.training.perception_seam_data import (
     MultiProviderSample,
     ProviderObservation,
     VJEPATemporalSample,
+    VisionBackboneProjectionSample,
 )
 
 
@@ -297,6 +298,141 @@ def multi_provider_samples_from_episode(
 
 
 # ---------------------------------------------------------------------------
+# LeRobot → VisionBackboneProjectionSample adapter
+# ---------------------------------------------------------------------------
+
+
+def _projection_target_from_feature(
+    feature: torch.Tensor,
+    *,
+    d_out: int,
+) -> torch.Tensor:
+    """Build a deterministic CPU-safe proxy target from one backbone feature."""
+
+    flat = feature.flatten().float()
+    if flat.numel() >= d_out:
+        return flat[:d_out]
+    return torch.nn.functional.pad(flat, (0, d_out - flat.numel()))
+
+
+def vision_backbone_projection_sample_from_lerobot_step(
+    step: ReplayStepRecord,
+    *,
+    camera_keys: Optional[List[str]] = None,
+    feature_config: Optional[FeatureExtractionConfig] = None,
+    tokens_per_camera: int = 4,
+    d_out: int = 128,
+) -> VisionBackboneProjectionSample:
+    """Convert one LeRobot step into a projection-head proof sample.
+
+    This is intentionally a **prototype / schema** adapter, not a provider-
+    credible training adapter. In the absence of object annotations or frozen
+    backbone execution, each camera slot becomes a stable pseudo-identity and
+    each camera contributes a small bundle of deterministic proxy tokens. That
+    is enough to prove the LeRobot → projection-seam path without pretending we
+    have real object-ID supervision.
+    """
+
+    if feature_config is None:
+        feature_config = FeatureExtractionConfig(d_feature=1024)
+    if camera_keys is None:
+        camera_keys = discover_camera_keys(step.obs)
+    if not camera_keys:
+        raise ValueError(
+            f"No camera keys found in step obs. Keys: {list(step.obs.keys())}"
+        )
+
+    backbone_tokens: list[torch.Tensor] = []
+    identity_labels: list[int] = []
+    cross_provider_targets: list[torch.Tensor] = []
+
+    for camera_idx, cam_key in enumerate(camera_keys):
+        image = None
+        for prefix in ["images.", "observation.images.", ""]:
+            full_key = f"{prefix}{cam_key}"
+            if full_key in step.obs:
+                image = step.obs[full_key]
+                break
+        if image is None:
+            continue
+
+        base_feature = extract_features(
+            image,
+            feature_config,
+            seed_str=f"vision_projection_{step.episode_id}_{cam_key}",
+        )
+        for token_idx in range(tokens_per_camera):
+            token_seed = int(
+                hashlib.md5(
+                    f"{step.episode_id}_{step.step_idx}_{cam_key}_{token_idx}".encode()
+                ).hexdigest()[:8],
+                16,
+            )
+            generator = torch.Generator().manual_seed(token_seed)
+            token = base_feature + torch.randn(
+                base_feature.shape,
+                generator=generator,
+            ) * 0.01
+            backbone_tokens.append(token)
+            identity_labels.append(camera_idx)
+            cross_provider_targets.append(
+                _projection_target_from_feature(token, d_out=d_out)
+            )
+
+    if not backbone_tokens:
+        raise ValueError(
+            f"No available camera observations found in step obs. Keys: {list(step.obs.keys())}"
+        )
+
+    scene_label = int(
+        hashlib.md5(step.episode_id.encode()).hexdigest()[:8],
+        16,
+    )
+    return VisionBackboneProjectionSample(
+        sample_id=step.record_id,
+        backbone_features=torch.stack(backbone_tokens, dim=0),
+        object_identity_labels=torch.tensor(identity_labels, dtype=torch.long),
+        scene_label=scene_label,
+        cross_provider_embeddings=torch.stack(cross_provider_targets, dim=0),
+    )
+
+
+def vision_backbone_projection_samples_from_episode(
+    episode: ReplayEpisodeRecord,
+    steps: Sequence[ReplayStepRecord],
+    *,
+    camera_keys: Optional[List[str]] = None,
+    feature_config: Optional[FeatureExtractionConfig] = None,
+    stride: int = 1,
+    max_samples: Optional[int] = None,
+    tokens_per_camera: int = 4,
+    d_out: int = 128,
+) -> List[VisionBackboneProjectionSample]:
+    """Convert one LeRobot episode into projection-head proof samples."""
+
+    ordered_steps = sorted(steps, key=lambda s: s.step_idx)
+    if camera_keys is None and ordered_steps:
+        camera_keys = discover_camera_keys(ordered_steps[0].obs)
+
+    samples: list[VisionBackboneProjectionSample] = []
+    for idx, step in enumerate(ordered_steps):
+        if idx % stride != 0:
+            continue
+        samples.append(
+            vision_backbone_projection_sample_from_lerobot_step(
+                step,
+                camera_keys=camera_keys,
+                feature_config=feature_config,
+                tokens_per_camera=tokens_per_camera,
+                d_out=d_out,
+            )
+        )
+        if max_samples is not None and len(samples) >= max_samples:
+            break
+    return samples
+
+
+# ---------------------------------------------------------------------------
 # LeRobot → VJEPATemporalSample adapter
 # ---------------------------------------------------------------------------
 
@@ -461,6 +597,9 @@ class LeRobotPerceptionAdapterConfig:
     d_wm: int = 128
     d_out: int = 128
 
+    # Vision-backbone projection proof sampling
+    projection_tokens_per_camera: int = 4
+
     def __post_init__(self):
         if self.feature_config is None:
             self.feature_config = FeatureExtractionConfig()
@@ -530,6 +669,33 @@ def adapt_lerobot_episodes_for_vjepa_temporal(
     return all_samples
 
 
+def adapt_lerobot_episodes_for_vision_backbone_projection(
+    episodes: Sequence[Tuple[ReplayEpisodeRecord, Sequence[ReplayStepRecord]]],
+    config: Optional[LeRobotPerceptionAdapterConfig] = None,
+) -> List[VisionBackboneProjectionSample]:
+    """Adapt LeRobot episodes for local vision-projection proof work."""
+
+    if config is None:
+        config = LeRobotPerceptionAdapterConfig(
+            feature_config=FeatureExtractionConfig(d_feature=1024)
+        )
+
+    all_samples: list[VisionBackboneProjectionSample] = []
+    for episode, steps in episodes:
+        samples = vision_backbone_projection_samples_from_episode(
+            episode,
+            steps,
+            camera_keys=config.camera_keys,
+            feature_config=config.feature_config,
+            stride=config.step_stride,
+            max_samples=config.max_samples_per_episode,
+            tokens_per_camera=config.projection_tokens_per_camera,
+            d_out=config.d_out,
+        )
+        all_samples.extend(samples)
+    return all_samples
+
+
 __all__ = [
     # Config
     "FeatureExtractionConfig",
@@ -540,10 +706,13 @@ __all__ = [
     # Single-step adapters
     "multi_provider_sample_from_lerobot_step",
     "multi_provider_samples_from_episode",
+    "vision_backbone_projection_sample_from_lerobot_step",
+    "vision_backbone_projection_samples_from_episode",
     # Temporal window adapters
     "vjepa_temporal_sample_from_episode_window",
     "vjepa_temporal_samples_from_episode",
     # Dataset-level adapters
     "adapt_lerobot_episodes_for_evidence_fusion",
     "adapt_lerobot_episodes_for_vjepa_temporal",
+    "adapt_lerobot_episodes_for_vision_backbone_projection",
 ]

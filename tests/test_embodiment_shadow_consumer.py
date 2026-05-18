@@ -27,11 +27,11 @@ from src.world_model.perception_grounding import (
 from src.world_model.perception_grounding.receipts import (
     DeploymentResourceReceipt,
     GroundingCalibrationReceipt,
-    InferenceHeadroomReceipt,
     PerceptionContributionReceipt,
     ProviderAvailabilityReceipt,
     TemporalGroundingReceipt,
 )
+from src.world_model.perception_grounding.semantic_bridges import SemanticBridgeReceipt
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +275,7 @@ def test_consumer_does_not_assert_embodiment_wm_sovereignty() -> None:
 
 
 def test_compile_with_receipts_emits_full_receipt_family() -> None:
-    """compile_with_receipts now returns all 8 receipt types."""
+    """compile_with_receipts now returns the full live receipt family."""
     result = compile_perception_grounding_with_receipts(
         episode_id="ep_full_receipts",
         task_id="drawer_vase",
@@ -293,11 +293,32 @@ def test_compile_with_receipts_emits_full_receipt_family() -> None:
     # Must have all these receipt families
     assert "EvidenceFusionReceipt" in receipt_types
     assert "ProviderAvailabilityReceipt" in receipt_types
+    assert "SemanticBridgeReceipt" in receipt_types
     assert "GroundingCalibrationReceipt" in receipt_types
     assert "InferenceHeadroomReceipt" in receipt_types
     assert "DeploymentResourceReceipt" in receipt_types
     assert "TemporalGroundingReceipt" in receipt_types
     assert "PerceptionContributionReceipt" in receipt_types
+
+
+def test_semantic_bridge_receipts_cover_all_active_bridges() -> None:
+    result = compile_perception_grounding_with_receipts(
+        episode_id="ep_bridge_receipts",
+        task_id="drawer_vase",
+        semantic_tags=["drawer", "fragile"],
+        belief_state=_belief_state(),
+        scene_tracks_payload=_scene_tracks_payload(),
+    )
+
+    bridge_receipts = [
+        r for r in result.receipts if isinstance(r, SemanticBridgeReceipt)
+    ]
+    bridge_kinds = {r.bridge_kind for r in bridge_receipts}
+
+    assert bridge_kinds == {"sim_synth", "embodiment", "annotation", "economic"}
+    assert all(r.source_graph_id for r in bridge_receipts)
+    assert all(0.0 <= r.output_quality_score <= 1.0 for r in bridge_receipts)
+    assert all(0.0 <= r.downstream_usefulness_score <= 1.0 for r in bridge_receipts)
 
 
 def test_provider_availability_receipts_cover_all_providers() -> None:

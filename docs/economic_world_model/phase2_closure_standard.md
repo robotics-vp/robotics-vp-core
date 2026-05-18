@@ -73,7 +73,10 @@ Phase 2 is closed when:
 ## Transition Triggers
 
 - **≤2 isolated Category A** → may begin parallel Phase 3 (Embodiment) spec/doctrine work
-- **Zero Category A** → shift implementation center of gravity to Phase 3
+- **Zero Category A** → Phase 2 no longer needs to remain the implementation
+  center; follow the active roadmap for the next leg
+  - under the current roadmap, that next leg is the reopenable Phase 1.x
+    Sim / Synth / Physics return before Phase 3 implementation begins
 - **Phase 2 reopens** if Phase 3 or later work discovers a genuine missing Perception contract
 
 ## Required Evidence for Closure
@@ -100,17 +103,21 @@ Phase 2 targets at minimum `shadow_runtime` before closure:
 Phase 2 should not claim closure below `shadow_runtime` unless the gap is
 genuinely external (all remaining items are GPU/provider/data blocked).
 
-Current branch read:
+Current branch read as of 2026-05-18:
 
-- the branch has now reached early `shadow_runtime` on audited surfaces:
+- the branch has reached `shadow_runtime` on the audited structural surfaces:
   - Perception state compiles from real local inputs
-  - one Sim / Synth shadow consumer exists
-  - one annotation/evidence shadow consumer exists
-- Phase 2 is still open because additional Category A work remains around:
-  - live receipt emission
-  - provider/runtime truth compilation
-  - replay/export surfaces
-  - additional downstream consumers
+  - three shadow consumers are live: Sim / Synth, annotation / VLA, and
+    Embodiment
+  - the lower-WM provider / dataset / task / deployment-resource family is live
+  - the audited receipt family is live, including semantic bridge receipts
+  - replay / training export surfaces exist for annotation-derived perception
+    supervision and persisted benchmark evidence
+- the latest closure audit is recorded in
+  `docs/economic_world_model/phase2_closure_assessment.md`
+- that audit finds zero remaining Category A items on the structural sheet;
+  the remaining open work is Category B provider / GPU / real-data /
+  calibration / held-out-evidence work
 
 ## Required Surface Families
 

@@ -9,26 +9,19 @@ Tests cover:
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 import pytest
 import torch
 
 from src.training.perception_seam_losses import (
-    EvidenceFusionLossConfig,
-    SAMCalibrationLossConfig,
-    DepthMetricCalibrationLossConfig,
-    VJEPATemporalAlignmentLossConfig,
     SeamLossResult,
     evidence_fusion_loss,
     sam_calibration_loss,
     depth_metric_calibration_loss,
+    vision_backbone_projection_loss,
     vjepa_temporal_alignment_loss,
     get_seam_loss_fn,
 )
 from src.training.perception_seam_data import (
-    ProviderObservation,
     MultiProviderSample,
     EvidenceFusionBatch,
     EvidenceFusionDataset,
@@ -36,27 +29,30 @@ from src.training.perception_seam_data import (
     SAMCalibrationDataset,
     DepthCalibrationSample,
     DepthCalibrationDataset,
+    VisionBackboneProjectionSample,
+    VisionBackboneProjectionDataset,
     VJEPATemporalSample,
     VJEPATemporalDataset,
     generate_synthetic_evidence_fusion_samples,
     generate_synthetic_sam_calibration_samples,
     generate_synthetic_depth_calibration_samples,
+    generate_synthetic_vision_backbone_projection_samples,
     generate_synthetic_vjepa_temporal_samples,
     create_evidence_fusion_loader,
     create_sam_calibration_loader,
     create_depth_calibration_loader,
+    create_vision_backbone_projection_loader,
     create_vjepa_temporal_loader,
 )
 from src.training.perception_seam_benchmarks import (
-    BenchmarkGateConfig,
     BenchmarkMetric,
     BenchmarkGateResult,
     EvidenceFusionBenchmark,
     SAMCalibrationBenchmark,
     DepthCalibrationBenchmark,
+    VisionBackboneProjectionBenchmark,
     VJEPATemporalBenchmark,
     get_benchmark_evaluator,
-    evaluate_seam_benchmark,
 )
 
 
@@ -178,6 +174,26 @@ class TestDepthMetricCalibrationLoss:
         )
 
         assert "scale_consistency" in result.component_losses
+
+
+class TestVisionBackboneProjectionLoss:
+    def test_basic_loss_computation(self):
+        batch_size = 4
+        n_tokens = 8
+        d_out = 128
+
+        result = vision_backbone_projection_loss(
+            projected_features=torch.randn(batch_size, n_tokens, d_out),
+            object_identity_labels=torch.randint(0, 4, (batch_size, n_tokens)),
+            scene_labels=torch.tensor([0, 0, 1, 1]),
+            cross_provider_embeddings=torch.randn(batch_size, n_tokens, d_out),
+        )
+
+        assert isinstance(result, SeamLossResult)
+        assert not torch.isnan(result.total_loss)
+        assert "identity" in result.component_losses
+        assert "contrastive" in result.component_losses
+        assert "alignment" in result.component_losses
 
 
 class TestVJEPATemporalAlignmentLoss:
@@ -303,6 +319,60 @@ class TestDepthCalibrationDataset:
         assert batch.relative_depth.shape == (4, 1, 32, 32)
 
 
+class TestVisionBackboneProjectionDataset:
+    def test_synthetic_sample_generation(self):
+        samples = generate_synthetic_vision_backbone_projection_samples(
+            n_samples=24,
+            n_tokens=8,
+            n_identities=4,
+            d_backbone=64,
+            d_out=32,
+            seed=42,
+        )
+        assert len(samples) == 24
+        assert all(isinstance(s, VisionBackboneProjectionSample) for s in samples)
+
+    def test_collation(self):
+        samples = generate_synthetic_vision_backbone_projection_samples(
+            n_samples=8,
+            n_tokens=8,
+            d_backbone=64,
+            d_out=32,
+            seed=42,
+        )
+        from src.training.perception_seam_data import VisionBackboneProjectionBatch
+
+        batch = VisionBackboneProjectionDataset.collate_fn(
+            samples[:4],
+            max_tokens=8,
+            d_backbone=64,
+            d_out=32,
+        )
+        assert isinstance(batch, VisionBackboneProjectionBatch)
+        assert batch.backbone_features.shape == (4, 8, 64)
+        assert batch.object_identity_labels.shape == (4, 8)
+        assert batch.cross_provider_embeddings is not None
+        assert batch.cross_provider_embeddings.shape == (4, 8, 32)
+
+    def test_data_loader_creation(self):
+        samples = generate_synthetic_vision_backbone_projection_samples(
+            n_samples=16,
+            n_tokens=8,
+            d_backbone=64,
+            d_out=32,
+            seed=42,
+        )
+        loader = create_vision_backbone_projection_loader(
+            samples,
+            batch_size=4,
+            max_tokens=8,
+            d_backbone=64,
+            d_out=32,
+        )
+        batch = next(iter(loader))
+        assert batch.backbone_features.shape == (4, 8, 64)
+
+
 class TestVJEPATemporalDataset:
     def test_synthetic_sample_generation(self):
         samples = generate_synthetic_vjepa_temporal_samples(
@@ -411,6 +481,41 @@ class TestDepthCalibrationBenchmark:
         assert result.seam_type == "depth_metric_calibration"
 
 
+class TestVisionBackboneProjectionBenchmark:
+    def test_evaluate(self):
+        from src.world_model.perception_grounding.neural_seams import (
+            VisionBackboneProjectionSeam,
+        )
+
+        seam = VisionBackboneProjectionSeam(
+            d_backbone=64,
+            d_hidden=32,
+            d_out=32,
+        )
+        samples = generate_synthetic_vision_backbone_projection_samples(
+            n_samples=24,
+            n_tokens=8,
+            n_identities=4,
+            d_backbone=64,
+            d_out=32,
+            seed=42,
+        )
+        loader = create_vision_backbone_projection_loader(
+            samples,
+            batch_size=4,
+            max_tokens=8,
+            d_backbone=64,
+            d_out=32,
+        )
+
+        benchmark = VisionBackboneProjectionBenchmark()
+        result = benchmark.evaluate(seam, loader)
+
+        assert isinstance(result, BenchmarkGateResult)
+        assert result.seam_type == "vision_backbone_projection"
+        assert len(result.metrics) == 3
+
+
 class TestVJEPATemporalBenchmark:
     def test_evaluate(self):
         from src.world_model.perception_grounding.neural_seams import VJEPATemporalAlignmentSeam
@@ -439,6 +544,7 @@ class TestGetBenchmarkEvaluator:
         seam_types = [
             "evidence_fusion",
             "sam_calibration",
+            "vision_backbone_projection",
             "depth_metric_calibration",
             "vjepa_temporal_alignment",
         ]

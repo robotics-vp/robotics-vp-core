@@ -23,10 +23,13 @@ from src.replay.schema import ReplayEpisodeRecord, ReplayStepRecord
 from src.dataset_bridges.lerobot_perception_adapter import (
     FeatureExtractionConfig,
     LeRobotPerceptionAdapterConfig,
+    adapt_lerobot_episodes_for_vision_backbone_projection,
     discover_camera_keys,
     extract_features,
     multi_provider_sample_from_lerobot_step,
     multi_provider_samples_from_episode,
+    vision_backbone_projection_sample_from_lerobot_step,
+    vision_backbone_projection_samples_from_episode,
     vjepa_temporal_sample_from_episode_window,
     vjepa_temporal_samples_from_episode,
     adapt_lerobot_episodes_for_evidence_fusion,
@@ -36,6 +39,7 @@ from src.training.perception_seam_data import (
     MultiProviderSample,
     ProviderObservation,
     VJEPATemporalSample,
+    VisionBackboneProjectionSample,
 )
 
 
@@ -481,6 +485,55 @@ class TestMultiProviderSamplesFromEpisode:
 
 
 # ---------------------------------------------------------------------------
+# VisionBackboneProjectionSample adapter tests
+# ---------------------------------------------------------------------------
+
+
+class TestVisionBackboneProjectionSampleAdapter:
+    """Test LeRobot step → VisionBackboneProjectionSample conversion."""
+
+    def test_droid_step_to_projection_sample(self):
+        step = make_mock_lerobot_step("ep1", 5, camera_format="droid")
+        config = FeatureExtractionConfig(strategy="placeholder", d_feature=1024)
+
+        sample = vision_backbone_projection_sample_from_lerobot_step(
+            step,
+            feature_config=config,
+        )
+
+        assert isinstance(sample, VisionBackboneProjectionSample)
+        assert sample.sample_id == step.record_id
+        assert sample.backbone_features.shape == (12, 1024)
+        assert sample.object_identity_labels.tolist() == [0] * 4 + [1] * 4 + [2] * 4
+        assert sample.cross_provider_embeddings is not None
+        assert sample.cross_provider_embeddings.shape == (12, 128)
+
+    def test_projection_tokens_are_deterministic(self):
+        step = make_mock_lerobot_step("ep1", 0, camera_format="droid")
+
+        sample1 = vision_backbone_projection_sample_from_lerobot_step(step)
+        sample2 = vision_backbone_projection_sample_from_lerobot_step(step)
+
+        assert torch.allclose(sample1.backbone_features, sample2.backbone_features)
+        assert torch.allclose(
+            sample1.cross_provider_embeddings,
+            sample2.cross_provider_embeddings,
+        )
+
+    def test_projection_episode_conversion_respects_stride(self):
+        episode, steps = make_mock_lerobot_episode(num_steps=10, camera_format="droid")
+
+        samples = vision_backbone_projection_samples_from_episode(
+            episode,
+            steps,
+            stride=3,
+        )
+
+        assert len(samples) == 4
+        assert all(isinstance(sample, VisionBackboneProjectionSample) for sample in samples)
+
+
+# ---------------------------------------------------------------------------
 # VJEPATemporalSample adapter tests
 # ---------------------------------------------------------------------------
 
@@ -650,6 +703,33 @@ class TestDatasetLevelAdapters:
         # 20 steps, window=4, stride=4 → 5 windows
         # 15 steps, window=4, stride=4 → 3 windows
         assert len(samples) == 5 + 3
+
+    def test_adapt_for_vision_backbone_projection(self):
+        episodes = [
+            make_mock_lerobot_episode(num_steps=5, camera_format="droid"),
+            make_mock_lerobot_episode(num_steps=7, camera_format="droid"),
+        ]
+        config = LeRobotPerceptionAdapterConfig(
+            feature_config=FeatureExtractionConfig(
+                strategy="placeholder",
+                d_feature=1024,
+            ),
+            step_stride=2,
+            max_samples_per_episode=3,
+            projection_tokens_per_camera=4,
+            d_out=128,
+        )
+
+        samples = adapt_lerobot_episodes_for_vision_backbone_projection(
+            episodes,
+            config,
+        )
+
+        assert len(samples) == 3 + 3
+        assert all(
+            isinstance(sample, VisionBackboneProjectionSample)
+            for sample in samples
+        )
 
 
 # ---------------------------------------------------------------------------

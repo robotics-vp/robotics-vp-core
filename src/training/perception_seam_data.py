@@ -25,6 +25,7 @@ Dataset classes
 - ``ProviderAgreementDataset``: Base dataset for multi-provider observations
 - ``EvidenceFusionDataset``: Dataset for evidence fusion seam training
 - ``SAMCalibrationDataset``: Dataset for SAM calibration seam training
+- ``VisionBackboneProjectionDataset``: Dataset for projection-head training
 - ``DepthCalibrationDataset``: Dataset for depth calibration seam training
 - ``VJEPATemporalDataset``: Dataset for V-JEPA temporal alignment training
 """
@@ -384,6 +385,117 @@ class SAMCalibrationDataset(Dataset[SAMCalibrationSample]):
             downstream_quality=downstream_quality,
             provider_disagreement=provider_disagreement if has_disagreement else None,
             segmentation_iou=segmentation_iou if has_iou else None,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Vision Backbone Projection Dataset
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class VisionBackboneProjectionSample:
+    """Sample for vision-backbone projection seam training."""
+
+    sample_id: str
+    backbone_features: torch.Tensor  # (N_tokens, d_backbone)
+    object_identity_labels: torch.Tensor  # (N_tokens,) int; -1 = background/pad
+    scene_label: Optional[int] = None
+    cross_provider_embeddings: Optional[torch.Tensor] = None  # (N_tokens, d_out)
+
+
+@dataclass
+class VisionBackboneProjectionBatch:
+    """Collated batch for vision-backbone projection seam training."""
+
+    backbone_features: torch.Tensor  # (batch, N_tokens, d_backbone)
+    object_identity_labels: torch.Tensor  # (batch, N_tokens)
+    token_valid_mask: torch.Tensor  # (batch, N_tokens) bool
+    scene_labels: Optional[torch.Tensor] = None
+    cross_provider_embeddings: Optional[torch.Tensor] = None
+    sample_ids: Optional[List[str]] = None
+
+
+class VisionBackboneProjectionDataset(Dataset[VisionBackboneProjectionSample]):
+    """Dataset for projection-head training over frozen backbone features."""
+
+    def __init__(
+        self,
+        samples: Sequence[VisionBackboneProjectionSample],
+        *,
+        max_tokens: int = 32,
+        d_backbone: int = 1024,
+        d_out: int = 128,
+    ) -> None:
+        self.samples = list(samples)
+        self.max_tokens = max_tokens
+        self.d_backbone = d_backbone
+        self.d_out = d_out
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> VisionBackboneProjectionSample:
+        return self.samples[idx]
+
+    @staticmethod
+    def collate_fn(
+        samples: List[VisionBackboneProjectionSample],
+        *,
+        max_tokens: int = 32,
+        d_backbone: int = 1024,
+        d_out: int = 128,
+    ) -> VisionBackboneProjectionBatch:
+        """Collate projection samples into a padded batch."""
+        batch_size = len(samples)
+        backbone_features = torch.zeros(batch_size, max_tokens, d_backbone)
+        object_identity_labels = torch.full(
+            (batch_size, max_tokens),
+            fill_value=-1,
+            dtype=torch.long,
+        )
+        token_valid_mask = torch.zeros(batch_size, max_tokens, dtype=torch.bool)
+        scene_labels = torch.zeros(batch_size, dtype=torch.long)
+        cross_provider_embeddings = torch.zeros(batch_size, max_tokens, d_out)
+
+        has_scene_labels = False
+        has_cross_provider = False
+
+        for i, sample in enumerate(samples):
+            n_tokens = min(sample.backbone_features.size(0), max_tokens)
+            d_feat = min(sample.backbone_features.size(1), d_backbone)
+            backbone_features[i, :n_tokens, :d_feat] = sample.backbone_features[
+                :n_tokens,
+                :d_feat,
+            ]
+
+            n_labels = min(sample.object_identity_labels.size(0), max_tokens)
+            object_identity_labels[i, :n_labels] = sample.object_identity_labels[
+                :n_labels
+            ]
+            token_valid_mask[i, :n_tokens] = True
+
+            if sample.scene_label is not None:
+                scene_labels[i] = int(sample.scene_label)
+                has_scene_labels = True
+
+            if sample.cross_provider_embeddings is not None:
+                n_cross = min(sample.cross_provider_embeddings.size(0), max_tokens)
+                d_cross = min(sample.cross_provider_embeddings.size(1), d_out)
+                cross_provider_embeddings[i, :n_cross, :d_cross] = (
+                    sample.cross_provider_embeddings[:n_cross, :d_cross]
+                )
+                has_cross_provider = True
+
+        return VisionBackboneProjectionBatch(
+            backbone_features=backbone_features,
+            object_identity_labels=object_identity_labels,
+            token_valid_mask=token_valid_mask,
+            scene_labels=scene_labels if has_scene_labels else None,
+            cross_provider_embeddings=(
+                cross_provider_embeddings if has_cross_provider else None
+            ),
+            sample_ids=[sample.sample_id for sample in samples],
         )
 
 
@@ -901,6 +1013,50 @@ def generate_synthetic_depth_calibration_samples(
     return samples
 
 
+def generate_synthetic_vision_backbone_projection_samples(
+    n_samples: int = 100,
+    n_tokens: int = 12,
+    n_identities: int = 4,
+    n_scenes: int = 8,
+    d_backbone: int = 1024,
+    d_out: int = 128,
+    *,
+    seed: Optional[int] = None,
+) -> List[VisionBackboneProjectionSample]:
+    """Generate synthetic projection-head samples for local training tests."""
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    samples: List[VisionBackboneProjectionSample] = []
+    identity_centers = torch.randn(n_identities, d_backbone)
+    provider_projection = torch.randn(d_backbone, d_out) / max(1, d_backbone) ** 0.5
+
+    for i in range(n_samples):
+        scene_label = i % max(1, n_scenes)
+        labels = torch.arange(n_tokens) % max(1, n_identities)
+        labels = labels[torch.randperm(n_tokens)]
+        backbone_features = identity_centers[labels] + torch.randn(
+            n_tokens,
+            d_backbone,
+        ) * 0.1
+        cross_provider_embeddings = backbone_features @ provider_projection
+        cross_provider_embeddings = cross_provider_embeddings + torch.randn(
+            n_tokens,
+            d_out,
+        ) * 0.02
+        samples.append(
+            VisionBackboneProjectionSample(
+                sample_id=f"vision_proj_synthetic_{i:04d}",
+                backbone_features=backbone_features,
+                object_identity_labels=labels.long(),
+                scene_label=scene_label,
+                cross_provider_embeddings=cross_provider_embeddings,
+            )
+        )
+
+    return samples
+
+
 def generate_synthetic_vjepa_temporal_samples(
     n_samples: int = 100,
     n_temporal_steps: int = 4,
@@ -1100,6 +1256,43 @@ def create_depth_calibration_loader(
 
     def collate(batch: List[DepthCalibrationSample]) -> DepthCalibrationBatch:
         return DepthCalibrationDataset.collate_fn(batch, target_size=target_size)
+
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        collate_fn=collate,
+    )
+
+
+def create_vision_backbone_projection_loader(
+    samples: Sequence[VisionBackboneProjectionSample],
+    *,
+    batch_size: int = 16,
+    shuffle: bool = True,
+    num_workers: int = 0,
+    max_tokens: int = 32,
+    d_backbone: int = 1024,
+    d_out: int = 128,
+) -> DataLoader[VisionBackboneProjectionBatch]:
+    """Create data loader for vision-backbone projection seam training."""
+    dataset = VisionBackboneProjectionDataset(
+        samples,
+        max_tokens=max_tokens,
+        d_backbone=d_backbone,
+        d_out=d_out,
+    )
+
+    def collate(
+        batch: List[VisionBackboneProjectionSample],
+    ) -> VisionBackboneProjectionBatch:
+        return VisionBackboneProjectionDataset.collate_fn(
+            batch,
+            max_tokens=max_tokens,
+            d_backbone=d_backbone,
+            d_out=d_out,
+        )
 
     return DataLoader(
         dataset,
@@ -1639,6 +1832,10 @@ __all__ = [
     "SAMCalibrationSample",
     "SAMCalibrationBatch",
     "SAMCalibrationDataset",
+    # Vision backbone projection
+    "VisionBackboneProjectionSample",
+    "VisionBackboneProjectionBatch",
+    "VisionBackboneProjectionDataset",
     # Depth calibration
     "DepthCalibrationSample",
     "DepthCalibrationBatch",
@@ -1656,12 +1853,14 @@ __all__ = [
     "generate_synthetic_evidence_fusion_samples",
     "generate_synthetic_sam_calibration_samples",
     "generate_synthetic_scene_graph_samples",
+    "generate_synthetic_vision_backbone_projection_samples",
     "generate_synthetic_vjepa_temporal_samples",
     # Loaders
     "create_depth_calibration_loader",
     "create_evidence_fusion_loader",
     "create_sam_calibration_loader",
     "create_scene_graph_loader",
+    "create_vision_backbone_projection_loader",
     "create_vjepa_temporal_loader",
     # Real-data converters
     "annotation_export_to_scene_graph_samples",

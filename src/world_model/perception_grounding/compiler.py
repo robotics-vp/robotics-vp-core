@@ -42,6 +42,7 @@ from .semantic_bridges import (
     AnnotationSemanticBridgeState,
     EconomicSemanticBridgeState,
     EmbodimentSemanticBridgeState,
+    SemanticBridgeReceipt,
     SemanticBridgeRegistry,
     SimSynthSemanticBridgeState,
 )
@@ -1607,6 +1608,124 @@ def _semantic_bridge_registry(
     )
 
 
+def _semantic_bridge_receipts(
+    *,
+    state_id: str,
+    bridge_registry: SemanticBridgeRegistry,
+) -> List[SemanticBridgeReceipt]:
+    """Emit typed receipts for each active WM-native semantic bridge."""
+
+    receipts: list[SemanticBridgeReceipt] = []
+
+    sim_bridge = bridge_registry.sim_synth_bridge
+    if sim_bridge is not None:
+        receipts.append(
+            SemanticBridgeReceipt(
+                receipt_id=f"semantic_bridge_sim_synth_{state_id}",
+                bridge_kind="sim_synth",
+                source_graph_id=sim_bridge.source_graph_id,
+                output_quality_score=clip01(
+                    float(np.mean(sim_bridge.object_preservation_scores))
+                    if sim_bridge.object_preservation_scores
+                    else 0.0
+                ),
+                downstream_usefulness_score=clip01(
+                    float(np.mean(sim_bridge.branch_relevance_scores))
+                    if sim_bridge.branch_relevance_scores
+                    else 0.0
+                ),
+                helper_posture=sim_bridge.helper_posture,
+                helper_promotion_stage=sim_bridge.helper_promotion_stage,
+                metadata={
+                    "bridge_id": sim_bridge.bridge_id,
+                    "downstream_wm": sim_bridge.metadata.get(
+                        "downstream_wm", "sim_synth_physics"
+                    ),
+                },
+            )
+        )
+
+    embodiment_bridge = bridge_registry.embodiment_bridge
+    if embodiment_bridge is not None:
+        receipts.append(
+            SemanticBridgeReceipt(
+                receipt_id=f"semantic_bridge_embodiment_{state_id}",
+                bridge_kind="embodiment",
+                source_graph_id=embodiment_bridge.source_graph_id,
+                output_quality_score=clip01(
+                    float(np.mean(list(embodiment_bridge.per_object_affordance_scores.values())))
+                    if embodiment_bridge.per_object_affordance_scores
+                    else 0.0
+                ),
+                downstream_usefulness_score=clip01(
+                    0.5
+                    + 0.3 * float(bool(embodiment_bridge.resource_conditioned))
+                    + 0.2
+                    * float(bool(embodiment_bridge.body_object_pairwise_scores))
+                ),
+                helper_posture=embodiment_bridge.helper_posture,
+                helper_promotion_stage=embodiment_bridge.helper_promotion_stage,
+                metadata={
+                    "bridge_id": embodiment_bridge.bridge_id,
+                    "downstream_wm": embodiment_bridge.metadata.get(
+                        "downstream_wm", "embodiment_actuation"
+                    ),
+                    "resource_conditioned": bool(
+                        embodiment_bridge.resource_conditioned
+                    ),
+                },
+            )
+        )
+
+    annotation_bridge = bridge_registry.annotation_bridge
+    if annotation_bridge is not None:
+        receipts.append(
+            SemanticBridgeReceipt(
+                receipt_id=f"semantic_bridge_annotation_{state_id}",
+                bridge_kind="annotation",
+                source_graph_id=annotation_bridge.source_graph_id,
+                output_quality_score=clip01(
+                    float(np.mean(list(annotation_bridge.object_confidence_scores.values())))
+                    if annotation_bridge.object_confidence_scores
+                    else 0.0
+                ),
+                downstream_usefulness_score=clip01(
+                    annotation_bridge.teacher_alignment_score
+                ),
+                helper_posture=annotation_bridge.helper_posture,
+                helper_promotion_stage=annotation_bridge.helper_promotion_stage,
+                metadata={
+                    "bridge_id": annotation_bridge.bridge_id,
+                    "downstream_wm": annotation_bridge.metadata.get(
+                        "downstream_wm", "annotation_evidence"
+                    ),
+                },
+            )
+        )
+
+    economic_bridge = bridge_registry.economic_bridge
+    if economic_bridge is not None:
+        receipts.append(
+            SemanticBridgeReceipt(
+                receipt_id=f"semantic_bridge_economic_{state_id}",
+                bridge_kind="economic",
+                source_graph_id=economic_bridge.source_graph_id,
+                output_quality_score=clip01(economic_bridge.grounding_confidence),
+                downstream_usefulness_score=clip01(economic_bridge.semantic_density),
+                helper_posture=economic_bridge.helper_posture,
+                helper_promotion_stage=economic_bridge.helper_promotion_stage,
+                metadata={
+                    "bridge_id": economic_bridge.bridge_id,
+                    "downstream_wm": economic_bridge.metadata.get(
+                        "downstream_wm", "economic"
+                    ),
+                },
+            )
+        )
+
+    return receipts
+
+
 def _provider_availability_receipts(
     *,
     state_id: str,
@@ -2074,6 +2193,10 @@ def compile_perception_grounding_world_state(
         deployment_resource_surface=deployment_surface,
         benchmark_signals=benchmark_payload,
     )
+    semantic_bridge_receipts = _semantic_bridge_receipts(
+        state_id=state_id,
+        bridge_registry=bridge_registry,
+    )
 
     # Build intermediate state objects that receipts depend on
     temporal_grounding_state = _temporal_grounding(
@@ -2178,6 +2301,7 @@ def compile_perception_grounding_world_state(
                 else None
             ),
             "provider_availability_receipts": [r.to_dict() for r in provider_avail_receipts],
+            "semantic_bridge_receipts": [r.to_dict() for r in semantic_bridge_receipts],
             "grounding_calibration_receipt": grounding_cal_receipt.to_dict(),
             "inference_headroom_receipts": [r.to_dict() for r in inference_headroom_recs],
             "deployment_resource_receipt": deploy_receipt.to_dict(),
@@ -2204,6 +2328,7 @@ class PerceptionCompilationResult:
     - ``EvidenceFusionReceipt`` — evidence routing and fusion quality
     - ``ProviderInvocationReceipt`` — per-seam invocation status
     - ``ProviderAvailabilityReceipt`` — pre-invocation provider posture
+    - ``SemanticBridgeReceipt`` — WM-native bridge transformation quality
     - ``GroundingCalibrationReceipt`` — grounding quality calibration
     - ``InferenceHeadroomReceipt`` — per-provider runtime headroom
     - ``DeploymentResourceReceipt`` — deployment readiness and bottlenecks
@@ -2266,6 +2391,12 @@ def compile_perception_grounding_with_receipts(
     # Provider availability receipts
     for pa_dict in md.get("provider_availability_receipts", []):
         r = _reconstruct_receipt(ProviderAvailabilityReceipt, pa_dict)
+        if r is not None:
+            receipts.append(r)
+
+    # Semantic bridge receipts
+    for sb_dict in md.get("semantic_bridge_receipts", []):
+        r = _reconstruct_receipt(SemanticBridgeReceipt, sb_dict)
         if r is not None:
             receipts.append(r)
 

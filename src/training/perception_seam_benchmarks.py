@@ -43,12 +43,10 @@ Default thresholds are conservative:
 
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -483,6 +481,132 @@ class SAMCalibrationBenchmark:
         return ece
 
 
+class VisionBackboneProjectionBenchmark:
+    """Benchmark evaluator for VisionBackboneProjectionSeam."""
+
+    def __init__(self, config: Optional[BenchmarkGateConfig] = None):
+        self.config = config or BenchmarkGateConfig()
+
+    @staticmethod
+    def _centroid_accuracy(
+        features: torch.Tensor,
+        labels: torch.Tensor,
+    ) -> float:
+        valid_mask = labels >= 0
+        if valid_mask.sum() <= 1:
+            return 0.0
+        valid_features = features[valid_mask]
+        valid_labels = labels[valid_mask]
+        unique_labels = torch.unique(valid_labels)
+        if unique_labels.numel() <= 0:
+            return 0.0
+        centroids = torch.stack(
+            [
+                valid_features[valid_labels == label].mean(dim=0)
+                for label in unique_labels
+            ],
+            dim=0,
+        )
+        sims = torch.nn.functional.cosine_similarity(
+            valid_features.unsqueeze(1),
+            centroids.unsqueeze(0),
+            dim=-1,
+        )
+        pred_labels = unique_labels[sims.argmax(dim=-1)]
+        return float((pred_labels == valid_labels).float().mean().item())
+
+    def evaluate(
+        self,
+        seam: nn.Module,
+        eval_loader: DataLoader,
+    ) -> BenchmarkGateResult:
+        """Evaluate projection quality on identity, scene, and alignment signals."""
+        seam.eval()
+        projected_batches: List[torch.Tensor] = []
+        label_batches: List[torch.Tensor] = []
+        pooled_scene_features: List[torch.Tensor] = []
+        scene_label_batches: List[torch.Tensor] = []
+        alignment_scores: List[torch.Tensor] = []
+
+        with torch.no_grad():
+            for batch in eval_loader:
+                projected = seam(batch.backbone_features)
+                projected_batches.append(projected.reshape(-1, projected.size(-1)))
+                label_batches.append(batch.object_identity_labels.reshape(-1))
+
+                if batch.scene_labels is not None:
+                    pooled_scene_features.append(projected.mean(dim=1))
+                    scene_label_batches.append(batch.scene_labels)
+
+                if batch.cross_provider_embeddings is not None:
+                    mse = torch.nn.functional.mse_loss(
+                        projected,
+                        batch.cross_provider_embeddings,
+                        reduction="none",
+                    ).mean(dim=(-1, -2))
+                    alignment_scores.append(1.0 / (1.0 + mse))
+
+        flat_projected = torch.cat(projected_batches, dim=0)
+        flat_labels = torch.cat(label_batches, dim=0)
+        identity_accuracy = self._centroid_accuracy(flat_projected, flat_labels)
+
+        metrics: List[BenchmarkMetric] = [
+            BenchmarkMetric(
+                name="object_identity_retrieval_accuracy",
+                value=identity_accuracy,
+                threshold=0.6,
+                passed=identity_accuracy >= 0.6,
+            )
+        ]
+
+        if pooled_scene_features and scene_label_batches:
+            pooled = torch.cat(pooled_scene_features, dim=0)
+            scene_labels = torch.cat(scene_label_batches, dim=0)
+            scene_accuracy = self._centroid_accuracy(pooled, scene_labels)
+            metrics.append(
+                BenchmarkMetric(
+                    name="scene_retrieval_accuracy",
+                    value=scene_accuracy,
+                    threshold=0.6,
+                    passed=scene_accuracy >= 0.6,
+                )
+            )
+
+        if alignment_scores:
+            alignment_score = torch.cat(alignment_scores).mean().item()
+            metrics.append(
+                BenchmarkMetric(
+                    name="cross_provider_alignment_score",
+                    value=alignment_score,
+                    threshold=0.7,
+                    passed=alignment_score >= 0.7,
+                )
+            )
+
+        metric_scores = [metric.value for metric in metrics]
+        overall_score = sum(metric_scores) / max(1, len(metric_scores))
+        overall_passed = all(metric.passed for metric in metrics)
+
+        if overall_score >= self.config.promotion_threshold and overall_passed:
+            promotion_decision = "promote"
+        elif overall_score < self.config.demotion_threshold:
+            promotion_decision = "demote"
+        elif overall_score >= self.config.shadow_threshold:
+            promotion_decision = "shadow"
+        else:
+            promotion_decision = "maintain"
+
+        return BenchmarkGateResult(
+            seam_id="",
+            seam_type="vision_backbone_projection",
+            evaluation_id=f"bench_{uuid.uuid4().hex[:12]}",
+            overall_score=overall_score,
+            overall_passed=overall_passed,
+            promotion_decision=promotion_decision,
+            metrics=metrics,
+        )
+
+
 class DepthCalibrationBenchmark:
     """Benchmark evaluator for DepthMetricCalibrationSeam."""
 
@@ -700,6 +824,7 @@ class VJEPATemporalBenchmark:
 BENCHMARK_REGISTRY: Dict[str, type] = {
     "evidence_fusion": EvidenceFusionBenchmark,
     "sam_calibration": SAMCalibrationBenchmark,
+    "vision_backbone_projection": VisionBackboneProjectionBenchmark,
     "depth_metric_calibration": DepthCalibrationBenchmark,
     "vjepa_temporal_alignment": VJEPATemporalBenchmark,
 }
@@ -760,6 +885,7 @@ __all__ = [
     # Evaluators
     "EvidenceFusionBenchmark",
     "SAMCalibrationBenchmark",
+    "VisionBackboneProjectionBenchmark",
     "DepthCalibrationBenchmark",
     "VJEPATemporalBenchmark",
     # Registry

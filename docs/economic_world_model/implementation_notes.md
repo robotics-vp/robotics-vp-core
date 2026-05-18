@@ -1,5 +1,196 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-18 - Phase 2 final local pocket: LeRobot projection adapter parity
+
+### What changed
+
+- Finished the documented but previously missing LeRobot projection adapter:
+  - `vision_backbone_projection_sample_from_lerobot_step(...)`
+  - `vision_backbone_projection_samples_from_episode(...)`
+  - `adapt_lerobot_episodes_for_vision_backbone_projection(...)`
+- The adapter is intentionally honest:
+  - camera slots become stable proxy identity labels
+  - features are CPU-safe placeholder features unless a future provider season
+    supplies real frozen-backbone outputs
+  - cross-provider targets are proxy targets for plumbing verification only
+- `scripts/smoke_test_vision_backbone_projection_seam.py` now supports:
+  - `--data-source synthetic`
+  - `--data-source mock_lerobot_droid`
+  - `--data-source local_lerobot_rows`
+- Added tests that verify both the adapter path and the local row-bundle proof
+  path.
+
+### Why this was the right last no-GPU Phase 2 move
+
+There is no actual local real-data row bundle in the workspace today, so a real
+external-data proof would have been theater. The useful local move was to make
+the future real proof frictionless instead.
+
+This closes a claim-vs-code mismatch: the adapter module already named a
+LeRobot → projection path, but only evidence-fusion and temporal adaptation were
+implemented. With this pass, the first promotion-chain seam now has the same
+cheap intake grammar as the later seams.
+
+The labels remain `camera_slot_proxy`, not real object identities. That is
+deliberate: this is the last structural hardening pass before returning to
+Phase 1.x, not a promotion claim.
+
+### Local run
+
+- `python3 scripts/smoke_test_vision_backbone_projection_seam.py --steps 30 --data-source mock_lerobot_droid --artifact-dir artifacts/phase2_local_proof_of_life/vision_backbone_projection_mock_lerobot_30 --require-loss-decrease`
+- result: initial validation loss `5.8005`, best validation loss `5.7418`,
+  `loss_decreased: true`, `3` training receipts, `3` validation receipts, `1`
+  benchmark receipt
+
+### Verification
+
+- `python3 -m ruff check src/dataset_bridges/lerobot_perception_adapter.py scripts/smoke_test_vision_backbone_projection_seam.py tests/test_lerobot_perception_adapter.py tests/test_vision_backbone_projection_proof_of_life_smoke.py` ->
+  pass
+- `python3 -m pytest -q tests/test_lerobot_perception_adapter.py tests/test_vision_backbone_projection_proof_of_life_smoke.py` ->
+  `49 passed`
+- `python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1628 passed, 3 skipped, 24 warnings`
+
+## 2026-05-18 - Phase 2 closure audit and live semantic-bridge receipts
+
+### What changed
+
+- Added `docs/economic_world_model/phase2_closure_assessment.md`.
+- `src/world_model/perception_grounding/compiler.py` now emits live
+  `SemanticBridgeReceipt` objects for:
+  - `sim_synth`
+  - `embodiment`
+  - `annotation`
+  - `economic`
+- The serialized bridge receipts are stored in Perception WM metadata and are
+  reconstructed into `compile_perception_grounding_with_receipts(...)` output.
+- `tests/test_embodiment_shadow_consumer.py` now verifies:
+  - `SemanticBridgeReceipt` is part of the live compilation family
+  - all four active bridge kinds emit receipts
+  - their quality / usefulness scores remain bounded
+
+### Why this was the right closure move
+
+The May 18 audit turned up one last genuine internal seam: the WM-native bridge
+family was part of canonical state, but its receipt contract was still only a
+type, not live compiler evidence. That is exactly the kind of quiet gap the
+closure standard is meant to flush out.
+
+Once the live bridge receipts landed, the audited structural sheet reached:
+
+- Category A: `0`
+- Category B: provider / GPU / real-data / calibration / held-out-evidence only
+- Category C: `0`
+
+So Phase 2 is now best described as **structurally closure-ready**, not
+provider-ready and not promotion-ready. While GPU access is absent, we can keep
+doing cheap local hardening opportunistically, but those tasks are no longer the
+reason the phase itself must stay structurally open.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/perception_grounding/compiler.py tests/test_embodiment_shadow_consumer.py` ->
+  pass
+- `python3 -m pytest -q tests/test_embodiment_shadow_consumer.py tests/test_perception_grounding_compiler.py` ->
+  `39 passed`
+- `python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1623 passed, 3 skipped, 24 warnings`
+
+## 2026-05-18 - Phase 2 local vision-backbone projection proof artifacts
+
+### What changed
+
+- Added `scripts/smoke_test_vision_backbone_projection_seam.py`.
+- The script runs `VisionBackboneProjectionSeam` through the real local trainer
+  path and emits:
+  - `vision_backbone_projection_seam_proof_of_life.json`
+  - `vision_backbone_projection_metric_report.json`
+  - `vision_backbone_projection_benchmark_evidence.json`
+  - `training_runtime_manifest.json`
+  - persistent checkpoint, registry summary, and full receipt JSON
+- Added `tests/test_vision_backbone_projection_proof_of_life_smoke.py` to keep
+  the artifact contract from drifting.
+
+### Why this was the right next local Phase 2 step
+
+The prior pass made `vision_backbone_projection` locally trainable and
+benchmarkable. This pass finishes the near-term local job: the first seam in
+the promotion dependency chain now has the same manifest / receipt / evidence
+shape as EvidenceFusion and V-JEPA temporal alignment.
+
+Because provider bring-up is intentionally delayed, this is the strongest
+honest move available locally. It makes the eventual DINOv2/SigLIP season
+consume a prepared lane rather than reopening mundane artifact plumbing under
+scarcer GPU time.
+
+The proof remains synthetic and provisional. It is a statement about
+structural readiness, not provider readiness.
+
+### Local run
+
+- `python3 scripts/smoke_test_vision_backbone_projection_seam.py --steps 40 --artifact-dir artifacts/phase2_local_proof_of_life/vision_backbone_projection_synth_40 --require-loss-decrease`
+- result: initial validation loss `5.7407`, best validation loss `5.2823`,
+  `loss_decreased: true`, `4` training receipts, `4` validation receipts, `1`
+  benchmark receipt
+
+### Verification
+
+- `python3 -m ruff check scripts/smoke_test_vision_backbone_projection_seam.py tests/test_vision_backbone_projection_proof_of_life_smoke.py src/training/perception_seam_data.py src/training/perception_seam_benchmarks.py tests/test_perception_seam_training.py` ->
+  pass
+- `python3 -m pytest -q tests/test_vision_backbone_projection_proof_of_life_smoke.py tests/test_perception_seam_training.py` ->
+  `32 passed`
+
+## 2026-05-18 - Phase 2 local vision-backbone projection training lane
+
+### What changed
+
+- `src/training/perception_seam_data.py` now has a real typed lane for
+  `vision_backbone_projection`:
+  - `VisionBackboneProjectionSample`
+  - `VisionBackboneProjectionBatch`
+  - `VisionBackboneProjectionDataset`
+  - `generate_synthetic_vision_backbone_projection_samples(...)`
+  - `create_vision_backbone_projection_loader(...)`
+- `src/training/perception_seam_benchmarks.py` now includes
+  `VisionBackboneProjectionBenchmark` and registers it in
+  `BENCHMARK_REGISTRY`.
+- The benchmark lane measures:
+  - object-identity retrieval accuracy
+  - scene-retrieval accuracy
+  - cross-provider alignment score
+- `tests/test_perception_seam_training.py` now covers:
+  - projection loss behavior
+  - projection sample generation
+  - projection collation / loader creation
+  - projection benchmark evaluation
+
+### Why this was the right next local Phase 2 step
+
+Provider bring-up is intentionally damped until RunPod or equivalent GPU
+capacity is available. The remaining useful local work is therefore to make
+the eventual provider season structurally cheap.
+
+`vision_backbone_projection` is the first dependency in the current Phase 2
+promotion chain, but before this pass it had no first-class trainer data lane
+or benchmark evaluator even though the seam and loss already existed. That
+would have forced future DINOv2/SigLIP bring-up work to solve basic local batch
+plumbing during a much scarcer GPU window.
+
+This pass does **not** claim provider readiness, benchmark credibility, or
+promotion proximity. It only removes a local structural gap so later real
+provider evidence has somewhere honest to land.
+
+### Verification
+
+- `python3 -m ruff check src/training/perception_seam_data.py src/training/perception_seam_benchmarks.py tests/test_perception_seam_training.py` ->
+  pass
+- `python3 -m pytest -q tests/test_perception_seam_training.py` ->
+  `31 passed`
+- `python3 -m compileall src/training/perception_seam_data.py src/training/perception_seam_benchmarks.py tests/test_perception_seam_training.py -q` ->
+  pass
+- `python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1621 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-11 - Phase 2 local perception proof-of-life artifacts
 
 ### What changed

@@ -18,34 +18,51 @@ Claude operates as a high-leverage architecture, topology, neuralization, and sy
 
 **Critical rule**: Do not let architectural attractiveness pull the implementation center of gravity away from the current phase before that phase is honestly closed enough.
 
-**Current implementation priority**: Perception / Grounding WM is now the Codex implementation center of gravity. Phase 1 (Sim / Synth / Physics WM) was declared structurally closed on 2026-04-02 with zero Category A items remaining. The remaining Phase 1 blockers are honestly external:
+**Current implementation priority**: Phase 2 Perception / Grounding WM reached
+structural closure-readiness on 2026-05-18, and the final cheap local hardening
+pass (LeRobot projection-adapter parity) is now landed. The Codex
+implementation center therefore returns to the queued **Phase 1.x Sim / Synth /
+Physics** leg before Phase 3 implementation begins. Original Phase 1 closure on
+2026-04-02 remains valid; the Phase 1.x return is the planned additive revisit,
+not a repudiation of that closure.
+
+The remaining original Phase 1 blockers are still honestly external:
 - Isaac/Holosoma runtime installs and assets
 - GPU-backed GGDS/LDM/video materialization
 - Unitree-class sim assets and checkpoints
 
 **Phase 2 current status**:
-- Schema/doctrine reconciliation is landed
-- `compile_perception_grounding_world_state(...)` exists and compiles canonical state
-- First bounded neural seam (`EvidenceFusionSeam`) is landed
-- First shadow consumers are wired (Sim/Synth semantic-context, rollout-labeling/annotation)
-- Next Phase 2 work: provider/runtime truth, receipt emission, additional downstream consumers
+- structurally closure-ready at `shadow_runtime`
+- audited Category A count `0`
+- three shadow consumers wired: Sim / Synth, annotation / VLA, Embodiment
+- live audited receipt family emitted, including semantic bridge receipts
+- local proof lanes now cover EvidenceFusion, V-JEPA temporal alignment, and
+  vision-backbone projection, with shared local row-bundle intake support
+- remaining work is honestly external or opportunistic: GPU provider execution,
+  calibration / real-data corpora, and held-out non-provisional reports
 
-Do NOT advance to Embodiment / Actuation WM (Phase 3) implementation while Perception / Grounding still has implementable provider, receipt, downstream-consumer, or promotion-gate gaps.
+Do NOT advance to Embodiment / Actuation WM (Phase 3) implementation before the
+planned Phase 1.x return leg is complete enough for the roadmap to move on.
 
 **Parallel spec work is allowed**: Claude may prepare Embodiment / Actuation WM doctrine, schemas, and tranche specs in parallel with ongoing Perception / Grounding implementation. This ensures the embodiment schema (including imitation-learning pipelines) is ready when the implementation priority shifts, without pulling Codex off Phase 2 prematurely.
 
-The pattern is:
-1. Keep pushing Perception / Grounding WM implementation (Codex)
-2. In parallel, keep specifying adjacent Embodiment / Actuation doctrine/schema (Claude)
-3. After meaningful Perception / Grounding tranches, Codex emits `claude_to_comment_on.md`
-4. Claude reviews against doctrine and drafts the next tranche spec accordingly
-5. Only shift Codex implementation priority to Embodiment / Actuation WM when Perception / Grounding is honestly at the "remaining blockers are data/GPU/assets/calibration" stage
+The pattern is now:
+1. Re-enter Phase 1.x Sim / Synth / Physics implementation (Codex)
+2. Keep Phase 2 provider / GPU / real-data items in their honest external lanes
+3. In parallel, keep specifying adjacent Embodiment / Actuation doctrine/schema
+   (Claude)
+4. After meaningful Phase 1.x tranches, Codex emits `claude_to_comment_on.md`
+5. Shift Codex implementation priority to Embodiment / Actuation WM only after
+   the Phase 1.x return leg is complete enough that the remaining blockers are
+   again honestly external
 
 This sequencing rule derives from the Phase Exit Rule in `multi_wm_architecture_plan.md`.
 
 ## What Claude Should Watch Especially
 
-- **Perception / Grounding WM completeness** (current implementation priority — do not let it drift)
+- **Phase 1.x Sim / Synth / Physics return-leg completeness** (current implementation priority)
+- Perception / Grounding WM external follow-through without reopening local
+  structural work by habit
 - Provider bring-up: SAM 3/3.1, V-JEPA 2, DINOv2/SigLIP, Depth Anything V2
 - Semantic successor topology (no monolithic replacements, only composed bridge families)
 - Embodiment / Actuation WM spec readiness (spec-first, not implement-first until Phase 2 closes)
@@ -117,6 +134,7 @@ Claude should always ask:
 - Deferring schema/contract design until after implementation hardens the wrong shapes
 - Training lower-WM helpers on perception-impoverished canonical state
 - Letting the architecture drift after September 2026 training begins when the problem is data/GPU/calibration, not missing structure
-- **Pulling implementation priority away from Perception / Grounding WM before that phase is honestly closed enough** — this is the most likely near-term sequencing error
+- **Treating the planned Phase 1.x return as a contradiction of Phase 1 closure**
+  instead of the roadmap's explicit additive revisit
 - Treating annotation as trivially lightweight when it is the primary mechanism by which semantic state becomes training-usable evidence
 - Starting Phase 3 implementation before Phase 2 provider bring-up and downstream consumers are wired

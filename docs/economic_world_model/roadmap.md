@@ -426,12 +426,13 @@ typed outputs of those subsystems. When Phase 3 begins, the first tranches
 should follow the repo's established pattern: typed state contracts → shadow
 compiler → downstream consumers → receipt emission → bounded neural seams.
 
-Phase 2 remains the current implementation center. But because the Phase 1 Sim
-/ Synth / Physics burden has since been expanded through additional
-provider-family, transfer-boundary, and runtime/materialization obligations,
-Phase 3 should not begin immediately upon Phase 2 closure. After Phase 2, the
-roadmap returns to Phase 1 to finish the remaining Phase 1 additions, and only
-then proceeds to Phase 3.
+As of 2026-05-18, Phase 2 is structurally closure-ready on the audited internal
+surfaces. Because the Phase 1 Sim / Synth / Physics burden has since been
+expanded through additional provider-family, transfer-boundary, and
+runtime/materialization obligations, Phase 3 should not begin immediately upon
+Phase 2 closure. After the current local Phase 2 hardening pocket, the roadmap
+returns to Phase 1 to finish the remaining Phase 1 additions, and only then
+proceeds to Phase 3.
 
 Useful contract ideas from Habitat include articulated-agent config discipline,
 sensor schema, and action-space normalization. Additionally, external
@@ -745,13 +746,25 @@ Current branch status:
 - **Landed 2026-05-11**: receipt-backed runtime provider-token selection for benchmark object tokens: successful `vision_backbone_projection` and `vjepa_temporal_alignment` provider invocations can feed annotation/export evidence; skipped or failed invocations remain heuristic/provisional instead of claiming provider-backed truth
 - **Landed 2026-05-11**: provider-adapter benchmark-evidence emitter (`scripts/emit_perception_provider_adapter_benchmark_evidence.py`) for `vision_backbone_projection`, `sam_calibration`, `depth_metric_calibration`, and `vjepa_temporal_alignment`; it aggregates `ProviderInvocationReceipt` artifacts, links optional training manifests / metric reports, and keeps receipt-only evidence provisional by default
 - **Landed 2026-05-11**: local CPU perception proof-of-life artifacts now cover both `EvidenceFusionSeam` (`scripts/smoke_test_perception_seam_training.py`) and `VJEPATemporalAlignmentSeam` (`scripts/smoke_test_vjepa_temporal_seam.py`); both scripts emit persistent checkpoints, metric reports, provisional benchmark evidence, training runtime manifests, and loss-decrease proof; both support synthetic, DROID-shaped mock LeRobot adapter paths, and local LeRobot-like JSON/JSONL row bundles; this is provisional plumbing evidence only, not promotion evidence
+- **Landed 2026-05-18**: `vision_backbone_projection` now has a first-class local training-data and benchmark lane (`VisionBackboneProjectionSample` / `Batch` / `Dataset`, synthetic sample generator, loader factory, and `VisionBackboneProjectionBenchmark`) so the first promotion-chain seam no longer depends on ad hoc batch plumbing before future DINOv2/SigLIP provider runs
+- **Landed 2026-05-18**: local CPU proof-of-life artifacts now cover `VisionBackboneProjectionSeam` as well (`scripts/smoke_test_vision_backbone_projection_seam.py`), emitting the same checkpoint / metric-report / provisional benchmark-evidence / manifest / receipt family while keeping promotion explicitly held
+- **Landed 2026-05-18**: LeRobot adapter parity for the first promotion-chain seam; `vision_backbone_projection` now accepts the same `mock_lerobot_droid` and `local_lerobot_rows` intake grammar as the evidence-fusion and temporal proof lanes, with explicit `camera_slot_proxy` labels rather than false object-ID claims
+- **Landed 2026-05-18**: live compiler emission for the WM-native semantic bridge family; `SemanticBridgeReceipt` is now emitted for `sim_synth`, `embodiment`, `annotation`, and `economic` bridges and returned by `compile_perception_grounding_with_receipts(...)`
 - 3 shadow consumers now wired: SimSynth, Annotation/VLA, Embodiment
-- full receipt family live: ProviderAvailability, EvidenceFusion, ProviderInvocation, GroundingCalibration, InferenceHeadroom, DeploymentResource, TemporalGrounding, PerceptionContribution
-- the next best Phase 2 work is therefore (in priority order):
-  1. **Provider contract bring-up** — SAM 3/3.1, DINOv2/SigLIP, V-JEPA 2, Depth typed contracts still need real-or-unavailable posture with actual GPU execution on real hosts
-  2. **Real-data prototype-train proof-of-life, only if cheap** — local synthetic, mock-LeRobot, and file-based local row-bundle proofs now exist for both camera-fusion and temporal seams; the remaining cheap step is a tiny real external-data adapter → seam → trainer loop such as `droid_100`, still without pretending it is promotion evidence
-  3. **Provider-specific non-provisional metric reports** — turn GPU/provider runs into held-out metric reports that can feed the provider-adapter evidence emitter without relying on receipt-only provisional evidence
-  4. **Hold off on pretending promotion is near** — structural path exists, but promotion-credible training still depends on dependency-ordered benchmark evidence (`vision_backbone_projection` → `scene_graph_transformer` → `annotation_bridge_projection` → provider calibrators)
+- full audited receipt family live: ProviderAvailability, EvidenceFusion, ProviderInvocation, SemanticBridge, GroundingCalibration, InferenceHeadroom, DeploymentResource, TemporalGrounding, PerceptionContribution
+- with GPU/provider bring-up intentionally deferred, the local Phase 2 pocket is
+  now exhausted enough to leave cleanly:
+  1. **Tiny real-data proof, only if cheap later** — use the existing local
+     row-bundle intake path only when a real export is already available; do not
+     turn dataset acquisition into a side quest
+  2. **Provider-specific non-provisional metric reports, later** — produce these
+     only once real provider executions exist
+  3. **Hold off on pretending promotion is near** — structural closure does not
+     imply promotion credibility; dependency-ordered benchmark evidence is still
+     required (`vision_backbone_projection` → `scene_graph_transformer` →
+     `annotation_bridge_projection` → provider calibrators)
+- current implementation center after this final local pocket:
+  **Phase 1.x Sim / Synth / Physics return leg**
 
 **Caution**: Do not let the adapter layer become another comfort zone. It exists to serve seam training, downstream usefulness, and promotion honesty—not to become its own mini-project.
 

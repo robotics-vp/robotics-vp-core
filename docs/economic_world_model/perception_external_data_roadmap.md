@@ -35,6 +35,17 @@ External data closes the synthetic-comfort-zone gap **structurally now** (adapte
 - ⚠️ CPU proof-of-life: tiny subset training to verify loss functions work
 - ❌ Promotion-credible training: requires GPU at meaningful scale
 
+As of 2026-05-18, the local synthetic / mock-LeRobot / file-based
+`local_lerobot_rows` proof lanes are already live for the camera-fusion and
+temporal seams, and the first promotion-chain seam
+(`vision_backbone_projection`) has its own local trainer / benchmark / proof
+artifact lane plus matching `mock_lerobot_droid` /
+`local_lerobot_rows` intake support. With provider bring-up intentionally
+deferred until a GPU plane returns, the remaining useful no-GPU data step is now
+only an **opportunistic tiny real row-bundle proof** when a real export is cheap
+to obtain; it should not be mistaken for promotion evidence or used to keep the
+implementation center in Phase 2 indefinitely.
+
 **Integration path:**
 - Existing `lerobot_bridge.py` and `rlds_bridge.py` already provide `ReplayEpisodeRecord` rehydration
 - Multi-camera observations map directly to `MultiProviderSample` records
@@ -384,6 +395,14 @@ Now that adapter work is done, the priority stack is:
      LeRobot-like JSON/JSONL row bundle (`--data-source local_lerobot_rows`),
      which makes the next tiny DROID / Bridge external-data proof a local file
      execution problem instead of a missing contract problem
+   - **Landed 2026-05-18**: `vision_backbone_projection` now has a typed local
+     sample / batch / dataset lane plus a benchmark evaluator, so the first
+     promotion-chain seam is structurally trainable without waiting for the
+     eventual GPU provider bring-up window
+   - **Landed 2026-05-18**: `VisionBackboneProjectionSeam` now also has a local
+     CPU proof-of-life artifact lane, so its checkpoint / metric / evidence /
+     manifest grammar is already aligned with EvidenceFusion and V-JEPA
+     temporal alignment before real DINOv2/SigLIP runs exist
    - Remaining cheap step: tiny real-data subset run to verify external-data
      adapter → seam → trainer path is real for at least one camera-fusion seam
      and one temporal seam, such as `droid_100`
