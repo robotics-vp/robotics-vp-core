@@ -24,16 +24,26 @@ from .inferential import (
     build_simulation_job_inferential_contract,
 )
 from .gen2sim_admission import compile_gen2sim_admission_state
+from .phase1x_surfaces import (
+    compile_differentiable_physics_provider_state,
+    compile_scene_hierarchy_state,
+    compile_surrogate_physics_provider_state,
+    compile_task_measurement_surface,
+)
 from .promotion import HelperMode, infer_backend_payload
 from .randomization import compile_physics_adaptation_policy
 from .runtime_bridge import compile_backend_runtime_bridge
 from .state import (
+    DifferentiablePhysicsProviderState,
     DiffusionConditioningState,
     Gen2SimAdmissionState,
     PhysicsAdaptationPolicyState,
     PhysicsContextState,
+    SceneHierarchyState,
     SimSynthPhysicsWorldState,
+    SurrogatePhysicsProviderState,
     SyntheticBranchPlan,
+    TaskMeasurementSurface,
 )
 from .synthetic_branches import compile_synthetic_branch_plans
 
@@ -61,6 +71,10 @@ RUNTIME_OWNED_RECEIPTS = [
     "backend_runtime_outcome_receipt_v1",
     "backend_shadow_execution_receipt_v1",
     "physics_calibration_receipt_v1",
+    "sim_real_gap_receipt_v1",
+    "backend_mismatch_receipt_v1",
+    "surrogate_physics_receipt_v1",
+    "surrogate_calibration_receipt_v1",
     "sim_synth_training_feedback_v1",
 ]
 
@@ -545,6 +559,10 @@ def _compile_receipt_inventory(
     physics_execution_contract: Any,
     backend_execution_binding: Any,
     backend_runtime_bridge: Any,
+    task_measurements: TaskMeasurementSurface,
+    scene_hierarchy: SceneHierarchyState,
+    differentiable_physics_provider: DifferentiablePhysicsProviderState,
+    surrogate_physics_provider: SurrogatePhysicsProviderState,
     branch_plans: list[SyntheticBranchPlan],
     gen2sim_admission: Gen2SimAdmissionState,
     diffusion_conditioning: Optional[DiffusionConditioningState],
@@ -579,6 +597,12 @@ def _compile_receipt_inventory(
             "backend_runtime_bridge_id": (
                 "" if backend_runtime_bridge is None else str(backend_runtime_bridge.bridge_id)
             ),
+            "task_measurement_surface_id": task_measurements.surface_id,
+            "scene_hierarchy_id": scene_hierarchy.hierarchy_id,
+            "differentiable_physics_provider_id": (
+                differentiable_physics_provider.provider_id
+            ),
+            "surrogate_physics_provider_id": surrogate_physics_provider.provider_id,
             "admission_id": str(getattr(gen2sim_admission, "admission_id", "") or ""),
             "diffusion_conditioning_id": (
                 ""
@@ -675,6 +699,17 @@ def compile_sim_synth_physics_world_state(
         adaptation_policy=physics_adaptation_policy,
         embodiment_context=embodiment_context,
     )
+    task_measurements = compile_task_measurement_surface(
+        jobs,
+        physics_context=physics_context,
+        benchmark_signals=benchmark_payload,
+    )
+    scene_hierarchy = compile_scene_hierarchy_state(
+        jobs,
+        robot_asset_contract=robot_asset_contract,
+        semantic_context=semantic_context,
+        perception_grounding_state=perception_grounding_state,
+    )
     backend_runtime_bridge = compile_backend_runtime_bridge(
         physics_context,
         backend_execution_binding,
@@ -690,6 +725,15 @@ def compile_sim_synth_physics_world_state(
         economic_context=economic_context,
         branch_planner=branch_planner,
         branch_planner_mode=branch_planner_mode,
+    )
+    differentiable_physics_provider = compile_differentiable_physics_provider_state(
+        physics_context,
+        branch_plans,
+        benchmark_signals=benchmark_payload,
+    )
+    surrogate_physics_provider = compile_surrogate_physics_provider_state(
+        branch_plans,
+        benchmark_signals=benchmark_payload,
     )
     gen2sim_admission = compile_gen2sim_admission_state(
         branch_plans,
@@ -718,6 +762,10 @@ def compile_sim_synth_physics_world_state(
         "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
         "backend_execution_binding_id": backend_execution_binding.binding_id,
         "robot_asset_contract_id": robot_asset_contract.contract_id,
+        "task_measurement_surface_id": task_measurements.surface_id,
+        "scene_hierarchy_id": scene_hierarchy.hierarchy_id,
+        "differentiable_physics_provider_id": differentiable_physics_provider.provider_id,
+        "surrogate_physics_provider_id": surrogate_physics_provider.provider_id,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
         "diffusion_conditioning_id": (
             diffusion_conditioning.conditioning_id if diffusion_conditioning is not None else None
@@ -728,6 +776,10 @@ def compile_sim_synth_physics_world_state(
         "physics_context_id": physics_context.context_id,
         "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
         "robot_asset_contract_id": robot_asset_contract.contract_id,
+        "task_measurement_surface_id": task_measurements.surface_id,
+        "scene_hierarchy_id": scene_hierarchy.hierarchy_id,
+        "differentiable_physics_provider_id": differentiable_physics_provider.provider_id,
+        "surrogate_physics_provider_id": surrogate_physics_provider.provider_id,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
         "admission_id": gen2sim_admission.admission_id,
     }
@@ -738,6 +790,10 @@ def compile_sim_synth_physics_world_state(
         physics_adaptation_policy=physics_adaptation_policy,
         backend_execution_binding=backend_execution_binding,
         robot_asset_contract=robot_asset_contract,
+        task_measurements=task_measurements,
+        scene_hierarchy=scene_hierarchy,
+        differentiable_physics_provider=differentiable_physics_provider,
+        surrogate_physics_provider=surrogate_physics_provider,
         backend_runtime_bridge=backend_runtime_bridge,
         synthetic_branch_plans=branch_plans,
         gen2sim_admission=gen2sim_admission,
@@ -770,6 +826,10 @@ def compile_sim_synth_physics_world_state(
         physics_execution_contract=physics_execution_contract,
         backend_execution_binding=backend_execution_binding,
         backend_runtime_bridge=backend_runtime_bridge,
+        task_measurements=task_measurements,
+        scene_hierarchy=scene_hierarchy,
+        differentiable_physics_provider=differentiable_physics_provider,
+        surrogate_physics_provider=surrogate_physics_provider,
         branch_plans=branch_plans,
         gen2sim_admission=gen2sim_admission,
         diffusion_conditioning=diffusion_conditioning,

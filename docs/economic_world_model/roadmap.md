@@ -201,10 +201,14 @@ These may involve selective code borrowing or provider integration:
   CPU-only math, no GPU dependency. Implementable now.)
   → **implementation target**: utility module
   (`camera_geometry.py` in `src/world_model/sim_synth_physics/utils/`)
+- **landed locally on 2026-05-18**: CPU-only pinhole intrinsics, transform
+  composition / inversion, depth unprojection, and point projection helpers
 - Vectorized runtime/eval patterns for batch sim execution
   (source: Habitat-Lab `VectorEnv`, evaluate patterns)
   → **implementation target**: runtime adapter
   (`VectorizedSimRunner` in Sim/Synth WM)
+- **landed locally on 2026-05-18**: an honest `sequential_batch` local facade;
+  provider-season parallelism remains future work rather than a current claim
 - Interactive play / benchmark harness patterns
   (source: Habitat-Lab interactive play script + `habitat_baselines` eval)
   → **implementation target**: benchmark harness
@@ -255,6 +259,10 @@ Also preserve a narrow SIM1 rule:
   `DifferentiablePhysicsProviderState`, `SurrogatePhysicsProviderState`,
   `SimRealGapReceipt`, `BackendMismatchReceipt`,
   `SurrogatePhysicsReceipt`, `SurrogateCalibrationReceipt`
+- **landed locally on 2026-05-18**: the first CPU-local Phase 1.x tranche now
+  implements that shared surface / receipt family in the live
+  `sim_synth_physics` compiler/runtime path; differentiable and surrogate lanes
+  remain explicitly `contract_reserved` unless future evidence says otherwise
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

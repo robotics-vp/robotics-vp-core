@@ -1,5 +1,56 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-18 - Phase 1.x re-entry: first shared Sim / Synth / Physics surface family
+
+### What changed
+
+- Added live Phase 1.x typed state under `src/world_model/sim_synth_physics/`:
+  - `TaskMeasurementSurface`
+  - `SceneHierarchyState`
+  - `DifferentiablePhysicsProviderState`
+  - `SurrogatePhysicsProviderState`
+- Added the first paired transfer / surrogate receipt family:
+  - `SimRealGapReceipt`
+  - `BackendMismatchReceipt`
+  - `SurrogatePhysicsReceipt`
+  - `SurrogateCalibrationReceipt`
+- The compiler now embeds those surfaces in `SimSynthPhysicsWorldState`, stable
+  artifact refs, and the compiled receipt inventory.
+- The runtime now emits the paired receipts into loop results, serialized
+  artifact files, and training-feedback manifests.
+- Added CPU-local geometry helpers:
+  - `camera_intrinsics_from_fov(...)`
+  - `compose_transforms(...)`
+  - `invert_transform(...)`
+  - `unproject_depth(...)`
+  - `project_points(...)`
+- Added `VectorizedSimRunner` / `VectorizedSimBatchResult` as the first local
+  batch-execution facade. It is intentionally `sequential_batch` today: the
+  shape is now explicit, but there is no false claim of parallel GPU sim.
+
+### Why this was the right Phase 1.x re-entry move
+
+The roadmap had already named these surfaces as the cleanest CPU-local Phase
+1.x opening, but they were still doctrine only. Making them real first gives
+the reopenable Sim / Synth / Physics lane shared joints before we spend cycles
+on provider-specific lanes that cannot yet be brought up locally.
+
+The implementation stays epistemically honest:
+
+- differentiable and surrogate providers default to `contract_reserved`
+- surrogate calibration defaults to `not_calibrated`
+- sim-real gap remains `estimated` until runtime evidence becomes real
+- vectorized execution is a batch facade, not a speedup claim
+
+That is the right posture while RunPod is unavailable: structure the future
+evidence channels now, preserve provider sovereignty boundaries, and leave the
+truth labels conservative.
+
+### Verification
+
+- `python3 -m compileall src/world_model/sim_synth_physics`
+- `python3 -m pytest tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_vectorized_runtime.py -q`
+
 ## 2026-05-18 - Phase 2 final local pocket: LeRobot projection adapter parity
 
 ### What changed

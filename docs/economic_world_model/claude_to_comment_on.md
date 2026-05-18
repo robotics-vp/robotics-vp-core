@@ -157,15 +157,22 @@ through `embodiment_shadow_consumer.py`.
 
 ## Next Best Tranche
 
-Current re-entry target after the Phase 2 pocket:
+Current re-entry status after the Phase 2 pocket:
 
-1. return to the Phase 1.x Sim / Synth / Physics leg
-2. start with a CPU-local tranche before provider season work, preferably the
-   already-reserved but still code-absent shared Phase 1.x surface family
-   (`TaskMeasurementSurface`, `SceneHierarchyState`, then the paired
-   provider/sim-real-gap receipt surfaces)
-3. keep external runtime / GPU bring-up items in the external backlog rather
-   than reopening Phase 1 structural closure by rhetoric
+1. returned to the Phase 1.x Sim / Synth / Physics leg
+2. landed the first CPU-local tranche:
+   - shared surface family:
+     `TaskMeasurementSurface`, `SceneHierarchyState`,
+     `DifferentiablePhysicsProviderState`, `SurrogatePhysicsProviderState`
+   - paired receipt family:
+     `SimRealGapReceipt`, `BackendMismatchReceipt`,
+     `SurrogatePhysicsReceipt`, `SurrogateCalibrationReceipt`
+   - local `camera_geometry.py` utilities
+   - local `VectorizedSimRunner` batch facade
+3. next best local follow-on should deepen use of these surfaces rather than
+   inventing another ontology: task/measurement receipt production, scene
+   hierarchy consumers, or transfer-evidence consumers are now the cleanest
+   candidates while external GPU/provider work remains blocked
 
 ### Habitat-derived Sim/Synth/Physics adoption track reminder
 

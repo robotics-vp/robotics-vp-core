@@ -1,5 +1,40 @@
 # Economic World Model Progress Log
 
+## 2026-05-18 - Phase 1.x re-entry tranche: shared surfaces, transfer receipts, geometry, and batch runner
+
+- **Changed**:
+  - made the previously reserved Phase 1.x shared surface family concrete in
+    `src/world_model/sim_synth_physics/`:
+    - `TaskMeasurementSurface`
+    - `SceneHierarchyState`
+    - `DifferentiablePhysicsProviderState`
+    - `SurrogatePhysicsProviderState`
+  - added the paired bounded receipt family:
+    - `SimRealGapReceipt`
+    - `BackendMismatchReceipt`
+    - `SurrogatePhysicsReceipt`
+    - `SurrogateCalibrationReceipt`
+  - wired those surfaces into `SimSynthPhysicsWorldState`, compiler artifact
+    refs, receipt inventory, runtime loop results, training-feedback manifests,
+    and emitted runtime artifact files
+  - added CPU-local camera geometry utilities under
+    `src/world_model/sim_synth_physics/utils/camera_geometry.py`
+  - added `VectorizedSimRunner` / `VectorizedSimBatchResult` as an honest
+    sequential local batch facade for later provider-season vectorization work
+- **Why this matters**:
+  - the Phase 1.x return leg is no longer merely a docs reservation; the first
+    cross-subsystem joints now exist in code and serialize through the live
+    compiler/runtime path
+  - the transfer/surrogate receipts are deliberately bounded and honest
+    (`estimated`, `contract_reserved`, `not_calibrated`) while RunPod and real
+    provider evidence remain absent
+  - the geometry and batch utilities pull two explicitly local backlog items
+    forward without reopening any frozen Phase B math or pretending GPU bring-up
+    happened
+- **Verification**:
+  - `python3 -m compileall src/world_model/sim_synth_physics`
+  - `python3 -m pytest tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_vectorized_runtime.py -q`
+
 ## 2026-05-18 - Phase 2 final local pocket: LeRobot projection adapter parity
 
 - **Changed**:

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from .agenda import SimulationAgenda
-from .common import clip01, mapping, strings
+from .common import clip01, float_mapping, mapping, strings
 from .physics_contracts import PhysicsExecutionContract
 
 
@@ -137,6 +137,141 @@ class RobotAssetContractState:
             "calibration_contracts": strings(self.calibration_contracts),
             "observation_contracts": strings(self.observation_contracts),
             "action_contracts": strings(self.action_contracts),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
+class TaskMeasurementSurface:
+    """Typed task / measurement surface for one sim-synth planning window."""
+
+    surface_id: str
+    task_family: str
+    measurement_names: list[str] = field(default_factory=list)
+    measurement_values: Dict[str, float] = field(default_factory=dict)
+    measurement_status: Dict[str, str] = field(default_factory=dict)
+    measurement_dependencies: Dict[str, list[str]] = field(default_factory=dict)
+    episode_refs: list[str] = field(default_factory=list)
+    vector_env_count: int = 0
+    measurement_window_steps: int = 0
+    benchmark_gate_ready: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "sim_synth_task_measurement_surface_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "surface_id": self.surface_id,
+            "task_family": self.task_family,
+            "measurement_names": strings(self.measurement_names),
+            "measurement_values": float_mapping(self.measurement_values),
+            "measurement_status": {
+                str(key): str(value) for key, value in self.measurement_status.items()
+            },
+            "measurement_dependencies": {
+                str(key): strings(value)
+                for key, value in self.measurement_dependencies.items()
+            },
+            "episode_refs": strings(self.episode_refs),
+            "vector_env_count": int(self.vector_env_count),
+            "measurement_window_steps": int(self.measurement_window_steps),
+            "benchmark_gate_ready": bool(self.benchmark_gate_ready),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
+class SceneHierarchyState:
+    """Typed scene / region / object hierarchy for materialization."""
+
+    hierarchy_id: str
+    scene_id: str
+    scene_kind: str
+    hierarchy_levels: list[str] = field(default_factory=list)
+    node_counts_by_level: Dict[str, int] = field(default_factory=dict)
+    region_ids: list[str] = field(default_factory=list)
+    object_ids: list[str] = field(default_factory=list)
+    asset_refs: list[str] = field(default_factory=list)
+    sensor_profile: str = ""
+    materialization_status: str = "unmaterialized"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "scene_hierarchy_state_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "hierarchy_id": self.hierarchy_id,
+            "scene_id": self.scene_id,
+            "scene_kind": self.scene_kind,
+            "hierarchy_levels": strings(self.hierarchy_levels),
+            "node_counts_by_level": {
+                str(key): int(value) for key, value in self.node_counts_by_level.items()
+            },
+            "region_ids": strings(self.region_ids),
+            "object_ids": strings(self.object_ids),
+            "asset_refs": strings(self.asset_refs),
+            "sensor_profile": self.sensor_profile,
+            "materialization_status": self.materialization_status,
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
+class DifferentiablePhysicsProviderState:
+    """Typed reservation surface for differentiable-physics provider lanes."""
+
+    provider_id: str
+    provider_family: str
+    provider_status: str
+    backend: str
+    gradient_mode: str
+    supported_features: list[str] = field(default_factory=list)
+    compatible_branch_ids: list[str] = field(default_factory=list)
+    available: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "differentiable_physics_provider_state_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "provider_id": self.provider_id,
+            "provider_family": self.provider_family,
+            "provider_status": self.provider_status,
+            "backend": self.backend,
+            "gradient_mode": self.gradient_mode,
+            "supported_features": strings(self.supported_features),
+            "compatible_branch_ids": strings(self.compatible_branch_ids),
+            "available": bool(self.available),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
+class SurrogatePhysicsProviderState:
+    """Typed reservation surface for surrogate-physics provider lanes."""
+
+    provider_id: str
+    provider_family: str
+    provider_status: str
+    forecast_mode: str
+    calibration_status: str
+    supported_targets: list[str] = field(default_factory=list)
+    compatible_branch_ids: list[str] = field(default_factory=list)
+    available: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "surrogate_physics_provider_state_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "provider_id": self.provider_id,
+            "provider_family": self.provider_family,
+            "provider_status": self.provider_status,
+            "forecast_mode": self.forecast_mode,
+            "calibration_status": self.calibration_status,
+            "supported_targets": strings(self.supported_targets),
+            "compatible_branch_ids": strings(self.compatible_branch_ids),
+            "available": bool(self.available),
             "metadata": mapping(self.metadata),
             "version": self.version,
         }
@@ -347,6 +482,10 @@ class SimSynthPhysicsWorldState:
     physics_adaptation_policy: Optional[PhysicsAdaptationPolicyState] = None
     backend_execution_binding: Optional[BackendExecutionBindingState] = None
     robot_asset_contract: Optional[RobotAssetContractState] = None
+    task_measurements: Optional[TaskMeasurementSurface] = None
+    scene_hierarchy: Optional[SceneHierarchyState] = None
+    differentiable_physics_provider: Optional[DifferentiablePhysicsProviderState] = None
+    surrogate_physics_provider: Optional[SurrogatePhysicsProviderState] = None
     backend_runtime_bridge: Optional[BackendRuntimeBridgeState] = None
     synthetic_branch_plans: list[SyntheticBranchPlan] = field(default_factory=list)
     gen2sim_admission: Optional[Gen2SimAdmissionState] = None
@@ -379,6 +518,22 @@ class SimSynthPhysicsWorldState:
             "robot_asset_contract": (
                 self.robot_asset_contract.to_dict()
                 if self.robot_asset_contract is not None
+                else None
+            ),
+            "task_measurements": (
+                self.task_measurements.to_dict() if self.task_measurements is not None else None
+            ),
+            "scene_hierarchy": (
+                self.scene_hierarchy.to_dict() if self.scene_hierarchy is not None else None
+            ),
+            "differentiable_physics_provider": (
+                self.differentiable_physics_provider.to_dict()
+                if self.differentiable_physics_provider is not None
+                else None
+            ),
+            "surrogate_physics_provider": (
+                self.surrogate_physics_provider.to_dict()
+                if self.surrogate_physics_provider is not None
                 else None
             ),
             "backend_runtime_bridge": (

@@ -115,6 +115,17 @@ def test_world_state_compiles_canonical_agenda_and_branch_plans() -> None:
     assert world_state.backend_execution_binding.binding_status == "ready"
     assert world_state.robot_asset_contract is not None
     assert world_state.robot_asset_contract.asset_profile == "tabletop_workcell_assets"
+    assert world_state.task_measurements is not None
+    assert world_state.task_measurements.measurement_status["promotion_readiness"] == "shadow_only"
+    assert world_state.scene_hierarchy is not None
+    assert world_state.scene_hierarchy.materialization_status in {
+        "asset_contract_ready",
+        "asset_contract_incomplete",
+    }
+    assert world_state.differentiable_physics_provider is not None
+    assert world_state.differentiable_physics_provider.provider_status == "contract_reserved"
+    assert world_state.surrogate_physics_provider is not None
+    assert world_state.surrogate_physics_provider.provider_status == "contract_reserved"
     assert world_state.backend_runtime_bridge is not None
     assert world_state.backend_runtime_bridge.bridge_status == "runtime_bridge_ready"
     assert world_state.backend_runtime_bridge.transport_profile == "local_python_sim_bridge"
@@ -160,6 +171,16 @@ def test_world_state_to_dict_round_trips_core_phase1_state() -> None:
     assert round_tripped["physics_adaptation_policy"]["policy_id"] == world_state.physics_adaptation_policy.policy_id
     assert round_tripped["backend_execution_binding"]["binding_id"] == world_state.backend_execution_binding.binding_id
     assert round_tripped["robot_asset_contract"]["contract_id"] == world_state.robot_asset_contract.contract_id
+    assert round_tripped["task_measurements"]["surface_id"] == world_state.task_measurements.surface_id
+    assert round_tripped["scene_hierarchy"]["hierarchy_id"] == world_state.scene_hierarchy.hierarchy_id
+    assert (
+        round_tripped["differentiable_physics_provider"]["provider_id"]
+        == world_state.differentiable_physics_provider.provider_id
+    )
+    assert (
+        round_tripped["surrogate_physics_provider"]["provider_id"]
+        == world_state.surrogate_physics_provider.provider_id
+    )
     assert round_tripped["backend_runtime_bridge"]["bridge_id"] == world_state.backend_runtime_bridge.bridge_id
     assert round_tripped["gen2sim_admission"]["admission_id"] == world_state.gen2sim_admission.admission_id
     assert round_tripped["diffusion_conditioning"]["conditioning_id"] == world_state.diffusion_conditioning.conditioning_id
@@ -825,6 +846,11 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
         "shadow_executed_with_asset_gaps",
     }
     assert result.physics_calibration_receipt.metadata["explicit_gap_kind"] == "missing_backend_adapter"
+    assert result.sim_real_gap_receipt.status == "estimated"
+    assert result.sim_real_gap_receipt.gap_score > 0.0
+    assert result.backend_mismatch_receipt.status == "mismatch_estimated"
+    assert result.surrogate_physics_receipt.forecast_status == "contract_reserved"
+    assert result.surrogate_calibration_receipt.calibration_status == "not_calibrated"
     assert result.backend_runtime_bridge_receipt.bridge_status in {
         "runtime_targets_missing",
         "runtime_assets_missing",
@@ -901,6 +927,10 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "backend_shadow_execution" / "isaac" / "backend_calibration_sidecar.json").exists()
     assert (tmp_path / "backend_shadow_execution" / "isaac" / "backend_io_contract_sidecar.json").exists()
     assert (tmp_path / "physics_calibration_receipt.json").exists()
+    assert (tmp_path / "sim_real_gap_receipt.json").exists()
+    assert (tmp_path / "backend_mismatch_receipt.json").exists()
+    assert (tmp_path / "surrogate_physics_receipt.json").exists()
+    assert (tmp_path / "surrogate_calibration_receipt.json").exists()
     assert (tmp_path / "render_provider_receipts.json").exists()
     assert (tmp_path / "simulation_outcome_receipts.json").exists()
     assert all(

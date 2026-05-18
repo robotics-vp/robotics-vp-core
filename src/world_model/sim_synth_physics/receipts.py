@@ -351,6 +351,114 @@ class RobotAssetContractReceipt:
 
 
 @dataclass(frozen=True)
+class SimRealGapReceipt:
+    """Estimated sim-real transfer gap for the current planning window."""
+
+    receipt_id: str
+    source_backend: str
+    target_hardware_class: str
+    comparison_scope: str
+    gap_score: float
+    realism_confidence: float
+    status: str
+    branch_plan_ids: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "sim_real_gap_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "source_backend": self.source_backend,
+            "target_hardware_class": self.target_hardware_class,
+            "comparison_scope": self.comparison_scope,
+            "gap_score": clip01(self.gap_score),
+            "realism_confidence": clip01(self.realism_confidence),
+            "status": self.status,
+            "branch_plan_ids": strings(self.branch_plan_ids),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
+class BackendMismatchReceipt:
+    """Backend-to-backend mismatch estimate for the active runtime route."""
+
+    receipt_id: str
+    reference_backend: str
+    candidate_backend: str
+    mismatch_score: float
+    calibration_staleness_score: float
+    status: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "backend_mismatch_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "reference_backend": self.reference_backend,
+            "candidate_backend": self.candidate_backend,
+            "mismatch_score": clip01(self.mismatch_score),
+            "calibration_staleness_score": clip01(self.calibration_staleness_score),
+            "status": self.status,
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
+class SurrogatePhysicsReceipt:
+    """Receipt for the advisory surrogate-physics lane."""
+
+    receipt_id: str
+    provider_id: str
+    forecast_scope: str
+    forecast_status: str
+    surrogate_confidence: float
+    branch_plan_ids: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "surrogate_physics_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "provider_id": self.provider_id,
+            "forecast_scope": self.forecast_scope,
+            "forecast_status": self.forecast_status,
+            "surrogate_confidence": clip01(self.surrogate_confidence),
+            "branch_plan_ids": strings(self.branch_plan_ids),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
+class SurrogateCalibrationReceipt:
+    """Receipt for surrogate-vs-backend calibration posture."""
+
+    receipt_id: str
+    provider_id: str
+    reference_backend: str
+    calibration_status: str
+    calibration_score: float
+    staleness_score: float
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "surrogate_calibration_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "provider_id": self.provider_id,
+            "reference_backend": self.reference_backend,
+            "calibration_status": self.calibration_status,
+            "calibration_score": clip01(self.calibration_score),
+            "staleness_score": clip01(self.staleness_score),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class Gen2SimAdmissionReceipt:
     """Receipt for one WM-owned gen2sim admission decision surface."""
 

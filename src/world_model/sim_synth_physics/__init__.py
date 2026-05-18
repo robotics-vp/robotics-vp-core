@@ -31,10 +31,23 @@ from .gen2sim_admission import (
     build_gen2sim_admission_receipt,
     compile_gen2sim_admission_state,
 )
+from .phase1x_receipts import (
+    build_backend_mismatch_receipt,
+    build_sim_real_gap_receipt,
+    build_surrogate_calibration_receipt,
+    build_surrogate_physics_receipt,
+)
+from .phase1x_surfaces import (
+    compile_differentiable_physics_provider_state,
+    compile_scene_hierarchy_state,
+    compile_surrogate_physics_provider_state,
+    compile_task_measurement_surface,
+)
 from .physics_contracts import PhysicsExecutionContract
 from .render_materialization import materialize_render_provider_receipts
 from .receipts import (
     BackendExecutionBindingReceipt,
+    BackendMismatchReceipt,
     BackendRuntimeBridgeReceipt,
     BackendRuntimeOutcomeReceipt,
     BackendShadowExecutionReceipt,
@@ -44,7 +57,10 @@ from .receipts import (
     PhysicsCalibrationReceipt,
     RenderProviderReceipt,
     RobotAssetContractReceipt,
+    SimRealGapReceipt,
     SimulationOutcomeReceipt,
+    SurrogateCalibrationReceipt,
+    SurrogatePhysicsReceipt,
 )
 from .runtime_bridge import (
     build_backend_runtime_bridge_receipt,
@@ -74,13 +90,17 @@ from .state import (
     BackendExecutionBindingState,
     BackendRuntimeBridgeState,
     BranchRenderProviderState,
+    DifferentiablePhysicsProviderState,
     DiffusionConditioningState,
     Gen2SimAdmissionState,
     PhysicsAdaptationPolicyState,
     PhysicsContextState,
     RobotAssetContractState,
+    SceneHierarchyState,
     SimSynthPhysicsWorldState,
+    SurrogatePhysicsProviderState,
     SyntheticBranchPlan,
+    TaskMeasurementSurface,
 )
 from .synthetic_branches import (
     build_synthetic_branch_corpus_metadata,
@@ -95,11 +115,13 @@ from .training_corpus import (
     harvest_sim_synth_receipt_bundles,
     load_sim_synth_receipt_bundles,
 )
+from .vectorized_runtime import VectorizedSimBatchResult, VectorizedSimRunner
 
 __all__ = [
     "BackendSelectorRuntimePackage",
     "BackendAdapterDescriptor",
     "BackendExecutionBindingReceipt",
+    "BackendMismatchReceipt",
     "BackendRuntimeBridgeReceipt",
     "BackendRuntimeOutcomeReceipt",
     "BackendRuntimeWorkOrderReceipt",
@@ -107,6 +129,7 @@ __all__ = [
     "BackendExecutionBindingState",
     "BackendRuntimeBridgeState",
     "BranchRenderProviderState",
+    "DifferentiablePhysicsProviderState",
     "BranchPlannerRuntimePackage",
     "DiffusionConditioningState",
     "GapDrivenDiffusionPlan",
@@ -122,6 +145,8 @@ __all__ = [
     "RenderProviderReceipt",
     "RobotAssetContractReceipt",
     "RobotAssetContractState",
+    "SceneHierarchyState",
+    "SimRealGapReceipt",
     "SimSynthPhysicsLoopResult",
     "SimSynthPhysicsRuntime",
     "SimSynthPhysicsRuntimeConfig",
@@ -129,11 +154,21 @@ __all__ = [
     "SimulationAgenda",
     "SimulationJobSpec",
     "SimulationOutcomeReceipt",
+    "SurrogateCalibrationReceipt",
+    "SurrogatePhysicsProviderState",
+    "SurrogatePhysicsReceipt",
     "SyntheticBranchPlan",
+    "TaskMeasurementSurface",
+    "VectorizedSimBatchResult",
+    "VectorizedSimRunner",
     "assess_local_branch_corpus_gen2sim",
     "build_gen2sim_admission_receipt",
+    "build_backend_mismatch_receipt",
     "build_physics_adaptation_receipt",
     "build_physics_calibration_receipt",
+    "build_sim_real_gap_receipt",
+    "build_surrogate_calibration_receipt",
+    "build_surrogate_physics_receipt",
     "compile_robot_asset_contract",
     "compile_backend_runtime_bridge",
     "describe_holosoma_policy_contract",
@@ -171,8 +206,12 @@ __all__ = [
     "build_backend_selector_rows_from_receipts",
     "build_branch_planner_rows_from_receipts",
     "compile_gap_driven_diffusion_plans",
+    "compile_differentiable_physics_provider_state",
+    "compile_scene_hierarchy_state",
     "harvest_sim_synth_receipt_bundles",
     "harvest_backend_runtime_outcomes",
+    "compile_surrogate_physics_provider_state",
+    "compile_task_measurement_surface",
 ]
 
 
