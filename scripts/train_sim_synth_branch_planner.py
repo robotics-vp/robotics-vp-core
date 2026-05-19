@@ -32,6 +32,7 @@ from src.world_model.sim_synth_physics.training_corpus import (
     build_branch_planner_rows_from_receipts,
     harvest_sim_synth_receipt_bundles,
     load_sim_synth_receipt_bundles,
+    select_phase1x_positive_training_rows,
 )
 
 try:
@@ -80,6 +81,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {}
 
 
 def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
@@ -157,6 +164,7 @@ def _build_dataset_summary(
     *,
     dataset_arg: Optional[str],
     receipt_source: Optional[Mapping[str, Any]],
+    admissibility_summary: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
     mode_counts = Counter(
         str(row.get("target_generation_mode", "coverage_branch") or "coverage_branch")
@@ -185,6 +193,10 @@ def _build_dataset_summary(
             }
         ),
         "row_count": len(rows),
+        "source_row_count": int(
+            _mapping(admissibility_summary).get("source_row_count", len(rows))
+        ),
+        "admissibility_summary": dict(_mapping(admissibility_summary)),
         "mode_counts": dict(sorted(mode_counts.items())),
         "high_yield_rows": high_yield_rows,
         "target_source_counts": dict(sorted(target_source_counts.items())),
@@ -327,6 +339,8 @@ def _build_training_summary(
         "config_digest": config_digest,
         "dataset_digest": dataset_summary.get("dataset_digest"),
         "row_count": int(dataset_summary.get("row_count", 0)),
+        "source_row_count": int(dataset_summary.get("source_row_count", 0)),
+        "admissibility_summary": dict(dataset_summary.get("admissibility_summary", {}) or {}),
         "train_accuracy": float(train_accuracy),
         "benchmark_gate": dict(dataset_summary.get("benchmark_gate", {}) or {}),
         "artifacts": dict(artifacts),
@@ -338,7 +352,12 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         raise ImportError("PyTorch is required to train the branch planner")
     output_root = Path(args.save_dir)
     output_root.mkdir(parents=True, exist_ok=True)
-    rows, receipt_source = _build_dataset_rows(args)
+    source_rows, receipt_source = _build_dataset_rows(args)
+    rows, admissibility_summary = select_phase1x_positive_training_rows(source_rows)
+    if not rows:
+        raise ValueError(
+            "No positive branch-planner training rows found after Phase 1.x admissibility filtering"
+        )
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -350,6 +369,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         compiled_dataset_path,
         dataset_arg=getattr(args, "dataset", None),
         receipt_source=receipt_source,
+        admissibility_summary=admissibility_summary,
     )
     execution_preconditions = _build_execution_preconditions(dataset_summary)
     model_config = _build_model_config(args.hidden_dim)
@@ -423,6 +443,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         "training_summary": str(training_summary_path),
         "runtime_package": str(runtime_package_path),
         "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
+        "admissibility_summary": dict(admissibility_summary),
     }
     _write_json(
         training_job_result_path,
@@ -444,6 +465,8 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
                 "overall_status": "pass",
                 "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
                 "row_count": len(rows),
+                "source_row_count": len(source_rows),
+                "admissibility_summary": dict(admissibility_summary),
             },
             context_sha=config_digest,
         )
@@ -454,10 +477,26 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
             objective_profile_snapshot={"profile_id": "sim_synth_branch_planner"},
             promotion_policy_snapshot={},
             source_domain_coverage={"generation_modes": dict(dataset_summary.get("mode_counts", {}) or {})},
-            receipt_label_coverage={"rows": int(dataset_summary.get("row_count", 0))},
+            receipt_label_coverage={
+                "rows": int(dataset_summary.get("row_count", 0)),
+                "source_rows": int(dataset_summary.get("source_row_count", 0)),
+                "positive_training_rows": int(
+                    _mapping(dataset_summary.get("admissibility_summary")).get(
+                        "positive_training_row_count",
+                        0,
+                    )
+                ),
+                "excluded_rows": int(
+                    _mapping(dataset_summary.get("admissibility_summary")).get(
+                        "excluded_row_count",
+                        0,
+                    )
+                ),
+            },
             metadata={
                 "target_contract": "branch_generation_mode_plus_expected_yield_v1",
                 "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
+                "phase1x_training_admissibility_enforced": True,
             },
         )
         runner.register_artifact("sim_synth_branch_planner_dataset_summary", dataset_summary_path)

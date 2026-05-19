@@ -62,6 +62,13 @@ def _write_receipt_bundles(path: Path) -> Path:
                     ][idx % 3],
                     "quality_score": 0.7 + (0.03 * idx),
                 },
+                "runtime_receipt_manifest": {
+                    "version": "sim_synth_runtime_receipt_manifest_v1",
+                    "manifest_id": f"runtime_manifest_backend_{idx}",
+                    "manifest_status": "complete",
+                    "receipt_family_counts": {"physics_calibration_receipt_v1": 1},
+                    "missing_required_families": [],
+                },
             }
         )
     path.write_text(json.dumps({"bundles": bundles}, indent=2, sort_keys=True), encoding="utf-8")
@@ -107,12 +114,23 @@ def _write_live_receipt_dir(path: Path) -> Path:
         "metadata": {},
         "version": "physics_calibration_receipt_v1",
     }
+    manifest = {
+        "version": "sim_synth_runtime_receipt_manifest_v1",
+        "manifest_id": "live_runtime_manifest_backend",
+        "manifest_status": "complete",
+        "receipt_family_counts": {"physics_calibration_receipt_v1": 1},
+        "missing_required_families": [],
+    }
     (path / "episode_sim_synth_world_state_v1.json").write_text(
         json.dumps(world_state, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     (path / "episode_physics_calibration_receipt_v1.json").write_text(
         json.dumps(calibration, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    (path / "runtime_receipt_manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     return path
@@ -195,6 +213,9 @@ def test_train_sim_synth_backend_selector_emits_runtime_package(tmp_path: Path) 
     assert runtime_package["metadata"]["target_hardware_class"] == "unitree_g1_r1_class"
     assert runtime_package["checkpoint_path"] == "sim_synth_backend_selector.pt"
     assert dataset_summary["runtime_receipt_rows"] == 6
+    assert dataset_summary["source_row_count"] == 6
+    assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 6
+    assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 0
     assert dataset_summary["input_sources"]["receipt_path"] == str(receipt_path)
 
 
@@ -240,6 +261,7 @@ def test_train_sim_synth_backend_selector_runner_emits_runtime_manifest(tmp_path
     )
     assert checkpoint_registry["checkpoints"][0]["model_family"] == "sim_synth_backend_selector"
     assert holder["payload"]["benchmark_gate_ready"] is False
+    assert holder["payload"]["admissibility_summary"]["legacy_dataset_row_count"] == 8
 
 
 def test_train_sim_synth_backend_selector_harvests_receipt_dir(tmp_path: Path) -> None:
@@ -264,3 +286,5 @@ def test_train_sim_synth_backend_selector_harvests_receipt_dir(tmp_path: Path) -
     assert dataset_summary["input_sources"]["receipt_source_kind"] == "harvested_runtime_receipts"
     assert dataset_summary["input_sources"]["receipt_dirs"] == [str(receipt_dir)]
     assert dataset_summary["input_sources"]["receipt_bundle_count"] == 1
+    assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 1
+    assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 0

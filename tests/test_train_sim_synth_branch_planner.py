@@ -84,6 +84,35 @@ def _write_receipt_bundles(path: Path) -> Path:
                         },
                     }
                 ],
+                "branch_validity_receipts": [
+                    {
+                        "version": "branch_validity_receipt_v1",
+                        "receipt_id": f"branch_validity_{idx}",
+                        "branch_plan_id": f"plan_{idx}",
+                        "admissible": True,
+                        "reject_reasons": [],
+                    }
+                ],
+                "replay_validity_receipts": [
+                    {
+                        "version": "replay_validity_receipt_v1",
+                        "receipt_id": f"replay_validity_{idx}",
+                        "branch_plan_id": f"plan_{idx}",
+                        "status": "training_validity_estimated",
+                        "reject_reasons": [],
+                    }
+                ],
+                "runtime_receipt_manifest": {
+                    "version": "sim_synth_runtime_receipt_manifest_v1",
+                    "manifest_id": f"runtime_manifest_branch_{idx}",
+                    "manifest_status": "complete",
+                    "receipt_family_counts": {
+                        "branch_validity_receipt_v1": 1,
+                        "replay_validity_receipt_v1": 1,
+                        "simulation_outcome_receipt_v1": 1,
+                    },
+                    "missing_required_families": [],
+                },
             }
         )
     path.write_text(json.dumps({"bundles": bundles}, indent=2, sort_keys=True), encoding="utf-8")
@@ -137,12 +166,49 @@ def _write_live_receipt_dir(path: Path) -> Path:
         },
         "version": "simulation_outcome_receipt_v1",
     }
+    branch_validity = {
+        "version": "branch_validity_receipt_v1",
+        "receipt_id": "live_branch_validity_branch",
+        "branch_plan_id": "live_plan_branch",
+        "admissible": True,
+        "reject_reasons": [],
+    }
+    replay_validity = {
+        "version": "replay_validity_receipt_v1",
+        "receipt_id": "live_replay_validity_branch",
+        "branch_plan_id": "live_plan_branch",
+        "status": "training_validity_estimated",
+        "reject_reasons": [],
+    }
+    manifest = {
+        "version": "sim_synth_runtime_receipt_manifest_v1",
+        "manifest_id": "live_runtime_manifest_branch",
+        "manifest_status": "complete",
+        "receipt_family_counts": {
+            "branch_validity_receipt_v1": 1,
+            "replay_validity_receipt_v1": 1,
+            "simulation_outcome_receipt_v1": 1,
+        },
+        "missing_required_families": [],
+    }
     (path / "episode_sim_synth_world_state_v1.json").write_text(
         json.dumps(world_state, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     (path / "episode_simulation_outcome_receipt_v1.json").write_text(
         json.dumps(outcome, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    (path / "episode_branch_validity_receipt_v1.json").write_text(
+        json.dumps(branch_validity, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    (path / "episode_replay_validity_receipt_v1.json").write_text(
+        json.dumps(replay_validity, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    (path / "runtime_receipt_manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     return path
@@ -228,6 +294,9 @@ def test_train_sim_synth_branch_planner_emits_runtime_package(tmp_path: Path) ->
     assert runtime_package["metadata"]["target_hardware_class"] == "unitree_g1_r1_class"
     assert runtime_package["checkpoint_path"] == "sim_synth_branch_planner.pt"
     assert dataset_summary["runtime_receipt_rows"] == 6
+    assert dataset_summary["source_row_count"] == 6
+    assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 6
+    assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 0
     assert dataset_summary["input_sources"]["receipt_path"] == str(receipt_path)
 
 
@@ -273,6 +342,7 @@ def test_train_sim_synth_branch_planner_runner_emits_runtime_manifest(tmp_path: 
     )
     assert checkpoint_registry["checkpoints"][0]["model_family"] == "sim_synth_branch_planner"
     assert holder["payload"]["benchmark_gate_ready"] is False
+    assert holder["payload"]["admissibility_summary"]["legacy_dataset_row_count"] == 10
 
 
 def test_train_sim_synth_branch_planner_harvests_receipt_dir(tmp_path: Path) -> None:
@@ -297,3 +367,5 @@ def test_train_sim_synth_branch_planner_harvests_receipt_dir(tmp_path: Path) -> 
     assert dataset_summary["input_sources"]["receipt_source_kind"] == "harvested_runtime_receipts"
     assert dataset_summary["input_sources"]["receipt_dirs"] == [str(receipt_dir)]
     assert dataset_summary["input_sources"]["receipt_bundle_count"] == 1
+    assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 1
+    assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 0

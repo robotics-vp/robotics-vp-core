@@ -1,5 +1,44 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x trainer-side admissibility enforcement
+
+### What changed
+
+- Added `select_phase1x_positive_training_rows(...)` and
+  `phase1x_positive_training_row_selection_v1` summaries.
+- Exported the selector through the Sim / Synth / Physics package surface.
+- `scripts/train_sim_synth_backend_selector.py` and
+  `scripts/train_sim_synth_branch_planner.py` now split source rows before
+  training:
+  - `positive_training` rows are selected
+  - `legacy_dataset_row` rows remain selected for explicit historical datasets
+  - `negative_supervision` rows are counted and excluded until the helper losses
+    support negative examples directly
+  - `diagnostic_only` rows are counted and excluded
+- Dataset summaries, training summaries, job results, and Regal receipt-label
+  coverage now record source row counts, selected row counts, excluded row
+  counts, status counts, reason counts, and bounded excluded row refs.
+
+### Why this was the right next local step
+
+The prior tranche made each harvested row's admissibility state visible. Leaving
+the trainer entrypoints unchanged would still allow invalid or negative rows to
+be flattened into positive supervised labels. The trainer losses are currently
+positive-label helper losses, so this pass keeps negative supervision available
+as counted evidence without pretending the losses know how to use it yet.
+
+The remaining debt is explicit and smaller: add negative-example losses or a
+separate reject/utility head later, then promote selected negative supervision
+from counted evidence into trainable signal.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py src/world_model/sim_synth_physics/__init__.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py`
+- `git diff --check && python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q && python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q` ->
+  `10 passed`
+- `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1634 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x training-admissibility gating
 
 ### What changed

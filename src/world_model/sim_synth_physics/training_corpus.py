@@ -808,6 +808,79 @@ def _phase1x_training_admissibility(
         "replay_reject_reasons": replay_reasons,
     }
 
+
+def phase1x_training_admissibility_status(row: Mapping[str, Any]) -> str:
+    """Return the Phase 1.x training-admissibility status for a row."""
+
+    row_mapping = _mapping(row)
+    training_admissibility = _mapping(row_mapping.get("training_admissibility"))
+    if training_admissibility:
+        return str(training_admissibility.get("status") or "diagnostic_only")
+    metadata = _mapping(row_mapping.get("metadata"))
+    metadata_status = str(metadata.get("training_admissibility_status", "") or "")
+    if metadata_status:
+        return metadata_status
+    return "legacy_dataset_row"
+
+
+def select_phase1x_positive_training_rows(
+    rows: Sequence[Mapping[str, Any]],
+) -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
+    """Select rows compatible with the current positive-only helper losses."""
+
+    selected_rows: list[Dict[str, Any]] = []
+    excluded_refs: list[Dict[str, Any]] = []
+    status_counts: dict[str, int] = {}
+    reason_counts: dict[str, int] = {}
+    for row_index, row in enumerate(rows):
+        row_mapping = _mapping(row)
+        status = phase1x_training_admissibility_status(row_mapping)
+        status_counts[status] = status_counts.get(status, 0) + 1
+        training_admissibility = _mapping(row_mapping.get("training_admissibility"))
+        metadata = _mapping(row_mapping.get("metadata"))
+        reasons = [
+            str(reason)
+            for reason in list(
+                training_admissibility.get(
+                    "reasons",
+                    metadata.get("training_admissibility_reasons", []),
+                )
+                or []
+            )
+            if str(reason)
+        ]
+        for reason in reasons:
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        if status in {"positive_training", "legacy_dataset_row"}:
+            selected_rows.append(dict(row_mapping))
+            continue
+        excluded_refs.append(
+            {
+                "row_index": row_index,
+                "row_id": str(row_mapping.get("row_id") or row_index),
+                "training_admissibility_status": status,
+                "reasons": reasons,
+            }
+        )
+
+    source_row_count = len(rows)
+    return selected_rows, {
+        "schema_version": "phase1x_positive_training_row_selection_v1",
+        "selection_policy": "positive_training_or_legacy_dataset_rows_only",
+        "source_row_count": source_row_count,
+        "selected_row_count": len(selected_rows),
+        "excluded_row_count": source_row_count - len(selected_rows),
+        "status_counts": dict(sorted(status_counts.items())),
+        "reason_counts": dict(sorted(reason_counts.items())),
+        "positive_training_row_count": int(status_counts.get("positive_training", 0)),
+        "negative_supervision_row_count": int(status_counts.get("negative_supervision", 0)),
+        "diagnostic_only_row_count": int(status_counts.get("diagnostic_only", 0)),
+        "legacy_dataset_row_count": int(status_counts.get("legacy_dataset_row", 0)),
+        "excluded_row_refs": excluded_refs[:50],
+        "excluded_row_ref_overflow_count": max(0, len(excluded_refs) - 50),
+    }
+
+
 def build_backend_selector_rows_from_receipts(
     bundles: Sequence[Mapping[str, Any]],
 ) -> list[Dict[str, Any]]:
@@ -2045,5 +2118,7 @@ __all__ = [
     "build_branch_planner_rows_from_receipts",
     "harvest_sim_synth_receipt_bundles",
     "load_sim_synth_receipt_bundles",
+    "phase1x_training_admissibility_status",
+    "select_phase1x_positive_training_rows",
     "validate_runtime_receipt_manifest",
 ]

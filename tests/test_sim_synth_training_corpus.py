@@ -5,6 +5,7 @@ from src.world_model.sim_synth_physics.training_corpus import (
     build_backend_selector_rows_from_receipts,
     build_branch_planner_rows_from_receipts,
     harvest_sim_synth_receipt_bundles,
+    select_phase1x_positive_training_rows,
     validate_runtime_receipt_manifest,
 )
 
@@ -916,6 +917,28 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         "replay_reject_reasons_present",
         "replay_validity_filtered",
     ]
+    selected_backend_rows, backend_selection_summary = select_phase1x_positive_training_rows(
+        [backend_rows[0], filtered_backend_rows[0]]
+    )
+    assert selected_backend_rows == [backend_rows[0]]
+    assert backend_selection_summary["source_row_count"] == 2
+    assert backend_selection_summary["selected_row_count"] == 1
+    assert backend_selection_summary["excluded_row_count"] == 1
+    assert backend_selection_summary["positive_training_row_count"] == 1
+    assert backend_selection_summary["negative_supervision_row_count"] == 1
+    assert backend_selection_summary["status_counts"] == {
+        "negative_supervision": 1,
+        "positive_training": 1,
+    }
+    selected_branch_rows, branch_selection_summary = select_phase1x_positive_training_rows(
+        [branch_rows[0], filtered_branch_rows[0]]
+    )
+    assert selected_branch_rows == [branch_rows[0]]
+    assert branch_selection_summary["source_row_count"] == 2
+    assert branch_selection_summary["selected_row_count"] == 1
+    assert branch_selection_summary["excluded_row_count"] == 1
+    assert branch_selection_summary["positive_training_row_count"] == 1
+    assert branch_selection_summary["negative_supervision_row_count"] == 1
 
 
 def test_harvest_sim_synth_receipt_bundles_ignores_incomplete_dirs(tmp_path: Path) -> None:

@@ -289,6 +289,10 @@ Also preserve a narrow SIM1 rule:
   backend-selector and branch-planner rows as positive training, negative
   supervision, or diagnostic-only based on manifest validation, target source,
   branch validity, and replay validity
+- **landed locally on 2026-05-19**: trainer entrypoints now enforce the
+  admissibility boundary for current positive-only helper losses: positive and
+  explicit legacy dataset rows train, while negative-supervision and
+  diagnostic-only rows are counted and excluded until negative losses exist
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

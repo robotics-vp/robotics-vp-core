@@ -1,5 +1,28 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x trainer-side admissibility enforcement
+
+- **Changed**:
+  - added `phase1x_positive_training_row_selection_v1` selection summaries for
+    Sim / Synth / Physics training rows
+  - backend-selector and branch-planner trainer entrypoints now train only on
+    `positive_training` rows plus explicit legacy dataset rows
+  - `negative_supervision` and `diagnostic_only` rows are excluded from current
+    positive-only helper losses while their counts, reasons, and row refs remain
+    visible in dataset summaries, training summaries, job results, and Regal
+    receipt-label coverage
+- **Why this matters**:
+  - the previous pass made admissibility legible; this pass makes it enforced
+    at the local trainer boundary
+  - negative supervision is no longer accidentally treated as positive labels
+    before the helper models have explicit negative-example losses
+  - this remains local-only trainer hygiene, not provider truth or promotion
+    evidence
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py src/world_model/sim_synth_physics/__init__.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py`
+  - `git diff --check && python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q && python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q` (`10 passed`)
+  - `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1634 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x training-admissibility gating for receipt rows
 
 - **Changed**:
