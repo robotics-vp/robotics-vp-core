@@ -313,6 +313,10 @@ Also preserve a narrow SIM1 rule:
   trainer rows now preserve that subsystem index ID, coverage summary,
   subsystem IDs, ownership rule, structural status, and honest blocker class so
   subsystem legibility survives into training and promotion artifacts
+- **landed locally on 2026-05-19**: Holosoma local smoke now has an explicit
+  preflight mode and auto-selected local policy ref, making the current
+  non-GPU blocker (`holosoma_python_module` missing while policy checkpoint
+  exists) separate from Isaac/Unitree and GGDS/LDM GPU/runtime debt
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

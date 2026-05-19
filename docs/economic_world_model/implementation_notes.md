@@ -1,5 +1,46 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Holosoma local preflight separates provider install from GPU debt
+
+### What changed
+
+- `scripts/local_holosoma_smoke.py` no longer requires `--policy-id` when a
+  local Holosoma policy contract can provide a selected checkpoint.
+- Added `--preflight-only`.
+- The script now writes `holosoma_smoke_preflight.json` with:
+  - Holosoma Python-module availability
+  - selected policy ref and source
+  - policy checkpoint existence
+  - readiness
+  - missing preconditions
+- Added `tests/test_local_holosoma_smoke.py`.
+
+### Current local read
+
+`python3 scripts/scan_phase1_runtime_layouts.py --output-path artifacts/sim_synth_runtime_layout_scan.json`
+finds a local Holosoma policy checkpoint and ready local Holosoma surfaces on
+this host. A direct smoke cannot yet run because the optional `holosoma` Python
+module is not importable. The new preflight records that as
+`missing_preconditions: ["holosoma_python_module"]` while confirming the policy
+checkpoint exists.
+
+This means the remaining Phase 1 work is not perfectly summarized as
+“GPU-only.” More precisely:
+
+- Isaac/Unitree concrete execution and GGDS/LDM materialization remain
+  GPU/runtime/asset blocked.
+- Holosoma has a local non-GPU provider-install blocker before concrete smoke
+  execution can run.
+
+### Verification
+
+- `python3 -m ruff check scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py`
+- `git diff --check && python3 -m compileall scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py -q && python3 -m pytest tests/test_local_holosoma_smoke.py -q` ->
+  `2 passed`
+- `python3 scripts/local_holosoma_smoke.py --preflight-only --out-dir artifacts/holosoma_local_probe` ->
+  `ready: false`, missing `holosoma_python_module`, policy checkpoint exists
+- `python3 -m ruff check scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py && git diff --check && python3 -m compileall src/ scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py && python3 -m pytest tests/ -q` -> `1642 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x subsystem index trainer-row propagation
 
 ### What changed

@@ -13,6 +13,12 @@ artifacts. This is still local structural readiness: provider bring-up,
 GPU-backed calibration, and benchmark promotion evidence remain future gates,
 not current claims.
 
+One caveat is now explicit: Phase 1 is not perfectly “GPU-only.” The current
+host scan finds a local Holosoma policy checkpoint, but the optional
+`holosoma` Python module is not importable. `scripts/local_holosoma_smoke.py`
+now has a preflight mode that records this as local provider-install debt
+separate from Isaac/Unitree and GGDS/LDM GPU/runtime blockers.
+
 ## Current Status
 
 - **Date**: 2026-04-03

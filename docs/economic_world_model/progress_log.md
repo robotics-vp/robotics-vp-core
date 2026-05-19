@@ -1,5 +1,29 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Holosoma local preflight separates provider install from GPU debt
+
+- **Changed**:
+  - `scripts/local_holosoma_smoke.py` can now auto-resolve the selected local
+    Holosoma policy checkpoint from the runtime policy contract when
+    `--policy-id` is omitted
+  - added `--preflight-only`, which writes
+    `holosoma_smoke_preflight.json` and reports Holosoma module availability,
+    selected policy ref/source, policy existence, readiness, and missing
+    preconditions without attempting runtime execution
+  - added tests for missing-module and auto-policy behavior
+- **Why this matters**:
+  - the current host has local Holosoma roots/checkpoints, so Phase 1 is not
+    literally “GPU-only” in the Holosoma lane
+  - the live blocker is now explicit: `holosoma_python_module` is missing while
+    the selected policy checkpoint exists
+  - Isaac/Unitree and GGDS/LDM remain GPU/runtime/asset blocked, but Holosoma
+    can be advanced by local provider installation before RunPod is available
+- **Verification**:
+  - `python3 -m ruff check scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py`
+  - `git diff --check && python3 -m compileall scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py -q && python3 -m pytest tests/test_local_holosoma_smoke.py -q` (`2 passed`)
+  - `python3 scripts/local_holosoma_smoke.py --preflight-only --out-dir artifacts/holosoma_local_probe` (`ready: false`, missing `holosoma_python_module`, policy checkpoint exists)
+  - `python3 -m ruff check scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py && git diff --check && python3 -m compileall src/ scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py && python3 -m pytest tests/ -q` (`1642 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x subsystem index trainer-row propagation
 
 - **Changed**:

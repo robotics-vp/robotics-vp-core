@@ -40,6 +40,7 @@ pre-training prerequisites, not active implementation debt.
 
 | Item | Blocker | Required for | Expected timing |
 |------|---------|-------------|-----------------|
+| Local Holosoma smoke execution | Optional `holosoma` Python module is not importable on the current local host even though local roots/checkpoints may be discoverable | Concrete local non-GPU provider smoke before RunPod | As soon as local provider dependency can be installed |
 | Meaningful runtime execution beyond repo-local evidence | Requires runtime/install/provider reality beyond local clone | Concrete execution receipts and real episode data | First A100 weekly cycle |
 | Richer deploy/runtime-report/install truth | Depends on Holosoma runtime maturity | Complete runtime-target install-shape truth | Provider maturity |
 
@@ -49,12 +50,17 @@ pre-training prerequisites, not active implementation debt.
 - Request→consumer→execution→realization chain wired
 - Policy selection prefers model/checkpoint surfaces
 - Host preflight status: `preflight_ready`
+- `scripts/local_holosoma_smoke.py --preflight-only` records whether the local
+  provider dependency and selected policy checkpoint are actually executable
 
 ### What happens on GPU day-0
 
-1. Run Holosoma runtime execution on A100 host
-2. Validate episode outputs and motion quality
-3. Harvest concrete runtime outcomes
+1. Install or point the local environment at the optional Holosoma Python module
+2. Run `python3 scripts/local_holosoma_smoke.py --preflight-only` and then the
+   concrete local smoke once `ready=true`
+3. Run Holosoma runtime execution on A100 host when GPU-backed runs are needed
+4. Validate episode outputs and motion quality
+5. Harvest concrete runtime outcomes
 
 ## GGDS / LDM / Video
 
