@@ -16,7 +16,7 @@ from .inferential import (
     adjusted_branch_yield_score,
     build_branch_plan_inferential_contract,
 )
-from .promotion import HelperMode, infer_branch_payload
+from .promotion import HelperMode, helper_payload_rejects, infer_branch_payload
 from .render_providers import compile_branch_render_provider_state
 from .state import (
     PhysicsAdaptationPolicyState,
@@ -288,6 +288,8 @@ def _branch_helper_resolution(
     benchmark_gate_ready = bool(helper_status.get("benchmark_gate_ready", False))
     trace_available = bool(helper_payload)
 
+    if trace_available and helper_payload_rejects(helper_payload):
+        return "heuristic_due_to_learned_reject", "reject_probability_threshold", False
     if promotion_stage == "promoted" and trace_available:
         return "learned_payload_applied", "benchmark_gate_ready", True
     if promotion_stage == "demoted_to_shadow":
@@ -347,9 +349,13 @@ def compile_synthetic_branch_plans(
         selection_policy = "heuristic_only"
         generation_mode = heuristic_mode
         expected_yield_score = heuristic_score
+        learned_reject = False
         if helper_payload:
+            learned_reject = helper_payload_rejects(helper_payload)
             selection_policy = "heuristic_plus_learned_branch_planner"
-            if str(helper_status.get("promotion_stage")) == "promoted":
+            if learned_reject:
+                selection_policy = "heuristic_plus_learned_branch_planner_rejected"
+            elif str(helper_status.get("promotion_stage")) == "promoted":
                 generation_mode = str(helper_payload.get("generation_mode") or heuristic_mode)
                 expected_yield_score = clip01(
                     helper_payload.get("expected_yield_score", heuristic_score)
@@ -442,6 +448,7 @@ def compile_synthetic_branch_plans(
                     "inferential_replay_weight": inferential_replay_weight,
                     "branch_helper_status": helper_status,
                     "branch_helper_trace": helper_payload,
+                    "branch_helper_reject_recommended": learned_reject,
                     "branch_helper_resolution": helper_resolution,
                     "branch_helper_resolution_reason": helper_resolution_reason,
                     "branch_helper_payload_applied": helper_payload_applied,

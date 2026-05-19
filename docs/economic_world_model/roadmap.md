@@ -296,6 +296,10 @@ Also preserve a narrow SIM1 rule:
 - **landed locally on 2026-05-19**: excluded negative-supervision and
   diagnostic rows now persist as trainer sidecar JSONL artifacts and Regal
   registered artifacts, preserving them for later reject/utility heads
+- **landed locally on 2026-05-19**: backend-selector and branch-planner helpers
+  now train bounded reject-probability heads from negative-supervision sidecars;
+  rejected learned payloads remain trace-visible but do not override heuristic
+  runtime decisions
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

@@ -15,8 +15,7 @@ def _write_receipt_bundles(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     bundles = []
     for idx in range(6):
-        bundles.append(
-            {
+        bundle = {
                 "bundle_id": f"backend_bundle_{idx}",
                 "world_state": {
                     "state_id": f"state_{idx}",
@@ -70,7 +69,20 @@ def _write_receipt_bundles(path: Path) -> Path:
                     "missing_required_families": [],
                 },
             }
-        )
+        if idx == 1:
+            bundle["replay_validity_receipts"] = [
+                {
+                    "version": "replay_validity_receipt_v1",
+                    "receipt_id": "backend_replay_negative_1",
+                    "branch_plan_id": "backend_plan_negative_1",
+                    "status": "training_filtered_estimate",
+                    "reject_reasons": ["sensor_alignment_unready"],
+                }
+            ]
+            bundle["runtime_receipt_manifest"]["receipt_family_counts"][
+                "replay_validity_receipt_v1"
+            ] = 1
+        bundles.append(bundle)
     path.write_text(json.dumps({"bundles": bundles}, indent=2, sort_keys=True), encoding="utf-8")
     return path
 
@@ -210,16 +222,27 @@ def test_train_sim_synth_backend_selector_emits_runtime_package(tmp_path: Path) 
 
     runtime_package = json.loads(Path(result["runtime_package"]).read_text(encoding="utf-8"))
     dataset_summary = json.loads(Path(result["dataset_summary"]).read_text(encoding="utf-8"))
+    training_summary = json.loads(Path(result["training_summary"]).read_text(encoding="utf-8"))
+    model_config = json.loads(Path(result["model_config"]).read_text(encoding="utf-8"))
     assert runtime_package["promotion_stage"] == "shadow_candidate"
     assert runtime_package["inference_contract"]["helper_blend_policy"] == "bounded_backend_selector_helper_v1"
+    assert runtime_package["inference_contract"]["reject_probability_threshold"] == 0.5
     assert runtime_package["metadata"]["target_hardware_class"] == "unitree_g1_r1_class"
+    assert runtime_package["metadata"]["negative_supervision_contract"] == "phase1x_reject_probability_head_v1"
     assert runtime_package["checkpoint_path"] == "sim_synth_backend_selector.pt"
-    assert dataset_summary["runtime_receipt_rows"] == 6
+    assert dataset_summary["runtime_receipt_rows"] == 5
     assert dataset_summary["source_row_count"] == 6
-    assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 6
-    assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 0
+    assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 5
+    assert dataset_summary["admissibility_summary"]["negative_supervision_row_count"] == 1
+    assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 1
     assert dataset_summary["input_sources"]["receipt_path"] == str(receipt_path)
-    assert Path(result["negative_supervision_dataset"]).read_text(encoding="utf-8") == ""
+    assert model_config["negative_supervision_contract"] == "phase1x_reject_probability_head_v1"
+    assert "reject_probability" in model_config["heads"]
+    assert training_summary["reject_head"]["negative_rows"] == 1
+    assert 0.0 <= training_summary["reject_accuracy"] <= 1.0
+    assert "backend_replay_negative_1" in Path(result["negative_supervision_dataset"]).read_text(
+        encoding="utf-8"
+    )
     assert Path(result["diagnostic_dataset"]).read_text(encoding="utf-8") == ""
 
 

@@ -98,8 +98,10 @@ def _write_receipt_bundles(path: Path) -> Path:
                         "version": "replay_validity_receipt_v1",
                         "receipt_id": f"replay_validity_{idx}",
                         "branch_plan_id": f"plan_{idx}",
-                        "status": "training_validity_estimated",
-                        "reject_reasons": [],
+                        "status": "training_filtered_estimate"
+                        if idx == 1
+                        else "training_validity_estimated",
+                        "reject_reasons": ["sensor_alignment_unready"] if idx == 1 else [],
                     }
                 ],
                 "runtime_receipt_manifest": {
@@ -291,16 +293,27 @@ def test_train_sim_synth_branch_planner_emits_runtime_package(tmp_path: Path) ->
 
     runtime_package = json.loads(Path(result["runtime_package"]).read_text(encoding="utf-8"))
     dataset_summary = json.loads(Path(result["dataset_summary"]).read_text(encoding="utf-8"))
+    training_summary = json.loads(Path(result["training_summary"]).read_text(encoding="utf-8"))
+    model_config = json.loads(Path(result["model_config"]).read_text(encoding="utf-8"))
     assert runtime_package["promotion_stage"] == "shadow_candidate"
     assert runtime_package["inference_contract"]["helper_blend_policy"] == "bounded_branch_planner_helper_v1"
+    assert runtime_package["inference_contract"]["reject_probability_threshold"] == 0.5
     assert runtime_package["metadata"]["target_hardware_class"] == "unitree_g1_r1_class"
+    assert runtime_package["metadata"]["negative_supervision_contract"] == "phase1x_reject_probability_head_v1"
     assert runtime_package["checkpoint_path"] == "sim_synth_branch_planner.pt"
-    assert dataset_summary["runtime_receipt_rows"] == 6
+    assert dataset_summary["runtime_receipt_rows"] == 5
     assert dataset_summary["source_row_count"] == 6
-    assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 6
-    assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 0
+    assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 5
+    assert dataset_summary["admissibility_summary"]["negative_supervision_row_count"] == 1
+    assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 1
     assert dataset_summary["input_sources"]["receipt_path"] == str(receipt_path)
-    assert Path(result["negative_supervision_dataset"]).read_text(encoding="utf-8") == ""
+    assert model_config["negative_supervision_contract"] == "phase1x_reject_probability_head_v1"
+    assert "reject_probability" in model_config["heads"]
+    assert training_summary["reject_head"]["negative_rows"] == 1
+    assert 0.0 <= training_summary["reject_accuracy"] <= 1.0
+    assert "replay_validity_1" in Path(result["negative_supervision_dataset"]).read_text(
+        encoding="utf-8"
+    )
     assert Path(result["diagnostic_dataset"]).read_text(encoding="utf-8") == ""
 
 

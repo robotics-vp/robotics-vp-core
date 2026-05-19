@@ -259,6 +259,12 @@ def _build_model_config(hidden_dim: int) -> dict[str, Any]:
         "schema_version": "sim_synth_branch_planner_model_config_v1",
         "hidden_dim": int(hidden_dim),
         "generation_modes": list(GENERATION_MODES),
+        "heads": [
+            "generation_mode",
+            "expected_yield",
+            "reject_probability",
+        ],
+        "negative_supervision_contract": "phase1x_reject_probability_head_v1",
         "target_contract": "branch_generation_mode_plus_expected_yield_v1",
     }
 
@@ -276,6 +282,28 @@ def _evaluate_train_accuracy(model: Any, rows: Sequence[Mapping[str, Any]]) -> f
         target_mode = str(row.get("target_generation_mode", "coverage_branch") or "coverage_branch")
         correct += int(prediction["generation_mode"] == target_mode)
         total += 1
+    return float(correct / max(total, 1))
+
+
+def _evaluate_reject_accuracy(
+    model: Any,
+    *,
+    positive_rows: Sequence[Mapping[str, Any]],
+    negative_rows: Sequence[Mapping[str, Any]],
+) -> float:
+    if torch is None:
+        return 0.0
+    correct = 0
+    total = 0
+    for expected_reject, rows in ((False, positive_rows), (True, negative_rows)):
+        for row in rows:
+            prediction = model.predict_context(
+                job=dict(row.get("job", {}) or {}),
+                context=dict(row.get("context", {}) or {}),
+            )
+            observed_reject = bool(prediction.get("reject_recommended", False))
+            correct += int(observed_reject is expected_reject)
+            total += 1
     return float(correct / max(total, 1))
 
 
@@ -309,11 +337,14 @@ def _build_runtime_package(
             "allowed_modes": ["disabled", "auto", "required"],
             "shadow_candidate_helper_weight": 0.12,
             "promoted_helper_weight": 0.35,
+            "reject_probability_threshold": 0.5,
+            "reject_head_policy": "phase1x_negative_supervision_head_v1",
         },
         "metadata": {
             "config_digest": config_digest,
             "dataset_digest": dataset_summary.get("dataset_digest"),
             "training_contract": "branch_generation_mode_plus_expected_yield_v1",
+            "negative_supervision_contract": "phase1x_reject_probability_head_v1",
             "routing_targets": ["sim_synth_physics.synthetic_branch_plans", "diffusion_contracts"],
             "target_hardware_class": "unitree_g1_r1_class",
             "subsystem_posture": "complete_subsystem_until_data_gpu_assets_are_bottleneck",
@@ -329,6 +360,7 @@ def _build_training_summary(
     config_digest: str,
     dataset_summary: Mapping[str, Any],
     train_accuracy: float,
+    reject_accuracy: float,
     artifacts: Mapping[str, Any],
 ) -> dict[str, Any]:
     return {
@@ -342,6 +374,18 @@ def _build_training_summary(
         "source_row_count": int(dataset_summary.get("source_row_count", 0)),
         "admissibility_summary": dict(dataset_summary.get("admissibility_summary", {}) or {}),
         "train_accuracy": float(train_accuracy),
+        "reject_accuracy": float(reject_accuracy),
+        "reject_head": {
+            "trained": True,
+            "positive_rows": int(dataset_summary.get("row_count", 0)),
+            "negative_rows": int(
+                _mapping(dataset_summary.get("admissibility_summary")).get(
+                    "negative_supervision_row_count",
+                    0,
+                )
+            ),
+            "threshold": 0.5,
+        },
         "benchmark_gate": dict(dataset_summary.get("benchmark_gate", {}) or {}),
         "artifacts": dict(artifacts),
     }
@@ -386,6 +430,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
     config_digest = sha256_json(
         {
             "dataset_digest": dataset_summary.get("dataset_digest"),
+            "admissibility_summary": admissibility_summary,
             "hidden_dim": args.hidden_dim,
             "epochs": args.epochs,
             "lr": args.lr,
@@ -404,12 +449,18 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
 
     model = train_branch_planner(
         rows,
+        negative_rows=negative_supervision_rows,
         epochs=args.epochs,
         lr=args.lr,
         hidden_dim=args.hidden_dim,
         save_path=str(checkpoint_path),
     )
     train_accuracy = _evaluate_train_accuracy(model, rows)
+    reject_accuracy = _evaluate_reject_accuracy(
+        model,
+        positive_rows=rows,
+        negative_rows=negative_supervision_rows,
+    )
     artifacts = {
         "checkpoint": str(checkpoint_path),
         "compiled_dataset": str(compiled_dataset_path),
@@ -426,6 +477,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         config_digest=config_digest,
         dataset_summary=dataset_summary,
         train_accuracy=train_accuracy,
+        reject_accuracy=reject_accuracy,
         artifacts=artifacts,
     )
     runtime_package = _build_runtime_package(
@@ -458,6 +510,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         "runtime_package": str(runtime_package_path),
         "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
         "admissibility_summary": dict(admissibility_summary),
+        "reject_accuracy": reject_accuracy,
     }
     _write_json(
         training_job_result_path,
@@ -481,6 +534,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
                 "row_count": len(rows),
                 "source_row_count": len(source_rows),
                 "admissibility_summary": dict(admissibility_summary),
+                "reject_accuracy": reject_accuracy,
             },
             context_sha=config_digest,
         )
@@ -506,11 +560,14 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
                         0,
                     )
                 ),
+                "negative_supervision_rows": len(negative_supervision_rows),
             },
             metadata={
                 "target_contract": "branch_generation_mode_plus_expected_yield_v1",
                 "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
                 "phase1x_training_admissibility_enforced": True,
+                "phase1x_reject_head_trained": True,
+                "reject_accuracy": reject_accuracy,
             },
         )
         runner.register_artifact("sim_synth_branch_planner_dataset_summary", dataset_summary_path)
@@ -534,6 +591,8 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
                     "config_digest": config_digest,
                     "dataset_digest": dataset_summary.get("dataset_digest"),
                     "train_accuracy": train_accuracy,
+                    "reject_accuracy": reject_accuracy,
+                    "negative_supervision_row_count": len(negative_supervision_rows),
                 },
             )
         )

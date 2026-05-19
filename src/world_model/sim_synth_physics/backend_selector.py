@@ -161,13 +161,17 @@ try:
             self.backend_head = nn.Linear(hidden_dim, len(BACKEND_LABELS))
             self.fidelity_head = nn.Linear(hidden_dim, len(FIDELITY_LABELS))
             self.randomization_head = nn.Linear(hidden_dim, len(RANDOMIZATION_LABELS))
+            self.reject_head = nn.Linear(hidden_dim, 1)
 
-        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        def forward(
+            self, x: torch.Tensor
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
             hidden = self.net(x)
             return (
                 self.backend_head(hidden),
                 self.fidelity_head(hidden),
                 self.randomization_head(hidden),
+                self.reject_head(hidden),
             )
 
         def predict_context(
@@ -179,10 +183,11 @@ try:
             ext = extractor or BackendSelectorFeatureExtractor()
             x = torch.from_numpy(ext(context).raw).unsqueeze(0)
             with torch.no_grad():
-                backend_logits, fidelity_logits, randomization_logits = self.forward(x)
+                backend_logits, fidelity_logits, randomization_logits, reject_logit = self.forward(x)
                 backend_probs = F.softmax(backend_logits, dim=-1).squeeze(0).cpu().numpy().tolist()
                 fidelity_probs = F.softmax(fidelity_logits, dim=-1).squeeze(0).cpu().numpy().tolist()
                 randomization_probs = F.softmax(randomization_logits, dim=-1).squeeze(0).cpu().numpy().tolist()
+                reject_probability = float(torch.sigmoid(reject_logit).squeeze(0).item())
             backend_idx = int(max(range(len(backend_probs)), key=lambda idx: backend_probs[idx]))
             fidelity_idx = int(max(range(len(fidelity_probs)), key=lambda idx: fidelity_probs[idx]))
             randomization_idx = int(
@@ -202,6 +207,8 @@ try:
                     label: float(prob)
                     for label, prob in zip(RANDOMIZATION_LABELS, randomization_probs)
                 },
+                "reject_probability": reject_probability,
+                "reject_recommended": reject_probability > 0.5,
             }
 
         def select_backend(self, *, context: Mapping[str, Any]) -> Dict[str, Any]:
@@ -214,7 +221,10 @@ try:
                 input_dim=ckpt.get("input_dim", BackendSelectorFeatureExtractor.FEATURE_DIM),
                 hidden_dim=ckpt.get("hidden_dim", 64),
             )
-            model.load_state_dict(ckpt["model_state_dict"])
+            if "reject_head.weight" not in ckpt.get("model_state_dict", {}):
+                nn.init.constant_(model.reject_head.weight, 0.0)
+                nn.init.constant_(model.reject_head.bias, -6.0)
+            model.load_state_dict(ckpt["model_state_dict"], strict=False)
             model.eval()
             return model
 
@@ -235,9 +245,11 @@ except ImportError:  # pragma: no cover
 def train_backend_selector(
     rows: Sequence[Mapping[str, Any]],
     *,
+    negative_rows: Optional[Sequence[Mapping[str, Any]]] = None,
     epochs: int = 50,
     lr: float = 1e-3,
     hidden_dim: int = 64,
+    reject_loss_weight: float = 0.5,
     save_path: Optional[str] = None,
 ) -> Any:
     if not TORCH_AVAILABLE:
@@ -277,6 +289,13 @@ def train_backend_selector(
     y_backend = torch.tensor(backend_labels, dtype=torch.long)
     y_fidelity = torch.tensor(fidelity_labels, dtype=torch.long)
     y_randomization = torch.tensor(randomization_labels, dtype=torch.long)
+    reject_features = [extractor(row).raw for row in rows]
+    reject_labels = [0.0 for _ in rows]
+    for row in list(negative_rows or []):
+        reject_features.append(extractor(row).raw)
+        reject_labels.append(1.0)
+    X_reject = torch.from_numpy(np.array(reject_features, dtype=np.float32))
+    y_reject = torch.tensor(reject_labels, dtype=torch.float32).unsqueeze(-1)
 
     model = LearnedBackendSelector(
         input_dim=BackendSelectorFeatureExtractor.FEATURE_DIM,
@@ -284,14 +303,17 @@ def train_backend_selector(
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss()
+    loss_reject = nn.BCEWithLogitsLoss()
 
     model.train()
     for _ in range(epochs):
-        backend_logits, fidelity_logits, randomization_logits = model(X)
+        backend_logits, fidelity_logits, randomization_logits, _ = model(X)
+        _, _, _, reject_logits = model(X_reject)
         loss = (
             loss_fn(backend_logits, y_backend)
             + loss_fn(fidelity_logits, y_fidelity)
             + loss_fn(randomization_logits, y_randomization)
+            + (float(reject_loss_weight) * loss_reject(reject_logits, y_reject))
         )
         optimizer.zero_grad()
         loss.backward()
@@ -306,6 +328,14 @@ def train_backend_selector(
                 "hidden_dim": hidden_dim,
                 "epochs": epochs,
                 "n_rows": len(rows),
+                "n_negative_rows": len(list(negative_rows or [])),
+                "reject_loss_weight": float(reject_loss_weight),
+                "heads": [
+                    "backend",
+                    "fidelity",
+                    "domain_randomization",
+                    "reject_probability",
+                ],
             },
             save_path,
         )

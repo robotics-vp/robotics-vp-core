@@ -71,6 +71,19 @@ class PromotedBackendSelector:
         }
 
 
+class RejectingPromotedBackendSelector:
+    benchmark_gate = {"ready": True}
+
+    def select_backend(self, *, context):
+        return {
+            "preferred_backend": "isaac",
+            "fidelity_tier": "high_fidelity",
+            "domain_randomization_regime": "benchmark_focus",
+            "reject_probability": 0.99,
+            "reject_recommended": True,
+        }
+
+
 class PromotedHolosomaBackendSelector:
     benchmark_gate = {"ready": True}
 
@@ -101,6 +114,18 @@ class PromotedGGDSBranchPlanner:
         return {
             "generation_mode": "targeted_synth_rollout",
             "expected_yield_score": 0.9,
+        }
+
+
+class RejectingPromotedBranchPlanner:
+    benchmark_gate = {"ready": True}
+
+    def plan_branch(self, *, job, context):
+        return {
+            "generation_mode": "targeted_synth_rollout",
+            "expected_yield_score": 0.99,
+            "reject_probability": 0.99,
+            "reject_recommended": True,
         }
 
 
@@ -232,6 +257,25 @@ def test_world_state_uses_promoted_backend_selector_from_day_one() -> None:
         "runtime_assets_missing",
         "shadow_bridge_only",
     }
+
+
+def test_promoted_backend_selector_reject_head_keeps_heuristic_backend() -> None:
+    world_state = compile_sim_synth_physics_world_state(
+        _make_test_graph(),
+        backend_selector=RejectingPromotedBackendSelector(),
+        backend_selector_mode="auto",
+    )
+
+    assert world_state.physics_context.backend == "pybullet"
+    assert (
+        world_state.physics_context.selection_policy
+        == "heuristic_plus_learned_backend_selector_rejected"
+    )
+    assert (
+        world_state.physics_context.metadata["backend_helper_trace"]["preferred_backend"]
+        == "isaac"
+    )
+    assert world_state.physics_context.metadata["backend_helper_reject_recommended"] is True
 
 
 def test_world_state_marks_isaac_runtime_ready_when_isaaclab_backend_exists(
@@ -536,6 +580,21 @@ def test_shadow_branch_planner_records_neural_trace_without_overriding() -> None
     assert first_plan.render_provider.materialization_entrypoint
 
 
+def test_promoted_branch_planner_reject_head_keeps_heuristic_branch() -> None:
+    world_state = compile_sim_synth_physics_world_state(
+        _make_test_graph(),
+        branch_planner=RejectingPromotedBranchPlanner(),
+        branch_planner_mode="auto",
+    )
+
+    first_plan = world_state.synthetic_branch_plans[0]
+    assert first_plan.selection_policy == "heuristic_plus_learned_branch_planner_rejected"
+    assert first_plan.metadata["branch_helper_trace"]["generation_mode"] == "targeted_synth_rollout"
+    assert first_plan.metadata["branch_helper_reject_recommended"] is True
+    assert first_plan.metadata["branch_helper_resolution"] == "heuristic_due_to_learned_reject"
+    assert first_plan.metadata["branch_helper_payload_applied"] is False
+
+
 def test_diffusion_conditioning_uses_admitted_branches_for_budget() -> None:
     world_state = compile_sim_synth_physics_world_state(_make_test_graph(), limit=2)
 
@@ -712,6 +771,61 @@ def test_world_state_loads_branch_planner_runtime_package(tmp_path: Path) -> Non
     assert first_plan.metadata["branch_helper_resolution"] == "learned_payload_applied"
     assert first_plan.metadata["branch_helper_resolution_reason"] == "benchmark_gate_ready"
     assert first_plan.metadata["branch_helper_payload_applied"] is True
+
+
+def test_reject_head_checkpoint_loading_is_backward_compatible(tmp_path: Path) -> None:
+    torch = pytest.importorskip("torch")
+
+    backend_checkpoint = tmp_path / "legacy_backend_selector.pt"
+    backend_model = LearnedBackendSelector(hidden_dim=16)
+    backend_state = {
+        key: value
+        for key, value in backend_model.state_dict().items()
+        if not key.startswith("reject_head.")
+    }
+    torch.save(
+        {
+            "model_state_dict": backend_state,
+            "input_dim": backend_model.net[0].in_features,
+            "hidden_dim": backend_model.net[0].out_features,
+        },
+        backend_checkpoint,
+    )
+    loaded_backend = LearnedBackendSelector.from_checkpoint(str(backend_checkpoint))
+    backend_prediction = loaded_backend.predict_context(
+        context={
+            "jobs": [],
+            "heuristic_backend": "pybullet",
+            "heuristic_fidelity_tier": "branch_balanced",
+            "heuristic_domain_randomization_regime": "steady_state",
+        }
+    )
+    assert backend_prediction["reject_probability"] < 0.01
+
+    branch_checkpoint = tmp_path / "legacy_branch_planner.pt"
+    branch_model = LearnedBranchPlanner(hidden_dim=16)
+    branch_state = {
+        key: value
+        for key, value in branch_model.state_dict().items()
+        if not key.startswith("reject_head.")
+    }
+    torch.save(
+        {
+            "model_state_dict": branch_state,
+            "input_dim": branch_model.net[0].in_features,
+            "hidden_dim": branch_model.net[0].out_features,
+        },
+        branch_checkpoint,
+    )
+    loaded_branch = LearnedBranchPlanner.from_checkpoint(str(branch_checkpoint))
+    branch_prediction = loaded_branch.predict_context(
+        job={},
+        context={
+            "physics_context": {"backend": "pybullet", "fidelity_tier": "branch_balanced"},
+            "heuristic_generation_mode": "coverage_branch",
+        },
+    )
+    assert branch_prediction["reject_probability"] < 0.01
 
 
 def test_resolve_helper_demotion_on_evidence_failure() -> None:

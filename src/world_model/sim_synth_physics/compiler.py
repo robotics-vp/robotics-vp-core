@@ -32,7 +32,7 @@ from .phase1x_surfaces import (
     compile_task_definition_contract_state,
     compile_task_measurement_surface,
 )
-from .promotion import HelperMode, infer_backend_payload
+from .promotion import HelperMode, helper_payload_rejects, infer_backend_payload
 from .randomization import compile_physics_adaptation_policy
 from .runtime_bridge import compile_backend_runtime_bridge
 from .state import (
@@ -329,9 +329,13 @@ def _compile_physics_context(
     backend = heuristic_backend
     fidelity_tier = heuristic_fidelity
     domain_randomization_regime = heuristic_randomization
+    learned_reject = False
     if helper_payload:
+        learned_reject = helper_payload_rejects(helper_payload)
         selection_policy = "heuristic_plus_learned_backend_selector"
-        if str(helper_status.get("promotion_stage")) == "promoted":
+        if learned_reject:
+            selection_policy = "heuristic_plus_learned_backend_selector_rejected"
+        elif str(helper_status.get("promotion_stage")) == "promoted":
             backend = str(
                 helper_payload.get("preferred_backend")
                 or helper_payload.get("backend")
@@ -365,6 +369,7 @@ def _compile_physics_context(
             "heuristic_domain_randomization_regime": heuristic_randomization,
             "backend_helper_status": helper_status,
             "backend_helper_trace": helper_payload,
+            "backend_helper_reject_recommended": learned_reject,
             "backend_adapter": adapter_descriptor.to_dict(),
             "benchmark_signals": mapping(benchmark_signals),
         },

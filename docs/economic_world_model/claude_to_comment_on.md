@@ -176,9 +176,10 @@ Current re-entry status after the Phase 2 pocket:
    branch-validity / reject-filter, geometry-backed sensor-alignment,
    replay-validity / task-consistency, runtime receipt-manifest, manifest
    validation, training-admissibility consumers, trainer-side admissibility
-   enforcement, and excluded-row trainer sidecars are now live in runtime
-   artifacts, training-row harvest, local trainer summaries, and Regal artifact
-   manifests while external GPU/provider work remains blocked
+   enforcement, excluded-row trainer sidecars, and bounded reject-head training
+   are now live in runtime artifacts, training-row harvest, local trainer
+   summaries, Regal artifact manifests, and helper runtime application gates
+   while external GPU/provider work remains blocked
 
 ### Habitat-derived Sim/Synth/Physics adoption track reminder
 

@@ -1,5 +1,29 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x reject-head training over negative supervision
+
+- **Changed**:
+  - added bounded `reject_probability` heads to the Sim / Synth / Physics
+    backend-selector and branch-planner helper models
+  - trainer entrypoints now pass preserved `negative_supervision` sidecar rows
+    into reject-head losses while keeping backend/mode/yield heads trained only
+    on positive/legacy rows
+  - runtime packages, model configs, training summaries, Regal metadata, and
+    checkpoint metadata now record the negative-supervision contract and reject
+    accuracy
+  - promoted learned helper payloads that recommend rejection now stay as traces
+    and do not override heuristic backend or branch choices
+- **Why this matters**:
+  - the previous sidecars were evidence-preserving but not yet trainable
+  - this converts filtered Phase 1.x outcomes into a first local learned signal
+    without mixing them into positive labels
+  - the reject head remains bounded and non-promotional until provider truth and
+    benchmark evidence exist
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics/backend_selector.py src/world_model/sim_synth_physics/branch_planner.py src/world_model/sim_synth_physics/compiler.py src/world_model/sim_synth_physics/synthetic_branches.py src/world_model/sim_synth_physics/promotion.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`
+  - `git diff --check && python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q && python3 -m pytest tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q` (`43 passed`)
+  - `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1637 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x excluded-row sidecars for trainer inputs
 
 - **Changed**:

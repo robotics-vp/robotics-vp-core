@@ -104,6 +104,18 @@ def _coerce_helper_payload(payload: Any) -> Dict[str, Any]:
     return {}
 
 
+def helper_payload_rejects(payload: Mapping[str, Any], *, threshold: float = 0.5) -> bool:
+    """Return whether a learned helper explicitly recommends rejection."""
+
+    payload_mapping = mapping(payload)
+    if bool(payload_mapping.get("reject_recommended", False)):
+        return True
+    try:
+        return float(payload_mapping.get("reject_probability", 0.0) or 0.0) > float(threshold)
+    except Exception:
+        return False
+
+
 def infer_backend_payload(helper: Any, *, context: Mapping[str, Any]) -> Dict[str, Any]:
     if helper is None:
         return {}

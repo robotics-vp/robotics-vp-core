@@ -1,5 +1,46 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x reject-head training over negative supervision
+
+### What changed
+
+- Added `reject_head` / `reject_probability` output to:
+  - `LearnedBackendSelector`
+  - `LearnedBranchPlanner`
+- `train_backend_selector(...)` and `train_branch_planner(...)` now accept
+  `negative_rows` and train a BCE reject loss against positive vs negative
+  supervision rows.
+- Existing backend/fidelity/randomization and branch mode/yield losses still use
+  selected positive rows only.
+- Trainer scripts pass negative-supervision sidecars into those reject losses and
+  report `reject_accuracy`.
+- Runtime package metadata now advertises
+  `phase1x_reject_probability_head_v1`.
+- Promoted helper payloads with `reject_recommended` or high
+  `reject_probability` stay trace-visible but are not applied to runtime backend
+  or branch decisions.
+- Legacy checkpoints without a reject head load safely with a low-reject default.
+
+### Why this was the right next local step
+
+This is the first pass where negative-supervision rows become actual learning
+signal. It deliberately does not let negative rows train the positive target
+heads. The model learns a bounded reject surface while the existing helper
+semantics stay intact. Runtime also respects that reject surface by refusing to
+apply a promoted learned payload that recommends rejection.
+
+This reduces the Phase 1.x local debt from “negative evidence is preserved but
+unused” to “negative evidence trains a bounded reject head, pending provider
+truth and benchmark validation.”
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics/backend_selector.py src/world_model/sim_synth_physics/branch_planner.py src/world_model/sim_synth_physics/compiler.py src/world_model/sim_synth_physics/synthetic_branches.py src/world_model/sim_synth_physics/promotion.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py`
+- `git diff --check && python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q && python3 -m pytest tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q` ->
+  `43 passed`
+- `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1637 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x excluded-row sidecars for trainer inputs
 
 ### What changed
