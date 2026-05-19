@@ -871,6 +871,12 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert {
         receipt.branch_plan_id for receipt in result.branch_validity_receipts
     } == {plan.plan_id for plan in result.world_state.synthetic_branch_plans}
+    assert result.sensor_alignment_receipt is not None
+    assert result.sensor_alignment_receipt.status in {
+        "alignment_contract_missing",
+        "geometry_contract_validated",
+        "intrinsics_validated_extrinsics_missing",
+    }
     assert result.backend_runtime_bridge_receipt.bridge_status in {
         "runtime_targets_missing",
         "runtime_assets_missing",
@@ -953,6 +959,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "surrogate_physics_receipt.json").exists()
     assert (tmp_path / "surrogate_calibration_receipt.json").exists()
     assert (tmp_path / "branch_validity_receipts.json").exists()
+    assert (tmp_path / "sensor_alignment_receipt.json").exists()
     assert (tmp_path / "render_provider_receipts.json").exists()
     assert (tmp_path / "simulation_outcome_receipts.json").exists()
     assert all(

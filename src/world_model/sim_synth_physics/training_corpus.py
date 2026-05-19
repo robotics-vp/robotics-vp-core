@@ -169,6 +169,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "surrogate_physics_receipt",
             "surrogate_calibration_receipt",
             "branch_validity_receipt",
+            "sensor_alignment_receipt",
             "render_provider_receipt",
             "simulation_outcome_receipt",
         )
@@ -197,6 +198,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_surrogate_physics: dict[Path, list[Dict[str, Any]]] = {}
     grouped_surrogate_calibrations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_branch_validity_receipts: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_sensor_alignments: dict[Path, list[Dict[str, Any]]] = {}
     grouped_render_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_outcomes: dict[Path, list[Dict[str, Any]]] = {}
     explicit_bundles: list[Dict[str, Any]] = []
@@ -260,6 +262,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_surrogate_calibrations.setdefault(parent, []).append(dict(payload))
             elif version == "branch_validity_receipt_v1":
                 grouped_branch_validity_receipts.setdefault(parent, []).append(dict(payload))
+            elif version == "sensor_alignment_receipt_v1":
+                grouped_sensor_alignments.setdefault(parent, []).append(dict(payload))
             elif version == "render_provider_receipt_v1":
                 grouped_render_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "simulation_outcome_receipt_v1":
@@ -286,6 +290,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         | set(grouped_surrogate_physics)
         | set(grouped_surrogate_calibrations)
         | set(grouped_branch_validity_receipts)
+        | set(grouped_sensor_alignments)
         | set(grouped_render_receipts)
         | set(grouped_outcomes)
     )
@@ -309,6 +314,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         surrogate_physics = grouped_surrogate_physics.get(directory, [])
         surrogate_calibrations = grouped_surrogate_calibrations.get(directory, [])
         branch_validity_receipts = grouped_branch_validity_receipts.get(directory, [])
+        sensor_alignments = grouped_sensor_alignments.get(directory, [])
         render_receipts = grouped_render_receipts.get(directory, [])
         outcomes = grouped_outcomes.get(directory, [])
         for world_state in world_states:
@@ -360,6 +366,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 bundle["branch_validity_receipts"] = [
                     dict(item) for item in branch_validity_receipts
                 ]
+            if sensor_alignments:
+                bundle["sensor_alignment_receipt"] = dict(sensor_alignments[-1])
             if render_receipts:
                 bundle["render_provider_receipts"] = [dict(item) for item in render_receipts]
             if outcomes:
@@ -490,6 +498,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "branch_validity_receipt_v1"
     ]
+    sensor_alignment_receipts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "sensor_alignment_receipt_v1"
+    ]
     render_receipts = [
         dict(payload)
         for payload in rows
@@ -548,6 +562,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             bundle["surrogate_calibration_receipt"] = surrogate_calibration_receipts[-1]
         if branch_validity_receipts:
             bundle["branch_validity_receipts"] = branch_validity_receipts
+        if sensor_alignment_receipts:
+            bundle["sensor_alignment_receipt"] = sensor_alignment_receipts[-1]
         if render_receipts:
             bundle["render_provider_receipts"] = render_receipts
         if outcomes:
@@ -586,6 +602,7 @@ def build_backend_selector_rows_from_receipts(
         adaptation_receipt = _mapping(bundle_mapping.get("physics_adaptation_receipt"))
         backend_binding_receipt = _mapping(bundle_mapping.get("backend_execution_binding_receipt"))
         robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
+        sensor_alignment_receipt = _mapping(bundle_mapping.get("sensor_alignment_receipt"))
         gen2sim_admission_receipt = _mapping(bundle_mapping.get("gen2sim_admission_receipt"))
         backend_runtime_bridge_receipt = _mapping(
             bundle_mapping.get("backend_runtime_bridge_receipt")
@@ -652,6 +669,7 @@ def build_backend_selector_rows_from_receipts(
         surrogate_calibration_receipt = _mapping(
             bundle_mapping.get("surrogate_calibration_receipt")
         )
+        sensor_alignment_receipt = _mapping(bundle_mapping.get("sensor_alignment_receipt"))
         branch_validity_receipts = _mapping_list(
             bundle_mapping.get("branch_validity_receipts")
         )
@@ -794,6 +812,15 @@ def build_backend_selector_rows_from_receipts(
                         1 for receipt in branch_validity_receipts if not receipt.get("admissible")
                     ),
                     "branch_validity_reject_reasons": branch_reject_reasons,
+                    "sensor_alignment_receipt_id": sensor_alignment_receipt.get("receipt_id"),
+                    "sensor_alignment_status": sensor_alignment_receipt.get("status"),
+                    "sensor_alignment_score": sensor_alignment_receipt.get("alignment_score"),
+                    "sensor_alignment_checks": _mapping(
+                        sensor_alignment_receipt.get("checks")
+                    ),
+                    "sensor_alignment_metrics": _mapping(
+                        sensor_alignment_receipt.get("metrics")
+                    ),
                     "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
                     "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(
                         "benchmark_gate_ready"
@@ -1110,6 +1137,7 @@ def build_branch_planner_rows_from_receipts(
             if str(receipt.get("branch_plan_id"))
         }
         robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
+        sensor_alignment_receipt = _mapping(bundle_mapping.get("sensor_alignment_receipt"))
         gen2sim_admission_receipt = _mapping(bundle_mapping.get("gen2sim_admission_receipt"))
         backend_runtime_bridge_receipt = _mapping(
             bundle_mapping.get("backend_runtime_bridge_receipt")
@@ -1304,6 +1332,18 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "branch_reject_reasons": list(
                             branch_validity_receipt.get("reject_reasons") or []
+                        ),
+                        "sensor_alignment_receipt_id": sensor_alignment_receipt.get(
+                            "receipt_id"
+                        ),
+                        "sensor_alignment_status": sensor_alignment_receipt.get(
+                            "status"
+                        ),
+                        "sensor_alignment_score": sensor_alignment_receipt.get(
+                            "alignment_score"
+                        ),
+                        "sensor_alignment_checks": _mapping(
+                            sensor_alignment_receipt.get("checks")
                         ),
                         "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                         "task_measurement_receipt_id": task_measurement_receipt.get(

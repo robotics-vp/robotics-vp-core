@@ -10,12 +10,18 @@ from .receipts import (
     BackendMismatchReceipt,
     BranchValidityReceipt,
     PhysicsCalibrationReceipt,
+    SensorAlignmentReceipt,
     SimRealGapReceipt,
     SurrogateCalibrationReceipt,
     SurrogatePhysicsReceipt,
     TaskMeasurementReceipt,
 )
 from .state import SimSynthPhysicsWorldState
+from .utils.camera_geometry import (
+    camera_intrinsics_from_mapping,
+    camera_round_trip_error,
+    transform_from_mapping,
+)
 
 
 def _runtime_evidence(calibration_receipt: PhysicsCalibrationReceipt) -> dict[str, Any]:
@@ -206,6 +212,109 @@ def build_surrogate_calibration_receipt(
     )
 
 
+def build_sensor_alignment_receipt(
+    world_state: SimSynthPhysicsWorldState,
+) -> SensorAlignmentReceipt:
+    """Emit a CPU-local camera geometry / sensor-alignment receipt."""
+
+    scene_hierarchy = world_state.scene_hierarchy
+    scene_metadata = mapping({} if scene_hierarchy is None else scene_hierarchy.metadata)
+    semantic_context = mapping(scene_metadata.get("semantic_context"))
+    intrinsics_source = (
+        semantic_context.get("camera_intrinsics")
+        or semantic_context.get("sensor_intrinsics")
+        or semantic_context.get("intrinsics")
+    )
+    intrinsics_payload = (
+        mapping(intrinsics_source)
+        if isinstance(intrinsics_source, dict)
+        else ({"matrix": intrinsics_source} if intrinsics_source is not None else {})
+    )
+    extrinsics_source = (
+        semantic_context.get("camera_extrinsics")
+        or semantic_context.get("camera_pose")
+        or semantic_context.get("sensor_extrinsics")
+    )
+    checks = {
+        "scene_hierarchy": "present" if scene_hierarchy is not None else "missing",
+        "intrinsics": "missing",
+        "extrinsics": "missing",
+        "round_trip": "not_run",
+    }
+    metrics: dict[str, float] = {}
+    metadata: dict[str, Any] = {
+        "world_state_id": world_state.state_id,
+        "scene_materialization_status": (
+            "" if scene_hierarchy is None else scene_hierarchy.materialization_status
+        ),
+        "asset_contract_id": world_state.robot_asset_contract.contract_id,
+        "asset_profile": world_state.robot_asset_contract.asset_profile,
+        "missing_assets": list(world_state.robot_asset_contract.missing_assets),
+        "semantic_context_keys": sorted(semantic_context),
+    }
+    status = "alignment_contract_missing"
+    alignment_score = 0.0
+
+    if intrinsics_payload:
+        try:
+            intrinsics = camera_intrinsics_from_mapping(intrinsics_payload)
+            checks["intrinsics"] = "valid"
+            metadata["intrinsics_matrix"] = intrinsics.tolist()
+            camera_to_world = None
+            if extrinsics_source is not None:
+                camera_to_world = transform_from_mapping(extrinsics_source)
+                checks["extrinsics"] = "valid"
+                metadata["camera_to_world"] = camera_to_world.tolist()
+            depth_sample = semantic_context.get("alignment_depth_sample") or [
+                [1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
+            ]
+            round_trip_error = camera_round_trip_error(
+                depth_sample,
+                intrinsics,
+                camera_to_world=camera_to_world,
+            )
+            checks["round_trip"] = "passed" if round_trip_error <= 1e-6 else "failed"
+            metrics["round_trip_max_pixel_error"] = round_trip_error
+            alignment_score = clip01(1.0 - min(round_trip_error, 1.0))
+            if camera_to_world is None:
+                status = "intrinsics_validated_extrinsics_missing"
+                alignment_score = min(alignment_score, 0.5)
+            elif checks["round_trip"] == "passed":
+                status = "geometry_contract_validated"
+            else:
+                status = "geometry_round_trip_mismatch"
+        except Exception as exc:  # pragma: no cover - exact exception type is metadata only
+            status = "alignment_contract_invalid"
+            checks["round_trip"] = "failed"
+            metadata["validation_error"] = str(exc)
+            alignment_score = 0.0
+            if checks["intrinsics"] == "missing" and intrinsics_payload:
+                checks["intrinsics"] = "invalid"
+            if extrinsics_source is not None and checks["extrinsics"] == "missing":
+                checks["extrinsics"] = "invalid"
+
+    payload = {
+        "state_id": world_state.state_id,
+        "scene_hierarchy_id": "" if scene_hierarchy is None else scene_hierarchy.hierarchy_id,
+        "sensor_profile": "" if scene_hierarchy is None else scene_hierarchy.sensor_profile,
+        "status": status,
+        "checks": checks,
+    }
+    return SensorAlignmentReceipt(
+        receipt_id=stable_id("sensor_alignment_receipt", payload),
+        scene_hierarchy_id="" if scene_hierarchy is None else scene_hierarchy.hierarchy_id,
+        sensor_profile="" if scene_hierarchy is None else scene_hierarchy.sensor_profile,
+        alignment_score=alignment_score,
+        status=status,
+        checks=checks,
+        metrics=metrics,
+        metadata=metadata,
+    )
+
+
+
 def _branch_reject_reasons(
     *,
     plan_metadata: dict[str, Any],
@@ -304,6 +413,7 @@ def build_branch_validity_receipts(
 __all__ = [
     "build_backend_mismatch_receipt",
     "build_branch_validity_receipts",
+    "build_sensor_alignment_receipt",
     "build_sim_real_gap_receipt",
     "build_surrogate_calibration_receipt",
     "build_surrogate_physics_receipt",

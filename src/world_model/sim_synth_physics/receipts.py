@@ -521,6 +521,34 @@ class BranchValidityReceipt:
 
 
 @dataclass(frozen=True)
+class SensorAlignmentReceipt:
+    """CPU-local camera geometry / sensor-alignment receipt."""
+
+    receipt_id: str
+    scene_hierarchy_id: str
+    sensor_profile: str
+    alignment_score: float
+    status: str
+    checks: Dict[str, str] = field(default_factory=dict)
+    metrics: Dict[str, float] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "sensor_alignment_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "scene_hierarchy_id": self.scene_hierarchy_id,
+            "sensor_profile": self.sensor_profile,
+            "alignment_score": clip01(self.alignment_score),
+            "status": self.status,
+            "checks": {str(key): str(value) for key, value in self.checks.items()},
+            "metrics": {str(key): float(value) for key, value in self.metrics.items()},
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class Gen2SimAdmissionReceipt:
     """Receipt for one WM-owned gen2sim admission decision surface."""
 

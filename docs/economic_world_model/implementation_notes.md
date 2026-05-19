@@ -1,5 +1,44 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-18 - Phase 1.x sensor-alignment receipts
+
+### What changed
+
+- Extended `camera_geometry.py` with:
+  - `camera_intrinsics_from_mapping(...)`
+  - `transform_from_mapping(...)`
+  - `camera_round_trip_error(...)`
+- Added `SensorAlignmentReceipt` for CPU-local camera/sensor geometry checks.
+- Added `build_sensor_alignment_receipt(...)`, deriving status from scene
+  hierarchy semantic context, camera intrinsics, camera extrinsics / pose, and a
+  local projection round-trip check.
+- `SimSynthPhysicsRuntime` now emits `sensor_alignment_receipt.json` and embeds
+  the receipt in loop results plus training-feedback rows.
+- `training_corpus.py` now harvests the receipt and exposes alignment status,
+  score, checks, and metrics to backend-selector and branch-planner rows.
+
+### Why this was the right next local step
+
+After branch-validity receipts, the next cheap Phase 1.x gap was sensor truth.
+We cannot validate provider observation quality without GPU/runtime bring-up, but
+we can make the geometry contract visible and testable now: intrinsics,
+extrinsics, and projection round-trip posture are no longer implicit inside
+semantic context or asset notes.
+
+The receipt preserves honest semantics. `geometry_contract_validated` means the
+local metadata is internally consistent; it does not mean a real camera, Isaac
+render, UE5 render, or Unitree sensor path has been calibrated. Missing or
+invalid metadata remains `alignment_contract_missing` or
+`alignment_contract_invalid`.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+- `python3 -m pytest tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_vectorized_runtime.py -q` ->
+  `40 passed`
+- `python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1634 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-18 - Phase 1.x branch-validity and reject-filter receipts
 
 ### What changed

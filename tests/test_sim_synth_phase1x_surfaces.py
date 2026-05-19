@@ -1,5 +1,8 @@
 from src.world_model.semantic_coverage_graph import CoverageEdge, CoverageNode, SemanticCoverageGraph
-from src.world_model.sim_synth_physics import compile_sim_synth_physics_world_state
+from src.world_model.sim_synth_physics import (
+    build_sensor_alignment_receipt,
+    compile_sim_synth_physics_world_state,
+)
 
 
 def _graph() -> SemanticCoverageGraph:
@@ -33,6 +36,11 @@ def test_phase1x_surfaces_compile_from_local_context() -> None:
             "region_ids": ["countertop"],
             "object_ids": ["drawer", "vase"],
             "sensor_profile": "rgbd_front",
+            "camera_intrinsics": {"resolution": [4, 4], "fov_deg": 90.0},
+            "camera_extrinsics": {
+                "translation": [0.0, 0.0, 1.0],
+                "rotation_rpy": [0.0, 0.0, 0.0],
+            },
         },
         benchmark_signals={
             "ready": True,
@@ -69,3 +77,10 @@ def test_phase1x_surfaces_compile_from_local_context() -> None:
     assert state.surrogate_physics_provider is not None
     assert state.surrogate_physics_provider.available is True
     assert state.surrogate_physics_provider.provider_family == "windinet_like"
+
+    sensor_alignment = build_sensor_alignment_receipt(state)
+    assert sensor_alignment.status == "geometry_contract_validated"
+    assert sensor_alignment.alignment_score == 1.0
+    assert sensor_alignment.checks["intrinsics"] == "valid"
+    assert sensor_alignment.checks["extrinsics"] == "valid"
+    assert sensor_alignment.metrics["round_trip_max_pixel_error"] == 0.0

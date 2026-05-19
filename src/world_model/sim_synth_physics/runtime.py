@@ -20,6 +20,7 @@ from .gen2sim_admission import build_gen2sim_admission_receipt
 from .phase1x_receipts import (
     build_backend_mismatch_receipt,
     build_branch_validity_receipts,
+    build_sensor_alignment_receipt,
     build_sim_real_gap_receipt,
     build_surrogate_calibration_receipt,
     build_surrogate_physics_receipt,
@@ -39,6 +40,7 @@ from .receipts import (
     BackendShadowExecutionReceipt,
     BranchValidityReceipt,
     BackendMismatchReceipt,
+    SensorAlignmentReceipt,
     Gen2SimAdmissionReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
@@ -91,6 +93,7 @@ class SimSynthPhysicsLoopResult:
     surrogate_physics_receipt: SurrogatePhysicsReceipt
     surrogate_calibration_receipt: SurrogateCalibrationReceipt
     branch_validity_receipts: list[BranchValidityReceipt] = field(default_factory=list)
+    sensor_alignment_receipt: Optional[SensorAlignmentReceipt] = None
     backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt] = field(default_factory=list)
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt] = None
     backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt] = None
@@ -149,6 +152,11 @@ class SimSynthPhysicsLoopResult:
             "branch_validity_receipts": [
                 receipt.to_dict() for receipt in self.branch_validity_receipts
             ],
+            "sensor_alignment_receipt": (
+                self.sensor_alignment_receipt.to_dict()
+                if self.sensor_alignment_receipt is not None
+                else None
+            ),
             "render_provider_receipts": [
                 receipt.to_dict() for receipt in self.render_provider_receipts
             ],
@@ -190,6 +198,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "surrogate_physics_receipt": root / "surrogate_physics_receipt.json",
         "surrogate_calibration_receipt": root / "surrogate_calibration_receipt.json",
         "branch_validity_receipts": root / "branch_validity_receipts.json",
+        "sensor_alignment_receipt": root / "sensor_alignment_receipt.json",
         "render_provider_receipts": root / "render_provider_receipts.json",
         "simulation_outcome_receipts": root / "simulation_outcome_receipts.json",
         "training_feedback_manifest": root / "sim_synth_training_feedback.json",
@@ -499,6 +508,7 @@ def _build_training_feedback_manifest(
     surrogate_physics_receipt: SurrogatePhysicsReceipt,
     surrogate_calibration_receipt: SurrogateCalibrationReceipt,
     branch_validity_receipts: list[BranchValidityReceipt],
+    sensor_alignment_receipt: SensorAlignmentReceipt,
     render_provider_receipts: list[RenderProviderReceipt],
     outcome_receipts: list[SimulationOutcomeReceipt],
 ) -> dict[str, Any]:
@@ -573,6 +583,7 @@ def _build_training_feedback_manifest(
                     if branch_validity_receipt is None
                     else branch_validity_receipt.to_dict()
                 ),
+                "sensor_alignment": sensor_alignment_receipt.to_dict(),
                 "metadata": mapping(receipt.metadata),
             }
         )
@@ -626,6 +637,9 @@ def _build_training_feedback_manifest(
         "branch_validity_reject_count": sum(
             1 for receipt in branch_validity_receipts if not receipt.admissible
         ),
+        "sensor_alignment_receipt_id": sensor_alignment_receipt.receipt_id,
+        "sensor_alignment_status": sensor_alignment_receipt.status,
+        "sensor_alignment_score": sensor_alignment_receipt.alignment_score,
         "route_status": execution_contract.route_status,
         "gen2sim_benchmark_gate_ready": bool(gen2sim_admission_receipt.benchmark_gate_ready),
         "gen2sim_admissible_branch_count": len(gen2sim_admission_receipt.admissible_branch_ids),
@@ -1108,6 +1122,7 @@ class SimSynthPhysicsRuntime:
             ],
         )
         branch_validity_receipts = build_branch_validity_receipts(world_state)
+        sensor_alignment_receipt = build_sensor_alignment_receipt(world_state)
         training_feedback_manifest = _build_training_feedback_manifest(
             world_state,
             execution_contract,
@@ -1129,6 +1144,7 @@ class SimSynthPhysicsRuntime:
             surrogate_physics_receipt,
             surrogate_calibration_receipt,
             branch_validity_receipts,
+            sensor_alignment_receipt,
             render_provider_receipts,
             outcome_receipts,
         )
@@ -1153,6 +1169,7 @@ class SimSynthPhysicsRuntime:
             surrogate_physics_receipt=surrogate_physics_receipt,
             surrogate_calibration_receipt=surrogate_calibration_receipt,
             branch_validity_receipts=branch_validity_receipts,
+            sensor_alignment_receipt=sensor_alignment_receipt,
             render_provider_receipts=render_provider_receipts,
             outcome_receipts=outcome_receipts,
             training_feedback_manifest=training_feedback_manifest,
@@ -1278,6 +1295,10 @@ class SimSynthPhysicsRuntime:
                     "version": "branch_validity_receipt_bundle_v1",
                     "receipts": [receipt.to_dict() for receipt in branch_validity_receipts],
                 },
+            )
+            _write_json(
+                artifact_paths["sensor_alignment_receipt"],
+                sensor_alignment_receipt.to_dict(),
             )
             _write_json(
                 artifact_paths["render_provider_receipts"],

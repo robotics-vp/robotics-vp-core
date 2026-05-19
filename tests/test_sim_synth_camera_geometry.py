@@ -3,9 +3,12 @@ import pytest
 
 from src.world_model.sim_synth_physics.utils.camera_geometry import (
     camera_intrinsics_from_fov,
+    camera_intrinsics_from_mapping,
+    camera_round_trip_error,
     compose_transforms,
     invert_transform,
     project_points,
+    transform_from_mapping,
     unproject_depth,
 )
 
@@ -56,3 +59,21 @@ def test_compose_transforms_matches_matrix_chain() -> None:
     composed = compose_transforms(first, second)
 
     assert composed[:3, 3] == pytest.approx(np.asarray([1.0, 2.0, 0.0]))
+
+
+def test_intrinsics_and_transform_mapping_helpers_support_metadata_shapes() -> None:
+    intrinsics = camera_intrinsics_from_mapping(
+        {"resolution": [4, 4], "fov_deg": 90.0, "cx": 1.5, "cy": 1.5}
+    )
+    transform = transform_from_mapping(
+        {"translation": [1.0, 2.0, 3.0], "rotation_rpy": [0.0, 0.0, 0.0]}
+    )
+    error = camera_round_trip_error(
+        np.ones((4, 4), dtype=np.float64),
+        intrinsics,
+        camera_to_world=transform,
+    )
+
+    assert intrinsics[0, 0] == pytest.approx(2.0)
+    assert transform[:3, 3] == pytest.approx(np.asarray([1.0, 2.0, 3.0]))
+    assert error == pytest.approx(0.0)

@@ -272,6 +272,9 @@ Also preserve a narrow SIM1 rule:
 - **landed locally on 2026-05-18**: branch-validity / reject-filter receipts
   now emit through runtime artifacts and become training-visible in
   backend-selector aggregates plus branch-planner per-branch metadata
+- **landed locally on 2026-05-18**: geometry-backed sensor-alignment receipts
+  now validate camera intrinsics/extrinsics metadata via CPU-local projection
+  round trips and expose alignment posture to runtime and training rows
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

@@ -1,5 +1,30 @@
 # Economic World Model Progress Log
 
+## 2026-05-18 - Phase 1.x geometry-backed sensor alignment receipts
+
+- **Changed**:
+  - extended CPU-local camera geometry helpers with metadata parsers for
+    common intrinsics / extrinsics shapes plus round-trip reprojection checks
+  - added `SensorAlignmentReceipt` as the typed camera/sensor geometry receipt
+    for Sim / Synth / Physics scene materialization posture
+  - runtime execution now emits `sensor_alignment_receipt.json`, includes the
+    receipt in loop results, and threads alignment status / score into
+    training-feedback rows
+  - receipt harvesting now recognizes sensor-alignment receipts and projects
+    their status, score, checks, and metrics into backend-selector and
+    branch-planner training rows
+- **Why this matters**:
+  - this turns camera intrinsics/extrinsics alignment from a loose asset note
+    into replayable CPU-local evidence before provider/GPU bring-up exists
+  - the receipt is intentionally a geometry-contract check, not a calibration
+    or benchmark claim; missing or invalid contracts remain explicit
+  - future Isaac/UE5/Habitat-style providers can plug real observation bundles
+    into the same receipt family instead of introducing bespoke sensor gates
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_vectorized_runtime.py -q` (`40 passed`)
+  - `python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1634 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-18 - Phase 1.x branch-validity / reject-filter receipts
 
 - **Changed**:
