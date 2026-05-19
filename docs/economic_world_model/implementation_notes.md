@@ -1,5 +1,46 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x subsystem index in compiled WM state
+
+### What changed
+
+- Added `src/world_model/sim_synth_physics/subsystems.py`.
+- The new `phase1x_subsystem_index_v1` maps all 10 Sim / Synth / Physics
+  Phase 1.x subsystems to:
+  - owned modules
+  - typed state surfaces
+  - receipt surfaces
+  - learned or reserved seams
+  - promotion gates
+  - provider families
+  - external blockers
+  - runtime artifact-ref keys
+- `compile_sim_synth_physics_world_state(...)` now embeds the subsystem index
+  in world-state metadata using the compiled artifact refs and receipt
+  inventory.
+- The package exports `PHASE1X_SUBSYSTEM_SPECS`,
+  `Phase1xSubsystemSpec`, and `build_phase1x_subsystem_index(...)`.
+
+### Why this was the right next local step
+
+The Phase 1.x decomposition had been specified in doctrine but was not yet a
+machine-readable runtime surface. That made it easy for future audits to drift
+back into prose interpretation. This pass turns subsystem ownership into a
+compiled WM artifact while staying honest about provider/GPU blockers.
+
+This does not claim the package has been physically refactored into 10
+directories or that all provider lanes are executable. It gives future
+provider bring-up, training, and closure audits a stable index for deciding
+which subsystem owns each surface and which blockers are external.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics/subsystems.py src/world_model/sim_synth_physics/compiler.py src/world_model/sim_synth_physics/__init__.py tests/test_sim_synth_phase1x_subsystems.py`
+- `git diff --check && python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_phase1x_subsystems.py -q && python3 -m pytest tests/test_sim_synth_phase1x_subsystems.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_physics_world_model.py -q` ->
+  `36 passed`
+- `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1639 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x training-gate promotion preconditions
 
 ### What changed

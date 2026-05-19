@@ -114,6 +114,11 @@ from .state import (
     TaskDefinitionContractState,
     TaskMeasurementSurface,
 )
+from .subsystems import (
+    PHASE1X_SUBSYSTEM_SPECS,
+    Phase1xSubsystemSpec,
+    build_phase1x_subsystem_index,
+)
 from .synthetic_branches import (
     build_synthetic_branch_corpus_metadata,
     collect_local_synthetic_branch_records,
@@ -161,6 +166,8 @@ __all__ = [
     "PhysicsCalibrationReceipt",
     "PhysicsExecutionContract",
     "PhysicsContextState",
+    "PHASE1X_SUBSYSTEM_SPECS",
+    "Phase1xSubsystemSpec",
     "RenderProviderReceipt",
     "RobotAssetContractReceipt",
     "RobotAssetContractState",
@@ -232,6 +239,7 @@ __all__ = [
     "build_backend_selector_rows_from_receipts",
     "build_branch_planner_rows_from_receipts",
     "build_phase1x_training_gate",
+    "build_phase1x_subsystem_index",
     "phase1x_training_admissibility_status",
     "select_phase1x_positive_training_rows",
     "split_phase1x_training_rows",

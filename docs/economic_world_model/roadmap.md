@@ -305,6 +305,10 @@ Also preserve a narrow SIM1 rule:
   rows to match admissibility summaries, diagnostic rows to stay out of
   promotion, runtime receipt manifests to validate cleanly, and
   negative-supervision sidecars to be backed by reject-head training
+- **landed locally on 2026-05-19**: compiled Sim / Synth / Physics world states
+  now carry `phase1x_subsystem_index_v1`, mapping the 10 Phase 1.x subsystems
+  to typed state surfaces, receipt families, learned/reserved seams, promotion
+  gates, provider families, runtime artifact refs, and honest external blockers
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

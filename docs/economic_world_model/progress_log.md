@@ -1,5 +1,25 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x subsystem index in compiled WM state
+
+- **Changed**:
+  - added `phase1x_subsystem_index_v1`, a machine-readable mapping of the
+    Sim / Synth / Physics WM's 10 Phase 1.x subsystems to owned modules, typed
+    state surfaces, receipt families, learned/reserved seams, promotion gates,
+    provider families, runtime artifact refs, and honest external blockers
+  - compiled `SimSynthPhysicsWorldState` metadata now carries the subsystem
+    index with runtime artifact refs and compiled receipt-family coverage
+  - package exports expose `build_phase1x_subsystem_index(...)` and the static
+    `PHASE1X_SUBSYSTEM_SPECS`
+- **Why this matters**:
+  - the 10-subsystem Phase 1.x decomposition is no longer doctrine-only
+  - downstream audits can now distinguish local structural ownership from
+    provider/GPU/asset/benchmark blockers without re-parsing roadmap prose
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics/subsystems.py src/world_model/sim_synth_physics/compiler.py src/world_model/sim_synth_physics/__init__.py tests/test_sim_synth_phase1x_subsystems.py`
+  - `git diff --check && python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_phase1x_subsystems.py -q && python3 -m pytest tests/test_sim_synth_phase1x_subsystems.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_physics_world_model.py -q` (`36 passed`)
+  - `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1639 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x training-gate promotion preconditions
 
 - **Changed**:

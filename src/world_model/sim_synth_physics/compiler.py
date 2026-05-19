@@ -49,6 +49,7 @@ from .state import (
     TaskDefinitionContractState,
     TaskMeasurementSurface,
 )
+from .subsystems import build_phase1x_subsystem_index
 from .synthetic_branches import compile_synthetic_branch_plans
 
 EXPECTED_RECEIPTS = [
@@ -786,6 +787,7 @@ def compile_sim_synth_physics_world_state(
     }
     artifact_refs = {
         "coverage_window_ref": coverage_window_ref,
+        "physics_context_id": physics_context.context_id,
         "physics_adaptation_policy_id": physics_adaptation_policy.policy_id,
         "backend_execution_binding_id": backend_execution_binding.binding_id,
         "robot_asset_contract_id": robot_asset_contract.contract_id,
@@ -796,6 +798,7 @@ def compile_sim_synth_physics_world_state(
         "differentiable_physics_provider_id": differentiable_physics_provider.provider_id,
         "surrogate_physics_provider_id": surrogate_physics_provider.provider_id,
         "branch_plan_ids": [plan.plan_id for plan in branch_plans],
+        "admission_id": gen2sim_admission.admission_id,
         "diffusion_conditioning_id": (
             diffusion_conditioning.conditioning_id if diffusion_conditioning is not None else None
         ),
@@ -876,6 +879,10 @@ def compile_sim_synth_physics_world_state(
     )
     final_metadata = dict(provisional_world_state.metadata)
     final_metadata["compiled_receipt_inventory"] = compiled_receipt_inventory
+    final_metadata["phase1x_subsystem_index"] = build_phase1x_subsystem_index(
+        artifact_refs=final_artifact_refs,
+        receipt_inventory=compiled_receipt_inventory,
+    )
     final_metadata["runtime_depth_projection"] = mapping(
         compiled_receipt_inventory.get("runtime_depth_projection")
     )

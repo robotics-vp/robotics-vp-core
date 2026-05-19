@@ -1649,7 +1649,11 @@ Current gaps:
 - parts of the LSD / NAG / GGDS path remain stubby
 - agenda ownership is still orchestrator-heavy instead of WM-owned
 - diffusion, gen2sim, and synthetic branch generation are not yet owned by one canonical state service
-- the implementation does not yet have explicit subsystem boundaries matching the 10-subsystem decomposition above — that is the Phase 1.x target
+- as of 2026-05-19, the compiled world state carries
+  `phase1x_subsystem_index_v1`, so the 10-subsystem decomposition is now
+  machine-readable at runtime; a deeper physical package refactor by subsystem
+  remains a future GPU/runtime-era cleanup, not a blocker for honest local
+  structural ownership
 
 ### 4. Economic WM
 
