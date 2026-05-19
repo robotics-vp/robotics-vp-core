@@ -1,5 +1,38 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x excluded-row sidecars for trainer inputs
+
+### What changed
+
+- Added `split_phase1x_training_rows(...)` with
+  `phase1x_training_row_split_v1` output.
+- The split preserves four groups:
+  - selected positive / legacy rows for current helper training
+  - `negative_supervision` rows
+  - `diagnostic_only` rows
+  - other excluded rows, if a future status appears
+- Backend-selector and branch-planner training scripts now write:
+  - `*_rows.jsonl` for selected positive training rows
+  - `*_negative_supervision_rows.jsonl`
+  - `*_diagnostic_rows.jsonl`
+- The negative and diagnostic sidecars are included in training summaries, job
+  results, and Regal artifact manifests.
+
+### Why this was the right next local step
+
+The previous pass correctly excluded negative and diagnostic rows from positive
+helper losses. This pass prevents a different failure mode: losing the excluded
+rows as actionable artifacts. Negative supervision remains deferred as a model
+loss, but it is now preserved as a first-class local dataset sidecar.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py src/world_model/sim_synth_physics/__init__.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py`
+- `git diff --check && python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q && python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q` ->
+  `10 passed`
+- `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1634 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x trainer-side admissibility enforcement
 
 ### What changed

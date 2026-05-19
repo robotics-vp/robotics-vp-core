@@ -6,6 +6,7 @@ from src.world_model.sim_synth_physics.training_corpus import (
     build_branch_planner_rows_from_receipts,
     harvest_sim_synth_receipt_bundles,
     select_phase1x_positive_training_rows,
+    split_phase1x_training_rows,
     validate_runtime_receipt_manifest,
 )
 
@@ -939,6 +940,11 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_selection_summary["excluded_row_count"] == 1
     assert branch_selection_summary["positive_training_row_count"] == 1
     assert branch_selection_summary["negative_supervision_row_count"] == 1
+    branch_split = split_phase1x_training_rows([branch_rows[0], filtered_branch_rows[0]])
+    assert branch_split["positive_training_rows"] == [branch_rows[0]]
+    assert branch_split["negative_supervision_rows"] == [filtered_branch_rows[0]]
+    assert branch_split["diagnostic_only_rows"] == []
+    assert branch_split["selection_summary"]["excluded_row_count"] == 1
 
 
 def test_harvest_sim_synth_receipt_bundles_ignores_incomplete_dirs(tmp_path: Path) -> None:

@@ -1,5 +1,27 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x excluded-row sidecars for trainer inputs
+
+- **Changed**:
+  - added `phase1x_training_row_split_v1` row splitting for Sim / Synth /
+    Physics trainer inputs
+  - backend-selector and branch-planner training scripts now write explicit
+    negative-supervision and diagnostic JSONL sidecars beside the positive
+    training dataset
+  - Regal training manifests register the excluded-row sidecars as artifacts, so
+    rejected rows are preserved for later negative-loss work instead of only
+    counted in summaries
+- **Why this matters**:
+  - trainer-side admissibility enforcement should not erase negative evidence
+  - the current helper losses remain positive-only, but future reject/utility
+    heads now have a local artifact path to consume
+  - this is still structural/data plumbing, not a claim that negative examples
+    are already improving model quality
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py src/world_model/sim_synth_physics/__init__.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py`
+  - `git diff --check && python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q && python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py -q` (`10 passed`)
+  - `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1634 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x trainer-side admissibility enforcement
 
 - **Changed**:

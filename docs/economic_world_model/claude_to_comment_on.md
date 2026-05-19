@@ -175,10 +175,10 @@ Current re-entry status after the Phase 2 pocket:
    inventing another ontology: scene-hierarchy, transfer-evidence,
    branch-validity / reject-filter, geometry-backed sensor-alignment,
    replay-validity / task-consistency, runtime receipt-manifest, manifest
-   validation, training-admissibility consumers, and trainer-side
-   admissibility enforcement are now live in runtime artifacts, training-row
-   harvest, and local trainer summaries while external GPU/provider work
-   remains blocked
+   validation, training-admissibility consumers, trainer-side admissibility
+   enforcement, and excluded-row trainer sidecars are now live in runtime
+   artifacts, training-row harvest, local trainer summaries, and Regal artifact
+   manifests while external GPU/provider work remains blocked
 
 ### Habitat-derived Sim/Synth/Physics adoption track reminder
 

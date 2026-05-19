@@ -198,6 +198,8 @@ def test_train_sim_synth_backend_selector_emits_runtime_package(tmp_path: Path) 
 
     assert Path(result["checkpoint"]).exists()
     assert Path(result["compiled_dataset"]).exists()
+    assert Path(result["negative_supervision_dataset"]).exists()
+    assert Path(result["diagnostic_dataset"]).exists()
     assert Path(result["dataset_summary"]).exists()
     assert Path(result["model_config"]).exists()
     assert Path(result["preconditions"]).exists()
@@ -217,6 +219,8 @@ def test_train_sim_synth_backend_selector_emits_runtime_package(tmp_path: Path) 
     assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 6
     assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 0
     assert dataset_summary["input_sources"]["receipt_path"] == str(receipt_path)
+    assert Path(result["negative_supervision_dataset"]).read_text(encoding="utf-8") == ""
+    assert Path(result["diagnostic_dataset"]).read_text(encoding="utf-8") == ""
 
 
 def test_train_sim_synth_backend_selector_runner_emits_runtime_manifest(tmp_path: Path) -> None:
@@ -258,6 +262,12 @@ def test_train_sim_synth_backend_selector_runner_emits_runtime_manifest(tmp_path
     assert manifest["training_kind"] == "sim_synth_backend_selector"
     assert manifest["artifact_paths"]["sim_synth_backend_selector_runtime_package"].endswith(
         "sim_synth_backend_selector_package.json"
+    )
+    assert manifest["artifact_paths"]["sim_synth_backend_selector_negative_supervision_dataset"].endswith(
+        "sim_synth_backend_selector_negative_supervision_rows.jsonl"
+    )
+    assert manifest["artifact_paths"]["sim_synth_backend_selector_diagnostic_dataset"].endswith(
+        "sim_synth_backend_selector_diagnostic_rows.jsonl"
     )
     assert checkpoint_registry["checkpoints"][0]["model_family"] == "sim_synth_backend_selector"
     assert holder["payload"]["benchmark_gate_ready"] is False

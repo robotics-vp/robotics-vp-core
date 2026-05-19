@@ -128,6 +128,7 @@ from .training_corpus import (
     load_sim_synth_receipt_bundles,
     phase1x_training_admissibility_status,
     select_phase1x_positive_training_rows,
+    split_phase1x_training_rows,
 )
 from .vectorized_runtime import VectorizedSimBatchResult, VectorizedSimRunner
 
@@ -231,6 +232,7 @@ __all__ = [
     "build_branch_planner_rows_from_receipts",
     "phase1x_training_admissibility_status",
     "select_phase1x_positive_training_rows",
+    "split_phase1x_training_rows",
     "compile_gap_driven_diffusion_plans",
     "compile_differentiable_physics_provider_state",
     "compile_scene_hierarchy_state",

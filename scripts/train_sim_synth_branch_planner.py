@@ -32,7 +32,7 @@ from src.world_model.sim_synth_physics.training_corpus import (
     build_branch_planner_rows_from_receipts,
     harvest_sim_synth_receipt_bundles,
     load_sim_synth_receipt_bundles,
-    select_phase1x_positive_training_rows,
+    split_phase1x_training_rows,
 )
 
 try:
@@ -353,7 +353,13 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
     output_root = Path(args.save_dir)
     output_root.mkdir(parents=True, exist_ok=True)
     source_rows, receipt_source = _build_dataset_rows(args)
-    rows, admissibility_summary = select_phase1x_positive_training_rows(source_rows)
+    row_split = split_phase1x_training_rows(source_rows)
+    rows = list(row_split["positive_training_rows"])
+    negative_supervision_rows = list(row_split["negative_supervision_rows"])
+    diagnostic_rows = list(row_split["diagnostic_only_rows"]) + list(
+        row_split["other_excluded_rows"]
+    )
+    admissibility_summary = dict(row_split["selection_summary"])
     if not rows:
         raise ValueError(
             "No positive branch-planner training rows found after Phase 1.x admissibility filtering"
@@ -363,7 +369,11 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
     np.random.seed(args.seed)
 
     compiled_dataset_path = output_root / "sim_synth_branch_planner_rows.jsonl"
+    negative_rows_path = output_root / "sim_synth_branch_planner_negative_supervision_rows.jsonl"
+    diagnostic_rows_path = output_root / "sim_synth_branch_planner_diagnostic_rows.jsonl"
     _write_jsonl(compiled_dataset_path, rows)
+    _write_jsonl(negative_rows_path, negative_supervision_rows)
+    _write_jsonl(diagnostic_rows_path, diagnostic_rows)
     dataset_summary = _build_dataset_summary(
         rows,
         compiled_dataset_path,
@@ -403,6 +413,8 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
     artifacts = {
         "checkpoint": str(checkpoint_path),
         "compiled_dataset": str(compiled_dataset_path),
+        "negative_supervision_dataset": str(negative_rows_path),
+        "diagnostic_dataset": str(diagnostic_rows_path),
         "dataset_summary": str(dataset_summary_path),
         "model_config": str(model_config_path),
         "preconditions": str(preconditions_path),
@@ -437,6 +449,8 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
     result = {
         "checkpoint": str(checkpoint_path),
         "compiled_dataset": str(compiled_dataset_path),
+        "negative_supervision_dataset": str(negative_rows_path),
+        "diagnostic_dataset": str(diagnostic_rows_path),
         "dataset_summary": str(dataset_summary_path),
         "model_config": str(model_config_path),
         "preconditions": str(preconditions_path),
@@ -501,6 +515,8 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         )
         runner.register_artifact("sim_synth_branch_planner_dataset_summary", dataset_summary_path)
         runner.register_artifact("sim_synth_branch_planner_compiled_dataset", compiled_dataset_path)
+        runner.register_artifact("sim_synth_branch_planner_negative_supervision_dataset", negative_rows_path)
+        runner.register_artifact("sim_synth_branch_planner_diagnostic_dataset", diagnostic_rows_path)
         runner.register_artifact("sim_synth_branch_planner_model_config", model_config_path)
         runner.register_artifact("sim_synth_branch_planner_preconditions", preconditions_path)
         runner.register_artifact("sim_synth_branch_planner_training_summary", training_summary_path)

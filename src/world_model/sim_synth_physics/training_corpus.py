@@ -881,6 +881,34 @@ def select_phase1x_positive_training_rows(
     }
 
 
+def split_phase1x_training_rows(
+    rows: Sequence[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """Split Phase 1.x rows into selected and excluded sidecar groups."""
+
+    selected_rows, selection_summary = select_phase1x_positive_training_rows(rows)
+    negative_rows: list[Dict[str, Any]] = []
+    diagnostic_rows: list[Dict[str, Any]] = []
+    other_excluded_rows: list[Dict[str, Any]] = []
+    for row in rows:
+        row_mapping = _mapping(row)
+        status = phase1x_training_admissibility_status(row_mapping)
+        if status == "negative_supervision":
+            negative_rows.append(dict(row_mapping))
+        elif status == "diagnostic_only":
+            diagnostic_rows.append(dict(row_mapping))
+        elif status not in {"positive_training", "legacy_dataset_row"}:
+            other_excluded_rows.append(dict(row_mapping))
+    return {
+        "schema_version": "phase1x_training_row_split_v1",
+        "positive_training_rows": selected_rows,
+        "negative_supervision_rows": negative_rows,
+        "diagnostic_only_rows": diagnostic_rows,
+        "other_excluded_rows": other_excluded_rows,
+        "selection_summary": dict(selection_summary),
+    }
+
+
 def build_backend_selector_rows_from_receipts(
     bundles: Sequence[Mapping[str, Any]],
 ) -> list[Dict[str, Any]]:
@@ -2120,5 +2148,6 @@ __all__ = [
     "load_sim_synth_receipt_bundles",
     "phase1x_training_admissibility_status",
     "select_phase1x_positive_training_rows",
+    "split_phase1x_training_rows",
     "validate_runtime_receipt_manifest",
 ]

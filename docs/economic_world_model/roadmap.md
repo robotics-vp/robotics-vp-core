@@ -293,6 +293,9 @@ Also preserve a narrow SIM1 rule:
   admissibility boundary for current positive-only helper losses: positive and
   explicit legacy dataset rows train, while negative-supervision and
   diagnostic-only rows are counted and excluded until negative losses exist
+- **landed locally on 2026-05-19**: excluded negative-supervision and
+  diagnostic rows now persist as trainer sidecar JSONL artifacts and Regal
+  registered artifacts, preserving them for later reject/utility heads
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 
