@@ -609,6 +609,11 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["target_hardware_class"] == "unitree_g1_r1_class"
     assert backend_rows[0]["target_system_identification_profile"] == "humanoid_shadow_system_id"
     assert backend_rows[0]["target_source"] == "runtime_receipt"
+    assert backend_rows[0]["training_admissibility"]["status"] == "positive_training"
+    assert backend_rows[0]["training_admissibility"]["positive_training_admissible"] is True
+    assert backend_rows[0]["training_admissibility"]["negative_supervision_eligible"] is False
+    assert backend_rows[0]["metadata"]["training_admissibility_status"] == "positive_training"
+    assert backend_rows[0]["metadata"]["positive_training_admissible"] is True
     assert backend_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
     assert backend_rows[0]["metadata"]["task_measurement_receipt_id"] == "task_measure_1"
     assert backend_rows[0]["metadata"]["task_measurement_values"]["coverage_gap_score"] == 0.7
@@ -742,6 +747,11 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     branch_rows = build_branch_planner_rows_from_receipts(bundles)
     assert branch_rows[0]["target_render_materialization_status"] == "scene_materialized"
     assert branch_rows[0]["target_render_materialization_mode"] == "scene_config"
+    assert branch_rows[0]["training_admissibility"]["status"] == "positive_training"
+    assert branch_rows[0]["training_admissibility"]["positive_training_admissible"] is True
+    assert branch_rows[0]["training_admissibility"]["negative_supervision_eligible"] is False
+    assert branch_rows[0]["metadata"]["training_admissibility_status"] == "positive_training"
+    assert branch_rows[0]["metadata"]["positive_training_admissible"] is True
     assert branch_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
     assert branch_rows[0]["metadata"]["scene_hierarchy_ref"]["hierarchy_id"] == "scene_h_1"
     assert branch_rows[0]["metadata"]["scene_materialization_status"] == "asset_contract_ready"
@@ -867,6 +877,45 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         branch_rows[0]["metadata"]["render_artifact_refs"]
         == ["/tmp/render_provider_1/lsd_vector_scene_config.json"]
     )
+
+    filtered_bundles = json.loads(json.dumps(bundles))
+    filtered_bundles[0]["replay_validity_receipts"][0]["status"] = "training_filtered_estimate"
+    filtered_bundles[0]["replay_validity_receipts"][0]["reject_reasons"] = [
+        "sensor_alignment_unready"
+    ]
+    filtered_backend_rows = build_backend_selector_rows_from_receipts(filtered_bundles)
+    assert (
+        filtered_backend_rows[0]["training_admissibility"]["status"]
+        == "negative_supervision"
+    )
+    assert (
+        filtered_backend_rows[0]["training_admissibility"]["positive_training_admissible"]
+        is False
+    )
+    assert (
+        filtered_backend_rows[0]["training_admissibility"]["negative_supervision_eligible"]
+        is True
+    )
+    assert filtered_backend_rows[0]["metadata"]["training_admissibility_reasons"] == [
+        "replay_reject_reasons_present"
+    ]
+    filtered_branch_rows = build_branch_planner_rows_from_receipts(filtered_bundles)
+    assert (
+        filtered_branch_rows[0]["training_admissibility"]["status"]
+        == "negative_supervision"
+    )
+    assert (
+        filtered_branch_rows[0]["training_admissibility"]["positive_training_admissible"]
+        is False
+    )
+    assert (
+        filtered_branch_rows[0]["training_admissibility"]["negative_supervision_eligible"]
+        is True
+    )
+    assert filtered_branch_rows[0]["metadata"]["training_admissibility_reasons"] == [
+        "replay_reject_reasons_present",
+        "replay_validity_filtered",
+    ]
 
 
 def test_harvest_sim_synth_receipt_bundles_ignores_incomplete_dirs(tmp_path: Path) -> None:

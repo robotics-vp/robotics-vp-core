@@ -1,5 +1,45 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x training-admissibility gating
+
+### What changed
+
+- Added a shared local classifier that emits
+  `phase1x_training_admissibility_v1` records for training-row builders.
+- Backend-selector rows now carry top-level and metadata-level admissibility
+  posture.
+- Branch-planner rows now carry the same posture using per-branch replay and
+  branch-validity receipts.
+- The classifier separates:
+  - `positive_training`
+  - `negative_supervision`
+  - `diagnostic_only`
+- Reasons include manifest validation failures, planning-only target source,
+  missing outcomes, missing validity receipts, branch rejection, and replay
+  rejection.
+
+### Why this was the right next local step
+
+Receipt emission and manifest validation made the evidence visible. This pass
+makes it actionable for training-row consumers. Rows that are structurally
+healthy and unfiltered can be used as positive targets; rows with explicit
+replay/branch rejects can become negative supervision; rows with missing or
+manifest-inconsistent evidence stay diagnostic-only.
+
+This avoids a common failure mode in receipt-heavy systems: collecting honest
+evidence and then accidentally flattening it back into undifferentiated
+training rows.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_training_corpus.py`
+- `python3 -m pytest tests/test_sim_synth_training_corpus.py -q` ->
+  `4 passed`
+- `python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_vectorized_runtime.py -q` ->
+  `40 passed`
+- `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1634 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x runtime receipt manifest validation
 
 ### What changed

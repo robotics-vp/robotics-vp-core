@@ -285,6 +285,10 @@ Also preserve a narrow SIM1 rule:
 - **landed locally on 2026-05-19**: runtime receipt-manifest validation now
   compares manifest receipt-family counts against harvested bundle contents and
   exposes mismatch diagnostics to training rows
+- **landed locally on 2026-05-19**: training-admissibility gates now label
+  backend-selector and branch-planner rows as positive training, negative
+  supervision, or diagnostic-only based on manifest validation, target source,
+  branch validity, and replay validity
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

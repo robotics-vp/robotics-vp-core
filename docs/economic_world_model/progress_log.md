@@ -1,5 +1,29 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x training-admissibility gating for receipt rows
+
+- **Changed**:
+  - added `phase1x_training_admissibility_v1` classification for harvested
+    backend-selector and branch-planner rows
+  - rows now distinguish positive training rows, negative-supervision rows,
+    and diagnostic-only rows using runtime manifest validation, target-source
+    posture, branch-validity reasons, and replay-validity reasons
+  - branch-planner rows now treat missing outcomes, missing branch/replay
+    validity, manifest mismatches, and planning-only targets as diagnostic
+    blockers rather than positive training data
+- **Why this matters**:
+  - the runtime can now emit rich receipts without every row being interpreted
+    as equally trainable
+  - negative/filtered outcomes remain useful, but they are labeled as negative
+    supervision instead of being silently mixed into positive targets
+  - this is still local-only structural gating; provider truth, benchmark
+    credibility, and calibration quality remain future evidence gates
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_training_corpus.py`
+  - `python3 -m pytest tests/test_sim_synth_training_corpus.py -q` (`4 passed`)
+  - `python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_vectorized_runtime.py -q` (`40 passed`)
+  - `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1634 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x runtime receipt manifest validation
 
 - **Changed**:

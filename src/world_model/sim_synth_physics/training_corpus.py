@@ -718,6 +718,96 @@ def validate_runtime_receipt_manifest(
         "actual_receipt_family_counts": actual_counts,
     }
 
+
+def _manifest_validation_reasons(validation: Mapping[str, Any]) -> list[str]:
+    status = str(validation.get("validation_status", "manifest_missing") or "")
+    reasons: list[str] = []
+    if status != "validated":
+        reasons.append(f"runtime_receipt_manifest_{status}")
+    missing_required = [
+        str(item) for item in list(validation.get("missing_required_families") or []) if item
+    ]
+    if missing_required:
+        reasons.append("runtime_receipt_manifest_missing_required")
+    if list(validation.get("mismatched_families") or []):
+        reasons.append("runtime_receipt_manifest_count_mismatch")
+    return sorted(set(reasons))
+
+
+def _phase1x_training_admissibility(
+    *,
+    target_surface: str,
+    manifest_validation: Mapping[str, Any],
+    target_source: str,
+    branch_reject_reasons: Sequence[Any] = (),
+    replay_reject_reasons: Sequence[Any] = (),
+    replay_validity_receipt: Mapping[str, Any] | None = None,
+    branch_validity_receipt: Mapping[str, Any] | None = None,
+    outcome: Mapping[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Classify whether a harvested row is positive, negative, or diagnostic."""
+
+    reasons = _manifest_validation_reasons(manifest_validation)
+    target_source_value = str(target_source or "")
+    if target_source_value == "wm_planning_state":
+        reasons.append("target_source_planning_only")
+
+    replay_receipt = _mapping(replay_validity_receipt)
+    if target_surface == "branch_planner":
+        branch_receipt = _mapping(branch_validity_receipt)
+        outcome_mapping = _mapping(outcome)
+        if not outcome_mapping:
+            reasons.append("outcome_receipt_missing")
+        if not branch_receipt:
+            reasons.append("branch_validity_missing")
+        elif branch_receipt.get("admissible") is False:
+            reasons.append("branch_not_admissible")
+        if not replay_receipt:
+            reasons.append("replay_validity_missing")
+        elif str(replay_receipt.get("status", "") or "") != "training_validity_estimated":
+            reasons.append("replay_validity_filtered")
+
+    branch_reasons = [str(reason) for reason in branch_reject_reasons if str(reason)]
+    replay_reasons = [str(reason) for reason in replay_reject_reasons if str(reason)]
+    if branch_reasons:
+        reasons.append("branch_reject_reasons_present")
+    if replay_reasons:
+        reasons.append("replay_reject_reasons_present")
+    reasons = sorted(set(reasons))
+
+    manifest_validated = not _manifest_validation_reasons(manifest_validation)
+    diagnostic_blockers = {
+        "runtime_receipt_manifest_manifest_missing",
+        "runtime_receipt_manifest_manifest_count_mismatch",
+        "runtime_receipt_manifest_manifest_declares_missing_required",
+        "runtime_receipt_manifest_missing_required",
+        "runtime_receipt_manifest_count_mismatch",
+        "target_source_planning_only",
+        "outcome_receipt_missing",
+        "branch_validity_missing",
+        "replay_validity_missing",
+    }
+    diagnostic_only = any(reason in diagnostic_blockers for reason in reasons)
+    positive = manifest_validated and not reasons
+    negative = manifest_validated and not diagnostic_only and not positive
+    status = "positive_training"
+    if diagnostic_only:
+        status = "diagnostic_only"
+    elif negative:
+        status = "negative_supervision"
+
+    return {
+        "version": "phase1x_training_admissibility_v1",
+        "target_surface": target_surface,
+        "status": status,
+        "positive_training_admissible": bool(positive),
+        "negative_supervision_eligible": bool(negative),
+        "diagnostic_only": bool(diagnostic_only),
+        "reasons": reasons,
+        "branch_reject_reasons": branch_reasons,
+        "replay_reject_reasons": replay_reasons,
+    }
+
 def build_backend_selector_rows_from_receipts(
     bundles: Sequence[Mapping[str, Any]],
 ) -> list[Dict[str, Any]]:
@@ -863,6 +953,13 @@ def build_backend_selector_rows_from_receipts(
         benchmark_signals = _mapping(
             bundle_mapping.get("benchmark_signals") or physics_metadata.get("benchmark_signals")
         )
+        training_admissibility = _phase1x_training_admissibility(
+            target_surface="backend_selector",
+            manifest_validation=runtime_receipt_manifest_validation,
+            target_source=target_source,
+            branch_reject_reasons=branch_reject_reasons,
+            replay_reject_reasons=replay_reject_reasons,
+        )
         rows.append(
             {
                 "row_id": str(
@@ -912,9 +1009,21 @@ def build_backend_selector_rows_from_receipts(
                 ),
                 "target_source": target_source,
                 "promotion_stage": str(helper_status.get("promotion_stage") or "shadow_candidate"),
+                "training_admissibility": dict(training_admissibility),
                 "metadata": {
                     "bundle_index": bundle_index,
                     "world_state_id": world_state.get("state_id"),
+                    "training_admissibility_status": training_admissibility["status"],
+                    "positive_training_admissible": training_admissibility[
+                        "positive_training_admissible"
+                    ],
+                    "negative_supervision_eligible": training_admissibility[
+                        "negative_supervision_eligible"
+                    ],
+                    "diagnostic_only": training_admissibility["diagnostic_only"],
+                    "training_admissibility_reasons": list(
+                        training_admissibility["reasons"]
+                    ),
                     "physics_execution_contract_id": physics_execution_contract.get("contract_id"),
                     "physics_route_status": physics_execution_contract.get("route_status"),
                     "physics_requested_backend": physics_execution_contract.get("requested_backend"),
@@ -1420,6 +1529,18 @@ def build_branch_planner_rows_from_receipts(
             branch_validity_receipt = _mapping(branch_validity_receipts.get(plan_id))
             replay_validity_receipt = _mapping(replay_validity_receipts.get(plan_id))
             target_source = "runtime_receipt" if outcome else "wm_planning_state"
+            replay_reject_reasons = list(replay_validity_receipt.get("reject_reasons") or [])
+            branch_reject_reasons = list(branch_validity_receipt.get("reject_reasons") or [])
+            training_admissibility = _phase1x_training_admissibility(
+                target_surface="branch_planner",
+                manifest_validation=runtime_receipt_manifest_validation,
+                target_source=target_source,
+                branch_reject_reasons=branch_reject_reasons,
+                replay_reject_reasons=replay_reject_reasons,
+                replay_validity_receipt=replay_validity_receipt,
+                branch_validity_receipt=branch_validity_receipt,
+                outcome=outcome,
+            )
             fallback_yield = _clip01(plan.get("expected_yield_score"), 0.0)
             realized_yield = _clip01(
                 outcome_metadata.get("realized_yield_score", outcome_metadata.get("quality_score")),
@@ -1467,9 +1588,21 @@ def build_branch_planner_rows_from_receipts(
                     ),
                     "target_source": target_source,
                     "promotion_stage": str(helper_status.get("promotion_stage") or "shadow_candidate"),
+                    "training_admissibility": dict(training_admissibility),
                     "metadata": {
                         "bundle_index": bundle_index,
                         "world_state_id": world_state.get("state_id"),
+                        "training_admissibility_status": training_admissibility["status"],
+                        "positive_training_admissible": training_admissibility[
+                            "positive_training_admissible"
+                        ],
+                        "negative_supervision_eligible": training_admissibility[
+                            "negative_supervision_eligible"
+                        ],
+                        "diagnostic_only": training_admissibility["diagnostic_only"],
+                        "training_admissibility_reasons": list(
+                            training_admissibility["reasons"]
+                        ),
                         "physics_execution_contract_id": physics_execution_contract.get(
                             "contract_id"
                         ),
@@ -1552,9 +1685,7 @@ def build_branch_planner_rows_from_receipts(
                         "branch_validity_evidence_status": branch_validity_receipt.get(
                             "evidence_status"
                         ),
-                        "branch_reject_reasons": list(
-                            branch_validity_receipt.get("reject_reasons") or []
-                        ),
+                        "branch_reject_reasons": list(branch_reject_reasons),
                         "sensor_alignment_receipt_id": sensor_alignment_receipt.get(
                             "receipt_id"
                         ),
@@ -1582,9 +1713,7 @@ def build_branch_planner_rows_from_receipts(
                         "replay_transfer_consistency_score": replay_validity_receipt.get(
                             "transfer_consistency_score"
                         ),
-                        "replay_reject_reasons": list(
-                            replay_validity_receipt.get("reject_reasons") or []
-                        ),
+                        "replay_reject_reasons": list(replay_reject_reasons),
                         "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                         "task_measurement_receipt_id": task_measurement_receipt.get(
                             "receipt_id"
