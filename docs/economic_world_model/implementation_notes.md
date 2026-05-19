@@ -1,5 +1,48 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x closure sheet and Phase 3 prep artifacts
+
+### What changed
+
+- Added `docs/economic_world_model/phase1x_closure_assessment.md`.
+- Added `docs/economic_world_model/groot_inspired_functionality_status.md`.
+- Added `docs/economic_world_model/phase3_embodiment_actuation_spec_prep.md`.
+- Updated roadmap and actuation doctrine links so the new artifacts are not isolated notes.
+
+### Assessment
+
+Phase 1.x is documented as locally structural closure-ready: Category A = `0`,
+unresolved Category C = `0`, and remaining blockers are external evidence gates.
+The meaningful remaining debt is provider/GPU/hardware/benchmark debt, not a
+known local code-structure gap. In particular, Isaac/Unitree latency and
+safety-watchdog profiles should not be filled with placeholder YAML; they need
+truthful runtime or hardware evidence.
+
+### GR00T-inspired boundary
+
+The end state borrows GR00T/Isaac discipline for teacher/student lanes,
+deploy-shaped observations, domain randomization, reset curricula,
+action-space hygiene, export gates, and sim-to-real transfer receipts. It does
+not adopt GR00T as ontology. Current wiring is limited to typed Perception
+evidence, Phase 1.x runtime truth/training admissibility, local Holosoma ONNX
+action smoke, local Isaac/Unitree scan truth, and early Embodiment/Runtime
+adapter substrates.
+
+### Phase 3 prep
+
+The first Phase 3 implementation should be additive canonical-state work under
+`src/world_model/embodiment_actuation/`: state contracts, receipts, a shadow
+compiler from existing advisory artifacts, and tests proving no runtime
+authority by default. Provider bring-up and hardware claims remain later.
+
+### Verification
+
+- `git diff --check && python3 -m compileall src/`
+- `python3 -m pytest tests/test_scan_phase1_runtime_layouts.py tests/test_setup_holosoma_local_smoke.py tests/test_local_holosoma_smoke.py tests/test_sim_synth_phase1x_subsystems.py -q` -> `12 passed`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+- `python3 -m pytest tests/ -q` -> `1647 passed, 2 skipped, 24 warnings`
+
+
 ## 2026-05-19 - Reproducible local Holosoma smoke bootstrap
 
 ### What changed

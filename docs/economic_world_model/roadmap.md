@@ -319,6 +319,13 @@ Also preserve a narrow SIM1 rule:
   `actor_obs [1, 100]` and emits finite `action [1, 29]`, while WM runtime
   routing remains shadow/fallback unless `ROBOTICS_VP_ENABLE_HOLOSOMA_RUNTIME=1`
   is set and simulated episode evidence remains provider/GPU debt
+- **closure assessment recorded on 2026-05-19**:
+  `docs/economic_world_model/phase1x_closure_assessment.md` classifies the
+  remaining Phase 1.x findings as Category B external provider / GPU / asset /
+  calibration / benchmark / native-runtime blockers, with Category A = `0` and
+  unresolved Category C = `0`. Treat this as locally structural closure-ready
+  pending owner / Claude review, not as provider readiness or promotion
+  evidence.
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 
@@ -491,12 +498,20 @@ should follow the repo's established pattern: typed state contracts → shadow
 compiler → downstream consumers → receipt emission → bounded neural seams.
 
 As of 2026-05-18, Phase 2 is structurally closure-ready on the audited internal
-surfaces. Because the Phase 1 Sim / Synth / Physics burden has since been
-expanded through additional provider-family, transfer-boundary, and
-runtime/materialization obligations, Phase 3 should not begin immediately upon
-Phase 2 closure. After the current local Phase 2 hardening pocket, the roadmap
-returns to Phase 1 to finish the remaining Phase 1 additions, and only then
-proceeds to Phase 3.
+surfaces. As of 2026-05-19, the local Phase 1.x Sim / Synth / Physics return leg
+is also recorded as structurally closure-ready in
+`docs/economic_world_model/phase1x_closure_assessment.md`: remaining blockers
+are external provider / GPU / asset / calibration / benchmark /
+native-runtime evidence, not known internal structure. Phase 3 should therefore
+begin with spec/canonical-state preparation after owner / Claude acceptance,
+not with provider bring-up or hardware claims. The first prep artifact is
+`docs/economic_world_model/phase3_embodiment_actuation_spec_prep.md`.
+
+GR00T / Isaac / VisualSim2Real borrowing status is summarized in
+`docs/economic_world_model/groot_inspired_functionality_status.md`: these are
+pattern sources for teacher/student, deploy-shaped observations, sim-to-real
+receipts, randomization/reset curricula, and promotion gates, not replacement
+ontologies.
 
 Useful contract ideas from Habitat include articulated-agent config discipline,
 sensor schema, and action-space normalization. Additionally, external

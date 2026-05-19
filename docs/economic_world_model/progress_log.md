@@ -1,5 +1,23 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x closure assessment and Phase 3 spec prep
+
+- **Changed**:
+  - added `docs/economic_world_model/phase1x_closure_assessment.md`, recording Category A = `0`, unresolved Category C = `0`, and remaining Phase 1.x blockers as external provider / GPU / asset / calibration / benchmark / native-runtime evidence
+  - added `docs/economic_world_model/groot_inspired_functionality_status.md`, separating GR00T-inspired teacher/student, deploy-observation, randomization, transfer, and promotion-gate patterns from the repo-native multi-WM ontology
+  - added `docs/economic_world_model/phase3_embodiment_actuation_spec_prep.md`, defining the first Phase 3 canonical state, receipt, shadow compiler, learned-seam, and provider-contract prep targets
+  - cross-linked the new status/spec artifacts from `roadmap.md` and `actuation_embodiment_world_model.md`
+- **Why this matters**:
+  - the Phase 1.x return leg now has the same explicit closure sheet pattern used for Phase 2 rather than an implicit judgment call
+  - the remaining Isaac/Unitree latency/watchdog and native-runtime gaps stay honest as external evidence gates, not local defaults to invent
+  - Phase 3 can begin from typed Embodiment / Actuation state prep after owner/Claude acceptance instead of jumping straight to hardware/provider bring-up
+- **Verification**:
+  - `git diff --check && python3 -m compileall src/`
+  - `python3 -m pytest tests/test_scan_phase1_runtime_layouts.py tests/test_setup_holosoma_local_smoke.py tests/test_local_holosoma_smoke.py tests/test_sim_synth_phase1x_subsystems.py -q` (`12 passed`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+  - `python3 -m pytest tests/ -q` (`1647 passed, 2 skipped, 24 warnings`)
+
+
 ## 2026-05-19 - Local Holosoma smoke bootstrap is reproducible
 
 - **Changed**:

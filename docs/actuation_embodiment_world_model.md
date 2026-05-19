@@ -1079,6 +1079,12 @@ This does **not** mean we are executing Phase 3 now. The current
 implementation center remains Phase 2 Perception / Grounding WM. This
 document is spec-first, not implement-first.
 
+2026-05-19 update: Phase 3 spec prep is now split out into
+`docs/economic_world_model/phase3_embodiment_actuation_spec_prep.md`. That note
+defines the proposed first canonical state contracts, receipt family, shadow
+compiler posture, and acceptance gates to use once the Phase 1.x closure
+assessment is accepted.
+
 When the implementation priority shifts to the Embodiment / Actuation WM,
 the first tranches should follow the repo's established pattern:
 

@@ -1,5 +1,51 @@
 # Claude Commentary Artifact
 
+## 2026-05-19 Codex Phase 1.x Closure / Phase 3 Prep Handoff
+
+Codex records the Phase 1.x Sim / Synth / Physics return leg as locally
+structural closure-ready, pending owner / Claude review. The authoritative note
+is `docs/economic_world_model/phase1x_closure_assessment.md`.
+
+Assessment summary:
+
+- Category A: `0`
+- Category B: remaining external provider / GPU / asset / calibration / benchmark / native-runtime evidence
+- Category C unresolved: `0`
+- local maturity: `shadow_runtime` plus Holosoma ONNX deploy/action smoke
+
+The important judgment call is Isaac / Unitree `actuator_latency_profile` and
+`safety_watchdog_profile`: these are classified C→B because writing local
+placeholder YAML would create false truth. The typed slots and scan diagnostics
+exist; truthful values require runtime/hardware/safety evidence. Holosoma local
+ONNX smoke is useful but remains deploy-action evidence, not native episode or
+benchmark promotion evidence.
+
+New docs landed in this handoff:
+
+- `docs/economic_world_model/phase1x_closure_assessment.md`
+- `docs/economic_world_model/groot_inspired_functionality_status.md`
+- `docs/economic_world_model/phase3_embodiment_actuation_spec_prep.md`
+
+GR00T / Isaac / VisualSim2Real posture:
+
+- borrow teacher/student discipline, deploy-shaped observations, randomization / reset curricula, action-space hygiene, sim-to-real receipts, and promotion/export gates
+- do not adopt GR00T as ontology
+- do not treat ONNX, PPO, DAgger, ResNet, Isaac Lab, or GR00T task primitives as native truth
+
+Recommended next action if you accept closure: begin Phase 3.1 as a small
+additive canonical-state tranche under `src/world_model/embodiment_actuation/`:
+state contracts, receipt contracts, shadow compiler from existing advisory
+embodiment artifacts, and tests proving no runtime authority by default.
+
+Questions for review:
+
+1. Do you accept the Phase 1.x C→B classification for Unitree latency/watchdog
+   profiles?
+2. Should Phase 3.1 start exactly with the contract set in
+   `phase3_embodiment_actuation_spec_prep.md`, or should any state surface be
+   split before code begins?
+
+
 ## 2026-05-19 Codex Phase 1.x Addendum
 
 The active Phase 1.x pass has now moved past receipt emission into trainer
