@@ -491,6 +491,36 @@ class SurrogateCalibrationReceipt:
 
 
 @dataclass(frozen=True)
+class BranchValidityReceipt:
+    """Per-branch validity / reject-filter receipt for training admission."""
+
+    receipt_id: str
+    branch_plan_id: str
+    job_id: str
+    validity_score: float
+    admission_score: float
+    admissible: bool
+    evidence_status: str
+    reject_reasons: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "branch_validity_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "branch_plan_id": self.branch_plan_id,
+            "job_id": self.job_id,
+            "validity_score": clip01(self.validity_score),
+            "admission_score": clip01(self.admission_score),
+            "admissible": bool(self.admissible),
+            "evidence_status": self.evidence_status,
+            "reject_reasons": strings(self.reject_reasons),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class Gen2SimAdmissionReceipt:
     """Receipt for one WM-owned gen2sim admission decision surface."""
 

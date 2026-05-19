@@ -168,6 +168,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "backend_mismatch_receipt",
             "surrogate_physics_receipt",
             "surrogate_calibration_receipt",
+            "branch_validity_receipt",
             "render_provider_receipt",
             "simulation_outcome_receipt",
         )
@@ -195,6 +196,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_backend_mismatches: dict[Path, list[Dict[str, Any]]] = {}
     grouped_surrogate_physics: dict[Path, list[Dict[str, Any]]] = {}
     grouped_surrogate_calibrations: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_branch_validity_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_render_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_outcomes: dict[Path, list[Dict[str, Any]]] = {}
     explicit_bundles: list[Dict[str, Any]] = []
@@ -256,6 +258,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_surrogate_physics.setdefault(parent, []).append(dict(payload))
             elif version == "surrogate_calibration_receipt_v1":
                 grouped_surrogate_calibrations.setdefault(parent, []).append(dict(payload))
+            elif version == "branch_validity_receipt_v1":
+                grouped_branch_validity_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "render_provider_receipt_v1":
                 grouped_render_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "simulation_outcome_receipt_v1":
@@ -281,6 +285,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         | set(grouped_backend_mismatches)
         | set(grouped_surrogate_physics)
         | set(grouped_surrogate_calibrations)
+        | set(grouped_branch_validity_receipts)
         | set(grouped_render_receipts)
         | set(grouped_outcomes)
     )
@@ -303,6 +308,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         backend_mismatches = grouped_backend_mismatches.get(directory, [])
         surrogate_physics = grouped_surrogate_physics.get(directory, [])
         surrogate_calibrations = grouped_surrogate_calibrations.get(directory, [])
+        branch_validity_receipts = grouped_branch_validity_receipts.get(directory, [])
         render_receipts = grouped_render_receipts.get(directory, [])
         outcomes = grouped_outcomes.get(directory, [])
         for world_state in world_states:
@@ -350,6 +356,10 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 bundle["surrogate_physics_receipt"] = dict(surrogate_physics[-1])
             if surrogate_calibrations:
                 bundle["surrogate_calibration_receipt"] = dict(surrogate_calibrations[-1])
+            if branch_validity_receipts:
+                bundle["branch_validity_receipts"] = [
+                    dict(item) for item in branch_validity_receipts
+                ]
             if render_receipts:
                 bundle["render_provider_receipts"] = [dict(item) for item in render_receipts]
             if outcomes:
@@ -474,6 +484,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "surrogate_calibration_receipt_v1"
     ]
+    branch_validity_receipts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "branch_validity_receipt_v1"
+    ]
     render_receipts = [
         dict(payload)
         for payload in rows
@@ -530,6 +546,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             bundle["surrogate_physics_receipt"] = surrogate_physics_receipts[-1]
         if surrogate_calibration_receipts:
             bundle["surrogate_calibration_receipt"] = surrogate_calibration_receipts[-1]
+        if branch_validity_receipts:
+            bundle["branch_validity_receipts"] = branch_validity_receipts
         if render_receipts:
             bundle["render_provider_receipts"] = render_receipts
         if outcomes:
@@ -633,6 +651,17 @@ def build_backend_selector_rows_from_receipts(
         surrogate_physics_receipt = _mapping(bundle_mapping.get("surrogate_physics_receipt"))
         surrogate_calibration_receipt = _mapping(
             bundle_mapping.get("surrogate_calibration_receipt")
+        )
+        branch_validity_receipts = _mapping_list(
+            bundle_mapping.get("branch_validity_receipts")
+        )
+        branch_reject_reasons = sorted(
+            {
+                str(reason)
+                for receipt in branch_validity_receipts
+                for reason in list(receipt.get("reject_reasons") or [])
+                if str(reason)
+            }
         )
         if calibration_receipt:
             target_source = "runtime_receipt"
@@ -755,6 +784,16 @@ def build_backend_selector_rows_from_receipts(
                     "surrogate_calibration_score": surrogate_calibration_receipt.get(
                         "calibration_score"
                     ),
+                    "branch_validity_receipt_ids": [
+                        receipt.get("receipt_id") for receipt in branch_validity_receipts
+                    ],
+                    "branch_validity_admissible_count": sum(
+                        1 for receipt in branch_validity_receipts if receipt.get("admissible")
+                    ),
+                    "branch_validity_reject_count": sum(
+                        1 for receipt in branch_validity_receipts if not receipt.get("admissible")
+                    ),
+                    "branch_validity_reject_reasons": branch_reject_reasons,
                     "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
                     "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(
                         "benchmark_gate_ready"
@@ -1065,6 +1104,11 @@ def build_branch_planner_rows_from_receipts(
             for receipt in _mapping_list(bundle_mapping.get("render_provider_receipts"))
             if str(receipt.get("branch_plan_id"))
         }
+        branch_validity_receipts = {
+            str(receipt.get("branch_plan_id")): receipt
+            for receipt in _mapping_list(bundle_mapping.get("branch_validity_receipts"))
+            if str(receipt.get("branch_plan_id"))
+        }
         robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
         gen2sim_admission_receipt = _mapping(bundle_mapping.get("gen2sim_admission_receipt"))
         backend_runtime_bridge_receipt = _mapping(
@@ -1146,6 +1190,7 @@ def build_branch_planner_rows_from_receipts(
             outcome = _mapping(outcomes.get(plan_id))
             outcome_metadata = _mapping(outcome.get("metadata"))
             render_receipt = _mapping(render_receipts.get(plan_id))
+            branch_validity_receipt = _mapping(branch_validity_receipts.get(plan_id))
             target_source = "runtime_receipt" if outcome else "wm_planning_state"
             fallback_yield = _clip01(plan.get("expected_yield_score"), 0.0)
             realized_yield = _clip01(
@@ -1241,6 +1286,24 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "scene_materialization_status": str(
                             plan_metadata.get("scene_materialization_status") or ""
+                        ),
+                        "branch_validity_receipt_id": branch_validity_receipt.get(
+                            "receipt_id"
+                        ),
+                        "branch_validity_score": branch_validity_receipt.get(
+                            "validity_score"
+                        ),
+                        "branch_admission_score": branch_validity_receipt.get(
+                            "admission_score"
+                        ),
+                        "branch_validity_admissible": branch_validity_receipt.get(
+                            "admissible"
+                        ),
+                        "branch_validity_evidence_status": branch_validity_receipt.get(
+                            "evidence_status"
+                        ),
+                        "branch_reject_reasons": list(
+                            branch_validity_receipt.get("reject_reasons") or []
                         ),
                         "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                         "task_measurement_receipt_id": task_measurement_receipt.get(

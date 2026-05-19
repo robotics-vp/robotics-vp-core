@@ -172,11 +172,10 @@ Current re-entry status after the Phase 2 pocket:
    - local `camera_geometry.py` utilities
    - local `VectorizedSimRunner` batch facade
 3. next best local follow-on should deepen use of these surfaces rather than
-   inventing another ontology: the first scene-hierarchy and transfer-evidence
-   consumers are now live in branch/materialization planning and training-row
-   harvest; next local candidates are branch-validity / reject-filter receipts
-   and geometry-backed sensor/alignment checks while external GPU/provider work
-   remains blocked
+   inventing another ontology: scene-hierarchy, transfer-evidence, and
+   branch-validity / reject-filter consumers are now live in runtime artifacts
+   and training-row harvest; the next local candidate is geometry-backed
+   sensor/alignment checking while external GPU/provider work remains blocked
 
 ### Habitat-derived Sim/Synth/Physics adoption track reminder
 

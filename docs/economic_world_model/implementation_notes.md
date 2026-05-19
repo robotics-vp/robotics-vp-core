@@ -1,5 +1,43 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-18 - Phase 1.x branch-validity and reject-filter receipts
+
+### What changed
+
+- Added `BranchValidityReceipt` to the Sim / Synth / Physics receipt family.
+- Added `build_branch_validity_receipts(...)`, deriving per-branch validity
+  from `Gen2SimAdmissionState`, branch admission preconditions, benchmark gate
+  status, semantic-grounding posture, and scene-materialization status.
+- `SimSynthPhysicsRuntime` now emits the receipt bundle as
+  `branch_validity_receipts.json` and embeds the same evidence in loop results
+  and training-feedback rows.
+- `training_corpus.py` now harvests branch-validity receipts from live dirs or
+  mixed receipt files.
+- Backend-selector rows receive aggregate admission/reject counts and reject
+  reasons; branch-planner rows receive the per-branch receipt id, validity
+  score, admission score, admissibility flag, evidence status, and reject
+  reasons.
+
+### Why this was the right next local step
+
+The previous Phase 1.x pass made scene/transfer evidence training-visible. The
+next load-bearing gap was branch admissibility: without a durable validity
+receipt, the system could plan branches and emit outcomes while losing the
+reason a branch was admitted or rejected.
+
+This pass keeps that decision replayable and trainable without pretending that
+GPU/provider evidence exists. When benchmark gates are unavailable, validity is
+marked as `local_estimate`; provider-season runs can later replace that with
+benchmark-supported evidence through the same artifact shape.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+- `python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_vectorized_runtime.py -q` ->
+  `36 passed`
+- `python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1633 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-18 - Phase 1.x consumers: scene and transfer evidence made consequential
 
 ### What changed

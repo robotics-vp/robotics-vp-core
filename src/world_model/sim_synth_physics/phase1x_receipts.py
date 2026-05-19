@@ -8,6 +8,7 @@ from .common import clip01, mapping, stable_id
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import (
     BackendMismatchReceipt,
+    BranchValidityReceipt,
     PhysicsCalibrationReceipt,
     SimRealGapReceipt,
     SurrogateCalibrationReceipt,
@@ -205,8 +206,104 @@ def build_surrogate_calibration_receipt(
     )
 
 
+def _branch_reject_reasons(
+    *,
+    plan_metadata: dict[str, Any],
+    admission_preconditions: dict[str, Any],
+    benchmark_gate_ready: bool,
+    semantic_grounding_non_heuristic: bool,
+    admissible: bool,
+) -> list[str]:
+    reasons: list[str] = []
+    if bool(admission_preconditions.get("requires_benchmark_ready", False)) and not benchmark_gate_ready:
+        reasons.append("benchmark_gate_not_ready")
+    if (
+        bool(admission_preconditions.get("requires_non_heuristic_grounding", False))
+        and not semantic_grounding_non_heuristic
+    ):
+        reasons.append("semantic_grounding_heuristic")
+    if str(plan_metadata.get("scene_materialization_status", "")) == "asset_contract_incomplete":
+        reasons.append("scene_asset_contract_incomplete")
+    if not admissible and not reasons:
+        reasons.append("admission_gate_blocked")
+    return reasons
+
+
+def build_branch_validity_receipts(
+    world_state: SimSynthPhysicsWorldState,
+) -> list[BranchValidityReceipt]:
+    """Emit per-branch validity / reject-filter receipts from admission state."""
+
+    admission = world_state.gen2sim_admission
+    admissible_branch_ids = set(getattr(admission, "admissible_branch_ids", []) or [])
+    admission_metadata = mapping({} if admission is None else admission.metadata)
+    admission_scores = mapping(admission_metadata.get("admission_scores"))
+    benchmark_signals = mapping(admission_metadata.get("benchmark_signals"))
+    benchmark_gate_ready = bool(
+        benchmark_signals.get("ready", False)
+        or benchmark_signals.get("benchmark_eligible", False)
+        or getattr(admission, "benchmark_gate_ready", False)
+    )
+    semantic_grounding_non_heuristic = bool(
+        admission_metadata.get("semantic_grounding_non_heuristic", False)
+    )
+    receipts: list[BranchValidityReceipt] = []
+    for plan in world_state.synthetic_branch_plans:
+        plan_metadata = mapping(plan.metadata)
+        admission_preconditions = mapping(plan.admission_preconditions)
+        admissible = plan.plan_id in admissible_branch_ids
+        admission_score = clip01(
+            admission_scores.get(plan.plan_id, getattr(plan, "expected_yield_score", 0.0))
+        )
+        reject_reasons = _branch_reject_reasons(
+            plan_metadata=plan_metadata,
+            admission_preconditions=admission_preconditions,
+            benchmark_gate_ready=benchmark_gate_ready,
+            semantic_grounding_non_heuristic=semantic_grounding_non_heuristic,
+            admissible=admissible,
+        )
+        payload = {
+            "state_id": world_state.state_id,
+            "branch_plan_id": plan.plan_id,
+            "admission_score": admission_score,
+            "admissible": admissible,
+        }
+        receipts.append(
+            BranchValidityReceipt(
+                receipt_id=stable_id("branch_validity_receipt", payload),
+                branch_plan_id=plan.plan_id,
+                job_id=plan.source_job_id,
+                validity_score=admission_score,
+                admission_score=admission_score,
+                admissible=admissible,
+                evidence_status=(
+                    "benchmark_supported_estimate"
+                    if benchmark_gate_ready
+                    else "local_estimate"
+                ),
+                reject_reasons=reject_reasons,
+                metadata={
+                    "world_state_id": world_state.state_id,
+                    "gen2sim_admission_id": (
+                        "" if admission is None else str(admission.admission_id)
+                    ),
+                    "admission_preconditions": admission_preconditions,
+                    "scene_hierarchy_ref": mapping(plan_metadata.get("scene_hierarchy_ref")),
+                    "scene_materialization_status": str(
+                        plan_metadata.get("scene_materialization_status", "") or ""
+                    ),
+                    "expected_yield_score": float(plan.expected_yield_score),
+                    "benchmark_gate_ready": benchmark_gate_ready,
+                    "semantic_grounding_non_heuristic": semantic_grounding_non_heuristic,
+                },
+            )
+        )
+    return receipts
+
+
 __all__ = [
     "build_backend_mismatch_receipt",
+    "build_branch_validity_receipts",
     "build_sim_real_gap_receipt",
     "build_surrogate_calibration_receipt",
     "build_surrogate_physics_receipt",

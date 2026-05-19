@@ -33,6 +33,7 @@ from .gen2sim_admission import (
 )
 from .phase1x_receipts import (
     build_backend_mismatch_receipt,
+    build_branch_validity_receipts,
     build_sim_real_gap_receipt,
     build_surrogate_calibration_receipt,
     build_surrogate_physics_receipt,
@@ -55,6 +56,7 @@ from .receipts import (
     BackendRuntimeOutcomeReceipt,
     BackendShadowExecutionReceipt,
     BackendRuntimeWorkOrderReceipt,
+    BranchValidityReceipt,
     Gen2SimAdmissionReceipt,
     PhysicsAdaptationReceipt,
     PhysicsCalibrationReceipt,
@@ -132,6 +134,7 @@ __all__ = [
     "BackendRuntimeOutcomeReceipt",
     "BackendRuntimeWorkOrderReceipt",
     "BackendShadowExecutionReceipt",
+    "BranchValidityReceipt",
     "BackendExecutionBindingState",
     "BackendRuntimeBridgeState",
     "BranchRenderProviderState",
@@ -173,6 +176,7 @@ __all__ = [
     "assess_local_branch_corpus_gen2sim",
     "build_gen2sim_admission_receipt",
     "build_backend_mismatch_receipt",
+    "build_branch_validity_receipts",
     "build_physics_adaptation_receipt",
     "build_physics_calibration_receipt",
     "build_sim_real_gap_receipt",

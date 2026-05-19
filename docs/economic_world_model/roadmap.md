@@ -269,6 +269,9 @@ Also preserve a narrow SIM1 rule:
 - **landed locally on 2026-05-18**: scene hierarchy is now consumed by
   branch/materialization planning, and task/transfer/surrogate receipts are
   harvested into backend-selector and branch-planner training rows
+- **landed locally on 2026-05-18**: branch-validity / reject-filter receipts
+  now emit through runtime artifacts and become training-visible in
+  backend-selector aggregates plus branch-planner per-branch metadata
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

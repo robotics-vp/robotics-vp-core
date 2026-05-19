@@ -1,5 +1,31 @@
 # Economic World Model Progress Log
 
+## 2026-05-18 - Phase 1.x branch-validity / reject-filter receipts
+
+- **Changed**:
+  - added `BranchValidityReceipt` as the typed per-branch admission and
+    reject-filter receipt for Sim / Synth / Physics branches
+  - runtime execution now emits `branch_validity_receipts.json`, includes the
+    receipts in `SimSynthPhysicsLoopResult`, and threads per-branch validity
+    into `sim_synth_training_feedback_v1` rows
+  - receipt harvesting now recognizes standalone and bundled branch-validity
+    receipts
+  - backend-selector rows now expose aggregate branch-validity admission /
+    reject counts, while branch-planner rows expose per-branch validity score,
+    admission score, evidence status, and reject reasons
+- **Why this matters**:
+  - the SIM1/Habitat-derived `generate -> smooth -> replay -> filter` posture
+    now has a concrete CPU-local reject-filter artifact instead of remaining a
+    doctrine-only reminder
+  - branch admission becomes replayable training evidence, not a transient
+    compiler choice hidden behind `Gen2SimAdmissionState`
+  - current evidence remains deliberately conservative (`local_estimate` unless
+    benchmark gates are ready), so this does not claim provider/GPU bring-up
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_vectorized_runtime.py -q` (`36 passed`)
+  - `python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1633 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-18 - Phase 1.x consumers: scene hierarchy and transfer evidence made training-visible
 
 - **Changed**:

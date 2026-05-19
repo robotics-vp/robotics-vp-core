@@ -196,6 +196,27 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_branch_validity_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "branch_validity_1",
+                "branch_plan_id": "plan_1",
+                "job_id": "job_1",
+                "validity_score": 0.66,
+                "admission_score": 0.61,
+                "admissible": True,
+                "evidence_status": "local_estimate",
+                "reject_reasons": [],
+                "metadata": {
+                    "scene_materialization_status": "asset_contract_ready",
+                },
+                "version": "branch_validity_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_physics_adaptation_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -502,6 +523,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         bundles[0]["surrogate_calibration_receipt"]["receipt_id"]
         == "surrogate_calibration_1"
     )
+    assert bundles[0]["branch_validity_receipts"][0]["receipt_id"] == "branch_validity_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
     assert bundles[0]["simulation_outcome_receipts"][0]["receipt_id"] == "outcome_1"
 
@@ -546,6 +568,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         backend_rows[0]["metadata"]["backend_shadow_execution_status"]
         == "shadow_executed_with_asset_gaps"
     )
+    assert backend_rows[0]["metadata"]["branch_validity_receipt_ids"] == [
+        "branch_validity_1"
+    ]
+    assert backend_rows[0]["metadata"]["branch_validity_admissible_count"] == 1
+    assert backend_rows[0]["metadata"]["branch_validity_reject_count"] == 0
+    assert backend_rows[0]["metadata"]["branch_validity_reject_reasons"] == []
     assert backend_rows[0]["metadata"]["gen2sim_admission_receipt_id"] == "gen2sim_1"
     assert backend_rows[0]["metadata"]["gen2sim_admissible_branch_count"] == 1
     assert backend_rows[0]["metadata"]["backend_runtime_execution_receipt_id"] == "runtime_1"
@@ -615,6 +643,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
     assert branch_rows[0]["metadata"]["scene_hierarchy_ref"]["hierarchy_id"] == "scene_h_1"
     assert branch_rows[0]["metadata"]["scene_materialization_status"] == "asset_contract_ready"
+    assert branch_rows[0]["metadata"]["branch_validity_receipt_id"] == "branch_validity_1"
+    assert branch_rows[0]["metadata"]["branch_validity_score"] == 0.66
+    assert branch_rows[0]["metadata"]["branch_admission_score"] == 0.61
+    assert branch_rows[0]["metadata"]["branch_validity_admissible"] is True
+    assert branch_rows[0]["metadata"]["branch_validity_evidence_status"] == "local_estimate"
+    assert branch_rows[0]["metadata"]["branch_reject_reasons"] == []
     assert branch_rows[0]["metadata"]["task_measurement_receipt_id"] == "task_measure_1"
     assert branch_rows[0]["metadata"]["sim_real_gap_receipt_id"] == "sim_real_gap_1"
     assert branch_rows[0]["metadata"]["sim_real_gap_score"] == 0.42

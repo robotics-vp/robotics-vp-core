@@ -86,6 +86,7 @@ RUNTIME_OWNED_RECEIPTS = [
 PER_BRANCH_RECEIPTS = [
     "render_provider_receipt_v1",
     "simulation_outcome_receipt_v1",
+    "branch_validity_receipt_v1",
 ]
 
 
