@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 from src.envs.lsd3d_env.ggds import create_default_optimizer
 from src.vision.nag.integration_lsd_backend import (
@@ -12,7 +12,12 @@ from src.vision.nag.integration_lsd_backend import (
 from src.config.lsd_vector_scene_config import LSDVectorSceneConfig
 
 from .common import stable_id
-from .state import BranchRenderProviderState, PhysicsAdaptationPolicyState, PhysicsContextState
+from .state import (
+    BranchRenderProviderState,
+    PhysicsAdaptationPolicyState,
+    PhysicsContextState,
+    SceneHierarchyState,
+)
 
 
 def _lsd_available() -> bool:
@@ -44,6 +49,7 @@ def compile_branch_render_provider_state(
     physics_context: PhysicsContextState,
     physics_adaptation_policy: PhysicsAdaptationPolicyState,
     benchmark_signals: Mapping[str, Any],
+    scene_hierarchy: Optional[SceneHierarchyState] = None,
 ) -> BranchRenderProviderState:
     benchmark_ready = bool(
         benchmark_signals.get("ready", False) or benchmark_signals.get("benchmark_eligible", False)
@@ -121,6 +127,21 @@ def compile_branch_render_provider_state(
         "counterfactual_mode": counterfactual_mode,
         "ggds_mode": ggds_mode,
     }
+    scene_hierarchy_ref = (
+        {}
+        if scene_hierarchy is None
+        else {
+            "hierarchy_id": scene_hierarchy.hierarchy_id,
+            "scene_id": scene_hierarchy.scene_id,
+            "scene_kind": scene_hierarchy.scene_kind,
+            "hierarchy_levels": list(scene_hierarchy.hierarchy_levels),
+            "node_counts_by_level": dict(scene_hierarchy.node_counts_by_level),
+            "materialization_status": scene_hierarchy.materialization_status,
+        }
+    )
+    provider_config = dict(provider_config)
+    if scene_hierarchy_ref:
+        provider_config["scene_hierarchy"] = scene_hierarchy_ref
     return BranchRenderProviderState(
         provider_id=stable_id("branch_render_provider", payload),
         provider_kind=provider_kind,
@@ -154,6 +175,7 @@ def compile_branch_render_provider_state(
             ),
             "materialization_status": materialization_status,
             "materialization_entrypoint": materialization_entrypoint,
+            "scene_hierarchy_ref": scene_hierarchy_ref,
             "gap_kind": (
                 ""
                 if provider_status == "ready"

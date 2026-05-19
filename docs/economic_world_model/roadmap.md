@@ -266,6 +266,9 @@ Also preserve a narrow SIM1 rule:
   implements that shared surface / receipt family in the live
   `sim_synth_physics` compiler/runtime path; differentiable and surrogate lanes
   remain explicitly `contract_reserved` unless future evidence says otherwise
+- **landed locally on 2026-05-18**: scene hierarchy is now consumed by
+  branch/materialization planning, and task/transfer/surrogate receipts are
+  harvested into backend-selector and branch-planner training rows
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

@@ -58,6 +58,11 @@ def test_phase1x_surfaces_compile_from_local_context() -> None:
     assert state.scene_hierarchy.scene_id == "drawer_vase_scene_a"
     assert state.scene_hierarchy.hierarchy_levels == ["scene", "surface", "object"]
     assert state.scene_hierarchy.node_counts_by_level["object"] == 2
+    assert state.synthetic_branch_plans[0].metadata["scene_hierarchy_ref"]["scene_id"] == "drawer_vase_scene_a"
+    assert (
+        state.synthetic_branch_plans[0].render_provider.provider_config["scene_hierarchy"]["scene_id"]
+        == "drawer_vase_scene_a"
+    )
     assert state.differentiable_physics_provider is not None
     assert state.differentiable_physics_provider.available is True
     assert state.differentiable_physics_provider.provider_family == "jaxsim_like"

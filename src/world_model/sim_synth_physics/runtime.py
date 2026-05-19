@@ -497,6 +497,26 @@ def _build_training_feedback_manifest(
     render_receipts_by_plan = {
         str(receipt.branch_plan_id): receipt for receipt in render_provider_receipts
     }
+    transfer_evidence = {
+        "sim_real_gap_receipt_id": sim_real_gap_receipt.receipt_id,
+        "sim_real_gap_status": sim_real_gap_receipt.status,
+        "sim_real_gap_score": float(sim_real_gap_receipt.gap_score),
+        "sim_real_realism_confidence": float(sim_real_gap_receipt.realism_confidence),
+        "backend_mismatch_receipt_id": backend_mismatch_receipt.receipt_id,
+        "backend_mismatch_status": backend_mismatch_receipt.status,
+        "backend_mismatch_score": float(backend_mismatch_receipt.mismatch_score),
+        "backend_calibration_staleness_score": float(
+            backend_mismatch_receipt.calibration_staleness_score
+        ),
+        "surrogate_physics_receipt_id": surrogate_physics_receipt.receipt_id,
+        "surrogate_forecast_status": surrogate_physics_receipt.forecast_status,
+        "surrogate_confidence": float(surrogate_physics_receipt.surrogate_confidence),
+        "surrogate_calibration_receipt_id": surrogate_calibration_receipt.receipt_id,
+        "surrogate_calibration_status": surrogate_calibration_receipt.calibration_status,
+        "surrogate_calibration_score": float(
+            surrogate_calibration_receipt.calibration_score
+        ),
+    }
     adapter_realization = (
         {}
         if backend_runtime_adapter_receipt is None
@@ -535,6 +555,7 @@ def _build_training_feedback_manifest(
                     if render_receipt is None
                     else list(render_receipt.metadata.get("unsatisfied_preconditions", []) or [])
                 ),
+                "transfer_evidence": dict(transfer_evidence),
                 "metadata": mapping(receipt.metadata),
             }
         )
@@ -581,6 +602,7 @@ def _build_training_feedback_manifest(
         "backend_mismatch_receipt_id": backend_mismatch_receipt.receipt_id,
         "surrogate_physics_receipt_id": surrogate_physics_receipt.receipt_id,
         "surrogate_calibration_receipt_id": surrogate_calibration_receipt.receipt_id,
+        "transfer_evidence": transfer_evidence,
         "route_status": execution_contract.route_status,
         "gen2sim_benchmark_gate_ready": bool(gen2sim_admission_receipt.benchmark_gate_ready),
         "gen2sim_admissible_branch_count": len(gen2sim_admission_receipt.admissible_branch_ids),

@@ -163,6 +163,11 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "backend_runtime_outcome_receipt",
             "backend_shadow_execution_receipt",
             "physics_calibration_receipt",
+            "task_measurement_receipt",
+            "sim_real_gap_receipt",
+            "backend_mismatch_receipt",
+            "surrogate_physics_receipt",
+            "surrogate_calibration_receipt",
             "render_provider_receipt",
             "simulation_outcome_receipt",
         )
@@ -185,6 +190,11 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_backend_outcome: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_shadow: dict[Path, list[Dict[str, Any]]] = {}
     grouped_calibrations: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_task_measurements: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_sim_real_gaps: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_backend_mismatches: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_surrogate_physics: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_surrogate_calibrations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_render_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_outcomes: dict[Path, list[Dict[str, Any]]] = {}
     explicit_bundles: list[Dict[str, Any]] = []
@@ -236,6 +246,16 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_backend_shadow.setdefault(parent, []).append(dict(payload))
             elif version == "physics_calibration_receipt_v1":
                 grouped_calibrations.setdefault(parent, []).append(dict(payload))
+            elif version == "task_measurement_receipt_v1":
+                grouped_task_measurements.setdefault(parent, []).append(dict(payload))
+            elif version == "sim_real_gap_receipt_v1":
+                grouped_sim_real_gaps.setdefault(parent, []).append(dict(payload))
+            elif version == "backend_mismatch_receipt_v1":
+                grouped_backend_mismatches.setdefault(parent, []).append(dict(payload))
+            elif version == "surrogate_physics_receipt_v1":
+                grouped_surrogate_physics.setdefault(parent, []).append(dict(payload))
+            elif version == "surrogate_calibration_receipt_v1":
+                grouped_surrogate_calibrations.setdefault(parent, []).append(dict(payload))
             elif version == "render_provider_receipt_v1":
                 grouped_render_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "simulation_outcome_receipt_v1":
@@ -256,6 +276,11 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         | set(grouped_backend_outcome)
         | set(grouped_backend_shadow)
         | set(grouped_calibrations)
+        | set(grouped_task_measurements)
+        | set(grouped_sim_real_gaps)
+        | set(grouped_backend_mismatches)
+        | set(grouped_surrogate_physics)
+        | set(grouped_surrogate_calibrations)
         | set(grouped_render_receipts)
         | set(grouped_outcomes)
     )
@@ -273,6 +298,11 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         backend_outcome_receipts = grouped_backend_outcome.get(directory, [])
         backend_shadow_receipts = grouped_backend_shadow.get(directory, [])
         calibrations = grouped_calibrations.get(directory, [])
+        task_measurements = grouped_task_measurements.get(directory, [])
+        sim_real_gaps = grouped_sim_real_gaps.get(directory, [])
+        backend_mismatches = grouped_backend_mismatches.get(directory, [])
+        surrogate_physics = grouped_surrogate_physics.get(directory, [])
+        surrogate_calibrations = grouped_surrogate_calibrations.get(directory, [])
         render_receipts = grouped_render_receipts.get(directory, [])
         outcomes = grouped_outcomes.get(directory, [])
         for world_state in world_states:
@@ -310,6 +340,16 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 bundle["backend_shadow_execution_receipt"] = dict(backend_shadow_receipts[-1])
             if calibrations:
                 bundle["physics_calibration_receipt"] = dict(calibrations[-1])
+            if task_measurements:
+                bundle["task_measurement_receipt"] = dict(task_measurements[-1])
+            if sim_real_gaps:
+                bundle["sim_real_gap_receipt"] = dict(sim_real_gaps[-1])
+            if backend_mismatches:
+                bundle["backend_mismatch_receipt"] = dict(backend_mismatches[-1])
+            if surrogate_physics:
+                bundle["surrogate_physics_receipt"] = dict(surrogate_physics[-1])
+            if surrogate_calibrations:
+                bundle["surrogate_calibration_receipt"] = dict(surrogate_calibrations[-1])
             if render_receipts:
                 bundle["render_provider_receipts"] = [dict(item) for item in render_receipts]
             if outcomes:
@@ -404,6 +444,36 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "physics_calibration_receipt_v1"
     ]
+    task_measurements = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "task_measurement_receipt_v1"
+    ]
+    sim_real_gaps = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "sim_real_gap_receipt_v1"
+    ]
+    backend_mismatches = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "backend_mismatch_receipt_v1"
+    ]
+    surrogate_physics_receipts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "surrogate_physics_receipt_v1"
+    ]
+    surrogate_calibration_receipts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "surrogate_calibration_receipt_v1"
+    ]
     render_receipts = [
         dict(payload)
         for payload in rows
@@ -450,6 +520,16 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             bundle["backend_shadow_execution_receipt"] = backend_shadow_receipts[-1]
         if calibrations:
             bundle["physics_calibration_receipt"] = calibrations[-1]
+        if task_measurements:
+            bundle["task_measurement_receipt"] = task_measurements[-1]
+        if sim_real_gaps:
+            bundle["sim_real_gap_receipt"] = sim_real_gaps[-1]
+        if backend_mismatches:
+            bundle["backend_mismatch_receipt"] = backend_mismatches[-1]
+        if surrogate_physics_receipts:
+            bundle["surrogate_physics_receipt"] = surrogate_physics_receipts[-1]
+        if surrogate_calibration_receipts:
+            bundle["surrogate_calibration_receipt"] = surrogate_calibration_receipts[-1]
         if render_receipts:
             bundle["render_provider_receipts"] = render_receipts
         if outcomes:
@@ -547,6 +627,13 @@ def build_backend_selector_rows_from_receipts(
             bundle_mapping.get("physics_calibration_receipt")
             or bundle_mapping.get("physics_calibration")
         )
+        task_measurement_receipt = _mapping(bundle_mapping.get("task_measurement_receipt"))
+        sim_real_gap_receipt = _mapping(bundle_mapping.get("sim_real_gap_receipt"))
+        backend_mismatch_receipt = _mapping(bundle_mapping.get("backend_mismatch_receipt"))
+        surrogate_physics_receipt = _mapping(bundle_mapping.get("surrogate_physics_receipt"))
+        surrogate_calibration_receipt = _mapping(
+            bundle_mapping.get("surrogate_calibration_receipt")
+        )
         if calibration_receipt:
             target_source = "runtime_receipt"
         elif backend_runtime_outcome_receipt and _runtime_outcome_can_drive_target_source(
@@ -631,6 +718,43 @@ def build_backend_selector_rows_from_receipts(
                         "upstream_runtime_pack_status"
                     ),
                     "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
+                    "task_measurement_receipt_id": task_measurement_receipt.get("receipt_id"),
+                    "task_measurement_benchmark_gate_ready": task_measurement_receipt.get(
+                        "benchmark_gate_ready"
+                    ),
+                    "task_measurement_values": _mapping(
+                        task_measurement_receipt.get("measurement_values")
+                    ),
+                    "sim_real_gap_receipt_id": sim_real_gap_receipt.get("receipt_id"),
+                    "sim_real_gap_status": sim_real_gap_receipt.get("status"),
+                    "sim_real_gap_score": sim_real_gap_receipt.get("gap_score"),
+                    "sim_real_realism_confidence": sim_real_gap_receipt.get(
+                        "realism_confidence"
+                    ),
+                    "backend_mismatch_receipt_id": backend_mismatch_receipt.get("receipt_id"),
+                    "backend_mismatch_status": backend_mismatch_receipt.get("status"),
+                    "backend_mismatch_score": backend_mismatch_receipt.get("mismatch_score"),
+                    "backend_calibration_staleness_score": backend_mismatch_receipt.get(
+                        "calibration_staleness_score"
+                    ),
+                    "surrogate_physics_receipt_id": surrogate_physics_receipt.get(
+                        "receipt_id"
+                    ),
+                    "surrogate_forecast_status": surrogate_physics_receipt.get(
+                        "forecast_status"
+                    ),
+                    "surrogate_confidence": surrogate_physics_receipt.get(
+                        "surrogate_confidence"
+                    ),
+                    "surrogate_calibration_receipt_id": surrogate_calibration_receipt.get(
+                        "receipt_id"
+                    ),
+                    "surrogate_calibration_status": surrogate_calibration_receipt.get(
+                        "calibration_status"
+                    ),
+                    "surrogate_calibration_score": surrogate_calibration_receipt.get(
+                        "calibration_score"
+                    ),
                     "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
                     "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(
                         "benchmark_gate_ready"
@@ -996,6 +1120,13 @@ def build_branch_planner_rows_from_receipts(
             or bundle_mapping.get("physics_calibration")
         )
         adaptation_receipt = _mapping(bundle_mapping.get("physics_adaptation_receipt"))
+        task_measurement_receipt = _mapping(bundle_mapping.get("task_measurement_receipt"))
+        sim_real_gap_receipt = _mapping(bundle_mapping.get("sim_real_gap_receipt"))
+        backend_mismatch_receipt = _mapping(bundle_mapping.get("backend_mismatch_receipt"))
+        surrogate_physics_receipt = _mapping(bundle_mapping.get("surrogate_physics_receipt"))
+        surrogate_calibration_receipt = _mapping(
+            bundle_mapping.get("surrogate_calibration_receipt")
+        )
         upstream_runtime_pack = _mapping(
             backend_runtime_bundle.get("upstream_runtime_pack")
         ) or _mapping(backend_runtime_bridge_receipt.get("metadata", {})).get(
@@ -1105,7 +1236,56 @@ def build_branch_planner_rows_from_receipts(
                             helper_trace.get("expected_yield_score"),
                             0.0,
                         ),
+                        "scene_hierarchy_ref": _mapping(
+                            plan_metadata.get("scene_hierarchy_ref")
+                        ),
+                        "scene_materialization_status": str(
+                            plan_metadata.get("scene_materialization_status") or ""
+                        ),
                         "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
+                        "task_measurement_receipt_id": task_measurement_receipt.get(
+                            "receipt_id"
+                        ),
+                        "task_measurement_benchmark_gate_ready": task_measurement_receipt.get(
+                            "benchmark_gate_ready"
+                        ),
+                        "task_measurement_values": _mapping(
+                            task_measurement_receipt.get("measurement_values")
+                        ),
+                        "sim_real_gap_receipt_id": sim_real_gap_receipt.get("receipt_id"),
+                        "sim_real_gap_status": sim_real_gap_receipt.get("status"),
+                        "sim_real_gap_score": sim_real_gap_receipt.get("gap_score"),
+                        "sim_real_realism_confidence": sim_real_gap_receipt.get(
+                            "realism_confidence"
+                        ),
+                        "backend_mismatch_receipt_id": backend_mismatch_receipt.get(
+                            "receipt_id"
+                        ),
+                        "backend_mismatch_status": backend_mismatch_receipt.get("status"),
+                        "backend_mismatch_score": backend_mismatch_receipt.get(
+                            "mismatch_score"
+                        ),
+                        "backend_calibration_staleness_score": backend_mismatch_receipt.get(
+                            "calibration_staleness_score"
+                        ),
+                        "surrogate_physics_receipt_id": surrogate_physics_receipt.get(
+                            "receipt_id"
+                        ),
+                        "surrogate_forecast_status": surrogate_physics_receipt.get(
+                            "forecast_status"
+                        ),
+                        "surrogate_confidence": surrogate_physics_receipt.get(
+                            "surrogate_confidence"
+                        ),
+                        "surrogate_calibration_receipt_id": surrogate_calibration_receipt.get(
+                            "receipt_id"
+                        ),
+                        "surrogate_calibration_status": surrogate_calibration_receipt.get(
+                            "calibration_status"
+                        ),
+                        "surrogate_calibration_score": surrogate_calibration_receipt.get(
+                            "calibration_score"
+                        ),
                         "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
                         "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(
                             "benchmark_gate_ready"

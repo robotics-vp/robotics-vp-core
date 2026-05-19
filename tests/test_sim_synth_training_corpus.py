@@ -46,6 +46,13 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                             "branch_helper_resolution": "heuristic_due_to_shadow_candidate",
                             "branch_helper_resolution_reason": "benchmark_gate_not_ready",
                             "branch_helper_payload_applied": False,
+                            "scene_hierarchy_ref": {
+                                "hierarchy_id": "scene_h_1",
+                                "scene_id": "workcell_scene_1",
+                                "scene_kind": "workcell",
+                                "materialization_status": "asset_contract_ready",
+                            },
+                            "scene_materialization_status": "asset_contract_ready",
                         },
                     }
                 ],
@@ -94,6 +101,95 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
                 "calibration_profile": "default",
                 "quality_score": 0.8,
                 "version": "physics_calibration_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (receipt_dir / "episode_task_measurement_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "task_measure_1",
+                "surface_id": "task_surface_1",
+                "task_definition_contract_id": "task_contract_1",
+                "task_family": "drawer_vase",
+                "benchmark_gate_ready": False,
+                "measurement_values": {
+                    "coverage_gap_score": 0.7,
+                    "promotion_readiness": 0.2,
+                },
+                "measurement_status": {
+                    "coverage_gap_score": "available",
+                    "promotion_readiness": "shadow_only",
+                },
+                "version": "task_measurement_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (receipt_dir / "episode_sim_real_gap_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "sim_real_gap_1",
+                "source_backend": "isaac",
+                "target_hardware_class": "unitree_g1_r1_class",
+                "comparison_scope": "planning_window",
+                "gap_score": 0.42,
+                "realism_confidence": 0.58,
+                "status": "estimated",
+                "branch_plan_ids": ["plan_1"],
+                "version": "sim_real_gap_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (receipt_dir / "episode_backend_mismatch_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "backend_mismatch_1",
+                "reference_backend": "pybullet",
+                "candidate_backend": "isaac",
+                "mismatch_score": 0.25,
+                "calibration_staleness_score": 0.2,
+                "status": "mismatch_estimated",
+                "version": "backend_mismatch_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (receipt_dir / "episode_surrogate_physics_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "surrogate_physics_1",
+                "provider_id": "surrogate_provider_1",
+                "forecast_scope": "branch_preview",
+                "forecast_status": "contract_reserved",
+                "surrogate_confidence": 0.0,
+                "branch_plan_ids": ["plan_1"],
+                "version": "surrogate_physics_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (receipt_dir / "episode_surrogate_calibration_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "surrogate_calibration_1",
+                "provider_id": "surrogate_provider_1",
+                "reference_backend": "isaac",
+                "calibration_status": "not_calibrated",
+                "calibration_score": 0.0,
+                "staleness_score": 1.0,
+                "version": "surrogate_calibration_receipt_v1",
             },
             indent=2,
             sort_keys=True,
@@ -398,6 +494,14 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["backend_runtime_outcome_receipt"]["receipt_id"] == "runtime_outcome_1"
     assert bundles[0]["backend_shadow_execution_receipt"]["receipt_id"] == "shadow_1"
     assert bundles[0]["physics_calibration_receipt"]["receipt_id"] == "cal_1"
+    assert bundles[0]["task_measurement_receipt"]["receipt_id"] == "task_measure_1"
+    assert bundles[0]["sim_real_gap_receipt"]["receipt_id"] == "sim_real_gap_1"
+    assert bundles[0]["backend_mismatch_receipt"]["receipt_id"] == "backend_mismatch_1"
+    assert bundles[0]["surrogate_physics_receipt"]["receipt_id"] == "surrogate_physics_1"
+    assert (
+        bundles[0]["surrogate_calibration_receipt"]["receipt_id"]
+        == "surrogate_calibration_1"
+    )
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
     assert bundles[0]["simulation_outcome_receipts"][0]["receipt_id"] == "outcome_1"
 
@@ -406,6 +510,17 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["target_system_identification_profile"] == "humanoid_shadow_system_id"
     assert backend_rows[0]["target_source"] == "runtime_receipt"
     assert backend_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
+    assert backend_rows[0]["metadata"]["task_measurement_receipt_id"] == "task_measure_1"
+    assert backend_rows[0]["metadata"]["task_measurement_values"]["coverage_gap_score"] == 0.7
+    assert backend_rows[0]["metadata"]["sim_real_gap_receipt_id"] == "sim_real_gap_1"
+    assert backend_rows[0]["metadata"]["sim_real_gap_score"] == 0.42
+    assert backend_rows[0]["metadata"]["backend_mismatch_receipt_id"] == "backend_mismatch_1"
+    assert backend_rows[0]["metadata"]["backend_mismatch_score"] == 0.25
+    assert backend_rows[0]["metadata"]["surrogate_physics_receipt_id"] == "surrogate_physics_1"
+    assert (
+        backend_rows[0]["metadata"]["surrogate_calibration_receipt_id"]
+        == "surrogate_calibration_1"
+    )
     assert backend_rows[0]["metadata"]["physics_execution_contract_id"] == "contract_1"
     assert backend_rows[0]["metadata"]["physics_route_status"] == "fallback"
     assert backend_rows[0]["metadata"]["compiled_receipt_inventory_id"] == "inventory_1"
@@ -498,6 +613,13 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["target_render_materialization_status"] == "scene_materialized"
     assert branch_rows[0]["target_render_materialization_mode"] == "scene_config"
     assert branch_rows[0]["metadata"]["robot_asset_contract_receipt_id"] == "asset_1"
+    assert branch_rows[0]["metadata"]["scene_hierarchy_ref"]["hierarchy_id"] == "scene_h_1"
+    assert branch_rows[0]["metadata"]["scene_materialization_status"] == "asset_contract_ready"
+    assert branch_rows[0]["metadata"]["task_measurement_receipt_id"] == "task_measure_1"
+    assert branch_rows[0]["metadata"]["sim_real_gap_receipt_id"] == "sim_real_gap_1"
+    assert branch_rows[0]["metadata"]["sim_real_gap_score"] == 0.42
+    assert branch_rows[0]["metadata"]["backend_mismatch_receipt_id"] == "backend_mismatch_1"
+    assert branch_rows[0]["metadata"]["backend_mismatch_score"] == 0.25
     assert branch_rows[0]["metadata"]["physics_execution_contract_id"] == "contract_1"
     assert branch_rows[0]["metadata"]["physics_route_status"] == "fallback"
     assert branch_rows[0]["metadata"]["compiled_receipt_inventory_id"] == "inventory_1"

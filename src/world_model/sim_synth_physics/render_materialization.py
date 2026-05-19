@@ -48,6 +48,16 @@ def _render_source_context(
     future_training = mapping(plan.metadata.get("future_training_artifacts"))
     if future_training:
         context.setdefault("future_training_artifacts", future_training)
+    scene_hierarchy = (
+        {}
+        if world_state.scene_hierarchy is None
+        else world_state.scene_hierarchy.to_dict()
+    )
+    if scene_hierarchy:
+        context.setdefault("scene_hierarchy", scene_hierarchy)
+    plan_scene_ref = mapping(plan.metadata.get("scene_hierarchy_ref"))
+    if plan_scene_ref:
+        context.setdefault("scene_hierarchy_ref", plan_scene_ref)
     return context
 
 
@@ -79,6 +89,7 @@ def _materialize_lsd_scene(
                 "provider_kind": provider.provider_kind,
                 "materialization_mode": "scene_config",
                 "materialization_status": "scene_materialized",
+                "scene_hierarchy_ref": mapping(plan.metadata.get("scene_hierarchy_ref")),
                 "unsatisfied_preconditions": [],
             },
         )

@@ -1,5 +1,37 @@
 # Economic World Model Progress Log
 
+## 2026-05-18 - Phase 1.x consumers: scene hierarchy and transfer evidence made training-visible
+
+- **Changed**:
+  - `SceneHierarchyState` now flows into:
+    - `SyntheticBranchPlan.gap_target_refs`
+    - branch-plan metadata
+    - render-provider config / metadata
+    - render materialization manifests and source context
+  - `sim_synth_training_feedback_v1` rows now carry a transfer-evidence
+    summary derived from:
+    - `TaskMeasurementReceipt`
+    - `SimRealGapReceipt`
+    - `BackendMismatchReceipt`
+    - `SurrogatePhysicsReceipt`
+    - `SurrogateCalibrationReceipt`
+  - `harvest_sim_synth_receipt_bundles(...)` now recognizes and bundles the
+    new Phase 1.x receipt family
+  - backend-selector and branch-planner training rows now expose task
+    measurement values, sim-real gap score/status, backend mismatch score/status,
+    surrogate posture, and scene hierarchy refs
+- **Why this matters**:
+  - the first Phase 1.x tranche created the joints; this pass makes them load
+    bearing
+  - future training/eval code can now condition on scene/materialization
+    structure and transfer-risk evidence instead of rediscovering those facts
+    from loose artifacts
+  - the evidence remains honest: current local rows expose estimated and
+    contract-reserved posture until provider/GPU execution replaces it
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_vectorized_runtime.py -q`
+
 ## 2026-05-18 - Phase 1.x re-entry tranche: shared surfaces, task protocol, transfer receipts, geometry, and batch runner
 
 - **Changed**:

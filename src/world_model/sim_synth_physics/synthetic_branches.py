@@ -21,6 +21,7 @@ from .render_providers import compile_branch_render_provider_state
 from .state import (
     PhysicsAdaptationPolicyState,
     PhysicsContextState,
+    SceneHierarchyState,
     SyntheticBranchPlan,
 )
 
@@ -318,6 +319,7 @@ def compile_synthetic_branch_plans(
     benchmark_signals: Mapping[str, Any],
     semantic_context: Optional[Mapping[str, Any]],
     economic_context: Optional[Mapping[str, Any]],
+    scene_hierarchy: Optional[SceneHierarchyState] = None,
     branch_planner: Any,
     branch_planner_mode: HelperMode,
 ) -> list[SyntheticBranchPlan]:
@@ -335,6 +337,9 @@ def compile_synthetic_branch_plans(
             context={
                 "job": job.to_dict(),
                 "physics_context": physics_context.to_dict(),
+                "scene_hierarchy": (
+                    None if scene_hierarchy is None else scene_hierarchy.to_dict()
+                ),
                 "benchmark_signals": mapping(benchmark_signals),
                 "heuristic_generation_mode": heuristic_mode,
             },
@@ -367,6 +372,19 @@ def compile_synthetic_branch_plans(
             "render_backend": physics_context.backend,
         }
         plan_id = stable_id("branch_plan", plan_payload)
+        scene_hierarchy_ref = (
+            {}
+            if scene_hierarchy is None
+            else {
+                "ref_kind": "scene_hierarchy_state",
+                "hierarchy_id": scene_hierarchy.hierarchy_id,
+                "scene_id": scene_hierarchy.scene_id,
+                "scene_kind": scene_hierarchy.scene_kind,
+                "hierarchy_levels": list(scene_hierarchy.hierarchy_levels),
+                "node_counts_by_level": dict(scene_hierarchy.node_counts_by_level),
+                "materialization_status": scene_hierarchy.materialization_status,
+            }
+        )
         branch_contract = build_branch_plan_inferential_contract(
             plan_id=plan_id,
             job_id=job.job_id,
@@ -399,7 +417,9 @@ def compile_synthetic_branch_plans(
                 branch_family=f"{job.task_family}:{job.data_collection_intent}",
                 generation_mode=generation_mode,
                 render_backend=physics_context.backend,
-                gap_target_refs=[mapping(job.coverage_targets)],
+                gap_target_refs=[
+                    ref for ref in [mapping(job.coverage_targets), scene_hierarchy_ref] if ref
+                ],
                 admission_preconditions=admission_preconditions,
                 expected_yield_score=expected_yield_score,
                 selection_policy=selection_policy,
@@ -410,6 +430,7 @@ def compile_synthetic_branch_plans(
                     physics_context=physics_context,
                     physics_adaptation_policy=physics_adaptation_policy,
                     benchmark_signals=benchmark_signals,
+                    scene_hierarchy=scene_hierarchy,
                 ),
                 inferential_learnability_contract=branch_contract.to_dict(),
                 metadata={
@@ -424,6 +445,12 @@ def compile_synthetic_branch_plans(
                     "branch_helper_resolution": helper_resolution,
                     "branch_helper_resolution_reason": helper_resolution_reason,
                     "branch_helper_payload_applied": helper_payload_applied,
+                    "scene_hierarchy_ref": scene_hierarchy_ref,
+                    "scene_materialization_status": str(
+                        scene_hierarchy.materialization_status
+                    )
+                    if scene_hierarchy is not None
+                    else "",
                 },
             )
         )

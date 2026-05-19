@@ -1,5 +1,40 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-18 - Phase 1.x consumers: scene and transfer evidence made consequential
+
+### What changed
+
+- `compile_synthetic_branch_plans(...)` now consumes `SceneHierarchyState`.
+- Each `SyntheticBranchPlan` now carries a `scene_hierarchy_ref` in both
+  `gap_target_refs` and metadata.
+- `compile_branch_render_provider_state(...)` now receives the scene hierarchy
+  and records it in provider config / metadata.
+- Render materialization source context and manifests now preserve the scene
+  hierarchy reference.
+- `sim_synth_training_feedback_v1` now includes a transfer-evidence summary
+  over:
+  - task measurement posture
+  - sim-real gap score / realism confidence
+  - backend mismatch / calibration staleness
+  - surrogate forecast and calibration posture
+- `training_corpus.py` now harvests the new receipt family and exposes it in
+  backend-selector / branch-planner rows.
+
+### Why this matters
+
+The earlier Phase 1.x pass made a clean state/receipt family. This pass makes
+that family harder to ignore: scene hierarchy now shapes branch/materialization
+planning, and transfer evidence becomes visible to training-row consumers.
+
+This is still not provider bring-up. The value is that future GPU/runtime runs
+will arrive into a training/evidence pipeline that already knows how to carry
+scene structure, sim-real risk, backend mismatch, and surrogate posture.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+- `python3 -m pytest tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_vectorized_runtime.py -q`
+
 ## 2026-05-18 - Phase 1.x re-entry: first shared Sim / Synth / Physics surface family
 
 ### What changed

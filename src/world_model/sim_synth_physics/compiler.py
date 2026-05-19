@@ -740,6 +740,7 @@ def compile_sim_synth_physics_world_state(
         physics_adaptation_policy=physics_adaptation_policy,
         benchmark_signals=benchmark_payload,
         semantic_context=semantic_context,
+        scene_hierarchy=scene_hierarchy,
         economic_context=economic_context,
         branch_planner=branch_planner,
         branch_planner_mode=branch_planner_mode,
