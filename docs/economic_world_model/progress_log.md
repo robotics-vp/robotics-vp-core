@@ -1,5 +1,30 @@
 # Economic World Model Progress Log
 
+## 2026-05-18 - Phase 1.x replay-validity / task-consistency receipts
+
+- **Changed**:
+  - added `ReplayValidityReceipt` as the per-branch post-outcome training
+    admissibility receipt tying outcome status to task, transfer, branch, and
+    sensor evidence
+  - runtime execution now emits `replay_validity_receipts.json`, includes the
+    receipts in loop results, and threads per-row replay validity into
+    `sim_synth_training_feedback_v1`
+  - receipt harvesting now recognizes replay-validity receipts and projects
+    aggregate reject reasons into backend-selector rows plus per-branch
+    validity / consistency scores into branch-planner rows
+- **Why this matters**:
+  - the roadmap's replay-validity / task-consistency filter is now a concrete
+    CPU-local artifact rather than a future provider-season note
+  - branch outcomes can be filtered from training for explicit reasons
+    (`outcome_blocked_by_admission`, `sensor_alignment_unready`, high sim-real
+    gap, or benchmark-gate absence) instead of being silently treated as useful
+  - this remains a local estimate until real provider replay and benchmark
+    evidence exist
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_vectorized_runtime.py -q` (`40 passed`)
+  - `python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1634 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-18 - Phase 1.x geometry-backed sensor alignment receipts
 
 - **Changed**:

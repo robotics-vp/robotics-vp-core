@@ -1,5 +1,42 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-18 - Phase 1.x replay-validity and task-consistency receipts
+
+### What changed
+
+- Added `ReplayValidityReceipt` to the Sim / Synth / Physics receipt family.
+- Added `build_replay_validity_receipts(...)`, combining:
+  - outcome receipt status / realized yield
+  - branch-validity admissibility
+  - task-measurement consistency
+  - sim-real transfer consistency
+  - sensor-alignment score
+- `SimSynthPhysicsRuntime` now emits `replay_validity_receipts.json` and embeds
+  per-branch replay validity in loop results and training-feedback rows.
+- `training_corpus.py` now harvests replay-validity receipts and exposes
+  aggregate reject reasons to backend-selector rows plus per-branch validity and
+  consistency values to branch-planner rows.
+
+### Why this was the right next local step
+
+Branch validity decides whether a generated branch is admissible before or
+during execution. Replay validity decides whether the resulting branch outcome
+should be allowed into later training/evaluation surfaces. That second decision
+needed its own receipt; otherwise invalid, blocked, or weakly grounded outcomes
+could still look like ordinary training rows downstream.
+
+The receipt is deliberately conservative. It records local estimates and reject
+reasons now, then gives future provider replay, benchmark gates, and real
+sim-real evidence a typed place to land later.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+- `python3 -m pytest tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_vectorized_runtime.py -q` ->
+  `40 passed`
+- `python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1634 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-18 - Phase 1.x sensor-alignment receipts
 
 ### What changed

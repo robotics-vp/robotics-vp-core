@@ -81,6 +81,7 @@ RUNTIME_OWNED_RECEIPTS = [
     "surrogate_physics_receipt_v1",
     "surrogate_calibration_receipt_v1",
     "sensor_alignment_receipt_v1",
+    "replay_validity_receipt_v1",
     "sim_synth_training_feedback_v1",
 ]
 

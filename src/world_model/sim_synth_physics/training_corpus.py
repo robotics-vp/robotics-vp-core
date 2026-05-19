@@ -170,6 +170,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "surrogate_calibration_receipt",
             "branch_validity_receipt",
             "sensor_alignment_receipt",
+            "replay_validity_receipt",
             "render_provider_receipt",
             "simulation_outcome_receipt",
         )
@@ -199,6 +200,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_surrogate_calibrations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_branch_validity_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_sensor_alignments: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_replay_validity_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_render_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_outcomes: dict[Path, list[Dict[str, Any]]] = {}
     explicit_bundles: list[Dict[str, Any]] = []
@@ -264,6 +266,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_branch_validity_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "sensor_alignment_receipt_v1":
                 grouped_sensor_alignments.setdefault(parent, []).append(dict(payload))
+            elif version == "replay_validity_receipt_v1":
+                grouped_replay_validity_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "render_provider_receipt_v1":
                 grouped_render_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "simulation_outcome_receipt_v1":
@@ -291,6 +295,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         | set(grouped_surrogate_calibrations)
         | set(grouped_branch_validity_receipts)
         | set(grouped_sensor_alignments)
+        | set(grouped_replay_validity_receipts)
         | set(grouped_render_receipts)
         | set(grouped_outcomes)
     )
@@ -315,6 +320,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         surrogate_calibrations = grouped_surrogate_calibrations.get(directory, [])
         branch_validity_receipts = grouped_branch_validity_receipts.get(directory, [])
         sensor_alignments = grouped_sensor_alignments.get(directory, [])
+        replay_validity_receipts = grouped_replay_validity_receipts.get(directory, [])
         render_receipts = grouped_render_receipts.get(directory, [])
         outcomes = grouped_outcomes.get(directory, [])
         for world_state in world_states:
@@ -368,6 +374,10 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 ]
             if sensor_alignments:
                 bundle["sensor_alignment_receipt"] = dict(sensor_alignments[-1])
+            if replay_validity_receipts:
+                bundle["replay_validity_receipts"] = [
+                    dict(item) for item in replay_validity_receipts
+                ]
             if render_receipts:
                 bundle["render_provider_receipts"] = [dict(item) for item in render_receipts]
             if outcomes:
@@ -504,6 +514,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "sensor_alignment_receipt_v1"
     ]
+    replay_validity_receipts = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "replay_validity_receipt_v1"
+    ]
     render_receipts = [
         dict(payload)
         for payload in rows
@@ -564,6 +580,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             bundle["branch_validity_receipts"] = branch_validity_receipts
         if sensor_alignment_receipts:
             bundle["sensor_alignment_receipt"] = sensor_alignment_receipts[-1]
+        if replay_validity_receipts:
+            bundle["replay_validity_receipts"] = replay_validity_receipts
         if render_receipts:
             bundle["render_provider_receipts"] = render_receipts
         if outcomes:
@@ -673,10 +691,21 @@ def build_backend_selector_rows_from_receipts(
         branch_validity_receipts = _mapping_list(
             bundle_mapping.get("branch_validity_receipts")
         )
+        replay_validity_receipts = _mapping_list(
+            bundle_mapping.get("replay_validity_receipts")
+        )
         branch_reject_reasons = sorted(
             {
                 str(reason)
                 for receipt in branch_validity_receipts
+                for reason in list(receipt.get("reject_reasons") or [])
+                if str(reason)
+            }
+        )
+        replay_reject_reasons = sorted(
+            {
+                str(reason)
+                for receipt in replay_validity_receipts
                 for reason in list(receipt.get("reject_reasons") or [])
                 if str(reason)
             }
@@ -821,6 +850,13 @@ def build_backend_selector_rows_from_receipts(
                     "sensor_alignment_metrics": _mapping(
                         sensor_alignment_receipt.get("metrics")
                     ),
+                    "replay_validity_receipt_ids": [
+                        receipt.get("receipt_id") for receipt in replay_validity_receipts
+                    ],
+                    "replay_validity_reject_count": sum(
+                        1 for receipt in replay_validity_receipts if receipt.get("reject_reasons")
+                    ),
+                    "replay_validity_reject_reasons": replay_reject_reasons,
                     "gen2sim_admission_receipt_id": gen2sim_admission_receipt.get("receipt_id"),
                     "gen2sim_benchmark_gate_ready": gen2sim_admission_receipt.get(
                         "benchmark_gate_ready"
@@ -1136,6 +1172,11 @@ def build_branch_planner_rows_from_receipts(
             for receipt in _mapping_list(bundle_mapping.get("branch_validity_receipts"))
             if str(receipt.get("branch_plan_id"))
         }
+        replay_validity_receipts = {
+            str(receipt.get("branch_plan_id")): receipt
+            for receipt in _mapping_list(bundle_mapping.get("replay_validity_receipts"))
+            if str(receipt.get("branch_plan_id"))
+        }
         robot_asset_contract_receipt = _mapping(bundle_mapping.get("robot_asset_contract_receipt"))
         sensor_alignment_receipt = _mapping(bundle_mapping.get("sensor_alignment_receipt"))
         gen2sim_admission_receipt = _mapping(bundle_mapping.get("gen2sim_admission_receipt"))
@@ -1219,6 +1260,7 @@ def build_branch_planner_rows_from_receipts(
             outcome_metadata = _mapping(outcome.get("metadata"))
             render_receipt = _mapping(render_receipts.get(plan_id))
             branch_validity_receipt = _mapping(branch_validity_receipts.get(plan_id))
+            replay_validity_receipt = _mapping(replay_validity_receipts.get(plan_id))
             target_source = "runtime_receipt" if outcome else "wm_planning_state"
             fallback_yield = _clip01(plan.get("expected_yield_score"), 0.0)
             realized_yield = _clip01(
@@ -1344,6 +1386,24 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "sensor_alignment_checks": _mapping(
                             sensor_alignment_receipt.get("checks")
+                        ),
+                        "replay_validity_receipt_id": replay_validity_receipt.get(
+                            "receipt_id"
+                        ),
+                        "replay_validity_score": replay_validity_receipt.get(
+                            "validity_score"
+                        ),
+                        "replay_validity_status": replay_validity_receipt.get(
+                            "status"
+                        ),
+                        "replay_task_consistency_score": replay_validity_receipt.get(
+                            "task_consistency_score"
+                        ),
+                        "replay_transfer_consistency_score": replay_validity_receipt.get(
+                            "transfer_consistency_score"
+                        ),
+                        "replay_reject_reasons": list(
+                            replay_validity_receipt.get("reject_reasons") or []
                         ),
                         "adaptation_receipt_id": adaptation_receipt.get("receipt_id"),
                         "task_measurement_receipt_id": task_measurement_receipt.get(

@@ -241,6 +241,27 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_replay_validity_receipt_v1.json").write_text(
+        json.dumps(
+            {
+                "receipt_id": "replay_validity_1",
+                "branch_plan_id": "plan_1",
+                "outcome_receipt_id": "outcome_1",
+                "validity_score": 0.72,
+                "task_consistency_score": 0.68,
+                "transfer_consistency_score": 0.58,
+                "status": "training_validity_estimated",
+                "reject_reasons": [],
+                "metadata": {
+                    "evidence_status": "local_estimate",
+                },
+                "version": "replay_validity_receipt_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_physics_adaptation_receipt_v1.json").write_text(
         json.dumps(
             {
@@ -549,6 +570,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     )
     assert bundles[0]["branch_validity_receipts"][0]["receipt_id"] == "branch_validity_1"
     assert bundles[0]["sensor_alignment_receipt"]["receipt_id"] == "sensor_alignment_1"
+    assert bundles[0]["replay_validity_receipts"][0]["receipt_id"] == "replay_validity_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
     assert bundles[0]["simulation_outcome_receipts"][0]["receipt_id"] == "outcome_1"
 
@@ -603,6 +625,11 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["metadata"]["sensor_alignment_status"] == "geometry_contract_validated"
     assert backend_rows[0]["metadata"]["sensor_alignment_score"] == 0.95
     assert backend_rows[0]["metadata"]["sensor_alignment_checks"]["round_trip"] == "passed"
+    assert backend_rows[0]["metadata"]["replay_validity_receipt_ids"] == [
+        "replay_validity_1"
+    ]
+    assert backend_rows[0]["metadata"]["replay_validity_reject_count"] == 0
+    assert backend_rows[0]["metadata"]["replay_validity_reject_reasons"] == []
     assert backend_rows[0]["metadata"]["gen2sim_admission_receipt_id"] == "gen2sim_1"
     assert backend_rows[0]["metadata"]["gen2sim_admissible_branch_count"] == 1
     assert backend_rows[0]["metadata"]["backend_runtime_execution_receipt_id"] == "runtime_1"
@@ -682,6 +709,12 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["sensor_alignment_status"] == "geometry_contract_validated"
     assert branch_rows[0]["metadata"]["sensor_alignment_score"] == 0.95
     assert branch_rows[0]["metadata"]["sensor_alignment_checks"]["intrinsics"] == "valid"
+    assert branch_rows[0]["metadata"]["replay_validity_receipt_id"] == "replay_validity_1"
+    assert branch_rows[0]["metadata"]["replay_validity_score"] == 0.72
+    assert branch_rows[0]["metadata"]["replay_validity_status"] == "training_validity_estimated"
+    assert branch_rows[0]["metadata"]["replay_task_consistency_score"] == 0.68
+    assert branch_rows[0]["metadata"]["replay_transfer_consistency_score"] == 0.58
+    assert branch_rows[0]["metadata"]["replay_reject_reasons"] == []
     assert branch_rows[0]["metadata"]["task_measurement_receipt_id"] == "task_measure_1"
     assert branch_rows[0]["metadata"]["sim_real_gap_receipt_id"] == "sim_real_gap_1"
     assert branch_rows[0]["metadata"]["sim_real_gap_score"] == 0.42

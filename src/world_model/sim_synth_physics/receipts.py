@@ -549,6 +549,36 @@ class SensorAlignmentReceipt:
 
 
 @dataclass(frozen=True)
+class ReplayValidityReceipt:
+    """Per-branch replay/task-consistency receipt for training admission."""
+
+    receipt_id: str
+    branch_plan_id: str
+    outcome_receipt_id: str
+    validity_score: float
+    task_consistency_score: float
+    transfer_consistency_score: float
+    status: str
+    reject_reasons: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "replay_validity_receipt_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "branch_plan_id": self.branch_plan_id,
+            "outcome_receipt_id": self.outcome_receipt_id,
+            "validity_score": clip01(self.validity_score),
+            "task_consistency_score": clip01(self.task_consistency_score),
+            "transfer_consistency_score": clip01(self.transfer_consistency_score),
+            "status": self.status,
+            "reject_reasons": strings(self.reject_reasons),
+            "metadata": mapping(self.metadata),
+            "version": self.version,
+        }
+
+
+@dataclass(frozen=True)
 class Gen2SimAdmissionReceipt:
     """Receipt for one WM-owned gen2sim admission decision surface."""
 

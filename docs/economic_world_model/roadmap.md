@@ -275,6 +275,9 @@ Also preserve a narrow SIM1 rule:
 - **landed locally on 2026-05-18**: geometry-backed sensor-alignment receipts
   now validate camera intrinsics/extrinsics metadata via CPU-local projection
   round trips and expose alignment posture to runtime and training rows
+- **landed locally on 2026-05-18**: replay-validity / task-consistency
+  receipts now filter branch outcomes for training using outcome, task,
+  transfer, branch-admission, and sensor-alignment evidence
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

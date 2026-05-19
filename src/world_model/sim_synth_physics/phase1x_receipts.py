@@ -10,8 +10,10 @@ from .receipts import (
     BackendMismatchReceipt,
     BranchValidityReceipt,
     PhysicsCalibrationReceipt,
+    ReplayValidityReceipt,
     SensorAlignmentReceipt,
     SimRealGapReceipt,
+    SimulationOutcomeReceipt,
     SurrogateCalibrationReceipt,
     SurrogatePhysicsReceipt,
     TaskMeasurementReceipt,
@@ -315,6 +317,119 @@ def build_sensor_alignment_receipt(
 
 
 
+def _average_clip(values: Sequence[float]) -> float:
+    clipped = [clip01(value) for value in values]
+    return 0.0 if not clipped else float(sum(clipped) / len(clipped))
+
+
+def build_replay_validity_receipts(
+    world_state: SimSynthPhysicsWorldState,
+    *,
+    task_measurement_receipt: TaskMeasurementReceipt,
+    sim_real_gap_receipt: SimRealGapReceipt,
+    sensor_alignment_receipt: SensorAlignmentReceipt,
+    outcome_receipts: Sequence[SimulationOutcomeReceipt],
+    branch_validity_receipts: Sequence[BranchValidityReceipt],
+) -> list[ReplayValidityReceipt]:
+    """Emit replay validity / task-consistency receipts for outcome rows."""
+
+    branch_validity_by_plan = {
+        receipt.branch_plan_id: receipt for receipt in branch_validity_receipts
+    }
+    measurement_values = dict(task_measurement_receipt.measurement_values)
+    if measurement_values:
+        task_consistency_score = _average_clip(list(measurement_values.values()))
+    else:
+        task_consistency_score = 0.0
+    transfer_consistency_score = clip01(1.0 - sim_real_gap_receipt.gap_score)
+    sensor_score = clip01(sensor_alignment_receipt.alignment_score)
+    receipts: list[ReplayValidityReceipt] = []
+    for outcome in outcome_receipts:
+        outcome_metadata = mapping(outcome.metadata)
+        branch_validity = branch_validity_by_plan.get(outcome.branch_plan_id)
+        branch_score = 0.0 if branch_validity is None else clip01(branch_validity.validity_score)
+        outcome_score = clip01(
+            outcome_metadata.get(
+                "realized_yield_score",
+                outcome_metadata.get("quality_score", outcome_metadata.get("expected_yield_score", 0.0)),
+            )
+        )
+        reject_reasons: list[str] = []
+        if str(outcome.status) == "blocked_by_admission":
+            outcome_score = 0.0
+            reject_reasons.append("outcome_blocked_by_admission")
+        if branch_validity is None:
+            reject_reasons.append("branch_validity_missing")
+        elif not branch_validity.admissible:
+            reject_reasons.append("branch_not_admissible")
+        if sensor_alignment_receipt.status in {
+            "alignment_contract_missing",
+            "alignment_contract_invalid",
+        }:
+            reject_reasons.append("sensor_alignment_unready")
+        if sim_real_gap_receipt.gap_score >= 0.75:
+            reject_reasons.append("sim_real_gap_high")
+        if not task_measurement_receipt.benchmark_gate_ready:
+            reject_reasons.append("task_benchmark_gate_not_ready")
+
+        validity_score = _average_clip(
+            [
+                outcome_score,
+                branch_score,
+                task_consistency_score,
+                transfer_consistency_score,
+                sensor_score,
+            ]
+        )
+        status = (
+            "training_validity_estimated"
+            if not reject_reasons
+            else "training_filtered_estimate"
+        )
+        evidence_status = (
+            "benchmark_supported_estimate"
+            if task_measurement_receipt.benchmark_gate_ready
+            and sensor_alignment_receipt.status == "geometry_contract_validated"
+            else "local_estimate"
+        )
+        payload = {
+            "state_id": world_state.state_id,
+            "branch_plan_id": outcome.branch_plan_id,
+            "outcome_receipt_id": outcome.receipt_id,
+            "status": status,
+        }
+        receipts.append(
+            ReplayValidityReceipt(
+                receipt_id=stable_id("replay_validity_receipt", payload),
+                branch_plan_id=outcome.branch_plan_id,
+                outcome_receipt_id=outcome.receipt_id,
+                validity_score=validity_score,
+                task_consistency_score=task_consistency_score,
+                transfer_consistency_score=transfer_consistency_score,
+                status=status,
+                reject_reasons=reject_reasons,
+                metadata={
+                    "world_state_id": world_state.state_id,
+                    "evidence_status": evidence_status,
+                    "outcome_status": outcome.status,
+                    "outcome_score": outcome_score,
+                    "branch_validity_receipt_id": (
+                        "" if branch_validity is None else branch_validity.receipt_id
+                    ),
+                    "branch_validity_score": branch_score,
+                    "task_measurement_receipt_id": task_measurement_receipt.receipt_id,
+                    "sim_real_gap_receipt_id": sim_real_gap_receipt.receipt_id,
+                    "sim_real_gap_score": sim_real_gap_receipt.gap_score,
+                    "sensor_alignment_receipt_id": sensor_alignment_receipt.receipt_id,
+                    "sensor_alignment_status": sensor_alignment_receipt.status,
+                    "sensor_alignment_score": sensor_score,
+                },
+            )
+        )
+    return receipts
+
+
+
 def _branch_reject_reasons(
     *,
     plan_metadata: dict[str, Any],
@@ -413,6 +528,7 @@ def build_branch_validity_receipts(
 __all__ = [
     "build_backend_mismatch_receipt",
     "build_branch_validity_receipts",
+    "build_replay_validity_receipts",
     "build_sensor_alignment_receipt",
     "build_sim_real_gap_receipt",
     "build_surrogate_calibration_receipt",
