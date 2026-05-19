@@ -314,11 +314,11 @@ Also preserve a narrow SIM1 rule:
   subsystem IDs, ownership rule, structural status, and honest blocker class so
   subsystem legibility survives into training and promotion artifacts
 - **landed locally on 2026-05-19**: Holosoma local smoke now has an explicit
-  preflight mode, auto-selected local policy ref, and ONNX deploy/action smoke;
-  the current local proof loads `actor_obs [1, 100]` and emits finite
-  `action [1, 29]`, while WM runtime routing remains shadow/fallback unless
-  `ROBOTICS_VP_ENABLE_HOLOSOMA_RUNTIME=1` is set and simulated episode evidence
-  remains provider/GPU debt
+  preflight mode, auto-selected local policy ref, ONNX deploy/action smoke, and
+  a reproducible no-pip path-shim bootstrap; the current local proof loads
+  `actor_obs [1, 100]` and emits finite `action [1, 29]`, while WM runtime
+  routing remains shadow/fallback unless `ROBOTICS_VP_ENABLE_HOLOSOMA_RUNTIME=1`
+  is set and simulated episode evidence remains provider/GPU debt
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

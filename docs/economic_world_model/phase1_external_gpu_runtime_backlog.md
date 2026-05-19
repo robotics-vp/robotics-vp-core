@@ -54,6 +54,8 @@ pre-training prerequisites, not active implementation debt.
   provider dependency and selected policy checkpoint are actually executable
 - Local ONNX deploy/action smoke runs for the selected policy and writes
   `holosoma_onnx_deploy_smoke.json` (`actor_obs [1, 100] -> action [1, 29]`)
+- `scripts/setup_holosoma_local_smoke.py` can recreate the local `.pth` shim
+  without installing the full Holosoma provider dependency tree
 - WM runtime routing remains shadow/fallback by default; full Holosoma runtime
   execution requires explicit `ROBOTICS_VP_ENABLE_HOLOSOMA_RUNTIME=1` enablement
 

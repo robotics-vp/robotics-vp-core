@@ -1,5 +1,49 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Reproducible local Holosoma smoke bootstrap
+
+### What changed
+
+- Added `scripts/setup_holosoma_local_smoke.py`.
+- The script writes the user-site `.pth` shim for the existing local Holosoma
+  checkout and intentionally does not run pip.
+- It supports `--dry-run`, `--remove`, `--holosoma-root`, `--site-packages-dir`,
+  and `--pth-name`.
+- It prints machine-readable JSON with the shim path, path entries, missing
+  paths, the minimal smoke dependency install hint, and the post-install smoke
+  command.
+- Added `tests/test_setup_holosoma_local_smoke.py`.
+
+### Current local read
+
+The local shim is now reproducible with:
+
+```bash
+python3 scripts/setup_holosoma_local_smoke.py
+```
+
+That recreates
+`/Users/amarmurray/Library/Python/3.9/lib/python/site-packages/robotics_vp_holosoma_local.pth`
+with these entries:
+
+- `/Users/amarmurray/code/holosoma/src/holosoma`
+- `/Users/amarmurray/code/holosoma/src/holosoma_inference`
+- `/Users/amarmurray/code/holosoma/src/holosoma_retargeting`
+
+This remains a local deploy-smoke bootstrap only. Full Holosoma runtime execution
+still requires explicit runtime enablement and real provider/runtime evidence.
+
+### Verification
+
+- `python3 -m ruff check scripts/setup_holosoma_local_smoke.py tests/test_setup_holosoma_local_smoke.py`
+- `python3 -m compileall scripts/setup_holosoma_local_smoke.py tests/test_setup_holosoma_local_smoke.py`
+- `python3 -m pytest tests/test_setup_holosoma_local_smoke.py -q` -> `3 passed`
+- `python3 scripts/setup_holosoma_local_smoke.py` -> `status: installed`
+- `python3 scripts/local_holosoma_smoke.py --preflight-only --out-dir artifacts/holosoma_local_probe` -> `ready: true`, `policy_kind: onnx_deploy`
+- `python3 scripts/local_holosoma_smoke.py --episodes 1 --out-dir artifacts/holosoma_local_probe` -> finite ONNX action output
+- `python3 -m ruff check scripts/setup_holosoma_local_smoke.py tests/test_setup_holosoma_local_smoke.py && git diff --check && python3 -m compileall src/ scripts/setup_holosoma_local_smoke.py tests/test_setup_holosoma_local_smoke.py && python3 -m pytest tests/ -q` -> `1647 passed, 2 skipped, 24 warnings`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`, no drift
+
 ## 2026-05-19 - Local Holosoma ONNX deploy smoke
 
 ### What changed

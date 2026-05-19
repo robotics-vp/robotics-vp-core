@@ -1,5 +1,30 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Local Holosoma smoke bootstrap is reproducible
+
+- **Changed**:
+  - added `scripts/setup_holosoma_local_smoke.py`, a no-pip bootstrap for the
+    local Holosoma `.pth` path shim
+  - the script installs, dry-runs, or removes
+    `robotics_vp_holosoma_local.pth` and reports the exact path entries and
+    follow-up smoke commands as JSON
+  - added `tests/test_setup_holosoma_local_smoke.py` for install, missing-path,
+    and remove behavior
+- **Why this matters**:
+  - the local ONNX deploy-smoke setup is now reproducible on a fresh host
+    without accidentally pulling the full Holosoma provider dependency tree
+  - this keeps the distinction clean: local deploy inference can be reproduced
+    cheaply, while full simulated episode/runtime evidence remains gated
+- **Verification**:
+  - `python3 -m ruff check scripts/setup_holosoma_local_smoke.py tests/test_setup_holosoma_local_smoke.py`
+  - `python3 -m compileall scripts/setup_holosoma_local_smoke.py tests/test_setup_holosoma_local_smoke.py`
+  - `python3 -m pytest tests/test_setup_holosoma_local_smoke.py -q` (`3 passed`)
+  - `python3 scripts/setup_holosoma_local_smoke.py` (`status: installed`)
+  - `python3 scripts/local_holosoma_smoke.py --preflight-only --out-dir artifacts/holosoma_local_probe` (`ready: true`, `policy_kind: onnx_deploy`)
+  - `python3 scripts/local_holosoma_smoke.py --episodes 1 --out-dir artifacts/holosoma_local_probe` (`actor_obs [1, 100] -> action [1, 29]`, finite `float32`)
+  - `python3 -m ruff check scripts/setup_holosoma_local_smoke.py tests/test_setup_holosoma_local_smoke.py && git diff --check && python3 -m compileall src/ scripts/setup_holosoma_local_smoke.py tests/test_setup_holosoma_local_smoke.py && python3 -m pytest tests/ -q` (`1647 passed, 2 skipped, 24 warnings`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`, no drift)
+
 ## 2026-05-19 - Local Holosoma ONNX deploy smoke runs without full provider install
 
 - **Changed**:
