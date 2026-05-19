@@ -1,5 +1,27 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x runtime receipt manifest validation
+
+- **Changed**:
+  - added `validate_runtime_receipt_manifest(...)` for harvested Sim / Synth /
+    Physics receipt bundles
+  - live-directory harvesting now expands runtime-emitted receipt-bundle files
+    such as branch-validity, replay-validity, render-provider, simulation
+    outcome, and backend work-order bundles into bundle rows
+  - backend-selector and branch-planner training rows now expose runtime
+    manifest validation status and mismatched-family diagnostics
+- **Why this matters**:
+  - manifest presence alone is not enough; training consumers need to know
+    whether manifest receipt-family counts match the actual harvested bundle
+  - this closes a local-only integrity gap before provider-era runs start
+    emitting larger receipt sets
+  - the validator remains structural: it checks internal receipt accounting, not
+    provider truth, benchmark success, or calibration quality
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_vectorized_runtime.py -q` (`40 passed`)
+  - `python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1634 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x runtime receipt manifest consolidation
 
 - **Changed**:

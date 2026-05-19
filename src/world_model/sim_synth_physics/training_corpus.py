@@ -63,6 +63,10 @@ def _json_mappings(path: Path) -> list[Dict[str, Any]]:
         return rows
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, Mapping):
+        receipts = payload.get("receipts")
+        version = str(payload.get("version", payload.get("schema_version", "")) or "")
+        if version.endswith("_bundle_v1") and isinstance(receipts, Sequence):
+            return _mapping_list(receipts)
         return [dict(payload)]
     if isinstance(payload, Sequence):
         return _mapping_list(payload)
@@ -94,7 +98,10 @@ def load_sim_synth_receipt_bundles(path: str | Path) -> list[Dict[str, Any]]:
             return [dict(payload)]
         receipts = payload.get("receipts")
         if isinstance(receipts, Sequence):
-            return _mapping_list(receipts)
+            receipt_rows = _mapping_list(receipts)
+            if all("world_state" in row or "bundle_id" in row for row in receipt_rows):
+                return receipt_rows
+            raise ValueError("raw receipt bundle is not a sim/synth training bundle")
     if isinstance(payload, Sequence):
         return _mapping_list(payload)
     raise ValueError(f"Unsupported sim/synth/physics receipt payload in {receipt_path}")
@@ -158,6 +165,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "robot_asset_contract_receipt",
             "gen2sim_admission_receipt",
             "backend_runtime_bridge_receipt",
+            "backend_runtime_work_order",
             "backend_runtime_execution_receipt",
             "backend_runtime_adapter_receipt",
             "backend_runtime_launch_receipt",
@@ -189,6 +197,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_asset_contracts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_gen2sim_receipts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_bridges: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_backend_work_orders: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_runtime: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_adapter: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_launch: dict[Path, list[Dict[str, Any]]] = {}
@@ -246,6 +255,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 grouped_gen2sim_receipts.setdefault(parent, []).append(dict(payload))
             elif version == "backend_runtime_bridge_receipt_v1":
                 grouped_backend_bridges.setdefault(parent, []).append(dict(payload))
+            elif version == "backend_runtime_work_order_receipt_v1":
+                grouped_backend_work_orders.setdefault(parent, []).append(dict(payload))
             elif version == "backend_runtime_execution_receipt_v1":
                 grouped_backend_runtime.setdefault(parent, []).append(dict(payload))
             elif version == "backend_runtime_adapter_receipt_v1":
@@ -289,6 +300,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         | set(grouped_asset_contracts)
         | set(grouped_gen2sim_receipts)
         | set(grouped_backend_bridges)
+        | set(grouped_backend_work_orders)
         | set(grouped_backend_runtime)
         | set(grouped_backend_adapter)
         | set(grouped_backend_launch)
@@ -315,6 +327,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
         asset_contracts = grouped_asset_contracts.get(directory, [])
         gen2sim_receipts = grouped_gen2sim_receipts.get(directory, [])
         backend_bridge_receipts = grouped_backend_bridges.get(directory, [])
+        backend_work_orders = grouped_backend_work_orders.get(directory, [])
         backend_runtime_receipts = grouped_backend_runtime.get(directory, [])
         backend_adapter_receipts = grouped_backend_adapter.get(directory, [])
         backend_launch_receipts = grouped_backend_launch.get(directory, [])
@@ -356,6 +369,10 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 bundle["gen2sim_admission_receipt"] = dict(gen2sim_receipts[-1])
             if backend_bridge_receipts:
                 bundle["backend_runtime_bridge_receipt"] = dict(backend_bridge_receipts[-1])
+            if backend_work_orders:
+                bundle["backend_runtime_work_orders"] = [
+                    dict(item) for item in backend_work_orders
+                ]
             if backend_runtime_receipts:
                 bundle["backend_runtime_execution_receipt"] = dict(backend_runtime_receipts[-1])
             if backend_adapter_receipts:
@@ -451,6 +468,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         for payload in rows
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "backend_runtime_bridge_receipt_v1"
+    ]
+    backend_work_orders = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "backend_runtime_work_order_receipt_v1"
     ]
     backend_runtime_receipts = [
         dict(payload)
@@ -572,6 +595,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             bundle["gen2sim_admission_receipt"] = gen2sim_receipts[-1]
         if backend_bridge_receipts:
             bundle["backend_runtime_bridge_receipt"] = backend_bridge_receipts[-1]
+        if backend_work_orders:
+            bundle["backend_runtime_work_orders"] = backend_work_orders
         if backend_runtime_receipts:
             bundle["backend_runtime_execution_receipt"] = backend_runtime_receipts[-1]
         if backend_adapter_receipts:
@@ -608,6 +633,91 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
     return bundles
 
 
+
+_RUNTIME_MANIFEST_FAMILY_KEYS: dict[str, tuple[str, str]] = {
+    "physics_adaptation_receipt_v1": ("physics_adaptation_receipt", "single"),
+    "gen2sim_admission_receipt_v1": ("gen2sim_admission_receipt", "single"),
+    "backend_execution_binding_receipt_v1": ("backend_execution_binding_receipt", "single"),
+    "robot_asset_contract_receipt_v1": ("robot_asset_contract_receipt", "single"),
+    "backend_runtime_bridge_receipt_v1": ("backend_runtime_bridge_receipt", "single"),
+    "backend_runtime_work_order_receipt_v1": ("backend_runtime_work_orders", "list"),
+    "backend_runtime_execution_receipt_v1": ("backend_runtime_execution_receipt", "single"),
+    "backend_runtime_adapter_receipt_v1": ("backend_runtime_adapter_receipt", "single"),
+    "backend_runtime_launch_receipt_v1": ("backend_runtime_launch_receipt", "single"),
+    "backend_runtime_outcome_receipt_v1": ("backend_runtime_outcome_receipt", "single"),
+    "backend_shadow_execution_receipt_v1": ("backend_shadow_execution_receipt", "single"),
+    "physics_calibration_receipt_v1": ("physics_calibration_receipt", "single"),
+    "task_measurement_receipt_v1": ("task_measurement_receipt", "single"),
+    "sim_real_gap_receipt_v1": ("sim_real_gap_receipt", "single"),
+    "backend_mismatch_receipt_v1": ("backend_mismatch_receipt", "single"),
+    "surrogate_physics_receipt_v1": ("surrogate_physics_receipt", "single"),
+    "surrogate_calibration_receipt_v1": ("surrogate_calibration_receipt", "single"),
+    "branch_validity_receipt_v1": ("branch_validity_receipts", "list"),
+    "sensor_alignment_receipt_v1": ("sensor_alignment_receipt", "single"),
+    "replay_validity_receipt_v1": ("replay_validity_receipts", "list"),
+    "render_provider_receipt_v1": ("render_provider_receipts", "list"),
+    "simulation_outcome_receipt_v1": ("simulation_outcome_receipts", "list"),
+}
+
+
+def _bundle_family_count(bundle: Mapping[str, Any], family: str) -> int:
+    key_mode = _RUNTIME_MANIFEST_FAMILY_KEYS.get(family)
+    if key_mode is None:
+        return 0
+    key, mode = key_mode
+    if mode == "list":
+        return len(_mapping_list(bundle.get(key)))
+    return 1 if _mapping(bundle.get(key)) else 0
+
+
+def validate_runtime_receipt_manifest(
+    bundle: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Validate runtime receipt-manifest claims against a harvested bundle."""
+
+    bundle_mapping = _mapping(bundle)
+    manifest = _mapping(bundle_mapping.get("runtime_receipt_manifest"))
+    if not manifest:
+        return {
+            "version": "runtime_receipt_manifest_validation_v1",
+            "manifest_id": "",
+            "validation_status": "manifest_missing",
+            "mismatched_families": [],
+            "missing_required_families": [],
+            "actual_receipt_family_counts": {},
+        }
+    manifest_counts = {
+        str(key): int(value)
+        for key, value in _mapping(manifest.get("receipt_family_counts")).items()
+    }
+    actual_counts = {
+        family: _bundle_family_count(bundle_mapping, family)
+        for family in sorted(manifest_counts)
+    }
+    mismatches = [
+        {
+            "family": family,
+            "manifest_count": int(manifest_counts.get(family, 0)),
+            "actual_count": int(actual_counts.get(family, 0)),
+        }
+        for family in sorted(manifest_counts)
+        if int(manifest_counts.get(family, 0)) != int(actual_counts.get(family, 0))
+    ]
+    missing_required = list(manifest.get("missing_required_families") or [])
+    validation_status = "validated"
+    if missing_required:
+        validation_status = "manifest_declares_missing_required"
+    if mismatches:
+        validation_status = "manifest_count_mismatch"
+    return {
+        "version": "runtime_receipt_manifest_validation_v1",
+        "manifest_id": manifest.get("manifest_id", ""),
+        "validation_status": validation_status,
+        "mismatched_families": mismatches,
+        "missing_required_families": missing_required,
+        "actual_receipt_family_counts": actual_counts,
+    }
+
 def build_backend_selector_rows_from_receipts(
     bundles: Sequence[Mapping[str, Any]],
 ) -> list[Dict[str, Any]]:
@@ -625,6 +735,9 @@ def build_backend_selector_rows_from_receipts(
             or world_state.get("physics_execution_contract")
         )
         runtime_receipt_manifest = _mapping(bundle_mapping.get("runtime_receipt_manifest"))
+        runtime_receipt_manifest_validation = validate_runtime_receipt_manifest(
+            bundle_mapping
+        )
         world_state_metadata = _mapping(world_state.get("metadata"))
         compiled_receipt_inventory = _mapping(
             world_state_metadata.get("compiled_receipt_inventory")
@@ -821,6 +934,13 @@ def build_backend_selector_rows_from_receipts(
                     ),
                     "runtime_receipt_family_counts": _mapping(
                         runtime_receipt_manifest.get("receipt_family_counts")
+                    ),
+                    "runtime_receipt_manifest_validation_status": runtime_receipt_manifest_validation.get(
+                        "validation_status"
+                    ),
+                    "runtime_receipt_manifest_mismatched_families": list(
+                        runtime_receipt_manifest_validation.get("mismatched_families")
+                        or []
                     ),
                     "compiled_runtime_binding_status": runtime_depth_projection.get("binding_status"),
                     "compiled_runtime_bridge_status": runtime_depth_projection.get("bridge_status"),
@@ -1172,6 +1292,9 @@ def build_branch_planner_rows_from_receipts(
             or world_state.get("physics_execution_contract")
         )
         runtime_receipt_manifest = _mapping(bundle_mapping.get("runtime_receipt_manifest"))
+        runtime_receipt_manifest_validation = validate_runtime_receipt_manifest(
+            bundle_mapping
+        )
         world_state_metadata = _mapping(world_state.get("metadata"))
         compiled_receipt_inventory = _mapping(
             world_state_metadata.get("compiled_receipt_inventory")
@@ -1374,6 +1497,13 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "runtime_receipt_family_counts": _mapping(
                             runtime_receipt_manifest.get("receipt_family_counts")
+                        ),
+                        "runtime_receipt_manifest_validation_status": runtime_receipt_manifest_validation.get(
+                            "validation_status"
+                        ),
+                        "runtime_receipt_manifest_mismatched_families": list(
+                            runtime_receipt_manifest_validation.get("mismatched_families")
+                            or []
                         ),
                         "compiled_runtime_binding_status": runtime_depth_projection.get(
                             "binding_status"
@@ -1786,4 +1916,5 @@ __all__ = [
     "build_branch_planner_rows_from_receipts",
     "harvest_sim_synth_receipt_bundles",
     "load_sim_synth_receipt_bundles",
+    "validate_runtime_receipt_manifest",
 ]

@@ -1,5 +1,40 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x runtime receipt manifest validation
+
+### What changed
+
+- Added `validate_runtime_receipt_manifest(...)` to `training_corpus.py`.
+- The validator compares manifest `receipt_family_counts` against the actual
+  harvested bundle representation and reports:
+  - `validation_status`
+  - mismatched families
+  - missing required families
+  - actual receipt-family counts
+- Live-directory harvest now expands runtime-emitted receipt bundle wrappers
+  into their constituent receipts before grouping.
+- Backend-selector and branch-planner rows now carry manifest validation status
+  and mismatched-family diagnostics.
+
+### Why this was the right next local step
+
+The runtime manifest made receipt emission auditable. This pass makes the audit
+checkable after harvest. Without it, a downstream row could carry a manifest id
+while silently missing bundled receipts because the harvester only saw wrapper
+files.
+
+The validator is intentionally narrow: it verifies receipt accounting and
+required-family completeness. It does not certify provider execution, benchmark
+readiness, calibration quality, or promotion eligibility.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+- `python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_vectorized_runtime.py -q` ->
+  `40 passed`
+- `python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1634 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x runtime receipt manifest consolidation
 
 ### What changed

@@ -5,6 +5,7 @@ from src.world_model.sim_synth_physics.training_corpus import (
     build_backend_selector_rows_from_receipts,
     build_branch_planner_rows_from_receipts,
     harvest_sim_synth_receipt_bundles,
+    validate_runtime_receipt_manifest,
 )
 
 
@@ -598,6 +599,9 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["sensor_alignment_receipt"]["receipt_id"] == "sensor_alignment_1"
     assert bundles[0]["replay_validity_receipts"][0]["receipt_id"] == "replay_validity_1"
     assert bundles[0]["runtime_receipt_manifest"]["manifest_id"] == "runtime_manifest_1"
+    manifest_validation = validate_runtime_receipt_manifest(bundles[0])
+    assert manifest_validation["validation_status"] == "validated"
+    assert manifest_validation["mismatched_families"] == []
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
     assert bundles[0]["simulation_outcome_receipts"][0]["receipt_id"] == "outcome_1"
 
@@ -630,6 +634,11 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ]
         == 1
     )
+    assert (
+        backend_rows[0]["metadata"]["runtime_receipt_manifest_validation_status"]
+        == "validated"
+    )
+    assert backend_rows[0]["metadata"]["runtime_receipt_manifest_mismatched_families"] == []
     assert backend_rows[0]["metadata"]["compiled_runtime_binding_status"] == "assets_missing"
     assert (
         backend_rows[0]["metadata"]["compiled_runtime_bridge_status"]
@@ -770,6 +779,11 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ]
         == 1
     )
+    assert (
+        branch_rows[0]["metadata"]["runtime_receipt_manifest_validation_status"]
+        == "validated"
+    )
+    assert branch_rows[0]["metadata"]["runtime_receipt_manifest_mismatched_families"] == []
     assert branch_rows[0]["metadata"]["compiled_runtime_binding_status"] == "assets_missing"
     assert (
         branch_rows[0]["metadata"]["compiled_runtime_bridge_status"]

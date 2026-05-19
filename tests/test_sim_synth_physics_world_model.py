@@ -17,6 +17,10 @@ from src.world_model.sim_synth_physics import (
     compile_gap_driven_diffusion_plans,
     compile_sim_synth_physics_world_state,
 )
+from src.world_model.sim_synth_physics.training_corpus import (
+    harvest_sim_synth_receipt_bundles,
+    validate_runtime_receipt_manifest,
+)
 from src.world_model.sim_synth_physics.backend_selector import (
     BACKEND_LABELS,
     FIDELITY_LABELS,
@@ -978,6 +982,11 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "sensor_alignment_receipt.json").exists()
     assert (tmp_path / "replay_validity_receipts.json").exists()
     assert (tmp_path / "runtime_receipt_manifest.json").exists()
+    harvested_bundles = harvest_sim_synth_receipt_bundles([tmp_path])
+    assert harvested_bundles
+    live_manifest_validation = validate_runtime_receipt_manifest(harvested_bundles[0])
+    assert live_manifest_validation["validation_status"] == "validated"
+    assert live_manifest_validation["mismatched_families"] == []
     assert (tmp_path / "render_provider_receipts.json").exists()
     assert (tmp_path / "simulation_outcome_receipts.json").exists()
     assert all(

@@ -282,6 +282,9 @@ Also preserve a narrow SIM1 rule:
   emitted receipt families, artifact paths, missing-required checks, optional
   provider/runtime absences, and training-row linkage into one harvestable
   audit surface
+- **landed locally on 2026-05-19**: runtime receipt-manifest validation now
+  compares manifest receipt-family counts against harvested bundle contents and
+  exposes mismatch diagnostics to training rows
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 
