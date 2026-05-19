@@ -173,10 +173,10 @@ Current re-entry status after the Phase 2 pocket:
    - local `VectorizedSimRunner` batch facade
 3. next best local follow-on should deepen use of these surfaces rather than
    inventing another ontology: scene-hierarchy, transfer-evidence,
-   branch-validity / reject-filter, geometry-backed sensor-alignment, and
-   replay-validity / task-consistency consumers are now live in runtime
-   artifacts and training-row harvest while external GPU/provider work remains
-   blocked
+   branch-validity / reject-filter, geometry-backed sensor-alignment,
+   replay-validity / task-consistency, and runtime receipt-manifest consumers
+   are now live in runtime artifacts and training-row harvest while external
+   GPU/provider work remains blocked
 
 ### Habitat-derived Sim/Synth/Physics adoption track reminder
 

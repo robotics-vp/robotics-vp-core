@@ -13,7 +13,7 @@ from .calibration import (
     build_physics_adaptation_receipt,
     build_physics_calibration_receipt,
 )
-from .common import mapping
+from .common import mapping, stable_id
 from .compiler import compile_sim_synth_physics_world_state
 from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
 from .gen2sim_admission import build_gen2sim_admission_receipt
@@ -106,6 +106,7 @@ class SimSynthPhysicsLoopResult:
     render_provider_receipts: list[RenderProviderReceipt] = field(default_factory=list)
     outcome_receipts: list[SimulationOutcomeReceipt] = field(default_factory=list)
     training_feedback_manifest: Mapping[str, Any] = field(default_factory=dict)
+    runtime_receipt_manifest: Mapping[str, Any] = field(default_factory=dict)
     artifact_paths: Mapping[str, str] = field(default_factory=dict)
     version: str = "sim_synth_physics_loop_result_v1"
 
@@ -168,6 +169,7 @@ class SimSynthPhysicsLoopResult:
             ],
             "outcome_receipts": [receipt.to_dict() for receipt in self.outcome_receipts],
             "training_feedback_manifest": mapping(self.training_feedback_manifest),
+            "runtime_receipt_manifest": mapping(self.runtime_receipt_manifest),
             "artifact_paths": mapping(self.artifact_paths),
             "version": self.version,
         }
@@ -209,6 +211,7 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "render_provider_receipts": root / "render_provider_receipts.json",
         "simulation_outcome_receipts": root / "simulation_outcome_receipts.json",
         "training_feedback_manifest": root / "sim_synth_training_feedback.json",
+        "runtime_receipt_manifest": root / "runtime_receipt_manifest.json",
         "loop_summary": root / "sim_synth_physics_loop_summary.json",
         "diffusion_plans": root / "gap_driven_diffusion_plans.json",
     }
@@ -493,6 +496,320 @@ def _build_outcome_receipts(
         )
     return receipts
 
+
+
+def _manifest_artifact_ref(artifact_paths: Mapping[str, Path], artifact_key: str) -> str:
+    artifact_path = artifact_paths.get(artifact_key)
+    return "" if artifact_path is None else str(artifact_path.resolve())
+
+
+def _runtime_manifest_entry(
+    *,
+    family: str,
+    artifact_key: str,
+    artifact_paths: Mapping[str, Path],
+    receipt_ids: list[str],
+    required: bool,
+    group: str,
+) -> dict[str, Any]:
+    emitted = bool(receipt_ids)
+    return {
+        "family": family,
+        "artifact_key": artifact_key,
+        "artifact_path": _manifest_artifact_ref(artifact_paths, artifact_key),
+        "required": bool(required),
+        "group": group,
+        "status": "emitted" if emitted else "not_emitted",
+        "receipt_ids": list(receipt_ids),
+        "receipt_count": len(receipt_ids),
+    }
+
+
+def _build_runtime_receipt_manifest(
+    *,
+    world_state: SimSynthPhysicsWorldState,
+    execution_contract: PhysicsExecutionContract,
+    artifact_paths: Mapping[str, Path],
+    training_feedback_manifest: Mapping[str, Any],
+    physics_adaptation_receipt: PhysicsAdaptationReceipt,
+    gen2sim_admission_receipt: Gen2SimAdmissionReceipt,
+    backend_execution_binding_receipt: BackendExecutionBindingReceipt,
+    robot_asset_contract_receipt: RobotAssetContractReceipt,
+    backend_runtime_bridge_receipt: BackendRuntimeBridgeReceipt,
+    backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt],
+    backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt],
+    backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt],
+    backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt],
+    backend_runtime_outcome_receipt: Optional[BackendRuntimeOutcomeReceipt],
+    backend_shadow_execution_receipt: Optional[BackendShadowExecutionReceipt],
+    physics_calibration_receipt: PhysicsCalibrationReceipt,
+    task_measurement_receipt: TaskMeasurementReceipt,
+    sim_real_gap_receipt: SimRealGapReceipt,
+    backend_mismatch_receipt: BackendMismatchReceipt,
+    surrogate_physics_receipt: SurrogatePhysicsReceipt,
+    surrogate_calibration_receipt: SurrogateCalibrationReceipt,
+    branch_validity_receipts: list[BranchValidityReceipt],
+    sensor_alignment_receipt: SensorAlignmentReceipt,
+    replay_validity_receipts: list[ReplayValidityReceipt],
+    render_provider_receipts: list[RenderProviderReceipt],
+    outcome_receipts: list[SimulationOutcomeReceipt],
+) -> dict[str, Any]:
+    entries = [
+        _runtime_manifest_entry(
+            family="physics_adaptation_receipt_v1",
+            artifact_key="physics_adaptation_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[physics_adaptation_receipt.receipt_id],
+            required=True,
+            group="runtime_window",
+        ),
+        _runtime_manifest_entry(
+            family="gen2sim_admission_receipt_v1",
+            artifact_key="gen2sim_admission_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[gen2sim_admission_receipt.receipt_id],
+            required=True,
+            group="admission",
+        ),
+        _runtime_manifest_entry(
+            family="backend_execution_binding_receipt_v1",
+            artifact_key="backend_execution_binding_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[backend_execution_binding_receipt.receipt_id],
+            required=True,
+            group="runtime_binding",
+        ),
+        _runtime_manifest_entry(
+            family="robot_asset_contract_receipt_v1",
+            artifact_key="robot_asset_contract_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[robot_asset_contract_receipt.receipt_id],
+            required=True,
+            group="runtime_binding",
+        ),
+        _runtime_manifest_entry(
+            family="backend_runtime_bridge_receipt_v1",
+            artifact_key="backend_runtime_bridge_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[backend_runtime_bridge_receipt.receipt_id],
+            required=True,
+            group="runtime_binding",
+        ),
+        _runtime_manifest_entry(
+            family="backend_runtime_work_order_receipt_v1",
+            artifact_key="backend_runtime_work_orders",
+            artifact_paths=artifact_paths,
+            receipt_ids=[receipt.receipt_id for receipt in backend_runtime_work_orders],
+            required=True,
+            group="runtime_work_orders",
+        ),
+        _runtime_manifest_entry(
+            family="backend_runtime_execution_receipt_v1",
+            artifact_key="backend_runtime_execution_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=(
+                []
+                if backend_runtime_execution_receipt is None
+                else [backend_runtime_execution_receipt.receipt_id]
+            ),
+            required=False,
+            group="optional_runtime",
+        ),
+        _runtime_manifest_entry(
+            family="backend_runtime_adapter_receipt_v1",
+            artifact_key="backend_runtime_adapter_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=(
+                []
+                if backend_runtime_adapter_receipt is None
+                else [backend_runtime_adapter_receipt.receipt_id]
+            ),
+            required=False,
+            group="optional_runtime",
+        ),
+        _runtime_manifest_entry(
+            family="backend_runtime_launch_receipt_v1",
+            artifact_key="backend_runtime_launch_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=(
+                []
+                if backend_runtime_launch_receipt is None
+                else [backend_runtime_launch_receipt.receipt_id]
+            ),
+            required=False,
+            group="optional_runtime",
+        ),
+        _runtime_manifest_entry(
+            family="backend_runtime_outcome_receipt_v1",
+            artifact_key="backend_runtime_outcome_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=(
+                []
+                if backend_runtime_outcome_receipt is None
+                else [backend_runtime_outcome_receipt.receipt_id]
+            ),
+            required=False,
+            group="optional_runtime",
+        ),
+        _runtime_manifest_entry(
+            family="backend_shadow_execution_receipt_v1",
+            artifact_key="backend_shadow_execution_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=(
+                []
+                if backend_shadow_execution_receipt is None
+                else [backend_shadow_execution_receipt.receipt_id]
+            ),
+            required=False,
+            group="optional_runtime",
+        ),
+        _runtime_manifest_entry(
+            family="physics_calibration_receipt_v1",
+            artifact_key="physics_calibration_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[physics_calibration_receipt.receipt_id],
+            required=True,
+            group="transfer",
+        ),
+        _runtime_manifest_entry(
+            family="task_measurement_receipt_v1",
+            artifact_key="task_measurement_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[task_measurement_receipt.receipt_id],
+            required=True,
+            group="task",
+        ),
+        _runtime_manifest_entry(
+            family="sim_real_gap_receipt_v1",
+            artifact_key="sim_real_gap_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[sim_real_gap_receipt.receipt_id],
+            required=True,
+            group="transfer",
+        ),
+        _runtime_manifest_entry(
+            family="backend_mismatch_receipt_v1",
+            artifact_key="backend_mismatch_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[backend_mismatch_receipt.receipt_id],
+            required=True,
+            group="transfer",
+        ),
+        _runtime_manifest_entry(
+            family="surrogate_physics_receipt_v1",
+            artifact_key="surrogate_physics_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[surrogate_physics_receipt.receipt_id],
+            required=True,
+            group="surrogate",
+        ),
+        _runtime_manifest_entry(
+            family="surrogate_calibration_receipt_v1",
+            artifact_key="surrogate_calibration_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[surrogate_calibration_receipt.receipt_id],
+            required=True,
+            group="surrogate",
+        ),
+        _runtime_manifest_entry(
+            family="branch_validity_receipt_v1",
+            artifact_key="branch_validity_receipts",
+            artifact_paths=artifact_paths,
+            receipt_ids=[receipt.receipt_id for receipt in branch_validity_receipts],
+            required=True,
+            group="per_branch_filter",
+        ),
+        _runtime_manifest_entry(
+            family="sensor_alignment_receipt_v1",
+            artifact_key="sensor_alignment_receipt",
+            artifact_paths=artifact_paths,
+            receipt_ids=[sensor_alignment_receipt.receipt_id],
+            required=True,
+            group="sensor_geometry",
+        ),
+        _runtime_manifest_entry(
+            family="replay_validity_receipt_v1",
+            artifact_key="replay_validity_receipts",
+            artifact_paths=artifact_paths,
+            receipt_ids=[receipt.receipt_id for receipt in replay_validity_receipts],
+            required=True,
+            group="per_branch_filter",
+        ),
+        _runtime_manifest_entry(
+            family="render_provider_receipt_v1",
+            artifact_key="render_provider_receipts",
+            artifact_paths=artifact_paths,
+            receipt_ids=[receipt.receipt_id for receipt in render_provider_receipts],
+            required=True,
+            group="render_materialization",
+        ),
+        _runtime_manifest_entry(
+            family="simulation_outcome_receipt_v1",
+            artifact_key="simulation_outcome_receipts",
+            artifact_paths=artifact_paths,
+            receipt_ids=[receipt.receipt_id for receipt in outcome_receipts],
+            required=True,
+            group="runtime_outcomes",
+        ),
+    ]
+    missing_required = [
+        str(entry["family"])
+        for entry in entries
+        if entry["required"] and entry["status"] != "emitted"
+    ]
+    optional_not_emitted = [
+        str(entry["family"])
+        for entry in entries
+        if not entry["required"] and entry["status"] != "emitted"
+    ]
+    family_counts = {str(entry["family"]): int(entry["receipt_count"]) for entry in entries}
+    emitted_receipt_ids = {
+        str(entry["family"]): list(entry["receipt_ids"])
+        for entry in entries
+        if entry["receipt_ids"]
+    }
+    payload = {
+        "world_state_id": world_state.state_id,
+        "physics_execution_contract_id": execution_contract.contract_id,
+        "emitted_receipt_ids": emitted_receipt_ids,
+        "missing_required": missing_required,
+    }
+    manifest_id = stable_id("sim_synth_runtime_receipt_manifest", payload)
+    return {
+        "version": "sim_synth_runtime_receipt_manifest_v1",
+        "manifest_id": manifest_id,
+        "world_state_id": world_state.state_id,
+        "physics_execution_contract_id": execution_contract.contract_id,
+        "compiled_receipt_inventory_id": str(
+            mapping(world_state.metadata.get("compiled_receipt_inventory")).get(
+                "inventory_id", ""
+            )
+            or ""
+        ),
+        "manifest_status": "complete" if not missing_required else "missing_required",
+        "missing_required_families": missing_required,
+        "optional_not_emitted_families": optional_not_emitted,
+        "receipt_family_counts": family_counts,
+        "emitted_receipt_ids": emitted_receipt_ids,
+        "emitted_receipt_count": sum(family_counts.values()),
+        "artifact_entries": entries,
+        "training_feedback_manifest_ref": _manifest_artifact_ref(
+            artifact_paths, "training_feedback_manifest"
+        ),
+        "training_feedback_row_count": len(list(training_feedback_manifest.get("rows") or [])),
+        "route_status": execution_contract.route_status,
+        "requested_backend": execution_contract.requested_backend,
+        "resolved_backend": execution_contract.resolved_backend,
+        "metadata": {
+            "artifact_root": (
+                ""
+                if not artifact_paths
+                else str(next(iter(artifact_paths.values())).parent.resolve())
+            ),
+            "promotion_posture": "local_receipt_manifest_only",
+            "provider_truth_claim": "no_provider_bringup_claimed",
+        },
+    }
 
 def _build_training_feedback_manifest(
     world_state: SimSynthPhysicsWorldState,
@@ -1180,6 +1497,43 @@ class SimSynthPhysicsRuntime:
             render_provider_receipts,
             outcome_receipts,
         )
+        runtime_receipt_manifest = _build_runtime_receipt_manifest(
+            world_state=world_state,
+            execution_contract=execution_contract,
+            artifact_paths=artifact_paths,
+            training_feedback_manifest=training_feedback_manifest,
+            physics_adaptation_receipt=adaptation_receipt,
+            gen2sim_admission_receipt=gen2sim_admission_receipt,
+            backend_execution_binding_receipt=backend_binding_receipt,
+            robot_asset_contract_receipt=robot_asset_contract_receipt,
+            backend_runtime_bridge_receipt=backend_runtime_bridge_receipt,
+            backend_runtime_work_orders=backend_runtime_work_orders,
+            backend_runtime_execution_receipt=backend_runtime_execution_receipt,
+            backend_runtime_adapter_receipt=backend_runtime_adapter_receipt,
+            backend_runtime_launch_receipt=backend_runtime_launch_receipt,
+            backend_runtime_outcome_receipt=backend_runtime_outcome_receipt,
+            backend_shadow_execution_receipt=backend_shadow_execution_receipt,
+            physics_calibration_receipt=calibration_receipt,
+            task_measurement_receipt=task_measurement_receipt,
+            sim_real_gap_receipt=sim_real_gap_receipt,
+            backend_mismatch_receipt=backend_mismatch_receipt,
+            surrogate_physics_receipt=surrogate_physics_receipt,
+            surrogate_calibration_receipt=surrogate_calibration_receipt,
+            branch_validity_receipts=branch_validity_receipts,
+            sensor_alignment_receipt=sensor_alignment_receipt,
+            replay_validity_receipts=replay_validity_receipts,
+            render_provider_receipts=render_provider_receipts,
+            outcome_receipts=outcome_receipts,
+        )
+        training_feedback_manifest["runtime_receipt_manifest_id"] = (
+            runtime_receipt_manifest["manifest_id"]
+        )
+        training_feedback_manifest["runtime_receipt_manifest_status"] = (
+            runtime_receipt_manifest["manifest_status"]
+        )
+        training_feedback_manifest["runtime_receipt_missing_required_families"] = list(
+            runtime_receipt_manifest.get("missing_required_families") or []
+        )
         result = SimSynthPhysicsLoopResult(
             world_state=world_state,
             physics_execution_contract=execution_contract,
@@ -1206,6 +1560,7 @@ class SimSynthPhysicsRuntime:
             render_provider_receipts=render_provider_receipts,
             outcome_receipts=outcome_receipts,
             training_feedback_manifest=training_feedback_manifest,
+            runtime_receipt_manifest=runtime_receipt_manifest,
             artifact_paths={
                 key: str(path.resolve()) for key, path in artifact_paths.items()
             },
@@ -1359,12 +1714,20 @@ class SimSynthPhysicsRuntime:
                 training_feedback_manifest,
             )
             _write_json(
+                artifact_paths["runtime_receipt_manifest"],
+                runtime_receipt_manifest,
+            )
+            _write_json(
                 artifact_paths["loop_summary"],
                 {
                     "version": "sim_synth_physics_loop_summary_v1",
                     "world_state_id": world_state.state_id,
                     "physics_execution_contract_id": execution_contract.contract_id,
                     "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
+                    "runtime_receipt_manifest_id": runtime_receipt_manifest["manifest_id"],
+                    "runtime_receipt_manifest_status": runtime_receipt_manifest[
+                        "manifest_status"
+                    ],
                     "gen2sim_admission_receipt_id": gen2sim_admission_receipt.receipt_id,
                     "gen2sim_benchmark_gate_ready": bool(gen2sim_admission_receipt.benchmark_gate_ready),
                     "gen2sim_admissible_branch_count": len(gen2sim_admission_receipt.admissible_branch_ids),

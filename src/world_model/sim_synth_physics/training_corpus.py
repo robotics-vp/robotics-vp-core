@@ -151,6 +151,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
             "receipt_bundle",
             "sim_synth",
             "world_state",
+            "runtime_receipt_manifest",
             "physics_execution_contract",
             "physics_adaptation_receipt",
             "backend_execution_binding_receipt",
@@ -181,6 +182,7 @@ def _looks_like_receipt_bundle(path: Path) -> bool:
 
 def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     grouped_world_states: dict[Path, list[Dict[str, Any]]] = {}
+    grouped_runtime_receipt_manifests: dict[Path, list[Dict[str, Any]]] = {}
     grouped_execution_contracts: dict[Path, list[Dict[str, Any]]] = {}
     grouped_adaptations: dict[Path, list[Dict[str, Any]]] = {}
     grouped_backend_bindings: dict[Path, list[Dict[str, Any]]] = {}
@@ -228,6 +230,10 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
             parent = path.parent.resolve()
             if version == "sim_synth_physics_world_state_v1":
                 grouped_world_states.setdefault(parent, []).append(dict(payload))
+            elif version == "sim_synth_runtime_receipt_manifest_v1":
+                grouped_runtime_receipt_manifests.setdefault(parent, []).append(
+                    dict(payload)
+                )
             elif version == "physics_execution_contract_v1":
                 grouped_execution_contracts.setdefault(parent, []).append(dict(payload))
             elif version == "physics_adaptation_receipt_v1":
@@ -276,6 +282,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     bundles: list[Dict[str, Any]] = list(explicit_bundles)
     all_dirs = sorted(
         set(grouped_world_states)
+        | set(grouped_runtime_receipt_manifests)
         | set(grouped_execution_contracts)
         | set(grouped_adaptations)
         | set(grouped_backend_bindings)
@@ -301,6 +308,7 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
     )
     for directory in all_dirs:
         world_states = grouped_world_states.get(directory, [])
+        runtime_receipt_manifests = grouped_runtime_receipt_manifests.get(directory, [])
         execution_contracts = grouped_execution_contracts.get(directory, [])
         adaptations = grouped_adaptations.get(directory, [])
         backend_bindings = grouped_backend_bindings.get(directory, [])
@@ -330,6 +338,8 @@ def _harvest_receipt_dir(root: Path) -> list[Dict[str, Any]]:
                 "bundle_id": str(world_state.get("state_id", "")) or directory.name,
                 "world_state": dict(world_state),
             }
+            if runtime_receipt_manifests:
+                bundle["runtime_receipt_manifest"] = dict(runtime_receipt_manifests[-1])
             if execution_contracts:
                 bundle["physics_execution_contract"] = dict(execution_contracts[-1])
             elif isinstance(world_state.get("physics_execution_contract"), Mapping):
@@ -399,6 +409,12 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
         for payload in rows
         if str(payload.get("version", payload.get("schema_version", "")) or "")
         == "sim_synth_physics_world_state_v1"
+    ]
+    runtime_receipt_manifests = [
+        dict(payload)
+        for payload in rows
+        if str(payload.get("version", payload.get("schema_version", "")) or "")
+        == "sim_synth_runtime_receipt_manifest_v1"
     ]
     execution_contracts = [
         dict(payload)
@@ -538,6 +554,8 @@ def _harvest_receipt_file(path: Path) -> list[Dict[str, Any]]:
             "bundle_id": str(world_state.get("state_id", "")) or parent.name,
             "world_state": world_state,
         }
+        if runtime_receipt_manifests:
+            bundle["runtime_receipt_manifest"] = runtime_receipt_manifests[-1]
         if execution_contracts:
             bundle["physics_execution_contract"] = execution_contracts[-1]
         elif isinstance(world_state.get("physics_execution_contract"), Mapping):
@@ -606,6 +624,7 @@ def build_backend_selector_rows_from_receipts(
             bundle_mapping.get("physics_execution_contract")
             or world_state.get("physics_execution_contract")
         )
+        runtime_receipt_manifest = _mapping(bundle_mapping.get("runtime_receipt_manifest"))
         world_state_metadata = _mapping(world_state.get("metadata"))
         compiled_receipt_inventory = _mapping(
             world_state_metadata.get("compiled_receipt_inventory")
@@ -788,6 +807,21 @@ def build_backend_selector_rows_from_receipts(
                     "physics_requested_backend": physics_execution_contract.get("requested_backend"),
                     "physics_resolved_backend": physics_execution_contract.get("resolved_backend"),
                     "compiled_receipt_inventory_id": compiled_receipt_inventory.get("inventory_id"),
+                    "runtime_receipt_manifest_id": runtime_receipt_manifest.get(
+                        "manifest_id"
+                    ),
+                    "runtime_receipt_manifest_status": runtime_receipt_manifest.get(
+                        "manifest_status"
+                    ),
+                    "runtime_receipt_missing_required_families": list(
+                        runtime_receipt_manifest.get("missing_required_families") or []
+                    ),
+                    "runtime_receipt_emitted_count": runtime_receipt_manifest.get(
+                        "emitted_receipt_count"
+                    ),
+                    "runtime_receipt_family_counts": _mapping(
+                        runtime_receipt_manifest.get("receipt_family_counts")
+                    ),
                     "compiled_runtime_binding_status": runtime_depth_projection.get("binding_status"),
                     "compiled_runtime_bridge_status": runtime_depth_projection.get("bridge_status"),
                     "compiled_runtime_pack_status": runtime_depth_projection.get(
@@ -1137,6 +1171,7 @@ def build_branch_planner_rows_from_receipts(
             bundle_mapping.get("physics_execution_contract")
             or world_state.get("physics_execution_contract")
         )
+        runtime_receipt_manifest = _mapping(bundle_mapping.get("runtime_receipt_manifest"))
         world_state_metadata = _mapping(world_state.get("metadata"))
         compiled_receipt_inventory = _mapping(
             world_state_metadata.get("compiled_receipt_inventory")
@@ -1324,6 +1359,21 @@ def build_branch_planner_rows_from_receipts(
                         ),
                         "compiled_receipt_inventory_id": compiled_receipt_inventory.get(
                             "inventory_id"
+                        ),
+                        "runtime_receipt_manifest_id": runtime_receipt_manifest.get(
+                            "manifest_id"
+                        ),
+                        "runtime_receipt_manifest_status": runtime_receipt_manifest.get(
+                            "manifest_status"
+                        ),
+                        "runtime_receipt_missing_required_families": list(
+                            runtime_receipt_manifest.get("missing_required_families") or []
+                        ),
+                        "runtime_receipt_emitted_count": runtime_receipt_manifest.get(
+                            "emitted_receipt_count"
+                        ),
+                        "runtime_receipt_family_counts": _mapping(
+                            runtime_receipt_manifest.get("receipt_family_counts")
                         ),
                         "compiled_runtime_binding_status": runtime_depth_projection.get(
                             "binding_status"

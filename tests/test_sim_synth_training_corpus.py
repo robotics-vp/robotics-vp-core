@@ -73,6 +73,32 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
         ),
         encoding="utf-8",
     )
+    (receipt_dir / "episode_runtime_receipt_manifest_v1.json").write_text(
+        json.dumps(
+            {
+                "manifest_id": "runtime_manifest_1",
+                "world_state_id": "sim_state_1",
+                "physics_execution_contract_id": "contract_1",
+                "compiled_receipt_inventory_id": "inventory_1",
+                "manifest_status": "complete",
+                "missing_required_families": [],
+                "optional_not_emitted_families": [
+                    "backend_runtime_launch_receipt_v1"
+                ],
+                "receipt_family_counts": {
+                    "branch_validity_receipt_v1": 1,
+                    "replay_validity_receipt_v1": 1,
+                    "sensor_alignment_receipt_v1": 1,
+                },
+                "emitted_receipt_count": 3,
+                "artifact_entries": [],
+                "version": "sim_synth_runtime_receipt_manifest_v1",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     (receipt_dir / "episode_physics_execution_contract_v1.json").write_text(
         json.dumps(
             {
@@ -571,6 +597,7 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert bundles[0]["branch_validity_receipts"][0]["receipt_id"] == "branch_validity_1"
     assert bundles[0]["sensor_alignment_receipt"]["receipt_id"] == "sensor_alignment_1"
     assert bundles[0]["replay_validity_receipts"][0]["receipt_id"] == "replay_validity_1"
+    assert bundles[0]["runtime_receipt_manifest"]["manifest_id"] == "runtime_manifest_1"
     assert bundles[0]["render_provider_receipts"][0]["receipt_id"] == "provider_1"
     assert bundles[0]["simulation_outcome_receipts"][0]["receipt_id"] == "outcome_1"
 
@@ -593,6 +620,16 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert backend_rows[0]["metadata"]["physics_execution_contract_id"] == "contract_1"
     assert backend_rows[0]["metadata"]["physics_route_status"] == "fallback"
     assert backend_rows[0]["metadata"]["compiled_receipt_inventory_id"] == "inventory_1"
+    assert backend_rows[0]["metadata"]["runtime_receipt_manifest_id"] == "runtime_manifest_1"
+    assert backend_rows[0]["metadata"]["runtime_receipt_manifest_status"] == "complete"
+    assert backend_rows[0]["metadata"]["runtime_receipt_missing_required_families"] == []
+    assert backend_rows[0]["metadata"]["runtime_receipt_emitted_count"] == 3
+    assert (
+        backend_rows[0]["metadata"]["runtime_receipt_family_counts"][
+            "replay_validity_receipt_v1"
+        ]
+        == 1
+    )
     assert backend_rows[0]["metadata"]["compiled_runtime_binding_status"] == "assets_missing"
     assert (
         backend_rows[0]["metadata"]["compiled_runtime_bridge_status"]
@@ -723,6 +760,16 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_rows[0]["metadata"]["physics_execution_contract_id"] == "contract_1"
     assert branch_rows[0]["metadata"]["physics_route_status"] == "fallback"
     assert branch_rows[0]["metadata"]["compiled_receipt_inventory_id"] == "inventory_1"
+    assert branch_rows[0]["metadata"]["runtime_receipt_manifest_id"] == "runtime_manifest_1"
+    assert branch_rows[0]["metadata"]["runtime_receipt_manifest_status"] == "complete"
+    assert branch_rows[0]["metadata"]["runtime_receipt_missing_required_families"] == []
+    assert branch_rows[0]["metadata"]["runtime_receipt_emitted_count"] == 3
+    assert (
+        branch_rows[0]["metadata"]["runtime_receipt_family_counts"][
+            "branch_validity_receipt_v1"
+        ]
+        == 1
+    )
     assert branch_rows[0]["metadata"]["compiled_runtime_binding_status"] == "assets_missing"
     assert (
         branch_rows[0]["metadata"]["compiled_runtime_bridge_status"]

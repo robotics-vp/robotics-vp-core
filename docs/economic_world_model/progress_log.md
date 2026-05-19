@@ -1,5 +1,30 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x runtime receipt manifest consolidation
+
+- **Changed**:
+  - added a `sim_synth_runtime_receipt_manifest_v1` artifact emitted as
+    `runtime_receipt_manifest.json` from the Sim / Synth / Physics runtime
+  - the manifest records emitted receipt families, receipt ids, artifact paths,
+    required-vs-optional status, missing required families, route posture, and
+    training-feedback row counts
+  - `sim_synth_training_feedback_v1` now carries the runtime manifest id,
+    manifest status, and missing-required-family list
+  - receipt harvesting now recognizes runtime receipt manifests and exposes
+    manifest id/status/counts in backend-selector and branch-planner rows
+- **Why this matters**:
+  - the Phase 1.x receipt family has grown enough that relying on loose files
+    alone would invite drift
+  - the manifest gives future provider-era runs a single audit surface for
+    checking whether all required local receipts were emitted before training
+    rows are trusted
+  - optional provider/runtime receipts remain honest: not emitted is tracked
+    without becoming a missing-required failure
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+  - `python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_vectorized_runtime.py -q` (`40 passed`)
+  - `python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1634 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-18 - Phase 1.x replay-validity / task-consistency receipts
 
 - **Changed**:

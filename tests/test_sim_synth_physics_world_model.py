@@ -881,6 +881,18 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert {
         receipt.branch_plan_id for receipt in result.replay_validity_receipts
     } == {receipt.branch_plan_id for receipt in result.outcome_receipts}
+    assert result.runtime_receipt_manifest["manifest_status"] == "complete"
+    assert result.runtime_receipt_manifest["missing_required_families"] == []
+    assert (
+        result.runtime_receipt_manifest["receipt_family_counts"][
+            "replay_validity_receipt_v1"
+        ]
+        == len(result.replay_validity_receipts)
+    )
+    assert (
+        result.training_feedback_manifest["runtime_receipt_manifest_id"]
+        == result.runtime_receipt_manifest["manifest_id"]
+    )
     assert result.backend_runtime_bridge_receipt.bridge_status in {
         "runtime_targets_missing",
         "runtime_assets_missing",
@@ -965,6 +977,7 @@ def test_runtime_executes_world_state_with_explicit_isaac_fallback(tmp_path: Pat
     assert (tmp_path / "branch_validity_receipts.json").exists()
     assert (tmp_path / "sensor_alignment_receipt.json").exists()
     assert (tmp_path / "replay_validity_receipts.json").exists()
+    assert (tmp_path / "runtime_receipt_manifest.json").exists()
     assert (tmp_path / "render_provider_receipts.json").exists()
     assert (tmp_path / "simulation_outcome_receipts.json").exists()
     assert all(

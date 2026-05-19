@@ -1,5 +1,44 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x runtime receipt manifest consolidation
+
+### What changed
+
+- `SimSynthPhysicsRuntime` now builds and emits
+  `sim_synth_runtime_receipt_manifest_v1` as `runtime_receipt_manifest.json`.
+- The manifest captures:
+  - emitted receipt families and ids
+  - artifact keys and output paths
+  - required vs optional receipt posture
+  - missing required families
+  - optional provider/runtime families that were not emitted
+  - receipt-family counts and training-feedback row count
+- `SimSynthPhysicsLoopResult` and `to_dict()` now include the manifest.
+- `sim_synth_training_feedback_v1` now links back to the manifest id and
+  manifest status.
+- `training_corpus.py` now harvests manifest artifacts from live dirs / mixed
+  files and projects manifest metadata into backend-selector and branch-planner
+  rows.
+
+### Why this was the right next local step
+
+The last several Phase 1.x passes made useful receipts real. This pass prevents
+those receipts from becoming another loose artifact pile. The runtime now emits
+one audit surface that says what was produced, what was optional and absent, and
+whether any required local receipt family is missing.
+
+This is still local-only. It does not certify provider execution, benchmark
+readiness, or calibration quality. It makes those future claims easier to audit
+by forcing every run to enumerate its receipt surface explicitly.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py`
+- `python3 -m pytest tests/test_sim_synth_training_corpus.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_phase1x_surfaces.py tests/test_sim_synth_camera_geometry.py tests/test_sim_synth_vectorized_runtime.py -q` ->
+  `40 passed`
+- `python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1634 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-18 - Phase 1.x replay-validity and task-consistency receipts
 
 ### What changed

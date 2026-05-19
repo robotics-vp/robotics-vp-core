@@ -278,6 +278,10 @@ Also preserve a narrow SIM1 rule:
 - **landed locally on 2026-05-18**: replay-validity / task-consistency
   receipts now filter branch outcomes for training using outcome, task,
   transfer, branch-admission, and sensor-alignment evidence
+- **landed locally on 2026-05-19**: runtime receipt manifests now consolidate
+  emitted receipt families, artifact paths, missing-required checks, optional
+  provider/runtime absences, and training-row linkage into one harvestable
+  audit surface
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 
