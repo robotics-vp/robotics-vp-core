@@ -300,6 +300,11 @@ Also preserve a narrow SIM1 rule:
   now train bounded reject-probability heads from negative-supervision sidecars;
   rejected learned payloads remain trace-visible but do not override heuristic
   runtime decisions
+- **landed locally on 2026-05-19**: trainer runtime packages now include a
+  `phase1x_training_gate_v1` promotion/precondition surface, requiring selected
+  rows to match admissibility summaries, diagnostic rows to stay out of
+  promotion, runtime receipt manifests to validate cleanly, and
+  negative-supervision sidecars to be backed by reject-head training
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

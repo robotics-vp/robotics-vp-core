@@ -909,6 +909,73 @@ def split_phase1x_training_rows(
     }
 
 
+def build_phase1x_training_gate(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    admissibility_summary: Mapping[str, Any],
+    reject_head_trained: bool = False,
+) -> Dict[str, Any]:
+    """Build a structural training gate for Phase 1.x trainer promotion."""
+
+    summary = _mapping(admissibility_summary)
+    status_counts = _mapping(summary.get("status_counts"))
+    manifest_status_counts: dict[str, int] = {}
+    runtime_manifest_rows = 0
+    for row in rows:
+        row_mapping = _mapping(row)
+        metadata = _mapping(row_mapping.get("metadata"))
+        manifest_status = str(
+            metadata.get("runtime_receipt_manifest_validation_status", "") or ""
+        )
+        row_status = phase1x_training_admissibility_status(row_mapping)
+        if row_status == "legacy_dataset_row":
+            manifest_status = manifest_status or "legacy_dataset_row"
+        elif manifest_status:
+            runtime_manifest_rows += 1
+        else:
+            manifest_status = "manifest_status_missing"
+        manifest_status_counts[manifest_status] = manifest_status_counts.get(
+            manifest_status,
+            0,
+        ) + 1
+
+    selected_row_count = int(summary.get("selected_row_count", len(rows)) or 0)
+    negative_rows = int(summary.get("negative_supervision_row_count", 0) or 0)
+    diagnostic_rows = int(summary.get("diagnostic_only_row_count", 0) or 0)
+    expected_selected = int(status_counts.get("positive_training", 0) or 0) + int(
+        status_counts.get("legacy_dataset_row", 0) or 0
+    )
+    blockers: list[str] = []
+    if selected_row_count != len(rows) or expected_selected != len(rows):
+        blockers.append("selected_row_count_mismatch")
+    if diagnostic_rows:
+        blockers.append("diagnostic_rows_present")
+    if negative_rows and not reject_head_trained:
+        blockers.append("negative_supervision_without_reject_head")
+    invalid_manifest_statuses = {
+        status: count
+        for status, count in manifest_status_counts.items()
+        if status not in {"validated", "legacy_dataset_row"}
+    }
+    if invalid_manifest_statuses:
+        blockers.append("runtime_manifest_validation_not_clean")
+
+    return {
+        "schema_version": "phase1x_training_gate_v1",
+        "ready": not blockers,
+        "blockers": sorted(set(blockers)),
+        "selected_row_count": len(rows),
+        "source_row_count": int(summary.get("source_row_count", len(rows)) or 0),
+        "positive_training_row_count": int(status_counts.get("positive_training", 0) or 0),
+        "negative_supervision_row_count": negative_rows,
+        "diagnostic_only_row_count": diagnostic_rows,
+        "legacy_dataset_row_count": int(status_counts.get("legacy_dataset_row", 0) or 0),
+        "reject_head_trained": bool(reject_head_trained),
+        "runtime_manifest_rows": runtime_manifest_rows,
+        "manifest_validation_status_counts": dict(sorted(manifest_status_counts.items())),
+    }
+
+
 def build_backend_selector_rows_from_receipts(
     bundles: Sequence[Mapping[str, Any]],
 ) -> list[Dict[str, Any]]:
@@ -2144,6 +2211,7 @@ def build_branch_planner_rows_from_receipts(
 __all__ = [
     "build_backend_selector_rows_from_receipts",
     "build_branch_planner_rows_from_receipts",
+    "build_phase1x_training_gate",
     "harvest_sim_synth_receipt_bundles",
     "load_sim_synth_receipt_bundles",
     "phase1x_training_admissibility_status",

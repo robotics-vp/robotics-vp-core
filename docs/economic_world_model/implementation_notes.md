@@ -1,5 +1,45 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x training-gate promotion preconditions
+
+### What changed
+
+- Added `build_phase1x_training_gate(...)` with
+  `phase1x_training_gate_v1` output.
+- The gate is now emitted through both Sim / Synth / Physics helper trainers:
+  - dataset summary
+  - training summary
+  - runtime package
+  - training job result
+  - Regal result/runtime metadata
+  - execution preconditions
+- The runtime package `promotion_stage` now requires:
+  - existing benchmark-density gate readiness
+  - Phase 1.x training-gate readiness
+- The gate blocks promotion if selected rows do not match the admissibility
+  summary, diagnostic rows are present, runtime manifest validation is not
+  clean, or negative-supervision rows exist without reject-head training.
+
+### Why this was the right next local step
+
+The previous tranche trained bounded reject heads from negative-supervision
+sidecars. This tranche closes the surrounding promotion gap: a helper package
+can no longer look promotion-ready from benchmark density alone if its training
+corpus violates the Phase 1.x admissibility/reject-head contract.
+
+This is still local structural readiness. It does not claim that the helper
+models are good, that provider truth exists, or that GPU-backed benchmarks have
+been run. It makes the later provider/GPU season stricter by giving those runs
+a concrete precondition surface to satisfy.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py src/world_model/sim_synth_physics/__init__.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py`
+- `git diff --check && python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py -q && python3 -m pytest tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q` ->
+  `43 passed`
+- `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1637 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x reject-head training over negative supervision
 
 ### What changed

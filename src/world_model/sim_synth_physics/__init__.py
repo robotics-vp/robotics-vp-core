@@ -124,6 +124,7 @@ from .synthetic_branches import (
 from .training_corpus import (
     build_backend_selector_rows_from_receipts,
     build_branch_planner_rows_from_receipts,
+    build_phase1x_training_gate,
     harvest_sim_synth_receipt_bundles,
     load_sim_synth_receipt_bundles,
     phase1x_training_admissibility_status,
@@ -230,6 +231,7 @@ __all__ = [
     "train_branch_planner",
     "build_backend_selector_rows_from_receipts",
     "build_branch_planner_rows_from_receipts",
+    "build_phase1x_training_gate",
     "phase1x_training_admissibility_status",
     "select_phase1x_positive_training_rows",
     "split_phase1x_training_rows",

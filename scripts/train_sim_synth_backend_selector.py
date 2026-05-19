@@ -32,6 +32,7 @@ from src.world_model.sim_synth_physics.backend_selector import (
 )
 from src.world_model.sim_synth_physics.training_corpus import (
     build_backend_selector_rows_from_receipts,
+    build_phase1x_training_gate,
     harvest_sim_synth_receipt_bundles,
     load_sim_synth_receipt_bundles,
     split_phase1x_training_rows,
@@ -167,6 +168,7 @@ def _build_dataset_summary(
     dataset_arg: Optional[str],
     receipt_source: Optional[Mapping[str, Any]],
     admissibility_summary: Optional[Mapping[str, Any]] = None,
+    phase1x_training_gate: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
     backend_counts = Counter(
         str(row.get("target_backend", row.get("heuristic_backend", "other")) or "other")
@@ -214,6 +216,7 @@ def _build_dataset_summary(
             _mapping(admissibility_summary).get("source_row_count", len(rows))
         ),
         "admissibility_summary": dict(_mapping(admissibility_summary)),
+        "phase1x_training_gate": dict(_mapping(phase1x_training_gate)),
         "backend_counts": dict(sorted(backend_counts.items())),
         "fidelity_counts": dict(sorted(fidelity_counts.items())),
         "randomization_counts": dict(sorted(randomization_counts.items())),
@@ -247,6 +250,7 @@ def _build_dataset_summary(
 
 def _build_execution_preconditions(dataset_summary: Mapping[str, Any]) -> dict[str, Any]:
     benchmark_gate = dict(dataset_summary.get("benchmark_gate", {}) or {})
+    phase1x_training_gate = _mapping(dataset_summary.get("phase1x_training_gate"))
     satisfied = {
         "artifact::dataset_present": int(bool(dataset_summary.get("dataset_path"))),
         "dataset::non_empty": int(int(dataset_summary.get("row_count", 0)) > 0),
@@ -262,13 +266,19 @@ def _build_execution_preconditions(dataset_summary: Mapping[str, Any]) -> dict[s
             int(benchmark_gate.get("observed_runtime_receipt_rows", 0))
             >= int(benchmark_gate.get("required_runtime_receipt_rows", 0))
         ),
+        "dataset::phase1x_training_gate": int(bool(phase1x_training_gate.get("ready", False))),
         "benchmark::backend_selector_density": int(bool(benchmark_gate.get("ready", False))),
     }
+    promotion_gate_ready = bool(benchmark_gate.get("ready", False)) and bool(
+        phase1x_training_gate.get("ready", False)
+    )
     return {
         "schema_version": "sim_synth_backend_selector_execution_preconditions_v1",
         "satisfied_preconditions": satisfied,
         "unsatisfied_preconditions": [key for key, value in sorted(satisfied.items()) if not value],
         "benchmark_gate_ready": bool(benchmark_gate.get("ready", False)),
+        "phase1x_training_gate_ready": bool(phase1x_training_gate.get("ready", False)),
+        "promotion_gate_ready": promotion_gate_ready,
     }
 
 
@@ -350,7 +360,10 @@ def _build_runtime_package(
     training_summary_path: Path,
 ) -> dict[str, Any]:
     benchmark_gate = dict(dataset_summary.get("benchmark_gate", {}) or {})
-    benchmark_gate_ready = bool(benchmark_gate.get("ready", False))
+    phase1x_training_gate = dict(dataset_summary.get("phase1x_training_gate", {}) or {})
+    promotion_gate_ready = bool(benchmark_gate.get("ready", False)) and bool(
+        phase1x_training_gate.get("ready", False)
+    )
     return {
         "schema_version": "sim_synth_backend_selector_runtime_package_v1",
         "package_id": f"sim_synth_backend_selector_{config_digest[:12]}",
@@ -360,8 +373,9 @@ def _build_runtime_package(
         "preconditions_path": _artifact_ref(preconditions_path, base_dir=checkpoint_path.parent),
         "training_summary_path": _artifact_ref(training_summary_path, base_dir=checkpoint_path.parent),
         "benchmark_gate": benchmark_gate,
+        "phase1x_training_gate": phase1x_training_gate,
         "execution_preconditions": dict(execution_preconditions),
-        "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
+        "promotion_stage": "promoted" if promotion_gate_ready else "shadow_candidate",
         "inference_contract": {
             "helper_blend_policy": "bounded_backend_selector_helper_v1",
             "allowed_modes": ["disabled", "auto", "required"],
@@ -403,6 +417,7 @@ def _build_training_summary(
         "row_count": int(dataset_summary.get("row_count", 0)),
         "source_row_count": int(dataset_summary.get("source_row_count", 0)),
         "admissibility_summary": dict(dataset_summary.get("admissibility_summary", {}) or {}),
+        "phase1x_training_gate": dict(dataset_summary.get("phase1x_training_gate", {}) or {}),
         "train_accuracy": float(train_accuracy),
         "reject_accuracy": float(reject_accuracy),
         "reject_head": {
@@ -434,6 +449,11 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         row_split["other_excluded_rows"]
     )
     admissibility_summary = dict(row_split["selection_summary"])
+    phase1x_training_gate = build_phase1x_training_gate(
+        rows,
+        admissibility_summary=admissibility_summary,
+        reject_head_trained=True,
+    )
     if not rows:
         raise ValueError(
             "No positive backend-selector training rows found after Phase 1.x admissibility filtering"
@@ -454,6 +474,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         dataset_arg=getattr(args, "dataset", None),
         receipt_source=receipt_source,
         admissibility_summary=admissibility_summary,
+        phase1x_training_gate=phase1x_training_gate,
     )
     execution_preconditions = _build_execution_preconditions(dataset_summary)
     model_config = _build_model_config(args.hidden_dim)
@@ -539,6 +560,9 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
         "training_summary": str(training_summary_path),
         "runtime_package": str(runtime_package_path),
         "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
+        "phase1x_training_gate": dict(phase1x_training_gate),
+        "phase1x_training_gate_ready": bool(phase1x_training_gate.get("ready", False)),
+        "promotion_gate_ready": bool(execution_preconditions.get("promotion_gate_ready", False)),
         "admissibility_summary": dict(admissibility_summary),
         "reject_accuracy": reject_accuracy,
     }
@@ -561,9 +585,12 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
             {
                 "overall_status": "pass",
                 "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
+                "phase1x_training_gate_ready": bool(phase1x_training_gate.get("ready", False)),
+                "promotion_gate_ready": bool(execution_preconditions.get("promotion_gate_ready", False)),
                 "row_count": len(rows),
                 "source_row_count": len(source_rows),
                 "admissibility_summary": dict(admissibility_summary),
+                "phase1x_training_gate": dict(phase1x_training_gate),
                 "reject_accuracy": reject_accuracy,
             },
             context_sha=config_digest,
@@ -591,10 +618,13 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
                     )
                 ),
                 "negative_supervision_rows": len(negative_supervision_rows),
+                "phase1x_training_gate_ready": int(bool(phase1x_training_gate.get("ready", False))),
             },
             metadata={
                 "target_contract": "backend_fidelity_randomization_selection_v1",
                 "benchmark_gate_ready": bool((dataset_summary.get("benchmark_gate", {}) or {}).get("ready")),
+                "phase1x_training_gate_ready": bool(phase1x_training_gate.get("ready", False)),
+                "promotion_gate_ready": bool(execution_preconditions.get("promotion_gate_ready", False)),
                 "phase1x_training_admissibility_enforced": True,
                 "phase1x_reject_head_trained": True,
                 "reject_accuracy": reject_accuracy,
@@ -623,6 +653,7 @@ def _train(*, args: argparse.Namespace, runner: Optional[RegalTrainingRunner]) -
                     "train_accuracy": train_accuracy,
                     "reject_accuracy": reject_accuracy,
                     "negative_supervision_row_count": len(negative_supervision_rows),
+                    "phase1x_training_gate_ready": bool(phase1x_training_gate.get("ready", False)),
                 },
             )
         )

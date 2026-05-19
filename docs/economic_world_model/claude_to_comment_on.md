@@ -1,5 +1,14 @@
 # Claude Commentary Artifact
 
+## 2026-05-19 Codex Phase 1.x Addendum
+
+The active Phase 1.x pass has now moved past receipt emission into trainer
+admissibility, negative-supervision sidecars, bounded reject-head training, and
+`phase1x_training_gate_v1` promotion/precondition enforcement for the
+Sim / Synth / Physics backend-selector and branch-planner helper packages. This
+is still local structural readiness: provider bring-up, GPU-backed calibration,
+and benchmark promotion evidence remain future gates, not current claims.
+
 ## Current Status
 
 - **Date**: 2026-04-03

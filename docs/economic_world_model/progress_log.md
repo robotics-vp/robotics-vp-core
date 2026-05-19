@@ -1,5 +1,29 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x training-gate promotion preconditions
+
+- **Changed**:
+  - added `phase1x_training_gate_v1` as the structural promotion gate for Sim /
+    Synth / Physics trainer outputs
+  - backend-selector and branch-planner dataset summaries, training summaries,
+    runtime packages, job results, Regal metadata, and execution preconditions
+    now carry the gate
+  - runtime package promotion now requires both benchmark-density readiness and
+    Phase 1.x training-gate readiness
+  - the gate checks selected-row count consistency, absence of diagnostic rows,
+    clean runtime receipt manifest validation, and reject-head coverage whenever
+    negative-supervision sidecars exist
+- **Why this matters**:
+  - reject-head training made negative supervision usable, but promotion still
+    needed a single auditable yes/no surface tying admissibility to package
+    readiness
+  - this keeps local trainer progress useful without implying provider truth,
+    GPU-backed calibration, or benchmark credibility
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py src/world_model/sim_synth_physics/__init__.py scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py`
+  - `git diff --check && python3 -m compileall src/world_model/sim_synth_physics scripts/train_sim_synth_backend_selector.py scripts/train_sim_synth_branch_planner.py tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_training_corpus.py -q && python3 -m pytest tests/test_train_sim_synth_backend_selector.py tests/test_train_sim_synth_branch_planner.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_training_corpus.py -q` (`43 passed`)
+  - `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1637 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x reject-head training over negative supervision
 
 - **Changed**:

@@ -293,6 +293,7 @@ def test_train_sim_synth_branch_planner_emits_runtime_package(tmp_path: Path) ->
 
     runtime_package = json.loads(Path(result["runtime_package"]).read_text(encoding="utf-8"))
     dataset_summary = json.loads(Path(result["dataset_summary"]).read_text(encoding="utf-8"))
+    preconditions = json.loads(Path(result["preconditions"]).read_text(encoding="utf-8"))
     training_summary = json.loads(Path(result["training_summary"]).read_text(encoding="utf-8"))
     model_config = json.loads(Path(result["model_config"]).read_text(encoding="utf-8"))
     assert runtime_package["promotion_stage"] == "shadow_candidate"
@@ -306,6 +307,15 @@ def test_train_sim_synth_branch_planner_emits_runtime_package(tmp_path: Path) ->
     assert dataset_summary["admissibility_summary"]["positive_training_row_count"] == 5
     assert dataset_summary["admissibility_summary"]["negative_supervision_row_count"] == 1
     assert dataset_summary["admissibility_summary"]["excluded_row_count"] == 1
+    assert dataset_summary["phase1x_training_gate"]["ready"] is True
+    assert dataset_summary["phase1x_training_gate"]["negative_supervision_row_count"] == 1
+    assert runtime_package["phase1x_training_gate"]["ready"] is True
+    assert preconditions["phase1x_training_gate_ready"] is True
+    assert preconditions["promotion_gate_ready"] is False
+    assert preconditions["satisfied_preconditions"]["dataset::phase1x_training_gate"] == 1
+    assert training_summary["phase1x_training_gate"]["ready"] is True
+    assert result["phase1x_training_gate_ready"] is True
+    assert result["promotion_gate_ready"] is False
     assert dataset_summary["input_sources"]["receipt_path"] == str(receipt_path)
     assert model_config["negative_supervision_contract"] == "phase1x_reject_probability_head_v1"
     assert "reject_probability" in model_config["heads"]
@@ -365,6 +375,7 @@ def test_train_sim_synth_branch_planner_runner_emits_runtime_manifest(tmp_path: 
     )
     assert checkpoint_registry["checkpoints"][0]["model_family"] == "sim_synth_branch_planner"
     assert holder["payload"]["benchmark_gate_ready"] is False
+    assert holder["payload"]["phase1x_training_gate_ready"] is True
     assert holder["payload"]["admissibility_summary"]["legacy_dataset_row_count"] == 10
 
 

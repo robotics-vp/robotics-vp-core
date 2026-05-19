@@ -4,6 +4,7 @@ from pathlib import Path
 from src.world_model.sim_synth_physics.training_corpus import (
     build_backend_selector_rows_from_receipts,
     build_branch_planner_rows_from_receipts,
+    build_phase1x_training_gate,
     harvest_sim_synth_receipt_bundles,
     select_phase1x_positive_training_rows,
     split_phase1x_training_rows,
@@ -945,6 +946,21 @@ def test_harvest_sim_synth_receipt_bundles_builds_bundle_from_live_dir(tmp_path:
     assert branch_split["negative_supervision_rows"] == [filtered_branch_rows[0]]
     assert branch_split["diagnostic_only_rows"] == []
     assert branch_split["selection_summary"]["excluded_row_count"] == 1
+    branch_gate = build_phase1x_training_gate(
+        branch_split["positive_training_rows"],
+        admissibility_summary=branch_split["selection_summary"],
+        reject_head_trained=True,
+    )
+    assert branch_gate["ready"] is True
+    assert branch_gate["negative_supervision_row_count"] == 1
+    assert branch_gate["manifest_validation_status_counts"] == {"validated": 1}
+    blocked_gate = build_phase1x_training_gate(
+        branch_split["positive_training_rows"],
+        admissibility_summary=branch_split["selection_summary"],
+        reject_head_trained=False,
+    )
+    assert blocked_gate["ready"] is False
+    assert "negative_supervision_without_reject_head" in blocked_gate["blockers"]
 
 
 def test_harvest_sim_synth_receipt_bundles_ignores_incomplete_dirs(tmp_path: Path) -> None:
