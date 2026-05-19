@@ -1,5 +1,49 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Local Holosoma ONNX deploy smoke
+
+### What changed
+
+- Used a user-site `.pth` shim pointing at the existing local Holosoma checkout
+  instead of running `pip install -r requirements-holosoma.txt`. This avoids the
+  full heavy dependency set while making `holosoma`, `holosoma_inference`, and
+  `holosoma_retargeting` importable.
+- Installed only the narrow smoke-path dependencies with `--no-cache-dir`:
+  `tyro`, `loguru`, `omegaconf`, `tqdm`, `tensordict`, `tensorboard`,
+  `trimesh`, and `onnxruntime`; captured the same set in `requirements-holosoma-smoke.txt`.
+- Split local smoke behavior by policy kind:
+  - `.onnx` policies use ONNX deploy/action smoke
+  - non-ONNX policies continue to use the native Holosoma eval path
+- Updated Holosoma backend entrypoint imports to support the local upstream
+  checkout layout.
+- Added an explicit `ROBOTICS_VP_ENABLE_HOLOSOMA_RUNTIME=1` gate for WM runtime
+  execution claims, keeping importable local packages separate from concrete
+  simulator/runtime availability.
+
+### Current local read
+
+The selected local policy is
+`/Users/amarmurray/code/holosoma/src/holosoma_inference/holosoma_inference/models/loco/g1_29dof/fastsac_g1_29dof.onnx`.
+A native Holosoma eval loop is the wrong path for that artifact because the eval
+entrypoint expects a serialized training checkpoint with embedded
+`experiment_config`. The local non-GPU proof is now an ONNX deploy/action smoke:
+`actor_obs [1, 100] -> action [1, 29]` with finite `float32` output.
+
+This does not promote Holosoma runtime evidence. It proves local policy loading
+and deploy-path inference only; simulated episode evidence, motion quality, and
+provider runtime receipts remain future provider/GPU work. WM runtime routing
+therefore remains shadow/fallback by default unless
+`ROBOTICS_VP_ENABLE_HOLOSOMA_RUNTIME=1` is set.
+
+### Verification
+
+- `python3 -m ruff check scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py src/motor_backend/holosoma_backend.py`
+- `python3 -m compileall scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py src/motor_backend/holosoma_backend.py`
+- `python3 -m pytest tests/test_local_holosoma_smoke.py tests/test_holosoma_backend_interface.py -q` -> `4 passed`
+- `python3 scripts/local_holosoma_smoke.py --preflight-only --out-dir artifacts/holosoma_local_probe` -> `ready: true`, `policy_kind: onnx_deploy`
+- `python3 scripts/local_holosoma_smoke.py --episodes 1 --out-dir artifacts/holosoma_local_probe` -> wrote `holosoma_onnx_deploy_smoke.json` with finite action output
+- `python3 -m ruff check scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py tests/test_sim_synth_physics_world_model.py src/motor_backend/holosoma_backend.py src/world_model/sim_synth_physics/holosoma_runtime_gate.py src/world_model/sim_synth_physics/backend_adapters.py src/world_model/sim_synth_physics/adapters/backend_holosoma.py src/world_model/sim_synth_physics/runtime_targets.py src/world_model/sim_synth_physics/shadow_execution.py src/world_model/sim_synth_physics/backend_runtime_execution.py src/world_model/sim_synth_physics/adapters/holosoma_adapter_execution.py && git diff --check && python3 -m compileall src/ scripts/local_holosoma_smoke.py tests/test_local_holosoma_smoke.py tests/test_sim_synth_physics_world_model.py && python3 -m pytest tests/ -q` -> `1644 passed, 2 skipped, 24 warnings`
+
 ## 2026-05-19 - Holosoma local preflight separates provider install from GPU debt
 
 ### What changed

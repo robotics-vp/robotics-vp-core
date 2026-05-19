@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import importlib
 import re
 import sys
 from dataclasses import dataclass
@@ -40,6 +41,15 @@ def ensure_holosoma_available() -> None:
             "Holosoma backend requested but 'holosoma' is not installed. "
             "Install with `pip install -r requirements-holosoma.txt` or the holosoma extra."
         )
+
+
+def _import_holosoma_module(primary: str, fallback: str) -> Any:
+    try:
+        return importlib.import_module(primary)
+    except ModuleNotFoundError as exc:
+        if exc.name != primary:
+            raise
+        return importlib.import_module(fallback)
 
 
 @dataclass(frozen=True)
@@ -131,7 +141,7 @@ class DefaultHolosomaRunner:
         before = {p for p in project_dir.iterdir() if p.is_dir()}
 
         self._ensure_pythonpath()
-        from holosoma.holosoma.train_agent import train as holosoma_train  # type: ignore[import-not-found]
+        holosoma_train = _import_holosoma_module("holosoma.train_agent", "holosoma.holosoma.train_agent").train
 
         holosoma_train(config)
 
@@ -160,10 +170,13 @@ class DefaultHolosomaRunner:
         if num_episodes <= 0:
             return HolosomaRunResult(policy_id=policy_id, raw_metrics={})
         try:
-            from holosoma.holosoma.eval_agent import run_eval_with_tyro  # type: ignore[import-not-found]
-            from holosoma.utils.eval_utils import CheckpointConfig, load_saved_experiment_config  # type: ignore[import-not-found]
+            eval_agent = _import_holosoma_module("holosoma.eval_agent", "holosoma.holosoma.eval_agent")
+            eval_utils = _import_holosoma_module("holosoma.utils.eval_utils", "holosoma.holosoma.utils.eval_utils")
         except Exception as exc:
             raise RuntimeError("Holosoma evaluation entrypoints are unavailable.") from exc
+        run_eval_with_tyro = eval_agent.run_eval_with_tyro
+        CheckpointConfig = eval_utils.CheckpointConfig
+        load_saved_experiment_config = eval_utils.load_saved_experiment_config
 
         checkpoint_cfg = CheckpointConfig(checkpoint=policy_id)
         saved_cfg, saved_wandb_path = load_saved_experiment_config(checkpoint_cfg)

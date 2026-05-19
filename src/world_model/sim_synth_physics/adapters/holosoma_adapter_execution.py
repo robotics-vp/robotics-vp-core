@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import importlib.util
 from typing import Any, Mapping
 
 from ..common import mapping, stable_id, strings
+from ..holosoma_runtime_gate import holosoma_runtime_enabled
 from ..receipts import BackendRuntimeAdapterReceipt
 
 
@@ -13,10 +13,7 @@ LOCAL_RUNTIME_MODULE = "holosoma"
 
 
 def _has_local_runtime_module() -> bool:
-    try:
-        return importlib.util.find_spec(LOCAL_RUNTIME_MODULE) is not None
-    except Exception:
-        return False
+    return holosoma_runtime_enabled()
 
 
 def prepare_holosoma_adapter_execution(

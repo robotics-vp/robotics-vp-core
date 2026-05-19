@@ -40,7 +40,7 @@ pre-training prerequisites, not active implementation debt.
 
 | Item | Blocker | Required for | Expected timing |
 |------|---------|-------------|-----------------|
-| Local Holosoma smoke execution | Optional `holosoma` Python module is not importable on the current local host even though local roots/checkpoints may be discoverable | Concrete local non-GPU provider smoke before RunPod | As soon as local provider dependency can be installed |
+| Native Holosoma simulated episode execution | The selected local policy is an ONNX deploy artifact; native Holosoma eval expects a serialized checkpoint with embedded `experiment_config`, and real episode evidence still needs provider/runtime bring-up | Concrete simulated episode receipts and motion-quality evidence | First provider/GPU bring-up cycle |
 | Meaningful runtime execution beyond repo-local evidence | Requires runtime/install/provider reality beyond local clone | Concrete execution receipts and real episode data | First A100 weekly cycle |
 | Richer deploy/runtime-report/install truth | Depends on Holosoma runtime maturity | Complete runtime-target install-shape truth | Provider maturity |
 
@@ -52,15 +52,19 @@ pre-training prerequisites, not active implementation debt.
 - Host preflight status: `preflight_ready`
 - `scripts/local_holosoma_smoke.py --preflight-only` records whether the local
   provider dependency and selected policy checkpoint are actually executable
+- Local ONNX deploy/action smoke runs for the selected policy and writes
+  `holosoma_onnx_deploy_smoke.json` (`actor_obs [1, 100] -> action [1, 29]`)
+- WM runtime routing remains shadow/fallback by default; full Holosoma runtime
+  execution requires explicit `ROBOTICS_VP_ENABLE_HOLOSOMA_RUNTIME=1` enablement
 
 ### What happens on GPU day-0
 
-1. Install or point the local environment at the optional Holosoma Python module
-2. Run `python3 scripts/local_holosoma_smoke.py --preflight-only` and then the
-   concrete local smoke once `ready=true`
-3. Run Holosoma runtime execution on A100 host when GPU-backed runs are needed
-4. Validate episode outputs and motion quality
-5. Harvest concrete runtime outcomes
+1. Provide a native Holosoma checkpoint or runtime config when simulated episode
+   evaluation is required rather than ONNX deploy-path inference
+2. Run Holosoma runtime execution on A100 host when GPU-backed/provider-backed
+   episodes are needed
+3. Validate episode outputs and motion quality
+4. Harvest concrete runtime outcomes
 
 ## GGDS / LDM / Video
 

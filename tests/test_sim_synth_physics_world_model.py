@@ -495,8 +495,10 @@ def test_holosoma_binding_records_runtime_target_contract(
     from src.world_model.sim_synth_physics.adapters import backend_holosoma as binding_module
     from src.world_model.sim_synth_physics import runtime_targets as runtime_targets_module
 
-    monkeypatch.setattr(binding_module, "_has_module", lambda name: name == "holosoma")
-    monkeypatch.setattr(runtime_targets_module, "_has_module", lambda name: name == "holosoma")
+    monkeypatch.setattr(binding_module, "holosoma_importable", lambda: True)
+    monkeypatch.setattr(binding_module, "holosoma_runtime_enabled", lambda: True)
+    monkeypatch.setattr(runtime_targets_module, "holosoma_importable", lambda: True)
+    monkeypatch.setattr(runtime_targets_module, "holosoma_runtime_enabled", lambda: True)
     holosoma_root = tmp_path / "holosoma_repo"
     motion_root = tmp_path / "holosoma_motion"
     policy_root = tmp_path / "holosoma_policy"
@@ -1748,8 +1750,10 @@ def test_runtime_executes_concrete_holosoma_backend_when_runtime_and_policy_exis
                 rollout_bundle=rollout_bundle,
             )
 
-    monkeypatch.setattr(binding_module, "_has_module", lambda name: name == "holosoma")
-    monkeypatch.setattr(runtime_targets_module, "_has_module", lambda name: name == "holosoma")
+    monkeypatch.setattr(binding_module, "holosoma_importable", lambda: True)
+    monkeypatch.setattr(binding_module, "holosoma_runtime_enabled", lambda: True)
+    monkeypatch.setattr(runtime_targets_module, "holosoma_importable", lambda: True)
+    monkeypatch.setattr(runtime_targets_module, "holosoma_runtime_enabled", lambda: True)
     monkeypatch.setattr(holosoma_adapter_module, "_has_local_runtime_module", lambda: True)
     monkeypatch.setattr(runtime_exec_module, "_runtime_supports_execution", lambda backend: backend == "holosoma")
     monkeypatch.setattr(
@@ -1884,8 +1888,10 @@ def test_runtime_trains_concrete_holosoma_backend_when_motion_datapacks_exist(
                 rollout_bundle=rollout_bundle,
             )
 
-    monkeypatch.setattr(binding_module, "_has_module", lambda name: name == "holosoma")
-    monkeypatch.setattr(runtime_targets_module, "_has_module", lambda name: name == "holosoma")
+    monkeypatch.setattr(binding_module, "holosoma_importable", lambda: True)
+    monkeypatch.setattr(binding_module, "holosoma_runtime_enabled", lambda: True)
+    monkeypatch.setattr(runtime_targets_module, "holosoma_importable", lambda: True)
+    monkeypatch.setattr(runtime_targets_module, "holosoma_runtime_enabled", lambda: True)
     monkeypatch.setattr(holosoma_adapter_module, "_has_local_runtime_module", lambda: True)
     monkeypatch.setattr(runtime_exec_module, "_runtime_supports_execution", lambda backend: backend == "holosoma")
     monkeypatch.setattr(

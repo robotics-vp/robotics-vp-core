@@ -43,6 +43,7 @@ from .adapters.local_backend_factory_adapter import (
 )
 from .asset_manifest import extract_robot_asset_manifest, normalize_robot_asset_manifest
 from .common import mapping, safe_float, strings
+from .holosoma_runtime_gate import holosoma_runtime_enabled
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import (
     BackendExecutionBindingReceipt,
@@ -447,7 +448,7 @@ def _materialize_isaac_binding(
 
 def _runtime_supports_execution(backend: str) -> bool:
     if backend == "holosoma":
-        return _has_module("holosoma")
+        return holosoma_runtime_enabled()
     if backend == "isaac":
         return _has_module("src.motor_backend.workcell_isaaclab_backend")
     return False

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -12,6 +11,7 @@ from src.envs.physics.isaac_backend import IsaacBackend
 from src.motor_backend.holosoma_backend import HOLOSOMA_TASK_MAP
 
 from .common import mapping
+from .holosoma_runtime_gate import holosoma_importable, holosoma_runtime_enabled
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import (
     BackendExecutionBindingReceipt,
@@ -35,13 +35,6 @@ def _mapping(value: Any) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
-
-
-def _has_module(name: str) -> bool:
-    try:
-        return importlib.util.find_spec(name) is not None
-    except Exception:
-        return False
 
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -628,7 +621,8 @@ def _materialize_holosoma_shadow_execution(
         None if output_root is None else output_root / "backend_shadow_execution_receipt.json"
     )
     work_order_path = None if output_root is None else output_root / "holosoma_shadow_work_order.json"
-    runtime_available = bool(_has_module("holosoma"))
+    runtime_importable = holosoma_importable()
+    runtime_available = holosoma_runtime_enabled()
     missing_assets = list(backend_binding_receipt.metadata.get("missing_assets", []) or [])
     unsatisfied_preconditions = list(missing_assets)
     unsatisfied_preconditions.extend(
@@ -694,6 +688,7 @@ def _materialize_holosoma_shadow_execution(
             ),
             "missing_assets": missing_assets,
             "concrete_runtime_available": runtime_available,
+            "holosoma_importable": runtime_importable,
             "unsatisfied_preconditions": unsatisfied_preconditions,
             "robot_asset_contract_id": asset_summary.get("robot_asset_contract_id", ""),
             "asset_sidecar_refs": list(asset_sidecar_refs),

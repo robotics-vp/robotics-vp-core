@@ -9,6 +9,7 @@ from typing import Any, Dict
 from src.motor_backend.holosoma_backend import HOLOSOMA_TASK_MAP
 
 from .common import mapping
+from .holosoma_runtime_gate import holosoma_importable, holosoma_runtime_enabled
 
 
 def _has_module(name: str) -> bool:
@@ -74,7 +75,8 @@ def describe_backend_adapter(backend: str) -> BackendAdapterDescriptor:
             },
         )
     if normalized == "holosoma":
-        available = _has_module("holosoma")
+        importable = holosoma_importable()
+        available = holosoma_runtime_enabled()
         simulator_stack = sorted(
             {
                 spec.simulator
@@ -98,6 +100,7 @@ def describe_backend_adapter(backend: str) -> BackendAdapterDescriptor:
             ),
             metadata={
                 "provider_class": "external_execution_provider",
+                "holosoma_importable": importable,
                 "holosoma_available": available,
                 "shadow_backend_available": True,
                 "concrete_runtime_available": available,

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .common import mapping
+from .holosoma_runtime_gate import holosoma_importable, holosoma_runtime_enabled
 from .local_runtime_discovery import discover_named_root
 
 
@@ -529,10 +530,11 @@ def describe_holosoma_runtime_targets(
     summary = _runtime_stack_summary(
         backend="holosoma",
         records=records,
-        python_bridge_available=_has_module("holosoma"),
+        python_bridge_available=holosoma_runtime_enabled(),
         required_target_ids=["holosoma_motion_root"],
         one_of_groups=[["holosoma_root", "holosoma_policy_root"]],
     )
+    summary["python_bridge_importable"] = holosoma_importable()
     return summary
 
 

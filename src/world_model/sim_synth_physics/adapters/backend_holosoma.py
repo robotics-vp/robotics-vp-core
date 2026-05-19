@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
 from typing import Any, Dict, Mapping
 
 from src.motor_backend.holosoma_backend import HOLOSOMA_TASK_MAP
 
 from ..common import mapping
+from ..holosoma_runtime_gate import holosoma_importable, holosoma_runtime_enabled
 from .holosoma_deployment import build_holosoma_deployment_contract
 from .holosoma_runtime_pack import build_holosoma_runtime_pack
 from ..runtime_layouts import (
@@ -17,20 +17,14 @@ from ..runtime_layouts import (
 from ..runtime_targets import describe_holosoma_runtime_targets
 
 
-def _has_module(name: str) -> bool:
-    try:
-        return importlib.util.find_spec(name) is not None
-    except Exception:
-        return False
-
-
 def build_holosoma_backend_binding(
     *,
     physics_context: Mapping[str, Any],
     adaptation_policy: Mapping[str, Any],
     embodiment_context: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    available = _has_module("holosoma")
+    importable = holosoma_importable()
+    available = holosoma_runtime_enabled()
     active_embodiments = list(
         embodiment_context.get("active_embodiments")
         or embodiment_context.get("target_embodiments")
@@ -114,6 +108,7 @@ def build_holosoma_backend_binding(
                 adaptation_policy.get("system_identification_profile", "")
             ),
             "shadow_backend_available": True,
+            "holosoma_importable": importable,
             "concrete_runtime_available": available,
             "task_presets": sorted(HOLOSOMA_TASK_MAP.keys()),
             "motion_source_count": len(motion_sources) + len(motion_clips),
