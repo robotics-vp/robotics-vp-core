@@ -1,6 +1,8 @@
 from src.world_model.semantic_coverage_graph import CoverageEdge, CoverageNode, SemanticCoverageGraph
 from src.world_model.sim_synth_physics import (
     PHASE1X_SUBSYSTEM_SPECS,
+    build_backend_selector_rows_from_receipts,
+    build_branch_planner_rows_from_receipts,
     build_phase1x_subsystem_index,
     compile_sim_synth_physics_world_state,
 )
@@ -89,3 +91,37 @@ def test_compiled_world_state_embeds_phase1x_subsystem_index() -> None:
     )
     assert "gen2sim_admission_receipt_v1" in training_surface["receipt_surfaces_present"]
     assert "phase1x_training_gate_v1" in training_surface["promotion_gates"]
+
+
+def test_phase1x_subsystem_index_survives_into_training_rows() -> None:
+    state = compile_sim_synth_physics_world_state(
+        _graph(),
+        benchmark_signals={"ready": False},
+    )
+    bundle = {"bundle_id": "subsystem_bundle", "world_state": state.to_dict()}
+
+    backend_rows = build_backend_selector_rows_from_receipts([bundle])
+    branch_rows = build_branch_planner_rows_from_receipts([bundle])
+
+    for row in (backend_rows[0], branch_rows[0]):
+        metadata = row["metadata"]
+        assert metadata["phase1x_subsystem_index_id"] == (
+            state.metadata["phase1x_subsystem_index"]["index_id"]
+        )
+        assert metadata["phase1x_subsystem_count"] == 10
+        assert metadata["phase1x_subsystem_provider_ownership_rule"] == (
+            "providers_may_span_subsystems_but_never_own_wm_truth"
+        )
+        assert metadata["phase1x_subsystem_blocker_class"] == (
+            "external_gpu_runtime_asset_benchmark_or_provider_evidence"
+        )
+        assert (
+            "phase1x_subsystem_10_training_worthiness_synthetic_yield_evaluator"
+            in metadata["phase1x_subsystem_ids"]
+        )
+        assert (
+            metadata["phase1x_subsystem_coverage_summary"][
+                "subsystems_with_compiled_receipt_families"
+            ]
+            == 10
+        )

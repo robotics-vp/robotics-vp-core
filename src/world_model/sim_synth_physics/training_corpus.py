@@ -50,6 +50,32 @@ def _runtime_outcome_can_drive_target_source(
     }
 
 
+def _phase1x_subsystem_metadata(world_state_metadata: Mapping[str, Any]) -> dict[str, Any]:
+    subsystem_index = _mapping(world_state_metadata.get("phase1x_subsystem_index"))
+    if not subsystem_index:
+        return {}
+    subsystems = _mapping_list(subsystem_index.get("subsystems"))
+    coverage_summary = _mapping(subsystem_index.get("coverage_summary"))
+    return {
+        "phase1x_subsystem_index_id": subsystem_index.get("index_id"),
+        "phase1x_subsystem_index_schema_version": subsystem_index.get("schema_version"),
+        "phase1x_subsystem_structural_status": subsystem_index.get("structural_status"),
+        "phase1x_subsystem_count": subsystem_index.get("subsystem_count"),
+        "phase1x_subsystem_ids": [
+            str(item.get("subsystem_id"))
+            for item in subsystems
+            if str(item.get("subsystem_id", "") or "")
+        ],
+        "phase1x_subsystem_coverage_summary": coverage_summary,
+        "phase1x_subsystem_provider_ownership_rule": subsystem_index.get(
+            "provider_ownership_rule"
+        ),
+        "phase1x_subsystem_blocker_class": subsystem_index.get(
+            "honest_remaining_blocker_class"
+        ),
+    }
+
+
 def _json_mappings(path: Path) -> list[Dict[str, Any]]:
     if path.suffix == ".jsonl":
         rows: list[Dict[str, Any]] = []
@@ -1000,6 +1026,7 @@ def build_backend_selector_rows_from_receipts(
         compiled_receipt_inventory = _mapping(
             world_state_metadata.get("compiled_receipt_inventory")
         )
+        phase1x_subsystem_metadata = _phase1x_subsystem_metadata(world_state_metadata)
         runtime_depth_projection = _mapping(
             world_state_metadata.get("runtime_depth_projection")
             or compiled_receipt_inventory.get("runtime_depth_projection")
@@ -1197,6 +1224,7 @@ def build_backend_selector_rows_from_receipts(
                     "physics_requested_backend": physics_execution_contract.get("requested_backend"),
                     "physics_resolved_backend": physics_execution_contract.get("resolved_backend"),
                     "compiled_receipt_inventory_id": compiled_receipt_inventory.get("inventory_id"),
+                    **phase1x_subsystem_metadata,
                     "runtime_receipt_manifest_id": runtime_receipt_manifest.get(
                         "manifest_id"
                     ),
@@ -1576,6 +1604,7 @@ def build_branch_planner_rows_from_receipts(
         compiled_receipt_inventory = _mapping(
             world_state_metadata.get("compiled_receipt_inventory")
         )
+        phase1x_subsystem_metadata = _phase1x_subsystem_metadata(world_state_metadata)
         runtime_depth_projection = _mapping(
             world_state_metadata.get("runtime_depth_projection")
             or compiled_receipt_inventory.get("runtime_depth_projection")
@@ -1784,6 +1813,7 @@ def build_branch_planner_rows_from_receipts(
                         "compiled_receipt_inventory_id": compiled_receipt_inventory.get(
                             "inventory_id"
                         ),
+                        **phase1x_subsystem_metadata,
                         "runtime_receipt_manifest_id": runtime_receipt_manifest.get(
                             "manifest_id"
                         ),

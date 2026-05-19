@@ -1,5 +1,39 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-19 - Phase 1.x subsystem index trainer-row propagation
+
+### What changed
+
+- `build_backend_selector_rows_from_receipts(...)` and
+  `build_branch_planner_rows_from_receipts(...)` now carry the compiled
+  `phase1x_subsystem_index_v1` into row metadata.
+- Trainer-facing rows preserve:
+  - subsystem index ID and schema version
+  - structural status
+  - subsystem count and subsystem IDs
+  - coverage summary
+  - provider ownership rule
+  - honest blocker class
+- Added regression coverage that compiles a world state, projects receipt
+  bundles into both trainer row families, and verifies the subsystem index
+  survives the projection.
+
+### Why this was the right next local step
+
+The previous pass made the subsystem index a compiled world-state artifact.
+This pass makes it survive into the trainer-facing corpus boundary, where
+promotion and benchmark preparation will actually inspect rows. Without this,
+the index could still decay into state-only documentation once rows are
+exported.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_phase1x_subsystems.py`
+- `git diff --check && python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_phase1x_subsystems.py -q && python3 -m pytest tests/test_sim_synth_phase1x_subsystems.py tests/test_sim_synth_training_corpus.py -q` ->
+  `7 passed`
+- `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` ->
+  `1640 passed, 3 skipped, 24 warnings`
+
 ## 2026-05-19 - Phase 1.x subsystem index in compiled WM state
 
 ### What changed

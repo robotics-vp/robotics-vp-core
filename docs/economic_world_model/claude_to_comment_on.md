@@ -7,9 +7,11 @@ admissibility, negative-supervision sidecars, bounded reject-head training, and
 `phase1x_training_gate_v1` promotion/precondition enforcement for the
 Sim / Synth / Physics backend-selector and branch-planner helper packages. The
 compiled world state now also carries `phase1x_subsystem_index_v1`, making the
-10-subsystem ownership map machine-readable instead of doctrine-only. This is
-still local structural readiness: provider bring-up, GPU-backed calibration, and
-benchmark promotion evidence remain future gates, not current claims.
+10-subsystem ownership map machine-readable instead of doctrine-only; backend
+and branch trainer rows preserve that index so ownership survives into learning
+artifacts. This is still local structural readiness: provider bring-up,
+GPU-backed calibration, and benchmark promotion evidence remain future gates,
+not current claims.
 
 ## Current Status
 

@@ -309,6 +309,10 @@ Also preserve a narrow SIM1 rule:
   now carry `phase1x_subsystem_index_v1`, mapping the 10 Phase 1.x subsystems
   to typed state surfaces, receipt families, learned/reserved seams, promotion
   gates, provider families, runtime artifact refs, and honest external blockers
+- **landed locally on 2026-05-19**: backend-selector and branch-planner
+  trainer rows now preserve that subsystem index ID, coverage summary,
+  subsystem IDs, ownership rule, structural status, and honest blocker class so
+  subsystem legibility survives into training and promotion artifacts
 - keep the constitutional rule: providers may span multiple subsystems, but
   never own WM truth
 

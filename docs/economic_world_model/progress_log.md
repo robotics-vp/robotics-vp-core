@@ -1,5 +1,24 @@
 # Economic World Model Progress Log
 
+## 2026-05-19 - Phase 1.x subsystem index trainer-row propagation
+
+- **Changed**:
+  - backend-selector and branch-planner receipt-row builders now preserve
+    `phase1x_subsystem_index_v1` identity, coverage summary, subsystem IDs,
+    ownership rule, structural status, and honest blocker class in
+    trainer-facing metadata
+  - added regression coverage proving compiled subsystem indices survive from
+    world-state metadata into both trainer row families
+- **Why this matters**:
+  - subsystem legibility now reaches the surfaces that training, promotion, and
+    later benchmark audits actually inspect
+  - this avoids reintroducing prose-only ownership once rows leave the compiled
+    world-state artifact
+- **Verification**:
+  - `python3 -m ruff check src/world_model/sim_synth_physics/training_corpus.py tests/test_sim_synth_phase1x_subsystems.py`
+  - `git diff --check && python3 -m compileall src/world_model/sim_synth_physics tests/test_sim_synth_phase1x_subsystems.py -q && python3 -m pytest tests/test_sim_synth_phase1x_subsystems.py tests/test_sim_synth_training_corpus.py -q` (`7 passed`)
+  - `git diff --check && python3 -m compileall src/ && python3 -m pytest tests/ -q` (`1640 passed, 3 skipped, 24 warnings`)
+
 ## 2026-05-19 - Phase 1.x subsystem index in compiled WM state
 
 - **Changed**:
