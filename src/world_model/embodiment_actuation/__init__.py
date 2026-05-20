@@ -21,6 +21,22 @@ from .consumers import (
     build_runtime_adapter_validation_context,
     build_sim_embodiment_transfer_context,
 )
+from .morphology import (
+    G1MorphologyProfile,
+    MorphologyEvidenceReceipt,
+    MorphologyJointSpec,
+    build_g1_morphology_profile,
+    scan_unitree_g1_public_evidence,
+)
+from .neural_seams import (
+    ActionProposalSeam,
+    DriftCalibrationSeam,
+    InverseRetargetingSeam,
+    LocalContactDynamicsSeam,
+    SeamForwardResult,
+    encode_state_features,
+    smoke_forward_all_seams,
+)
 from .promotion import EmbodimentSeamResolution, resolve_embodiment_seam
 from .provider_contracts import (
     EmbodimentProviderContract,
@@ -28,6 +44,14 @@ from .provider_contracts import (
     holosoma_contract,
     isaac_contract,
     unitree_g1_contract,
+)
+from .training_corpus import (
+    EmbodimentSeamTrainingRow,
+    EmbodimentTrainingManifest,
+    build_phase34_training_manifest,
+    build_phase34_training_rows_from_state,
+    load_phase34_training_rows_jsonl,
+    write_phase34_training_rows_jsonl,
 )
 from .receipts import (
     ActionProposalReceipt,
@@ -66,6 +90,24 @@ from .state import (
 )
 
 __all__ = [
+    "ActionProposalSeam",
+    "DriftCalibrationSeam",
+    "EmbodimentSeamTrainingRow",
+    "EmbodimentTrainingManifest",
+    "G1MorphologyProfile",
+    "InverseRetargetingSeam",
+    "LocalContactDynamicsSeam",
+    "MorphologyEvidenceReceipt",
+    "MorphologyJointSpec",
+    "SeamForwardResult",
+    "build_g1_morphology_profile",
+    "build_phase34_training_manifest",
+    "build_phase34_training_rows_from_state",
+    "encode_state_features",
+    "load_phase34_training_rows_jsonl",
+    "scan_unitree_g1_public_evidence",
+    "smoke_forward_all_seams",
+    "write_phase34_training_rows_jsonl",
     "EMBODIMENT_ACTUATION_WORLD_STATE_VERSION",
     "ActionProposalBundleState",
     "ActionProposalReceipt",

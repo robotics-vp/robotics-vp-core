@@ -95,6 +95,8 @@ Concrete end-state capabilities:
 | Cross-WM shadow inputs | Wired through Perception's embodiment shadow consumer and Sim/Synth's embodiment input adapter |
 | Embodiment / Actuation canonical WM substrate | Wired as `src/world_model/embodiment_actuation/`: canonical state contracts, receipts, provider contracts, promotion posture, shadow compiler, and first shadow consumers |
 | GR00T-shaped native loop sockets | Structurally wired as teacher/student-adjacent state and receipt surfaces: deploy observation, action-space validation, inverse retarget trace, action proposal bundle, transfer receipt, and promotion gate posture |
+| G1 morphology / action-space evidence | Wired as typed morphology profiles, public/local evidence receipts, registry-entry conversion, and explicit unresolved latency/watchdog/hardware blockers |
+| Phase 3.4 learned-seam scaffolding | Wired as CPU-runnable local dynamics, inverse-retargeting, action-proposal, and drift/calibration modules plus training-row manifests; no GPU training or promotion claim |
 
 ## What is not wired yet
 

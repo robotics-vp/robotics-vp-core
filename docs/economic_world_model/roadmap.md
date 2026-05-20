@@ -537,6 +537,16 @@ Economic receipt ingest. This is structural/shadow runtime work only:
 `authority_level` remains `none`, provider/GPU/hardware claims remain external,
 and no GR00T/Isaac ontology is imported.
 
+**Landed locally on 2026-05-20**: Phase 3.4 now has CPU-runnable neural
+scaffolding and training-row materialization. `morphology.py` turns Unitree G1
+public/local repo evidence into typed morphology profiles and evidence
+receipts; `neural_seams.py` provides bounded local-dynamics, inverse-retarget,
+action-proposal, and drift/calibration modules; `training_corpus.py` emits
+seam rows and non-promotional manifests; and
+`scripts/smoke_test_embodiment_phase34.py` proves finite local forward passes.
+Promotion remains blocked on GPU/provider/benchmark plus latency/watchdog and
+hardware drift evidence.
+
 That embodiment-side transfer truth should later include realized post-transfer
 drift, action-feasibility degradation, control-rate / latency mismatch, and
 local recovery posture as typed replay/exportable receipts rather than as

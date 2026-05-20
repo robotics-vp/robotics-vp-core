@@ -1,5 +1,25 @@
 # Economic World Model Progress Log
 
+## 2026-05-20 - Phase 3 morphology evidence and 3.4 neural scaffolding
+
+- **Changed**:
+  - added `src/world_model/embodiment_actuation/morphology.py` with G1 morphology profiles, joint specs, registry-entry conversion, and OSS/local evidence receipts
+  - added `src/world_model/embodiment_actuation/neural_seams.py` with CPU-runnable local-contact-dynamics, inverse-retargeting, action-proposal, and drift/calibration seam modules
+  - added `src/world_model/embodiment_actuation/training_corpus.py` with Phase 3.4 training rows, manifest generation, JSONL write/load, and explicit non-promotional blocker posture
+  - added `scripts/smoke_test_embodiment_phase34.py` and `tests/test_embodiment_actuation_phase34.py`
+  - added `docs/economic_world_model/phase3_external_pattern_absorption.md` documenting what was borrowed from Unitree/Isaac/GR00T-style public patterns and what remains external
+- **Why this matters**:
+  - Phase 3.4 is now locally code-real without requiring GPU training: seams execute forward on CPU and training rows are materialized
+  - Unitree G1 morphology/action-space evidence is now a typed WM artifact rather than a prose-only future concern
+  - promotion remains blocked until provider, GPU, benchmark, latency, watchdog, and hardware drift evidence exist
+- **Verification**:
+  - `git diff --check && python3 -m ruff check src/world_model/embodiment_actuation scripts/smoke_test_embodiment_phase34.py tests/test_embodiment_actuation_phase34.py tests/test_embodiment_actuation_world_model.py && python3 -m compileall src/world_model/embodiment_actuation scripts/smoke_test_embodiment_phase34.py tests/test_embodiment_actuation_phase34.py tests/test_embodiment_actuation_world_model.py -q && python3 -m pytest tests/test_embodiment_actuation_world_model.py tests/test_embodiment_actuation_phase34.py -q` (`13 passed`)
+  - `python3 scripts/smoke_test_embodiment_phase34.py --out-dir artifacts/embodiment_phase34 --scan-root /Users/amarmurray/code/unitree_rl_gym --scan-root /Users/amarmurray/code/unitree_sim_isaaclab --scan-root /Users/amarmurray/code/unitree_models --variant g1_29dof` (`status: ok`)
+  - `python3 -m pytest tests/embodiment/test_embodiment_module.py tests/test_embodiment_shadow_consumer.py tests/test_sim_synth_phase1x_subsystems.py -q` (`29 passed`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+  - `python3 -m pytest tests/ -q` (`1660 passed, 2 skipped, 24 warnings`)
+
+
 ## 2026-05-20 - Phase 3.1-3.3 Embodiment / Actuation WM shadow substrate
 
 - **Changed**:

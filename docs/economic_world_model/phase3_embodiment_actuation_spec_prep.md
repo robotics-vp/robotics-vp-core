@@ -217,3 +217,21 @@ Phase 3.1 through 3.3 are now implemented as an additive shadow substrate:
 
 Still deferred: provider execution, GPU-backed training, hardware calibration,
 native GR00T loops, policy promotion, and any runtime authority.
+
+## Implementation status — 2026-05-20, 3.4 scaffold pass
+
+Phase 3.4 is now structurally live as CPU-runnable scaffolding:
+
+- `morphology.py` records Unitree G1 morphology/action-space evidence,
+  12-DoF locomotion and 29-DoF whole-body joint families, and remaining
+  calibration blockers as receipts
+- `neural_seams.py` provides bounded local-contact-dynamics,
+  inverse-retargeting, action-proposal, and drift/calibration seam modules
+- `training_corpus.py` emits Phase 3.4 seam rows and a manifest with
+  `promotion_eligible=false`
+- `scripts/smoke_test_embodiment_phase34.py` proves all four seam families
+  execute finite CPU forward passes and writes local row artifacts
+
+This is not a training claim. The point is to make the 3.4 learned path real
+enough that the future GPU/provider season is blocked by data, benchmark, and
+calibration evidence rather than missing local structure.

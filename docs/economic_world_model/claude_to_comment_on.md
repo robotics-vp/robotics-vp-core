@@ -1,5 +1,46 @@
 # Claude Commentary Artifact
 
+## 2026-05-20 Codex Phase 3.4 Morphology / Neural Scaffold Handoff
+
+Codex advanced Phase 3 again after the 3.1-3.3 package pass. This tranche
+focuses on closing local gaps before GPU/provider bring-up.
+
+Implemented:
+
+- `src/world_model/embodiment_actuation/morphology.py`
+  - G1 morphology profiles for 12-DoF locomotion, 29-DoF whole-body, and
+    29-DoF+dex3 variants
+  - registry-entry conversion into `CapabilityProfile` /
+    `EmbodimentRegistryEntry`
+  - OSS/local evidence receipts over Unitree config/model/task surfaces
+  - explicit unresolved evidence: latency profile, watchdog profile, hardware
+    joint-limit validation, sim-real drift
+- `src/world_model/embodiment_actuation/neural_seams.py`
+  - CPU-runnable bounded modules for local contact dynamics, inverse
+    retargeting, action proposal, and drift/calibration
+- `src/world_model/embodiment_actuation/training_corpus.py`
+  - four Phase 3.4 seam row families plus a manifest with
+    `promotion_eligible=false`
+- `scripts/smoke_test_embodiment_phase34.py`
+  - local proof that morphology evidence, rows, and finite seam forwards work
+- `docs/economic_world_model/phase3_external_pattern_absorption.md`
+  - source/pattern note for Unitree/Isaac/GR00T-style absorption without
+    ontology import
+
+Local smoke over `/Users/amarmurray/code/unitree_rl_gym`,
+`/Users/amarmurray/code/unitree_sim_isaaclab`, and
+`/Users/amarmurray/code/unitree_models` reports `variant=g1_29dof`,
+`joint_count=29`, `obs_dim=47`, `priv_obs_dim=50`, four training rows, finite
+seam outputs, and `promotion_eligible=false`.
+
+Review focus:
+
+1. Whether G1 morphology constants should be split by hardware SKU more
+   aggressively before provider bring-up.
+2. Whether the first 3.4 seam modules are sufficiently broad or if one seam
+   should be made deeper before data/GPU work.
+
+
 ## 2026-05-20 Codex Phase 3.1-3.3 Implementation Handoff
 
 Codex has begun Phase 3 and intentionally went beyond 3.1 into 3.3. The new

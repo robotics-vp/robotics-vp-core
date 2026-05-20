@@ -1092,6 +1092,13 @@ posture, a shadow compiler, and first shadow downstream consumers. It remains
 advisory: no runtime authority, no provider/GPU claims, and no GR00T/Isaac
 ontology import.
 
+2026-05-20 follow-up: Phase 3.4 scaffolding is now live. G1 morphology and
+OSS/local evidence are typed in `morphology.py`; bounded neural seams are in
+`neural_seams.py`; seam training rows and non-promotional manifests are in
+`training_corpus.py`; and `scripts/smoke_test_embodiment_phase34.py` proves
+CPU-local forward passes. This is learned-path readiness, not a GPU training or
+policy-promotion claim.
+
 When the implementation priority shifts to the Embodiment / Actuation WM,
 the first tranches should follow the repo's established pattern:
 
