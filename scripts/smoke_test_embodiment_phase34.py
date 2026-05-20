@@ -16,11 +16,13 @@ from src.runtime.action_adapter_v2 import ActionAdapterV2
 from src.runtime.observation_adapter_v2 import ObservationAdapterV2
 from src.world_model.embodiment_actuation import (
     build_g1_morphology_profile,
+    build_embodiment_neural_architecture_manifest,
     build_phase34_training_manifest,
     build_phase34_training_rows_from_state,
     compile_embodiment_actuation_with_receipts,
     scan_unitree_g1_public_evidence,
     smoke_forward_all_seams,
+    smoke_forward_neural_architectures,
     unitree_g1_contract,
     write_phase34_training_rows_jsonl,
 )
@@ -88,9 +90,21 @@ def main() -> int:
     )
     rows_path = write_phase34_training_rows_jsonl(rows, out_dir / "phase34_training_rows.jsonl")
     seam_smoke = smoke_forward_all_seams(result.state)
+    neural_manifest = build_embodiment_neural_architecture_manifest(
+        result.state,
+        source_refs={"state_id": result.state.state_id, "morphology_profile_id": morphology.profile_id},
+    )
+    neural_manifest_path = out_dir / "phase34_neural_architecture_manifest.json"
+    neural_manifest_path.write_text(json.dumps(to_json_safe(neural_manifest.to_dict()), indent=2, sort_keys=True))
+    neural_smoke = smoke_forward_neural_architectures(result.state)
 
     summary = {
-        "status": "ok" if all(item["finite"] for item in seam_smoke.values()) else "failed",
+        "status": (
+            "ok"
+            if all(item["finite"] for item in seam_smoke.values())
+            and all(item["finite"] for item in neural_smoke.values())
+            else "failed"
+        ),
         "morphology": morphology.to_dict(),
         "evidence_receipts": [receipt.to_dict() for receipt in evidence_receipts],
         "state_id": result.state.state_id,
@@ -98,6 +112,9 @@ def main() -> int:
         "training_manifest": manifest.to_dict(),
         "rows_path": str(rows_path),
         "seam_smoke": seam_smoke,
+        "neural_architecture_manifest": neural_manifest.to_dict(),
+        "neural_architecture_manifest_path": str(neural_manifest_path),
+        "neural_architecture_smoke": neural_smoke,
         "promotion_eligible": manifest.promotion_eligible,
     }
     (out_dir / "phase34_smoke_summary.json").write_text(

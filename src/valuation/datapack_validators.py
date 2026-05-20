@@ -88,6 +88,14 @@ def validate_embodiment_profile(ep: EmbodimentProfileSummary) -> List[str]:
         "drift_report_json",
         "calibration_targets_json",
         "summary_jsonl",
+        "embodiment_actuation_state_json",
+        "embodiment_actuation_receipts_json",
+        "embodiment_actuation_consumers_json",
+        "embodiment_phase34_training_rows_jsonl",
+        "embodiment_phase34_training_manifest_json",
+        "embodiment_neural_architecture_manifest_json",
+        "embodiment_morphology_profile_json",
+        "embodiment_morphology_receipts_json",
     ):
         value = getattr(ep, field)
         if value is not None and not isinstance(value, str):

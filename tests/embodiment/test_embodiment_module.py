@@ -6,6 +6,7 @@ import numpy as np
 
 from src.embodiment.core import EmbodimentInputs, compute_embodiment
 from src.embodiment.artifacts import EMBODIMENT_PROFILE_PREFIX
+from src.embodiment.datapack_adapter import embodiment_profile_from_summary
 from src.embodiment.runner import run_embodiment_for_rollouts
 from src.motor_backend.rollout_capture import EpisodeMetadata, EpisodeRollout, RolloutBundle
 from src.orchestrator.semantic_fusion import SEMANTIC_FUSION_PREFIX
@@ -173,3 +174,89 @@ def test_runner_loads_semantic_fusion_from_metadata_path(tmp_path: Path):
     summary = summaries[0]
     assert "semantic_fusion" not in summary["missing_inputs"]
     assert np.isclose(summary["semantic_confidence_mean"], float(np.mean(fused_conf)))
+
+
+def test_runner_emits_phase3_embodiment_actuation_sidecars(tmp_path: Path):
+    episode_id = "episode-g1"
+    episode_dir = tmp_path / "episode_002"
+    episode_dir.mkdir(parents=True, exist_ok=True)
+
+    trajectory_path = episode_dir / "trajectory.npz"
+    _write_trajectory(
+        trajectory_path,
+        {
+            "scene_tracks_v1": _scene_tracks_payload(class_names=["hand", "drawer"]),
+            "states": [{"positions": [0.0] * 29, "velocities": [0.0] * 29}],
+        },
+    )
+    _write_metadata(episode_dir / "metadata.json", episode_id, trajectory_path, None)
+
+    metadata = EpisodeMetadata(
+        episode_id=episode_id,
+        task_id="drawer_open",
+        robot_family="unitree_g1",
+        seed=None,
+        env_params={
+            "robot_variant": "g1_29dof",
+            "num_observations": 47,
+            "num_privileged_obs": 50,
+            "control_hz": 50,
+        },
+    )
+    rollout = EpisodeRollout(metadata=metadata, trajectory_path=trajectory_path, metrics={})
+    bundle = RolloutBundle(scenario_id="scenario", episodes=[rollout])
+
+    summaries = run_embodiment_for_rollouts(bundle, output_dir=episode_dir)
+    summary = summaries[0]
+
+    state_path = Path(summary["embodiment_actuation_state_path"])
+    receipts_path = Path(summary["embodiment_actuation_receipts_path"])
+    consumers_path = Path(summary["embodiment_actuation_consumers_path"])
+    rows_path = Path(summary["embodiment_phase34_training_rows_path"])
+    manifest_path = Path(summary["embodiment_phase34_training_manifest_path"])
+    neural_manifest_path = Path(summary["embodiment_neural_architecture_manifest_path"])
+    morphology_path = Path(summary["embodiment_morphology_profile_path"])
+
+    for path in (
+        state_path,
+        receipts_path,
+        consumers_path,
+        rows_path,
+        manifest_path,
+        neural_manifest_path,
+        morphology_path,
+    ):
+        assert path.exists()
+
+    state = json.loads(state_path.read_text())
+    manifest = json.loads(manifest_path.read_text())
+    neural_manifest = json.loads(neural_manifest_path.read_text())
+    receipts = json.loads(receipts_path.read_text())
+    metadata_payload = json.loads((episode_dir / "metadata.json").read_text())
+
+    assert state["authority_level"] == "none"
+    assert state["capability"]["robot_family"] == "unitree_g1"
+    assert state["action_space"]["dimension"] == 29
+    assert state["provider_runtime_surface"]["missing_components"]
+    assert receipts["receipt_count"] >= 13
+    assert manifest["promotion_eligible"] is False
+    assert "no_gpu_training_run" in manifest["blocker_reasons"]
+    assert neural_manifest["architecture_count"] == 4
+    assert neural_manifest["promotion_eligible"] is False
+    assert neural_manifest["smoke_results"]["diffusion_policy_action_denoiser"]["finite"] is True
+    assert summary["embodiment_actuation"]["phase34_row_count"] == 4
+    assert summary["embodiment_actuation"]["neural_architecture_count"] == 4
+    assert metadata_payload["embodiment_actuation_state_path"] == str(state_path)
+
+    profile_summary = embodiment_profile_from_summary(
+        summary,
+        artifact_paths={
+            "embodiment_actuation_state_path": str(state_path),
+            "embodiment_phase34_training_manifest_path": str(manifest_path),
+            "embodiment_neural_architecture_manifest_path": str(neural_manifest_path),
+        },
+    )
+    assert profile_summary.diagnostics["embodiment_actuation"]["state_id"] == state["state_id"]
+    assert profile_summary.embodiment_actuation_state_json == str(state_path)
+    assert profile_summary.embodiment_phase34_training_manifest_json == str(manifest_path)
+    assert profile_summary.embodiment_neural_architecture_manifest_json == str(neural_manifest_path)

@@ -30,9 +30,16 @@ Embodiment / Actuation WM contracts.
 - `src/world_model/embodiment_actuation/training_corpus.py`
   - Phase 3.4 training-row and manifest builders with promotion blocked until
     GPU/provider/benchmark evidence exists
+- `src/world_model/embodiment_actuation/neural_architectures.py`
+  - CPU-runnable architecture contracts inspired by JEPA latent prediction,
+    ACT action chunking, Diffusion Policy denoising, TD-MPC-style latent
+    control, and topology-contrastive morphology consistency
+- `src/world_model/embodiment_actuation/sidecars.py`
+  - local-loop materialization of canonical state, receipts, consumers,
+    morphology receipts, training rows, and neural architecture manifests
 - `scripts/smoke_test_embodiment_phase34.py`
-  - local proof that morphology evidence, training rows, and all seam forward
-    passes can run without GPU
+  - local proof that morphology evidence, training rows, neural architecture manifests,
+    seam forwards, and architecture forwards can run without GPU
 
 ## Current local evidence result
 
@@ -58,4 +65,5 @@ does not close provider/runtime/hardware evidence.
 | Hardware joint-limit validation | external hardware evidence |
 | Sim-real drift measurement | external provider/hardware evidence |
 | GPU-backed training for 3.4 seams | deferred GPU/provider season |
+| Neural architecture promotion | blocked on GPU training, provider/runtime eval, benchmarks, latency/watchdog evidence, and demotion-path tests |
 | Benchmark promotion | deferred until real evaluation evidence exists |

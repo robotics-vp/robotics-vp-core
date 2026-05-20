@@ -34,6 +34,12 @@ Artifacts are versioned and numpy-only where applicable:
 - `EmbodimentValueAttribution_v1.json`: ΔMPL/Δerror/ΔEP attribution by segment
 - `EmbodimentDriftReport_v1.json`: contact drift + constraint drift + sim/backend mismatch
 - `CalibrationTargets_v1.json`: advisory physics knob deltas
+- `EmbodimentActuationWorldState_v1.json`: canonical Phase 3 shadow state
+- `EmbodimentActuationReceipts_v1.json`: Phase 3 receipt family
+- `EmbodimentActuationConsumers_v1.json`: Sim/Synth, Perception, Runtime, and Economic shadow consumers
+- `EmbodimentPhase34TrainingRows_v1.jsonl`: local training-row materialization for future learned seams
+- `EmbodimentPhase34TrainingManifest_v1.json`: non-promotional training manifest and blockers
+- `EmbodimentNeuralArchitectureManifest_v1.json`: CPU-runnable neural architecture specs/smoke results for future GPU training
 
 Key scalars:
 - `w_embodiment` in [0,1]
@@ -42,7 +48,8 @@ Key scalars:
 ## Integration Points
 - `src/policies/unified_quality.py`: logs embodiment weight + drift + impossible contacts (optional weight)
 - `src/rl/episode_sampling.py`: optional sampling strategies using embodiment metrics
-- `src/valuation/datapack_schema.py`: EmbodimentProfileSummary stores artifact pointers + key scalars
+- `src/valuation/datapack_schema.py`: EmbodimentProfileSummary stores artifact pointers, Phase 3 sidecar refs, and key scalars
+- `src/world_model/embodiment_actuation/sidecars.py`: materializes Phase 3 canonical state, receipts, consumer payloads, training rows, morphology receipts, and neural architecture manifests from runner outputs
 
 ## Economics Wiring (Non-Coupling)
 Embodiment does not alter reward math. It provides advisory signals that can be

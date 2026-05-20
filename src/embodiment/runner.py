@@ -18,6 +18,10 @@ from src.embodiment.config import EmbodimentConfig
 from src.embodiment.core import EmbodimentInputs, compute_embodiment
 from src.motor_backend.rollout_capture import EpisodeRollout, RolloutBundle
 from src.vision.motion_hierarchy.metrics import compute_motion_hierarchy_summary_from_stats
+from src.world_model.embodiment_actuation.sidecars import (
+    build_embodiment_actuation_sidecar_bundle,
+    write_embodiment_actuation_sidecars,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -354,6 +358,61 @@ def run_embodiment_for_rollouts(
             "embodiment_calibration_targets_path": str(calibration_path),
             "semantic_fusion_path": str(semantic_fusion_path) if semantic_fusion_path else None,
         }
+
+        phase3_refs = {
+            "embodiment_profile_ref": str(profile_path),
+            "affordance_graph_ref": str(affordance_path),
+            "skill_segments_ref": str(segments_path),
+            "cost_breakdown_ref": str(cost_path),
+            "value_attribution_ref": str(value_path),
+            "drift_report_ref": str(drift_path),
+            "calibration_targets_ref": str(calibration_path),
+            "semantic_fusion_ref": str(semantic_fusion_path) if semantic_fusion_path else "",
+        }
+        phase3_bundle = build_embodiment_actuation_sidecar_bundle(
+            episode_id=episode_id,
+            advisory_embodiment_result=result,
+            artifact_refs=phase3_refs,
+            backend_tags=_extract_backend_tags(episode),
+            joint_state=_extract_joint_state(trajectory_payload),
+        )
+        phase3_write = write_embodiment_actuation_sidecars(
+            phase3_bundle,
+            output_dir=out_dir,
+            episode_id=episode_id,
+        )
+        artifact_paths.update(phase3_write.artifact_paths)
+        summary["embodiment_actuation"] = phase3_write.summary
+        summary.update(phase3_write.artifact_paths)
+        summary.update(
+            {
+                "embodiment_actuation_state_id": phase3_bundle.compilation.state.state_id,
+                "embodiment_actuation_authority_level": phase3_bundle.compilation.state.authority_level,
+                "embodiment_actuation_safety_status": phase3_bundle.compilation.state.safety_envelope.status,
+                "embodiment_actuation_action_feasibility_score": (
+                    phase3_bundle.compilation.state.action_proposal_bundle.action_feasibility_score
+                ),
+                "embodiment_actuation_retargeting_readiness_score": (
+                    phase3_bundle.compilation.state.inverse_retarget_trace.readiness_score
+                ),
+                "embodiment_phase34_row_count": len(phase3_bundle.training_rows),
+                "embodiment_phase34_promotion_eligible": (
+                    phase3_bundle.training_manifest.promotion_eligible
+                ),
+            }
+        )
+        metrics.update(
+            {
+                "embodiment_actuation_action_feasibility_score": (
+                    phase3_bundle.compilation.state.action_proposal_bundle.action_feasibility_score
+                ),
+                "embodiment_actuation_retargeting_readiness_score": (
+                    phase3_bundle.compilation.state.inverse_retarget_trace.readiness_score
+                ),
+                "embodiment_actuation_drift_score": phase3_bundle.compilation.state.drift_summary.drift_score,
+                "embodiment_actuation_authority_level": phase3_bundle.compilation.state.authority_level,
+            }
+        )
 
         _update_episode_metadata(episode_dir, metrics, artifact_paths, summary)
         summaries.append(summary)

@@ -16,6 +16,25 @@ def embodiment_profile_from_summary(
     artifact_paths = artifact_paths or {}
     cost_summary = cost_breakdown.get("episode") if isinstance(cost_breakdown, dict) else None
     value_summary = value_attribution.get("totals") if isinstance(value_attribution, dict) else None
+    diagnostics = dict(summary.get("diagnostics") or {})
+    phase3_refs = {
+        key: artifact_paths.get(key) or summary.get(key)
+        for key in (
+            "embodiment_actuation_state_path",
+            "embodiment_actuation_receipts_path",
+            "embodiment_actuation_consumers_path",
+            "embodiment_phase34_training_rows_path",
+            "embodiment_phase34_training_manifest_path",
+            "embodiment_neural_architecture_manifest_path",
+            "embodiment_morphology_profile_path",
+            "embodiment_morphology_receipts_path",
+        )
+        if artifact_paths.get(key) or summary.get(key)
+    }
+    if phase3_refs:
+        diagnostics["embodiment_actuation_artifact_refs"] = phase3_refs
+    if isinstance(summary.get("embodiment_actuation"), dict):
+        diagnostics["embodiment_actuation"] = summary["embodiment_actuation"]
 
     return EmbodimentProfileSummary(
         w_embodiment=float(summary.get("w_embodiment", 1.0)),
@@ -33,9 +52,19 @@ def embodiment_profile_from_summary(
         drift_report_json=artifact_paths.get("drift_report_path"),
         calibration_targets_json=artifact_paths.get("calibration_targets_path"),
         summary_jsonl=artifact_paths.get("summary_jsonl"),
+        embodiment_actuation_state_json=phase3_refs.get("embodiment_actuation_state_path"),
+        embodiment_actuation_receipts_json=phase3_refs.get("embodiment_actuation_receipts_path"),
+        embodiment_actuation_consumers_json=phase3_refs.get("embodiment_actuation_consumers_path"),
+        embodiment_phase34_training_rows_jsonl=phase3_refs.get("embodiment_phase34_training_rows_path"),
+        embodiment_phase34_training_manifest_json=phase3_refs.get("embodiment_phase34_training_manifest_path"),
+        embodiment_neural_architecture_manifest_json=phase3_refs.get(
+            "embodiment_neural_architecture_manifest_path"
+        ),
+        embodiment_morphology_profile_json=phase3_refs.get("embodiment_morphology_profile_path"),
+        embodiment_morphology_receipts_json=phase3_refs.get("embodiment_morphology_receipts_path"),
         cost_summary=cost_summary,
         value_summary=value_summary,
-        diagnostics=summary.get("diagnostics"),
+        diagnostics=diagnostics,
     )
 
 

@@ -97,11 +97,14 @@ Concrete end-state capabilities:
 | GR00T-shaped native loop sockets | Structurally wired as teacher/student-adjacent state and receipt surfaces: deploy observation, action-space validation, inverse retarget trace, action proposal bundle, transfer receipt, and promotion gate posture |
 | G1 morphology / action-space evidence | Wired as typed morphology profiles, public/local evidence receipts, registry-entry conversion, and explicit unresolved latency/watchdog/hardware blockers |
 | Phase 3.4 learned-seam scaffolding | Wired as CPU-runnable local dynamics, inverse-retargeting, action-proposal, and drift/calibration modules plus training-row manifests; no GPU training or promotion claim |
+| Phase 3 local-loop sidecars | Wired through the embodiment runner: canonical state, receipts, consumers, training rows, morphology receipts, and neural architecture manifests are emitted per local episode |
+| OSS-inspired neural architecture scaffolds | Wired as CPU-forward JEPA-style, ACT-style, Diffusion Policy-style, and topology-contrastive model skeletons with explicit promotion blockers |
 
 ## What is not wired yet
 
 - No native GR00T training loop is imported or owned.
 - No privileged-teacher to deploy-student training loop has been run.
+- No JEPA/ACT/Diffusion/TD-MPC-style architecture has been trained or benchmark-promoted; current modules are shape/proof-of-life scaffolds only.
 - No full native Holosoma simulated episode has been promoted.
 - No Isaac / Unitree runtime execution has been validated.
 - No G1 hardware calibration, latency, watchdog, or drift evidence exists.

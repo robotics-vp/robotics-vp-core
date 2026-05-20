@@ -37,6 +37,18 @@ from .neural_seams import (
     encode_state_features,
     smoke_forward_all_seams,
 )
+from .neural_architectures import (
+    ActionChunkingTransformerHead,
+    DiffusionActionDenoiserHead,
+    EmbodimentNeuralArchitectureManifest,
+    EmbodimentNeuralArchitectureSpec,
+    EmbodimentTopologyContrastiveHead,
+    NEURAL_ARCHITECTURE_MANIFEST_VERSION,
+    TemporalJEPALatentPredictor,
+    build_embodiment_neural_architecture_manifest,
+    build_embodiment_neural_architecture_specs,
+    smoke_forward_neural_architectures,
+)
 from .promotion import EmbodimentSeamResolution, resolve_embodiment_seam
 from .provider_contracts import (
     EmbodimentProviderContract,
@@ -44,6 +56,12 @@ from .provider_contracts import (
     holosoma_contract,
     isaac_contract,
     unitree_g1_contract,
+)
+from .sidecars import (
+    EmbodimentActuationSidecarBundle,
+    EmbodimentActuationSidecarWriteResult,
+    build_embodiment_actuation_sidecar_bundle,
+    write_embodiment_actuation_sidecars,
 )
 from .training_corpus import (
     EmbodimentSeamTrainingRow,
@@ -91,22 +109,32 @@ from .state import (
 
 __all__ = [
     "ActionProposalSeam",
+    "ActionChunkingTransformerHead",
+    "DiffusionActionDenoiserHead",
     "DriftCalibrationSeam",
+    "EmbodimentNeuralArchitectureManifest",
+    "EmbodimentNeuralArchitectureSpec",
     "EmbodimentSeamTrainingRow",
     "EmbodimentTrainingManifest",
+    "EmbodimentTopologyContrastiveHead",
     "G1MorphologyProfile",
     "InverseRetargetingSeam",
     "LocalContactDynamicsSeam",
     "MorphologyEvidenceReceipt",
     "MorphologyJointSpec",
     "SeamForwardResult",
+    "TemporalJEPALatentPredictor",
+    "NEURAL_ARCHITECTURE_MANIFEST_VERSION",
     "build_g1_morphology_profile",
+    "build_embodiment_neural_architecture_manifest",
+    "build_embodiment_neural_architecture_specs",
     "build_phase34_training_manifest",
     "build_phase34_training_rows_from_state",
     "encode_state_features",
     "load_phase34_training_rows_jsonl",
     "scan_unitree_g1_public_evidence",
     "smoke_forward_all_seams",
+    "smoke_forward_neural_architectures",
     "write_phase34_training_rows_jsonl",
     "EMBODIMENT_ACTUATION_WORLD_STATE_VERSION",
     "ActionProposalBundleState",
@@ -124,6 +152,8 @@ __all__ = [
     "EconomicEmbodimentReceiptBundle",
     "EmbodimentActuationCompilationInputs",
     "EmbodimentActuationCompilationResult",
+    "EmbodimentActuationSidecarBundle",
+    "EmbodimentActuationSidecarWriteResult",
     "EmbodimentActuationWorldState",
     "EmbodimentCompilationReceipt",
     "EmbodimentCostReceipt",
@@ -149,6 +179,7 @@ __all__ = [
     "SimEmbodimentTransferContext",
     "SimEmbodimentTransferReceipt",
     "build_economic_embodiment_receipt_bundle",
+    "build_embodiment_actuation_sidecar_bundle",
     "build_perception_embodiment_feedback",
     "build_runtime_adapter_validation_context",
     "build_sim_embodiment_transfer_context",
@@ -158,4 +189,5 @@ __all__ = [
     "isaac_contract",
     "resolve_embodiment_seam",
     "unitree_g1_contract",
+    "write_embodiment_actuation_sidecars",
 ]

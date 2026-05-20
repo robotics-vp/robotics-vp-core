@@ -1,5 +1,25 @@
 # Economic World Model Progress Log
 
+## 2026-05-20 - Phase 3 runner sidecars and neural architecture scaffolding
+
+- **Changed**:
+  - added `src/world_model/embodiment_actuation/sidecars.py`, which materializes canonical Phase 3 state, receipts, shadow consumer payloads, morphology receipts, Phase 3.4 rows, and neural-architecture manifests from the existing local embodiment runner
+  - wired `src/embodiment/runner.py` so normal embodiment extraction now emits Phase 3 sidecars beside `EmbodimentProfile`, affordance, skill, cost, drift, and calibration artifacts
+  - extended `EmbodimentProfileSummary`, datapack validation, and representation-token payloads so Phase 3 refs survive datapack/export paths instead of remaining ambient files
+  - added `src/world_model/embodiment_actuation/neural_architectures.py` with CPU-runnable scaffolds for temporal JEPA-style latent prediction, ACT-style action chunking, Diffusion Policy-style action denoising, and topology-contrastive morphology consistency
+  - extended `scripts/smoke_test_embodiment_phase34.py` so the local smoke writes a neural-architecture manifest and verifies finite CPU forwards for those architecture scaffolds
+  - placed future Phase 3 neural training in `scripts/TRAINING_MIGRATION_BACKLOG.json` as `train_embodiment_phase34_neural_architectures.py`, explicitly blocked on GPU/provider/benchmark/latency evidence
+  - extended runner and Phase 3.4 tests to prove sidecar emission, non-promotional posture, finite neural forward passes, and datapack ref preservation
+- **Why this matters**:
+  - Phase 3 is no longer only callable through isolated tests or smoke scripts; the regular local embodiment loop now leaves canonical WM artifacts and future-training manifests behind each episode
+  - neural work that will eventually need GPU/provider evidence now has concrete local contracts, shapes, blockers, and proof-of-life without pretending training or promotion happened
+  - runtime authority remains `none`; GPU/provider/native-runtime/hardware evidence remains explicitly blocked
+- **Verification**:
+  - `git diff --check && python3 -m ruff check src/world_model/embodiment_actuation src/embodiment/runner.py src/embodiment/datapack_adapter.py src/valuation/datapack_schema.py src/valuation/datapack_validators.py src/representation/token_providers.py tests/test_embodiment_actuation_phase34.py tests/embodiment/test_embodiment_module.py && python3 -m compileall src/world_model/embodiment_actuation src/embodiment src/valuation src/representation tests/test_embodiment_actuation_phase34.py tests/embodiment/test_embodiment_module.py -q && python3 -m pytest tests/test_embodiment_actuation_phase34.py tests/embodiment/test_embodiment_module.py tests/test_embodiment_actuation_world_model.py -q` (`20 passed`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+  - `python3 scripts/smoke_test_embodiment_phase34.py --out-dir artifacts/embodiment_phase34 --variant g1_29dof` (`status: ok`, neural architecture manifest `promotion_eligible=false`)
+  - `python3 -m pytest tests/ -q` (`1662 passed, 2 skipped, 28 warnings`)
+
 ## 2026-05-20 - Phase 3 morphology evidence and 3.4 neural scaffolding
 
 - **Changed**:

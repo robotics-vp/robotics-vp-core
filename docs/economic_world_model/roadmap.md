@@ -547,6 +547,16 @@ seam rows and non-promotional manifests; and
 Promotion remains blocked on GPU/provider/benchmark plus latency/watchdog and
 hardware drift evidence.
 
+**Landed locally on 2026-05-20**: Phase 3 sidecars are now emitted by the normal
+local embodiment runner. Each processed episode can now carry canonical
+Embodiment / Actuation state, receipt, consumer, morphology, Phase 3.4 training
+row, training-manifest, and neural-architecture-manifest refs into metadata and
+datapack surfaces. `neural_architectures.py` also adds CPU-forward JEPA-style,
+ACT-style, Diffusion Policy-style, and topology-contrastive architecture
+scaffolds. These are training-ready shapes and contracts only: promotion remains
+blocked on GPU training, provider/runtime evaluation, benchmark evidence,
+latency/watchdog evidence, and demotion-path tests.
+
 That embodiment-side transfer truth should later include realized post-transfer
 drift, action-feasibility degradation, control-rate / latency mismatch, and
 local recovery posture as typed replay/exportable receipts rather than as

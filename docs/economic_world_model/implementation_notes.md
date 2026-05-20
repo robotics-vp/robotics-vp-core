@@ -1,5 +1,30 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-20 - Phase 3 local-loop sidecars and neural architecture scaffolds
+
+### What changed
+
+- Added `sidecars.py` under `src/world_model/embodiment_actuation/`.
+- The local embodiment runner now writes canonical Phase 3 state/receipt/consumer JSON sidecars, Phase 3.4 JSONL rows, non-promotional training manifests, morphology receipts, and a neural architecture manifest per episode.
+- Added `neural_architectures.py` with four CPU-forward architecture skeletons:
+  - temporal JEPA/action-conditioned latent predictor
+  - ACT-style chunked transformer head
+  - Diffusion Policy-style action denoiser
+  - topology-contrastive morphology consistency head
+- Threaded Phase 3 sidecar refs through `EmbodimentProfileSummary`, datapack validation, and representation-token payloads.
+- Added `train_embodiment_phase34_neural_architectures.py` to `scripts/TRAINING_MIGRATION_BACKLOG.json` as the future GPU/provider-gated trainer for these scaffolds.
+- Extended `scripts/smoke_test_embodiment_phase34.py` to write and verify the neural architecture manifest locally.
+
+### Boundary
+
+This is neural scaffolding, not training. The pass intentionally makes future GPU work concrete by fixing shapes, objectives, sidecar manifests, and promotion blockers. It does not run GPU training, does not import GR00T/V-JEPA/Diffusion Policy/ACT code, does not validate Unitree/Isaac/Holosoma runtime execution, and does not grant runtime authority.
+
+### Verification
+
+- `git diff --check && python3 -m ruff check src/world_model/embodiment_actuation src/embodiment/runner.py src/embodiment/datapack_adapter.py src/valuation/datapack_schema.py src/valuation/datapack_validators.py src/representation/token_providers.py tests/test_embodiment_actuation_phase34.py tests/embodiment/test_embodiment_module.py && python3 -m compileall src/world_model/embodiment_actuation src/embodiment src/valuation src/representation tests/test_embodiment_actuation_phase34.py tests/embodiment/test_embodiment_module.py -q && python3 -m pytest tests/test_embodiment_actuation_phase34.py tests/embodiment/test_embodiment_module.py tests/test_embodiment_actuation_world_model.py -q` -> `20 passed`
+- `python3 scripts/smoke_test_embodiment_phase34.py --out-dir artifacts/embodiment_phase34 --variant g1_29dof` -> `status: ok`, neural architecture manifest `promotion_eligible=false`
+- `python3 -m pytest tests/ -q` -> `1662 passed, 2 skipped, 28 warnings`
+
 ## 2026-05-20 - Phase 3 morphology and 3.4 learned-seam scaffolding
 
 ### What changed

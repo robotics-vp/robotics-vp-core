@@ -904,6 +904,16 @@ def _payload_from_embodiment_summary(summary: Any) -> Optional[Dict[str, Any]]:
             "value_summary": summary.get("value_summary"),
             "drift_score": summary.get("drift_score"),
             "w_embodiment": summary.get("w_embodiment"),
+            "embodiment_actuation_state_json": summary.get("embodiment_actuation_state_json")
+            or summary.get("embodiment_actuation_state_path"),
+            "embodiment_phase34_training_manifest_json": (
+                summary.get("embodiment_phase34_training_manifest_json")
+                or summary.get("embodiment_phase34_training_manifest_path")
+            ),
+            "embodiment_neural_architecture_manifest_json": (
+                summary.get("embodiment_neural_architecture_manifest_json")
+                or summary.get("embodiment_neural_architecture_manifest_path")
+            ),
         }
         return _payload_from_paths(paths)
     # EmbodimentProfileSummary dataclass
@@ -914,6 +924,17 @@ def _payload_from_embodiment_summary(summary: Any) -> Optional[Dict[str, Any]]:
         "value_summary": getattr(summary, "value_summary", None),
         "drift_score": getattr(summary, "drift_score", None),
         "w_embodiment": getattr(summary, "w_embodiment", None),
+        "embodiment_actuation_state_json": getattr(summary, "embodiment_actuation_state_json", None),
+        "embodiment_phase34_training_manifest_json": getattr(
+            summary,
+            "embodiment_phase34_training_manifest_json",
+            None,
+        ),
+        "embodiment_neural_architecture_manifest_json": getattr(
+            summary,
+            "embodiment_neural_architecture_manifest_json",
+            None,
+        ),
     }
     return _payload_from_paths(paths)
 
@@ -929,6 +950,13 @@ def _payload_from_paths(paths: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "value_summary": paths.get("value_summary"),
         "drift_score": paths.get("drift_score"),
         "w_embodiment": paths.get("w_embodiment"),
+        "embodiment_actuation_state_json": paths.get("embodiment_actuation_state_json"),
+        "embodiment_phase34_training_manifest_json": paths.get(
+            "embodiment_phase34_training_manifest_json"
+        ),
+        "embodiment_neural_architecture_manifest_json": paths.get(
+            "embodiment_neural_architecture_manifest_json"
+        ),
     }
     return payload
 

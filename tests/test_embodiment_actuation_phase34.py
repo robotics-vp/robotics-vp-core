@@ -19,10 +19,13 @@ from src.world_model.embodiment_actuation import (
     build_g1_morphology_profile,
     build_phase34_training_manifest,
     build_phase34_training_rows_from_state,
+    build_embodiment_neural_architecture_manifest,
+    build_embodiment_neural_architecture_specs,
     compile_embodiment_actuation_with_receipts,
     load_phase34_training_rows_jsonl,
     scan_unitree_g1_public_evidence,
     smoke_forward_all_seams,
+    smoke_forward_neural_architectures,
     unitree_g1_contract,
     write_phase34_training_rows_jsonl,
 )
@@ -146,6 +149,29 @@ def test_phase34_smoke_forward_all_seams_from_compiled_state() -> None:
     assert summary["action_proposal"]["output_shapes"]["action_chunk"][-1] == 29
 
 
+def test_phase34_neural_architecture_manifest_covers_oss_inspired_shapes() -> None:
+    result = _state()
+    specs = build_embodiment_neural_architecture_specs(result.state)
+    smoke = smoke_forward_neural_architectures(result.state)
+    manifest = build_embodiment_neural_architecture_manifest(
+        result.state,
+        source_refs={"state_id": result.state.state_id},
+    )
+
+    families = {spec.family for spec in specs}
+    assert families == {
+        "temporal_jepa_action_conditioned_predictor",
+        "act_style_chunked_transformer_head",
+        "diffusion_policy_action_denoiser",
+        "embodiment_topology_contrastive_head",
+    }
+    assert all(item["finite"] for item in smoke.values())
+    assert smoke["act_style_chunked_transformer_head"]["output_shapes"]["action_chunk"] == [2, 8, 29]
+    assert manifest.promotion_eligible is False
+    assert "no_gpu_training_run" in manifest.blocker_reasons
+    assert "no_provider_runtime_eval" in manifest.blocker_reasons
+
+
 def test_phase34_smoke_script_writes_rows_and_summary(tmp_path: Path) -> None:
     out_dir = tmp_path / "smoke"
     proc = subprocess.run(
@@ -167,4 +193,7 @@ def test_phase34_smoke_script_writes_rows_and_summary(tmp_path: Path) -> None:
     assert stdout["status"] == "ok"
     assert summary["status"] == "ok"
     assert summary["training_manifest"]["promotion_eligible"] is False
+    assert summary["neural_architecture_manifest"]["promotion_eligible"] is False
+    assert summary["neural_architecture_smoke"]["temporal_jepa_action_conditioned_predictor"]["finite"] is True
     assert (out_dir / "phase34_training_rows.jsonl").exists()
+    assert (out_dir / "phase34_neural_architecture_manifest.json").exists()

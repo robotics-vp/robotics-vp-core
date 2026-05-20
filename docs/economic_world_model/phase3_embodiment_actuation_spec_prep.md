@@ -235,3 +235,22 @@ Phase 3.4 is now structurally live as CPU-runnable scaffolding:
 This is not a training claim. The point is to make the 3.4 learned path real
 enough that the future GPU/provider season is blocked by data, benchmark, and
 calibration evidence rather than missing local structure.
+
+## Implementation status — 2026-05-20, local-loop sidecars and neural architecture pass
+
+The normal local embodiment runner now materializes Phase 3 outputs rather than
+leaving the package as a callable-only substrate:
+
+- canonical `EmbodimentActuationWorldState` JSON sidecars
+- Phase 3 receipt JSON sidecars
+- Sim/Synth, Perception, Runtime, and Economic consumer JSON sidecars
+- G1 morphology profile and morphology-receipt sidecars when Unitree/G1 tags are visible
+- Phase 3.4 training rows and non-promotional manifests
+- neural architecture manifests with CPU-forward smoke results
+
+`neural_architectures.py` adds four future-training scaffolds: temporal
+JEPA-style action-conditioned latent prediction, ACT-style chunked transformer
+action proposal, Diffusion Policy-style action denoising, and a topology-
+contrastive morphology consistency head. These are shape/contract/proof-of-life
+modules only. Promotion remains blocked on GPU training, provider runtime eval,
+benchmarks, latency/watchdog evidence, and demotion-path tests.

@@ -441,6 +441,14 @@ class EmbodimentProfileSummary:
     drift_report_json: Optional[str] = None
     calibration_targets_json: Optional[str] = None
     summary_jsonl: Optional[str] = None
+    embodiment_actuation_state_json: Optional[str] = None
+    embodiment_actuation_receipts_json: Optional[str] = None
+    embodiment_actuation_consumers_json: Optional[str] = None
+    embodiment_phase34_training_rows_jsonl: Optional[str] = None
+    embodiment_phase34_training_manifest_json: Optional[str] = None
+    embodiment_neural_architecture_manifest_json: Optional[str] = None
+    embodiment_morphology_profile_json: Optional[str] = None
+    embodiment_morphology_receipts_json: Optional[str] = None
 
     # Compact summaries for quick filters
     cost_summary: Optional[Dict[str, Any]] = None
