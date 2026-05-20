@@ -9,6 +9,7 @@
   - added `src/world_model/embodiment_actuation/neural_architectures.py` with CPU-runnable scaffolds for temporal JEPA-style latent prediction, ACT-style action chunking, Diffusion Policy-style action denoising, and topology-contrastive morphology consistency
   - extended `scripts/smoke_test_embodiment_phase34.py` so the local smoke writes a neural-architecture manifest and verifies finite CPU forwards for those architecture scaffolds
   - placed future Phase 3 neural training in `scripts/TRAINING_MIGRATION_BACKLOG.json` as `train_embodiment_phase34_neural_architectures.py`, explicitly blocked on GPU/provider/benchmark/latency evidence
+  - added `docs/economic_world_model/phase3_closure_assessment.md`, classifying Phase 3 as locally structurally closed under the current no-GPU/provider constraint
   - extended runner and Phase 3.4 tests to prove sidecar emission, non-promotional posture, finite neural forward passes, and datapack ref preservation
 - **Why this matters**:
   - Phase 3 is no longer only callable through isolated tests or smoke scripts; the regular local embodiment loop now leaves canonical WM artifacts and future-training manifests behind each episode

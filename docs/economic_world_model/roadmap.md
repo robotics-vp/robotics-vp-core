@@ -557,6 +557,11 @@ scaffolds. These are training-ready shapes and contracts only: promotion remains
 blocked on GPU training, provider/runtime evaluation, benchmark evidence,
 latency/watchdog evidence, and demotion-path tests.
 
+Phase 3 local closure is recorded in
+`docs/economic_world_model/phase3_closure_assessment.md`: under the current
+no-GPU/provider constraint, the remaining Phase 3 blockers are external
+evidence gates rather than known local substrate debt.
+
 That embodiment-side transfer truth should later include realized post-transfer
 drift, action-feasibility degradation, control-rate / latency mismatch, and
 local recovery posture as typed replay/exportable receipts rather than as

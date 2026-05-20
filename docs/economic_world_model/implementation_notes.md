@@ -14,6 +14,7 @@
 - Threaded Phase 3 sidecar refs through `EmbodimentProfileSummary`, datapack validation, and representation-token payloads.
 - Added `train_embodiment_phase34_neural_architectures.py` to `scripts/TRAINING_MIGRATION_BACKLOG.json` as the future GPU/provider-gated trainer for these scaffolds.
 - Extended `scripts/smoke_test_embodiment_phase34.py` to write and verify the neural architecture manifest locally.
+- Added `docs/economic_world_model/phase3_closure_assessment.md` to separate local structural closure from external GPU/provider/hardware evidence gates.
 
 ### Boundary
 
