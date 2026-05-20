@@ -93,6 +93,8 @@ Concrete end-state capabilities:
 | Runtime adapter contracts | Wired as `ActionAdapterV2` and `ObservationAdapterV2` with schema, timing, translator, and embodiment references |
 | Embodiment advisory artifacts | Wired through current `compute_embodiment(...)` outputs: profile, affordance graph, skill segments, cost, value attribution, drift, and calibration targets |
 | Cross-WM shadow inputs | Wired through Perception's embodiment shadow consumer and Sim/Synth's embodiment input adapter |
+| Embodiment / Actuation canonical WM substrate | Wired as `src/world_model/embodiment_actuation/`: canonical state contracts, receipts, provider contracts, promotion posture, shadow compiler, and first shadow consumers |
+| GR00T-shaped native loop sockets | Structurally wired as teacher/student-adjacent state and receipt surfaces: deploy observation, action-space validation, inverse retarget trace, action proposal bundle, transfer receipt, and promotion gate posture |
 
 ## What is not wired yet
 
@@ -102,7 +104,8 @@ Concrete end-state capabilities:
 - No Isaac / Unitree runtime execution has been validated.
 - No G1 hardware calibration, latency, watchdog, or drift evidence exists.
 - No policy checkpoint or ONNX artifact is benchmark-promoted.
-- No Embodiment / Actuation canonical world-state compiler exists yet.
+- No Embodiment / Actuation output has runtime authority; the compiler and
+  consumers are shadow/advisory only.
 
 ## Borrow / adapt / ignore
 

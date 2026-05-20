@@ -1,5 +1,24 @@
 # Economic World Model Progress Log
 
+## 2026-05-20 - Phase 3.1-3.3 Embodiment / Actuation WM shadow substrate
+
+- **Changed**:
+  - added `src/world_model/embodiment_actuation/` with canonical Phase 3 state contracts, receipt contracts, provider/runtime contracts, promotion posture, a shadow compiler, and shadow downstream consumers
+  - compiler now builds `EmbodimentActuationWorldState` from existing advisory embodiment artifacts, registry entries, `ActionAdapterV2`, `ObservationAdapterV2`, Perception embodiment-shadow surfaces, provider contracts, optional joint state, and source refs
+  - receipt family now covers compilation, capability profile, action-space validation, observation interface, contact/affordance, local dynamics, inverse retargeting, action proposal, safety envelope, drift, calibration, cost, and Sim↔Embodiment transfer
+  - downstream consumers now emit shadow-only Sim/Synth transfer context, Perception feedback, Runtime adapter validation, and Economic receipt bundles
+  - extended Sim/Synth embodiment-input normalization to preserve Phase 3 action feasibility, retarget readiness, drift, safety status, and authority level
+  - added `tests/test_embodiment_actuation_world_model.py` covering permissive missing-data posture, receipt completeness, provider-honesty, shadow consumers, and seam promotion gating
+- **Why this matters**:
+  - Phase 3 is now code-real through 3.3 without requiring GPUs, provider bring-up, GR00T import, or hardware claims
+  - the GR00T-inspired lane now has a native socket for teacher/student, action-space hygiene, transfer receipts, and promotion gates instead of a foreign execution island
+  - runtime authority remains explicitly `none`; safety/latency/watchdog evidence remains external when not provided
+- **Verification**:
+  - `git diff --check && python3 -m ruff check src/world_model/embodiment_actuation src/world_model/sim_synth_physics/adapters/embodiment_inputs.py tests/test_embodiment_actuation_world_model.py && python3 -m compileall src/ tests/test_embodiment_actuation_world_model.py -q && python3 -m pytest tests/test_embodiment_actuation_world_model.py tests/embodiment/test_embodiment_module.py tests/test_embodiment_shadow_consumer.py tests/test_sim_synth_phase1x_subsystems.py -q` (`36 passed`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+  - `python3 -m pytest tests/ -q` (`1654 passed, 2 skipped, 24 warnings`)
+
+
 ## 2026-05-19 - Phase 1.x closure assessment and Phase 3 spec prep
 
 - **Changed**:

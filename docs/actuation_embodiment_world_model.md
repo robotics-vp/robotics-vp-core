@@ -1085,6 +1085,13 @@ defines the proposed first canonical state contracts, receipt family, shadow
 compiler posture, and acceptance gates to use once the Phase 1.x closure
 assessment is accepted.
 
+2026-05-20 update: the first implementation pass is live in
+`src/world_model/embodiment_actuation/`, covering Phase 3.1 through 3.3:
+canonical state contracts, receipts, provider/runtime contracts, promotion
+posture, a shadow compiler, and first shadow downstream consumers. It remains
+advisory: no runtime authority, no provider/GPU claims, and no GR00T/Isaac
+ontology import.
+
 When the implementation priority shifts to the Embodiment / Actuation WM,
 the first tranches should follow the repo's established pattern:
 

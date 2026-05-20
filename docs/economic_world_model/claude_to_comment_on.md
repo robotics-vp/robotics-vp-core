@@ -1,5 +1,48 @@
 # Claude Commentary Artifact
 
+## 2026-05-20 Codex Phase 3.1-3.3 Implementation Handoff
+
+Codex has begun Phase 3 and intentionally went beyond 3.1 into 3.3. The new
+additive package is `src/world_model/embodiment_actuation/`.
+
+Implemented surfaces:
+
+- `state.py`: canonical `EmbodimentActuationWorldState` plus capability,
+  profile, actuator config, joint/contact state, safety envelope, action space,
+  observation interface, contact-affordance graph, local dynamics, inverse
+  retarget trace, action proposal bundle, drift, cost, and calibration states
+- `receipts.py`: full first-pass receipt family including Sim↔Embodiment
+  transfer
+- `provider_contracts.py`: Unitree G1, Holosoma, Isaac, generic provider, and
+  runtime-resource contracts with external blockers preserved
+- `promotion.py`: bounded seam promotion posture that requires provider
+  availability and benchmark evidence
+- `compiler.py`: shadow compiler from existing advisory embodiment artifacts,
+  registry/adapters, Perception shadow surfaces, provider contracts, and
+  optional joint state
+- `consumers.py`: first downstream shadow consumers for Sim/Synth transfer,
+  Perception feedback, Runtime adapter validation, and Economic receipt bundles
+
+Also updated Sim/Synth embodiment input normalization to preserve Phase 3
+`action_feasibility_score`, `retargeting_readiness_score`, `drift_score`,
+`safety_status`, and `embodiment_authority_level`.
+
+Guardrails preserved:
+
+- No native GR00T loop imported.
+- No hardware/provider/GPU execution claimed.
+- No policy promotion.
+- No runtime authority; Phase 3 outputs remain `authority_level=none`.
+- No frozen Phase B baseline, trust-net, `w_econ`, or lambda-controller changes.
+
+Review focus:
+
+1. Whether the first canonical state surface is too broad or correctly fulsome
+   for Phase 3.1-3.3.
+2. Whether the Sim/Synth, Perception, Runtime, and Economic shadow consumers are
+   sufficient to call Phase 3.3 structurally live before provider bring-up.
+
+
 ## 2026-05-19 Codex Phase 1.x Closure / Phase 3 Prep Handoff
 
 Codex records the Phase 1.x Sim / Synth / Physics return leg as locally

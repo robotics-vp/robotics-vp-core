@@ -194,3 +194,26 @@ small additive tranche:
 2. add a shadow `compiler.py` that consumes existing advisory artifacts
 3. add tests for missing-data posture, receipt emission, and no-runtime-authority
 4. update roadmap/progress docs with exact verification evidence
+
+## Implementation status — 2026-05-20
+
+Phase 3.1 through 3.3 are now implemented as an additive shadow substrate:
+
+- `state.py`: canonical `EmbodimentActuationWorldState` and all first-pass
+  subsystem state surfaces
+- `receipts.py`: compilation, capability, action-space, observation-interface,
+  contact/affordance, local-dynamics, inverse-retarget, action-proposal,
+  safety, drift, calibration, cost, and Sim↔Embodiment transfer receipts
+- `provider_contracts.py`: Unitree G1, Holosoma, Isaac, generic provider, and
+  runtime-resource contract surfaces that keep external evidence explicit
+- `promotion.py`: bounded seam promotion posture for local dynamics, inverse
+  retargeting, action proposal, and drift/calibration seams
+- `compiler.py`: shadow compiler from existing advisory embodiment artifacts,
+  registry/adapters, Perception shadow surfaces, provider contracts, and
+  optional joint state
+- `consumers.py`: first shadow consumers for Sim/Synth transfer, Perception
+  feedback, Runtime adapter validation, and Economic receipt bundles
+- `tests/test_embodiment_actuation_world_model.py`: focused regression coverage
+
+Still deferred: provider execution, GPU-backed training, hardware calibration,
+native GR00T loops, policy promotion, and any runtime authority.

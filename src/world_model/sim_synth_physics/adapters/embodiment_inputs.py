@@ -40,4 +40,9 @@ def build_embodiment_input_context(
         "contact_risk_score": clip01(
             payload.get("contact_risk_score", control_constraints.get("contact_risk_score", 0.0))
         ),
+        "action_feasibility_score": clip01(payload.get("action_feasibility_score", 0.0)),
+        "retargeting_readiness_score": clip01(payload.get("retargeting_readiness_score", 0.0)),
+        "drift_score": clip01(payload.get("drift_score", 0.0)),
+        "safety_status": str(payload.get("safety_status", "unknown")),
+        "embodiment_authority_level": str(payload.get("authority_level", "none")),
     }

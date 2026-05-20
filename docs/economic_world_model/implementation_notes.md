@@ -1,5 +1,39 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-20 - Phase 3.1-3.3 Embodiment / Actuation implementation
+
+### What changed
+
+- Added the additive `src/world_model/embodiment_actuation/` package.
+- Added canonical state contracts in `state.py` for capability, embodiment profile, actuator configuration, joint state, contact state, safety envelope, action space, observation interface, contact/affordance graph, local dynamics forecast, inverse retarget trace, action proposal bundle, drift, cost, and calibration targets.
+- Added receipt contracts in `receipts.py` for every Phase 3.1 minimum receipt plus Sim↔Embodiment transfer.
+- Added provider/runtime contracts in `provider_contracts.py` for Unitree G1, Holosoma, Isaac, and generic Embodiment providers without requiring those providers to be executable.
+- Added promotion posture in `promotion.py`; learned seams remain blocked unless posture, provider availability, and benchmark signals justify execution.
+- Added a shadow compiler in `compiler.py` and first downstream consumers in `consumers.py`.
+- Extended `src/world_model/sim_synth_physics/adapters/embodiment_inputs.py` to preserve Phase 3 transfer scores and authority posture.
+
+### Phase coverage
+
+- **3.1**: canonical state and receipts are live.
+- **3.2**: shadow compiler consumes existing advisory embodiment artifacts, registry/adapters, Perception shadow surfaces, Sim/provider refs, and optional joint state.
+- **3.3**: first shadow downstream consumers are live for Sim/Synth, Perception, Runtime validation, and Economic receipt ingest.
+
+### Guardrails preserved
+
+- No native GR00T import.
+- No hardware deployment.
+- No provider/GPU claims.
+- No policy promotion.
+- No changes to frozen Phase B baseline math, trust-net, `w_econ`, or lambda controller paths.
+- All runtime-facing outputs remain `authority_level=none` unless a later explicit promotion tranche changes that.
+
+### Verification
+
+- `git diff --check && python3 -m ruff check src/world_model/embodiment_actuation src/world_model/sim_synth_physics/adapters/embodiment_inputs.py tests/test_embodiment_actuation_world_model.py && python3 -m compileall src/ tests/test_embodiment_actuation_world_model.py -q && python3 -m pytest tests/test_embodiment_actuation_world_model.py tests/embodiment/test_embodiment_module.py tests/test_embodiment_shadow_consumer.py tests/test_sim_synth_phase1x_subsystems.py -q` -> `36 passed`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+- `python3 -m pytest tests/ -q` -> `1654 passed, 2 skipped, 24 warnings`
+
+
 ## 2026-05-19 - Phase 1.x closure sheet and Phase 3 prep artifacts
 
 ### What changed

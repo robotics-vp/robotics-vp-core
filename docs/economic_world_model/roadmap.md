@@ -528,6 +528,15 @@ state, and transfer/calibration receipts; Embodiment owns remap/retarget,
 capability filtering, and deployment-side adaptation. Later transport work
 should consume those typed surfaces rather than becoming their first owner.
 
+**Landed locally on 2026-05-20**: Phase 3.1-3.3 now has an additive native
+package at `src/world_model/embodiment_actuation/`. The package defines the
+canonical state family, full initial receipt family, provider/runtime
+contracts, promotion posture, a shadow compiler, and first shadow consumers for
+Sim/Synth transfer, Perception feedback, Runtime adapter validation, and
+Economic receipt ingest. This is structural/shadow runtime work only:
+`authority_level` remains `none`, provider/GPU/hardware claims remain external,
+and no GR00T/Isaac ontology is imported.
+
 That embodiment-side transfer truth should later include realized post-transfer
 drift, action-feasibility degradation, control-rate / latency mismatch, and
 local recovery posture as typed replay/exportable receipts rather than as
