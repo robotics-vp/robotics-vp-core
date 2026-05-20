@@ -1432,11 +1432,13 @@ Suggested weekly WM order for the first training season:
 
 ## Active Autonomous Priority Order
 
+The current local stage is the **Post-Phase-3 / Pre-Economic-WM Integration Stage**; see `docs/economic_world_model/pre_economic_wm_integration_stage.md`.
+
 The next autonomous passes should consume the video-world-model subset in this order:
 
 1. Deepen real-video grounding with non-stub SceneTracks adapters, richer calibration metadata, and stronger reconstruction joins in the live Stage-1 path.
-2. Keep teacher-runtime hardening live by pushing explicit contract/action fallback semantics through every remaining real-video or ingestion boundary, not just rollout labeling.
-3. Export governed supervision artifacts cleanly into replay and dataset-bridge paths so Stage-1 outputs are directly trainable later.
+2. Keep teacher-runtime hardening live by pushing explicit contract/action fallback semantics through every remaining real-video or ingestion boundary, not just rollout labeling. **Landed locally on 2026-05-20** for Stage-1 teacher contract/action/trace sidecars, including unavailable fallback sidecars.
+3. Export governed supervision artifacts cleanly into replay and dataset-bridge paths so Stage-1 outputs are directly trainable later. **Landed locally on 2026-05-20** for governed-video admission replay import plus RLDS/LeRobot bridge export preserving internal sidecar refs.
 4. Test and smoke coverage that proves the new refs and sidecars persist end to end in live loops.
 5. Only after those land cleanly, refresh the training backlog and consider `train_governed_video_world_model.py`.
 

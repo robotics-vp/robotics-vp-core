@@ -1,5 +1,24 @@
 # Economic World Model Progress Log
 
+## 2026-05-20 - Pre-Economic-WM Stage-1 replay/export integration
+
+- **Changed**:
+  - added `docs/economic_world_model/pre_economic_wm_integration_stage.md` to name the current stage and list the gates before Economic WM work begins
+  - `scripts/run_stage1_pipeline.py` now emits explicit teacher-runtime contract, action-envelope, and teacher-trace sidecars for every Stage-1 video, including unavailable/fallback cases
+  - Stage-1 reconstruction sidecars no longer fabricate calibration refs when the manifest does not provide them; missing calibration is represented as low-confidence calibration evidence
+  - governed-video admission preconditions now require the teacher sidecars alongside reconstruction, runtime packet, event spine, governance, counterfactual, and value-target refs
+  - replay import/discovery now preserves reconstruction, branch-evaluation, teacher-contract, teacher-action, and teacher-trace refs
+  - added `scripts/export_governed_video_stage1_bridges.py` to export Stage-1 governed-video admission logs into canonical replay plus lossy RLDS and LeRobot rows that preserve internal sidecar refs
+- **Why this matters**:
+  - this moves the stack into a concrete pre-Economic-WM integration stage: lower-WM evidence is becoming replayable/exportable supervision rather than loose files
+  - teacher fallback, missing calibration, and shadow-only benchmark status are typed and inspectable instead of silently treated as production truth
+  - Economic WM can start later against packet/evidence/governance/value/dataset surfaces, not bespoke joins
+- **Verification**:
+  - `python3 -m compileall scripts/run_stage1_pipeline.py scripts/export_governed_video_stage1_bridges.py src/replay/importers.py src/replay/preconditions.py src/replay/ingest.py src/dataset_bridges/sidecar_refs.py -q`
+  - `python3 -m pytest -q tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py tests/test_dataset_bridges.py tests/test_teacher_runtime.py tests/test_four_d_reconstruction.py` (`19 passed, 5 warnings`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+  - `python3 -m pytest tests/ -q` (`1663 passed, 2 skipped, 29 warnings`)
+
 ## 2026-05-20 - Phase 3 runner sidecars and neural architecture scaffolding
 
 - **Changed**:

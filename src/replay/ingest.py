@@ -1,4 +1,5 @@
 """Replay ingestion adapters for shadow artifacts and workcell episode logs."""
+
 from __future__ import annotations
 
 import json
@@ -50,7 +51,12 @@ def ingest_shadow_run(
     run_dir: str | Path,
     *,
     pricing_policy_path: str | Path = "config/pricing/default.yaml",
-) -> Tuple[List[ReplayEpisodeRecord], List[ReplayStepRecord], List[ReplayWindowRecord], Dict[str, Any]]:
+) -> Tuple[
+    List[ReplayEpisodeRecord],
+    List[ReplayStepRecord],
+    List[ReplayWindowRecord],
+    Dict[str, Any],
+]:
     """Ingest a shadow control-plane run into canonical replay records."""
 
     root = Path(run_dir)
@@ -68,9 +74,15 @@ def ingest_shadow_run(
     runtime_packet_path = root / "runtime_packets.json"
     event_spine_path = root / "event_spine.json"
     decision_ledger_path = root / "decision_ledger.json"
-    runtime_packet_payload = _load_json(runtime_packet_path) if runtime_packet_path.exists() else {}
-    event_spine_payload = _load_json(event_spine_path) if event_spine_path.exists() else {}
-    decision_ledger_payload = _load_json(decision_ledger_path) if decision_ledger_path.exists() else {}
+    runtime_packet_payload = (
+        _load_json(runtime_packet_path) if runtime_packet_path.exists() else {}
+    )
+    event_spine_payload = (
+        _load_json(event_spine_path) if event_spine_path.exists() else {}
+    )
+    decision_ledger_payload = (
+        _load_json(decision_ledger_path) if decision_ledger_path.exists() else {}
+    )
 
     objective_by_episode = {
         str(row.get("episode_id")): dict(row.get("objective_tensor", {}))
@@ -89,9 +101,13 @@ def ingest_shadow_run(
         episode_id = str(row.get("episode_id"))
         window = dict(row.get("window", {}) or {})
         window_id = str(window.get("window_id", ""))
-        econ_windows_by_episode[episode_id][window_id] = dict(row.get("econ_tensor", {}))
+        econ_windows_by_episode[episode_id][window_id] = dict(
+            row.get("econ_tensor", {})
+        )
     flags_by_episode = {
-        str(row.get("episode_id")): [dict(flag) for flag in list(row.get("flags", []) or [])]
+        str(row.get("episode_id")): [
+            dict(flag) for flag in list(row.get("flags", []) or [])
+        ]
         for row in list(flags_payload.get("episodes", []) or [])
     }
     datapack_by_episode = {
@@ -117,7 +133,9 @@ def ingest_shadow_run(
             packet = RuntimePacket.from_dict(packet_payload)
             if packet.episode_id:
                 runtime_packets_by_episode[packet.episode_id] = packet
-    runtime_packet_ref = runtime_packet_path.name if runtime_packets_by_episode else None
+    runtime_packet_ref = (
+        runtime_packet_path.name if runtime_packets_by_episode else None
+    )
     events_by_episode: Dict[str, List[RuntimeEvent]] = defaultdict(list)
     if isinstance(event_spine_payload, Mapping):
         for row in list(event_spine_payload.get("events", []) or []):
@@ -151,17 +169,24 @@ def ingest_shadow_run(
             pricing_by_episode.get(episode_id, []),
             key=lambda row: (str(row.get("mode", "")), str(row.get("tick_id", ""))),
         )
-        episode_pricing = next((row for row in pricing_ticks if row.get("mode") == "episode"), {})
+        episode_pricing = next(
+            (row for row in pricing_ticks if row.get("mode") == "episode"), {}
+        )
         datapack_summary = datapack_by_episode.get(episode_id, {})
         regal_summary = regal_by_episode.get(episode_id, {})
         step_traces = {
             int(row.get("step", index)): dict(row)
-            for index, row in enumerate(list(trace_payload.get("step_traces", []) or []))
+            for index, row in enumerate(
+                list(trace_payload.get("step_traces", []) or [])
+            )
         }
         episode_log = dict(trace_payload.get("episode_log", {}) or {})
         trajectory = list(episode_log.get("trajectory", []) or [])
         runtime_packet = runtime_packets_by_episode.get(episode_id)
-        episode_events = sorted(events_by_episode.get(episode_id, []), key=lambda row: (row.sequence_idx, row.event_id))
+        episode_events = sorted(
+            events_by_episode.get(episode_id, []),
+            key=lambda row: (row.sequence_idx, row.event_id),
+        )
         episode_decisions = sorted(
             decisions_by_episode.get(episode_id, []),
             key=lambda row: (row.sequence_idx, row.decision_id),
@@ -169,9 +194,18 @@ def ingest_shadow_run(
         seed = int(runtime_record.get("seed", 0))
         task_id = str(trace_payload.get("task_id", runtime_record.get("task_id", "")))
         env_id = str(trace_payload.get("env_id", runtime_record.get("env_id", "")))
-        source_domain = str(trace_payload.get("source_domain", runtime_record.get("source_domain", SourceDomain.REPLAY.value)))
-        started_at = str(trace_payload.get("started_at", runtime_record.get("timestamp", "")))
-        ended_at = str(trace_payload.get("ended_at", runtime_record.get("timestamp", "")))
+        source_domain = str(
+            trace_payload.get(
+                "source_domain",
+                runtime_record.get("source_domain", SourceDomain.REPLAY.value),
+            )
+        )
+        started_at = str(
+            trace_payload.get("started_at", runtime_record.get("timestamp", ""))
+        )
+        ended_at = str(
+            trace_payload.get("ended_at", runtime_record.get("timestamp", ""))
+        )
 
         episode_condition = build_shadow_condition_vector(
             condition_builder=condition_builder,
@@ -183,11 +217,24 @@ def ingest_shadow_run(
             constraint_flags=constraint_flags,
             semantic_tags=_extract_semantic_tags(runtime_record),
             objective_profile_id=str(episode_pricing.get("objective_profile_id", "")),
-            uncertainty=float(episode_pricing.get("metadata", {}).get("uncertainty", runtime_record.get("telemetry", {}).get("uncertainty", 0.0))),
-            trust_score=float(episode_pricing.get("confidence", runtime_record.get("telemetry", {}).get("trust_score", 1.0))),
+            uncertainty=float(
+                episode_pricing.get("metadata", {}).get(
+                    "uncertainty",
+                    runtime_record.get("telemetry", {}).get("uncertainty", 0.0),
+                )
+            ),
+            trust_score=float(
+                episode_pricing.get(
+                    "confidence",
+                    runtime_record.get("telemetry", {}).get("trust_score", 1.0),
+                )
+            ),
             episode_step=0,
         )
-        ledger_event_ids = [str(row.get("ledger_event_id")) for row in ledger_by_episode.get(episode_id, [])]
+        ledger_event_ids = [
+            str(row.get("ledger_event_id"))
+            for row in ledger_by_episode.get(episode_id, [])
+        ]
 
         episodes.append(
             ReplayEpisodeRecord(
@@ -201,10 +248,14 @@ def ingest_shadow_run(
                 started_at=started_at,
                 ended_at=ended_at,
                 total_steps=len(trajectory),
-                total_reward=float(runtime_record.get("episode_metrics", {}).get("reward_total", 0.0)),
+                total_reward=float(
+                    runtime_record.get("episode_metrics", {}).get("reward_total", 0.0)
+                ),
                 skill_mode=episode_condition.skill_mode,
                 condition_vector=episode_condition.to_dict(),
-                condition_vector_values=[float(value) for value in episode_condition.to_vector().tolist()],
+                condition_vector_values=[
+                    float(value) for value in episode_condition.to_vector().tolist()
+                ],
                 objective_tensor_summary=objective_summary,
                 objective_tensor_ref="objective_tensor.json",
                 econ_tensor_summary=econ_summary,
@@ -219,12 +270,20 @@ def ingest_shadow_run(
                     "objective_profile_id": episode_pricing.get("objective_profile_id"),
                     "runtime_record_hash": sha256_json(runtime_record),
                     "trace_hash": sha256_json(trace_payload),
-                    "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
-                    "contract_id": runtime_packet.contract.contract_id if runtime_packet else None,
+                    "runtime_packet_id": runtime_packet.packet_id
+                    if runtime_packet
+                    else None,
+                    "contract_id": runtime_packet.contract.contract_id
+                    if runtime_packet
+                    else None,
                     "event_refs": [event.event_id for event in episode_events],
-                    "decision_refs": [decision.decision_id for decision in episode_decisions],
+                    "decision_refs": [
+                        decision.decision_id for decision in episode_decisions
+                    ],
                     "event_kinds": [event.event_kind for event in episode_events],
-                    "decision_kinds": [decision.decision_kind for decision in episode_decisions],
+                    "decision_kinds": [
+                        decision.decision_kind for decision in episode_decisions
+                    ],
                 },
                 provenance={
                     "source_adapter": "shadow_control_plane_artifacts_v1",
@@ -233,7 +292,9 @@ def ingest_shadow_run(
                     "objective_tensor_ref": "objective_tensor.json",
                     "econ_tensor_ref": "econ_tensor.json",
                     "runtime_packet_ref": runtime_packet_ref,
-                    "runtime_packet_hash": sha256_json(runtime_packet.to_dict()) if runtime_packet else None,
+                    "runtime_packet_hash": sha256_json(runtime_packet.to_dict())
+                    if runtime_packet
+                    else None,
                     "event_spine_ref": event_spine_ref,
                     "decision_ledger_ref": decision_ledger_ref,
                 },
@@ -254,17 +315,30 @@ def ingest_shadow_run(
                 econ_summary=econ_summary,
                 constraint_flags=constraint_flags,
                 semantic_tags=_extract_semantic_tags(runtime_record),
-                objective_profile_id=str(episode_pricing.get("objective_profile_id", "")),
-                uncertainty=float(step_trace.get("task_state", {}).get("constraint_error", episode_pricing.get("metadata", {}).get("uncertainty", 0.0))),
-                trust_score=float(runtime_record.get("telemetry", {}).get("trust_score", 1.0)),
+                objective_profile_id=str(
+                    episode_pricing.get("objective_profile_id", "")
+                ),
+                uncertainty=float(
+                    step_trace.get("task_state", {}).get(
+                        "constraint_error",
+                        episode_pricing.get("metadata", {}).get("uncertainty", 0.0),
+                    )
+                ),
+                trust_score=float(
+                    runtime_record.get("telemetry", {}).get("trust_score", 1.0)
+                ),
                 episode_step=step_idx,
             )
             step_time = _timestamp_for_step(
                 started_at,
                 step_idx=step_idx,
-                time_step_s=float(runtime_record.get("episode_metrics", {}).get("time_step_s", 1.0)),
+                time_step_s=float(
+                    runtime_record.get("episode_metrics", {}).get("time_step_s", 1.0)
+                ),
             )
-            price_ref = _pick_window_tick_id(pricing_ticks, step_idx=step_idx) or episode_pricing.get("tick_id")
+            price_ref = _pick_window_tick_id(
+                pricing_ticks, step_idx=step_idx
+            ) or episode_pricing.get("tick_id")
             step_events = _events_for_step(episode_events, step_idx=step_idx)
             step_decisions = _decisions_for_step(episode_decisions, step_idx=step_idx)
             steps.append(
@@ -276,13 +350,21 @@ def ingest_shadow_run(
                     obs_vector=_extract_obs_vector(obs),
                     action=action,
                     action_vector=_extract_action_vector(action),
-                    reward=float(step_trace.get("reward", step.get("info", {}).get("reward", 0.0))),
-                    reward_decomposition=dict(step_trace.get("reward_breakdown", {}) or {}),
+                    reward=float(
+                        step_trace.get(
+                            "reward", step.get("info", {}).get("reward", 0.0)
+                        )
+                    ),
+                    reward_decomposition=dict(
+                        step_trace.get("reward_breakdown", {}) or {}
+                    ),
                     done=bool(step.get("done", False)),
                     task_id=task_id,
                     env_id=env_id,
                     condition_vector=step_condition.to_dict(),
-                    condition_vector_values=[float(value) for value in step_condition.to_vector().tolist()],
+                    condition_vector_values=[
+                        float(value) for value in step_condition.to_vector().tolist()
+                    ],
                     skill_mode=step_condition.skill_mode,
                     objective_tensor_summary=objective_summary,
                     objective_tensor_ref="objective_tensor.json",
@@ -297,16 +379,22 @@ def ingest_shadow_run(
                     metadata={
                         "success": bool(step.get("info", {}).get("success", False)),
                         "task_info": dict(step_trace.get("task_info", {}) or {}),
-                        "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
+                        "runtime_packet_id": runtime_packet.packet_id
+                        if runtime_packet
+                        else None,
                         "event_refs": [event.event_id for event in step_events],
-                        "decision_refs": [decision.decision_id for decision in step_decisions],
+                        "decision_refs": [
+                            decision.decision_id for decision in step_decisions
+                        ],
                     },
                     provenance={
                         "source_adapter": "shadow_control_plane_artifacts_v1",
                         "source_root": str(root),
                         "step_trace_hash": sha256_json(step_trace),
                         "runtime_packet_ref": runtime_packet_ref,
-                        "contract_id": runtime_packet.contract.contract_id if runtime_packet else None,
+                        "contract_id": runtime_packet.contract.contract_id
+                        if runtime_packet
+                        else None,
                         "event_spine_ref": event_spine_ref,
                         "decision_ledger_ref": decision_ledger_ref,
                     },
@@ -322,17 +410,24 @@ def ingest_shadow_run(
             window_id = str(window.get("window_id", ""))
             start_step = int(window.get("start_step", 0))
             end_step = int(window.get("end_step", start_step))
-            window_objective_payload = objective_windows.get(window_id, {}).get("objective_tensor")
+            window_objective_payload = objective_windows.get(window_id, {}).get(
+                "objective_tensor"
+            )
             if window_objective_payload:
-                window_objective = summarize_objective_tensor(ObjectiveTensor.from_dict(window_objective_payload))
+                window_objective = summarize_objective_tensor(
+                    ObjectiveTensor.from_dict(window_objective_payload)
+                )
             else:
                 window_objective = objective_summary
-            window_econ = summarize_econ_tensor(econ_windows_by_episode.get(episode_id, {}).get(window_id, {}))
+            window_econ = summarize_econ_tensor(
+                econ_windows_by_episode.get(episode_id, {}).get(window_id, {})
+            )
             window_tick = next(
                 (
                     row
                     for row in pricing_ticks
-                    if row.get("mode") == "step_window" and str(row.get("metadata", {}).get("window_id", "")) == window_id
+                    if row.get("mode") == "step_window"
+                    and str(row.get("metadata", {}).get("window_id", "")) == window_id
                 ),
                 {},
             )
@@ -345,12 +440,31 @@ def ingest_shadow_run(
                 econ_summary=window_econ,
                 constraint_flags=constraint_flags,
                 semantic_tags=_extract_semantic_tags(runtime_record),
-                objective_profile_id=str(window_tick.get("objective_profile_id", episode_pricing.get("objective_profile_id", ""))),
-                uncertainty=float(window_tick.get("metadata", {}).get("uncertainty", window.get("telemetry", {}).get("uncertainty", 0.0))),
-                trust_score=float(window.get("telemetry", {}).get("trust_score", episode_pricing.get("confidence", 1.0))),
+                objective_profile_id=str(
+                    window_tick.get(
+                        "objective_profile_id",
+                        episode_pricing.get("objective_profile_id", ""),
+                    )
+                ),
+                uncertainty=float(
+                    window_tick.get("metadata", {}).get(
+                        "uncertainty",
+                        window.get("telemetry", {}).get("uncertainty", 0.0),
+                    )
+                ),
+                trust_score=float(
+                    window.get("telemetry", {}).get(
+                        "trust_score", episode_pricing.get("confidence", 1.0)
+                    )
+                ),
                 episode_step=start_step,
             )
-            window_steps = [row for row in steps if row.episode_id == episode_id and start_step <= row.step_idx <= end_step]
+            window_steps = [
+                row
+                for row in steps
+                if row.episode_id == episode_id
+                and start_step <= row.step_idx <= end_step
+            ]
             window_events = _events_for_window(
                 episode_events,
                 start_step=start_step,
@@ -372,12 +486,26 @@ def ingest_shadow_run(
                     env_id=env_id,
                     source_domain=source_domain,
                     seed=seed,
-                    timestamp=_timestamp_for_step(started_at, step_idx=start_step, time_step_s=float(runtime_record.get("episode_metrics", {}).get("time_step_s", 1.0))),
+                    timestamp=_timestamp_for_step(
+                        started_at,
+                        step_idx=start_step,
+                        time_step_s=float(
+                            runtime_record.get("episode_metrics", {}).get(
+                                "time_step_s", 1.0
+                            )
+                        ),
+                    ),
                     reward_sum=sum(row.reward for row in window_steps),
-                    obs_vector_mean=_mean_vectors([row.obs_vector for row in window_steps]),
-                    action_vector_mean=_mean_vectors([row.action_vector for row in window_steps]),
+                    obs_vector_mean=_mean_vectors(
+                        [row.obs_vector for row in window_steps]
+                    ),
+                    action_vector_mean=_mean_vectors(
+                        [row.action_vector for row in window_steps]
+                    ),
                     condition_vector=window_condition.to_dict(),
-                    condition_vector_values=[float(value) for value in window_condition.to_vector().tolist()],
+                    condition_vector_values=[
+                        float(value) for value in window_condition.to_vector().tolist()
+                    ],
                     skill_mode=window_condition.skill_mode,
                     objective_tensor_summary=window_objective,
                     econ_tensor_summary=window_econ,
@@ -386,14 +514,18 @@ def ingest_shadow_run(
                     metadata={
                         "window_hash": sha256_json(window),
                         "event_refs": [event.event_id for event in window_events],
-                        "decision_refs": [decision.decision_id for decision in window_decisions],
+                        "decision_refs": [
+                            decision.decision_id for decision in window_decisions
+                        ],
                     },
                     provenance={
                         "source_adapter": "shadow_control_plane_artifacts_v1",
                         "source_root": str(root),
                         "window_id": window_id,
                         "runtime_packet_ref": runtime_packet_ref,
-                        "runtime_packet_id": runtime_packet.packet_id if runtime_packet else None,
+                        "runtime_packet_id": runtime_packet.packet_id
+                        if runtime_packet
+                        else None,
                         "event_spine_ref": event_spine_ref,
                         "decision_ledger_ref": decision_ledger_ref,
                     },
@@ -417,11 +549,18 @@ def ingest_shadow_run(
                 "schema_version": REPLAY_SCHEMA_VERSION,
                 "runtime_packet_count": len(runtime_packets_by_episode),
                 "event_count": sum(len(rows) for rows in events_by_episode.values()),
-                "decision_count": sum(len(rows) for rows in decisions_by_episode.values()),
+                "decision_count": sum(
+                    len(rows) for rows in decisions_by_episode.values()
+                ),
             }
         ),
     }
-    return _sort_episode_records(episodes), _sort_step_records(steps), _sort_window_records(windows), metadata
+    return (
+        _sort_episode_records(episodes),
+        _sort_step_records(steps),
+        _sort_window_records(windows),
+        metadata,
+    )
 
 
 def ingest_workcell_episode_log(
@@ -431,27 +570,47 @@ def ingest_workcell_episode_log(
     source_domain: str = SourceDomain.SYNTHETIC.value,
     objective_profile_id: str = "balanced_contract",
     pricing_policy_path: str | Path = "config/pricing/default.yaml",
-) -> Tuple[List[ReplayEpisodeRecord], List[ReplayStepRecord], List[ReplayWindowRecord], Dict[str, Any]]:
+) -> Tuple[
+    List[ReplayEpisodeRecord],
+    List[ReplayStepRecord],
+    List[ReplayWindowRecord],
+    Dict[str, Any],
+]:
     """Ingest an existing WorkcellEnv episode log into canonical replay records."""
 
     payload = _load_json(Path(episode_log_path))
-    if isinstance(payload, Mapping) and "metadata" not in payload and "episode_log" in payload:
+    if (
+        isinstance(payload, Mapping)
+        and "metadata" not in payload
+        and "episode_log" in payload
+    ):
         payload = payload.get("episode_log")
     if not isinstance(payload, Mapping):
-        raise ReplayIngestionError(f"Invalid workcell episode log at {episode_log_path}")
+        raise ReplayIngestionError(
+            f"Invalid workcell episode log at {episode_log_path}"
+        )
     episode_log = EpisodeLog.from_dict(dict(payload))
     metadata = episode_log.metadata
     metrics = dict(episode_log.metrics)
     if not metrics:
         metrics = {
-            "reward_total": float(sum(float(step.get("info", {}).get("reward", 0.0)) for step in episode_log.trajectory)),
+            "reward_total": float(
+                sum(
+                    float(step.get("info", {}).get("reward", 0.0))
+                    for step in episode_log.trajectory
+                )
+            ),
             "steps": len(episode_log.trajectory),
             "time_step_s": 1.0,
         }
     runtime_record = ObjectiveRuntimeRecord(
         task_id=metadata.task_id,
         episode_id=metadata.episode_id,
-        env_id=str((metadata.env_params or {}).get("config", {}).get("topology_type", "workcell_env")),
+        env_id=str(
+            (metadata.env_params or {})
+            .get("config", {})
+            .get("topology_type", "workcell_env")
+        ),
         world_id="workcell_episode_log",
         robot_id=str(metadata.robot_family or "workcell_robot"),
         source_domain=source_domain,
@@ -461,7 +620,9 @@ def ingest_workcell_episode_log(
         episode_metrics=metrics,
         reward_components={"scalar_reward": float(metrics.get("reward_total", 0.0))},
         telemetry={},
-        windows=_build_episode_log_windows(episode_log.trajectory, time_step_s=float(metrics.get("time_step_s", 1.0))),
+        windows=_build_episode_log_windows(
+            episode_log.trajectory, time_step_s=float(metrics.get("time_step_s", 1.0))
+        ),
         context={"episode_log_source": str(episode_log_path)},
     )
     builder = ObjectiveRuntimeBuilder()
@@ -469,7 +630,9 @@ def ingest_workcell_episode_log(
     objective_summary = summarize_objective_tensor(objective_tensor)
     constraint_set = ConstraintSet.from_runtime(
         hard_constraints={"throughput": {"min": 0.0}},
-        soft_constraints={"energy": {"max": float(metrics.get("energy_wh_per_unit", 8.0) or 8.0)}},
+        soft_constraints={
+            "energy": {"max": float(metrics.get("energy_wh_per_unit", 8.0) or 8.0)}
+        },
         geometry_hints={"source": "workcell_episode_log"},
         trust_metadata={"trust_score": 0.75},
     )
@@ -479,7 +642,11 @@ def ingest_workcell_episode_log(
         objective_tensor,
         constraint_flags=constraint_flags,
         uncertainty=0.15,
-        context={"run_id": runtime_record.run_id, "episode_id": runtime_record.episode_id, "source_domain": source_domain},
+        context={
+            "run_id": runtime_record.run_id,
+            "episode_id": runtime_record.episode_id,
+            "source_domain": source_domain,
+        },
     )
     econ_summary = summarize_econ_tensor(econ_tensor)
     pricing = PricingSentinel.from_path(pricing_policy_path).emit_tick(
@@ -526,7 +693,9 @@ def ingest_workcell_episode_log(
             total_reward=float(metrics.get("reward_total", 0.0)),
             skill_mode=episode_condition.skill_mode,
             condition_vector=episode_condition.to_dict(),
-            condition_vector_values=[float(value) for value in episode_condition.to_vector().tolist()],
+            condition_vector_values=[
+                float(value) for value in episode_condition.to_vector().tolist()
+            ],
             objective_tensor_summary=objective_summary,
             objective_tensor_ref=str(episode_log_path),
             econ_tensor_summary=econ_summary,
@@ -578,7 +747,9 @@ def ingest_workcell_episode_log(
                 task_id=runtime_record.task_id,
                 env_id=runtime_record.env_id,
                 condition_vector=condition.to_dict(),
-                condition_vector_values=[float(value) for value in condition.to_vector().tolist()],
+                condition_vector_values=[
+                    float(value) for value in condition.to_vector().tolist()
+                ],
                 skill_mode=condition.skill_mode,
                 objective_tensor_summary=objective_summary,
                 objective_tensor_ref=str(episode_log_path),
@@ -589,7 +760,11 @@ def ingest_workcell_episode_log(
                 ledger_event_ref=None,
                 source_domain=source_domain,
                 seed=runtime_record.seed,
-                timestamp=_timestamp_for_step(runtime_record.timestamp, step_idx=step_idx, time_step_s=float(metrics.get("time_step_s", 1.0))),
+                timestamp=_timestamp_for_step(
+                    runtime_record.timestamp,
+                    step_idx=step_idx,
+                    time_step_s=float(metrics.get("time_step_s", 1.0)),
+                ),
                 metadata={},
                 provenance={
                     "source_adapter": "workcell_episode_log_v1",
@@ -608,9 +783,19 @@ def ingest_workcell_episode_log(
         "schema_version": REPLAY_SCHEMA_VERSION,
         "source_adapter": "workcell_episode_log_v1",
         "source_path": str(episode_log_path),
-        "provenance_digest": sha256_json({"source_path": str(episode_log_path), "schema_version": REPLAY_SCHEMA_VERSION}),
+        "provenance_digest": sha256_json(
+            {
+                "source_path": str(episode_log_path),
+                "schema_version": REPLAY_SCHEMA_VERSION,
+            }
+        ),
     }
-    return episode_records, _sort_step_records(step_records), _sort_window_records(window_records), metadata_payload
+    return (
+        episode_records,
+        _sort_step_records(step_records),
+        _sort_window_records(window_records),
+        metadata_payload,
+    )
 
 
 def _resolve_rollout_artifact_path(episode_dir: Path, value: Any) -> Optional[str]:
@@ -628,7 +813,9 @@ def _resolve_rollout_artifact_path(episode_dir: Path, value: Any) -> Optional[st
     return str((episode_dir / path).resolve())
 
 
-def _register_rollout_artifact_ref(refs: Dict[str, Any], key: str, value: Optional[str]) -> None:
+def _register_rollout_artifact_ref(
+    refs: Dict[str, Any], key: str, value: Optional[str]
+) -> None:
     if value in (None, "", [], {}):
         return
     normalized_key = str(key)
@@ -646,7 +833,9 @@ def _load_rollout_metadata_payload(episode_dir: Path) -> Dict[str, Any]:
     return _load_json(metadata_path)
 
 
-def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[str, Any]:
+def _discover_rollout_artifact_refs(
+    episode_dir: Path, episode_id: str
+) -> Dict[str, Any]:
     metadata_payload = _load_rollout_metadata_payload(episode_dir)
     refs: Dict[str, Any] = {}
 
@@ -662,10 +851,15 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "governance_trace_path",
         "counterfactual_eval_path",
         "value_target_pack_path",
+        "reconstruction_sidecar_path",
+        "branch_evaluations_path",
         "semantic_world_model_path",
         "semantic_snapshot_path",
         "orchestrator_advisory_path",
         "control_plane_context_path",
+        "teacher_contract_path",
+        "teacher_action_path",
+        "teacher_action_envelope_path",
         "teacher_trace_path",
         "vla_semantic_evidence_path",
         "semantic_fusion_path",
@@ -673,11 +867,17 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "evidence_bus_path",
     )
     for key in explicit_path_keys:
-        resolved = _resolve_rollout_artifact_path(episode_dir, metadata_payload.get(key))
+        resolved = _resolve_rollout_artifact_path(
+            episode_dir, metadata_payload.get(key)
+        )
         _register_rollout_artifact_ref(refs, key, resolved)
 
     if isinstance(metadata_payload.get("sensor_bundle"), Mapping):
-        _register_rollout_artifact_ref(refs, "sensor_bundle_metadata_path", str((episode_dir / "metadata.json").resolve()))
+        _register_rollout_artifact_ref(
+            refs,
+            "sensor_bundle_metadata_path",
+            str((episode_dir / "metadata.json").resolve()),
+        )
 
     sidecar_patterns = {
         "scene_tracks_path": [
@@ -712,6 +912,14 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
             f"{episode_id}_value_target_pack_v1.json",
             "*_value_target_pack_v1.json",
         ],
+        "reconstruction_sidecar_path": [
+            f"{episode_id}_reconstruction_sidecar_v1.json",
+            "*_reconstruction_sidecar_v1.json",
+        ],
+        "branch_evaluations_path": [
+            f"{episode_id}_branch_evaluations_v1.json",
+            "*_branch_evaluations_v1.json",
+        ],
         "semantic_world_model_path": [
             f"{episode_id}_semantic_world_model_v1.json",
             "*_semantic_world_model_v1.json",
@@ -727,6 +935,18 @@ def _discover_rollout_artifact_refs(episode_dir: Path, episode_id: str) -> Dict[
         "control_plane_context_path": [
             f"{episode_id}_control_plane_context_v1.json",
             "*_control_plane_context_v1.json",
+        ],
+        "teacher_contract_path": [
+            f"{episode_id}_teacher_contract_v1.json",
+            "*_teacher_contract_v1.json",
+        ],
+        "teacher_action_path": [
+            f"{episode_id}_teacher_action_envelope_v1.json",
+            "*_teacher_action_envelope_v1.json",
+        ],
+        "teacher_action_envelope_path": [
+            f"{episode_id}_teacher_action_envelope_v1.json",
+            "*_teacher_action_envelope_v1.json",
         ],
         "teacher_trace_path": [
             f"{episode_id}_teacher_trace_v1.json",
@@ -766,7 +986,9 @@ def _scene_tracks_rollout_metadata(
     metadata_payload: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     payload = dict(metadata_payload or {})
-    provider_truth = coerce_external_provider_truth(payload.get("scene_tracks_provider_truth"))
+    provider_truth = coerce_external_provider_truth(
+        payload.get("scene_tracks_provider_truth")
+    )
     semantic_summary = payload.get("scene_tracks_semantic_summary", {})
     if not isinstance(semantic_summary, Mapping):
         semantic_summary = {}
@@ -781,11 +1003,21 @@ def _scene_tracks_rollout_metadata(
                 if isinstance(summary_payload, Mapping):
                     backend = str(
                         summary_payload.get("backend_selected")
-                        or dict(summary_payload.get("adapter_status", {}) or {}).get("overall_mode", "")
+                        or dict(summary_payload.get("adapter_status", {}) or {}).get(
+                            "overall_mode", ""
+                        )
                     )
-                    training_eligible = bool(summary_payload.get("training_eligible", False))
-            semantic_summary_raw = scene_tracks.get("scene_tracks_v1/semantic_summary_json")
-            if isinstance(semantic_summary_raw, np.ndarray) and semantic_summary_raw.size > 0 and not semantic_summary:
+                    training_eligible = bool(
+                        summary_payload.get("training_eligible", False)
+                    )
+            semantic_summary_raw = scene_tracks.get(
+                "scene_tracks_v1/semantic_summary_json"
+            )
+            if (
+                isinstance(semantic_summary_raw, np.ndarray)
+                and semantic_summary_raw.size > 0
+                and not semantic_summary
+            ):
                 decoded_summary = json.loads(str(semantic_summary_raw.flat[0]))
                 if isinstance(decoded_summary, Mapping):
                     semantic_summary = decoded_summary
@@ -798,17 +1030,23 @@ def _scene_tracks_rollout_metadata(
         explicit_non_stub=bool(payload.get("scene_tracks_non_stub", False)),
         semantic_grounding_ready=bool(semantic_summary.get("grounding_ready", False)),
         training_eligible=bool(training_eligible),
-        explicit_non_heuristic=bool(payload.get("semantic_grounding_non_heuristic", False)),
+        explicit_non_heuristic=bool(
+            payload.get("semantic_grounding_non_heuristic", False)
+        ),
     )
     return {
         "scene_tracks_backend": str(truth.get("scene_tracks_backend", "")),
         "scene_tracks_non_stub": bool(truth.get("scene_tracks_non_stub", False)),
-        "scene_tracks_training_eligible": bool(truth.get("scene_tracks_training_eligible", False)),
+        "scene_tracks_training_eligible": bool(
+            truth.get("scene_tracks_training_eligible", False)
+        ),
         "semantic_grounding_ready": bool(truth.get("semantic_grounding_ready", False)),
         "semantic_grounding_non_heuristic": bool(
             truth.get("semantic_grounding_non_heuristic", False)
         ),
-        "semantic_density_score": float(semantic_summary.get("semantic_density_score", 0.0) or 0.0),
+        "semantic_density_score": float(
+            semantic_summary.get("semantic_density_score", 0.0) or 0.0
+        ),
         "scene_tracks_provider_truth": provider_truth,
     }
 
@@ -831,15 +1069,23 @@ def _teacher_provider_truth_rollout_metadata(
     return coerce_external_provider_truth(trace_payload.get("provider_truth"))
 
 
-def _semantic_world_model_rollout_summary(semantic_world_model_path: Optional[str]) -> Dict[str, Any]:
+def _semantic_world_model_rollout_summary(
+    semantic_world_model_path: Optional[str],
+) -> Dict[str, Any]:
     if not semantic_world_model_path:
         return {}
     try:
         payload = _load_json(Path(semantic_world_model_path))
     except Exception:
         return {}
-    topology = dict(payload.get("topology", {}) or {}) if isinstance(payload, Mapping) else {}
-    capability_scores = dict(payload.get("capability_scores", {}) or {}) if isinstance(payload, Mapping) else {}
+    topology = (
+        dict(payload.get("topology", {}) or {}) if isinstance(payload, Mapping) else {}
+    )
+    capability_scores = (
+        dict(payload.get("capability_scores", {}) or {})
+        if isinstance(payload, Mapping)
+        else {}
+    )
     active_capabilities: List[str] = []
     for key, value in capability_scores.items():
         try:
@@ -854,7 +1100,9 @@ def _semantic_world_model_rollout_summary(semantic_world_model_path: Optional[st
         "world_model_id": str(payload.get("world_model_id", "")),
         "topology": topology,
         "capability_scores": capability_scores,
-        "grounded_track_object_count": int(topology.get("grounded_track_object_count", 0) or 0),
+        "grounded_track_object_count": int(
+            topology.get("grounded_track_object_count", 0) or 0
+        ),
         "active_capabilities": active_capabilities,
     }
 
@@ -906,7 +1154,12 @@ def ingest_rollout_bundle(
     source_domain: str = SourceDomain.SYNTHETIC.value,
     objective_profile_id: str = "balanced_contract",
     pricing_policy_path: str | Path = "config/pricing/default.yaml",
-) -> Tuple[List[ReplayEpisodeRecord], List[ReplayStepRecord], List[ReplayWindowRecord], Dict[str, Any]]:
+) -> Tuple[
+    List[ReplayEpisodeRecord],
+    List[ReplayStepRecord],
+    List[ReplayWindowRecord],
+    Dict[str, Any],
+]:
     """Ingest rollout-capture bundles into canonical replay records."""
 
     root = Path(rollout_root)
@@ -917,7 +1170,11 @@ def ingest_rollout_bundle(
             resolved_scenario_id = root.name
             base_dir = root.parent
         else:
-            scenario_dirs = [path for path in sorted(root.iterdir()) if path.is_dir() and any(path.glob("episode_*"))]
+            scenario_dirs = [
+                path
+                for path in sorted(root.iterdir())
+                if path.is_dir() and any(path.glob("episode_*"))
+            ]
             if len(scenario_dirs) == 1:
                 resolved_scenario_id = scenario_dirs[0].name
                 base_dir = root
@@ -933,7 +1190,9 @@ def ingest_rollout_bundle(
     for rollout in bundle.episodes:
         episode_dir = rollout.trajectory_path.parent
         raw_rollout_metadata = _load_rollout_metadata_payload(episode_dir)
-        artifact_refs = _discover_rollout_artifact_refs(episode_dir, rollout.metadata.episode_id)
+        artifact_refs = _discover_rollout_artifact_refs(
+            episode_dir, rollout.metadata.episode_id
+        )
         scene_tracks_metadata = _scene_tracks_rollout_metadata(
             artifact_refs.get("scene_tracks_path"),
             metadata_payload=raw_rollout_metadata,
@@ -953,7 +1212,9 @@ def ingest_rollout_bundle(
         semantic_world_model_summary = _semantic_world_model_rollout_summary(
             artifact_refs.get("semantic_world_model_path")
         )
-        trajectory_rows = _load_rollout_trajectory(rollout.trajectory_path, metrics=rollout.metrics)
+        trajectory_rows = _load_rollout_trajectory(
+            rollout.trajectory_path, metrics=rollout.metrics
+        )
         episode_log = EpisodeLog(
             metadata=rollout.metadata,
             trajectory=trajectory_rows,
@@ -962,10 +1223,14 @@ def ingest_rollout_bundle(
                 "reward_total": float(rollout.metrics.get("reward", 0.0)),
                 "steps": len(trajectory_rows),
                 "time_step_s": 1.0,
-                "throughput_units_per_hour": max(0.0, float(len(trajectory_rows)) * 12.0),
+                "throughput_units_per_hour": max(
+                    0.0, float(len(trajectory_rows)) * 12.0
+                ),
                 "error_rate": float(rollout.metrics.get("error_rate", 0.0)),
                 "safety_score": float(rollout.metrics.get("safety_score", 0.9)),
-                "energy_wh_per_unit": float(rollout.metrics.get("energy_wh_per_unit", 2.0)),
+                "energy_wh_per_unit": float(
+                    rollout.metrics.get("energy_wh_per_unit", 2.0)
+                ),
             },
         )
         temp_payload = episode_log.to_dict()
@@ -975,7 +1240,8 @@ def ingest_rollout_bundle(
         try:
             e_rows, s_rows, w_rows, _ = ingest_workcell_episode_log(
                 temp_path,
-                run_id=run_id or f"rollout_replay_{sha256_json({'scenario_id': resolved_scenario_id, 'episode_id': rollout.metadata.episode_id})[:10]}",
+                run_id=run_id
+                or f"rollout_replay_{sha256_json({'scenario_id': resolved_scenario_id, 'episode_id': rollout.metadata.episode_id})[:10]}",
                 source_domain=source_domain,
                 objective_profile_id=objective_profile_id,
                 pricing_policy_path=pricing_policy_path,
@@ -988,35 +1254,74 @@ def ingest_rollout_bundle(
             episode_payload["metadata"] = {
                 **dict(episode_payload.get("metadata", {}) or {}),
                 "rollout_episode_dir": str(episode_dir.resolve()),
-                "sensor_bundle": dict(raw_rollout_metadata.get("sensor_bundle", {}) or {})
+                "sensor_bundle": dict(
+                    raw_rollout_metadata.get("sensor_bundle", {}) or {}
+                )
                 if isinstance(raw_rollout_metadata.get("sensor_bundle"), Mapping)
                 else {},
-                "scene_tracks_non_stub": bool(scene_tracks_metadata.get("scene_tracks_non_stub", False)),
-                "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
-                "scene_tracks_provider_truth": dict(scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}),
-                "scene_tracks_training_eligible": bool(scene_tracks_metadata.get("scene_tracks_training_eligible", False)),
+                "scene_tracks_non_stub": bool(
+                    scene_tracks_metadata.get("scene_tracks_non_stub", False)
+                ),
+                "scene_tracks_backend": str(
+                    scene_tracks_metadata.get("scene_tracks_backend", "")
+                ),
+                "scene_tracks_provider_truth": dict(
+                    scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}
+                ),
+                "scene_tracks_training_eligible": bool(
+                    scene_tracks_metadata.get("scene_tracks_training_eligible", False)
+                ),
                 "teacher_provider_truth": dict(teacher_provider_truth or {}),
                 "semantic_memory_grounded": bool(
-                    semantic_world_model_summary.get("topology", {}).get("grounded_track_object_count", 0)
+                    semantic_world_model_summary.get("topology", {}).get(
+                        "grounded_track_object_count", 0
+                    )
                     or scene_tracks_metadata.get("semantic_grounding_ready", False)
                 ),
                 "semantic_grounding_non_heuristic": bool(
                     scene_tracks_metadata.get("semantic_grounding_non_heuristic", False)
                     or (
-                        raw_rollout_metadata.get("semantic_grounding_non_heuristic", False)
-                        and scene_tracks_metadata.get("scene_tracks_backend", "") not in {"passthrough", "stub", "auto"}
+                        raw_rollout_metadata.get(
+                            "semantic_grounding_non_heuristic", False
+                        )
+                        and scene_tracks_metadata.get("scene_tracks_backend", "")
+                        not in {"passthrough", "stub", "auto"}
                     )
                 ),
-                "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
-                "openvla_backend_selected": str(raw_rollout_metadata.get("openvla_backend_selected", "")),
-                "openvla_vision_backbone_selected": str(raw_rollout_metadata.get("openvla_vision_backbone_selected", "")),
-                "runtime_packet_id": str(raw_rollout_metadata.get("runtime_packet_id", "")),
-                "event_refs": [str(value) for value in list(raw_rollout_metadata.get("event_refs", []) or [])],
-                "decision_refs": [str(value) for value in list(raw_rollout_metadata.get("decision_refs", []) or [])],
-                "grounded_data_ready": bool(raw_rollout_metadata.get("grounded_data_ready", False)),
-                "grounded_data_mode": str(raw_rollout_metadata.get("grounded_data_mode", "")),
-                "grounded_data_requirements": dict(raw_rollout_metadata.get("grounded_data_requirements", {}) or {}),
-                "future_training_signals": dict(raw_rollout_metadata.get("future_training_signals", {}) or {}),
+                "semantic_density_score": float(
+                    scene_tracks_metadata.get("semantic_density_score", 0.0)
+                ),
+                "openvla_backend_selected": str(
+                    raw_rollout_metadata.get("openvla_backend_selected", "")
+                ),
+                "openvla_vision_backbone_selected": str(
+                    raw_rollout_metadata.get("openvla_vision_backbone_selected", "")
+                ),
+                "runtime_packet_id": str(
+                    raw_rollout_metadata.get("runtime_packet_id", "")
+                ),
+                "event_refs": [
+                    str(value)
+                    for value in list(raw_rollout_metadata.get("event_refs", []) or [])
+                ],
+                "decision_refs": [
+                    str(value)
+                    for value in list(
+                        raw_rollout_metadata.get("decision_refs", []) or []
+                    )
+                ],
+                "grounded_data_ready": bool(
+                    raw_rollout_metadata.get("grounded_data_ready", False)
+                ),
+                "grounded_data_mode": str(
+                    raw_rollout_metadata.get("grounded_data_mode", "")
+                ),
+                "grounded_data_requirements": dict(
+                    raw_rollout_metadata.get("grounded_data_requirements", {}) or {}
+                ),
+                "future_training_signals": dict(
+                    raw_rollout_metadata.get("future_training_signals", {}) or {}
+                ),
                 "semantic_world_model_summary": semantic_world_model_summary,
                 "selection_summary": dict(selection_summary or {}),
                 "control_plane_context": dict(control_plane_context or {}),
@@ -1028,18 +1333,24 @@ def ingest_rollout_bundle(
                 "trajectory_path": str(rollout.trajectory_path),
                 **dict(artifact_refs),
             }
-            episodes.append(
-                ReplayEpisodeRecord.from_dict(episode_payload)
-            )
+            episodes.append(ReplayEpisodeRecord.from_dict(episode_payload))
         for step in s_rows:
             step_payload = step.to_dict()
             step_payload["metadata"] = {
                 **dict(step_payload.get("metadata", {}) or {}),
-                "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
-                "scene_tracks_provider_truth": dict(scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}),
-                "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+                "scene_tracks_backend": str(
+                    scene_tracks_metadata.get("scene_tracks_backend", "")
+                ),
+                "scene_tracks_provider_truth": dict(
+                    scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}
+                ),
+                "semantic_density_score": float(
+                    scene_tracks_metadata.get("semantic_density_score", 0.0)
+                ),
                 "teacher_provider_truth": dict(teacher_provider_truth or {}),
-                "runtime_packet_id": str(raw_rollout_metadata.get("runtime_packet_id", "")),
+                "runtime_packet_id": str(
+                    raw_rollout_metadata.get("runtime_packet_id", "")
+                ),
             }
             step_payload["provenance"] = {
                 **dict(step_payload.get("provenance", {}) or {}),
@@ -1048,18 +1359,24 @@ def ingest_rollout_bundle(
                 "trajectory_path": str(rollout.trajectory_path),
                 **dict(artifact_refs),
             }
-            steps.append(
-                ReplayStepRecord.from_dict(step_payload)
-            )
+            steps.append(ReplayStepRecord.from_dict(step_payload))
         for window in w_rows:
             window_payload = window.to_dict()
             window_payload["metadata"] = {
                 **dict(window_payload.get("metadata", {}) or {}),
-                "scene_tracks_backend": str(scene_tracks_metadata.get("scene_tracks_backend", "")),
-                "scene_tracks_provider_truth": dict(scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}),
-                "semantic_density_score": float(scene_tracks_metadata.get("semantic_density_score", 0.0)),
+                "scene_tracks_backend": str(
+                    scene_tracks_metadata.get("scene_tracks_backend", "")
+                ),
+                "scene_tracks_provider_truth": dict(
+                    scene_tracks_metadata.get("scene_tracks_provider_truth", {}) or {}
+                ),
+                "semantic_density_score": float(
+                    scene_tracks_metadata.get("semantic_density_score", 0.0)
+                ),
                 "teacher_provider_truth": dict(teacher_provider_truth or {}),
-                "runtime_packet_id": str(raw_rollout_metadata.get("runtime_packet_id", "")),
+                "runtime_packet_id": str(
+                    raw_rollout_metadata.get("runtime_packet_id", "")
+                ),
             }
             window_payload["provenance"] = {
                 **dict(window_payload.get("provenance", {}) or {}),
@@ -1068,18 +1385,23 @@ def ingest_rollout_bundle(
                 "trajectory_path": str(rollout.trajectory_path),
                 **dict(artifact_refs),
             }
-            windows.append(
-                ReplayWindowRecord.from_dict(window_payload)
-            )
+            windows.append(ReplayWindowRecord.from_dict(window_payload))
 
     metadata = {
         "schema_version": REPLAY_SCHEMA_VERSION,
         "source_adapter": "rollout_capture_bundle_v1",
         "scenario_id": resolved_scenario_id,
         "source_root": str(root),
-        "provenance_digest": sha256_json({"source_root": str(root), "scenario_id": resolved_scenario_id}),
+        "provenance_digest": sha256_json(
+            {"source_root": str(root), "scenario_id": resolved_scenario_id}
+        ),
     }
-    return _sort_episode_records(episodes), _sort_step_records(steps), _sort_window_records(windows), metadata
+    return (
+        _sort_episode_records(episodes),
+        _sort_step_records(steps),
+        _sort_window_records(windows),
+        metadata,
+    )
 
 
 def build_shadow_condition_vector(
@@ -1102,7 +1424,9 @@ def build_shadow_condition_vector(
     objective_axes = dict(objective_summary.get("axes", {}) or {})
     normalized_axes = dict(objective_summary.get("normalized_axes", {}) or {})
     econ_axes = dict(econ_summary.get("axes", {}) or {})
-    hard_flags = sum(1 for flag in constraint_flags if str(flag.get("severity", "")) == "hard")
+    hard_flags = sum(
+        1 for flag in constraint_flags if str(flag.get("severity", "")) == "hard"
+    )
     skill_mode = _resolve_skill_mode(
         constraint_flags=constraint_flags,
         semantic_tags=semantic_tags,
@@ -1125,8 +1449,12 @@ def build_shadow_condition_vector(
         },
         econ_state={
             "target_mpl": float(objective_axes.get("throughput", 0.0)),
-            "current_wage_parity": float(econ_axes.get("price_tick", 0.0)) / 28.0 if float(econ_axes.get("price_tick", 0.0)) else 0.0,
-            "energy_budget_wh": max(1.0, float(objective_axes.get("energy", 0.0)) * 4.0),
+            "current_wage_parity": float(econ_axes.get("price_tick", 0.0)) / 28.0
+            if float(econ_axes.get("price_tick", 0.0))
+            else 0.0,
+            "energy_budget_wh": max(
+                1.0, float(objective_axes.get("energy", 0.0)) * 4.0
+            ),
         },
         curriculum_phase="shadow_replay",
         sima2_trust=float(trust_score),
@@ -1137,17 +1465,24 @@ def build_shadow_condition_vector(
             "objective_preset": objective_profile_id or "balanced_contract",
             "novelty_tier": min(3, len(set(semantic_tags)) + hard_flags),
             "ood_risk_level": float(max(0.0, min(1.0, uncertainty))),
-            "recovery_priority": 1.0 if hard_flags else float(max(0.0, min(1.0, uncertainty + 0.1))),
+            "recovery_priority": 1.0
+            if hard_flags
+            else float(max(0.0, min(1.0, uncertainty + 0.1))),
         },
         econ_slice={
             "mpl": float(objective_axes.get("throughput", 0.0)),
             "energy_wh": float(objective_axes.get("energy", 0.0)),
-            "wage_parity": float(econ_axes.get("price_tick", 0.0)) / 28.0 if float(econ_axes.get("price_tick", 0.0)) else 0.0,
+            "wage_parity": float(econ_axes.get("price_tick", 0.0)) / 28.0
+            if float(econ_axes.get("price_tick", 0.0))
+            else 0.0,
         },
         semantic_tags={str(tag): 1.0 for tag in semantic_tags},
         trust_summary={"shadow_replay": float(trust_score)},
         episode_metadata={"episode_id": f"{task_id}:{env_id}", "step": episode_step},
-        advisory_context={"skill_mode": skill_mode, "frontier_score": float(econ_axes.get("marginal_frontier_gain", 0.0))},
+        advisory_context={
+            "skill_mode": skill_mode,
+            "frontier_score": float(econ_axes.get("marginal_frontier_gain", 0.0)),
+        },
     )
 
 
@@ -1221,7 +1556,11 @@ def _episode_log_window_records(
             trust_score=float(window.telemetry.get("trust_score", 0.75)),
             episode_step=window.start_step,
         )
-        window_steps = [row for row in step_records if window.start_step <= row.step_idx <= window.end_step]
+        window_steps = [
+            row
+            for row in step_records
+            if window.start_step <= row.step_idx <= window.end_step
+        ]
         records.append(
             ReplayWindowRecord(
                 run_id=runtime_record.run_id,
@@ -1233,12 +1572,22 @@ def _episode_log_window_records(
                 env_id=runtime_record.env_id,
                 source_domain=str(runtime_record.source_domain),
                 seed=runtime_record.seed,
-                timestamp=_timestamp_for_step(runtime_record.timestamp, step_idx=window.start_step, time_step_s=float(runtime_record.episode_metrics.get("time_step_s", 1.0))),
+                timestamp=_timestamp_for_step(
+                    runtime_record.timestamp,
+                    step_idx=window.start_step,
+                    time_step_s=float(
+                        runtime_record.episode_metrics.get("time_step_s", 1.0)
+                    ),
+                ),
                 reward_sum=sum(row.reward for row in window_steps),
                 obs_vector_mean=_mean_vectors([row.obs_vector for row in window_steps]),
-                action_vector_mean=_mean_vectors([row.action_vector for row in window_steps]),
+                action_vector_mean=_mean_vectors(
+                    [row.action_vector for row in window_steps]
+                ),
                 condition_vector=condition.to_dict(),
-                condition_vector_values=[float(value) for value in condition.to_vector().tolist()],
+                condition_vector_values=[
+                    float(value) for value in condition.to_vector().tolist()
+                ],
                 skill_mode=condition.skill_mode,
                 objective_tensor_summary=objective_summary,
                 econ_tensor_summary=econ_summary,
@@ -1260,7 +1609,9 @@ def _build_episode_log_windows(
     for start in range(0, len(trajectory), max(1, window_size)):
         end = min(len(trajectory), start + max(1, window_size)) - 1
         window_steps = trajectory[start : end + 1]
-        reward_sum = sum(float(step.get("info", {}).get("reward", 0.0)) for step in window_steps)
+        reward_sum = sum(
+            float(step.get("info", {}).get("reward", 0.0)) for step in window_steps
+        )
         windows.append(
             ObjectiveRuntimeWindow(
                 window_id=f"window_{start:03d}_{end:03d}",
@@ -1270,7 +1621,9 @@ def _build_episode_log_windows(
                     "steps": len(window_steps),
                     "duration_s": len(window_steps) * float(time_step_s),
                     "reward_total": reward_sum,
-                    "throughput_units_per_hour": float(len(window_steps)) * 3600.0 / max(float(time_step_s) * len(window_steps), 1.0),
+                    "throughput_units_per_hour": float(len(window_steps))
+                    * 3600.0
+                    / max(float(time_step_s) * len(window_steps), 1.0),
                     "energy_wh_per_unit": 1.0,
                     "error_rate": 0.0,
                     "safety_score": 1.0,
@@ -1288,7 +1641,9 @@ def _extract_semantic_tags(runtime_record: Mapping[str, Any]) -> List[str]:
     return [str(tag) for tag in tags]
 
 
-def _pick_window_tick_id(pricing_ticks: Sequence[Mapping[str, Any]], *, step_idx: int) -> Optional[str]:
+def _pick_window_tick_id(
+    pricing_ticks: Sequence[Mapping[str, Any]], *, step_idx: int
+) -> Optional[str]:
     for row in pricing_ticks:
         if row.get("mode") != "step_window":
             continue
@@ -1371,7 +1726,9 @@ def _resolve_skill_mode(
     uncertainty: float,
 ) -> str:
     semantic_tags = [str(tag) for tag in semantic_tags]
-    if "fragile" in semantic_tags or any(str(flag.get("severity", "")) == "hard" for flag in constraint_flags):
+    if "fragile" in semantic_tags or any(
+        str(flag.get("severity", "")) == "hard" for flag in constraint_flags
+    ):
         return "safety_critical"
     if frontier_gain > 0.20 or uncertainty > 0.35:
         return "frontier_exploration"
@@ -1382,7 +1739,7 @@ def _resolve_skill_mode(
 
 def _hash_to_unit(value: str) -> float:
     digest = sha256_json({"value": value})
-    return int(digest[:12], 16) / float(16 ** 12)
+    return int(digest[:12], 16) / float(16**12)
 
 
 def _timestamp_for_step(timestamp: str, *, step_idx: int, time_step_s: float) -> str:
@@ -1400,7 +1757,11 @@ def _events_for_step(
     *,
     step_idx: int,
 ) -> List[RuntimeEvent]:
-    return [event for event in events if _scope_applies_to_step(event.scope, step_idx=step_idx)]
+    return [
+        event
+        for event in events
+        if _scope_applies_to_step(event.scope, step_idx=step_idx)
+    ]
 
 
 def _decisions_for_step(
@@ -1408,7 +1769,11 @@ def _decisions_for_step(
     *,
     step_idx: int,
 ) -> List[DecisionLedgerEntry]:
-    return [decision for decision in decisions if _scope_applies_to_step(decision.scope, step_idx=step_idx)]
+    return [
+        decision
+        for decision in decisions
+        if _scope_applies_to_step(decision.scope, step_idx=step_idx)
+    ]
 
 
 def _events_for_window(
@@ -1420,7 +1785,9 @@ def _events_for_window(
     return [
         event
         for event in events
-        if _scope_applies_to_window(event.scope, start_step=start_step, end_step=end_step)
+        if _scope_applies_to_window(
+            event.scope, start_step=start_step, end_step=end_step
+        )
     ]
 
 
@@ -1433,7 +1800,9 @@ def _decisions_for_window(
     return [
         decision
         for decision in decisions
-        if _scope_applies_to_window(decision.scope, start_step=start_step, end_step=end_step)
+        if _scope_applies_to_window(
+            decision.scope, start_step=start_step, end_step=end_step
+        )
     ]
 
 
@@ -1487,19 +1856,35 @@ def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
-def _sort_episode_records(records: Sequence[ReplayEpisodeRecord]) -> List[ReplayEpisodeRecord]:
+def _sort_episode_records(
+    records: Sequence[ReplayEpisodeRecord],
+) -> List[ReplayEpisodeRecord]:
     return sorted(records, key=lambda record: (record.run_id, record.episode_id))
 
 
 def _sort_step_records(records: Sequence[ReplayStepRecord]) -> List[ReplayStepRecord]:
-    return sorted(records, key=lambda record: (record.run_id, record.episode_id, record.step_idx))
+    return sorted(
+        records, key=lambda record: (record.run_id, record.episode_id, record.step_idx)
+    )
 
 
-def _sort_window_records(records: Sequence[ReplayWindowRecord]) -> List[ReplayWindowRecord]:
-    return sorted(records, key=lambda record: (record.run_id, record.episode_id, record.start_step, record.window_id))
+def _sort_window_records(
+    records: Sequence[ReplayWindowRecord],
+) -> List[ReplayWindowRecord]:
+    return sorted(
+        records,
+        key=lambda record: (
+            record.run_id,
+            record.episode_id,
+            record.start_step,
+            record.window_id,
+        ),
+    )
 
 
-def _load_rollout_trajectory(path: Path, *, metrics: Mapping[str, Any]) -> List[Dict[str, Any]]:
+def _load_rollout_trajectory(
+    path: Path, *, metrics: Mapping[str, Any]
+) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
     try:
@@ -1526,7 +1911,10 @@ def _load_rollout_trajectory(path: Path, *, metrics: Mapping[str, Any]) -> List[
                 action = dict(raw_action) if isinstance(raw_action, Mapping) else {}
                 obs = dict(state.get("obs", {}) or {})
                 if not obs:
-                    obs = {"state_vector": _flatten_numeric_payload(state) or [float(index)]}
+                    obs = {
+                        "state_vector": _flatten_numeric_payload(state)
+                        or [float(index)]
+                    }
                 info = dict(state.get("info", {}) or {})
                 trajectory.append(
                     {
@@ -1547,7 +1935,10 @@ def _load_rollout_trajectory(path: Path, *, metrics: Mapping[str, Any]) -> List[
             rows.append(
                 {
                     "step": int(entry.get("step", index)),
-                    "obs": dict(entry.get("obs", {}) or {"state_vector": _flatten_numeric_payload(entry)}),
+                    "obs": dict(
+                        entry.get("obs", {})
+                        or {"state_vector": _flatten_numeric_payload(entry)}
+                    ),
                     "action": dict(entry.get("action", {}) or {"action_vector": [0.0]}),
                     "done": bool(entry.get("done", index == len(trajectory) - 1)),
                     "info": dict(entry.get("info", {}) or {"reward": per_step_reward}),

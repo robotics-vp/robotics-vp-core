@@ -135,16 +135,18 @@ Already landed or now in scope:
 - `src/diffusion/real_video_diffusion_stub.py` now renders governed hypotheses when available instead of always originating futures itself.
 - `src/vision/scene_ir_tracker/io/scene_tracks_runner.py` no longer hardwires stub adapters in the runner API; stub usage is configurable.
 - `scripts/run_stage1_pipeline.py` now also emits reconstruction sidecars, runtime packets, branch evaluations, event-spine rows, decision-ledger rows, governance traces, counterfactual evals, value-target packs, and value-ledger receipts directly from the live governed video loop.
+- `scripts/run_stage1_pipeline.py` now emits teacher adapter contracts, teacher action envelopes, and teacher traces directly in the Stage-1 path, including unavailable fallback cases, and avoids fabricated calibration refs when the manifest does not provide calibration.
+- `scripts/export_governed_video_stage1_bridges.py` now exports governed-video admission logs into canonical replay plus RLDS and LeRobot rows while preserving internal sidecar refs.
 - `src/vla/rollout_labeler.py` plus `src/vla/teacher_runtime.py` now emit teacher adapter contracts and teacher action envelopes in the live labeling path even when OpenVLA is disabled or unavailable, so fallback becomes explicit supervision rather than silent absence.
 
 Still missing for production-ready v-JEPA-2-grade plumbing:
 
 - Real non-stub SceneTracks adapters and calibration at the production runner boundary.
-- A D4RT-style 4D reconstruction sidecar tying cameras, trajectories, and geometry together for real robot footage.
+- Production-grade 4D reconstruction evidence with real calibration, trajectories, and geometry for real robot footage.
 - Real evaluator-driven branching and test-time compute over governed video states rather than heuristic branching alone.
 - Action-conditioned latent predictor training over fused video / scene-track / BEV / embodiment / econ tokens.
 - Honest production support for non-stub OpenVLA or other teacher models beyond soft-fail sidecars.
-- Consistent teacher-runtime ingestion in the Stage-1 real-video path itself rather than only in rollout labeling and auxiliary evidence paths.
+- Broader non-stub teacher-runtime coverage beyond explicit Stage-1 fallback/manifest sidecars.
 
 Recommendation:
 
@@ -156,8 +158,8 @@ Recommendation:
 Immediate autonomous next tranche:
 
 - Deepen the now-live reconstruction sidecars with real SceneTracks calibration joins and richer camera metadata at the ingestion/runner boundary.
-- Push teacher-runtime contracts/envelopes through any remaining real-video consumers so fallback stays explicit everywhere, not only in rollout labeling.
-- Export the now-live governed supervision artifacts into replay and dataset-bridge paths so later training can consume them without bespoke joins.
+- Push teacher-runtime contracts/envelopes through any remaining real-video consumers outside the now-wired Stage-1 and rollout-labeling paths.
+- Sweep replay/export outputs over more manifest shapes now that governed supervision artifacts preserve internal sidecar refs through replay, RLDS, and LeRobot bridges.
 - Treat learned video-state training as backlog-only until those traces are real, replayable, and grounded by non-stub perception.
 
 ### 5. Dense economic supervision

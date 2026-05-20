@@ -40,7 +40,9 @@ def collect_replay_artifact_refs(
         if not isinstance(payload, Mapping):
             continue
         for key, value in payload.items():
-            if key.endswith(("_ref", "_refs", "_id", "_ids", "_path", "_paths")) and value not in (None, "", [], {}):
+            if key.endswith(
+                ("_ref", "_refs", "_id", "_ids", "_path", "_paths")
+            ) and value not in (None, "", [], {}):
                 refs[str(key)] = value
     return refs
 
@@ -54,41 +56,56 @@ def _future_training_signals(
     if not isinstance(explicit, Mapping):
         explicit = {}
     source_adapter = str(
-        metadata.get("source_adapter")
-        or episode.provenance.get("source_adapter")
-        or ""
+        metadata.get("source_adapter") or episode.provenance.get("source_adapter") or ""
     )
     semantic_world_model_summary = metadata.get("semantic_world_model_summary", {})
     grounded_track_count = 0
     if isinstance(semantic_world_model_summary, Mapping):
         topology = semantic_world_model_summary.get("topology", {})
         if isinstance(topology, Mapping):
-            grounded_track_count = int(topology.get("grounded_track_object_count", 0) or 0)
+            grounded_track_count = int(
+                topology.get("grounded_track_object_count", 0) or 0
+            )
     promotion_trace_complete = bool(
         refs.get("event_spine_ref")
         and refs.get("decision_ledger_ref")
         and refs.get("governance_trace_ref")
-        and (refs.get("counterfactual_eval_ref") or refs.get("counterfactual_eval_path"))
+        and (
+            refs.get("counterfactual_eval_ref") or refs.get("counterfactual_eval_path")
+        )
         and (refs.get("value_target_pack_ref") or refs.get("value_target_pack_path"))
     )
     benchmark_signals = collect_benchmark_gating_signals(metadata)
     derived = {
-        "replay_roundtrip_complete": source_adapter in {
+        "replay_roundtrip_complete": source_adapter
+        in {
             "rlds_bridge_rehydration_v1",
             "lerobot_bridge_rehydration_v1",
             "governed_video_admission_log_v1",
             "semantic_degraded_import_v1",
         },
         "promotion_trace_complete": promotion_trace_complete,
-        "teacher_runtime_live": bool(refs.get("teacher_trace_ref") or refs.get("teacher_trace_path")),
+        "teacher_runtime_live": bool(
+            refs.get("teacher_trace_ref")
+            or refs.get("teacher_trace_path")
+            or refs.get("teacher_contract_ref")
+            or refs.get("teacher_contract_path")
+            or refs.get("teacher_action_ref")
+            or refs.get("teacher_action_path")
+            or refs.get("teacher_action_envelope_ref")
+            or refs.get("teacher_action_envelope_path")
+        ),
         "scene_tracks_non_stub": bool(metadata.get("scene_tracks_non_stub", False)),
         "semantic_memory_grounded": bool(
-            grounded_track_count > 0
-            or metadata.get("semantic_memory_grounded", False)
+            grounded_track_count > 0 or metadata.get("semantic_memory_grounded", False)
         ),
         "budget_settlement_live": bool(metadata.get("budget_settlement_live", False)),
-        "teacher_runtime_real": bool(benchmark_signals.get("teacher_runtime_real", False)),
-        "vision_backbone_real": bool(benchmark_signals.get("vision_backbone_real", False)),
+        "teacher_runtime_real": bool(
+            benchmark_signals.get("teacher_runtime_real", False)
+        ),
+        "vision_backbone_real": bool(
+            benchmark_signals.get("vision_backbone_real", False)
+        ),
         "semantic_grounding_non_heuristic": bool(
             benchmark_signals.get("semantic_grounding_non_heuristic", False)
         ),
@@ -138,16 +155,26 @@ def build_replay_execution_preconditions(
     }
     signal_values = {
         "event_ref_count": len(list(episode.metadata.get("event_refs", []) or [])),
-        "decision_ref_count": len(list(episode.metadata.get("decision_refs", []) or [])),
+        "decision_ref_count": len(
+            list(episode.metadata.get("decision_refs", []) or [])
+        ),
         "window_count": len(window_rows),
         "step_count": len(step_rows) or int(episode.total_steps),
         **future_signals,
     }
     required_refs = list(REPLAY_REQUIRED_ARTIFACT_REFS)
     if refs.get("counterfactual_eval_ref") or refs.get("counterfactual_eval_path"):
-        required_refs.append("counterfactual_eval_path" if refs.get("counterfactual_eval_path") else "counterfactual_eval_ref")
+        required_refs.append(
+            "counterfactual_eval_path"
+            if refs.get("counterfactual_eval_path")
+            else "counterfactual_eval_ref"
+        )
     if refs.get("value_target_pack_ref") or refs.get("value_target_pack_path"):
-        required_refs.append("value_target_pack_path" if refs.get("value_target_pack_path") else "value_target_pack_ref")
+        required_refs.append(
+            "value_target_pack_path"
+            if refs.get("value_target_pack_path")
+            else "value_target_pack_ref"
+        )
     return build_execution_preconditions(
         subject_id=episode.episode_id,
         subject_kind="replay_episode",

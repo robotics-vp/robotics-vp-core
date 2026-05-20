@@ -1,5 +1,29 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-20 - Pre-Economic-WM Stage-1 replay/export integration
+
+### What changed
+
+- Added `docs/economic_world_model/pre_economic_wm_integration_stage.md`.
+- Added `scripts/export_governed_video_stage1_bridges.py` for governed-video admission-log export into canonical replay, RLDS-shaped JSONL, and LeRobot-shaped JSONL.
+- Stage-1 now writes teacher contract, teacher action-envelope, and teacher-trace sidecars for every governed-video episode, including explicit unavailable fallback semantics.
+- Stage-1 reconstruction sidecars now avoid synthetic calibration refs when no calibration exists in the manifest.
+- Replay discovery/import and replay preconditions now preserve and recognize reconstruction, branch-evaluation, teacher-contract, teacher-action, and teacher-trace refs.
+- Dataset bridge sidecar extraction now preserves `_path` / `_paths` fields as internal sidecar pointers in addition to refs and ids.
+
+### Boundary
+
+This is integration scaffolding, not Economic WM training. It does not run GPU/provider training, does not promote a video predictor, does not claim non-stub OpenVLA/SAM3D execution, and does not alter frozen Phase B reward, trust-net, `w_econ`, or lambda-controller math.
+
+### Verification
+
+- `python3 -m ruff format scripts/run_stage1_pipeline.py scripts/export_governed_video_stage1_bridges.py src/replay/importers.py src/replay/preconditions.py src/replay/ingest.py src/dataset_bridges/sidecar_refs.py tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py`
+- `python3 -m ruff check scripts/run_stage1_pipeline.py scripts/export_governed_video_stage1_bridges.py src/replay/importers.py src/replay/preconditions.py src/replay/ingest.py src/dataset_bridges/sidecar_refs.py tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py`
+- `python3 -m compileall scripts/run_stage1_pipeline.py scripts/export_governed_video_stage1_bridges.py src/replay/importers.py src/replay/preconditions.py src/replay/ingest.py src/dataset_bridges/sidecar_refs.py -q`
+- `python3 -m pytest -q tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py tests/test_dataset_bridges.py tests/test_teacher_runtime.py tests/test_four_d_reconstruction.py` -> `19 passed, 5 warnings`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+- `python3 -m pytest tests/ -q` -> `1663 passed, 2 skipped, 29 warnings`
+
 ## 2026-05-20 - Phase 3 local-loop sidecars and neural architecture scaffolds
 
 ### What changed

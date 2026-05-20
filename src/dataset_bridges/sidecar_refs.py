@@ -28,7 +28,7 @@ _SIDECAR_ID_KEYWORDS = (
 
 
 def _is_ref_key(key: str) -> bool:
-    if key.endswith(("_ref", "_refs")):
+    if key.endswith(("_ref", "_refs", "_path", "_paths")):
         return True
     if key.endswith(("_id", "_ids")):
         lowered = key.casefold()

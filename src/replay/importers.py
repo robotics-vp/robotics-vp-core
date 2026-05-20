@@ -60,14 +60,18 @@ def _future_signals_from_admission(
     explicit = row.get("future_training_signals", {})
     if not isinstance(explicit, Mapping):
         explicit = {}
-    semantic_world_model_path = artifact_refs.get("semantic_world_model_ref") or artifact_refs.get("semantic_world_model_path")
+    semantic_world_model_path = artifact_refs.get(
+        "semantic_world_model_ref"
+    ) or artifact_refs.get("semantic_world_model_path")
     grounded_track_count = 0
     if semantic_world_model_path:
         try:
             payload = _json_object(Path(str(semantic_world_model_path)))
             topology = payload.get("topology", {})
             if isinstance(topology, Mapping):
-                grounded_track_count = int(topology.get("grounded_track_object_count", 0) or 0)
+                grounded_track_count = int(
+                    topology.get("grounded_track_object_count", 0) or 0
+                )
         except Exception:
             grounded_track_count = 0
     benchmark_signals = collect_benchmark_gating_signals(row)
@@ -83,12 +87,22 @@ def _future_signals_from_admission(
         "teacher_runtime_live": bool(
             artifact_refs.get("teacher_trace_ref")
             or artifact_refs.get("teacher_trace_path")
+            or artifact_refs.get("teacher_contract_ref")
+            or artifact_refs.get("teacher_contract_path")
+            or artifact_refs.get("teacher_action_ref")
+            or artifact_refs.get("teacher_action_path")
+            or artifact_refs.get("teacher_action_envelope_ref")
+            or artifact_refs.get("teacher_action_envelope_path")
         ),
         "scene_tracks_non_stub": bool(row.get("scene_tracks_non_stub", False)),
         "semantic_memory_grounded": grounded_track_count > 0,
         "budget_settlement_live": False,
-        "teacher_runtime_real": bool(benchmark_signals.get("teacher_runtime_real", False)),
-        "vision_backbone_real": bool(benchmark_signals.get("vision_backbone_real", False)),
+        "teacher_runtime_real": bool(
+            benchmark_signals.get("teacher_runtime_real", False)
+        ),
+        "vision_backbone_real": bool(
+            benchmark_signals.get("vision_backbone_real", False)
+        ),
         "semantic_grounding_non_heuristic": bool(
             benchmark_signals.get("semantic_grounding_non_heuristic", False)
         ),
@@ -123,12 +137,22 @@ def _future_signals_from_degraded(
         "teacher_runtime_live": bool(
             artifact_refs.get("teacher_trace_ref")
             or artifact_refs.get("teacher_trace_path")
+            or artifact_refs.get("teacher_contract_ref")
+            or artifact_refs.get("teacher_contract_path")
+            or artifact_refs.get("teacher_action_ref")
+            or artifact_refs.get("teacher_action_path")
+            or artifact_refs.get("teacher_action_envelope_ref")
+            or artifact_refs.get("teacher_action_envelope_path")
         ),
         "scene_tracks_non_stub": bool(payload.get("scene_tracks_non_stub", False)),
         "semantic_memory_grounded": False,
         "budget_settlement_live": False,
-        "teacher_runtime_real": bool(benchmark_signals.get("teacher_runtime_real", False)),
-        "vision_backbone_real": bool(benchmark_signals.get("vision_backbone_real", False)),
+        "teacher_runtime_real": bool(
+            benchmark_signals.get("teacher_runtime_real", False)
+        ),
+        "vision_backbone_real": bool(
+            benchmark_signals.get("vision_backbone_real", False)
+        ),
         "semantic_grounding_non_heuristic": bool(
             benchmark_signals.get("semantic_grounding_non_heuristic", False)
         ),
@@ -159,7 +183,9 @@ def _future_artifacts(payload: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _single_window(episode: ReplayEpisodeRecord, step: ReplayStepRecord) -> ReplayWindowRecord:
+def _single_window(
+    episode: ReplayEpisodeRecord, step: ReplayStepRecord
+) -> ReplayWindowRecord:
     return ReplayWindowRecord(
         run_id=episode.run_id,
         episode_id=episode.episode_id,
@@ -196,12 +222,19 @@ def ingest_governed_video_admission_log(
     run_id: Optional[str] = None,
     source_domain: str = "governed_video_admission",
     objective_profile_id: str = "balanced_contract",
-) -> tuple[list[ReplayEpisodeRecord], list[ReplayStepRecord], list[ReplayWindowRecord], Dict[str, Any]]:
+) -> tuple[
+    list[ReplayEpisodeRecord],
+    list[ReplayStepRecord],
+    list[ReplayWindowRecord],
+    Dict[str, Any],
+]:
     """Convert governed-video proposal admission logs into canonical replay rows."""
 
     path = Path(log_path)
     rows = _json_rows(path)
-    resolved_run_id = run_id or f"governed_video_import_{sha256_json({'log_path': str(path)})[:12]}"
+    resolved_run_id = (
+        run_id or f"governed_video_import_{sha256_json({'log_path': str(path)})[:12]}"
+    )
     timestamp = _timestamp_from_path(path)
     episodes: list[ReplayEpisodeRecord] = []
     steps: list[ReplayStepRecord] = []
@@ -215,26 +248,47 @@ def ingest_governed_video_admission_log(
             {
                 key: value
                 for key, value in dict(row).items()
-                if str(key).endswith(("_path", "_paths", "_ref", "_refs", "_id", "_ids"))
+                if str(key).endswith(
+                    ("_path", "_paths", "_ref", "_refs", "_id", "_ids")
+                )
             }
         )
         source_preconditions = dict(row.get("execution_preconditions", {}) or {})
         source_work_order = dict(row.get("execution_work_order", {}) or {})
-        future_training_signals = _future_signals_from_admission(row, artifact_refs=artifact_refs)
+        future_training_signals = _future_signals_from_admission(
+            row, artifact_refs=artifact_refs
+        )
         future_training_artifacts = _future_artifacts(row)
         blocked = bool(row.get("blocked", False))
-        plausibility_gate = row.get("plausibility_gate", {}) if isinstance(row.get("plausibility_gate"), Mapping) else {}
-        plausibility_details = plausibility_gate.get("details", {}) if isinstance(plausibility_gate.get("details"), Mapping) else {}
-        plausibility_score = _as_float(plausibility_details.get("plausibility_score"), _as_float(source_preconditions.get("readiness_score"), 0.0))
+        plausibility_gate = (
+            row.get("plausibility_gate", {})
+            if isinstance(row.get("plausibility_gate"), Mapping)
+            else {}
+        )
+        plausibility_details = (
+            plausibility_gate.get("details", {})
+            if isinstance(plausibility_gate.get("details"), Mapping)
+            else {}
+        )
+        plausibility_score = _as_float(
+            plausibility_details.get("plausibility_score"),
+            _as_float(source_preconditions.get("readiness_score"), 0.0),
+        )
         readiness_score = _as_float(source_preconditions.get("readiness_score"), 0.0)
-        work_order_ready = bool(source_work_order.get("ready", source_preconditions.get("ready", False)))
+        work_order_ready = bool(
+            source_work_order.get("ready", source_preconditions.get("ready", False))
+        )
         obs_vector = [
             plausibility_score,
             readiness_score,
             1.0 if blocked else 0.0,
             1.0 if work_order_ready else 0.0,
-            1.0 if future_training_signals.get("promotion_trace_complete", False) else 0.0,
-            1.0 if future_training_signals.get("semantic_memory_grounded", False) else 0.0,
+            1.0
+            if future_training_signals.get("promotion_trace_complete", False)
+            else 0.0,
+            1.0
+            if future_training_signals.get("semantic_memory_grounded", False)
+            else 0.0,
         ]
         action_vector = [
             1.0 if source_work_order.get("decision") == "admit_datapack" else 0.0,
@@ -242,10 +296,18 @@ def ingest_governed_video_admission_log(
         ]
         condition_vector = {
             "blocked": blocked,
-            "promotion_trace_complete": future_training_signals.get("promotion_trace_complete", False),
-            "semantic_memory_grounded": future_training_signals.get("semantic_memory_grounded", False),
-            "teacher_runtime_live": future_training_signals.get("teacher_runtime_live", False),
-            "scene_tracks_non_stub": future_training_signals.get("scene_tracks_non_stub", False),
+            "promotion_trace_complete": future_training_signals.get(
+                "promotion_trace_complete", False
+            ),
+            "semantic_memory_grounded": future_training_signals.get(
+                "semantic_memory_grounded", False
+            ),
+            "teacher_runtime_live": future_training_signals.get(
+                "teacher_runtime_live", False
+            ),
+            "scene_tracks_non_stub": future_training_signals.get(
+                "scene_tracks_non_stub", False
+            ),
         }
         metadata = {
             "source_adapter": "governed_video_admission_log_v1",
@@ -256,9 +318,15 @@ def ingest_governed_video_admission_log(
             "source_execution_work_order": source_work_order,
             "future_training_signals": future_training_signals,
             "future_training_artifacts": future_training_artifacts,
-            "event_refs": [artifact_refs["event_spine_ref"]] if artifact_refs.get("event_spine_ref") else [],
-            "decision_refs": [artifact_refs["decision_ledger_ref"]] if artifact_refs.get("decision_ledger_ref") else [],
-            "semantic_world_model_summary": _json_object(Path(str(artifact_refs["semantic_world_model_ref"])))
+            "event_refs": [artifact_refs["event_spine_ref"]]
+            if artifact_refs.get("event_spine_ref")
+            else [],
+            "decision_refs": [artifact_refs["decision_ledger_ref"]]
+            if artifact_refs.get("decision_ledger_ref")
+            else [],
+            "semantic_world_model_summary": _json_object(
+                Path(str(artifact_refs["semantic_world_model_ref"]))
+            )
             if artifact_refs.get("semantic_world_model_ref")
             else {},
         }
@@ -287,7 +355,9 @@ def ingest_governed_video_admission_log(
             econ_tensor_summary={"plausibility_score": plausibility_score},
             econ_tensor_ref=None,
             pricing_summary={"plausibility_gate": plausibility_gate},
-            pricing_tick_refs=[artifact_refs["pricing_tick_ref"]] if artifact_refs.get("pricing_tick_ref") else [],
+            pricing_tick_refs=[artifact_refs["pricing_tick_ref"]]
+            if artifact_refs.get("pricing_tick_ref")
+            else [],
             constraint_flags=[
                 {"code": reason, "severity": "hard" if blocked else "info"}
                 for reason in list(plausibility_gate.get("reason_codes", []) or [])
@@ -309,10 +379,18 @@ def ingest_governed_video_admission_log(
             step_idx=0,
             obs={"plausibility_gate": plausibility_gate, "blocked": blocked},
             obs_vector=obs_vector,
-            action={"decision": source_work_order.get("decision", "capture_negative_supervision" if blocked else "admit_datapack")},
+            action={
+                "decision": source_work_order.get(
+                    "decision",
+                    "capture_negative_supervision" if blocked else "admit_datapack",
+                )
+            },
             action_vector=action_vector,
             reward=0.0 if blocked else float(work_order_ready),
-            reward_decomposition={"admission_ready": float(work_order_ready), "blocked": 1.0 if blocked else 0.0},
+            reward_decomposition={
+                "admission_ready": float(work_order_ready),
+                "blocked": 1.0 if blocked else 0.0,
+            },
             done=True,
             task_id=video_id,
             env_id="stage1_governed_video",
@@ -354,7 +432,12 @@ def ingest_semantic_degraded_artifacts(
     run_id: Optional[str] = None,
     source_domain: str = "semantic_negative_supervision",
     objective_profile_id: str = "balanced_contract",
-) -> tuple[list[ReplayEpisodeRecord], list[ReplayStepRecord], list[ReplayWindowRecord], Dict[str, Any]]:
+) -> tuple[
+    list[ReplayEpisodeRecord],
+    list[ReplayStepRecord],
+    list[ReplayWindowRecord],
+    Dict[str, Any],
+]:
     """Convert semantic degraded artifacts into canonical replay rows."""
 
     path = Path(root)
@@ -362,7 +445,9 @@ def ingest_semantic_degraded_artifacts(
         artifact_paths = [path]
     else:
         artifact_paths = sorted(path.rglob("*_semantic_degraded_v1.json"))
-    resolved_run_id = run_id or f"semantic_degraded_import_{sha256_json({'root': str(path)})[:12]}"
+    resolved_run_id = (
+        run_id or f"semantic_degraded_import_{sha256_json({'root': str(path)})[:12]}"
+    )
     episodes: list[ReplayEpisodeRecord] = []
     steps: list[ReplayStepRecord] = []
     windows: list[ReplayWindowRecord] = []
@@ -373,8 +458,12 @@ def ingest_semantic_degraded_artifacts(
             continue
         episode_id = str(payload.get("episode_id", artifact_path.stem))
         failure_reason = str(payload.get("failure_reason", "semantic_degraded"))
-        artifact_refs = _normalize_artifact_refs(dict(payload.get("artifact_refs", {}) or {}))
-        future_training_signals = _future_signals_from_degraded(payload, artifact_refs=artifact_refs)
+        artifact_refs = _normalize_artifact_refs(
+            dict(payload.get("artifact_refs", {}) or {})
+        )
+        future_training_signals = _future_signals_from_degraded(
+            payload, artifact_refs=artifact_refs
+        )
         future_training_artifacts = _future_artifacts(payload)
         source_preconditions = dict(payload.get("execution_preconditions", {}) or {})
         source_work_order = dict(payload.get("execution_work_order", {}) or {})
@@ -392,8 +481,12 @@ def ingest_semantic_degraded_artifacts(
             "source_execution_work_order": source_work_order,
             "future_training_signals": future_training_signals,
             "future_training_artifacts": future_training_artifacts,
-            "event_refs": [artifact_refs["event_spine_ref"]] if artifact_refs.get("event_spine_ref") else [],
-            "decision_refs": [artifact_refs["decision_ledger_ref"]] if artifact_refs.get("decision_ledger_ref") else [],
+            "event_refs": [artifact_refs["event_spine_ref"]]
+            if artifact_refs.get("event_spine_ref")
+            else [],
+            "decision_refs": [artifact_refs["decision_ledger_ref"]]
+            if artifact_refs.get("decision_ledger_ref")
+            else [],
         }
         provenance = {
             "source_adapter": "semantic_degraded_import_v1",
@@ -415,8 +508,12 @@ def ingest_semantic_degraded_artifacts(
             skill_mode="review",
             condition_vector={
                 "failure_reason": failure_reason,
-                "teacher_runtime_live": future_training_signals.get("teacher_runtime_live", False),
-                "scene_tracks_non_stub": future_training_signals.get("scene_tracks_non_stub", False),
+                "teacher_runtime_live": future_training_signals.get(
+                    "teacher_runtime_live", False
+                ),
+                "scene_tracks_non_stub": future_training_signals.get(
+                    "scene_tracks_non_stub", False
+                ),
             },
             condition_vector_values=list(obs_vector),
             objective_tensor_summary={"objective_profile_id": objective_profile_id},
@@ -427,7 +524,10 @@ def ingest_semantic_degraded_artifacts(
             pricing_tick_refs=[],
             constraint_flags=[{"code": failure_reason, "severity": "hard"}],
             regal_summary={"failure_reason": failure_reason},
-            datapack_summary={"negative_supervision": True, "work_order_id": source_work_order.get("work_order_id")},
+            datapack_summary={
+                "negative_supervision": True,
+                "work_order_id": source_work_order.get("work_order_id"),
+            },
             ledger_event_ids=[],
             metadata=metadata,
             provenance=provenance,
@@ -438,7 +538,11 @@ def ingest_semantic_degraded_artifacts(
             step_idx=0,
             obs={"failure_reason": failure_reason},
             obs_vector=obs_vector,
-            action={"decision": source_work_order.get("decision", "capture_negative_supervision")},
+            action={
+                "decision": source_work_order.get(
+                    "decision", "capture_negative_supervision"
+                )
+            },
             action_vector=[0.0, 1.0],
             reward=0.0,
             reward_decomposition={"negative_supervision": 1.0},
