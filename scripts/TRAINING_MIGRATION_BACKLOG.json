@@ -182,13 +182,13 @@
             "script": "train_economic_world_model_v0.py",
             "priority": "P1",
             "owner": "codex",
-            "blocked_by": "native scaffold, local row materialization, shadow allocation eval, teacher/provider evidence contracts, provider/GPU runbook templates, template validation, canonical lower-WM consumption preflight, native Stage-1 lower-WM refs, and neural architecture manifest now exist; actual training remains blocked by GPU/provider bring-up, promotion-grade benchmark evidence, and non-stub teacher/runtime execution evidence",
+            "blocked_by": "script scaffold exists with Phase-5 local prep contracts, resource surfaces, CPU smoke forwards, loss definitions, shadow execution work orders, and denied-promotion gates; actual training remains blocked by GPU/provider bring-up, promotion-grade benchmark evidence, non-stub teacher/runtime execution evidence, and real shadow outcome receipts",
             "downstream_dependents": [
                 "economic allocation critic",
                 "data acquisition allocator",
                 "cross-WM resource routing"
             ],
-            "notes": "Future Economic WM trainer over canonical replay, benchmark gates, value targets, counterfactual evals, runtime packets, event/decision/governance traces, inferential learnability contracts, native canonical lower-WM state refs, and neural estimator/dynamics/allocator/governance component manifests. First native scaffold artifacts, local replay feature rows, shadow allocation eval, teacher/provider evidence contracts, manifest-shaped provider/GPU runbook templates, template validation, native Stage-1 lower-WM refs, lower-WM canonical consumption rows, and neural architecture manifest now exist; this remains a trainer backlog entry only and must not become a GPU/provider/promotion claim.",
+            "notes": "Non-training trainer scaffold now exists and is intentionally denied promotion: dataset contract, component config, loss definitions, CPU smoke forward report, and trainer scaffold manifest are emitted without weight writes. Future real trainer must consume Phase-5 datapack-composition rows, temporal windows, counterfactual/value joins, resource receipts, canonical lower-WM refs, and shadow execution outcome receipts once GPU/provider evidence is available.",
             "created_at": "2026-05-21",
             "updated_at": "2026-05-21"
         }

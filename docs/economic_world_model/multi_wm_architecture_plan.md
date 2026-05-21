@@ -2847,6 +2847,13 @@ Key changes in this phase:
   - conservation
   - inferential work orders
 
+Current local Phase-5 closure artifacts (2026-05-21):
+
+- `resource_surfaces.py` defines capacity, latency, thermal, battery, companion-compute, degraded-mode, and queueing receipt schemas so compute/battery can become allocatable budget objects before GPU/provider execution exists.
+- `phase5_local_prep.py` emits datapack-composition rows, counterfactual/value-target joins, and temporal windows over canonical lower-WM refs and resource surfaces.
+- `train_economic_world_model_v0.py` is a trainer scaffold only: dataset contract, component configs, loss definitions, and CPU smoke forwards with no weight writes or training claim.
+- `shadow_execution.py` emits advisory work orders and outcome-comparison slots so Economic WM recommendations can be evaluated against later lower-WM outcomes without controlling reward math or live policy.
+
 Recommended module families in this phase:
 
 - economic resource-budgeting and allocation modules

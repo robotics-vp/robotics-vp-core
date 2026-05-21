@@ -3243,3 +3243,37 @@
 - Next recommended task from the refreshed audit:
   - `docs_only`: no missing additive scaffold detected; keep nightly verification
     and docs refresh only until a higher-priority gap appears.
+
+### 2026-05-21: Economic WM Phase-5 local-closure pass
+
+- Added Phase-5 resource and compute surfaces:
+  - `src/world_model/economic_world_model/resource_surfaces.py`
+  - `scripts/economic_world_model/prepare_economic_wm_resource_surfaces.py`
+  - `tests/test_economic_wm_resource_surfaces.py`
+- Added local prep row families beyond Stage-1:
+  - `economic_wm_datapack_composition_row_v1`
+  - `economic_wm_counterfactual_value_join_row_v1`
+  - `economic_wm_temporal_window_row_v1`
+  - `src/world_model/economic_world_model/phase5_local_prep.py`
+  - `scripts/economic_world_model/prepare_economic_wm_phase5_local_prep.py`
+  - `tests/test_economic_wm_phase5_local_prep.py`
+- Added `scripts/train_economic_world_model_v0.py` as a shape-checked trainer scaffold only:
+  - emits dataset contract, model component configs, loss definitions, CPU smoke forward report, and denied-promotion manifest
+  - keeps `training_executed=false`, `weights_written=false`, `ready_for_gpu_training=false`, `promotion_eligible=false`, and `reward_math_mutation=false`
+- Added shadow execution work-order loops:
+  - `src/world_model/economic_world_model/shadow_execution.py`
+  - `scripts/economic_world_model/run_economic_wm_shadow_execution.py`
+  - `tests/test_economic_wm_shadow_execution.py`
+- Added docs for resource surfaces, Phase-5 local prep, trainer scaffold, and shadow execution.
+- Boundary preserved: no GPU training, provider bring-up, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda math mutation.
+
+Verification for the Phase-5 local-closure pass:
+
+- Focused ruff/compile/tests: pass (`18 passed` across new and adjacent Economic WM tests).
+- Artifact CLIs materialized current local surfaces:
+  - resource surfaces: `row_count=5`, `receipt_count=5`, `ready_for_phase5_local_prep=true`
+  - Phase-5 local prep: `composition_row_count=5`, `counterfactual_value_join_count=5`, `temporal_window_count=3`, `ready_for_trainer_scaffold=true`
+  - trainer scaffold: `cpu_smoke_forward_passed=true`, `training_executed=false`, `weights_written=false`
+  - shadow execution: `work_order_count=3`, `outcome_comparison_count=3`, `ready_for_shadow_comparison=true`
+- Nightly audit: pass (`status=ok`).
+- Full suite: `python3 -m compileall src/ -q && python3 -m pytest tests/ -q` -> `1700 passed, 2 skipped, 32 warnings`.

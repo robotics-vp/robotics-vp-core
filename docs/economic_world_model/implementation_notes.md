@@ -4729,3 +4729,42 @@ the Sim / Synth / Physics WM.
 ### Verification
 
 - `git diff --check -- docs/economic_world_model/multi_wm_architecture_plan.md docs/economic_world_model/doctrine_economic_wm_future_architecture.md docs/economic_world_model/doctrine_bio_neuro_architecture_inspirations.md docs/economic_world_model/progress_log.md docs/economic_world_model/implementation_notes.md`
+
+## 2026-05-21 — Economic WM Phase-5 local closure
+
+### What was built
+
+- Resource/compute receipt surfaces for capacity, latency, thermal headroom, battery reserve, companion-compute contracts, degraded-mode runbooks, queue telemetry, and Economic WM ingestion slots.
+- Phase-5 local row families that consume canonical lower-WM refs and resource surfaces directly:
+  - datapack-composition rows
+  - counterfactual/value-target join rows
+  - temporal-window rows
+- `train_economic_world_model_v0.py` as a non-training scaffold that emits shape contracts, model component configs, loss definitions, CPU smoke-forward evidence, and a denied-promotion manifest.
+- Shadow execution work orders that turn Economic WM allocation recommendations into advisory lower-WM planning requests plus future outcome-comparison slots.
+
+### Why this closes more local Phase-5 debt
+
+Phase 5 should not wait for GPUs to define the shapes of the receipts, rows, queues, temporal windows, model contracts, and shadow authority boundaries it will eventually train against. This pass makes those surfaces explicit while keeping all learned/runtime claims blocked until they literally run.
+
+### Boundaries
+
+- No GPU training ran.
+- No provider bring-up ran.
+- No real weights were written.
+- No promotion claim was made.
+- No live policy or hardware control was granted.
+- Frozen reward/trust/`w_econ`/lambda-controller math was not modified.
+
+### Remaining honest blockers
+
+- Non-stub teacher/provider runtime receipts.
+- GPU-backed estimator/dynamics/allocator/governance training.
+- Counterfactual accuracy and Pareto-quality evaluation over real shadow outcomes.
+- Promotion-grade shadow benchmarks and deployment economics.
+
+### Verification
+
+- Focused compile, ruff, and Economic WM pytest slice passed (`18 passed`).
+- Resource, Phase-5 prep, trainer scaffold, and shadow execution CLIs all materialized local artifacts.
+- Nightly audit passed with `status=ok`.
+- Full suite passed: `1700 passed, 2 skipped, 32 warnings`.
