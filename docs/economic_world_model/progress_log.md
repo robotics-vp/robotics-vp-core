@@ -1,5 +1,22 @@
 # Economic World Model Progress Log
 
+## 2026-05-21 - Economic WM provider runbook validation
+
+- **Changed**:
+  - added `src/world_model/economic_world_model/provider_runbook_validation.py` with `EconomicWMProviderRunbookValidationReport`
+  - added `scripts/economic_world_model/validate_economic_wm_provider_runbook.py` to validate runbook JSON and saved manifest-template files
+  - added `tests/test_economic_wm_provider_runbook_validation.py`
+  - updated `docs/economic_world_model/economic_wm_provider_runbook.md` with the validation path
+- **Why this matters**:
+  - future provider/GPU windows now have a cheap preflight that rejects completed-looking, unguarded, or launch-eligible templates before anyone mistakes template artifacts for execution evidence
+  - the expected current validation posture is `status=ok`, `safe_for_template_storage=true`, and `safe_for_launch=false`
+- **Verification**:
+  - `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/validate_economic_wm_provider_runbook.py tests/test_economic_wm_provider_runbook_validation.py` (`All checks passed!`)
+  - `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/validate_economic_wm_provider_runbook.py -q`
+  - `python3 -m pytest -q tests/test_economic_wm_provider_runbook_validation.py` (`3 passed`)
+  - `python3 scripts/economic_world_model/validate_economic_wm_provider_runbook.py --output-dir artifacts/economic_world_model/economic_wm_provider_runbook_validation --runbook artifacts/economic_world_model/economic_wm_provider_runbook/economic_wm_provider_runbook_v1.json --manifest-template-dir artifacts/economic_world_model/economic_wm_provider_runbook/manifest_templates` (`status=ok`, `safe_for_template_storage=true`, `safe_for_launch=false`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-21 - Economic WM provider runbook templates
 
 - **Changed**:

@@ -26,6 +26,15 @@ from src.world_model.economic_world_model.provider_runbook import (
     save_economic_wm_provider_runbook,
 )
 
+from src.world_model.economic_world_model.provider_runbook_validation import (
+    EconomicWMProviderRunbookValidationReport,
+    load_economic_wm_provider_runbook_validation_report,
+    save_economic_wm_provider_runbook_validation_report,
+    validate_economic_wm_provider_runbook,
+    validate_economic_wm_provider_runbook_from_path,
+    validate_economic_wm_provider_runbook_payload,
+)
+
 from src.world_model.economic_world_model.scaffold import (
     AllocationEnvelope,
     EconomicState,
@@ -59,6 +68,12 @@ __all__ = [
     "EconomicWMTrainingCorpusManifest",
     "EconomicWMProviderRunTemplate",
     "EconomicWMProviderRunbook",
+    "EconomicWMProviderRunbookValidationReport",
+    "load_economic_wm_provider_runbook_validation_report",
+    "save_economic_wm_provider_runbook_validation_report",
+    "validate_economic_wm_provider_runbook",
+    "validate_economic_wm_provider_runbook_from_path",
+    "validate_economic_wm_provider_runbook_payload",
     "build_economic_wm_provider_runbook",
     "build_economic_wm_provider_runbook_from_contract_path",
     "load_economic_wm_provider_runbook",

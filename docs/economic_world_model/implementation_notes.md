@@ -1,5 +1,25 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-21 - Economic WM provider runbook validation
+
+### What changed
+
+- Added a validation report layer for Economic WM provider runbooks.
+- Added checks for template-only authority, launch denial, pending manifest status, empty runtime fields, external/provider/GPU guard commands, required template-key coverage, and no promotion posture.
+- Added a CLI validator that writes JSON and Markdown validation artifacts.
+
+### Boundary
+
+This validates storage safety only. It is explicitly `safe_for_launch=false` and does not turn any template into provider, GPU, benchmark, or promotion evidence.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/validate_economic_wm_provider_runbook.py tests/test_economic_wm_provider_runbook_validation.py` (`All checks passed!`)
+- `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/validate_economic_wm_provider_runbook.py -q`
+- `python3 -m pytest -q tests/test_economic_wm_provider_runbook_validation.py` (`3 passed`)
+- `python3 scripts/economic_world_model/validate_economic_wm_provider_runbook.py --output-dir artifacts/economic_world_model/economic_wm_provider_runbook_validation --runbook artifacts/economic_world_model/economic_wm_provider_runbook/economic_wm_provider_runbook_v1.json --manifest-template-dir artifacts/economic_world_model/economic_wm_provider_runbook/manifest_templates` (`status=ok`, `safe_for_template_storage=true`, `safe_for_launch=false`)
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-21 - Economic WM provider runbook templates
 
 ### What changed

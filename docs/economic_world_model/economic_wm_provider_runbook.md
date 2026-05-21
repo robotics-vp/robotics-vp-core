@@ -55,6 +55,18 @@ Each manifest template follows `docs/agent_ergonomics/run_manifest_schema.md` fi
 
 A manifest template is not a run. A future run becomes evidence only after the template is instantiated with a fresh `run_id`, actual commands, actual runtime identifiers, produced artifacts, timestamps, cost data, and review notes.
 
+
+## Validation path
+
+```bash
+python3 scripts/economic_world_model/validate_economic_wm_provider_runbook.py \
+  --output-dir artifacts/economic_world_model/economic_wm_provider_runbook_validation \
+  --runbook artifacts/economic_world_model/economic_wm_provider_runbook/economic_wm_provider_runbook_v1.json \
+  --manifest-template-dir artifacts/economic_world_model/economic_wm_provider_runbook/manifest_templates
+```
+
+The validator checks that the runbook remains `runbook_template_only`, all templates remain `launch_allowed=false`, manifest stubs remain `pending`, external/provider/GPU commands still contain template guards, and no pod/timestamp/cost fields imply execution. The expected current result is `status=ok`, `safe_for_template_storage=true`, and `safe_for_launch=false`.
+
 ## Boundary
 
 This does not run OpenVLA, V-JEPA, diffusion providers, SceneTracks, GPU training, or promotion benchmarks. It only makes the future run ledger concrete enough that a provider/GPU window can burn down a named blocker without changing frozen reward, trust-net, `w_econ`, or lambda-controller math.
