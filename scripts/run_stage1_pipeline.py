@@ -895,6 +895,191 @@ def build_stage1_constraint_set(
     }
 
 
+def _write_canonical_lower_wm_sidecars(
+    *,
+    sidecar_dir: Path,
+    episode_id: str,
+    video_ref: Dict[str, Any],
+    semantic_tags: List[str],
+    belief_state: Any,
+    semantic_world_model: Any,
+    benchmark_gate: Optional[Any],
+    sidecar_paths: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Emit canonical lower-WM states for Stage-1 Economic WM consumers.
+
+    These are structural producer-side references. They do not train or promote
+    any model; they make the lower-WM state consumed later by Economic WM rows
+    explicit at the Stage-1 sidecar boundary.
+    """
+
+    from src.world_model.embodiment_actuation import (
+        compile_embodiment_actuation_world_state,
+    )
+    from src.world_model.perception_grounding import (
+        compile_perception_grounding_world_state,
+    )
+    from src.world_model.semantic_coverage_graph import (
+        CoverageEdge,
+        CoverageNode,
+        SemanticCoverageGraph,
+    )
+    from src.world_model.sim_synth_physics import compile_sim_synth_physics_world_state
+
+    lower_wm_dir = sidecar_dir / "canonical_lower_wm" / episode_id
+    lower_wm_dir.mkdir(parents=True, exist_ok=True)
+    benchmark_payload = (
+        benchmark_gate.to_dict()
+        if hasattr(benchmark_gate, "to_dict")
+        else dict(benchmark_gate or {})
+    )
+    benchmark_ready = bool(benchmark_payload.get("ready", False))
+    metadata = _metadata_dict(video_ref)
+
+    perception_state = compile_perception_grounding_world_state(
+        episode_id=episode_id,
+        task_id=str(
+            video_ref.get("task_type")
+            or metadata.get("task_type")
+            or "stage1_governed_video"
+        ),
+        semantic_tags=list(semantic_tags),
+        benchmark_signals={
+            "benchmark_ready": benchmark_ready,
+            "stage1_benchmark_gate": benchmark_payload,
+            "source_stage": "stage1_governed_video",
+        },
+        metadata={
+            "source": "run_stage1_pipeline_native_lower_wm_sidecars",
+            "semantic_world_model_id": str(
+                getattr(semantic_world_model, "world_model_id", "")
+            ),
+            "belief_state_id": str(getattr(belief_state, "belief_id", "")),
+            "source_sidecars": dict(sidecar_paths),
+        },
+    )
+    perception_path = lower_wm_dir / "perception_grounding_world_state_v1.json"
+    perception_path.write_text(
+        json.dumps(perception_state.to_dict(), indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    tag_nodes = [
+        CoverageNode(f"tag:{tag}", "semantic_tag", str(tag))
+        for tag in list(semantic_tags)[:8]
+    ]
+    if not tag_nodes:
+        tag_nodes = [CoverageNode("tag:unknown", "semantic_tag", "unknown")]
+    graph = SemanticCoverageGraph(
+        nodes=[
+            CoverageNode(f"episode:{episode_id}", "episode", episode_id),
+            CoverageNode(
+                "task:stage1_governed_video", "task", "Stage-1 governed video"
+            ),
+            *tag_nodes,
+        ],
+        edges=[
+            CoverageEdge(
+                "task:stage1_governed_video",
+                node.node_id,
+                "covers",
+                evidence_count=1,
+                economic_priority=0.8 if benchmark_ready else 0.4,
+                trust_priority=0.6,
+                promotion_readiness=0.0,
+            )
+            for node in tag_nodes
+        ],
+    )
+    sim_state = compile_sim_synth_physics_world_state(
+        graph,
+        limit=2,
+        perception_grounding_state=perception_state,
+        semantic_context={
+            "episode_id": episode_id,
+            "semantic_tags": list(semantic_tags),
+            "semantic_world_model_id": str(
+                getattr(semantic_world_model, "world_model_id", "")
+            ),
+        },
+        economic_context={
+            "source_stage": "stage1_governed_video",
+            "benchmark_ready": benchmark_ready,
+            "admission_mode": "benchmark" if benchmark_ready else "shadow",
+        },
+        benchmark_signals={"benchmark_ready": benchmark_ready},
+    )
+    sim_path = lower_wm_dir / "sim_synth_physics_world_state_v1.json"
+    sim_path.write_text(
+        json.dumps(sim_state.to_dict(), indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    embodiment_state = compile_embodiment_actuation_world_state(
+        episode_id=episode_id,
+        frame_index=0,
+        perception_shadow_surface={
+            "perception_grounding_state_id": perception_state.state_id,
+            "scene_object_count": getattr(
+                perception_state.scene_graph, "object_count", 0
+            ),
+        },
+        sim_embodiment_context={
+            "sim_synth_physics_state_id": sim_state.state_id,
+            "branch_count": len(getattr(sim_state.simulation_agenda, "jobs", []) or []),
+        },
+        source_refs={
+            "video_state_path": sidecar_paths.get("video_state_path", ""),
+            "semantic_world_model_path": sidecar_paths.get(
+                "semantic_world_model_path", ""
+            ),
+            "belief_state_path": sidecar_paths.get("belief_state_path", ""),
+            "perception_grounding_world_state_path": str(perception_path),
+            "sim_synth_physics_world_state_path": str(sim_path),
+        },
+        metadata={
+            "embodiment_id": str(
+                video_ref.get("embodiment_id")
+                or metadata.get("embodiment_id")
+                or "stage1_video_reference_embodiment"
+            ),
+            "source": "run_stage1_pipeline_native_lower_wm_sidecars",
+        },
+    )
+    embodiment_path = lower_wm_dir / "embodiment_actuation_world_state_v1.json"
+    embodiment_path.write_text(
+        json.dumps(embodiment_state.to_dict(), indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    return {
+        "canonical_lower_wm_reference_pack_path": str(lower_wm_dir),
+        "perception_grounding_world_state_path": str(perception_path),
+        "sim_synth_physics_world_state_path": str(sim_path),
+        "embodiment_actuation_world_state_path": str(embodiment_path),
+        "canonical_lower_wm_refs": {
+            "perception_grounding": {
+                "artifact_path": str(perception_path),
+                "state_id": perception_state.state_id,
+                "version": getattr(perception_state, "version", ""),
+                "producer": "stage1_governed_video",
+            },
+            "sim_synth_physics": {
+                "artifact_path": str(sim_path),
+                "state_id": sim_state.state_id,
+                "version": getattr(sim_state, "version", ""),
+                "producer": "stage1_governed_video",
+            },
+            "embodiment_actuation": {
+                "artifact_path": str(embodiment_path),
+                "state_id": embodiment_state.state_id,
+                "version": getattr(embodiment_state, "version", ""),
+                "producer": "stage1_governed_video",
+            },
+        },
+    }
+
+
 def write_stage1_sidecars(
     output_dir: str,
     video_ref: Dict[str, Any],
@@ -910,7 +1095,7 @@ def write_stage1_sidecars(
     constraint_set: Dict[str, Any],
     benchmark_gate: Optional[Any] = None,
     teacher_runtime_artifacts: Optional[Dict[str, Any]] = None,
-) -> tuple[Dict[str, str], Any]:
+) -> tuple[Dict[str, Any], Any]:
     sidecar_dir = Path(output_dir) / "governed_video"
     sidecar_dir.mkdir(parents=True, exist_ok=True)
     episode_id = str(video_ref["episode_id"])
@@ -1079,6 +1264,17 @@ def write_stage1_sidecars(
     sidecar_paths["reconstruction_grounding_report_path"] = str(
         reconstruction_grounding_report_path
     )
+    lower_wm_refs = _write_canonical_lower_wm_sidecars(
+        sidecar_dir=sidecar_dir,
+        episode_id=episode_id,
+        video_ref=video_ref,
+        semantic_tags=semantic_tags,
+        belief_state=belief_state,
+        semantic_world_model=semantic_world_model,
+        benchmark_gate=benchmark_gate,
+        sidecar_paths=sidecar_paths,
+    )
+    sidecar_paths.update(lower_wm_refs)
 
     supervision_bundle = build_governed_video_supervision_bundle(
         run_id=f"stage1_governed_{episode_id}",
@@ -1656,6 +1852,14 @@ def run_stage1_pipeline(
             future_training_artifacts["benchmark_gate_path"] = sidecar_paths[
                 "benchmark_gate_path"
             ]
+        for key in (
+            "canonical_lower_wm_reference_pack_path",
+            "perception_grounding_world_state_path",
+            "sim_synth_physics_world_state_path",
+            "embodiment_actuation_world_state_path",
+        ):
+            if sidecar_paths.get(key):
+                future_training_artifacts[key] = sidecar_paths[key]
 
         # Step 5: For each proposal, generate VLA plan and create datapack
         for j, proposal in enumerate(proposals):
@@ -1714,6 +1918,9 @@ def run_stage1_pipeline(
                     "teacher_trace_path",
                     "event_spine_path",
                     "decision_ledger_path",
+                    "perception_grounding_world_state_path",
+                    "sim_synth_physics_world_state_path",
+                    "embodiment_actuation_world_state_path",
                 ],
                 signal_values={
                     **plausibility_context,

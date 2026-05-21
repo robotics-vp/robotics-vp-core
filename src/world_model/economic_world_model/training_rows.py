@@ -302,6 +302,24 @@ def build_economic_wm_replay_feature_row(
             ),
             "teacher_contract_path": row.get("teacher_contract_path", ""),
             "teacher_trace_path": row.get("teacher_trace_path", ""),
+            "canonical_lower_wm_reference_pack_path": row.get(
+                "canonical_lower_wm_reference_pack_path", ""
+            ),
+            "perception_grounding_world_state_path": row.get(
+                "perception_grounding_world_state_path", ""
+            ),
+            "sim_synth_physics_world_state_path": row.get(
+                "sim_synth_physics_world_state_path", ""
+            ),
+            "embodiment_actuation_world_state_path": row.get(
+                "embodiment_actuation_world_state_path", ""
+            ),
+            "canonical_lower_wm_refs": _mapping(
+                row.get("canonical_lower_wm_refs")
+                or _mapping(row.get("future_training_artifacts")).get(
+                    "canonical_lower_wm_refs"
+                )
+            ),
         },
         metadata={
             "boundary": "local scaffold row only; no GPU training or promotion claim",

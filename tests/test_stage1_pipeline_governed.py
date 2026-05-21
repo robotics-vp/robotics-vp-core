@@ -102,6 +102,19 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     control_plane_context_files = list(
         governed_dir.glob("*_control_plane_context_v1.json")
     )
+    perception_grounding_files = list(
+        governed_dir.glob(
+            "canonical_lower_wm/*/perception_grounding_world_state_v1.json"
+        )
+    )
+    sim_synth_files = list(
+        governed_dir.glob("canonical_lower_wm/*/sim_synth_physics_world_state_v1.json")
+    )
+    embodiment_actuation_files = list(
+        governed_dir.glob(
+            "canonical_lower_wm/*/embodiment_actuation_world_state_v1.json"
+        )
+    )
     assert video_state_files
     assert reconstruction_files
     assert reconstruction_report_files
@@ -116,6 +129,9 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     assert semantic_snapshot_files
     assert orchestrator_advisory_files
     assert control_plane_context_files
+    assert perception_grounding_files
+    assert sim_synth_files
+    assert embodiment_actuation_files
     payload = json.loads(video_state_files[0].read_text())
     assert payload["version"] == "video_state_snapshot_v1"
     semantic_world_model = json.loads(semantic_world_model_files[0].read_text())
@@ -134,6 +150,18 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     )
     assert control_plane_context["authority_class"] == "canonical_metadata"
     assert control_plane_context["semantic_world_model_summary"]["world_model_id"]
+    assert (
+        json.loads(perception_grounding_files[0].read_text())["version"]
+        == "perception_grounding_world_state_v1"
+    )
+    assert (
+        json.loads(sim_synth_files[0].read_text())["version"]
+        == "sim_synth_physics_world_state_v1"
+    )
+    assert (
+        json.loads(embodiment_actuation_files[0].read_text())["version"]
+        == "embodiment_actuation_world_state_v1"
+    )
     reconstruction = json.loads(reconstruction_files[0].read_text())
     assert reconstruction["version"] == "four_d_reconstruction_sidecar_v1"
     assert reconstruction["calibrations"][0]["calibrated"] is False
@@ -164,6 +192,18 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     ]
     assert admission_rows
     assert admission_rows[0]["execution_preconditions"]["ready"] is True
+    for key in (
+        "perception_grounding_world_state_path",
+        "sim_synth_physics_world_state_path",
+        "embodiment_actuation_world_state_path",
+    ):
+        assert admission_rows[0][key]
+        assert key in admission_rows[0]["future_training_artifacts"]
+    assert set(admission_rows[0]["canonical_lower_wm_refs"]) == {
+        "perception_grounding",
+        "sim_synth_physics",
+        "embodiment_actuation",
+    }
     assert (
         admission_rows[0]["future_training_signals"]["promotion_trace_complete"] is True
     )

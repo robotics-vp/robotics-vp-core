@@ -1,5 +1,24 @@
 # Economic World Model Progress Log
 
+## 2026-05-21 - Native lower-WM refs in Stage-1 and Economic rows
+
+- **Changed**:
+  - wired Stage-1 sidecar emission to write canonical Perception / Grounding, Sim / Synth / Physics, and Embodiment / Actuation state artifacts under `governed_video/canonical_lower_wm/<episode_id>/`
+  - threaded those producer-side refs into Stage-1 admission rows, future-training artifacts, and execution preconditions
+  - updated Economic WM training-row materialization to preserve `canonical_lower_wm_refs` and the three direct canonical state paths
+  - extended tests so Stage-1 sidecars and Economic WM rows prove native lower-WM refs are present
+- **Why this matters**:
+  - the Economic WM lower-WM consumption preflight can now pass with `--no-compile-missing-refs`; current artifact output reports `direct_reference_count=15`, `compiled_reference_count=0`, and `missing_reference_count=0`
+  - the previous local compile fallback remains available for stale rows, but fresh Stage-1/Economic row production no longer depends on it
+- **Verification**:
+  - `python3 -m ruff check scripts/run_stage1_pipeline.py src/world_model/economic_world_model/training_rows.py tests/test_stage1_pipeline_governed.py tests/test_economic_wm_training_rows.py tests/test_economic_wm_lower_wm_consumption.py` (`All checks passed!`)
+  - `python3 -m compileall scripts/run_stage1_pipeline.py src/world_model/economic_world_model/training_rows.py -q`
+  - `python3 -m pytest -q tests/test_stage1_pipeline_governed.py tests/test_stage1_bridge_readiness_sweep.py tests/test_economic_wm_training_rows.py tests/test_economic_wm_lower_wm_consumption.py` (`12 passed, 5 warnings`)
+  - `python3 scripts/economic_world_model/build_economic_wm_scaffold.py --output-dir artifacts/economic_world_model/economic_wm_scaffold && python3 scripts/economic_world_model/materialize_economic_wm_training_rows.py --output-dir artifacts/economic_world_model/economic_wm_training_rows --scaffold-report artifacts/economic_world_model/economic_wm_scaffold/economic_wm_scaffold_report_v1.json && python3 scripts/economic_world_model/prepare_economic_wm_lower_wm_consumption_preflight.py --output-dir artifacts/economic_world_model/economic_wm_lower_wm_consumption_preflight --corpus-manifest artifacts/economic_world_model/economic_wm_training_rows/economic_wm_training_corpus_manifest_v1.json --rows artifacts/economic_world_model/economic_wm_training_rows/economic_wm_replay_feature_rows_v1.jsonl --no-compile-missing-refs` (`status=ok`, `direct_reference_count=15`, `compiled_reference_count=0`, `promotion_eligible=false`)
+  - `python3 scripts/economic_world_model/build_economic_wm_neural_architecture_manifest.py --output-dir artifacts/economic_world_model/economic_wm_neural_architecture_manifest --lower-wm-preflight artifacts/economic_world_model/economic_wm_lower_wm_consumption_preflight/economic_wm_lower_wm_consumption_preflight_v1.json` (`component_count=6`, `promotion_eligible=false`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status=ok`)
+  - `python3 -m compileall src/ -q && python3 -m pytest tests/ -q` (`1693 passed, 2 skipped, 32 warnings`)
+
 ## 2026-05-21 - Economic WM canonical consumption and neural manifest
 
 - **Changed**:

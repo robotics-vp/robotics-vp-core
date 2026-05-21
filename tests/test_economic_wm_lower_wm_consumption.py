@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from scripts.economic_world_model.prepare_economic_wm_lower_wm_consumption_preflight import (
@@ -168,3 +169,45 @@ def test_prepare_lower_wm_consumption_preflight_script_roundtrip(tmp_path) -> No
     assert (
         loaded_rows[0].canonical_refs[0].reference_status == "compiled_local_reference"
     )
+
+
+def test_lower_wm_consumption_preflight_accepts_native_direct_refs(tmp_path) -> None:
+    paths = {}
+    for key, version in {
+        "perception_grounding": "perception_grounding_world_state_v1",
+        "sim_synth_physics": "sim_synth_physics_world_state_v1",
+        "embodiment_actuation": "embodiment_actuation_world_state_v1",
+    }.items():
+        path = tmp_path / f"{version}.json"
+        path.write_text(
+            json.dumps({"version": version, "state_id": f"state_{key}"}),
+            encoding="utf-8",
+        )
+        paths[key] = path
+    row = _sample_row("ewm_row_direct_refs")
+    row = EconomicWMReplayFeatureRow.from_dict(
+        {
+            **row.to_dict(),
+            "source_refs": {
+                **row.source_refs,
+                "canonical_lower_wm_refs": {
+                    key: {"artifact_path": str(path)} for key, path in paths.items()
+                },
+            },
+        }
+    )
+
+    preflight, consumption_rows = build_economic_wm_lower_wm_consumption_preflight(
+        corpus_manifest=_manifest("rows.jsonl"),
+        rows=[row],
+        output_dir=tmp_path / "out",
+        consumption_rows_path=tmp_path / "out" / "consumption_rows.jsonl",
+        compile_missing_refs=False,
+    )
+
+    assert preflight.status == "ok"
+    assert preflight.direct_reference_count == 3
+    assert preflight.compiled_reference_count == 0
+    assert preflight.missing_reference_count == 0
+    assert consumption_rows[0].ready_for_neural_manifest is True
+    assert all(ref.direct_reference for ref in consumption_rows[0].canonical_refs)

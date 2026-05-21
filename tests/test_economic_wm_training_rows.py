@@ -164,3 +164,50 @@ def test_materialize_economic_wm_training_rows_script_roundtrip(tmp_path) -> Non
         .endswith("runtime_packet.json")
     )
     assert (tmp_path / "rows" / "economic_wm_training_corpus_manifest_v1.md").exists()
+
+
+def test_economic_wm_training_rows_preserve_native_lower_wm_refs() -> None:
+    scaffold = _scaffold_report()
+    admission = _admission_row("native_refs", "proposal_0", ready=True, calibrated=True)
+    admission.update(
+        {
+            "canonical_lower_wm_reference_pack_path": "artifacts/native_refs/canonical_lower_wm",
+            "perception_grounding_world_state_path": "artifacts/native_refs/perception.json",
+            "sim_synth_physics_world_state_path": "artifacts/native_refs/sim.json",
+            "embodiment_actuation_world_state_path": "artifacts/native_refs/embodiment.json",
+            "canonical_lower_wm_refs": {
+                "perception_grounding": {
+                    "artifact_path": "artifacts/native_refs/perception.json",
+                    "version": "perception_grounding_world_state_v1",
+                },
+                "sim_synth_physics": {
+                    "artifact_path": "artifacts/native_refs/sim.json",
+                    "version": "sim_synth_physics_world_state_v1",
+                },
+                "embodiment_actuation": {
+                    "artifact_path": "artifacts/native_refs/embodiment.json",
+                    "version": "embodiment_actuation_world_state_v1",
+                },
+            },
+        }
+    )
+
+    _, rows = build_economic_wm_training_corpus_manifest(
+        scaffold_report=scaffold,
+        admission_rows=[admission],
+        rows_path="rows.jsonl",
+    )
+
+    source_refs = rows[0].source_refs
+    assert source_refs["perception_grounding_world_state_path"].endswith(
+        "perception.json"
+    )
+    assert source_refs["sim_synth_physics_world_state_path"].endswith("sim.json")
+    assert source_refs["embodiment_actuation_world_state_path"].endswith(
+        "embodiment.json"
+    )
+    assert set(source_refs["canonical_lower_wm_refs"]) == {
+        "perception_grounding",
+        "sim_synth_physics",
+        "embodiment_actuation",
+    }

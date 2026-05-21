@@ -8,7 +8,7 @@ This pass materializes local Economic WM row surfaces from the scaffold and Stag
 
 The row corpus emits:
 
-- `economic_wm_replay_feature_rows_v1.jsonl`: one row per Stage-1 admission with benchmark/shadow truth, typed feature vectors, target vectors, sidecar refs, and denied-promotion reasons.
+- `economic_wm_replay_feature_rows_v1.jsonl`: one row per Stage-1 admission with benchmark/shadow truth, typed feature vectors, target vectors, sidecar refs, canonical lower-WM refs, and denied-promotion reasons.
 - `economic_wm_training_corpus_manifest_v1.json`: corpus counts, scaffold linkage, blocker posture, and artifact refs.
 - `economic_wm_training_corpus_manifest_v1.md`: human-readable summary.
 
@@ -34,7 +34,7 @@ The current local corpus has:
 - `ready_for_training=false`
 - `promotion_eligible=false`
 
-Rows preserve the same benchmark vs shadow split as the Stage-1 bridge-readiness sweep. Benchmark-ready rows receive benchmark/reconstruction target weights. Shadow-only rows receive gap-collection target weights and blocked-precondition reasons.
+Rows preserve the same benchmark vs shadow split as the Stage-1 bridge-readiness sweep. Benchmark-ready rows receive benchmark/reconstruction target weights. Shadow-only rows receive gap-collection target weights and blocked-precondition reasons. Fresh rows also preserve Stage-1 producer-side canonical lower-WM refs for Perception / Grounding, Sim / Synth / Physics, and Embodiment / Actuation under `source_refs.canonical_lower_wm_refs`.
 
 ## Boundary
 
