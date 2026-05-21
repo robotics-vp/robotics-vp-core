@@ -1,5 +1,26 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-21 - Economic WM scaffold artifacts
+
+### What changed
+
+- Added the first native Economic WM scaffold package under `src/world_model/economic_world_model/`.
+- Added deterministic `economic_state_v1`, `allocation_envelope_v1`, and `economic_wm_scaffold_report_v1` artifacts.
+- Added a CLI builder that runs or consumes the Economic WM entry preflight and writes JSON plus a Markdown summary under `artifacts/`.
+- Added tests for state/envelope derivation and report round-trip behavior.
+
+### Boundary
+
+This is a scaffold-only Economic WM entry. It exposes resource reservoirs, flow fields, dissipation fields, bottlenecks, opportunity fields, and a denied-action envelope. It does not train a model, promote a model, run GPU/provider bring-up, or mutate frozen Phase B reward, trust-net, `w_econ`, or lambda-controller math.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/build_economic_wm_scaffold.py tests/test_economic_world_model_scaffold.py` -> `All checks passed!`
+- `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/build_economic_wm_scaffold.py -q`
+- `python3 -m pytest -q tests/test_economic_world_model_scaffold.py` -> `2 passed`
+- `python3 scripts/economic_world_model/build_economic_wm_scaffold.py --output-dir artifacts/economic_world_model/economic_wm_scaffold` -> `readiness_class=scaffold_ready_training_blocked`, `promotion_eligible=false`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+
 ## 2026-05-21 - Economic WM entry preflight
 
 ### What changed

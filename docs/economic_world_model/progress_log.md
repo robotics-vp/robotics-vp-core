@@ -1,5 +1,22 @@
 # Economic World Model Progress Log
 
+## 2026-05-21 - Economic WM scaffold artifacts
+
+- **Changed**:
+  - added `src/world_model/economic_world_model/scaffold.py` with typed `EconomicState`, `AllocationEnvelope`, and `EconomicWMScaffoldReport` artifacts
+  - added `scripts/economic_world_model/build_economic_wm_scaffold.py` to run or consume the entry preflight and write scaffold artifacts
+  - added `tests/test_economic_world_model_scaffold.py` for deterministic state/envelope generation and script round-trip behavior
+  - added `docs/economic_world_model/economic_wm_scaffold.md`
+- **Why this matters**:
+  - Economic WM proper now has native, deterministic scaffold outputs to consume before learned training exists
+  - the scaffold keeps `authority_class=scaffold_only`, `reward_math_mutation=false`, and `promotion_eligible=false`, so it does not blur local structural progress with GPU/provider training readiness
+- **Verification**:
+  - `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/build_economic_wm_scaffold.py tests/test_economic_world_model_scaffold.py` (`All checks passed!`)
+  - `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/build_economic_wm_scaffold.py -q`
+  - `python3 -m pytest -q tests/test_economic_world_model_scaffold.py` (`2 passed`)
+  - `python3 scripts/economic_world_model/build_economic_wm_scaffold.py --output-dir artifacts/economic_world_model/economic_wm_scaffold` (`readiness_class=scaffold_ready_training_blocked`, `promotion_eligible=false`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-21 - Economic WM entry preflight
 
 - **Changed**:

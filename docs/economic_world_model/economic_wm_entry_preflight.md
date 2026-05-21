@@ -59,6 +59,6 @@ Training remains blocked by:
 
 ## What this allows next
 
-It is now reasonable to start the **Economic WM scaffold**: input contracts, replay feature extraction, target rows, evaluation reports, and admission gates.
+It is now reasonable to build or refresh the **Economic WM scaffold**: input contracts, replay feature extraction, target rows, evaluation reports, and admission gates. The first scaffold artifacts are documented in `docs/economic_world_model/economic_wm_scaffold.md`.
 
 It is still not reasonable to claim an Economic WM has been trained or promoted.
