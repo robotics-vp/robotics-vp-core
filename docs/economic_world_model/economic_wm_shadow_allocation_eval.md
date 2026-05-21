@@ -45,3 +45,7 @@ This is `authority_class=shadow_eval_only`:
 - no reward math is mutated
 - no model is trained or promoted
 - GPU/provider work remains blocked until it literally runs
+
+## Downstream contract prep
+
+The recommended local contract-prep step is documented in `docs/economic_world_model/economic_wm_teacher_provider_contracts.md`. It names the evidence requirements but keeps provider bring-up, GPU training, and promotion blocked.

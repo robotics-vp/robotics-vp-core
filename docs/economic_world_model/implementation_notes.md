@@ -1,5 +1,25 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-21 - Economic WM teacher/provider evidence contracts
+
+### What changed
+
+- Added typed Economic WM evidence requirements for non-stub teacher runtime, external provider truth, promotion-grade benchmark evidence, GPU runtime receipts, and replay-row linkage integrity.
+- Added `EconomicWMTeacherProviderContract` as a contract-prep artifact downstream of the shadow allocation eval.
+- Added a CLI that emits JSON and Markdown contract-pack artifacts.
+
+### Boundary
+
+This is evidence-contract prep only. It does not run a provider, run GPU training, promote a model, or mutate reward math. The current output explicitly reports `provider_bringup_ready=false`, `gpu_training_ready=false`, and `promotion_eligible=false`.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/economic_world_model/evidence_contracts.py src/world_model/economic_world_model/__init__.py scripts/economic_world_model/prepare_economic_wm_teacher_provider_contracts.py tests/test_economic_wm_teacher_provider_contracts.py` -> `All checks passed!`
+- `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/prepare_economic_wm_teacher_provider_contracts.py -q`
+- `python3 -m pytest -q tests/test_economic_wm_teacher_provider_contracts.py` -> `2 passed`
+- `python3 scripts/economic_world_model/prepare_economic_wm_teacher_provider_contracts.py --output-dir artifacts/economic_world_model/economic_wm_teacher_provider_contracts --scaffold-report artifacts/economic_world_model/economic_wm_scaffold/economic_wm_scaffold_report_v1.json --allocation-eval artifacts/economic_world_model/economic_wm_shadow_allocation_eval/economic_wm_shadow_allocation_eval_v1.json --corpus-manifest artifacts/economic_world_model/economic_wm_training_rows/economic_wm_training_corpus_manifest_v1.json --rows artifacts/economic_world_model/economic_wm_training_rows/economic_wm_replay_feature_rows_v1.jsonl` -> `authority_class=evidence_contract_only`, `promotion_eligible=false`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+
 ## 2026-05-21 - Economic WM shadow allocation eval
 
 ### What changed
