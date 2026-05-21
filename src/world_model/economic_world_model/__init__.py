@@ -16,6 +16,25 @@ from src.world_model.economic_world_model.evidence_contracts import (
     load_economic_wm_teacher_provider_contract,
     save_economic_wm_teacher_provider_contract,
 )
+from src.world_model.economic_world_model.lower_wm_consumption import (
+    EconomicWMCanonicalConsumptionRow,
+    EconomicWMLowerWMConsumptionPreflight,
+    EconomicWMLowerWMReference,
+    build_economic_wm_lower_wm_consumption_preflight,
+    build_economic_wm_lower_wm_consumption_preflight_from_paths,
+    load_economic_wm_canonical_consumption_rows,
+    load_economic_wm_lower_wm_consumption_preflight,
+    save_economic_wm_lower_wm_consumption_outputs,
+)
+
+from src.world_model.economic_world_model.neural_architecture_manifest import (
+    EconomicWMNeuralArchitectureManifest,
+    EconomicWMNeuralComponentSpec,
+    build_economic_wm_neural_architecture_manifest,
+    build_economic_wm_neural_architecture_manifest_from_path,
+    load_economic_wm_neural_architecture_manifest,
+    save_economic_wm_neural_architecture_manifest,
+)
 
 from src.world_model.economic_world_model.provider_runbook import (
     EconomicWMProviderRunTemplate,
@@ -66,6 +85,20 @@ __all__ = [
     "EconomicWMShadowAllocationEval",
     "EconomicWMTeacherProviderContract",
     "EconomicWMTrainingCorpusManifest",
+    "EconomicWMCanonicalConsumptionRow",
+    "EconomicWMLowerWMConsumptionPreflight",
+    "EconomicWMLowerWMReference",
+    "EconomicWMNeuralArchitectureManifest",
+    "EconomicWMNeuralComponentSpec",
+    "build_economic_wm_neural_architecture_manifest",
+    "build_economic_wm_neural_architecture_manifest_from_path",
+    "load_economic_wm_neural_architecture_manifest",
+    "save_economic_wm_neural_architecture_manifest",
+    "build_economic_wm_lower_wm_consumption_preflight",
+    "build_economic_wm_lower_wm_consumption_preflight_from_paths",
+    "load_economic_wm_canonical_consumption_rows",
+    "load_economic_wm_lower_wm_consumption_preflight",
+    "save_economic_wm_lower_wm_consumption_outputs",
     "EconomicWMProviderRunTemplate",
     "EconomicWMProviderRunbook",
     "EconomicWMProviderRunbookValidationReport",

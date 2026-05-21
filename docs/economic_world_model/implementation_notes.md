@@ -1,5 +1,35 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-21 - Economic WM canonical consumption and neural manifest
+
+### What changed
+
+- Added a lower-WM canonical consumption preflight for Economic WM rows.
+- Added local canonical reference-pack compilation when rows do not yet carry direct lower-WM state refs.
+- Added `economic_wm_canonical_consumption_row_v1` rows with `source_refs.canonical_lower_wm_refs` for Perception / Grounding, Sim / Synth / Physics, and Embodiment / Actuation.
+- Added an Economic WM neural architecture manifest covering:
+  - datapack composition network
+  - economic state estimator
+  - economic dynamics model
+  - distributional Pareto allocator
+  - discrete receding-horizon allocator
+  - governance reciprocity compiler
+- Each neural component now carries explicit input surfaces, output surfaces, loss families, training signals, promotion gates, runtime plane, blockers, `training_ready=false`, and `promotion_eligible=false`.
+
+### Boundary
+
+This is canonical-consumption and neural-topology preparation only. The current reference packs are compiled locally from existing row identity when source rows lack direct lower-WM refs; that is structural scaffolding, not proof that lower-WM producers emitted them natively. No GPU training, provider bring-up, promotion-grade benchmark, external teacher invocation, or reward/trust/`w_econ`/lambda-controller mutation is claimed.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/prepare_economic_wm_lower_wm_consumption_preflight.py scripts/economic_world_model/build_economic_wm_neural_architecture_manifest.py tests/test_economic_wm_lower_wm_consumption.py tests/test_economic_wm_neural_architecture_manifest.py` (`All checks passed!`)
+- `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/prepare_economic_wm_lower_wm_consumption_preflight.py scripts/economic_world_model/build_economic_wm_neural_architecture_manifest.py -q`
+- `python3 -m pytest -q tests/test_economic_wm_lower_wm_consumption.py tests/test_economic_wm_neural_architecture_manifest.py` (`5 passed`)
+- `python3 scripts/economic_world_model/prepare_economic_wm_lower_wm_consumption_preflight.py --output-dir artifacts/economic_world_model/economic_wm_lower_wm_consumption_preflight --corpus-manifest artifacts/economic_world_model/economic_wm_training_rows/economic_wm_training_corpus_manifest_v1.json --rows artifacts/economic_world_model/economic_wm_training_rows/economic_wm_replay_feature_rows_v1.jsonl` (`status=ok`, `compiled_reference_count=15`, `promotion_eligible=false`)
+- `python3 scripts/economic_world_model/build_economic_wm_neural_architecture_manifest.py --output-dir artifacts/economic_world_model/economic_wm_neural_architecture_manifest --lower-wm-preflight artifacts/economic_world_model/economic_wm_lower_wm_consumption_preflight/economic_wm_lower_wm_consumption_preflight_v1.json` (`component_count=6`, `gpu_train_required_count=5`, `promotion_eligible=false`)
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status=ok`)
+- `python3 -m compileall src/ -q && python3 -m pytest tests/ -q` (`1691 passed, 2 skipped, 32 warnings`)
+
 ## 2026-05-21 - Economic WM provider runbook validation
 
 ### What changed
