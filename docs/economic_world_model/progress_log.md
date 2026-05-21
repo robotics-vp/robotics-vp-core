@@ -1,5 +1,22 @@
 # Economic World Model Progress Log
 
+## 2026-05-21 - Economic WM training-row materialization
+
+- **Changed**:
+  - added `src/world_model/economic_world_model/training_rows.py` with typed `EconomicWMReplayFeatureRow` and `EconomicWMTrainingCorpusManifest` artifacts
+  - added `scripts/economic_world_model/materialize_economic_wm_training_rows.py` to consume the scaffold plus Stage-1 proposal admissions and write local row corpora
+  - added `tests/test_economic_wm_training_rows.py` for benchmark/shadow truth preservation and script round-trip behavior
+  - added `docs/economic_world_model/economic_wm_training_rows.md`
+- **Why this matters**:
+  - Economic WM now has a local, inspectable row surface over benchmark-ready vs shadow-only replay examples, sidecar refs, deterministic feature vectors, target vectors, and denied-promotion reasons
+  - this advances future trainer/evaluator implementation without claiming GPU training, provider bring-up, model promotion, or reward-math authority
+- **Verification**:
+  - `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/materialize_economic_wm_training_rows.py tests/test_economic_wm_training_rows.py` (`All checks passed!`)
+  - `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/materialize_economic_wm_training_rows.py -q`
+  - `python3 -m pytest -q tests/test_economic_wm_training_rows.py` (`2 passed`)
+  - `python3 scripts/economic_world_model/materialize_economic_wm_training_rows.py --output-dir artifacts/economic_world_model/economic_wm_training_rows --scaffold-report artifacts/economic_world_model/economic_wm_scaffold/economic_wm_scaffold_report_v1.json` (`row_count=5`, `benchmark_ready_count=2`, `shadow_only_count=3`, `promotion_eligible=false`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-21 - Economic WM scaffold artifacts
 
 - **Changed**:

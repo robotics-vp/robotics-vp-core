@@ -1,5 +1,26 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-21 - Economic WM training-row materialization
+
+### What changed
+
+- Added a local Economic WM row-corpus layer under `src/world_model/economic_world_model/training_rows.py`.
+- Added `economic_wm_replay_feature_row_v1` rows with benchmark/shadow truth, deterministic feature vectors, deterministic target vectors, sidecar refs, and denied-promotion reasons.
+- Added `economic_wm_training_corpus_manifest_v1` to summarize row counts, scaffold linkage, blocker posture, and artifact refs.
+- Added a CLI materializer for Stage-1 proposal admissions.
+
+### Boundary
+
+This materializes rows only. It does not execute training, bring up providers, promote a model, or grant Economic WM outputs authority over frozen reward, trust-net, `w_econ`, or lambda-controller math.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/materialize_economic_wm_training_rows.py tests/test_economic_wm_training_rows.py` -> `All checks passed!`
+- `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/materialize_economic_wm_training_rows.py -q`
+- `python3 -m pytest -q tests/test_economic_wm_training_rows.py` -> `2 passed`
+- `python3 scripts/economic_world_model/materialize_economic_wm_training_rows.py --output-dir artifacts/economic_world_model/economic_wm_training_rows --scaffold-report artifacts/economic_world_model/economic_wm_scaffold/economic_wm_scaffold_report_v1.json` -> `row_count=5`, `benchmark_ready_count=2`, `shadow_only_count=3`, `promotion_eligible=false`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+
 ## 2026-05-21 - Economic WM scaffold artifacts
 
 ### What changed
