@@ -211,13 +211,15 @@ External data sources:
 ### 8. Deferred future world-model lanes
 
 Status:
-- backlog only
+- Economic WM scaffold entry is now locally preflighted (`ready_for_scaffold=true`)
+- training remains backlog-only until GPU/provider and promotion-grade evidence exist
 
 Tracked in:
 - `scripts/TRAINING_MIGRATION_BACKLOG.json`
 
 Examples:
 - `train_governed_video_world_model.py`
+- `train_economic_world_model_v0.py`
 - `train_semantic_gap_conditioned_world_models.py`
 - `train_vjepa2_sim_synth_predictor.py`
 - `train_vjepa2_perception_grounding.py`

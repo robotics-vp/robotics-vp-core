@@ -1,5 +1,22 @@
 # Economic World Model Progress Log
 
+## 2026-05-21 - Economic WM entry preflight
+
+- **Changed**:
+  - added `src/economics/economic_wm_entry.py` with a typed `EconomicWMEntryPreflightReport`
+  - added `scripts/economic_world_model/economic_wm_entry_preflight.py` to run or consume the Stage-1 bridge-readiness sweep and classify Economic WM entry readiness
+  - added tests for scaffold/training readiness separation and report round-trip behavior
+  - added `docs/economic_world_model/economic_wm_entry_preflight.md`
+  - refreshed `scripts/TRAINING_MIGRATION_BACKLOG.json` to mark governed-video training as structurally unblocked locally but still GPU/provider/evidence gated, and added `train_economic_world_model_v0.py` as a future trainer backlog entry
+- **Why this matters**:
+  - the repo now has an executable distinction between `ready_for_scaffold=true` and `ready_for_training=false`, which is the correct gate for starting Economic WM proper without overclaiming training readiness
+- **Verification**:
+  - `python3 -m ruff check src/economics/economic_wm_entry.py src/economics/__init__.py scripts/economic_world_model/economic_wm_entry_preflight.py tests/test_economic_wm_entry_preflight.py`
+  - `python3 -m compileall src/economics scripts/economic_world_model/economic_wm_entry_preflight.py -q`
+  - `python3 -m pytest -q tests/test_economic_wm_entry_preflight.py` (`3 passed, 1 warning`)
+  - `python3 scripts/economic_world_model/economic_wm_entry_preflight.py --output-dir artifacts/economic_world_model/economic_wm_entry_preflight` (`readiness_class=scaffold_ready_training_blocked`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-20 - Stage-1 bridge readiness sweep
 
 - **Changed**:

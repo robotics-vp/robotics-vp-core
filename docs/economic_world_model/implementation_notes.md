@@ -1,5 +1,26 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-21 - Economic WM entry preflight
+
+### What changed
+
+- Added a typed Economic WM entry preflight report.
+- Added a CLI preflight that runs or consumes the Stage-1 bridge-readiness sweep.
+- The preflight emits separate scaffold and training readiness booleans.
+- Refreshed the training backlog around governed-video and future Economic WM training lanes.
+
+### Boundary
+
+This authorizes scaffold work only. It does not train, promote, or claim GPU/provider-backed Economic WM functionality.
+
+### Verification
+
+- `python3 -m ruff check src/economics/economic_wm_entry.py src/economics/__init__.py scripts/economic_world_model/economic_wm_entry_preflight.py tests/test_economic_wm_entry_preflight.py`
+- `python3 -m compileall src/economics scripts/economic_world_model/economic_wm_entry_preflight.py -q`
+- `python3 -m pytest -q tests/test_economic_wm_entry_preflight.py` -> `3 passed, 1 warning`
+- `python3 scripts/economic_world_model/economic_wm_entry_preflight.py --output-dir artifacts/economic_world_model/economic_wm_entry_preflight` -> `readiness_class=scaffold_ready_training_blocked`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+
 ## 2026-05-20 - Stage-1 bridge readiness sweep
 
 ### What changed

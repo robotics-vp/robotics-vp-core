@@ -3,7 +3,7 @@
     "description": "Training script migration backlog for @regal_training wrapper",
     "goal": "Reduce pending count to 0",
     "created_at": "2026-01-13",
-    "updated_at": "2026-05-20",
+    "updated_at": "2026-05-21",
     "backlog": [
         {
             "script": "train_orchestration_transformer_v1_curriculum.py",
@@ -115,14 +115,14 @@
             "script": "train_governed_video_world_model.py",
             "priority": "P1",
             "owner": "codex",
-            "blocked_by": "real video grounding, teacher runtime hardening, governed supervision bundles",
+            "blocked_by": "gpu/provider training capacity, production non-stub SceneTracks and teacher-runtime evidence, promotion-grade benchmark evidence; local Stage-1 supervision/replay/bridge sweep and Economic WM scaffold preflight now pass",
             "downstream_dependents": [
                 "economic world model preconditions",
                 "video-state planner evaluation"
             ],
-            "notes": "High priority but intentionally deferred - action-conditioned latent predictor over fused video, scene tracks, geometry, embodiment, and economic context; successor to the stable Phase B baseline, not a rewrite of it.",
+            "notes": "High priority but still training-deferred - action-conditioned latent predictor over fused video, scene tracks, geometry, embodiment, and economic context. Local governed-video supervision, replay/RLDS/LeRobot bridge truth, and Economic WM scaffold entry preflight are now structural; actual training/promotion remains GPU/provider/evidence gated and must not rewrite the stable Phase B baseline.",
             "created_at": "2026-03-09",
-            "updated_at": "2026-03-09"
+            "updated_at": "2026-05-21"
         },
         {
             "script": "train_vjepa2_sim_synth_predictor.py",
@@ -177,6 +177,20 @@
             "notes": "Planned trainer for Phase 3.4+ neural scaffolds over embodiment sidecars: temporal JEPA-style latent prediction, ACT-style action chunks, Diffusion Policy-style denoising, and topology-contrastive morphology consistency. Local architecture manifests and rows are now emitted; actual training/promotion remains GPU/provider/benchmark gated.",
             "created_at": "2026-05-20",
             "updated_at": "2026-05-20"
+        },
+        {
+            "script": "train_economic_world_model_v0.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "local scaffold can begin after economic_wm_entry_preflight ready_for_scaffold=true; actual training remains blocked by GPU/provider bring-up, promotion-grade benchmark evidence, and non-stub teacher/runtime evidence",
+            "downstream_dependents": [
+                "economic allocation critic",
+                "data acquisition allocator",
+                "cross-WM resource routing"
+            ],
+            "notes": "Future Economic WM trainer over canonical replay, benchmark gates, value targets, counterfactual evals, runtime packets, event/decision/governance traces, and inferential learnability contracts. This is a trainer backlog entry only; first implementation should be scaffold/evaluator/preflight driven, not a GPU claim.",
+            "created_at": "2026-05-21",
+            "updated_at": "2026-05-21"
         }
     ],
     "migrated": [
