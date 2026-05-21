@@ -1,5 +1,25 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-20 - Camera-calibrated benchmark gating
+
+### What changed
+
+- Added optional camera-calibration requirements to the benchmark-gating helper.
+- Stage-1 now enables that requirement for governed-video benchmark readiness.
+- Stage-1 benchmark metadata derives calibration class from the same normalized sensor bundle used to build reconstruction sidecars.
+- Stage-1 SceneTracks truth payload assembly preserves metadata-level SceneTracks refs before falling back to top-level refs.
+
+### Boundary
+
+This is a readiness gate only. It does not calibrate cameras, run SceneTracks, train a model, or promote any provider. It prevents benchmark-ready claims when calibration evidence is absent.
+
+### Verification
+
+- `python3 -m ruff check src/evidence/benchmark_gating.py scripts/run_stage1_pipeline.py tests/test_benchmark_gating.py tests/test_stage1_pipeline_governed.py`
+- `python3 -m compileall src/evidence scripts/run_stage1_pipeline.py -q`
+- `python3 -m pytest -q tests/test_benchmark_gating.py tests/test_stage1_pipeline_governed.py` -> `10 passed, 4 warnings`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+
 ## 2026-05-20 - Reconstruction grounding eligibility reports
 
 ### What changed

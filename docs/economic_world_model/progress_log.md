@@ -1,5 +1,21 @@
 # Economic World Model Progress Log
 
+## 2026-05-20 - Camera-calibrated benchmark gating
+
+- **Changed**:
+  - Stage-1 benchmark gates now require camera calibration in addition to real SceneTracks, non-heuristic semantic grounding, and a real vision backbone
+  - benchmark gating signals now expose `reconstruction_calibrated`, `camera_calibration_required`, and `calibration_class`
+  - Stage-1 uses one sensor-bundle normalization path for benchmark gating and reconstruction sidecar emission
+  - SceneTracks truth payload assembly now preserves metadata-only SceneTracks refs instead of overwriting them with missing top-level fields
+- **Why this matters**:
+  - a manifest can no longer become benchmark-ready just because it claims real SceneTracks and real vision while lacking intrinsics/extrinsics calibration
+  - this aligns the pre-sidecar benchmark gate with the later `reconstruction_grounding_report_v1` eligibility truth
+- **Verification**:
+  - `python3 -m ruff check src/evidence/benchmark_gating.py scripts/run_stage1_pipeline.py tests/test_benchmark_gating.py tests/test_stage1_pipeline_governed.py`
+  - `python3 -m compileall src/evidence scripts/run_stage1_pipeline.py -q`
+  - `python3 -m pytest -q tests/test_benchmark_gating.py tests/test_stage1_pipeline_governed.py` (`10 passed, 4 warnings`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-20 - Reconstruction grounding eligibility reports
 
 - **Changed**:

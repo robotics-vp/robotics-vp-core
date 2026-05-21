@@ -4,7 +4,9 @@ from scripts.run_stage1_pipeline import run_stage1_pipeline
 from src.regal.gen_plausibility import PlausibilityThresholds, RegalGenPlausibilityNode
 
 
-def _stage1_manifest_with_real_scene_tracks(tmp_path):
+def _stage1_manifest_with_real_scene_tracks(
+    tmp_path, *, include_sensor_bundle: bool = True
+):
     manifest_path = tmp_path / "stage1_manifest.json"
     payload = {
         "videos": [
@@ -21,11 +23,17 @@ def _stage1_manifest_with_real_scene_tracks(tmp_path):
                     "scene_tracks_backend": "real",
                     "vision_backbone_selected": "real",
                     "teacher_runtime_backend_selected": "unavailable",
-                    "sensor_bundle": {
-                        "cameras": ["front"],
-                        "intrinsics": {"front": "intrinsics://front"},
-                        "extrinsics": {"front": "extrinsics://front"},
-                    },
+                    **(
+                        {
+                            "sensor_bundle": {
+                                "cameras": ["front"],
+                                "intrinsics": {"front": "intrinsics://front"},
+                                "extrinsics": {"front": "extrinsics://front"},
+                            }
+                        }
+                        if include_sensor_bundle
+                        else {}
+                    ),
                     "scene_tracks_v1": {
                         "track_ids": ["drawer_track", "vase_track"],
                         "entity_types": [0, 0],
@@ -257,3 +265,47 @@ def test_stage1_pipeline_marks_real_grounded_manifest_as_benchmark_ready(
     datapacks = json.loads((tmp_path / "datapacks.json").read_text())
     assert datapacks[0]["episode_metrics"]["benchmark_gate"]["ready"] is True
     assert datapacks[0]["attribution"]["tier"] >= 1
+
+
+def test_stage1_pipeline_blocks_benchmark_readiness_without_camera_calibration(
+    tmp_path,
+) -> None:
+    manifest_path = _stage1_manifest_with_real_scene_tracks(
+        tmp_path,
+        include_sensor_bundle=False,
+    )
+    stats = run_stage1_pipeline(
+        num_videos=1,
+        proposals_per_video=1,
+        output_dir=str(tmp_path),
+        video_manifest=str(manifest_path),
+    )
+
+    assert stats["benchmark_ready_proposals"] == 0
+    admission_rows = [
+        json.loads(line)
+        for line in open(stats["proposal_admission_log"], "r", encoding="utf-8")
+        if line.strip()
+    ]
+    assert admission_rows[0]["benchmark_gate"]["ready"] is False
+    assert (
+        "blocked::camera_calibration_missing"
+        in admission_rows[0]["benchmark_gate"]["blocking_preconditions"]
+    )
+    assert (
+        admission_rows[0]["future_training_signals"]["reconstruction_real_grounded"]
+        is True
+    )
+    assert (
+        admission_rows[0]["future_training_signals"]["reconstruction_training_eligible"]
+        is False
+    )
+    assert (
+        admission_rows[0]["execution_work_order"]["recommended_mode"]
+        == "shadow_stage1_datapack"
+    )
+    report_files = list(
+        (tmp_path / "governed_video").glob("*_reconstruction_grounding_report_v1.json")
+    )
+    report = json.loads(report_files[0].read_text())
+    assert report["calibration_class"] == "camera_missing"

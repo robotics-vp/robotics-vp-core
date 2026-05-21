@@ -99,6 +99,75 @@ def _metadata_dict(video_ref: Dict[str, Any]) -> Dict[str, Any]:
     return metadata if isinstance(metadata, dict) else {}
 
 
+def _sensor_bundle_metadata(video_ref: Dict[str, Any]) -> Dict[str, Any]:
+    metadata = _metadata_dict(video_ref)
+    if isinstance(video_ref.get("sensor_bundle"), dict):
+        return dict(video_ref["sensor_bundle"])
+    if isinstance(metadata.get("sensor_bundle"), dict):
+        return dict(metadata["sensor_bundle"])
+
+    camera_name = str(video_ref.get("camera") or metadata.get("camera") or "front")
+    intrinsics_ref = (
+        video_ref.get("intrinsics_ref")
+        or video_ref.get("camera_intrinsics_ref")
+        or metadata.get("intrinsics_ref")
+        or metadata.get("camera_intrinsics_ref")
+    )
+    extrinsics_ref = (
+        video_ref.get("extrinsics_ref")
+        or video_ref.get("camera_extrinsics_ref")
+        or metadata.get("extrinsics_ref")
+        or metadata.get("camera_extrinsics_ref")
+    )
+    return {
+        "cameras": [camera_name],
+        "intrinsics": {camera_name: intrinsics_ref} if intrinsics_ref else {},
+        "extrinsics": {camera_name: extrinsics_ref} if extrinsics_ref else {},
+        "depth_unit": metadata.get("depth_unit", "unknown"),
+    }
+
+
+def _camera_calibration_class(video_ref: Dict[str, Any]) -> str:
+    sensor_bundle = _sensor_bundle_metadata(video_ref)
+    cameras = [str(camera) for camera in list(sensor_bundle.get("cameras", []) or [])]
+    if not cameras:
+        return "camera_missing"
+    intrinsics = (
+        sensor_bundle.get("intrinsics")
+        if isinstance(sensor_bundle.get("intrinsics"), dict)
+        else {}
+    )
+    extrinsics = (
+        sensor_bundle.get("extrinsics")
+        if isinstance(sensor_bundle.get("extrinsics"), dict)
+        else {}
+    )
+    calibrated = sum(
+        1 for camera in cameras if intrinsics.get(camera) and extrinsics.get(camera)
+    )
+    if calibrated == len(cameras):
+        return "camera_calibrated"
+    if calibrated > 0 or any(
+        intrinsics.get(camera) or extrinsics.get(camera) for camera in cameras
+    ):
+        return "camera_partial"
+    return "camera_missing"
+
+
+def _scene_tracks_truth_payload(video_ref: Dict[str, Any]) -> Dict[str, Any]:
+    payload = dict(_metadata_dict(video_ref))
+    for key in (
+        "scene_tracks_v1",
+        "scene_tracks_path",
+        "scene_tracks_npz",
+        "scene_tracks",
+    ):
+        value = video_ref.get(key)
+        if value not in (None, "", [], {}):
+            payload[key] = value
+    return payload
+
+
 def _runtime_field(video_ref: Dict[str, Any], *keys: str, default: str = "") -> str:
     metadata = _metadata_dict(video_ref)
     for key in keys:
@@ -112,12 +181,7 @@ def _runtime_field(video_ref: Dict[str, Any], *keys: str, default: str = "") -> 
 def _scene_tracks_backend(video_ref: Dict[str, Any]) -> str:
     explicit = _runtime_field(video_ref, "scene_tracks_backend")
     truth = scene_tracks_truth_from_metadata(
-        {
-            **_metadata_dict(video_ref),
-            "scene_tracks_v1": video_ref.get("scene_tracks_v1"),
-            "scene_tracks_path": video_ref.get("scene_tracks_path"),
-            "scene_tracks_npz": video_ref.get("scene_tracks_npz"),
-        },
+        _scene_tracks_truth_payload(video_ref),
         explicit_backend=explicit,
     )
     return str(truth.get("scene_tracks_backend", "") or "unavailable")
@@ -164,12 +228,7 @@ def _semantic_grounding_mode(
 
 def _scene_tracks_non_stub(video_ref: Dict[str, Any]) -> bool:
     truth = scene_tracks_truth_from_metadata(
-        {
-            **_metadata_dict(video_ref),
-            "scene_tracks_v1": video_ref.get("scene_tracks_v1"),
-            "scene_tracks_path": video_ref.get("scene_tracks_path"),
-            "scene_tracks_npz": video_ref.get("scene_tracks_npz"),
-        },
+        _scene_tracks_truth_payload(video_ref),
         explicit_backend=_runtime_field(video_ref, "scene_tracks_backend"),
     )
     return bool(truth.get("scene_tracks_non_stub", False))
@@ -397,12 +456,7 @@ def _future_training_signals(
     if not isinstance(explicit, dict):
         explicit = {}
     scene_tracks_truth = scene_tracks_truth_from_metadata(
-        {
-            **metadata,
-            "scene_tracks_v1": video_ref.get("scene_tracks_v1"),
-            "scene_tracks_path": video_ref.get("scene_tracks_path"),
-            "scene_tracks_npz": video_ref.get("scene_tracks_npz"),
-        },
+        _scene_tracks_truth_payload(video_ref),
         explicit_backend=_runtime_field(video_ref, "scene_tracks_backend"),
     )
     topology = getattr(semantic_world_model, "topology", {}) or {}
@@ -519,6 +573,7 @@ def _stage1_benchmark_metadata(
             getattr(semantic_world_model, "metadata", {}).get("grounded_scene", {})
             or {}
         )
+    calibration_class = _camera_calibration_class(video_ref)
     return {
         "scene_tracks_backend": _scene_tracks_backend(video_ref),
         "teacher_runtime_backend_selected": _teacher_runtime_backend_selected(
@@ -528,6 +583,8 @@ def _stage1_benchmark_metadata(
         "semantic_grounding_mode": _semantic_grounding_mode(
             video_ref, semantic_world_model
         ),
+        "reconstruction_calibrated": calibration_class == "camera_calibrated",
+        "reconstruction_calibration_class": calibration_class,
         "semantic_memory_grounded": bool(
             grounded_scene.get("grounding_ready", False)
             or int(
@@ -566,6 +623,7 @@ def build_stage1_benchmark_gate(
         require_real_scene_tracks=True,
         require_teacher_runtime=False,
         require_vision_backbone=True,
+        require_camera_calibration=True,
     )
 
 
@@ -941,33 +999,7 @@ def write_stage1_sidecars(
     reconstruction_grounding_report_path = (
         sidecar_dir / f"{episode_id}_reconstruction_grounding_report_v1.json"
     )
-    sensor_bundle_meta = (
-        video_ref.get("sensor_bundle")
-        if isinstance(video_ref.get("sensor_bundle"), dict)
-        else metadata.get("sensor_bundle")
-        if isinstance(metadata.get("sensor_bundle"), dict)
-        else None
-    )
-    if sensor_bundle_meta is None:
-        camera_name = str(video_ref.get("camera", "front"))
-        intrinsics_ref = (
-            video_ref.get("intrinsics_ref")
-            or video_ref.get("camera_intrinsics_ref")
-            or metadata.get("intrinsics_ref")
-            or metadata.get("camera_intrinsics_ref")
-        )
-        extrinsics_ref = (
-            video_ref.get("extrinsics_ref")
-            or video_ref.get("camera_extrinsics_ref")
-            or metadata.get("extrinsics_ref")
-            or metadata.get("camera_extrinsics_ref")
-        )
-        sensor_bundle_meta = {
-            "cameras": [camera_name],
-            "intrinsics": {camera_name: intrinsics_ref} if intrinsics_ref else {},
-            "extrinsics": {camera_name: extrinsics_ref} if extrinsics_ref else {},
-            "depth_unit": metadata.get("depth_unit", "unknown"),
-        }
+    sensor_bundle_meta = _sensor_bundle_metadata(video_ref)
     scene_tracks_ref = (
         video_ref.get("scene_tracks_path")
         or video_ref.get("scene_tracks_npz")

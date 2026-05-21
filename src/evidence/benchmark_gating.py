@@ -4,15 +4,21 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional
 
-from src.evidence.preconditions import ExecutionPreconditionsReport, build_execution_preconditions
+from src.evidence.preconditions import (
+    ExecutionPreconditionsReport,
+    build_execution_preconditions,
+)
 
 
 def _mapping(payload: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     return dict(payload or {})
 
 
-def collect_benchmark_gating_signals(metadata: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+def collect_benchmark_gating_signals(
+    metadata: Optional[Mapping[str, Any]],
+) -> Dict[str, Any]:
     payload = _mapping(metadata)
+    require_camera_calibration = bool(payload.get("require_camera_calibration", False))
     semantic_summary = _mapping(payload.get("semantic_world_model_summary"))
     topology = _mapping(semantic_summary.get("topology"))
     grounded_count = int(
@@ -40,18 +46,33 @@ def collect_benchmark_gating_signals(metadata: Optional[Mapping[str, Any]]) -> D
         or payload.get("scene_tracks_backend")
         or ""
     )
-    heuristic = bool(payload.get("semantic_grounding_heuristic", False)) or grounding_mode in {
+    heuristic = bool(
+        payload.get("semantic_grounding_heuristic", False)
+    ) or grounding_mode in {
         "heuristic",
         "heuristic_fallback",
         "keyword_tags",
     }
-    semantic_memory_grounded = bool(payload.get("semantic_memory_grounded", False) or grounded_count > 0)
+    semantic_memory_grounded = bool(
+        payload.get("semantic_memory_grounded", False) or grounded_count > 0
+    )
     semantic_grounding_non_heuristic = semantic_memory_grounded and not heuristic
+    calibration_class = str(
+        payload.get("calibration_class")
+        or payload.get("reconstruction_calibration_class")
+        or ""
+    )
+    reconstruction_calibrated = bool(
+        payload.get("reconstruction_calibrated", False)
+        or payload.get("camera_calibrated", False)
+        or calibration_class == "camera_calibrated"
+    )
     benchmark_eligible = (
         semantic_grounding_non_heuristic
         and scene_tracks_backend == "real"
         and teacher_backend != "stub"
         and vision_backend != "stub"
+        and (reconstruction_calibrated or not require_camera_calibration)
     )
     return {
         "scene_tracks_backend": scene_tracks_backend,
@@ -60,6 +81,9 @@ def collect_benchmark_gating_signals(metadata: Optional[Mapping[str, Any]]) -> D
         "grounded_track_object_count": grounded_count,
         "semantic_memory_grounded": semantic_memory_grounded,
         "semantic_grounding_non_heuristic": semantic_grounding_non_heuristic,
+        "reconstruction_calibrated": reconstruction_calibrated,
+        "camera_calibration_required": require_camera_calibration,
+        "calibration_class": calibration_class,
         "scene_tracks_backend_real": scene_tracks_backend == "real",
         "teacher_runtime_real": teacher_backend == "real",
         "vision_backbone_real": vision_backend == "real",
@@ -75,8 +99,10 @@ def build_benchmark_gate_report(
     require_real_scene_tracks: bool = True,
     require_teacher_runtime: bool = False,
     require_vision_backbone: bool = False,
+    require_camera_calibration: bool = False,
 ) -> ExecutionPreconditionsReport:
     payload = _mapping(metadata)
+    payload["require_camera_calibration"] = bool(require_camera_calibration)
     signals = collect_benchmark_gating_signals(payload)
     blocked_reasons: list[str] = []
 
@@ -96,6 +122,10 @@ def build_benchmark_gate_report(
 
     if not bool(signals.get("semantic_grounding_non_heuristic", False)):
         blocked_reasons.append("semantic_grounding_heuristic")
+    if require_camera_calibration and not bool(
+        signals.get("reconstruction_calibrated", False)
+    ):
+        blocked_reasons.append("camera_calibration_missing")
 
     required_boolean_signals = {
         "semantic_grounding_non_heuristic": True,
@@ -106,12 +136,20 @@ def build_benchmark_gate_report(
         required_boolean_signals["teacher_runtime_real"] = True
     if require_vision_backbone:
         required_boolean_signals["vision_backbone_real"] = True
+    if require_camera_calibration:
+        required_boolean_signals["reconstruction_calibrated"] = True
 
     return build_execution_preconditions(
         subject_id=subject_id,
         subject_kind=subject_kind,
         artifact_refs={
-            "semantic_world_model_summary": semantic_summary if (semantic_summary := _mapping(payload.get("semantic_world_model_summary"))) else {},
+            "semantic_world_model_summary": semantic_summary
+            if (
+                semantic_summary := _mapping(
+                    payload.get("semantic_world_model_summary")
+                )
+            )
+            else {},
         },
         signal_values=signals,
         required_boolean_signals=required_boolean_signals,
@@ -120,6 +158,7 @@ def build_benchmark_gate_report(
             "require_real_scene_tracks": bool(require_real_scene_tracks),
             "require_teacher_runtime": bool(require_teacher_runtime),
             "require_vision_backbone": bool(require_vision_backbone),
+            "require_camera_calibration": bool(require_camera_calibration),
         },
     )
 

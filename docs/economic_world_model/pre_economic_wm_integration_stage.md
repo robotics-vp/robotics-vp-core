@@ -20,11 +20,11 @@ The job of this stage is to make lower-WM outputs replayable, exportable, and tr
 
 ## Landed local tranche
 
-The first 2026-05-20 integration pass added Stage-1 teacher-runtime contract/action/trace sidecars, stopped fabricating calibration refs in default reconstruction sidecars, threaded reconstruction/teacher refs through replay discovery, and added a governed-video bridge export script that writes canonical replay plus RLDS and LeRobot rows while preserving internal sidecar refs. The follow-up pass added `reconstruction_grounding_report_v1` so calibration class, grounding class, missing refs, training eligibility, and benchmark readiness are explicit sidecars rather than inferred from reconstruction-file presence.
+The first 2026-05-20 integration pass added Stage-1 teacher-runtime contract/action/trace sidecars, stopped fabricating calibration refs in default reconstruction sidecars, threaded reconstruction/teacher refs through replay discovery, and added a governed-video bridge export script that writes canonical replay plus RLDS and LeRobot rows while preserving internal sidecar refs. The follow-up pass added `reconstruction_grounding_report_v1` so calibration class, grounding class, missing refs, training eligibility, and benchmark readiness are explicit sidecars rather than inferred from reconstruction-file presence. The next local pass tightened Stage-1 benchmark gates so real SceneTracks and real vision cannot become benchmark-ready unless camera calibration is present before sidecar emission.
 
 ## Remaining before Economic WM
 
 - Run fuller replay/export sweeps over more Stage-1 examples and real manifest shapes.
-- Keep tightening real SceneTracks and calibration truth at ingestion/runner boundaries; Stage-1 now has explicit reconstruction grounding reports, but broader ingestion paths still need the same discipline.
+- Keep tightening real SceneTracks and calibration truth at ingestion/runner boundaries; Stage-1 now has explicit reconstruction grounding reports and calibration-aware benchmark gates, but broader ingestion paths still need the same discipline.
 - Add trainer/backlog specs only after the replay/export surfaces remain stable under those sweeps.
 - GPU/provider work remains external: non-stub teacher runtime, V-JEPA/DreamGen-style video-state training, SAM3D-scale grounding, and promotion-grade benchmark runs.
