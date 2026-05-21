@@ -16,6 +16,16 @@ from src.world_model.economic_world_model.evidence_contracts import (
     load_economic_wm_teacher_provider_contract,
     save_economic_wm_teacher_provider_contract,
 )
+
+from src.world_model.economic_world_model.provider_runbook import (
+    EconomicWMProviderRunTemplate,
+    EconomicWMProviderRunbook,
+    build_economic_wm_provider_runbook,
+    build_economic_wm_provider_runbook_from_contract_path,
+    load_economic_wm_provider_runbook,
+    save_economic_wm_provider_runbook,
+)
+
 from src.world_model.economic_world_model.scaffold import (
     AllocationEnvelope,
     EconomicState,
@@ -47,6 +57,12 @@ __all__ = [
     "EconomicWMShadowAllocationEval",
     "EconomicWMTeacherProviderContract",
     "EconomicWMTrainingCorpusManifest",
+    "EconomicWMProviderRunTemplate",
+    "EconomicWMProviderRunbook",
+    "build_economic_wm_provider_runbook",
+    "build_economic_wm_provider_runbook_from_contract_path",
+    "load_economic_wm_provider_runbook",
+    "save_economic_wm_provider_runbook",
     "build_allocation_envelope",
     "build_economic_state",
     "build_economic_wm_replay_feature_row",

@@ -1,5 +1,25 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-21 - Economic WM provider runbook templates
+
+### What changed
+
+- Added a template-only Economic WM provider runbook layer downstream of the teacher/provider evidence contract.
+- Added manifest-shaped templates for non-stub teacher runtime invocation, provider truth receipts, GPU training runtime receipts, promotion benchmark evidence, and local replay-row linkage checks.
+- Added a CLI compiler that writes JSON, Markdown, and per-template manifest stubs under `artifacts/economic_world_model/economic_wm_provider_runbook/`.
+
+### Boundary
+
+This is runbook prep only. It does not launch RunPod, run a provider, execute GPU training, promote a model, or mutate reward math. External/provider/GPU templates include guard commands and remain `launch_allowed=false` until a real execution path replaces them and records receipts.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/compile_economic_wm_provider_runbook.py tests/test_economic_wm_provider_runbook.py` (`All checks passed!`)
+- `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/compile_economic_wm_provider_runbook.py -q`
+- `python3 -m pytest -q tests/test_economic_wm_provider_runbook.py` (`2 passed`)
+- `python3 scripts/economic_world_model/compile_economic_wm_provider_runbook.py --output-dir artifacts/economic_world_model/economic_wm_provider_runbook --contract artifacts/economic_world_model/economic_wm_teacher_provider_contracts/economic_wm_teacher_provider_contract_v1.json` (`authority_class=runbook_template_only`, `template_count=5`, `promotion_eligible=false`)
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-21 - Economic WM teacher/provider evidence contracts
 
 ### What changed

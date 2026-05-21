@@ -1,5 +1,22 @@
 # Economic World Model Progress Log
 
+## 2026-05-21 - Economic WM provider runbook templates
+
+- **Changed**:
+  - added `src/world_model/economic_world_model/provider_runbook.py` with template-only `EconomicWMProviderRunbook` and `EconomicWMProviderRunTemplate` artifacts
+  - added `scripts/economic_world_model/compile_economic_wm_provider_runbook.py` to compile manifest-shaped future-run templates from the teacher/provider evidence contract
+  - added `tests/test_economic_wm_provider_runbook.py`
+  - added `docs/economic_world_model/economic_wm_provider_runbook.md`
+- **Why this matters**:
+  - the Economic WM now has concrete run-ledger templates for the exact future windows that are currently blocked: non-stub teacher invocation, provider truth receipts, GPU training receipts, and promotion-grade benchmark evidence
+  - the runbook preserves `authority_class=runbook_template_only`, `launch_allowed=false`, `provider_bringup_ready=false`, `gpu_training_ready=false`, and `promotion_eligible=false`
+- **Verification**:
+  - `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/compile_economic_wm_provider_runbook.py tests/test_economic_wm_provider_runbook.py` (`All checks passed!`)
+  - `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/compile_economic_wm_provider_runbook.py -q`
+  - `python3 -m pytest -q tests/test_economic_wm_provider_runbook.py` (`2 passed`)
+  - `python3 scripts/economic_world_model/compile_economic_wm_provider_runbook.py --output-dir artifacts/economic_world_model/economic_wm_provider_runbook --contract artifacts/economic_world_model/economic_wm_teacher_provider_contracts/economic_wm_teacher_provider_contract_v1.json` (`authority_class=runbook_template_only`, `template_count=5`, `promotion_eligible=false`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-21 - Economic WM teacher/provider evidence contracts
 
 - **Changed**:

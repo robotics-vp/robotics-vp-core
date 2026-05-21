@@ -54,6 +54,19 @@ The contract currently requires:
 
 Only replay-row linkage is locally satisfied. Teacher/provider/GPU/promotion requirements remain blocked until they literally run and produce receipts.
 
+
+## Downstream runbook
+
+The next local compiler is:
+
+```bash
+python3 scripts/economic_world_model/compile_economic_wm_provider_runbook.py \
+  --output-dir artifacts/economic_world_model/economic_wm_provider_runbook \
+  --contract artifacts/economic_world_model/economic_wm_teacher_provider_contracts/economic_wm_teacher_provider_contract_v1.json
+```
+
+It turns this contract into manifest-shaped templates only. It does not launch providers or training.
+
 ## Boundary
 
 This does not run OpenVLA, V-JEPA, diffusion providers, SceneTracks, GPU training, or promotion benchmarks. It only defines the evidence shape those future runs must satisfy.
