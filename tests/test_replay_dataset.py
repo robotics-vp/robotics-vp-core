@@ -485,6 +485,9 @@ def test_stage1_governed_video_bridge_export_preserves_sidecars(tmp_path):
     assert lerobot_rows[0]["metadata"]["internal_sidecars"][
         "reconstruction_sidecar_ref"
     ].endswith("_reconstruction_sidecar_v1.json")
+    assert lerobot_rows[0]["metadata"]["internal_sidecars"][
+        "reconstruction_grounding_report_ref"
+    ].endswith("_reconstruction_grounding_report_v1.json")
 
 
 def test_replay_dataset_imports_semantic_degraded_artifacts(tmp_path):

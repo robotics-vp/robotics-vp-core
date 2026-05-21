@@ -1,5 +1,26 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-20 - Reconstruction grounding eligibility reports
+
+### What changed
+
+- Added `ReconstructionGroundingReport` to the 4D reconstruction module.
+- Stage-1 writes `reconstruction_grounding_report_v1` sidecars for every governed-video episode.
+- The report records calibration class, grounding class, training eligibility, benchmark readiness, missing refs, quality scores, and source artifact refs.
+- Stage-1 future-training signals now expose reconstruction calibration and training eligibility directly.
+- Replay discovery and bridge coverage preserve the reconstruction grounding report ref.
+
+### Boundary
+
+This is a truth/eligibility sidecar. It does not run non-stub SceneTracks, does not calibrate cameras, does not train a predictor, and does not promote reconstruction or video-state modeling. It only prevents downstream consumers from treating reconstruction sidecar presence as calibrated real grounding.
+
+### Verification
+
+- `python3 -m ruff format src/vision/reconstruction/four_d_reconstruction.py src/vision/reconstruction/__init__.py scripts/run_stage1_pipeline.py src/replay/ingest.py tests/test_four_d_reconstruction.py tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py`
+- `python3 -m ruff check src/vision/reconstruction/four_d_reconstruction.py src/vision/reconstruction/__init__.py scripts/run_stage1_pipeline.py src/replay/ingest.py tests/test_four_d_reconstruction.py tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py`
+- `python3 -m compileall src/vision/reconstruction scripts/run_stage1_pipeline.py src/replay/ingest.py -q`
+- `python3 -m pytest -q tests/test_four_d_reconstruction.py tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py` -> `14 passed, 5 warnings`
+
 ## 2026-05-20 - Pre-Economic-WM Stage-1 replay/export integration
 
 ### What changed

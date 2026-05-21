@@ -21,6 +21,11 @@ def _stage1_manifest_with_real_scene_tracks(tmp_path):
                     "scene_tracks_backend": "real",
                     "vision_backbone_selected": "real",
                     "teacher_runtime_backend_selected": "unavailable",
+                    "sensor_bundle": {
+                        "cameras": ["front"],
+                        "intrinsics": {"front": "intrinsics://front"},
+                        "extrinsics": {"front": "extrinsics://front"},
+                    },
                     "scene_tracks_v1": {
                         "track_ids": ["drawer_track", "vase_track"],
                         "entity_types": [0, 0],
@@ -69,6 +74,9 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     assert governed_dir.exists()
     video_state_files = list(governed_dir.glob("*_video_state_v1.json"))
     reconstruction_files = list(governed_dir.glob("*_reconstruction_sidecar_v1.json"))
+    reconstruction_report_files = list(
+        governed_dir.glob("*_reconstruction_grounding_report_v1.json")
+    )
     teacher_contract_files = list(governed_dir.glob("*_teacher_contract_v1.json"))
     teacher_action_files = list(governed_dir.glob("*_teacher_action_envelope_v1.json"))
     teacher_trace_files = list(governed_dir.glob("*_teacher_trace_v1.json"))
@@ -88,6 +96,7 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     )
     assert video_state_files
     assert reconstruction_files
+    assert reconstruction_report_files
     assert teacher_contract_files
     assert teacher_action_files
     assert teacher_trace_files
@@ -120,6 +129,10 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
     reconstruction = json.loads(reconstruction_files[0].read_text())
     assert reconstruction["version"] == "four_d_reconstruction_sidecar_v1"
     assert reconstruction["calibrations"][0]["calibrated"] is False
+    reconstruction_report = json.loads(reconstruction_report_files[0].read_text())
+    assert reconstruction_report["version"] == "reconstruction_grounding_report_v1"
+    assert reconstruction_report["calibration_class"] == "camera_missing"
+    assert reconstruction_report["training_eligible"] is False
     teacher_contract = json.loads(teacher_contract_files[0].read_text())
     assert teacher_contract["available"] is False
     assert teacher_contract["provider_truth"]["authority_class"] == "canonical_metadata"
@@ -153,6 +166,14 @@ def test_stage1_pipeline_emits_governed_sidecars(tmp_path) -> None:
         is True
     )
     assert admission_rows[0]["future_training_signals"]["teacher_runtime_real"] is False
+    assert (
+        admission_rows[0]["future_training_signals"]["reconstruction_calibrated"]
+        is False
+    )
+    assert (
+        admission_rows[0]["future_training_signals"]["reconstruction_training_eligible"]
+        is False
+    )
     assert admission_rows[0]["benchmark_gate"]["ready"] is False
     assert (
         admission_rows[0]["execution_work_order"]["recommended_mode"]
@@ -215,6 +236,20 @@ def test_stage1_pipeline_marks_real_grounded_manifest_as_benchmark_ready(
         if line.strip()
     ]
     assert admission_rows[0]["benchmark_gate"]["ready"] is True
+    assert (
+        admission_rows[0]["future_training_signals"]["reconstruction_calibrated"]
+        is True
+    )
+    assert (
+        admission_rows[0]["future_training_signals"]["reconstruction_training_eligible"]
+        is True
+    )
+    report_files = list(
+        (tmp_path / "governed_video").glob("*_reconstruction_grounding_report_v1.json")
+    )
+    report = json.loads(report_files[0].read_text())
+    assert report["calibration_class"] == "camera_calibrated"
+    assert report["grounding_class"] == "real_scene_tracks_joined"
     assert (
         admission_rows[0]["execution_work_order"]["recommended_mode"]
         == "stage1_datapack"

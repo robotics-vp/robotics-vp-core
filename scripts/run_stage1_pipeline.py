@@ -76,7 +76,9 @@ from src.world_model.governed_video_supervision import (
 )
 from src.vision.reconstruction import (
     build_four_d_reconstruction_sidecar,
+    build_reconstruction_grounding_report,
     save_four_d_reconstruction_sidecar,
+    save_reconstruction_grounding_report,
 )
 
 
@@ -410,6 +412,9 @@ def _future_training_signals(
     benchmark_signals = collect_benchmark_gating_signals(
         _stage1_benchmark_metadata(video_ref, semantic_world_model)
     )
+    reconstruction_report = _load_json_sidecar(
+        sidecar_paths.get("reconstruction_grounding_report_path")
+    )
     derived = {
         "replay_roundtrip_complete": False,
         "promotion_trace_complete": all(
@@ -443,6 +448,13 @@ def _future_training_signals(
             scene_tracks_truth.get("semantic_grounding_non_heuristic", False)
         ),
         "semantic_memory_grounded": grounded_track_count > 0,
+        "reconstruction_calibrated": reconstruction_report.get("calibration_class")
+        == "camera_calibrated",
+        "reconstruction_real_grounded": reconstruction_report.get("grounding_class")
+        == "real_scene_tracks_joined",
+        "reconstruction_training_eligible": bool(
+            reconstruction_report.get("training_eligible", False)
+        ),
         "benchmark_gate_ready": bool(getattr(benchmark_gate, "ready", False))
         if benchmark_gate is not None
         else False,
@@ -469,6 +481,16 @@ def _future_training_signals(
         }
     )
     return dict(sorted(derived.items()))
+
+
+def _load_json_sidecar(path_value: Any) -> Dict[str, Any]:
+    if not path_value:
+        return {}
+    try:
+        payload = json.loads(Path(str(path_value)).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return dict(payload) if isinstance(payload, dict) else {}
 
 
 def _future_training_artifacts(video_ref: Dict[str, Any]) -> Dict[str, Any]:
@@ -916,6 +938,9 @@ def write_stage1_sidecars(
         metadata = {}
     frame_count = int(metadata.get("num_frames", 0) or 0)
     reconstruction_path = sidecar_dir / f"{episode_id}_reconstruction_sidecar_v1.json"
+    reconstruction_grounding_report_path = (
+        sidecar_dir / f"{episode_id}_reconstruction_grounding_report_v1.json"
+    )
     sensor_bundle_meta = (
         video_ref.get("sensor_bundle")
         if isinstance(video_ref.get("sensor_bundle"), dict)
@@ -949,6 +974,10 @@ def write_stage1_sidecars(
         or metadata.get("scene_tracks_path")
         or metadata.get("scene_tracks_npz")
     )
+    if not scene_tracks_ref and (
+        video_ref.get("scene_tracks_v1") or metadata.get("scene_tracks_v1")
+    ):
+        scene_tracks_ref = "inline:scene_tracks_v1"
     reconstruction_sidecar = build_four_d_reconstruction_sidecar(
         episode_id=episode_id,
         source_type=str(video_ref.get("source_type", "video_reference")),
@@ -1000,6 +1029,24 @@ def write_stage1_sidecars(
     )
     save_four_d_reconstruction_sidecar(reconstruction_path, reconstruction_sidecar)
     sidecar_paths["reconstruction_sidecar_path"] = str(reconstruction_path)
+    reconstruction_grounding_report = build_reconstruction_grounding_report(
+        sidecar=reconstruction_sidecar,
+        sidecar_path=reconstruction_path,
+        scene_tracks_backend=_scene_tracks_backend(video_ref),
+        semantic_grounding_mode=_semantic_grounding_mode(
+            video_ref, semantic_world_model
+        ),
+        vision_backbone_selected=_vision_backbone_selected(video_ref),
+        teacher_runtime_backend_selected=_teacher_runtime_backend_selected(video_ref),
+        metadata={"task_type": str(video_ref.get("task_type", ""))},
+    )
+    save_reconstruction_grounding_report(
+        reconstruction_grounding_report_path,
+        reconstruction_grounding_report,
+    )
+    sidecar_paths["reconstruction_grounding_report_path"] = str(
+        reconstruction_grounding_report_path
+    )
 
     supervision_bundle = build_governed_video_supervision_bundle(
         run_id=f"stage1_governed_{episode_id}",
@@ -1625,6 +1672,7 @@ def run_stage1_pipeline(
                     "belief_state_path",
                     "video_state_path",
                     "reconstruction_sidecar_path",
+                    "reconstruction_grounding_report_path",
                     "runtime_packet_path",
                     "governance_trace_path",
                     "counterfactual_eval_path",

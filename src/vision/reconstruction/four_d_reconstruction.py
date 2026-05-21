@@ -122,6 +122,57 @@ class FourDReconstructionSidecar:
         )
 
 
+@dataclass(frozen=True)
+class ReconstructionGroundingReport:
+    """Eligibility report for reconstruction calibration and grounding joins."""
+
+    report_id: str
+    episode_id: str
+    reconstruction_sidecar_id: str
+    calibration_class: str
+    grounding_class: str
+    training_eligible: bool
+    benchmark_ready: bool
+    missing_refs: list[str] = field(default_factory=list)
+    quality: Dict[str, float] = field(default_factory=dict)
+    artifact_refs: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = "reconstruction_grounding_report_v1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "report_id": self.report_id,
+            "episode_id": self.episode_id,
+            "reconstruction_sidecar_id": self.reconstruction_sidecar_id,
+            "calibration_class": self.calibration_class,
+            "grounding_class": self.grounding_class,
+            "training_eligible": bool(self.training_eligible),
+            "benchmark_ready": bool(self.benchmark_ready),
+            "missing_refs": list(self.missing_refs),
+            "quality": _float_mapping(self.quality),
+            "artifact_refs": _mapping(self.artifact_refs),
+            "metadata": _mapping(self.metadata),
+            "version": self.version,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ReconstructionGroundingReport":
+        return cls(
+            report_id=str(payload.get("report_id", "")),
+            episode_id=str(payload.get("episode_id", "")),
+            reconstruction_sidecar_id=str(payload.get("reconstruction_sidecar_id", "")),
+            calibration_class=str(payload.get("calibration_class", "camera_missing")),
+            grounding_class=str(payload.get("grounding_class", "unavailable")),
+            training_eligible=bool(payload.get("training_eligible", False)),
+            benchmark_ready=bool(payload.get("benchmark_ready", False)),
+            missing_refs=_strings(payload.get("missing_refs")),
+            quality=_float_mapping(payload.get("quality")),
+            artifact_refs=_mapping(payload.get("artifact_refs")),
+            metadata=_mapping(payload.get("metadata")),
+            version=str(payload.get("version", "reconstruction_grounding_report_v1")),
+        )
+
+
 def build_four_d_reconstruction_sidecar(
     *,
     episode_id: str,
@@ -141,17 +192,23 @@ def build_four_d_reconstruction_sidecar(
     calibrations = _calibration_records_from_sensor_bundle(sensor_bundle_meta)
     calibration_score = 0.0
     if calibrations:
-        calibration_score = sum(record.confidence for record in calibrations) / float(len(calibrations))
+        calibration_score = sum(record.confidence for record in calibrations) / float(
+            len(calibrations)
+        )
 
     quality_payload = {
         **_float_mapping(quality),
         "calibration_score": float(calibration_score),
         "camera_count": float(len(calibrations)),
-        "grounding_completeness": float(_grounding_completeness(calibrations, geometry_refs, evidence_refs)),
+        "grounding_completeness": float(
+            _grounding_completeness(calibrations, geometry_refs, evidence_refs)
+        ),
     }
     frame_window = {
         "frame_count": int(frame_count or 0),
-        "frame_range": [int(frame_range[0]), int(frame_range[1])] if frame_range and len(frame_range) >= 2 else [],
+        "frame_range": [int(frame_range[0]), int(frame_range[1])]
+        if frame_range and len(frame_range) >= 2
+        else [],
     }
     payload = {
         "episode_id": str(episode_id),
@@ -188,7 +245,130 @@ def build_four_d_reconstruction_sidecar(
     )
 
 
-def save_four_d_reconstruction_sidecar(path: Path, sidecar: FourDReconstructionSidecar) -> None:
+def build_reconstruction_grounding_report(
+    *,
+    sidecar: FourDReconstructionSidecar,
+    sidecar_path: str | Path | None = None,
+    scene_tracks_backend: str = "",
+    semantic_grounding_mode: str = "",
+    vision_backbone_selected: str = "",
+    teacher_runtime_backend_selected: str = "",
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> ReconstructionGroundingReport:
+    """Classify whether a reconstruction sidecar is calibrated and trainable."""
+
+    calibration_class = _calibration_class(sidecar.calibrations)
+    geometry_refs = dict(sidecar.geometry_refs or {})
+    evidence_refs = dict(sidecar.evidence_refs or {})
+    scene_tracks_ref = geometry_refs.get("scene_tracks_path") or geometry_refs.get(
+        "scene_tracks_ref"
+    )
+    required_refs = {
+        "video_state_path": geometry_refs.get("video_state_path"),
+        "hypotheses_path": geometry_refs.get("hypotheses_path"),
+        "belief_state_path": evidence_refs.get("belief_state_path"),
+        "evidence_bus_path": evidence_refs.get("evidence_bus_path"),
+        "scene_tracks_path": scene_tracks_ref,
+    }
+    missing_refs = sorted(
+        key for key, value in required_refs.items() if value in (None, "", [], {})
+    )
+    backend = str(
+        scene_tracks_backend or sidecar.metadata.get("scene_tracks_backend", "") or ""
+    )
+    grounding_mode = str(
+        semantic_grounding_mode
+        or sidecar.metadata.get("semantic_grounding_mode", "")
+        or ""
+    )
+    vision_backend = str(
+        vision_backbone_selected
+        or sidecar.metadata.get("vision_backbone_selected", "")
+        or ""
+    )
+    teacher_backend = str(
+        teacher_runtime_backend_selected
+        or sidecar.metadata.get("teacher_runtime_backend_selected", "")
+        or ""
+    )
+    grounding_class = _grounding_class(
+        scene_tracks_backend=backend,
+        semantic_grounding_mode=grounding_mode,
+        scene_tracks_ref=scene_tracks_ref,
+    )
+    training_eligible = bool(
+        calibration_class == "camera_calibrated"
+        and grounding_class == "real_scene_tracks_joined"
+        and vision_backend not in {"", "stub", "unavailable"}
+    )
+    benchmark_ready = bool(training_eligible and vision_backend == "real")
+    quality = {
+        **_float_mapping(sidecar.quality),
+        "calibration_complete": 1.0
+        if calibration_class == "camera_calibrated"
+        else 0.0,
+        "real_scene_tracks_joined": 1.0
+        if grounding_class == "real_scene_tracks_joined"
+        else 0.0,
+        "benchmark_ready": 1.0 if benchmark_ready else 0.0,
+    }
+    artifact_refs = {
+        "reconstruction_sidecar_path": str(sidecar_path or ""),
+        **{
+            key: value
+            for key, value in required_refs.items()
+            if value not in (None, "", [], {})
+        },
+    }
+    payload = {
+        "episode_id": sidecar.episode_id,
+        "reconstruction_sidecar_id": sidecar.sidecar_id,
+        "calibration_class": calibration_class,
+        "grounding_class": grounding_class,
+        "training_eligible": training_eligible,
+        "benchmark_ready": benchmark_ready,
+        "missing_refs": missing_refs,
+        "quality": quality,
+        "artifact_refs": artifact_refs,
+        "metadata": {
+            "scene_tracks_backend": backend,
+            "semantic_grounding_mode": grounding_mode,
+            "vision_backbone_selected": vision_backend,
+            "teacher_runtime_backend_selected": teacher_backend,
+            **_mapping(metadata),
+        },
+        "version": "reconstruction_grounding_report_v1",
+    }
+    return ReconstructionGroundingReport(
+        report_id=f"recon_grounding_{sha256_json(payload)[:16]}",
+        episode_id=sidecar.episode_id,
+        reconstruction_sidecar_id=sidecar.sidecar_id,
+        calibration_class=calibration_class,
+        grounding_class=grounding_class,
+        training_eligible=training_eligible,
+        benchmark_ready=benchmark_ready,
+        missing_refs=missing_refs,
+        quality=quality,
+        artifact_refs=artifact_refs,
+        metadata=payload["metadata"],
+    )
+
+
+def save_reconstruction_grounding_report(
+    path: Path,
+    report: ReconstructionGroundingReport,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report.to_dict(), indent=2))
+
+
+def load_reconstruction_grounding_report(path: Path) -> ReconstructionGroundingReport:
+    return ReconstructionGroundingReport.from_dict(json.loads(path.read_text()))
+
+
+def save_four_d_reconstruction_sidecar(
+    path: Path, sidecar: FourDReconstructionSidecar
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(sidecar.to_dict(), indent=2))
 
@@ -197,14 +377,53 @@ def load_four_d_reconstruction_sidecar(path: Path) -> FourDReconstructionSidecar
     return FourDReconstructionSidecar.from_dict(json.loads(path.read_text()))
 
 
+def _calibration_class(calibrations: Sequence[CameraCalibrationRecord]) -> str:
+    if not calibrations:
+        return "camera_missing"
+    calibrated = sum(1 for record in calibrations if record.calibrated)
+    if calibrated == len(calibrations):
+        return "camera_calibrated"
+    if calibrated > 0 or any(record.confidence > 0.0 for record in calibrations):
+        return "camera_partial"
+    return "camera_missing"
+
+
+def _grounding_class(
+    *,
+    scene_tracks_backend: str,
+    semantic_grounding_mode: str,
+    scene_tracks_ref: Any,
+) -> str:
+    backend = str(scene_tracks_backend or "").strip().lower()
+    mode = str(semantic_grounding_mode or "").strip().lower()
+    has_scene_tracks_ref = bool(scene_tracks_ref)
+    if (
+        backend == "real"
+        and has_scene_tracks_ref
+        and mode not in {"heuristic", "heuristic_fallback", "keyword_tags"}
+    ):
+        return "real_scene_tracks_joined"
+    if has_scene_tracks_ref:
+        return "scene_tracks_ref_unqualified"
+    return "video_state_only"
+
+
 def _calibration_records_from_sensor_bundle(
     sensor_bundle_meta: Optional[Mapping[str, Any]],
 ) -> list[CameraCalibrationRecord]:
     if not isinstance(sensor_bundle_meta, Mapping):
         return []
     cameras = sensor_bundle_meta.get("cameras") or []
-    intrinsics = sensor_bundle_meta.get("intrinsics") if isinstance(sensor_bundle_meta.get("intrinsics"), Mapping) else {}
-    extrinsics = sensor_bundle_meta.get("extrinsics") if isinstance(sensor_bundle_meta.get("extrinsics"), Mapping) else {}
+    intrinsics = (
+        sensor_bundle_meta.get("intrinsics")
+        if isinstance(sensor_bundle_meta.get("intrinsics"), Mapping)
+        else {}
+    )
+    extrinsics = (
+        sensor_bundle_meta.get("extrinsics")
+        if isinstance(sensor_bundle_meta.get("extrinsics"), Mapping)
+        else {}
+    )
     records: list[CameraCalibrationRecord] = []
     for camera_name in cameras:
         name = str(camera_name)
@@ -220,7 +439,9 @@ def _calibration_records_from_sensor_bundle(
                 calibrated=calibrated,
                 calibration_source="sensor_bundle",
                 confidence=float(confidence),
-                metadata={"depth_unit": sensor_bundle_meta.get("depth_unit", "unknown")},
+                metadata={
+                    "depth_unit": sensor_bundle_meta.get("depth_unit", "unknown")
+                },
             )
         )
     return records
@@ -233,7 +454,10 @@ def _grounding_completeness(
 ) -> float:
     components: list[float] = []
     if calibrations:
-        components.append(sum(1.0 for record in calibrations if record.calibrated) / float(len(calibrations)))
+        components.append(
+            sum(1.0 for record in calibrations if record.calibrated)
+            / float(len(calibrations))
+        )
     if geometry_refs:
         present = sum(1.0 for value in dict(geometry_refs).values() if value)
         components.append(min(1.0, present / 4.0))
@@ -246,7 +470,11 @@ def _grounding_completeness(
 __all__ = [
     "CameraCalibrationRecord",
     "FourDReconstructionSidecar",
+    "ReconstructionGroundingReport",
     "build_four_d_reconstruction_sidecar",
+    "build_reconstruction_grounding_report",
     "load_four_d_reconstruction_sidecar",
+    "load_reconstruction_grounding_report",
     "save_four_d_reconstruction_sidecar",
+    "save_reconstruction_grounding_report",
 ]

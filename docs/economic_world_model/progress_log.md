@@ -1,5 +1,21 @@
 # Economic World Model Progress Log
 
+## 2026-05-20 - Reconstruction grounding eligibility reports
+
+- **Changed**:
+  - added `ReconstructionGroundingReport` and save/load helpers in `src/vision/reconstruction/four_d_reconstruction.py`
+  - Stage-1 now emits `*_reconstruction_grounding_report_v1.json` beside each reconstruction sidecar
+  - the report separates `calibration_class`, `grounding_class`, `training_eligible`, `benchmark_ready`, and missing refs so downstream code does not infer trainability from sidecar presence alone
+  - governed-video admission signals now include `reconstruction_calibrated`, `reconstruction_real_grounded`, and `reconstruction_training_eligible`
+  - replay discovery now preserves `reconstruction_grounding_report_path`, and dataset bridge tests prove the ref survives LeRobot export
+- **Why this matters**:
+  - this tightens the real-video grounding gate before Economic WM: calibrated real-grounded reconstruction is now a typed eligibility claim, not an ambient file convention
+  - default/simulated Stage-1 remains explicit `camera_missing` / non-eligible, while calibrated real SceneTracks manifests can become reconstruction-training eligible without GPU/provider claims
+- **Verification**:
+  - `python3 -m ruff check src/vision/reconstruction/four_d_reconstruction.py src/vision/reconstruction/__init__.py scripts/run_stage1_pipeline.py src/replay/ingest.py tests/test_four_d_reconstruction.py tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py`
+  - `python3 -m compileall src/vision/reconstruction scripts/run_stage1_pipeline.py src/replay/ingest.py -q`
+  - `python3 -m pytest -q tests/test_four_d_reconstruction.py tests/test_stage1_pipeline_governed.py tests/test_replay_dataset.py` (`14 passed, 5 warnings`)
+
 ## 2026-05-20 - Pre-Economic-WM Stage-1 replay/export integration
 
 - **Changed**:

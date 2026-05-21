@@ -852,6 +852,7 @@ def _discover_rollout_artifact_refs(
         "counterfactual_eval_path",
         "value_target_pack_path",
         "reconstruction_sidecar_path",
+        "reconstruction_grounding_report_path",
         "branch_evaluations_path",
         "semantic_world_model_path",
         "semantic_snapshot_path",
@@ -915,6 +916,10 @@ def _discover_rollout_artifact_refs(
         "reconstruction_sidecar_path": [
             f"{episode_id}_reconstruction_sidecar_v1.json",
             "*_reconstruction_sidecar_v1.json",
+        ],
+        "reconstruction_grounding_report_path": [
+            f"{episode_id}_reconstruction_grounding_report_v1.json",
+            "*_reconstruction_grounding_report_v1.json",
         ],
         "branch_evaluations_path": [
             f"{episode_id}_branch_evaluations_v1.json",
