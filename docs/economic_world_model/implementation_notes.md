@@ -1,5 +1,25 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-21 - Economic WM shadow allocation eval
+
+### What changed
+
+- Added a shadow-only Economic WM allocation evaluator over local scaffold and row-corpus artifacts.
+- Added candidate scoring for benchmark replay curation, shadow-gap replay closure, teacher/provider evidence-contract preparation, and denied GPU training.
+- Added a CLI that emits `economic_wm_shadow_allocation_eval_v1` JSON and Markdown reports.
+
+### Boundary
+
+This is advisory only. It ranks local allocation candidates but does not execute allocation, mutate rewards, train a model, promote a model, or imply provider/GPU bring-up.
+
+### Verification
+
+- `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/evaluate_economic_wm_shadow_allocations.py tests/test_economic_wm_shadow_allocation_eval.py` -> `All checks passed!`
+- `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/evaluate_economic_wm_shadow_allocations.py -q`
+- `python3 -m pytest -q tests/test_economic_wm_shadow_allocation_eval.py` -> `2 passed`
+- `python3 scripts/economic_world_model/evaluate_economic_wm_shadow_allocations.py --output-dir artifacts/economic_world_model/economic_wm_shadow_allocation_eval --scaffold-report artifacts/economic_world_model/economic_wm_scaffold/economic_wm_scaffold_report_v1.json --corpus-manifest artifacts/economic_world_model/economic_wm_training_rows/economic_wm_training_corpus_manifest_v1.json --rows artifacts/economic_world_model/economic_wm_training_rows/economic_wm_replay_feature_rows_v1.jsonl` -> `recommended_candidate=prepare_teacher_provider_evidence_contracts`, `promotion_eligible=false`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+
 ## 2026-05-21 - Economic WM training-row materialization
 
 ### What changed

@@ -182,13 +182,13 @@
             "script": "train_economic_world_model_v0.py",
             "priority": "P1",
             "owner": "codex",
-            "blocked_by": "native scaffold and local row materialization now exist; actual training remains blocked by GPU/provider bring-up, promotion-grade benchmark evidence, and non-stub teacher/runtime evidence",
+            "blocked_by": "native scaffold, local row materialization, and shadow allocation eval now exist; actual training remains blocked by GPU/provider bring-up, promotion-grade benchmark evidence, and non-stub teacher/runtime evidence",
             "downstream_dependents": [
                 "economic allocation critic",
                 "data acquisition allocator",
                 "cross-WM resource routing"
             ],
-            "notes": "Future Economic WM trainer over canonical replay, benchmark gates, value targets, counterfactual evals, runtime packets, event/decision/governance traces, and inferential learnability contracts. First native scaffold artifacts and local replay feature rows now exist via build_economic_wm_scaffold.py and materialize_economic_wm_training_rows.py; this remains a trainer backlog entry only and must not become a GPU/provider/promotion claim.",
+            "notes": "Future Economic WM trainer over canonical replay, benchmark gates, value targets, counterfactual evals, runtime packets, event/decision/governance traces, and inferential learnability contracts. First native scaffold artifacts, local replay feature rows, and shadow allocation eval now exist; this remains a trainer backlog entry only and must not become a GPU/provider/promotion claim.",
             "created_at": "2026-05-21",
             "updated_at": "2026-05-21"
         }

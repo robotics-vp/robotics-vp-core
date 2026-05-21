@@ -36,7 +36,7 @@ The scaffold is allowed to:
 - define Economic WM state and allocation-envelope contracts
 - expose benchmark-ready vs shadow-only replay inventory
 - make GPU/provider/promotion blockers explicit
-- feed replay-feature extraction, training-row materialization, and later shadow allocation evals
+- feed replay-feature extraction, training-row materialization, and shadow allocation evals
 
 The scaffold is not allowed to:
 
@@ -60,3 +60,5 @@ Training remains blocked until GPU/provider bring-up, non-stub teacher/runtime e
 ## Downstream local row surface
 
 The first replay/training-row materializer is documented in `docs/economic_world_model/economic_wm_training_rows.md`. It consumes this scaffold and the Stage-1 proposal-admission log to produce local row artifacts while preserving `ready_for_training=false` and `promotion_eligible=false`.
+
+The first shadow allocation evaluator is documented in `docs/economic_world_model/economic_wm_shadow_allocation_eval.md`. It ranks local allocation candidates but does not execute them.

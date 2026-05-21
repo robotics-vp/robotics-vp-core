@@ -1,5 +1,22 @@
 # Economic World Model Progress Log
 
+## 2026-05-21 - Economic WM shadow allocation eval
+
+- **Changed**:
+  - added `src/world_model/economic_world_model/allocation_eval.py` with typed shadow-only allocation candidates and eval reports
+  - added `scripts/economic_world_model/evaluate_economic_wm_shadow_allocations.py` to score local allocation candidates over the scaffold and row corpus
+  - added `tests/test_economic_wm_shadow_allocation_eval.py`
+  - added `docs/economic_world_model/economic_wm_shadow_allocation_eval.md`
+- **Why this matters**:
+  - Economic WM now has a first advisory allocation surface: it can rank next local development allocations from row evidence while keeping `authority_class=shadow_eval_only`
+  - the current local eval recommends preparing teacher/provider evidence contracts, while explicitly denying `run_gpu_training`
+- **Verification**:
+  - `python3 -m ruff check src/world_model/economic_world_model scripts/economic_world_model/evaluate_economic_wm_shadow_allocations.py tests/test_economic_wm_shadow_allocation_eval.py` (`All checks passed!`)
+  - `python3 -m compileall src/world_model/economic_world_model scripts/economic_world_model/evaluate_economic_wm_shadow_allocations.py -q`
+  - `python3 -m pytest -q tests/test_economic_wm_shadow_allocation_eval.py` (`2 passed`)
+  - `python3 scripts/economic_world_model/evaluate_economic_wm_shadow_allocations.py --output-dir artifacts/economic_world_model/economic_wm_shadow_allocation_eval --scaffold-report artifacts/economic_world_model/economic_wm_scaffold/economic_wm_scaffold_report_v1.json --corpus-manifest artifacts/economic_world_model/economic_wm_training_rows/economic_wm_training_corpus_manifest_v1.json --rows artifacts/economic_world_model/economic_wm_training_rows/economic_wm_replay_feature_rows_v1.jsonl` (`recommended_candidate=prepare_teacher_provider_evidence_contracts`, `promotion_eligible=false`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-21 - Economic WM training-row materialization
 
 - **Changed**:

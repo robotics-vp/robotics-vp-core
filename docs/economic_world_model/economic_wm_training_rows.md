@@ -47,3 +47,7 @@ They do not:
 - promote an Economic WM
 - mutate reward, trust-net, `w_econ`, or lambda-controller math
 - treat external teacher/provider outputs as native truth
+
+## Downstream local eval
+
+The first shadow allocation evaluator is documented in `docs/economic_world_model/economic_wm_shadow_allocation_eval.md`. It consumes this row corpus and produces advisory allocation candidates only.
