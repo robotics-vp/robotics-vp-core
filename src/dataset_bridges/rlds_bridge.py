@@ -21,7 +21,9 @@ _PROVENANCE_REF_KEYS = {
 }
 
 
-def _split_sidecars(sidecars: Mapping[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+def _split_sidecars(
+    sidecars: Mapping[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
     metadata: Dict[str, Any] = {}
     provenance: Dict[str, Any] = {}
     for key, value in dict(sidecars or {}).items():
@@ -66,6 +68,14 @@ def rlds_episode_from_replay(
                     "task_id": step.task_id,
                     "env_id": step.env_id,
                     "source_domain": step.source_domain,
+                    "benchmark_gate": dict(
+                        step.metadata.get("benchmark_gate")
+                        or step.metadata.get("source_benchmark_gate")
+                        or {}
+                    ),
+                    "future_training_signals": dict(
+                        step.metadata.get("future_training_signals", {}) or {}
+                    ),
                     "internal_sidecars": _sidecar_refs(step),
                 },
             }
@@ -79,6 +89,14 @@ def rlds_episode_from_replay(
             "task_id": episode.task_id,
             "env_id": episode.env_id,
             "source_domain": episode.source_domain,
+            "benchmark_gate": dict(
+                episode.metadata.get("benchmark_gate")
+                or episode.metadata.get("source_benchmark_gate")
+                or {}
+            ),
+            "future_training_signals": dict(
+                episode.metadata.get("future_training_signals", {}) or {}
+            ),
             "internal_sidecars": {
                 **extract_sidecar_refs(episode),
                 "provenance": dict(episode.provenance),
@@ -102,7 +120,9 @@ def replay_episode_from_rlds(
     run_id = str(metadata.get("run_id", default_run_id) or default_run_id)
     task_id = str(metadata.get("task_id", "unknown_task") or "unknown_task")
     env_id = str(metadata.get("env_id", "unknown_env") or "unknown_env")
-    source_domain = str(metadata.get("source_domain", default_source_domain) or default_source_domain)
+    source_domain = str(
+        metadata.get("source_domain", default_source_domain) or default_source_domain
+    )
     ordered_steps = list(payload.get("steps", []) or [])
     replay_steps: list[ReplayStepRecord] = []
     event_refs: list[str] = []
@@ -111,8 +131,18 @@ def replay_episode_from_rlds(
         step_metadata = dict(step_payload.get("metadata", {}) or {})
         step_sidecars = dict(step_metadata.get("internal_sidecars", {}) or {})
         restored_metadata, restored_provenance = _split_sidecars(step_sidecars)
-        step_event_refs = [str(value) for value in restored_metadata.get("event_refs", []) or []]
-        step_decision_refs = [str(value) for value in restored_metadata.get("decision_refs", []) or []]
+        if isinstance(step_metadata.get("benchmark_gate"), Mapping):
+            restored_metadata["benchmark_gate"] = dict(step_metadata["benchmark_gate"])
+        if isinstance(step_metadata.get("future_training_signals"), Mapping):
+            restored_metadata["future_training_signals"] = dict(
+                step_metadata["future_training_signals"]
+            )
+        step_event_refs = [
+            str(value) for value in restored_metadata.get("event_refs", []) or []
+        ]
+        step_decision_refs = [
+            str(value) for value in restored_metadata.get("decision_refs", []) or []
+        ]
         event_refs.extend(step_event_refs)
         decision_refs.extend(step_decision_refs)
         replay_steps.append(
@@ -126,7 +156,9 @@ def replay_episode_from_rlds(
                 action_vector=[],
                 reward=float(step_payload.get("reward", 0.0)),
                 reward_decomposition={},
-                done=bool(step_payload.get("is_last", step_payload.get("is_terminal", False))),
+                done=bool(
+                    step_payload.get("is_last", step_payload.get("is_terminal", False))
+                ),
                 task_id=str(step_metadata.get("task_id", task_id) or task_id),
                 env_id=str(step_metadata.get("env_id", env_id) or env_id),
                 condition_vector={},
@@ -139,12 +171,21 @@ def replay_episode_from_rlds(
                 constraint_flags=[],
                 pricing_tick_ref=restored_metadata.get("pricing_tick_ref"),
                 ledger_event_ref=restored_metadata.get("ledger_event_ref"),
-                source_domain=str(step_metadata.get("source_domain", source_domain) or source_domain),
+                source_domain=str(
+                    step_metadata.get("source_domain", source_domain) or source_domain
+                ),
                 seed=int(step_metadata.get("seed", metadata.get("seed", 0)) or 0),
                 timestamp=str(step_metadata.get("timestamp", "")),
                 metadata=restored_metadata,
                 provenance=restored_provenance,
             )
+        )
+
+    if isinstance(metadata.get("benchmark_gate"), Mapping):
+        episode_metadata["benchmark_gate"] = dict(metadata["benchmark_gate"])
+    if isinstance(metadata.get("future_training_signals"), Mapping):
+        episode_metadata["future_training_signals"] = dict(
+            metadata["future_training_signals"]
         )
 
     episode = ReplayEpisodeRecord(

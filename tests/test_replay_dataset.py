@@ -434,6 +434,7 @@ def test_replay_dataset_imports_governed_video_admission_log(tmp_path):
         == "admit_shadow_datapack"
     )
     assert episode.metadata["execution_preconditions"]["ready"] is True
+    assert episode.metadata["benchmark_gate"]["ready"] is False
     summary = bundle.manifest.metadata["execution_precondition_summary"]
     assert (
         summary["satisfied_preconditions"]["signal_bool::promotion_trace_complete"] == 1
@@ -482,12 +483,26 @@ def test_stage1_governed_video_bridge_export_preserves_sidecars(tmp_path):
     assert rlds_rows[0]["steps"][0]["metadata"]["internal_sidecars"][
         "teacher_trace_ref"
     ].endswith("_teacher_trace_v1.json")
+    assert rlds_rows[0]["steps"][0]["metadata"]["benchmark_gate"]["ready"] is False
+    assert (
+        rlds_rows[0]["steps"][0]["metadata"]["future_training_signals"][
+            "reconstruction_training_eligible"
+        ]
+        is False
+    )
     assert lerobot_rows[0]["metadata"]["internal_sidecars"][
         "reconstruction_sidecar_ref"
     ].endswith("_reconstruction_sidecar_v1.json")
     assert lerobot_rows[0]["metadata"]["internal_sidecars"][
         "reconstruction_grounding_report_ref"
     ].endswith("_reconstruction_grounding_report_v1.json")
+    assert lerobot_rows[0]["metadata"]["benchmark_gate"]["ready"] is False
+    assert (
+        lerobot_rows[0]["metadata"]["future_training_signals"][
+            "reconstruction_training_eligible"
+        ]
+        is False
+    )
 
 
 def test_replay_dataset_imports_semantic_degraded_artifacts(tmp_path):

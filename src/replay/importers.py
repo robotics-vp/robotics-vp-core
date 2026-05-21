@@ -255,6 +255,7 @@ def ingest_governed_video_admission_log(
         )
         source_preconditions = dict(row.get("execution_preconditions", {}) or {})
         source_work_order = dict(row.get("execution_work_order", {}) or {})
+        source_benchmark_gate = dict(row.get("benchmark_gate", {}) or {})
         future_training_signals = _future_signals_from_admission(
             row, artifact_refs=artifact_refs
         )
@@ -316,6 +317,8 @@ def ingest_governed_video_admission_log(
             "blocked": blocked,
             "source_execution_preconditions": source_preconditions,
             "source_execution_work_order": source_work_order,
+            "source_benchmark_gate": source_benchmark_gate,
+            "benchmark_gate": source_benchmark_gate,
             "future_training_signals": future_training_signals,
             "future_training_artifacts": future_training_artifacts,
             "event_refs": [artifact_refs["event_spine_ref"]]
@@ -467,6 +470,7 @@ def ingest_semantic_degraded_artifacts(
         future_training_artifacts = _future_artifacts(payload)
         source_preconditions = dict(payload.get("execution_preconditions", {}) or {})
         source_work_order = dict(payload.get("execution_work_order", {}) or {})
+        source_benchmark_gate = dict(payload.get("benchmark_gate", {}) or {})
         timestamp = _timestamp_from_path(artifact_path)
         obs_vector = [
             _as_float(source_preconditions.get("readiness_score"), 0.0),
@@ -479,6 +483,8 @@ def ingest_semantic_degraded_artifacts(
             "failure_reason": failure_reason,
             "source_execution_preconditions": source_preconditions,
             "source_execution_work_order": source_work_order,
+            "source_benchmark_gate": source_benchmark_gate,
+            "benchmark_gate": source_benchmark_gate,
             "future_training_signals": future_training_signals,
             "future_training_artifacts": future_training_artifacts,
             "event_refs": [artifact_refs["event_spine_ref"]]

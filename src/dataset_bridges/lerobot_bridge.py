@@ -45,6 +45,14 @@ def lerobot_rows_from_replay(
                     "record_id": step.record_id,
                     "seed": step.seed,
                     "skill_mode": step.skill_mode,
+                    "benchmark_gate": dict(
+                        step.metadata.get("benchmark_gate")
+                        or step.metadata.get("source_benchmark_gate")
+                        or {}
+                    ),
+                    "future_training_signals": dict(
+                        step.metadata.get("future_training_signals", {}) or {}
+                    ),
                     "internal_sidecars": _row_sidecars(step),
                 },
             }
@@ -52,7 +60,9 @@ def lerobot_rows_from_replay(
     return rows
 
 
-def _split_sidecars(sidecars: Mapping[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+def _split_sidecars(
+    sidecars: Mapping[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
     metadata: Dict[str, Any] = {}
     provenance: Dict[str, Any] = {}
     for key, value in dict(sidecars or {}).items():
@@ -80,7 +90,9 @@ def replay_episode_from_lerobot(
     episode_id = str(first.get("episode_id", ""))
     task_id = str(first.get("task", "unknown_task") or "unknown_task")
     env_id = str(first.get("environment", "unknown_env") or "unknown_env")
-    source_domain = str(first.get("source_domain", default_source_domain) or default_source_domain)
+    source_domain = str(
+        first.get("source_domain", default_source_domain) or default_source_domain
+    )
     replay_steps: list[ReplayStepRecord] = []
     all_event_refs: list[str] = []
     all_decision_refs: list[str] = []
@@ -88,11 +100,23 @@ def replay_episode_from_lerobot(
         row_metadata = dict(row.get("metadata", {}) or {})
         row_sidecars = dict(row_metadata.get("internal_sidecars", {}) or {})
         restored_metadata, restored_provenance = _split_sidecars(row_sidecars)
-        all_event_refs.extend([str(value) for value in restored_metadata.get("event_refs", []) or []])
-        all_decision_refs.extend([str(value) for value in restored_metadata.get("decision_refs", []) or []])
+        if isinstance(row_metadata.get("benchmark_gate"), Mapping):
+            restored_metadata["benchmark_gate"] = dict(row_metadata["benchmark_gate"])
+        if isinstance(row_metadata.get("future_training_signals"), Mapping):
+            restored_metadata["future_training_signals"] = dict(
+                row_metadata["future_training_signals"]
+            )
+        all_event_refs.extend(
+            [str(value) for value in restored_metadata.get("event_refs", []) or []]
+        )
+        all_decision_refs.extend(
+            [str(value) for value in restored_metadata.get("decision_refs", []) or []]
+        )
         replay_steps.append(
             ReplayStepRecord(
-                run_id=str(row_metadata.get("run_id", default_run_id) or default_run_id),
+                run_id=str(
+                    row_metadata.get("run_id", default_run_id) or default_run_id
+                ),
                 episode_id=str(row.get("episode_id", episode_id) or episode_id),
                 step_idx=int(row.get("frame_index", 0)),
                 obs=dict(row.get("observation", {}) or {}),
@@ -114,7 +138,9 @@ def replay_episode_from_lerobot(
                 constraint_flags=[],
                 pricing_tick_ref=restored_metadata.get("pricing_tick_ref"),
                 ledger_event_ref=restored_metadata.get("ledger_event_ref"),
-                source_domain=str(row.get("source_domain", source_domain) or source_domain),
+                source_domain=str(
+                    row.get("source_domain", source_domain) or source_domain
+                ),
                 seed=int(row_metadata.get("seed", 0) or 0),
                 timestamp=str(row.get("timestamp", "")),
                 metadata=restored_metadata,
@@ -122,6 +148,12 @@ def replay_episode_from_lerobot(
             )
         )
     episode_metadata, episode_provenance = _split_sidecars(sidecars)
+    if isinstance(metadata.get("benchmark_gate"), Mapping):
+        episode_metadata["benchmark_gate"] = dict(metadata["benchmark_gate"])
+    if isinstance(metadata.get("future_training_signals"), Mapping):
+        episode_metadata["future_training_signals"] = dict(
+            metadata["future_training_signals"]
+        )
     episode = ReplayEpisodeRecord(
         run_id=str(metadata.get("run_id", default_run_id) or default_run_id),
         episode_id=episode_id,

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from src.dataset_bridges.lerobot_bridge import lerobot_rows_from_replay
 from src.dataset_bridges.lerobot_bridge import replay_episode_from_lerobot
-from src.dataset_bridges.rlds_bridge import replay_episode_from_rlds, rlds_episode_from_replay
+from src.dataset_bridges.rlds_bridge import (
+    replay_episode_from_rlds,
+    rlds_episode_from_replay,
+)
 from src.replay.schema import ReplayEpisodeRecord, ReplayStepRecord
 
 
@@ -32,8 +35,16 @@ def _episode() -> ReplayEpisodeRecord:
         regal_summary={"status": "ok"},
         datapack_summary={"slice": "s1"},
         ledger_event_ids=["ledger-1"],
-        metadata={"note": "episode", "governed_supervision_refs": ["supervision-1"]},
-        provenance={"event_spine_ref": "event_spine.jsonl", "teacher_trace_ref": "teacher_trace.json"},
+        metadata={
+            "note": "episode",
+            "governed_supervision_refs": ["supervision-1"],
+            "benchmark_gate": {"ready": False},
+            "future_training_signals": {"reconstruction_training_eligible": False},
+        },
+        provenance={
+            "event_spine_ref": "event_spine.jsonl",
+            "teacher_trace_ref": "teacher_trace.json",
+        },
     )
 
 
@@ -65,6 +76,8 @@ def _steps() -> list[ReplayStepRecord]:
             "decision_refs": ["decision-1"],
             "counterfactual_eval_ref": "counterfactual.json",
             "value_target_refs": ["value-target-1"],
+            "benchmark_gate": {"ready": False},
+            "future_training_signals": {"reconstruction_training_eligible": False},
         },
         provenance={
             "runtime_packet_ref": "packet.json",
@@ -73,8 +86,12 @@ def _steps() -> list[ReplayStepRecord]:
         },
     )
     return [
-        ReplayStepRecord(step_idx=0, reward=0.5, done=False, timestamp="2026-03-21T01:00:01Z", **base),
-        ReplayStepRecord(step_idx=1, reward=1.0, done=True, timestamp="2026-03-21T01:00:02Z", **base),
+        ReplayStepRecord(
+            step_idx=0, reward=0.5, done=False, timestamp="2026-03-21T01:00:01Z", **base
+        ),
+        ReplayStepRecord(
+            step_idx=1, reward=1.0, done=True, timestamp="2026-03-21T01:00:02Z", **base
+        ),
     ]
 
 
@@ -87,14 +104,41 @@ def test_rlds_bridge_converts_and_preserves_sidecar_refs() -> None:
     assert len(payload["steps"]) == 2
     assert payload["steps"][0]["is_first"] is True
     assert payload["steps"][1]["is_last"] is True
-    assert payload["steps"][1]["metadata"]["internal_sidecars"]["runtime_packet_ref"] == "packet.json"
-    assert payload["steps"][0]["metadata"]["internal_sidecars"]["counterfactual_eval_ref"] == "counterfactual.json"
-    assert payload["steps"][0]["metadata"]["internal_sidecars"]["value_target_refs"] == ["value-target-1"]
-    assert payload["steps"][0]["metadata"]["internal_sidecars"]["belief_state_ref"] == "belief.json"
+    assert (
+        payload["steps"][1]["metadata"]["internal_sidecars"]["runtime_packet_ref"]
+        == "packet.json"
+    )
+    assert (
+        payload["steps"][0]["metadata"]["internal_sidecars"]["counterfactual_eval_ref"]
+        == "counterfactual.json"
+    )
+    assert payload["steps"][0]["metadata"]["internal_sidecars"][
+        "value_target_refs"
+    ] == ["value-target-1"]
+    assert (
+        payload["steps"][0]["metadata"]["internal_sidecars"]["belief_state_ref"]
+        == "belief.json"
+    )
+    assert payload["steps"][0]["metadata"]["benchmark_gate"]["ready"] is False
+    assert (
+        payload["steps"][0]["metadata"]["future_training_signals"][
+            "reconstruction_training_eligible"
+        ]
+        is False
+    )
     assert "run_id" not in payload["steps"][0]["metadata"]["internal_sidecars"]
-    assert payload["metadata"]["internal_sidecars"]["objective_tensor_ref"] == "objective.json"
-    assert payload["metadata"]["internal_sidecars"]["governed_supervision_refs"] == ["supervision-1"]
-    assert payload["metadata"]["internal_sidecars"]["teacher_trace_ref"] == "teacher_trace.json"
+    assert (
+        payload["metadata"]["internal_sidecars"]["objective_tensor_ref"]
+        == "objective.json"
+    )
+    assert payload["metadata"]["internal_sidecars"]["governed_supervision_refs"] == [
+        "supervision-1"
+    ]
+    assert (
+        payload["metadata"]["internal_sidecars"]["teacher_trace_ref"]
+        == "teacher_trace.json"
+    )
+    assert payload["metadata"]["benchmark_gate"]["ready"] is False
 
 
 def test_lerobot_bridge_converts_and_preserves_sidecar_refs() -> None:
@@ -104,10 +148,24 @@ def test_lerobot_bridge_converts_and_preserves_sidecar_refs() -> None:
     assert rows[0]["frame_index"] == 0
     assert rows[1]["done"] is True
     assert rows[0]["metadata"]["internal_sidecars"]["event_refs"] == ["event-1"]
-    assert rows[0]["metadata"]["internal_sidecars"]["runtime_packet_ref"] == "packet.json"
-    assert rows[0]["metadata"]["internal_sidecars"]["counterfactual_eval_ref"] == "counterfactual.json"
-    assert rows[0]["metadata"]["internal_sidecars"]["value_target_refs"] == ["value-target-1"]
+    assert (
+        rows[0]["metadata"]["internal_sidecars"]["runtime_packet_ref"] == "packet.json"
+    )
+    assert (
+        rows[0]["metadata"]["internal_sidecars"]["counterfactual_eval_ref"]
+        == "counterfactual.json"
+    )
+    assert rows[0]["metadata"]["internal_sidecars"]["value_target_refs"] == [
+        "value-target-1"
+    ]
     assert rows[0]["metadata"]["internal_sidecars"]["belief_state_ref"] == "belief.json"
+    assert rows[0]["metadata"]["benchmark_gate"]["ready"] is False
+    assert (
+        rows[0]["metadata"]["future_training_signals"][
+            "reconstruction_training_eligible"
+        ]
+        is False
+    )
     assert "episode_id" not in rows[0]["metadata"]["internal_sidecars"]
 
 
@@ -122,8 +180,18 @@ def test_rlds_bridge_roundtrip_rehydrates_internal_sidecars() -> None:
     assert restored_episode.provenance["event_spine_ref"] == "event_spine.jsonl"
     assert restored_episode.metadata["governed_supervision_refs"] == ["supervision-1"]
     assert restored_steps[0].provenance["runtime_packet_ref"] == "packet.json"
-    assert restored_steps[0].metadata["counterfactual_eval_ref"] == "counterfactual.json"
+    assert (
+        restored_steps[0].metadata["counterfactual_eval_ref"] == "counterfactual.json"
+    )
     assert restored_steps[0].metadata["value_target_refs"] == ["value-target-1"]
+    assert restored_episode.metadata["benchmark_gate"]["ready"] is False
+    assert restored_steps[0].metadata["benchmark_gate"]["ready"] is False
+    assert (
+        restored_steps[0].metadata["future_training_signals"][
+            "reconstruction_training_eligible"
+        ]
+        is False
+    )
 
 
 def test_lerobot_bridge_roundtrip_rehydrates_internal_sidecars() -> None:
@@ -135,3 +203,10 @@ def test_lerobot_bridge_roundtrip_rehydrates_internal_sidecars() -> None:
     assert restored_steps[0].metadata["event_refs"] == ["event-1"]
     assert restored_steps[0].provenance["runtime_packet_ref"] == "packet.json"
     assert restored_steps[0].metadata["belief_state_ref"] == "belief.json"
+    assert restored_steps[0].metadata["benchmark_gate"]["ready"] is False
+    assert (
+        restored_steps[0].metadata["future_training_signals"][
+            "reconstruction_training_eligible"
+        ]
+        is False
+    )

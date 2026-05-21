@@ -1,5 +1,20 @@
 # Economic World Model Progress Log
 
+## 2026-05-20 - Benchmark truth through replay bridges
+
+- **Changed**:
+  - governed-video replay import now preserves the source benchmark gate in episode and step metadata
+  - RLDS and LeRobot bridge exports now carry benchmark-gate payloads and future-training signals alongside internal sidecar refs
+  - RLDS and LeRobot rehydration preserve those exported benchmark/future-signal payloads back into canonical replay metadata
+- **Why this matters**:
+  - calibration and benchmark blockers now survive the public-dataset export surface instead of existing only in the original Stage-1 admission log
+  - future Economic WM training rows can distinguish benchmark-ready, shadow-only, and blocked examples after bridge/export round trips
+- **Verification**:
+  - `python3 -m ruff check src/replay/importers.py src/dataset_bridges/rlds_bridge.py src/dataset_bridges/lerobot_bridge.py tests/test_dataset_bridges.py tests/test_replay_dataset.py`
+  - `python3 -m compileall src/replay src/dataset_bridges -q`
+  - `python3 -m pytest -q tests/test_dataset_bridges.py tests/test_replay_dataset.py` (`12 passed, 2 warnings`)
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` (`status: ok`)
+
 ## 2026-05-20 - Camera-calibrated benchmark gating
 
 - **Changed**:
