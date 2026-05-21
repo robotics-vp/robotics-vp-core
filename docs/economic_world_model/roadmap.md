@@ -1439,7 +1439,7 @@ The next autonomous passes should consume the video-world-model subset in this o
 1. Deepen real-video grounding with non-stub SceneTracks adapters, richer calibration metadata, and stronger reconstruction joins in the live Stage-1 path. **Landed locally on 2026-05-20** for `reconstruction_grounding_report_v1` eligibility sidecars and camera-calibrated Stage-1 benchmark gates; broader ingestion/runner calibration joins remain next.
 2. Keep teacher-runtime hardening live by pushing explicit contract/action fallback semantics through every remaining real-video or ingestion boundary, not just rollout labeling. **Landed locally on 2026-05-20** for Stage-1 teacher contract/action/trace sidecars, including unavailable fallback sidecars.
 3. Export governed supervision artifacts cleanly into replay and dataset-bridge paths so Stage-1 outputs are directly trainable later. **Landed locally on 2026-05-20** for governed-video admission replay import plus RLDS/LeRobot bridge export preserving internal sidecar refs, benchmark gates, and future-training signals.
-4. Test and smoke coverage that proves the new refs and sidecars persist end to end in live loops.
-5. Only after those land cleanly, refresh the training backlog and consider `train_governed_video_world_model.py`.
+4. Test and smoke coverage that proves the new refs and sidecars persist end to end in live loops. **Landed locally on 2026-05-20** via `scripts/economic_world_model/sweep_stage1_bridge_readiness.py`, covering five manifest shapes through Stage-1, replay, RLDS, and LeRobot.
+5. Refresh the training backlog and prepare the Economic WM entry preflight before considering `train_governed_video_world_model.py`.
 
 Nightly or autonomous execution should not skip directly to training or raw model experimentation while live grounding and live supervision wiring remain incomplete.

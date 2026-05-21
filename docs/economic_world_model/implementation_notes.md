@@ -1,5 +1,25 @@
 # Economic World Model Implementation Notes
 
+## 2026-05-20 - Stage-1 bridge readiness sweep
+
+### What changed
+
+- Added a local sweep script for Stage-1 governed-video readiness.
+- The sweep creates five manifest variants and runs Stage-1, replay import, RLDS export, and LeRobot export.
+- The report validates benchmark readiness, calibration class, reconstruction grounding class, reconstruction-training eligibility, blocking preconditions, and bridge truth preservation.
+
+### Boundary
+
+This is a structural replay/export sweep. It does not run GPU training, bring up providers, execute non-stub SceneTracks, or promote any model. Artifacts remain local under `artifacts/` and are intentionally not tracked.
+
+### Verification
+
+- `python3 -m ruff check scripts/economic_world_model/sweep_stage1_bridge_readiness.py tests/test_stage1_bridge_readiness_sweep.py`
+- `python3 -m compileall scripts/economic_world_model/sweep_stage1_bridge_readiness.py -q`
+- `python3 -m pytest -q tests/test_stage1_bridge_readiness_sweep.py` -> `1 passed, 1 warning`
+- `python3 scripts/economic_world_model/sweep_stage1_bridge_readiness.py --output-dir artifacts/economic_world_model/stage1_bridge_readiness_sweep` -> `status: ok`, `scenario_count=5`, `benchmark_ready_count=2`, `shadow_only_count=3`
+- `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_summary.json --output-markdown artifacts/economic_world_model/nightly_audit_summary.md` -> `status: ok`
+
 ## 2026-05-20 - Benchmark truth through replay bridges
 
 ### What changed
