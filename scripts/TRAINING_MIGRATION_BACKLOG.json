@@ -3,7 +3,7 @@
     "description": "Training script migration backlog for @regal_training wrapper",
     "goal": "Reduce pending count to 0",
     "created_at": "2026-01-13",
-    "updated_at": "2026-05-21",
+    "updated_at": "2026-05-22",
     "backlog": [
         {
             "script": "train_orchestration_transformer_v1_curriculum.py",
@@ -191,6 +191,20 @@
             "notes": "Non-training trainer scaffold now exists and is intentionally denied promotion: dataset contract, component config, loss definitions, CPU smoke forward report, and trainer scaffold manifest are emitted without weight writes. Future real trainer must consume Phase-5 datapack-composition rows, temporal windows, counterfactual/value joins, resource receipts, canonical lower-WM refs, and shadow execution outcome receipts once GPU/provider evidence is available.",
             "created_at": "2026-05-21",
             "updated_at": "2026-05-21"
+        },
+        {
+            "script": "train_wm_transport_bridge_v0.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "script scaffold exists with Phase-6.3 neural manifest, loss ledger, dataset contract, model config, CPU smoke forwards, and denied-promotion gates; actual bridge/receiver training remains blocked by GPU capacity, cross-WM corpus density, provider or hardware transport evidence, topology/latency evaluation, and promotion-grade downstream benchmarks",
+            "downstream_dependents": [
+                "cross-WM transport bridge training",
+                "per-WM receiver transformer training",
+                "meta-node transport readiness"
+            ],
+            "notes": "Non-training Phase-6.3 trainer scaffold now exists and is intentionally denied promotion: source-exporter/isomorphic-bridge/target-receiver component configs, 14 loss definitions, CPU smoke-forward evidence, and trainer scaffold manifests are emitted without weight writes. Future real trainer must consume transport rows, round-trip receipts, topology/causal metrics, uncertainty calibration receipts, shadow outcomes, and postmortem counterfactual labels once GPU/provider evidence exists.",
+            "created_at": "2026-05-22",
+            "updated_at": "2026-05-22"
         }
     ],
     "migrated": [
@@ -336,10 +350,10 @@
         }
     ],
     "summary": {
-        "total": 41,
+        "total": 45,
         "P0": 0,
-        "P1": 7,
-        "P2": 6,
+        "P1": 12,
+        "P2": 5,
         "migrated": 28
     }
 }

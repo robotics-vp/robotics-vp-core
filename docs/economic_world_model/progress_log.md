@@ -3330,3 +3330,12 @@ Verification for the Phase-5.1 pass:
 - Current local artifact run: `contract_count=20`, `transformer_count=7`, `roundtrip_receipt_count=20`, `training_row_count=160`, `status=ok`, `ready_for_phase6_3_neural_scaffold=true`, `ready_for_training=false`, `promotion_eligible=false`.
 - Verification: focused Phase-6 test passed (`3 passed`), changed-surface ruff passed, full suite passed (`1709 passed, 2 skipped, 32 warnings`), and nightly audit passed with `status=ok`.
 - Boundary preserved: contracts, row shapes, and receipts only; no GPU/provider execution, bridge training, hardware execution, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-22: Phase-6.3 transport neural scaffold and trainer contract
+
+- Added Phase-6.3 neural architecture scaffolding for the source-exporter / isomorphic-bridge / target-receiver training shape, plus round-trip, topology/causal, uncertainty, governance/actionability, and downstream-shadow components.
+- Added a 14-loss transport ledger, including topological contrastive alignment, receiver actionability, uncertainty calibration, governance satisfaction, downstream yield proxy, postmortem counterfactual improvement, and contextual-bandit shadow ranking; direct task-reward bridge RL remains explicitly disallowed.
+- Added `scripts/train_wm_transport_bridge_v0.py` as a non-training trainer scaffold that emits dataset contracts, model component configs, finite CPU smoke-forward evidence, and denied-promotion manifests without weight writes.
+- Current local artifact run: `component_count=8`, `loss_count=14`, `training_row_count=160`, `cpu_smoke_forward_passed=true`, `ready_for_training=false`, `ready_for_gpu_training=false`, `training_executed=false`, `weights_written=false`, `promotion_eligible=false`.
+- Verification: focused Phase-6/6.3 tests passed (`5 passed`), changed-surface ruff passed, artifact CLIs passed, nightly audit passed with `status=ok`, and full suite passed (`1711 passed, 2 skipped, 32 warnings`).
+- Boundary preserved: no GPU/provider execution, bridge/receiver training, hardware execution, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda mutation claim.

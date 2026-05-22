@@ -292,22 +292,28 @@ receiver fails to make it actionable for the target WM.
 Create a manifest-producing trainer scaffold only. It should include CPU smoke
 forwards and denied-promotion gates, not weight writes.
 
+Current local Phase-6.3 artifacts (2026-05-22):
+
+- `neural_manifest.py` emits an eight-component neural architecture manifest for source exporters, the isomorphic bridge, target receivers, round-trip decoder, topology/causal heads, uncertainty calibration, governance/actionability classification, and downstream shadow criticism.
+- `losses.py` emits a 14-loss ledger covering export/translation reconstruction, topological contrastive alignment, topology/causal preservation, receiver actionability, round-trip consistency, uncertainty calibration, provenance, governance satisfaction, downstream-yield proxy, postmortem counterfactual improvement, and contextual-bandit shadow ranking.
+- `training.py` and `train_wm_transport_bridge_v0.py` emit a non-training trainer scaffold with dataset contract, model component config, finite CPU smoke-forward report, denied-promotion gates, and no weight writes.
+- Current local artifacts report `component_count=8`, `loss_count=14`, `training_row_count=160`, `cpu_smoke_forward_passed=true`, `ready_for_training=false`, and `promotion_eligible=false`.
+
 Model components:
 
-- source typed-object encoder,
-- ontology projection head,
+- source typed-object exporter bank,
 - isomorphic transport bridge,
-- target per-WM receiver transformer,
-- round-trip decoder,
-- topology preservation head,
-- causal dependency head,
+- target per-WM receiver transformer bank,
+- round-trip cycle decoder,
+- topology / causal preservation heads,
 - uncertainty calibrator,
 - governance/actionability classifier,
-- optional bridge/receiver critic.
+- downstream shadow transport critic.
 
 Losses:
 
-- translation / reconstruction loss,
+- source export / translation reconstruction loss,
+- topological contrastive alignment loss,
 - round-trip consistency loss,
 - topology preservation loss,
 - causal edge preservation loss,
@@ -316,11 +322,14 @@ Losses:
 - receiver actionability loss,
 - governance constraint loss,
 - downstream yield proxy loss,
-- postmortem counterfactual improvement loss.
+- postmortem counterfactual improvement loss,
+- contextual-bandit shadow ranking loss.
 
 Topological contrastive training should use valid adjacent-WM transport pairs as
 positives and topology-breaking, causally invalid, provenance-invalid, or
-receiver-incompatible pairs as negatives.
+receiver-incompatible pairs as negatives. RL-style rows may shape transport only
+as offline labels, rankings, constraints, or sample weights; direct task-reward
+RL must not turn the bridge into a policy.
 
 ## Phase 6.4 — advisory runtime
 

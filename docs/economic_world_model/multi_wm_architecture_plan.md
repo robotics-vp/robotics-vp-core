@@ -2971,6 +2971,12 @@ Current local Phase-6.0-6.2 artifacts (2026-05-21):
 - `roundtrip.py`, `topology_metrics.py`, and `uncertainty.py` emit local structural receipts for round-trip consistency, topology/causal preservation, receiver actionability, and uncertainty calibration.
 - `runtime.py` emits a top-level Phase-6 scaffold report with `ready_for_phase6_3_neural_scaffold=true` while keeping `ready_for_training=false` and `promotion_eligible=false`.
 
+Current local Phase-6.3 artifacts (2026-05-22):
+
+- `neural_manifest.py` emits the source-exporter / isomorphic-bridge / target-receiver neural architecture manifest plus auxiliary topology, causal, uncertainty, governance, and downstream-shadow components.
+- `losses.py` emits the explicit 14-loss ledger, including topological contrastive alignment and offline RL-style shadow-ranking losses without direct bridge-policy RL.
+- `training.py` and `train_wm_transport_bridge_v0.py` emit dataset contracts, model component configs, CPU smoke forwards, and denied-promotion trainer manifests with `training_executed=false`, `weights_written=false`, and `promotion_eligible=false`.
+
 ### Training rule
 
 Train bridges by freezing adjacent WMs first.

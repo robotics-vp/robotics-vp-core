@@ -4907,3 +4907,41 @@ This is structural Phase-6 local work only. No bridge weights were trained, no p
 - Artifact CLI passed and emitted `contract_count=20`, `transformer_count=7`, `roundtrip_receipt_count=20`, `training_row_count=160`, `status=ok`.
 - Full suite passed: `python3 -m compileall src scripts/economic_world_model -q && python3 -m pytest tests/ -q` -> `1709 passed, 2 skipped, 32 warnings`.
 - Nightly audit passed with `status=ok`.
+
+## 2026-05-22 — Phase-6.3 transport neural scaffold and trainer contract
+
+### What was built
+
+- Added Phase-6.3 neural manifest scaffolding:
+  - `src/world_model/transport/neural_manifest.py`
+  - `scripts/economic_world_model/build_phase6_transport_neural_manifest.py`
+- Added explicit Phase-6.3 loss ledger scaffolding:
+  - `src/world_model/transport/losses.py`
+  - 14 losses including topological contrastive alignment, receiver actionability, uncertainty calibration, governance satisfaction, downstream yield proxy, postmortem counterfactual improvement, and contextual-bandit shadow ranking.
+- Added the non-training transport trainer scaffold:
+  - `src/world_model/transport/training.py`
+  - `scripts/train_wm_transport_bridge_v0.py`
+- Added tests:
+  - `tests/test_wm_transport_phase63_neural_scaffold.py`
+- Updated `scripts/TRAINING_MIGRATION_BACKLOG.json` to track the future real transport trainer separately from the local denied-promotion scaffold.
+- Added `docs/economic_world_model/phase6_transport_neural_scaffold.md`.
+
+### Current local artifact result
+
+- Neural manifest: `component_count=8`, `loss_family_count=14`, `ready_for_trainer_scaffold=true`, `ready_for_gpu_training=false`, `training_executed=false`, `weights_written=false`, `promotion_eligible=false`.
+- Trainer scaffold: `training_row_count=160`, `loss_count=14`, `cpu_smoke_forward_passed=true`, `ready_for_training=false`, `ready_for_gpu_training=false`, `training_executed=false`, `weights_written=false`, `promotion_eligible=false`.
+
+### Boundary
+
+The Phase-6.3 trainer is not a training run. It emits dataset contracts, model component configs, loss ledgers, finite CPU smoke-forward reports, and denied-promotion manifests only. It does not train bridge or receiver weights, run providers, run hardware, grant live policy authority, or mutate frozen reward/trust/`w_econ`/lambda-controller math.
+
+### Verification
+
+- `python3 -m pytest -q tests/test_wm_transport_phase63_neural_scaffold.py` passed (`2 passed`).
+- `python3 -m pytest -q tests/test_wm_transport_phase6_scaffold.py tests/test_wm_transport_phase63_neural_scaffold.py` passed (`5 passed`).
+- `python3 -m ruff check src/world_model/transport scripts/economic_world_model/build_phase6_transport_neural_manifest.py scripts/train_wm_transport_bridge_v0.py tests/test_wm_transport_phase63_neural_scaffold.py` passed.
+- Artifact CLIs passed:
+  - `scripts/economic_world_model/build_phase6_transport_neural_manifest.py`
+  - `scripts/train_wm_transport_bridge_v0.py`
+- Nightly audit passed with `status=ok`.
+- Full suite passed: `python3 -m compileall src scripts/economic_world_model -q && python3 -m pytest tests/ -q` -> `1711 passed, 2 skipped, 32 warnings`.

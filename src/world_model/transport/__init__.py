@@ -15,6 +15,20 @@ from src.world_model.transport.bridge_contracts import (
     load_wm_transport_contract_pack,
     save_wm_transport_contract_pack,
 )
+from src.world_model.transport.losses import (
+    WMTransportLossDefinition,
+    WMTransportLossLedger,
+    build_wm_transport_loss_ledger,
+    load_wm_transport_loss_ledger,
+    save_wm_transport_loss_ledger,
+)
+from src.world_model.transport.neural_manifest import (
+    WMTransportNeuralArchitectureManifest,
+    WMTransportNeuralComponentSpec,
+    build_wm_transport_neural_architecture_manifest,
+    load_wm_transport_neural_architecture_manifest,
+    save_wm_transport_neural_architecture_manifest,
+)
 from src.world_model.transport.roundtrip import (
     WMTransportRoundTripReceipt,
     build_wm_transport_roundtrip_receipts,
@@ -30,6 +44,18 @@ from src.world_model.transport.runtime import (
 from src.world_model.transport.topology_metrics import (
     WMTransportTopologyMetrics,
     compute_wm_transport_topology_metrics,
+)
+from src.world_model.transport.training import (
+    WMTransportTrainerDatasetContract,
+    WMTransportTrainerScaffoldManifest,
+    build_wm_transport_cpu_smoke_forward_report,
+    build_wm_transport_model_component_config,
+    build_wm_transport_trainer_dataset_contract,
+    build_wm_transport_trainer_scaffold_manifest,
+    load_wm_transport_trainer_dataset_contract,
+    load_wm_transport_trainer_scaffold_manifest,
+    save_wm_transport_trainer_dataset_contract,
+    save_wm_transport_trainer_scaffold_manifest,
 )
 from src.world_model.transport.training_rows import (
     ROW_FAMILIES,
@@ -64,6 +90,26 @@ __all__ = [
     "TransportUncertaintyProfile",
     "WMTransportBridgeContract",
     "WMTransportContractPack",
+    "WMTransportLossDefinition",
+    "WMTransportLossLedger",
+    "WMTransportNeuralArchitectureManifest",
+    "WMTransportNeuralComponentSpec",
+    "WMTransportTrainerDatasetContract",
+    "WMTransportTrainerScaffoldManifest",
+    "build_wm_transport_cpu_smoke_forward_report",
+    "build_wm_transport_loss_ledger",
+    "build_wm_transport_model_component_config",
+    "build_wm_transport_neural_architecture_manifest",
+    "build_wm_transport_trainer_dataset_contract",
+    "build_wm_transport_trainer_scaffold_manifest",
+    "load_wm_transport_loss_ledger",
+    "load_wm_transport_neural_architecture_manifest",
+    "load_wm_transport_trainer_dataset_contract",
+    "load_wm_transport_trainer_scaffold_manifest",
+    "save_wm_transport_loss_ledger",
+    "save_wm_transport_neural_architecture_manifest",
+    "save_wm_transport_trainer_dataset_contract",
+    "save_wm_transport_trainer_scaffold_manifest",
     "WMTransportPhase6ScaffoldReport",
     "WMTransportRoundTripReceipt",
     "WMTransportTopologyMetrics",
