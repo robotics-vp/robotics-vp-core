@@ -3306,3 +3306,18 @@ Verification for the Phase-5.1 pass:
   - lower-WM maturity sweep: `maturity_row_count=15`, `structural_ready_count=15`, `production_ready_count=0`
 - Nightly audit: pass (`status=ok`).
 - Full suite: `python3 -m compileall src/ -q && python3 -m pytest tests/ -q` -> `1706 passed, 2 skipped, 32 warnings`.
+
+### 2026-05-21: Phase-6 transport scaffold planning and Phase-5 follow-up ledger
+
+- Added `docs/economic_world_model/phase6_transport_scaffold_plan.md`.
+- Made Phase 6 explicitly require per-WM receiver transformers around the isomorphic transporter so each WM receives transported objects through its own native functionality, state vocabulary, actionability boundary, rows, receipts, and loss surfaces.
+- Updated `multi_wm_architecture_plan.md` and `roadmap.md` to decompose transport evaluation into bridge-only, receiver-only, downstream-only, joint, and interaction effects.
+- Added a Phase-5 follow-up closure ledger: current Phase 5 is structurally ready for Phase-6 contracts, but still lacks GPU-trained Economic WM components, non-stub provider receipts, production lower-WM maturity, real shadow-outcome corpus, measured deployment resource telemetry, promotion-grade economic authority, and Phase-4 hardware/deployment evidence.
+- Boundary preserved: docs-only; no GPU/provider execution, model training, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-21: Phase-6 bridge/receiver training shape and Phase-5 subsystem coverage audit
+
+- Added explicit Phase-6 training-coupling language for source per-WM exporters, isomorphic transport bridges, and target per-WM receiver transformers.
+- Added RL placement language: transport remains middleware trained by supervised/contrastive/predictive/calibration/topology/round-trip/postmortem losses; direct task-reward RL belongs in bounded Economic WM allocator/governance or later meta-governance lanes, not as bridge policy authority.
+- Confirmed in docs that the Economic WM roadmap subsystems have Phase-5 local scaffold/contract anchors: datapack composition, state estimation, dynamics, allocator/compiler, optional discrete receding-horizon allocation, resource/compute/battery budgeting, and governance/reciprocity.
+- Boundary preserved: coverage is local scaffold/contract coverage only, not GPU-trained, provider-proven, hardware-proven, promoted, or live-authority coverage.

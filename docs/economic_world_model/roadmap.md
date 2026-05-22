@@ -52,7 +52,10 @@ WM-transport ontology:
 - this is distinct from the operational ontology and should appear only when adjacent WMs are real
 - it is the typed semantic/governance contract for WM-to-WM interoperability
 - the isomorphic tensor / transport bridge is the fast differentiable realization of that contract, not a replacement for it
-- its training role is improving WM-to-ontology-to-WM translation quality, preserving topology/causal structure/actionability, increasing synchronized loop success, and decomposing bridge-only vs downstream-only vs joint gains
+- the transporter is received through per-WM functionality-specific transformer layers; it must not decode straight into every WM as if all WMs shared one vocabulary or authority surface
+- its training role is improving WM-to-ontology-to-WM translation quality, source-exporter quality, target-receiver actionability, topology/causal structure/actionability preservation, synchronized-loop success, and decomposing bridge-only vs receiver-only vs downstream-only vs joint gains
+- exporter/bridge/receiver training should be staged and measured separately: WM-local exporter/receiver pretraining, bridge-only topology alignment, round-trip/receiver-actionability training, then downstream shadow shaping
+- direct task-reward RL should not train transport as a policy; RL-style signals should enter through Economic WM allocator/governance receipts, constraints, sample weights, and downstream labels
 - its reward should come from completed-loop/postmortem outcomes, counterfactual improvement, governance satisfaction, and downstream economic yield for the adaptor/bridge layer
 
 Current honest state:
@@ -711,6 +714,9 @@ fields, budget envelopes, admissible Pareto slices, governance guidance.
 
 These are **asymmetric objects**, not the same tensor reversed. Upward carries
 raw receipts; downward carries compiled allocative fields with regime context.
+Phase 6 should preserve that asymmetry with per-WM exporter and receiver
+transformers around the isomorphic transport bridge rather than one universal
+decoder.
 
 ### Internal decomposition
 

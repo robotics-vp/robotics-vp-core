@@ -4796,3 +4796,73 @@ Phase 5 should not wait for GPUs to define the shapes of the receipts, rows, que
 - Supervision substrate, shadow outcome loop, and lower-WM maturity sweep CLIs all materialized local artifacts.
 - Nightly audit passed with `status=ok`.
 - Full suite passed: `1706 passed, 2 skipped, 32 warnings`.
+
+## 2026-05-21 — Phase-6 transport scaffold planning and Phase-5 follow-up ledger
+
+### What changed
+
+- Added `docs/economic_world_model/phase6_transport_scaffold_plan.md` as the owning local plan for Phase-6 transport scaffolding.
+- Updated `multi_wm_architecture_plan.md` to make Phase 6 require per-WM receiver transformers around the isomorphic transporter:
+  - source canonical WM state
+  - source per-WM export transformer
+  - WM-transport ontology object
+  - isomorphic transport bridge
+  - target per-WM receiver transformer
+  - target-native canonical intake / advisory proposal
+- Updated `roadmap.md` so WM-transport training/evaluation decomposes bridge-only, receiver-only, downstream-only, joint, and interaction effects.
+- Added a Phase-5 follow-up closure ledger to prevent structural Phase-6 readiness from being mistaken for production Phase-5 closure.
+
+### Phase-5 boundary clarified
+
+"Good enough for Phase 6" means ready for typed transport contracts and local scaffolding. It does not mean Economic WM training, provider execution, hardware deployment, promotion, or live authority are complete.
+
+Still-open Phase-5 evidence blockers:
+
+- GPU-trained Economic WM estimator/dynamics/allocator/governance components.
+- Non-stub provider / teacher receipts.
+- Production-ready lower-WM maturity.
+- Real shadow-outcome corpus and promotion-grade counterfactual/Pareto evaluation.
+- Measured resource telemetry for capacity, latency, thermal, battery, queueing, and companion compute.
+- Bounded economic authority grants backed by rollback/demotion tests.
+- Phase-4 hardware/deployment enabler evidence.
+
+### Verification
+
+- Docs-only pass; no runtime or training claims made.
+
+## 2026-05-21 — Phase-6 bridge/receiver training shape and Economic WM Phase-5 coverage audit
+
+### What changed
+
+- Extended the Phase-6 transport scaffold plan with the training relationship between:
+  - source per-WM exporter transformer,
+  - isomorphic transport bridge,
+  - target per-WM receiver transformer.
+- Added the intended staged training shape:
+  - WM-local exporter/receiver pretraining,
+  - bridge-only topology alignment,
+  - round-trip and receiver-actionability training,
+  - downstream shadow shaping from postmortem/counterfactual/economic-yield receipts.
+- Added RL placement language:
+  - transport and receiver layers remain middleware trained primarily through supervised, contrastive, predictive, calibration, topology-preservation, round-trip, and postmortem losses;
+  - direct task-reward RL does not train the bridge as a policy;
+  - RL-style structures live in bounded Economic WM allocator/governance and later meta-governance lanes.
+- Added an Economic WM Phase-5 subsystem coverage check to the Phase-6 plan.
+
+### Economic WM Phase-5 coverage call
+
+Every Economic WM subsystem articulated in the roadmap has a local Phase-5 scaffold/contract anchor:
+
+- datapack composition / mereotopological source encoder;
+- Economic State Estimator;
+- Economic Dynamics Model;
+- Economic Allocator / Compiler;
+- optional discrete receding-horizon allocator;
+- resource / compute / battery budgeting;
+- Governance / Reciprocity compiler.
+
+The missing work is depth, not coverage: GPU training, real provider/runtime receipts, real shadow-outcome density, measured deployment resource telemetry, actual receding-horizon solve loops, trained governance reciprocity, and promotion-grade authority evidence remain future work.
+
+### Verification
+
+- Docs-only pass; no runtime, training, provider, promotion, live-control, or frozen reward/trust/`w_econ`/lambda mutation claim.

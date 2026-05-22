@@ -2855,6 +2855,12 @@ Current local Phase-5 closure artifacts (2026-05-21):
 - `shadow_execution.py` emits advisory work orders and outcome-comparison slots so Economic WM recommendations can be evaluated against later lower-WM outcomes without controlling reward math or live policy.
 - `supervision_substrate.py`, `shadow_outcomes.py`, and `lower_wm_maturity_sweep.py` add the first Phase-5.1 self-checking loop: typed supervision records, local structural outcome receipts, and maturity diagnostics showing structural Phase-6 readiness separately from production readiness.
 
+Follow-up Phase-5 closure ledger carried into Phase 6.0:
+
+- "good enough for Phase 6" means structurally ready for transport contracts, not fully production-closed.
+- still missing: GPU-trained Economic WM estimator/dynamics/allocator/governance components, non-stub provider/teacher receipts, production-ready lower-WM maturity, real shadow-outcome corpus, measured resource telemetry, promotion-grade economic authority, and Phase-4 hardware/deployment evidence.
+- Phase 6.0 must preserve those as explicit blockers so transport rows do not confuse local structural receipts with trained, promoted, or hardware-proven truth.
+
 Recommended module families in this phase:
 
 - economic resource-budgeting and allocation modules
@@ -2906,6 +2912,25 @@ Each bridge should:
 - carry uncertainty and provenance explicitly
 - learn from completed loops and postmortem receipts
 
+Per-WM receiver transformer rule:
+
+- the isomorphic transporter must not write directly into every WM
+- every target WM needs a functionality-specific receiver transformer that converts transported objects into target-native state, actionability constraints, rows, and receipts
+- every source WM may also expose a functionality-specific exporter transformer that converts canonical state into the transport ontology
+- the shared bridge preserves compatibility; the per-WM receiver restores target-WM meaning
+- receiver-transformer evidence must be evaluated separately from bridge evidence, because a bridge can preserve topology while a receiver fails to make the result actionable for the target WM
+
+Recommended path shape:
+
+```text
+source canonical WM state
+  -> source per-WM export transformer
+  -> WM-transport ontology object
+  -> isomorphic transport bridge
+  -> target per-WM receiver transformer
+  -> target-native canonical intake / advisory proposal
+```
+
 ### Recommended boundary rule
 
 Bridges should operate over typed objects, not raw hidden states.
@@ -2927,9 +2952,13 @@ Recommended additive package:
 src/world_model/transport/
   __init__.py
   bridge_contracts.py
+  wm_transformers.py
   topology_metrics.py
   uncertainty.py
   roundtrip.py
+  training_rows.py
+  neural_manifest.py
+  losses.py
   training.py
   runtime.py
 ```
@@ -2937,6 +2966,28 @@ src/world_model/transport/
 ### Training rule
 
 Train bridges by freezing adjacent WMs first.
+
+Training should separate three learnable surfaces: source per-WM exporter,
+isomorphic transport bridge, and target per-WM receiver transformer. Exporters
+and receivers own WM-specific functionality and actionability; the bridge owns
+adjacent-WM compatibility, topology, causal, uncertainty, and provenance
+preservation. Evaluation must decompose bridge-only, receiver-only,
+downstream-only, joint, and interaction effects.
+
+RL placement rule:
+
+- transport bridges and receiver transformers are middleware and should train
+  primarily through supervised, contrastive, predictive, calibration,
+  topology-preservation, round-trip, and counterfactual/postmortem losses
+- direct task-reward RL should not train the bridge as if it were a policy
+- RL-style structures belong in bounded Economic WM allocator/governance lanes
+  and later meta-governance: distributional Pareto multi-objective RL,
+  constrained/offline RL, augmented-Lagrangian shadow prices, coherent-risk
+  critics, finite-set receding-horizon allocation, and contextual-bandit /
+  off-policy shadow ranking
+- those RL outputs may shape transport through receipts, labels, constraints,
+  and sample weights, but must not grant transport authority or bypass target
+  receivers
 
 Neuralization rule from tranche 1:
 
@@ -2957,6 +3008,8 @@ Core decomposed evaluation:
 Recommended training signals:
 
 - WM -> ontology -> WM translation quality
+- source-exporter quality
+- target-receiver actionability and native-state reconstruction
 - round-trip reconstruction
 - topology preservation
 - causal / dependency preservation
