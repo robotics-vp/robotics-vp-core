@@ -27,6 +27,16 @@ from src.world_model.economic_world_model.lower_wm_consumption import (
     save_economic_wm_lower_wm_consumption_outputs,
 )
 
+from src.world_model.economic_world_model.lower_wm_maturity_sweep import (
+    EconomicWMLowerWMMaturityRow,
+    EconomicWMLowerWMMaturitySweep,
+    build_economic_wm_lower_wm_maturity_sweep,
+    build_economic_wm_lower_wm_maturity_sweep_from_paths,
+    load_economic_wm_lower_wm_maturity_rows,
+    load_economic_wm_lower_wm_maturity_sweep,
+    save_economic_wm_lower_wm_maturity_sweep,
+)
+
 from src.world_model.economic_world_model.neural_architecture_manifest import (
     EconomicWMNeuralArchitectureManifest,
     EconomicWMNeuralComponentSpec,
@@ -106,6 +116,26 @@ from src.world_model.economic_world_model.shadow_execution import (
     save_economic_wm_shadow_execution_report,
 )
 
+from src.world_model.economic_world_model.supervision_substrate import (
+    EconomicWMSupervisionManifest,
+    EconomicWMSupervisionRecord,
+    build_economic_wm_supervision_substrate,
+    build_economic_wm_supervision_substrate_from_paths,
+    load_economic_wm_supervision_manifest,
+    load_economic_wm_supervision_records,
+    save_economic_wm_supervision_substrate,
+)
+
+from src.world_model.economic_world_model.shadow_outcomes import (
+    EconomicWMShadowOutcomeLoopReport,
+    EconomicWMShadowOutcomeReceipt,
+    build_economic_wm_shadow_outcome_loop,
+    build_economic_wm_shadow_outcome_loop_from_paths,
+    load_economic_wm_shadow_outcome_loop_report,
+    load_economic_wm_shadow_outcome_receipts,
+    save_economic_wm_shadow_outcome_loop,
+)
+
 from src.world_model.economic_world_model.training_rows import (
     EconomicWMReplayFeatureRow,
     EconomicWMTrainingCorpusManifest,
@@ -142,6 +172,12 @@ __all__ = [
     "EconomicWMCanonicalConsumptionRow",
     "EconomicWMLowerWMConsumptionPreflight",
     "EconomicWMLowerWMReference",
+    "EconomicWMLowerWMMaturityRow",
+    "EconomicWMLowerWMMaturitySweep",
+    "EconomicWMSupervisionManifest",
+    "EconomicWMSupervisionRecord",
+    "EconomicWMShadowOutcomeLoopReport",
+    "EconomicWMShadowOutcomeReceipt",
     "EconomicWMNeuralArchitectureManifest",
     "EconomicWMNeuralComponentSpec",
     "build_economic_wm_neural_architecture_manifest",
@@ -180,6 +216,21 @@ __all__ = [
     "load_economic_wm_phase5_local_prep_manifest",
     "load_economic_wm_temporal_window_rows",
     "save_economic_wm_phase5_local_prep",
+    "build_economic_wm_lower_wm_maturity_sweep",
+    "build_economic_wm_lower_wm_maturity_sweep_from_paths",
+    "load_economic_wm_lower_wm_maturity_rows",
+    "load_economic_wm_lower_wm_maturity_sweep",
+    "save_economic_wm_lower_wm_maturity_sweep",
+    "build_economic_wm_supervision_substrate",
+    "build_economic_wm_supervision_substrate_from_paths",
+    "load_economic_wm_supervision_manifest",
+    "load_economic_wm_supervision_records",
+    "save_economic_wm_supervision_substrate",
+    "build_economic_wm_shadow_outcome_loop",
+    "build_economic_wm_shadow_outcome_loop_from_paths",
+    "load_economic_wm_shadow_outcome_loop_report",
+    "load_economic_wm_shadow_outcome_receipts",
+    "save_economic_wm_shadow_outcome_loop",
     "build_allocation_envelope",
     "build_economic_state",
     "build_economic_wm_replay_feature_row",

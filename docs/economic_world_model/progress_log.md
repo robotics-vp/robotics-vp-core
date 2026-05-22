@@ -3277,3 +3277,32 @@ Verification for the Phase-5 local-closure pass:
   - shadow execution: `work_order_count=3`, `outcome_comparison_count=3`, `ready_for_shadow_comparison=true`
 - Nightly audit: pass (`status=ok`).
 - Full suite: `python3 -m compileall src/ -q && python3 -m pytest tests/ -q` -> `1700 passed, 2 skipped, 32 warnings`.
+
+### 2026-05-21: Economic WM Phase-5.1 self-checking loop
+
+- Added typed supervision substrate materialization:
+  - `src/world_model/economic_world_model/supervision_substrate.py`
+  - `scripts/economic_world_model/prepare_economic_wm_supervision_substrate.py`
+  - `tests/test_economic_wm_supervision_substrate.py`
+  - current artifacts: `record_count=5`, `ready_record_count=5`, `counterfactual_eval_count=5`, `value_target_pack_count=5`, `value_ledger_receipt_count=5`
+- Added local shadow outcome loop:
+  - `src/world_model/economic_world_model/shadow_outcomes.py`
+  - `scripts/economic_world_model/run_economic_wm_shadow_outcome_loop.py`
+  - `tests/test_economic_wm_shadow_outcome_loop.py`
+  - current artifacts: `outcome_receipt_count=3`, `completed_comparison_count=3`, `local_structural_loop_closed=true`
+- Added lower-WM maturity sweep:
+  - `src/world_model/economic_world_model/lower_wm_maturity_sweep.py`
+  - `scripts/economic_world_model/sweep_economic_wm_lower_wm_maturity.py`
+  - `tests/test_economic_wm_lower_wm_maturity_sweep.py`
+  - current artifacts: `maturity_row_count=15`, `structural_ready_count=15`, `production_ready_count=0`, `ready_for_phase6_contracts=true`
+- Boundary preserved: local structural receipts only; no hardware outcome, provider outcome, GPU training, promotion, live policy control, or reward-math mutation claim.
+
+Verification for the Phase-5.1 pass:
+
+- Focused ruff/compile/tests: pass (`17 passed` across new and adjacent Economic WM tests).
+- Artifact CLIs materialized current local surfaces:
+  - supervision substrate: `record_count=5`, `ready_record_count=5`
+  - shadow outcome loop: `outcome_receipt_count=3`, `local_structural_loop_closed=true`
+  - lower-WM maturity sweep: `maturity_row_count=15`, `structural_ready_count=15`, `production_ready_count=0`
+- Nightly audit: pass (`status=ok`).
+- Full suite: `python3 -m compileall src/ -q && python3 -m pytest tests/ -q` -> `1706 passed, 2 skipped, 32 warnings`.

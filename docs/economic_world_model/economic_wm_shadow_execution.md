@@ -44,3 +44,7 @@ The current local artifact run reports:
 ## Boundary
 
 This is `shadow_execution_only`. It emits advisory work orders and comparison slots only; it does not execute live allocation, hardware control, provider bring-up, GPU training, promotion, or frozen math mutation.
+
+## Downstream Phase-5.1 loop
+
+`docs/economic_world_model/economic_wm_shadow_outcome_loop.md` documents the next local loop, where these advisory work orders are joined to structural supervision receipts and outcome-comparison rows without live authority.

@@ -4768,3 +4768,31 @@ Phase 5 should not wait for GPUs to define the shapes of the receipts, rows, que
 - Resource, Phase-5 prep, trainer scaffold, and shadow execution CLIs all materialized local artifacts.
 - Nightly audit passed with `status=ok`.
 - Full suite passed: `1700 passed, 2 skipped, 32 warnings`.
+
+## 2026-05-21 — Economic WM Phase-5.1 self-checking loop
+
+### What was built
+
+- A supervision substrate that loads Phase-5 counterfactual eval refs, value target packs, and value-ledger receipts as typed Economic WM supervision records.
+- A shadow outcome loop that joins advisory work orders to local structural outcome receipts and updates outcome-comparison rows.
+- A lower-WM maturity sweep that checks canonical lower-WM refs, reconstruction grounding reports, benchmark gates, teacher traces, and resource surfaces while distinguishing structural Phase-6 readiness from production readiness.
+
+### Current local artifact results
+
+- Supervision substrate: 5 records, 5 counterfactual evals, 5 value-target packs, and 5 value-ledger receipts loaded.
+- Shadow outcome loop: 3 local structural outcome receipts and 3 joined comparisons emitted.
+- Lower-WM maturity sweep: 15 canonical refs structurally ready for Phase-6 contracts; 0 production-ready refs.
+
+### Boundaries
+
+- Local structural outcome receipts are not hardware outcomes.
+- Loaded counterfactual/value-target receipts are not training or promotion evidence.
+- Lower-WM structural readiness is not production maturity.
+- No GPU/provider execution, model training, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda mutation occurred.
+
+### Verification
+
+- Focused compile, ruff, and Economic WM pytest slice passed (`17 passed`).
+- Supervision substrate, shadow outcome loop, and lower-WM maturity sweep CLIs all materialized local artifacts.
+- Nightly audit passed with `status=ok`.
+- Full suite passed: `1706 passed, 2 skipped, 32 warnings`.

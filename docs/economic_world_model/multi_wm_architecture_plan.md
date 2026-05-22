@@ -2853,6 +2853,7 @@ Current local Phase-5 closure artifacts (2026-05-21):
 - `phase5_local_prep.py` emits datapack-composition rows, counterfactual/value-target joins, and temporal windows over canonical lower-WM refs and resource surfaces.
 - `train_economic_world_model_v0.py` is a trainer scaffold only: dataset contract, component configs, loss definitions, and CPU smoke forwards with no weight writes or training claim.
 - `shadow_execution.py` emits advisory work orders and outcome-comparison slots so Economic WM recommendations can be evaluated against later lower-WM outcomes without controlling reward math or live policy.
+- `supervision_substrate.py`, `shadow_outcomes.py`, and `lower_wm_maturity_sweep.py` add the first Phase-5.1 self-checking loop: typed supervision records, local structural outcome receipts, and maturity diagnostics showing structural Phase-6 readiness separately from production readiness.
 
 Recommended module families in this phase:
 
