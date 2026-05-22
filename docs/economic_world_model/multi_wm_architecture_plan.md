@@ -2963,6 +2963,14 @@ src/world_model/transport/
   runtime.py
 ```
 
+Current local Phase-6.0-6.2 artifacts (2026-05-21):
+
+- `bridge_contracts.py` builds adjacent-WM contracts from Phase-5.1 maturity rows and the Phase-5 local prep manifest.
+- `wm_transformers.py` materializes per-WM exporter and receiver posture so the isomorphic transporter is always received through target-native functionality.
+- `training_rows.py` emits transport pair, round-trip, topology, causal, uncertainty, downstream-yield, postmortem-counterfactual, and receiver-transformer rows.
+- `roundtrip.py`, `topology_metrics.py`, and `uncertainty.py` emit local structural receipts for round-trip consistency, topology/causal preservation, receiver actionability, and uncertainty calibration.
+- `runtime.py` emits a top-level Phase-6 scaffold report with `ready_for_phase6_3_neural_scaffold=true` while keeping `ready_for_training=false` and `promotion_eligible=false`.
+
 ### Training rule
 
 Train bridges by freezing adjacent WMs first.

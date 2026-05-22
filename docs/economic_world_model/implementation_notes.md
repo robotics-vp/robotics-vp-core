@@ -4866,3 +4866,44 @@ The missing work is depth, not coverage: GPU training, real provider/runtime rec
 ### Verification
 
 - Docs-only pass; no runtime, training, provider, promotion, live-control, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+## 2026-05-21 — Phase-6.0-6.2 transport scaffold implementation
+
+### What was built
+
+- Added the additive cross-WM transport package:
+  - `src/world_model/transport/bridge_contracts.py`
+  - `src/world_model/transport/wm_transformers.py`
+  - `src/world_model/transport/topology_metrics.py`
+  - `src/world_model/transport/uncertainty.py`
+  - `src/world_model/transport/roundtrip.py`
+  - `src/world_model/transport/training_rows.py`
+  - `src/world_model/transport/runtime.py`
+- Added `scripts/economic_world_model/prepare_phase6_transport_scaffold.py` to materialize local Phase-6 artifacts from the Phase-5.1 lower-WM maturity sweep and Phase-5 local prep manifest.
+- Added `tests/test_wm_transport_phase6_scaffold.py` covering adjacent contract construction, per-WM receiver/exporter posture, round-trip receipts, training row families, and script artifact roundtrip.
+- Added `docs/economic_world_model/phase6_transport_scaffold.md` as the implementation note for the landed 6.0-6.2 scaffold.
+
+### Current local artifact result
+
+The local artifact run reports:
+
+- `contract_count=20`
+- `transformer_count=7`
+- `roundtrip_receipt_count=20`
+- `training_row_count=160`
+- `status=ok`
+- `ready_for_phase6_3_neural_scaffold=true`
+- `ready_for_training=false`
+- `promotion_eligible=false`
+
+### Boundary
+
+This is structural Phase-6 local work only. No bridge weights were trained, no providers or hardware ran, no live policy authority was granted, no promotion was made, and frozen reward/trust/`w_econ`/lambda-controller math was not modified.
+
+### Verification
+
+- `python3 -m pytest -q tests/test_wm_transport_phase6_scaffold.py` passed (`3 passed`).
+- `python3 -m ruff check src/world_model/transport scripts/economic_world_model/prepare_phase6_transport_scaffold.py tests/test_wm_transport_phase6_scaffold.py` passed.
+- Artifact CLI passed and emitted `contract_count=20`, `transformer_count=7`, `roundtrip_receipt_count=20`, `training_row_count=160`, `status=ok`.
+- Full suite passed: `python3 -m compileall src scripts/economic_world_model -q && python3 -m pytest tests/ -q` -> `1709 passed, 2 skipped, 32 warnings`.
+- Nightly audit passed with `status=ok`.

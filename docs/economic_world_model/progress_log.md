@@ -3321,3 +3321,12 @@ Verification for the Phase-5.1 pass:
 - Added RL placement language: transport remains middleware trained by supervised/contrastive/predictive/calibration/topology/round-trip/postmortem losses; direct task-reward RL belongs in bounded Economic WM allocator/governance or later meta-governance lanes, not as bridge policy authority.
 - Confirmed in docs that the Economic WM roadmap subsystems have Phase-5 local scaffold/contract anchors: datapack composition, state estimation, dynamics, allocator/compiler, optional discrete receding-horizon allocation, resource/compute/battery budgeting, and governance/reciprocity.
 - Boundary preserved: coverage is local scaffold/contract coverage only, not GPU-trained, provider-proven, hardware-proven, promoted, or live-authority coverage.
+
+### 2026-05-21: Phase-6.0-6.2 transport scaffold implementation
+
+- Added `src/world_model/transport/` with typed adjacent bridge contracts, per-WM exporter/receiver scaffolds, topology metrics, uncertainty calibration, round-trip receipts, training-row materialization, and a top-level Phase-6 scaffold report.
+- Added `scripts/economic_world_model/prepare_phase6_transport_scaffold.py` to materialize Phase-6.0-6.2 artifacts from Phase-5/5.1 local surfaces.
+- Added `tests/test_wm_transport_phase6_scaffold.py`.
+- Current local artifact run: `contract_count=20`, `transformer_count=7`, `roundtrip_receipt_count=20`, `training_row_count=160`, `status=ok`, `ready_for_phase6_3_neural_scaffold=true`, `ready_for_training=false`, `promotion_eligible=false`.
+- Verification: focused Phase-6 test passed (`3 passed`), changed-surface ruff passed, full suite passed (`1709 passed, 2 skipped, 32 warnings`), and nightly audit passed with `status=ok`.
+- Boundary preserved: contracts, row shapes, and receipts only; no GPU/provider execution, bridge training, hardware execution, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda mutation claim.
