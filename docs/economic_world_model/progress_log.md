@@ -3339,3 +3339,33 @@ Verification for the Phase-5.1 pass:
 - Current local artifact run: `component_count=8`, `loss_count=14`, `training_row_count=160`, `cpu_smoke_forward_passed=true`, `ready_for_training=false`, `ready_for_gpu_training=false`, `training_executed=false`, `weights_written=false`, `promotion_eligible=false`.
 - Verification: focused Phase-6/6.3 tests passed (`5 passed`), changed-surface ruff passed, artifact CLIs passed, nightly audit passed with `status=ok`, and full suite passed (`1711 passed, 2 skipped, 32 warnings`).
 - Boundary preserved: no GPU/provider execution, bridge/receiver training, hardware execution, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-23: Phase-6.4 transport advisory runtime and decomposed eval
+
+- Added Phase-6.4 advisory runtime scaffolding for WM transport:
+  - `src/world_model/transport/advisory_runtime.py`
+  - `scripts/economic_world_model/run_phase6_transport_advisory_runtime.py`
+  - `tests/test_wm_transport_phase64_runtime_eval.py`
+  - `docs/economic_world_model/phase6_transport_advisory_runtime.md`
+- The runtime emits advisory `TransportProposal`, `TransportInvocation`, and
+  `TransportReceipt` surfaces over the existing Phase-6.0-6.3 contracts,
+  round-trip receipts, neural manifest, and non-training trainer scaffold.
+- Added decomposed eval reports with bridge-only, receiver-only,
+  downstream-only, joint, and interaction terms so bridge quality, receiver
+  actionability, and downstream shadow usefulness remain separately visible.
+- Added shadow outcome join slots for Economic-WM targets. Current local
+  artifacts join available local structural shadow outcomes where present and
+  leave explicit awaiting slots when absent.
+- Current local artifact run:
+  `proposal_count=20`, `invocation_count=20`, `receipt_count=20`,
+  `eval_report_count=20`, `shadow_join_slot_count=20`,
+  `joined_shadow_outcome_count=10`, `ready_for_decomposed_eval=true`,
+  `ready_for_training=false`, `weights_written=false`,
+  `promotion_eligible=false`.
+- Verification: focused Phase-6.4 test passed (`2 passed`), combined
+  Phase-6.0-6.4 transport tests passed (`7 passed`), changed-surface ruff
+  passed, artifact CLI passed, nightly audit passed (exit 0), and full suite
+  passed (`1713 passed, 2 skipped, 32 warnings`).
+- Boundary preserved: no transport training, weight writes, GPU/provider or
+  hardware execution, promotion, live policy control, target receiver bypass,
+  reward math mutation, or frozen reward/trust/`w_econ`/lambda mutation claim.

@@ -160,3 +160,17 @@ This pass does not close:
 - topology/latency benchmark evidence;
 - provider or hardware transport evidence;
 - promotion-grade downstream benchmarks.
+
+## Follow-up status
+
+Later local scaffold passes closed Phase 6.3 and Phase 6.4 structurally:
+
+- `phase6_transport_neural_scaffold.md` covers the neural manifest, loss ledger,
+  and non-training trainer scaffold.
+- `phase6_transport_advisory_runtime.md` covers advisory runtime proposals,
+  invocations, receipts, decomposed eval reports, and shadow outcome join slots.
+
+The remaining blockers are still training/evidence blockers: GPU-backed bridge
+and receiver training, cross-WM corpus density, provider or hardware transport
+evidence, topology/latency benchmarks, promotion-grade downstream benchmarks,
+and any bounded live authority grant.

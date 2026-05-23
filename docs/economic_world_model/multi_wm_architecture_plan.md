@@ -766,7 +766,18 @@ Today the repo does **not** yet have:
 
 - a fully neuralized operational ontology layer
 - a full WM-transport ontology implementation
-- a full ontology-mediated adjacent-WM transport runtime
+- a full ontology-mediated adjacent-WM transport runtime with trained weights,
+  provider/hardware evidence, promotion-grade downstream benchmarks, or live
+  authority
+
+Today the repo does have a local Phase-6.0-6.4 WM-transport scaffold:
+
+- adjacent-WM contracts, per-WM exporters/receivers, training rows, and
+  topology/round-trip/uncertainty receipts
+- neural manifest, loss ledger, and non-training trainer scaffold
+- advisory runtime proposals, invocations, receipts, decomposed eval reports,
+  and shadow outcome join slots with all training, weight-write, live-control,
+  reward-mutation, receiver-bypass, and promotion gates denied
 
 The sequencing remains:
 
@@ -2961,6 +2972,7 @@ src/world_model/transport/
   losses.py
   training.py
   runtime.py
+  advisory_runtime.py
 ```
 
 Current local Phase-6.0-6.2 artifacts (2026-05-21):
@@ -2976,6 +2988,20 @@ Current local Phase-6.3 artifacts (2026-05-22):
 - `neural_manifest.py` emits the source-exporter / isomorphic-bridge / target-receiver neural architecture manifest plus auxiliary topology, causal, uncertainty, governance, and downstream-shadow components.
 - `losses.py` emits the explicit 14-loss ledger, including topological contrastive alignment and offline RL-style shadow-ranking losses without direct bridge-policy RL.
 - `training.py` and `train_wm_transport_bridge_v0.py` emit dataset contracts, model component configs, CPU smoke forwards, and denied-promotion trainer manifests with `training_executed=false`, `weights_written=false`, and `promotion_eligible=false`.
+
+Current local Phase-6.4 artifacts (2026-05-23):
+
+- `advisory_runtime.py` emits advisory `TransportProposal`,
+  `TransportInvocation`, `TransportReceipt`, shadow outcome join slots,
+  decomposed eval reports, and a top-level runtime report.
+- `run_phase6_transport_advisory_runtime.py` materializes those artifacts from
+  the Phase-6.0-6.3 scaffold and existing Economic-WM shadow outcome receipts
+  where available.
+- Current local artifacts report `proposal_count=20`, `invocation_count=20`,
+  `receipt_count=20`, `eval_report_count=20`, and
+  `joined_shadow_outcome_count=10` while keeping `ready_for_training=false`,
+  `weights_written=false`, `live_policy_control=false`,
+  `reward_math_mutation=false`, and `promotion_eligible=false`.
 
 ### Training rule
 
@@ -3015,6 +3041,7 @@ Complete-subsystem rule:
 Core decomposed evaluation:
 
 - bridge-only improvement
+- receiver-only improvement
 - downstream-WM-only improvement
 - joint improvement
 - interaction term

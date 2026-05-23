@@ -121,13 +121,20 @@ The CPU smoke pass checks finite deterministic forwards over the current
 transport training rows and finite proxy loss values. It does not initialize or
 write real model weights.
 
+## Phase 6.4 follow-up
+
+Phase 6.4 has now landed as local advisory runtime scaffolding in
+`docs/economic_world_model/phase6_transport_advisory_runtime.md`. It emits
+transport proposals, invocations, receipts, decomposed evaluation reports, and
+shadow outcome join slots over the Phase-6.0-6.3 artifacts.
+
 ## Boundary
 
-Still open after Phase 6.3:
+Still open after Phase 6.4:
 
 - GPU-backed bridge/receiver training;
 - cross-WM corpus-density evidence;
 - provider or hardware transport evidence;
 - topology/latency benchmarks;
 - promotion-grade downstream benchmarks;
-- Phase 6.4 advisory runtime proposals over learned or calibrated bridge outputs.
+- learned or calibrated bridge outputs beyond the local scaffold receipts.

@@ -350,6 +350,23 @@ The runtime story is useful when it can answer:
 5. Did the adjacent WM find the object actionable?
 6. What downstream result or shadow outcome should later validate the transport?
 
+Current local Phase-6.4 artifacts (2026-05-23):
+
+- `advisory_runtime.py` emits `TransportProposal`, `TransportInvocation`,
+  `TransportReceipt`, shadow outcome join slots, decomposed eval reports, and a
+  top-level advisory runtime report.
+- `run_phase6_transport_advisory_runtime.py` materializes those artifacts from
+  the Phase-6.0-6.3 scaffold, neural manifest, and non-training trainer
+  scaffold.
+- Current local artifacts report `proposal_count=20`, `invocation_count=20`,
+  `receipt_count=20`, `eval_report_count=20`,
+  `joined_shadow_outcome_count=10`, `ready_for_decomposed_eval=true`,
+  `ready_for_training=false`, `weights_written=false`, and
+  `promotion_eligible=false`.
+- Shadow joins are local structural evaluation slots only; they are not
+  provider/hardware outcomes, promotion-grade downstream benchmarks, or live
+  authority grants.
+
 ## Local Phase-6 closure criteria
 
 Local Phase 6 should be considered structurally closed only when:

@@ -1,0 +1,281 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from scripts.economic_world_model.build_phase6_transport_neural_manifest import (
+    run_build_phase6_transport_neural_manifest,
+)
+from scripts.economic_world_model.prepare_phase6_transport_scaffold import (
+    run_prepare_phase6_transport_scaffold,
+)
+from scripts.economic_world_model.run_phase6_transport_advisory_runtime import (
+    run_phase6_transport_advisory_runtime,
+)
+from scripts.train_wm_transport_bridge_v0 import (
+    run_train_wm_transport_bridge_v0_scaffold,
+)
+from src.world_model.economic_world_model import (
+    EconomicWMLowerWMMaturityRow,
+    EconomicWMLowerWMMaturitySweep,
+    EconomicWMPhase5LocalPrepManifest,
+    save_economic_wm_lower_wm_maturity_sweep,
+    save_economic_wm_phase5_local_prep,
+)
+from src.world_model.economic_world_model.shadow_outcomes import (
+    EconomicWMShadowOutcomeReceipt,
+)
+from src.world_model.transport import (
+    DENIED_TRANSPORT_RUNTIME_AUTHORITIES,
+    load_wm_transport_advisory_runtime_report,
+    load_wm_transport_decomposed_eval_reports,
+    load_wm_transport_invocations,
+    load_wm_transport_proposals,
+    load_wm_transport_receipts,
+)
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(json.dumps(row, sort_keys=True) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _maturity_row(tmp_path: Path, source_row_id: str, wm_key: str, version: str):
+    state_path = tmp_path / f"{source_row_id}_{wm_key}.json"
+    _write_json(state_path, {"version": version, "state_id": f"state_{wm_key}"})
+    return EconomicWMLowerWMMaturityRow(
+        maturity_row_id=f"maturity_{source_row_id}_{wm_key}",
+        source_row_id=source_row_id,
+        source_episode_id="episode_transport_64",
+        wm_key=wm_key,
+        artifact_path=str(state_path),
+        observed_version=version,
+        state_id=f"state_{wm_key}",
+        reference_status="direct_source_reference",
+        direct_reference=True,
+        artifact_exists=True,
+        sidecar_scores={
+            "calibration_complete": 1.0,
+            "real_scene_tracks_joined": 1.0,
+            "resource_receipt_present": 1.0,
+        },
+        maturity_score=0.9,
+        maturity_class="local_structural_mature",
+        ready_for_phase6_contracts=True,
+        ready_for_production=False,
+        blockers=["teacher_runtime_unavailable"],
+    )
+
+
+def _materialize_phase64_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
+    rows = [
+        _maturity_row(
+            tmp_path,
+            "source_transport_64",
+            "perception_grounding",
+            "perception_grounding_world_state_v1",
+        ),
+        _maturity_row(
+            tmp_path,
+            "source_transport_64",
+            "sim_synth_physics",
+            "sim_synth_physics_world_state_v1",
+        ),
+        _maturity_row(
+            tmp_path,
+            "source_transport_64",
+            "embodiment_actuation",
+            "embodiment_actuation_world_state_v1",
+        ),
+    ]
+    sweep = EconomicWMLowerWMMaturitySweep(
+        sweep_id="maturity_sweep_transport_64",
+        phase5_manifest_id="phase5_transport_64",
+        lower_wm_preflight_id="lower_transport_64",
+        resource_manifest_id="resource_transport_64",
+        maturity_row_count=3,
+        structural_ready_count=3,
+        production_ready_count=0,
+        maturity_rows_path=str(tmp_path / "maturity_rows.jsonl"),
+        status="ok",
+        ready_for_phase6_contracts=True,
+        ready_for_production=False,
+    )
+    phase5 = EconomicWMPhase5LocalPrepManifest(
+        manifest_id="phase5_transport_64",
+        corpus_id="corpus_transport_64",
+        lower_wm_preflight_id="lower_transport_64",
+        resource_ingestion_manifest_id="resource_transport_64",
+        row_count=1,
+        composition_row_count=1,
+        counterfactual_value_join_count=1,
+        temporal_window_count=1,
+        composition_rows_path=str(tmp_path / "composition_rows.jsonl"),
+        counterfactual_value_joins_path=str(tmp_path / "joins.jsonl"),
+        temporal_windows_path=str(tmp_path / "windows.jsonl"),
+        status="ok",
+        ready_for_trainer_scaffold=True,
+    )
+    phase5_path = tmp_path / "phase5.json"
+    sweep_path = tmp_path / "sweep.json"
+    save_economic_wm_phase5_local_prep(
+        manifest_path=phase5_path,
+        manifest=phase5,
+        composition_rows=[],
+        counterfactual_value_joins=[],
+        temporal_windows=[],
+    )
+    save_economic_wm_lower_wm_maturity_sweep(
+        sweep_path=sweep_path,
+        sweep=sweep,
+        maturity_rows=rows,
+    )
+
+    scaffold_dir = tmp_path / "phase6_scaffold"
+    neural_dir = tmp_path / "phase6_neural"
+    trainer_dir = tmp_path / "phase6_trainer"
+    run_prepare_phase6_transport_scaffold(
+        output_dir=scaffold_dir,
+        phase5_prep_path=phase5_path,
+        maturity_sweep_path=sweep_path,
+        maturity_rows_path=sweep.maturity_rows_path,
+        run_dependencies_if_missing=False,
+    )
+    run_build_phase6_transport_neural_manifest(
+        output_dir=neural_dir,
+        scaffold_dir=scaffold_dir,
+        run_dependencies_if_missing=False,
+    )
+    run_train_wm_transport_bridge_v0_scaffold(
+        output_dir=trainer_dir,
+        neural_dir=neural_dir,
+        scaffold_dir=scaffold_dir,
+        run_dependencies_if_missing=False,
+    )
+    return scaffold_dir, neural_dir, trainer_dir
+
+
+def _shadow_outcome_path(tmp_path: Path) -> Path:
+    receipt = EconomicWMShadowOutcomeReceipt(
+        receipt_id="shadow_outcome_transport_64",
+        work_order_id="shadow_work_order_transport_64",
+        allocation_label="close_shadow_gap_replay",
+        recommended_action="request_lower_wm_gap_closure_receipts",
+        observed_effects={
+            "local_structural_loop_closed": 1.0,
+            "supervision_record_coverage": 1.0,
+            "value_target_pack_coverage": 1.0,
+            "value_ledger_receipt_coverage": 1.0,
+            "provider_outcome_coverage": 0.0,
+            "hardware_outcome_coverage": 0.0,
+        },
+        expected_effects={"expected_value": 0.6},
+        comparison_metrics={
+            "counterfactual_accuracy_observed": 0.0,
+            "pareto_quality_observed": 0.0,
+            "promotion_grade_evidence_observed": 0.0,
+        },
+        evidence_refs={"work_order_id": "shadow_work_order_transport_64"},
+        blockers=["promotion_grade_shadow_benchmarks_missing"],
+    )
+    path = tmp_path / "shadow_outcomes.jsonl"
+    _write_jsonl(path, [receipt.to_dict()])
+    return path
+
+
+def test_phase64_runtime_emits_advisory_surfaces_and_decomposed_eval(tmp_path):
+    scaffold_dir, neural_dir, trainer_dir = _materialize_phase64_inputs(tmp_path)
+    shadow_path = _shadow_outcome_path(tmp_path)
+
+    payload = run_phase6_transport_advisory_runtime(
+        output_dir=tmp_path / "phase64_runtime",
+        scaffold_dir=scaffold_dir,
+        neural_dir=neural_dir,
+        trainer_dir=trainer_dir,
+        shadow_outcomes_path=shadow_path,
+        run_dependencies_if_missing=False,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["proposal_count"] == 4
+    assert payload["invocation_count"] == 4
+    assert payload["receipt_count"] == 4
+    assert payload["eval_report_count"] == 4
+    assert payload["joined_shadow_outcome_count"] == 2
+    assert payload["ready_for_decomposed_eval"] is True
+    assert payload["ready_for_training"] is False
+    assert payload["training_executed"] is False
+    assert payload["weights_written"] is False
+    assert payload["live_policy_control"] is False
+    assert payload["reward_math_mutation"] is False
+    assert payload["promotion_eligible"] is False
+
+    refs = payload["artifact_refs"]
+    report = load_wm_transport_advisory_runtime_report(refs["report_path"])
+    proposals = load_wm_transport_proposals(refs["proposals_path"])
+    invocations = load_wm_transport_invocations(refs["invocations_path"])
+    receipts = load_wm_transport_receipts(refs["receipts_path"])
+    evals = load_wm_transport_decomposed_eval_reports(refs["eval_reports_path"])
+
+    assert report.report_id == payload["report_id"]
+    assert all(proposal.advisory_only for proposal in proposals)
+    assert all(
+        set(DENIED_TRANSPORT_RUNTIME_AUTHORITIES).issubset(
+            set(proposal.denied_authority)
+        )
+        for proposal in proposals
+    )
+    assert not any(invocation.target_receiver_bypassed for invocation in invocations)
+    assert not any(receipt.training_executed for receipt in receipts)
+    assert not any(receipt.weights_written for receipt in receipts)
+    assert not any(receipt.provider_executed for receipt in receipts)
+    assert not any(receipt.hardware_executed for receipt in receipts)
+    assert not any(receipt.live_policy_control for receipt in receipts)
+    assert not any(receipt.reward_math_mutation for receipt in receipts)
+    assert not any(receipt.promotion_eligible for receipt in receipts)
+    assert all(receipt.receiver_actionable for receipt in receipts)
+    assert all(eval_report.bridge_only_score > 0.0 for eval_report in evals)
+    assert all(eval_report.receiver_only_score > 0.0 for eval_report in evals)
+    assert all("interaction_effect" in eval_report.terms for eval_report in evals)
+    assert any(
+        eval_report.downstream_only_score > 0.0
+        and eval_report.shadow_outcome_join_status
+        == "joined_local_structural_shadow_outcome"
+        for eval_report in evals
+    )
+
+
+def test_phase64_runtime_keeps_shadow_join_slots_open_when_outcomes_missing(tmp_path):
+    scaffold_dir, neural_dir, trainer_dir = _materialize_phase64_inputs(tmp_path)
+
+    payload = run_phase6_transport_advisory_runtime(
+        output_dir=tmp_path / "phase64_runtime_missing_shadow",
+        scaffold_dir=scaffold_dir,
+        neural_dir=neural_dir,
+        trainer_dir=trainer_dir,
+        shadow_outcomes_path=tmp_path / "missing_shadow_outcomes.jsonl",
+        run_dependencies_if_missing=False,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["joined_shadow_outcome_count"] == 0
+    receipts = load_wm_transport_receipts(payload["artifact_refs"]["receipts_path"])
+    economic_slots = [
+        receipt.shadow_outcome_slot
+        for receipt in receipts
+        if receipt.target_wm == "economic"
+    ]
+    assert len(economic_slots) == 2
+    assert all(
+        slot.join_status == "awaiting_shadow_outcome_receipt"
+        for slot in economic_slots
+    )
+    assert not any(slot.promotion_eligible for slot in economic_slots)

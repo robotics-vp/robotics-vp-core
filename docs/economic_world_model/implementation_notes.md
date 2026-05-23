@@ -4945,3 +4945,68 @@ The Phase-6.3 trainer is not a training run. It emits dataset contracts, model c
   - `scripts/train_wm_transport_bridge_v0.py`
 - Nightly audit passed with `status=ok`.
 - Full suite passed: `python3 -m compileall src scripts/economic_world_model -q && python3 -m pytest tests/ -q` -> `1711 passed, 2 skipped, 32 warnings`.
+
+## 2026-05-23 — Phase-6.4 transport advisory runtime and decomposed evaluation
+
+### What was built
+
+- Added local advisory runtime surfaces:
+  - `src/world_model/transport/advisory_runtime.py`
+  - `TransportProposal`
+  - `TransportInvocation`
+  - `TransportReceipt`
+  - `WMTransportShadowOutcomeJoinSlot`
+  - `WMTransportDecomposedEvalReport`
+  - `WMTransportAdvisoryRuntimeReport`
+- Added `scripts/economic_world_model/run_phase6_transport_advisory_runtime.py`
+  to materialize Phase-6.4 artifacts from the existing Phase-6.0-6.3 scaffold,
+  neural manifest, trainer scaffold, and available local Economic-WM shadow
+  outcome receipts.
+- Added `tests/test_wm_transport_phase64_runtime_eval.py`.
+- Added `docs/economic_world_model/phase6_transport_advisory_runtime.md` and
+  updated the Phase-6 plan, roadmap, and multi-WM architecture docs so the
+  local status no longer stops at Phase 6.3.
+
+### Current local artifact result
+
+- `proposal_count=20`
+- `invocation_count=20`
+- `receipt_count=20`
+- `eval_report_count=20`
+- `shadow_join_slot_count=20`
+- `joined_shadow_outcome_count=10`
+- `ready_for_decomposed_eval=true`
+- `ready_for_training=false`
+- `ready_for_gpu_training=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+### Boundary
+
+Phase 6.4 is runtime/evaluation scaffolding only. It emits advisory proposals,
+invocations, receipts, decomposed eval reports, and shadow join slots. It does
+not train, write weights, run providers, run hardware, grant live policy
+authority, bypass target receivers, mutate reward math, or promote outputs.
+
+Shadow outcome joins are local structural labels/slots only. They are not
+provider outcomes, hardware outcomes, promotion-grade downstream benchmarks, or
+bounded authority evidence.
+
+### Verification
+
+- `python3 -m pytest -q tests/test_wm_transport_phase64_runtime_eval.py`
+  passed (`2 passed`).
+- `python3 -m pytest -q tests/test_wm_transport_phase6_scaffold.py tests/test_wm_transport_phase63_neural_scaffold.py tests/test_wm_transport_phase64_runtime_eval.py`
+  passed (`7 passed`).
+- `python3 -m ruff check src/world_model/transport scripts/economic_world_model/run_phase6_transport_advisory_runtime.py tests/test_wm_transport_phase64_runtime_eval.py`
+  passed.
+- `python3 scripts/economic_world_model/run_phase6_transport_advisory_runtime.py --no-run-dependencies`
+  passed and emitted the current local Phase-6.4 artifact set.
+- `python3 scripts/economic_world_model/nightly_audit.py` passed (exit 0).
+- `python3 -m compileall src scripts/economic_world_model -q && python3 -m pytest tests/ -q`
+  passed (`1713 passed, 2 skipped, 32 warnings`).
