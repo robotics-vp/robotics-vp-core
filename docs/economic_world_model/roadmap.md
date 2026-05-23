@@ -1022,6 +1022,7 @@ Mechanics-first advancement rule:
 Env/sim and neural scaffold sequencing rule:
 
 - Phase 3.5 should refit env and sim layout around posture-tagged families: `bipedal_whole_body_*` as the primary readiness lane, `stable_base_mobile_manipulator_*` as fallback/degraded-mode safety lane, and `fixed_base_tabletop_*` as curriculum/regression lane
+- The local Phase 3.5 return artifact is `phase35_humanoid_capacity_env_refit.md`: it records G1/R1-class planning capacity bands, onboard/companion/battery assumptions, humanoid observation/action/schema deltas, posture-tagged env taxonomy, Unitree sim integration target, and benchmark taxonomy without claiming sim, hardware, training, or promotion evidence
 - lower-WM neural scaffolds should target bipedal whole-body complexity first where they represent body/contact/control directly: whole-body state encoders, support/contact/balance predictors, loco-manipulation action heads, inverse-dynamics/retargeting lanes, fallback selectors, and latency/watchdog/resource predictors
 - stable-base fallback classifiers may become learned seams, but they should emit veto/defer/recovery/operator-handoff receipts rather than silently redefining the primary standard
 
@@ -1029,6 +1030,7 @@ Compute and battery sequencing rule:
 
 - Phase 3 should emit canonical body-adjacent compute / battery / thermal / placement state and receipts
 - Phase 3.5 should audit whether those contracts and the submodule capacities behind them are realistic for G1/R1-class onboard and companion deployment
+- The local Phase 4 sweep artifact is `phase4_local_deployment_enabler_sweep.md`: it limits current work to non-hardware 4A control-loop separation contracts, 4E companion-compute/comms contracts, 4F operator/teleop/recovery contracts, and 4B/4C/4D schema/runbook/interface stubs while deferring full closure to live streams, control interfaces, and hardware/sim runtime evidence
 - Phase 4A and 4E should make the runtime consequences real:
   - control-rate changes
   - offload decisions

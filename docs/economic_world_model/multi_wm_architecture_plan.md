@@ -2693,10 +2693,21 @@ Preconditions:
 Reference artifact:
 
 - `docs/economic_world_model/humanoid_target_readiness.md`
+- `docs/economic_world_model/phase35_humanoid_capacity_env_refit.md`
 
 ### Phase 4 - Deployment Enabler Phases
 
 These are not optional side quests. They are named future phases that must exist before serious embodied deployment.
+
+Current local sweep artifact:
+
+- `docs/economic_world_model/phase4_local_deployment_enabler_sweep.md`
+  defines the allowed non-hardware Phase 4 contract/runbook/interface pass:
+  4A real-time control-loop separation contracts, 4E companion compute /
+  communication middleware contracts, 4F operator / teleop / recovery
+  contracts, and explicit 4B/4C/4D schema/runbook/interface stubs.
+- It does not claim live streams, control interfaces, hardware/sim runtime
+  evidence, training, promotion, or live authority.
 
 Cross-phase rule here too:
 

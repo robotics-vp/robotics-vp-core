@@ -3401,3 +3401,40 @@ Verification for the Phase-5.1 pass:
 - Boundary preserved: no transport training, weight writes, GPU/provider or
   hardware execution, promotion, live policy control, target receiver bypass,
   reward math mutation, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-23: Phase-3.5 humanoid capacity and environment refit
+
+- Added `docs/economic_world_model/phase35_humanoid_capacity_env_refit.md`.
+- Recorded G1/R1-class planning capacity bands for onboard reflex reserve,
+  onboard low-rate state, companion real-time assist, companion heavy
+  inference, and offline GPU training.
+- Made onboard/companion/battery assumptions explicit: servo and safety reserve
+  first, companion compute as assistive but not automatically hard real-time,
+  battery/thermal/comms as canonical receipt fields.
+- Added humanoid observation/action/schema deltas for whole-body proprioception,
+  IMU/support state, contact/force state, egocentric perception, resource/timing
+  metadata, whole-body action chunks, fallback actions, and operator/recovery
+  actions.
+- Refit the env taxonomy around `bipedal_whole_body_*` primary lanes,
+  `stable_base_mobile_manipulator_*` safety fallback lanes, and
+  `fixed_base_tabletop_*` curriculum/regression lanes only.
+- Added Unitree sim integration target and posture-aware humanoid benchmark
+  taxonomy.
+- Boundary preserved: docs/contract refit only; no Unitree sim runtime, hardware,
+  provider execution, training, promotion, live policy control, or frozen
+  reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-23: Phase-4 local deployment-enabler sweep
+
+- Added `docs/economic_world_model/phase4_local_deployment_enabler_sweep.md`.
+- Scoped the local Phase 4 pass to non-hardware scaffold only:
+  - 4A real-time control-loop separation contracts;
+  - 4E companion compute / communication middleware contracts;
+  - 4F operator / teleop / recovery contracts;
+  - 4B/4C/4D schema, runbook, and interface stubs.
+- Preserved full closure blockers: live streams, control interfaces,
+  timing/jitter traces, measured companion-compute middleware,
+  operator/recovery traces, and hardware or honest sim runtime evidence.
+- Boundary preserved: no live streams, control interfaces, hardware/sim runtime
+  evidence, provider execution, training, promotion, live policy control, or
+  frozen reward/trust/`w_econ`/lambda mutation claim.

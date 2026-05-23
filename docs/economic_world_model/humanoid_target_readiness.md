@@ -325,6 +325,14 @@ The eventual Unitree sim lane should define:
 
 This should not be an ad hoc env fork. It should sit behind typed backend and schema contracts.
 
+The concrete Phase 3.5 return artifact is
+`docs/economic_world_model/phase35_humanoid_capacity_env_refit.md`. It records
+the local capacity bands, onboard/companion/battery assumptions, humanoid
+observation/action schema deltas, posture-tagged environment taxonomy, Unitree
+sim integration target, and benchmark taxonomy. It remains planning-only until
+sim assets, runtime evidence, hardware evidence, training, and promotion-grade
+benchmarks exist.
+
 ## Contract Deltas Required For Humanoid Targeting
 
 Current contracts will need to grow to include:

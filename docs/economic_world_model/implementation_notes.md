@@ -5059,3 +5059,41 @@ training, topology/latency benchmarks, provider or hardware transport evidence,
 and promotion-grade downstream benchmarks. No training, weight write,
 provider/hardware execution, live policy authority, reward math mutation, or
 promotion occurred.
+
+## 2026-05-23 — Phase-3.5 humanoid capacity and environment refit
+
+### What changed
+
+- Added `docs/economic_world_model/phase35_humanoid_capacity_env_refit.md`.
+- Linked it from `docs/economic_world_model/humanoid_target_readiness.md`,
+  `docs/economic_world_model/multi_wm_architecture_plan.md`, and the roadmap.
+- Turned the bipedal posture doctrine into concrete local planning surfaces:
+  capacity bands, onboard/companion/battery assumptions, humanoid observation
+  deltas, humanoid action deltas, posture-tagged env taxonomy, Unitree sim
+  integration target, and benchmark taxonomy.
+
+### Boundary
+
+This is not Unitree sim integration, hardware evidence, provider execution,
+training, promotion, or live authority. It is the Phase 3.5 local refit that
+prevents later scaffolding from treating fixed-base/tabletop domains as
+humanoid readiness.
+
+## 2026-05-23 — Phase-4 local deployment-enabler sweep
+
+### What changed
+
+- Added `docs/economic_world_model/phase4_local_deployment_enabler_sweep.md`.
+- Scoped local Phase 4 to non-hardware contracts and stubs:
+  - 4A control-loop separation contracts;
+  - 4E companion-compute and communication middleware contracts;
+  - 4F operator / teleop / recovery contracts;
+  - 4B/4C/4D schema, runbook, and interface stubs.
+
+### Boundary
+
+Full Phase 4 closure still waits for live streams, control interfaces,
+hardware/sim runtime evidence, timing/jitter traces, measured companion compute,
+and operator/recovery traces. No hardware/sim runtime, training, provider,
+promotion, live policy authority, or frozen reward/trust/`w_econ`/lambda
+mutation occurred.

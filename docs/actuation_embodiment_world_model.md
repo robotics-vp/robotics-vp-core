@@ -37,6 +37,12 @@ neural scaffold, and benchmark should preserve this posture. Missing posture
 metadata should be treated as unknown/fixed-base evidence, not as bipedal
 whole-body evidence.
 
+The current Phase 3.5 refit artifact is
+`docs/economic_world_model/phase35_humanoid_capacity_env_refit.md`. It records
+the local capacity bands, observation/action schema deltas, env taxonomy,
+Unitree sim integration target, and benchmark taxonomy that this WM should use
+when returning from Phase-6 local transport closure.
+
 ---
 
 ## How Our WM Topology Differs from the Dominant Framing
