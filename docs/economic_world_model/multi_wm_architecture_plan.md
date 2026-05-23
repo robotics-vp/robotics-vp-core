@@ -868,6 +868,14 @@ If the intended long-term target is Unitree G1/R1-class readiness, then several 
 - current policy and adapter widths were not chosen under a 21+ DoF humanoid requirement
 - current safety and observation assumptions are not yet real-time, proprioceptive, or whole-body enough
 
+The target hierarchy is now explicit:
+
+1. **Bipedal whole-body humanoid control is the primary standard.** The stack should be shaped around floating-base balance, gait/contact, whole-body kinematics, loco-manipulation, bimanual/dexterous action, physical safety, and real compute/battery limits.
+2. **Stable-base mobile manipulation is the safety fallback / degraded-mode posture.** It is a conservative recovery and partial-task-continuity lane, not a replacement target.
+3. **Fixed-base tabletop is a curriculum and regression profile.** It remains useful for skill islands, replay, and smoke tests, but it cannot satisfy humanoid-readiness gates by itself.
+
+Every env, sim adapter, canonical state packet, training row, neural scaffold, and benchmark should declare which posture it supports. Missing posture metadata should be treated as unknown or fixed-base evidence, never as bipedal whole-body evidence by default.
+
 ### Model-capacity implication
 
 Not every model in the stack needs to become large.
@@ -931,7 +939,15 @@ This should also include an explicit future simulation lane for:
 
 - Unitree G1/R1-class robot simulation integration
 
-That means the repo should eventually carry a named sim-env integration path for Unitree-class embodiments rather than assuming current workcell/tabletop envs can be stretched into that role.
+That means the repo should eventually carry a named sim-env integration path for Unitree-class embodiments rather than assuming current workcell/tabletop envs can be stretched into that role. The env/sim layout should separate three posture families:
+
+| Env/sim family | Role | Promotion boundary |
+| --- | --- | --- |
+| `bipedal_whole_body_*` | Primary G1/R1 readiness families: balance, gait, loco-manipulation, bimanual/dexterous contact, recovery | Required for bipedal promotion |
+| `stable_base_mobile_manipulator_*` | Safety fallback, degraded-mode, recovery, and operator-handoff continuity | Can validate fallback behavior, not bipedal authority |
+| `fixed_base_tabletop_*` | Curriculum, smoke tests, narrow manipulation skill islands, replay infrastructure | Pretraining/regression only unless explicitly transferred and benchmarked upward |
+
+Sim backends must preserve the same posture separation in receipts, backend truth, robot-asset refs, observation/action schema refs, and training exports.
 
 ### Contract implication
 
@@ -2402,7 +2418,7 @@ Preconditions:
 
 Objective:
 
-- create canonical body/action state for fixed-base and future humanoid/mobile embodiments
+- create canonical body/action state with bipedal whole-body humanoid control as the primary standard, stable-base mobile manipulation as the safety fallback/degraded-mode posture, and fixed-base tabletop as a restricted curriculum profile
 - implement the six core subsystems (capability state, contact/affordance graph, local dynamics, inverse-dynamics/retargeting, action proposal, drift/calibration/cost evaluation)
 - wire Perception WM embodiment bridge as the primary upstream input
 - establish typed interfaces (EmbodimentState, ContactAffordanceGraph, LocalDynamicsForecast, ActionProposalBundle, EmbodimentDriftSummary, EmbodimentCostVector) as frozen-dataclass state objects with receipt emission
@@ -2623,19 +2639,22 @@ What this phase should deliver:
 - an explicit list of modules that can stay compact versus modules that must scale
 - explicit compute-envelope and battery-budget assumptions for G1/R1-class onboard and companion deployments
 - revised humanoid-facing observation/action/schema requirements
+- an explicit posture hierarchy where bipedal whole-body control is the primary standard, stable-base mobile manipulation is the safety fallback/degraded-mode lane, and fixed-base tabletop is only curriculum/regression evidence
 - an environment roadmap that reclassifies current workcell/tabletop envs as partial domains rather than full humanoid proxies
+- an env/sim layout plan with separate `bipedal_whole_body_*`, `stable_base_mobile_manipulator_*`, and `fixed_base_tabletop_*` families, each emitting posture tags, backend truth, robot-asset refs, observation/action schema refs, and promotion posture
 - a named plan for integrating Unitree G1/R1 simulation environments into the sim/synth/physics stack through typed backend adapters rather than ad hoc env forks
 - a resource-placement review for which modules can plausibly run:
   - on-robot
   - on companion compute
   - only in offline or scheduled GPU windows
 - named future envs or env families for:
-  - locomotion + manipulation
+  - bipedal locomotion + manipulation
   - balance-constrained reaching
-  - bimanual manipulation
-  - dexterous hand tasks
+  - bimanual manipulation under whole-body constraints
+  - dexterous hand tasks under balance/contact constraints
   - mobile navigation + task execution
   - contact disturbance and recovery
+  - stable-base mobile-manipulator fallback / degraded-mode execution
 - SAM 3 / 3.1 is explicitly treated as a major egocentric visual provider for object-centric perception in cluttered/mobile scenes. While useful for high-object-count tracking, it is not sufficient by itself for humanoid readiness; it must be fused with depth, proprioception, IMU / body state, contact state, spatial mapping, latency limits, and compute ceilings.
 - do not advance beyond this refit until the remaining uncertainty is genuinely about assets, datasets, and benchmark evidence rather than carrying forward wrong environment assumptions
 
@@ -2657,11 +2676,12 @@ Minimum outputs:
   - observation/action contract deltas
   - receipt and replay compatibility plan
 - a first humanoid benchmark taxonomy covering:
-  - balance
+  - bipedal balance
   - locomotion-manipulation
-  - recovery
+  - stable-base fallback and recovery
   - dexterous manipulation
   - degraded-sensing robustness
+- neural scaffold deltas for whole-body state encoding, support/contact/balance prediction, loco-manipulation action proposals, inverse-dynamics/retargeting, fallback-mode selection, and latency/watchdog/resource prediction
 
 Preconditions:
 

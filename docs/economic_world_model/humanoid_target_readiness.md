@@ -23,6 +23,7 @@ It also assumes the stronger subsystem rule from the multi-WM plan:
 The target considered here is:
 
 - Unitree G1/R1-class embodied systems
+- bipedal whole-body control as the primary design center
 - 21+ DoF whole-body control
 - locomotion plus manipulation
 - dexterous or semi-dexterous hand use
@@ -35,6 +36,20 @@ This target is materially different from:
 - workcell-only operation
 - gripper-only action spaces
 - purely offline or episode-timescale control
+
+## Embodiment Posture Hierarchy
+
+The repo's humanoid target posture is now explicit:
+
+| Posture | Architectural role | Promotion meaning | What it must not become |
+| --- | --- | --- | --- |
+| `bipedal_whole_body` | Primary standard and default design center for Unitree G1/R1-class readiness | The stack can reason over floating-base balance, support/contact, gait, loco-manipulation, bimanual/dexterous action, whole-body safety, and real compute/battery limits | A decorative future target that leaves fixed-base assumptions as the real default |
+| `stable_base_mobile_manipulator` | Safety fallback / degraded-mode posture for humanoid operation when bipedal authority is unsafe, unavailable, or not yet promoted | The stack can preserve task progress or recover safely using a stable-base/mobile-manipulation envelope with explicit fallback receipts | A replacement for bipedal whole-body readiness, or a quiet way to promote tabletop manipulation as humanoid readiness |
+| `fixed_base_tabletop` | Legacy curriculum, smoke-test, replay, and manipulation-skill island | Useful for pretraining, regression, semantic/economic plumbing, and narrow manipulation gates | Final embodiment-readiness evidence for G1/R1-class deployment |
+
+Every lower WM, environment, sim adapter, training row, and benchmark should be able to state which posture it serves. If that posture is not declared, the artifact should be treated as `fixed_base_tabletop` or `unknown`, never as bipedal evidence by default.
+
+The stable-base mobile-manipulator posture is a safety fallback and bring-up/degraded-mode lane. It is valuable because it provides a conservative control envelope for recovery, operator handoff, and partial task continuity, but it cannot close humanoid readiness gates on its own.
 
 ## Program Window Assumption
 
@@ -116,7 +131,25 @@ What is still missing is not “more docs.” It is:
 - companion-compute middleware
 - humanoid-specific benchmark gates
 
-## What Current Envs Are Good For
+## Environment And Simulation Layout Standard
+
+The environment and simulation layout should follow the posture hierarchy rather than treating all robot envs as interchangeable. The target layout is:
+
+```text
+envs/
+  tabletop_curriculum/          # fixed-base skill islands and regression tests
+  stable_base_fallback/         # mobile/stable-base safety fallback and recovery posture
+  bipedal_whole_body/           # primary G1/R1 humanoid-readiness env families
+
+sim_backends/
+  typed_adapter_contracts/      # Isaac / MuJoCo / Unitree / other backend truth
+  robot_assets/                 # robot-description, joint-map, limits, calibration refs
+  replay_exports/               # posture-tagged receipts and training rows
+```
+
+This is a conceptual layout standard, not a claim that those directories already exist. The key requirement is that every env/sim artifact emits a posture tag, backend truth, robot-asset refs, observation/action schema refs, and promotion posture.
+
+### What Current Envs Are Good For
 
 Current envs such as:
 
@@ -126,6 +159,7 @@ Current envs such as:
 
 should currently be treated as:
 
+- `fixed_base_tabletop` curriculum lanes
 - manipulation skill islands
 - replay and control-plane substrate testbeds
 - early pretraining or curriculum domains
@@ -133,11 +167,25 @@ should currently be treated as:
 
 They should **not** be treated as:
 
-- whole-body humanoid proxies
+- bipedal whole-body humanoid proxies
 - locomotion/manipulation proxies
 - balance or recovery benchmarks
 - mobile-navigation benchmarks
 - final embodiment-readiness validation domains
+
+### Required future env/sim families
+
+The bipedal whole-body standard requires named future env/sim families for:
+
+- `bipedal_whole_body_balance_reach`: balance-constrained reaching and manipulation
+- `bipedal_whole_body_locomotion_manipulation`: walking while carrying, reaching, placing, opening, or tool-using
+- `bipedal_whole_body_bimanual`: dual-arm coordination under whole-body constraints
+- `bipedal_whole_body_dexterous_contact`: hand/contact-rich manipulation under balance and safety constraints
+- `bipedal_whole_body_disturbance_recovery`: push, slip, stumble, contact disturbance, and failed-step recovery
+- `stable_base_mobile_manipulator_fallback`: conservative mobile/stable-base recovery and degraded-mode task continuity
+- `fixed_base_tabletop_curriculum`: restricted manipulation pretraining and regression only
+
+Promotion gates must not let a `fixed_base_tabletop` or `stable_base_mobile_manipulator` success satisfy a `bipedal_whole_body` benchmark unless the benchmark explicitly names transfer evidence and remaining gaps.
 
 ## Readiness Checklist
 
@@ -223,6 +271,32 @@ Every lower-WM/submodule review should answer:
 3. Does this model need to represent contact, balance, locomotion, and dexterity directly?
 4. Would increasing capacity here reduce real bottlenecks, or merely compensate for a missing lower-WM contract?
 5. Does this module assume onboard, companion, or offline/GPU compute that will not actually be available on the target robot?
+
+## Neural Scaffolding Consequences
+
+The posture hierarchy changes the neural scaffolding target. Neural seams should be shaped around bipedal whole-body control first, with stable-base/mobile fallback as an explicit safety/degraded-mode classifier, not as the hidden default.
+
+Minimum neural scaffold families for the Phase 3.5 / Phase 4 return:
+
+| Scaffold family | Primary posture | Function | Local non-GPU work now | Future evidence required |
+| --- | --- | --- | --- | --- |
+| Whole-body state encoder | `bipedal_whole_body` | Encode floating base, limbs, hands, IMU, proprioception, contact, support phase, and body-relative scene state | Define input/output contract, topology, manifest, rows, and CPU shape checks | GPU training, sim/hardware trajectories, calibration receipts |
+| Contact/support/balance predictor | `bipedal_whole_body` | Predict support polygon, slip/fall risk, contact feasibility, and balance margin | Define losses and receipt schema; emit synthetic/local placeholder rows without promotion | humanoid sim disturbance corpora and hardware validation |
+| Loco-manipulation action proposal head | `bipedal_whole_body` | Propose action chunks that couple gait, posture, arms, hands, and task constraints | Define action schema, chunk horizons, policy-head manifest, denied-promotion gates | trained policy heads, benchmark pass, safety gates |
+| Inverse-dynamics / retargeting lane | `bipedal_whole_body` | Convert demonstrations, teleop, sim, and video-derived traces into Unitree-native action/state rows | Define retargeting receipts, robot-asset refs, feasibility filters, row schemas | real assets, datasets, retargeting quality evals |
+| Stable-base fallback selector | `stable_base_mobile_manipulator` | Detect when bipedal authority should degrade to stable-base/mobile-manipulator mode | Define classifier inputs, intervention receipts, veto/defer semantics | safety benchmark evidence and recovery traces |
+| Latency/watchdog/resource predictor | all postures, but bipedal-primary | Forecast control-rate feasibility, stale-data risk, compute/battery/thermal pressure | Define resource-state rows and Phase 4A/4E contracts | measured middleware/hardware telemetry |
+
+Training rows should carry at least:
+
+- `embodiment_posture`: `bipedal_whole_body`, `stable_base_mobile_manipulator`, `fixed_base_tabletop`, or `unknown`
+- `promotion_scope`: `curriculum`, `fallback`, `shadow`, `advisory`, `benchmark_candidate`, or `promoted`
+- robot-description / joint-map / joint-limit / calibration refs
+- support/contact/balance labels where available
+- compute, battery, thermal, latency, and placement refs
+- transfer annotations when a tabletop or fallback lane is used as pretraining rather than direct promotion evidence
+
+The stable-base fallback selector may be learned, but it must remain below the bipedal whole-body target: it can veto, defer, recover, or request operator handoff; it cannot silently redefine the primary embodiment standard.
 
 ## Environment Refit Requirements
 

@@ -5010,3 +5010,12 @@ bounded authority evidence.
 - `python3 scripts/economic_world_model/nightly_audit.py` passed (exit 0).
 - `python3 -m compileall src scripts/economic_world_model -q && python3 -m pytest tests/ -q`
   passed (`1713 passed, 2 skipped, 32 warnings`).
+
+## 2026-05-23 — Bipedal whole-body target hierarchy doctrine
+
+- Clarified that Unitree G1/R1-class bipedal whole-body control is the primary embodiment standard.
+- Defined stable-base mobile manipulation as a safety fallback / degraded-mode posture, not a replacement target.
+- Reclassified fixed-base tabletop/workcell environments as curriculum, regression, and manipulation-skill-island evidence only.
+- Added env/sim layout requirements for posture-tagged `bipedal_whole_body_*`, `stable_base_mobile_manipulator_*`, and `fixed_base_tabletop_*` families with backend truth, robot-asset refs, observation/action schema refs, replay exports, and promotion posture.
+- Added neural scaffold implications for whole-body state encoders, contact/support/balance predictors, loco-manipulation action heads, inverse-dynamics/retargeting, stable-base fallback selectors, and latency/watchdog/resource predictors.
+- Boundary preserved: docs-only doctrine patch; no runtime, training, provider, hardware, promotion, live-control, or frozen reward/trust/`w_econ`/lambda-controller mutation claim.

@@ -3369,3 +3369,13 @@ Verification for the Phase-5.1 pass:
 - Boundary preserved: no transport training, weight writes, GPU/provider or
   hardware execution, promotion, live policy control, target receiver bypass,
   reward math mutation, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-23: Bipedal whole-body target hierarchy doctrine
+
+- Updated the humanoid readiness, multi-WM roadmap, roadmap calendar, and Embodiment / Actuation WM docs to make the target posture hierarchy explicit:
+  - bipedal whole-body humanoid control is the primary standard;
+  - stable-base mobile manipulation is the safety fallback / degraded-mode posture;
+  - fixed-base tabletop/workcell envs are curriculum, regression, and manipulation-skill-island evidence only.
+- Added env/sim layout consequences: future artifacts should carry posture tags and separate `bipedal_whole_body_*`, `stable_base_mobile_manipulator_*`, and `fixed_base_tabletop_*` families with backend truth, robot-asset refs, observation/action schema refs, replay exports, and promotion posture.
+- Added neural scaffold consequences for whole-body state encoders, contact/support/balance predictors, loco-manipulation action heads, inverse-dynamics/retargeting, stable-base fallback selectors, and latency/watchdog/resource predictors.
+- Boundary preserved: docs-only; no GPU/provider/hardware execution, model training, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda mutation claim.
