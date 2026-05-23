@@ -943,12 +943,13 @@ Phase A: March 27, 2026 to August 31, 2026
 
 Must be true by August 31, 2026:
 
+- the embodiment target hierarchy is explicit across docs and scaffolds: bipedal whole-body humanoid control is the primary standard, stable-base mobile manipulation is the safety fallback/degraded-mode posture, and fixed-base tabletop remains only curriculum/regression evidence
 - sim / synth / physics WM plumbing is structurally real
 - for Phase 1 backend closure, the repo-root host scan must emit explicit local usable-profile / install / preflight truth for Isaac/Unitree and Holosoma instead of leaving Category B runtime reality implicit across many artifacts
 - and that same blocked truth must survive launch, work-order, and trainer-facing exports instead of being softened after the scan/runtime-binding layer
 - once public local Unitree repos/assets are on disk, Phase 1 should derive the remaining honest non-GPU asset truth from them before calling the rest external; on the current branch that reduces the explicit Unitree asset blockers to whole-body latency and watchdog contracts rather than generic robot-description/joint-map/joint-limit gaps
 - perception / grounding WM plumbing is structurally real
-- embodiment / actuation WM plumbing is structurally real enough to start training and later Unitree integration without another contract purge
+- embodiment / actuation WM plumbing is structurally real enough to start training and later Unitree integration without another contract purge, including posture tags for bipedal whole-body, stable-base fallback, and fixed-base curriculum artifacts
 - economic-WM ingestion over lower-WM receipts is structurally real
 - WM-transport seams are reserved at the contract level even if transport training itself still comes later
 
@@ -1012,10 +1013,17 @@ Weekly operating model from September 1, 2026 onward:
 Mechanics-first advancement rule:
 
 - do not call a WM "ready" because it can emit logs, summaries, or canonical-looking state in isolation
+- do not call fixed-base tabletop or stable-base fallback evidence humanoid-ready unless the artifact explicitly names its transfer boundary and the bipedal whole-body gaps that remain
 - a WM only counts as structurally real when it owns a bounded closed loop with real ingress, real execution or honest execution gating, replay/training exports, and all relevant downstream consumers for the future hardware-ready loop wired
 - neuralization remains part of scalable mechanics rather than a separate luxury layer; learned control, prediction, adaptation, and routing should be made load-bearing as soon as the surrounding subsystem can carry them honestly
 - keep the scalable mechanics substrate ahead of non-load-bearing learned claims; if a phase is still missing executors, adapters, safety gates, replay exports, or live downstream consumers, that phase is still structurally incomplete even if training code already exists
 - do not let a higher WM treat a lower WM as canonical until the lower WM has crossed bounded runtime authority and is affecting the relevant downstream loop rather than merely being logged
+
+Env/sim and neural scaffold sequencing rule:
+
+- Phase 3.5 should refit env and sim layout around posture-tagged families: `bipedal_whole_body_*` as the primary readiness lane, `stable_base_mobile_manipulator_*` as fallback/degraded-mode safety lane, and `fixed_base_tabletop_*` as curriculum/regression lane
+- lower-WM neural scaffolds should target bipedal whole-body complexity first where they represent body/contact/control directly: whole-body state encoders, support/contact/balance predictors, loco-manipulation action heads, inverse-dynamics/retargeting lanes, fallback selectors, and latency/watchdog/resource predictors
+- stable-base fallback classifiers may become learned seams, but they should emit veto/defer/recovery/operator-handoff receipts rather than silently redefining the primary standard
 
 Compute and battery sequencing rule:
 

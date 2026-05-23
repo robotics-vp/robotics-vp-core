@@ -9,13 +9,33 @@ stack's multi-WM topology. Its mission:
 > body-aware, capability-aware, contact-aware control state and action
 > proposals for real robot embodiments.
 
-This WM makes the robot ready to actually control a body. It is the layer
-between high-level task/simulation decisions and real actuator commands on a
-G1, a tabletop arm, or any future embodiment in the fleet.
+This WM makes the robot ready to actually control a body. Its primary
+design center is bipedal whole-body humanoid control for a Unitree G1/R1-class
+robot. Stable-base mobile manipulation is the safety fallback / degraded-mode
+posture, and fixed-base tabletop manipulation is a restricted curriculum and
+regression profile.
 
 It is **not** a global planner. It is the canonical body/capability/contact/
 control WM for real embodiments operating under physics, safety, energy,
 and deployment constraints.
+
+---
+
+## Embodiment Target Hierarchy
+
+The Embodiment / Actuation WM should not treat every robot body profile as an
+equal target. Its posture hierarchy is:
+
+| Posture | Role inside this WM | Authority boundary |
+| --- | --- | --- |
+| `bipedal_whole_body` | Primary target for body state, action proposals, dynamics, retargeting, safety, and resource prediction | Required for G1/R1-class promotion |
+| `stable_base_mobile_manipulator` | Safety fallback / degraded-mode posture for recovery, conservative manipulation, operator handoff, and partial task continuity | Can veto/defer/recover; cannot replace bipedal readiness |
+| `fixed_base_tabletop` | Curriculum, smoke tests, regression, and narrow manipulation skill islands | Pretraining/regression only |
+
+Every Embodiment WM state object, action proposal, sim receipt, replay row,
+neural scaffold, and benchmark should preserve this posture. Missing posture
+metadata should be treated as unknown/fixed-base evidence, not as bipedal
+whole-body evidence.
 
 ---
 
@@ -95,7 +115,7 @@ Every downstream subsystem within this WM reads from this surface.
 | Field | Type | Description |
 |-------|------|-------------|
 | `embodiment_id` | str | Robot family + serial (e.g. `g1_unit_001`) |
-| `embodiment_class` | str | `tabletop_arm`, `mobile_manipulator`, `humanoid` |
+| `embodiment_class` | str | `bipedal_whole_body`, `stable_base_mobile_manipulator`, `fixed_base_tabletop` (`tabletop_arm`, `mobile_manipulator`, and `humanoid` remain legacy aliases only) |
 | `actuator_config` | ActuatorConfigState | Joint count, limits, torque profiles, gear ratios |
 | `joint_state` | JointStateVector | Current positions, velocities, torques, temperatures |
 | `contact_state` | ContactStateVector | Per-effector contact normals, forces, slip estimates |
@@ -373,7 +393,7 @@ describe the canonical typed surfaces this WM should eventually own.
 EmbodimentState:
     state_id: str
     embodiment_id: str
-    embodiment_class: str           # tabletop_arm | mobile_manipulator | humanoid
+    embodiment_class: str           # bipedal_whole_body | stable_base_mobile_manipulator | fixed_base_tabletop
     actuator_config: ActuatorConfigState
     joint_state: JointStateVector   # positions, velocities, torques, temperatures
     contact_state: ContactStateVector
@@ -1040,24 +1060,45 @@ those into body-aware, constraint-respecting, contact-aware actuator commands.
 
 ### G1 / Unitree / humanoid integration path
 
-The Embodiment / Actuation WM is designed to accommodate:
+The Embodiment / Actuation WM is designed around bipedal whole-body Unitree
+G1/R1-class control as the primary standard. It must accommodate:
 
 - 29 DoF bimanual humanoid (G1)
-- Mobile base + dual arm coordination
-- Egocentric camera feeds (consumed via Perception WM embodiment bridge)
-- On-device vs companion compute placement decisions
-- Battery-constrained operation (battery_fraction as first-class state)
-- Real-time safety envelope enforcement
+- floating-base whole-body state, support/contact phase, and balance context
+- locomotion plus manipulation and bimanual/dexterous coordination
+- stable-base mobile-manipulator fallback for conservative recovery, operator
+  handoff, and degraded-mode task continuity
+- egocentric camera feeds (consumed via Perception WM embodiment bridge)
+- on-device vs companion compute placement decisions
+- battery-constrained operation (battery_fraction as first-class state)
+- real-time safety envelope enforcement
 
 The WM does not require the G1 hardware to be present today. The typed
 interfaces are designed so that:
 
 1. Current tabletop-arm and workcell sim backends exercise the same WM
-   subsystems at reduced DoF and complexity
-2. G1-specific embodiment profiles and safety envelopes can be added as
+   subsystems only as `fixed_base_tabletop` curriculum/regression lanes
+2. Stable-base mobile-manipulator surfaces can be used as explicit safety
+   fallback/degraded-mode lanes without satisfying bipedal promotion gates
+3. G1-specific embodiment profiles and safety envelopes can be added as
    configuration, not architecture changes
-3. Calibration drift and backend mismatch detection generalize across
+4. Calibration drift and backend mismatch detection generalize across
    embodiments
+
+Neural scaffolding should therefore target:
+
+- whole-body state encoders over floating base, limbs, hands, IMU, proprioception,
+  contact, support phase, and body-relative scene state
+- contact/support/balance predictors with fall/slip risk and support-margin
+  receipts
+- loco-manipulation action proposal heads that couple gait, posture, arms, hands,
+  and task constraints
+- inverse-dynamics / retargeting lanes that produce Unitree-native action/state
+  rows from teleop, sim, video-derived, or demonstration traces
+- learned fallback selectors that emit veto/defer/recovery/operator-handoff
+  receipts rather than silently redefining the primary bipedal target
+- latency/watchdog/resource predictors tied to Phase 4A and 4E control and
+  communication contracts
 
 ---
 
