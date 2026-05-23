@@ -119,3 +119,11 @@ Still open after Phase 6.4:
 - topology/latency benchmarks;
 - promotion-grade downstream benchmarks;
 - bounded authority grants with rollback and demotion evidence.
+
+## Closure Audit
+
+`phase6_transport_closure_audit.md` is the owning local closure audit after
+Phase 6.4. It confirms that no local transport contract/runtime surface remains
+missing. The open work is evidence and training depth: corpus density,
+GPU-backed bridge/receiver training, topology/latency benchmarks,
+provider/hardware transport evidence, and promotion-grade downstream benchmarks.

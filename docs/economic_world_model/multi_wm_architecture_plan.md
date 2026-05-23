@@ -3023,6 +3023,19 @@ Current local Phase-6.4 artifacts (2026-05-23):
   `weights_written=false`, `live_policy_control=false`,
   `reward_math_mutation=false`, and `promotion_eligible=false`.
 
+Current local Phase-6 closure audit (2026-05-23):
+
+- `closure_audit.py` and `audit_phase6_transport_closure.py` confirm
+  `local_phase6_structurally_closed=true` and
+  `missing_local_runtime_contracts=[]`.
+- The remaining blockers are not missing local transport contracts or runtime
+  surfaces. They are cross-WM corpus density, GPU bridge/receiver training,
+  topology/latency benchmarks, provider or hardware transport evidence, and
+  promotion-grade downstream benchmarks.
+- The roadmap return after this audit is Phase 3.5 humanoid capacity and
+  environment refit, followed by the Phase 4 local non-hardware deployment
+  enabler sweep, before Phase 6.5 meta-node neuralization.
+
 ### Training rule
 
 Train bridges by freezing adjacent WMs first.

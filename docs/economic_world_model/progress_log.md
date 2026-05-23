@@ -3379,3 +3379,25 @@ Verification for the Phase-5.1 pass:
 - Added env/sim layout consequences: future artifacts should carry posture tags and separate `bipedal_whole_body_*`, `stable_base_mobile_manipulator_*`, and `fixed_base_tabletop_*` families with backend truth, robot-asset refs, observation/action schema refs, replay exports, and promotion posture.
 - Added neural scaffold consequences for whole-body state encoders, contact/support/balance predictors, loco-manipulation action heads, inverse-dynamics/retargeting, stable-base fallback selectors, and latency/watchdog/resource predictors.
 - Boundary preserved: docs-only; no GPU/provider/hardware execution, model training, promotion, live policy control, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-23: Phase-6 transport local closure audit
+
+- Added a typed Phase-6 closure audit:
+  - `src/world_model/transport/closure_audit.py`
+  - `scripts/economic_world_model/audit_phase6_transport_closure.py`
+  - `docs/economic_world_model/phase6_transport_closure_audit.md`
+- The audit confirms `local_phase6_structurally_closed=true` and
+  `missing_local_runtime_contracts=[]`.
+- Current local artifact result: `contract_count=20`,
+  `transformer_count=7`, `training_row_count=160`,
+  `roundtrip_receipt_count=20`, `neural_component_count=8`,
+  `loss_count=14`, `advisory_proposal_count=20`,
+  `advisory_receipt_count=20`, `decomposed_eval_report_count=20`, and
+  `joined_shadow_outcome_count=10`.
+- Remaining blockers are now explicitly evidence/training blockers:
+  cross-WM corpus density, GPU bridge/receiver training, topology/latency
+  benchmarks, provider or hardware transport evidence, and promotion-grade
+  downstream benchmarks.
+- Boundary preserved: no transport training, weight writes, GPU/provider or
+  hardware execution, promotion, live policy control, target receiver bypass,
+  reward math mutation, or frozen reward/trust/`w_econ`/lambda mutation claim.

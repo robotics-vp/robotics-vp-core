@@ -32,6 +32,13 @@ from src.world_model.transport.bridge_contracts import (
     load_wm_transport_contract_pack,
     save_wm_transport_contract_pack,
 )
+from src.world_model.transport.closure_audit import (
+    PHASE6_REMAINING_EVIDENCE_BLOCKERS,
+    WMTransportPhase6ClosureAuditReport,
+    build_wm_transport_phase6_closure_audit,
+    load_wm_transport_phase6_closure_audit,
+    save_wm_transport_phase6_closure_audit,
+)
 from src.world_model.transport.losses import (
     WMTransportLossDefinition,
     WMTransportLossLedger,
@@ -97,6 +104,7 @@ from src.world_model.transport.wm_transformers import (
 
 __all__ = [
     "DENIED_TRANSPORT_RUNTIME_AUTHORITIES",
+    "PHASE6_REMAINING_EVIDENCE_BLOCKERS",
     "PHASE64_ADVISORY_RUNTIME_BLOCKERS",
     "ROW_FAMILIES",
     "PerWMTransportTransformer",
@@ -118,6 +126,7 @@ __all__ = [
     "WMTransportLossLedger",
     "WMTransportNeuralArchitectureManifest",
     "WMTransportNeuralComponentSpec",
+    "WMTransportPhase6ClosureAuditReport",
     "WMTransportShadowOutcomeJoinSlot",
     "WMTransportTrainerDatasetContract",
     "WMTransportTrainerScaffoldManifest",
@@ -126,14 +135,17 @@ __all__ = [
     "build_wm_transport_loss_ledger",
     "build_wm_transport_model_component_config",
     "build_wm_transport_neural_architecture_manifest",
+    "build_wm_transport_phase6_closure_audit",
     "build_wm_transport_trainer_dataset_contract",
     "build_wm_transport_trainer_scaffold_manifest",
     "load_wm_transport_loss_ledger",
     "load_wm_transport_neural_architecture_manifest",
+    "load_wm_transport_phase6_closure_audit",
     "load_wm_transport_trainer_dataset_contract",
     "load_wm_transport_trainer_scaffold_manifest",
     "save_wm_transport_loss_ledger",
     "save_wm_transport_neural_architecture_manifest",
+    "save_wm_transport_phase6_closure_audit",
     "save_wm_transport_trainer_dataset_contract",
     "save_wm_transport_trainer_scaffold_manifest",
     "WMTransportPhase6ScaffoldReport",

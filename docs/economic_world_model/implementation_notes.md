@@ -5019,3 +5019,43 @@ bounded authority evidence.
 - Added env/sim layout requirements for posture-tagged `bipedal_whole_body_*`, `stable_base_mobile_manipulator_*`, and `fixed_base_tabletop_*` families with backend truth, robot-asset refs, observation/action schema refs, replay exports, and promotion posture.
 - Added neural scaffold implications for whole-body state encoders, contact/support/balance predictors, loco-manipulation action heads, inverse-dynamics/retargeting, stable-base fallback selectors, and latency/watchdog/resource predictors.
 - Boundary preserved: docs-only doctrine patch; no runtime, training, provider, hardware, promotion, live-control, or frozen reward/trust/`w_econ`/lambda-controller mutation claim.
+
+## 2026-05-23 — Phase-6 transport local closure audit
+
+### What was built
+
+- Added `src/world_model/transport/closure_audit.py`.
+- Added `scripts/economic_world_model/audit_phase6_transport_closure.py`.
+- Added `docs/economic_world_model/phase6_transport_closure_audit.md`.
+- Extended `tests/test_wm_transport_phase64_runtime_eval.py` to verify the
+  closure audit over a temporary Phase-6 scaffold, neural manifest, trainer
+  scaffold, advisory runtime, and local shadow outcome join.
+
+### Current local artifact result
+
+- `status=ok`
+- `local_phase6_structurally_closed=true`
+- `missing_local_runtime_contracts=[]`
+- `contract_count=20`
+- `transformer_count=7`
+- `training_row_count=160`
+- `roundtrip_receipt_count=20`
+- `neural_component_count=8`
+- `loss_count=14`
+- `advisory_proposal_count=20`
+- `advisory_receipt_count=20`
+- `decomposed_eval_report_count=20`
+- `joined_shadow_outcome_count=10`
+
+### Boundary
+
+The audit closes local structure only. It confirms that Phase 6 is no longer
+blocked by missing local transport contracts, receiver/exporter posture, row
+surfaces, neural/trainer scaffold, advisory runtime, decomposed eval reports, or
+shadow join slots.
+
+The remaining blockers are cross-WM corpus density, GPU bridge/receiver
+training, topology/latency benchmarks, provider or hardware transport evidence,
+and promotion-grade downstream benchmarks. No training, weight write,
+provider/hardware execution, live policy authority, reward math mutation, or
+promotion occurred.

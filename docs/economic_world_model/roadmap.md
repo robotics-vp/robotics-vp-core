@@ -63,7 +63,7 @@ Current honest state:
 - today the repo mostly has operational ontology substrate/plumbing
 - it does not yet have a fully neural ontology layer
 - it now has a local Phase-6.0-6.4 WM-transport scaffold: contracts, per-WM exporters/receivers, rows, topology/round-trip/uncertainty receipts, neural manifest, loss ledger, non-training trainer scaffold, advisory runtime proposals/receipts, decomposed eval reports, and shadow outcome join slots
-- it does not yet have trained transport weights, provider/hardware transport evidence, corpus-density proof, latency/topology benchmarks, promotion-grade downstream evidence, or live transport authority
+- the Phase-6 local closure audit reports `missing_local_runtime_contracts=[]`; the remaining blockers are corpus density, GPU bridge/receiver training, latency/topology benchmarks, provider/hardware transport evidence, promotion-grade downstream evidence, and live transport authority
 - keep the current sequencing: lower WMs first, then economic-WM consolidation, then ontology-mediated WM transport promotion only after evidence exists
 
 ## Open-Vocabulary Segmentation / Concept-Tracking Provider Rule

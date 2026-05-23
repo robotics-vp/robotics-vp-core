@@ -12,6 +12,9 @@ from scripts.economic_world_model.prepare_phase6_transport_scaffold import (
 from scripts.economic_world_model.run_phase6_transport_advisory_runtime import (
     run_phase6_transport_advisory_runtime,
 )
+from scripts.economic_world_model.audit_phase6_transport_closure import (
+    run_audit_phase6_transport_closure,
+)
 from scripts.train_wm_transport_bridge_v0 import (
     run_train_wm_transport_bridge_v0_scaffold,
 )
@@ -30,6 +33,7 @@ from src.world_model.transport import (
     load_wm_transport_advisory_runtime_report,
     load_wm_transport_decomposed_eval_reports,
     load_wm_transport_invocations,
+    load_wm_transport_phase6_closure_audit,
     load_wm_transport_proposals,
     load_wm_transport_receipts,
 )
@@ -279,3 +283,55 @@ def test_phase64_runtime_keeps_shadow_join_slots_open_when_outcomes_missing(tmp_
         for slot in economic_slots
     )
     assert not any(slot.promotion_eligible for slot in economic_slots)
+
+
+def test_phase6_closure_audit_confirms_only_evidence_blockers_remain(tmp_path):
+    scaffold_dir, neural_dir, trainer_dir = _materialize_phase64_inputs(tmp_path)
+    runtime_dir = tmp_path / "phase64_runtime"
+    run_phase6_transport_advisory_runtime(
+        output_dir=runtime_dir,
+        scaffold_dir=scaffold_dir,
+        neural_dir=neural_dir,
+        trainer_dir=trainer_dir,
+        shadow_outcomes_path=_shadow_outcome_path(tmp_path),
+        run_dependencies_if_missing=False,
+    )
+
+    payload = run_audit_phase6_transport_closure(
+        output_dir=tmp_path / "phase6_closure",
+        scaffold_dir=scaffold_dir,
+        neural_dir=neural_dir,
+        trainer_dir=trainer_dir,
+        runtime_dir=runtime_dir,
+        run_dependencies_if_missing=False,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["local_phase6_structurally_closed"] is True
+    assert payload["missing_local_runtime_contracts"] == []
+    assert set(payload["remaining_evidence_blockers"]) == {
+        "cross_wm_corpus_density_not_proven",
+        "gpu_bridge_receiver_training_not_run",
+        "topology_latency_benchmarks_not_run",
+        "provider_or_hardware_transport_evidence_missing",
+        "promotion_grade_downstream_benchmark_missing",
+    }
+    assert payload["contract_count"] == 4
+    assert payload["advisory_proposal_count"] == 4
+    assert payload["decomposed_eval_report_count"] == 4
+    assert payload["ready_for_training"] is False
+    assert payload["training_executed"] is False
+    assert payload["weights_written"] is False
+    assert payload["provider_executed"] is False
+    assert payload["hardware_executed"] is False
+    assert payload["live_policy_control"] is False
+    assert payload["reward_math_mutation"] is False
+    assert payload["promotion_eligible"] is False
+
+    report = load_wm_transport_phase6_closure_audit(
+        payload["artifact_refs"]["report_path"]
+    )
+    assert report.audit_id == payload["audit_id"]
+    assert "advisory_runtime_proposals_invocations_receipts" in (
+        report.closed_local_surfaces
+    )

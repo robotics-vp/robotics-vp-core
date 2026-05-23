@@ -384,3 +384,13 @@ Local Phase 6 should be considered structurally closed only when:
 Remaining after local Phase 6 will be corpus density, GPU-backed training,
 provider/hardware evidence, latency evaluation, and promotion-grade downstream
 benchmarks.
+
+Current local closure audit (2026-05-23):
+
+- `phase6_transport_closure_audit.md` confirms local Phase 6 is structurally
+  closed with `missing_local_runtime_contracts=[]`.
+- The remaining blockers are cross-WM corpus density, GPU bridge/receiver
+  training, topology/latency benchmarks, provider or hardware transport
+  evidence, and promotion-grade downstream benchmarks.
+- This is not promotion or training closure. It only means Phase 6 should no
+  longer spend local-only work on missing transport contract/runtime surfaces.
