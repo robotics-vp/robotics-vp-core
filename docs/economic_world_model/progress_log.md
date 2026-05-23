@@ -3438,3 +3438,19 @@ Verification for the Phase-5.1 pass:
 - Boundary preserved: no live streams, control interfaces, hardware/sim runtime
   evidence, provider execution, training, promotion, live policy control, or
   frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-23: Phase-6.5 local meta-node neuralization scaffold
+
+- Added `docs/economic_world_model/phase65_local_meta_node_neuralization.md`.
+- Defined local meta-node surfaces for the pre-Phase-7 pass:
+  `MetaNodeState`, trajectory receipts, intervention receipts, counterfactual
+  targets, robustness reports, and denied-by-default promotion gates.
+- Named training targets for activation timing/strength, target selection,
+  veto/defer/fallback choice, operator handoff, governance satisfaction,
+  replay-shift stability, neighbor consistency, and counterfactual downstream
+  improvement.
+- Preserved Phase 7 separation: this is local meta-node maturity work, not a
+  Meta-Regal-Node / control-WM authority grant.
+- Boundary preserved: docs-only scaffold; no meta-node training, weight writes,
+  provider/hardware execution, promotion, live policy control, reward math
+  mutation, or frozen reward/trust/`w_econ`/lambda mutation claim.

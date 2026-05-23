@@ -5097,3 +5097,20 @@ hardware/sim runtime evidence, timing/jitter traces, measured companion compute,
 and operator/recovery traces. No hardware/sim runtime, training, provider,
 promotion, live policy authority, or frozen reward/trust/`w_econ`/lambda
 mutation occurred.
+
+## 2026-05-23 — Phase-6.5 local meta-node neuralization scaffold
+
+### What changed
+
+- Added `docs/economic_world_model/phase65_local_meta_node_neuralization.md`.
+- Updated the multi-WM plan and roadmap to name the local Phase 6.5 surfaces:
+  `MetaNodeState`, trajectory/intervention receipts, counterfactual targets,
+  robustness reports, and promotion gates.
+- Kept Phase 6.5 separate from Phase 7. Local meta-node neuralization prepares
+  mature lower-level objects for a future Meta-Regal-Node / control WM; it does
+  not grant that control-WM authority.
+
+### Boundary
+
+No meta-node training, weights, provider or hardware execution, live policy
+control, reward math mutation, promotion, or Phase 7 authority was claimed.

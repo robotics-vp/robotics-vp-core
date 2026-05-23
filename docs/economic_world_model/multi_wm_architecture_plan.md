@@ -3159,6 +3159,16 @@ Exit criteria:
 - they have their own honest training/runtime/promotion story
 - the later superposition WM can treat them as mature lower-level objects instead of pseudo-symbolic placeholders
 
+Current local scaffold note:
+
+- `docs/economic_world_model/phase65_local_meta_node_neuralization.md` defines
+  the local Phase 6.5 surfaces before Phase 7: `MetaNodeState`,
+  trajectory/intervention receipts, counterfactual targets, robustness reports,
+  and denied-by-default promotion gates.
+- It keeps Phase 6.5 local and preparatory. It does not claim trained
+  meta-node weights, provider/hardware evidence, live policy control, reward
+  mutation, promotion, or Phase 7 control-WM authority.
+
 ### Phase 7 - Meta-Regal-Node Superposition / Control WM
 
 Objective:

@@ -1038,6 +1038,7 @@ Compute and battery sequencing rule:
   - degraded-mode behavior
 - Phase 5 should turn those lower-WM resource receipts into allocatable economic budget objects
 - only later should transport and meta-node layers learn over those allocations as higher-order governance objects
+- The local Phase 6.5 scaffold note is `phase65_local_meta_node_neuralization.md`: it names `MetaNodeState`, trajectory/intervention receipts, counterfactual targets, robustness reports, and denied-by-default promotion gates before any Phase 7 control-WM authority exists
 
 Suggested RL staging for those resources:
 
