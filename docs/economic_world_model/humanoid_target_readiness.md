@@ -137,6 +137,13 @@ earlier docs-only posture:
   with Unitree ROS2 / SDK2-shaped bridge targets, G1Pilot-style fallback bridge
   targets, controller modes, command frames, safety receipts, dispatch-denied
   invocations, and replay-ready controller receipts;
+- Phase 4 now has a Unitree/G1 bring-up readiness pack under
+  `src/world_model/humanoid_readiness/unitree_bringup_readiness.py` and
+  `artifacts/economic_world_model/phase4_unitree_bringup_readiness/`, with
+  dependency inventory receipts, G1Pilot/fallback review receipts, robot asset
+  joint-conformance receipts, stream and command contracts, a local-only timing
+  probe, physical safety preflight receipts, operator e-stop/recovery runbooks,
+  and a sim/hardware evidence ledger;
 - Phase 6.5 local meta-node state/receipt/target/robustness/gate artifacts
   exist under `src/world_model/humanoid_readiness/phase65.py` and
   `artifacts/economic_world_model/phase65_meta_node_neuralization/`.
@@ -148,7 +155,12 @@ and their balance/replay receipts are schema/evidence slots. They do not change 
 not-humanoid-ready deployment status because Unitree assets/runtime,
 calibration, live streams, control interfaces, timing/jitter traces,
 hardware or honest sim evidence, trained weights, and promotion-grade
-benchmarks are still missing.
+benchmarks are still missing. The bring-up readiness pack narrows that list by
+turning local dependency discovery, public G1 asset parsing, dry-run command
+conformance, timing-probe slots, safety preflight slots, and operator recovery
+runbooks into receipts; it does not remove the need for runtime build
+verification, live DDS/SDK streams, hardware calibration, honest sim launch
+evidence, or on-robot safety drills.
 
 The repo already has strong substrate worth preserving:
 

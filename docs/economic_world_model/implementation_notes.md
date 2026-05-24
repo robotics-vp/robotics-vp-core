@@ -5340,3 +5340,74 @@ No ROS2/DDS publish, Unitree SDK2 write, G1Pilot runtime invocation, Unitree sim
 runtime, hardware execution, provider execution, training, weight writes,
 promotion, live policy control, reward math mutation, or frozen
 reward/trust/`w_econ`/lambda-controller mutation occurred.
+
+## 2026-05-24 — Phase-4 Unitree/G1 bring-up readiness pack
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/unitree_bringup_readiness.py`.
+- Added `scripts/economic_world_model/prepare_phase4_unitree_bringup_readiness.py`.
+- Added `tests/test_humanoid_phase4_unitree_bringup_readiness.py`.
+- Extended `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
+  and `src/world_model/humanoid_readiness/closure.py` so integrated local
+  closure requires the Unitree/G1 bring-up readiness pack.
+
+### New local surfaces
+
+- `UnitreeDependencyTarget`
+- `UnitreeAssetCalibrationReceipt`
+- `UnitreeStreamContract`
+- `UnitreeCommandConformanceReceipt`
+- `UnitreeTimingJitterProbeReceipt`
+- `UnitreeSafetyPreflightReceipt`
+- `UnitreeOperatorRecoveryRunbook`
+- `UnitreeSimHardwareEvidenceLedger`
+- `UnitreeBringupBlockReceipt`
+- `Phase4UnitreeBringupReadinessReport`
+
+### Current artifact result
+
+- `block_count=9`
+- `dependency_target_count=8`
+- `dependency_verified_count=5`
+- `asset_joint_subset_aligned=true`
+- `stream_contract_count=6`
+- `command_conformance_receipt_count=4`
+- `timing_jitter_probe_count=1`
+- `safety_preflight_receipt_count=5`
+- `operator_recovery_runbook_count=4`
+- `evidence_ledger_count=1`
+- `local_pre_purchase_prepared=true`
+- `honest_sim_or_hardware_evidence_present=false`
+- integrated closure now reports
+  `local_phase4_unitree_bringup_readiness_complete=true`
+
+### Block-by-block status
+
+- Dependency inventory: local roots are inventoried and marker-checked.
+- G1Pilot/fallback review: fallback contracts exist; G1Pilot runtime remains
+  absent unless separately fetched, reviewed, pinned, and tested.
+- Robot asset intake: the local public G1 URDF is parsed enough to confirm the
+  29 canonical controlled joints are present as a subset; extra asset joints are
+  recorded as fixed/sensor/helper joints and hardware calibration is still
+  missing.
+- Stream contracts: low-state, IMU, wireless/e-stop, low-command, sport-request,
+  and replay-export slots exist, but no live stream is observed.
+- Command conformance: downstream dry-run frames are grouped by command family,
+  but no ROS2/DDS publish or SDK2/G1Pilot write path is exercised.
+- Timing: a local `perf_counter` probe is emitted, but DDS/hardware timing is
+  still absent.
+- Safety: joint-limit clamp, stale-data watchdog, e-stop, collision/fall guard,
+  and stable-base demotion preflight receipts exist with dispatch veto default.
+- Operator recovery: e-stop, stale stream, low balance margin, and teleop
+  takeover runbooks exist without claiming drill execution.
+- Evidence ledger: local sim/hardware candidate roots are recorded, but honest
+  sim and hardware execution remain false.
+
+### Boundary
+
+This is pre-purchase local preparation only. It does not build or run Unitree
+ROS2 / SDK2, invoke G1Pilot, launch Unitree MuJoCo/RL Gym/IsaacLab sim, observe
+live low-state streams, write low commands, execute hardware, certify physical
+safety, run operator recovery drills, train weights, mutate reward math, or
+promote authority.

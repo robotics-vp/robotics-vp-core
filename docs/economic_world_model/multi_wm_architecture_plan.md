@@ -2748,12 +2748,16 @@ Current local implementation:
 
 - `src/world_model/humanoid_readiness/phase4.py`
 - `src/world_model/humanoid_readiness/downstream_controller.py`
+- `src/world_model/humanoid_readiness/unitree_bringup_readiness.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
 - `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
+- `scripts/economic_world_model/prepare_phase4_unitree_bringup_readiness.py`
 - Current artifact report:
   `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
 - Current downstream-controller artifact:
   `artifacts/economic_world_model/phase4_downstream_controller_scaffold/phase4_downstream_controller_scaffold_report_v1.json`
+- Current Unitree/G1 bring-up readiness artifact:
+  `artifacts/economic_world_model/phase4_unitree_bringup_readiness/phase4_unitree_bringup_readiness_report_v1.json`
 - Current local result: `contract_surface_count=15`, `stub_surface_count=3`,
   phase counts `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`,
   `local_non_hardware_scaffold_complete=true`, and
@@ -2766,8 +2770,15 @@ Current local implementation:
   `g1pilot_fallback_contract_present=true`,
   `dry_run_controller_present=true`, and
   `local_downstream_controller_scaffold_complete=true`.
+- Current Unitree/G1 bring-up readiness result: `block_count=9`,
+  `dependency_target_count=8`, `dependency_verified_count=5` on the current
+  host, `asset_joint_subset_aligned=true`, `stream_contract_count=6`,
+  `command_conformance_receipt_count=4`, `safety_preflight_receipt_count=5`,
+  `operator_recovery_runbook_count=4`, `local_pre_purchase_prepared=true`, and
+  `honest_sim_or_hardware_evidence_present=false`.
 - Full closure still waits for live streams, control interfaces,
-  timing/jitter traces, measured companion middleware, operator/recovery traces,
+  runtime build/interface verification, timing/jitter traces, measured
+  companion middleware, operator/recovery drills, physical safety calibration,
   and hardware or honest sim runtime evidence.
 
 Cross-phase rule here too:
@@ -2777,6 +2788,11 @@ Cross-phase rule here too:
 - downstream controller work should remain dispatch-denied until Unitree ROS2 /
   SDK2 or a replacement runtime is installed and measured; local command frames
   are replay/training-aware evidence, not live actuator authority
+- Unitree/G1 bring-up work should burn down local preparation before hardware
+  purchase by emitting dependency, asset, stream, command, timing, safety,
+  operator-recovery, and evidence-ledger receipts; it should still deny live
+  control until runtime builds, live streams, safety drills, and honest sim or
+  hardware evidence exist
 
 ### Phase 4A - Real-Time Control Loop Separation
 

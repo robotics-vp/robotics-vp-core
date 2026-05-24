@@ -17,6 +17,9 @@ from scripts.economic_world_model.prepare_phase4_deployment_enabler_sweep import
 from scripts.economic_world_model.prepare_phase4_downstream_controller_scaffold import (
     run_prepare_phase4_downstream_controller_scaffold,
 )
+from scripts.economic_world_model.prepare_phase4_unitree_bringup_readiness import (
+    run_prepare_phase4_unitree_bringup_readiness,
+)
 from scripts.economic_world_model.prepare_phase65_meta_node_neuralization import (
     run_prepare_phase65_meta_node_neuralization,
 )
@@ -31,6 +34,7 @@ from src.world_model.humanoid_readiness import (
     load_phase4_contract_surfaces,
     load_phase4_stub_surfaces,
 )
+from src.world_model.embodiment_actuation import load_humanoid_chassis_profile
 from src.world_model.transport import (
     WMTransportPhase6ClosureAuditReport,
     save_wm_transport_phase6_closure_audit,
@@ -69,12 +73,78 @@ def _fake_phase6_closure(phase6_dir: Path) -> Path:
     return path
 
 
+def _write(path: Path, text: str = "") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_unitree_urdf(path: Path, joint_names: list[str]) -> None:
+    lines = ['<robot name="synthetic_g1_29dof_contract">', '  <link name="base_link"/>']
+    for joint_name in [*joint_names, "imu_mount_joint", "camera_mount_joint"]:
+        child_name = f"{joint_name}_link"
+        joint_type = "fixed" if "mount" in joint_name else "revolute"
+        lines.extend(
+            [
+                f'  <link name="{child_name}"/>',
+                f'  <joint name="{joint_name}" type="{joint_type}">',
+                '    <parent link="base_link"/>',
+                f'    <child link="{child_name}"/>',
+                '    <limit lower="-1.0" upper="1.0" effort="1.0" velocity="1.0"/>',
+                "  </joint>",
+            ]
+        )
+    lines.append("</robot>")
+    _write(path, "\n".join(lines) + "\n")
+
+
+def _fake_unitree_roots(tmp_path: Path, joint_names: list[str]) -> dict[str, str]:
+    roots = tmp_path / "unitree_roots"
+    sdk2 = roots / "unitree_sdk2"
+    _write(sdk2 / "CMakeLists.txt", "cmake_minimum_required(VERSION 3.16)\n")
+    (sdk2 / "include/unitree").mkdir(parents=True)
+    (sdk2 / "lib").mkdir(parents=True)
+
+    models = roots / "unitree_models"
+    (models / "G1/29dof/usd").mkdir(parents=True)
+    _write(models / "README.md", "synthetic unitree model root\n")
+
+    rl_gym = roots / "unitree_rl_gym"
+    _write_unitree_urdf(
+        rl_gym / "resources/robots/g1_description/g1_29dof.urdf",
+        joint_names,
+    )
+    (rl_gym / "legged_gym").mkdir(parents=True)
+    (rl_gym / "deploy").mkdir(parents=True)
+
+    isaaclab = roots / "unitree_sim_isaaclab"
+    (isaaclab / "tasks/g1_tasks").mkdir(parents=True)
+    (isaaclab / "layeredcontrol").mkdir(parents=True)
+    (isaaclab / "tools").mkdir(parents=True)
+
+    il_lerobot = roots / "unitree_IL_lerobot"
+    (il_lerobot / "unitree_lerobot/eval_robot").mkdir(parents=True)
+    (il_lerobot / "unitree_lerobot/utils").mkdir(parents=True)
+    _write(il_lerobot / "pyproject.toml", "[project]\nname='synthetic'\n")
+
+    return {
+        "unitree_sdk2": str(sdk2),
+        "unitree_models": str(models),
+        "unitree_rl_gym": str(rl_gym),
+        "unitree_sim_isaaclab": str(isaaclab),
+        "unitree_il_lerobot": str(il_lerobot),
+        "g1pilot": str(roots / "g1pilot"),
+        "unitree_ros2": str(roots / "unitree_ros2"),
+        "unitree_mujoco": str(roots / "unitree_mujoco"),
+    }
+
+
 def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     phase35_dir = tmp_path / "phase35"
     bipedal_chassis_dir = tmp_path / "bipedal_chassis"
     phase35_bipedal_readiness_dir = tmp_path / "phase35_bipedal_readiness"
     phase4_dir = tmp_path / "phase4"
     phase4_downstream_controller_dir = tmp_path / "phase4_downstream_controller"
+    phase4_unitree_bringup_dir = tmp_path / "phase4_unitree_bringup"
     phase65_dir = tmp_path / "phase65"
     phase6_dir = tmp_path / "phase6_closure"
     closure_dir = tmp_path / "closure"
@@ -173,6 +243,27 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert phase4_downstream["unitree_sdk2_write_enabled"] is False
     assert phase4_downstream["promotion_eligible"] is False
 
+    chassis = load_humanoid_chassis_profile(
+        bipedal_chassis_dir / "humanoid_chassis_profile_v1.json"
+    )
+    phase4_unitree = run_prepare_phase4_unitree_bringup_readiness(
+        output_dir=phase4_unitree_bringup_dir,
+        bipedal_chassis_dir=bipedal_chassis_dir,
+        phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
+        phase4_downstream_controller_dir=phase4_downstream_controller_dir,
+        local_roots=_fake_unitree_roots(tmp_path, chassis.joint_names),
+        timing_iterations=16,
+        run_dependencies_if_missing=False,
+    )
+    assert phase4_unitree["status"] == "ok"
+    assert phase4_unitree["local_pre_purchase_prepared"] is True
+    assert phase4_unitree["block_count"] == 9
+    assert phase4_unitree["asset_joint_subset_aligned"] is True
+    assert phase4_unitree["command_conformance_dry_run_ready"] is True
+    assert phase4_unitree["honest_sim_or_hardware_evidence_present"] is False
+    assert phase4_unitree["hardware_executed"] is False
+    assert phase4_unitree["promotion_eligible"] is False
+
     phase65 = run_prepare_phase65_meta_node_neuralization(
         output_dir=phase65_dir,
         phase35_dir=phase35_dir,
@@ -220,6 +311,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
         phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
         phase4_dir=phase4_dir,
         phase4_downstream_controller_dir=phase4_downstream_controller_dir,
+        phase4_unitree_bringup_readiness_dir=phase4_unitree_bringup_dir,
         phase65_dir=phase65_dir,
         run_dependencies_if_missing=False,
     )
@@ -228,6 +320,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert closure["local_phase35_bipedal_readiness_complete"] is True
     assert closure["local_phase4_complete"] is True
     assert closure["local_phase4_downstream_controller_complete"] is True
+    assert closure["local_phase4_unitree_bringup_readiness_complete"] is True
     assert closure["local_phase65_complete"] is True
     assert closure["all_local_structures_complete"] is True
     assert closure["ready_for_phase7_scaffold"] is True
@@ -237,4 +330,12 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert closure["promotion_eligible"] is False
     assert "phase35_whole_body_replay_row_slots" in closure["closed_local_surfaces"]
     assert "phase4_dry_run_command_frames" in closure["closed_local_surfaces"]
+    assert (
+        "phase4_unitree_dependency_inventory_receipts"
+        in closure["closed_local_surfaces"]
+    )
+    assert (
+        "phase4_unitree_sim_hardware_evidence_ledger"
+        in closure["closed_local_surfaces"]
+    )
     assert "phase65_denied_promotion_gates" in closure["closed_local_surfaces"]

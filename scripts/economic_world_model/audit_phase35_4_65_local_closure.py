@@ -18,6 +18,9 @@ from scripts.economic_world_model.prepare_phase35_humanoid_capacity_env_refit im
     DEFAULT_OUTPUT_DIR as DEFAULT_PHASE35_DIR,
 )
 from scripts.economic_world_model.audit_phase35_bipedal_readiness import (  # noqa: E402
+    DEFAULT_BIPEDAL_CHASSIS_DIR,
+)
+from scripts.economic_world_model.audit_phase35_bipedal_readiness import (  # noqa: E402
     DEFAULT_OUTPUT_DIR as DEFAULT_PHASE35_BIPEDAL_READINESS_DIR,
 )
 from scripts.economic_world_model.audit_phase35_bipedal_readiness import (  # noqa: E402
@@ -32,6 +35,12 @@ from scripts.economic_world_model.prepare_phase4_downstream_controller_scaffold 
 from scripts.economic_world_model.prepare_phase4_downstream_controller_scaffold import (  # noqa: E402
     run_prepare_phase4_downstream_controller_scaffold,
 )
+from scripts.economic_world_model.prepare_phase4_unitree_bringup_readiness import (  # noqa: E402
+    DEFAULT_OUTPUT_DIR as DEFAULT_PHASE4_UNITREE_BRINGUP_READINESS_DIR,
+)
+from scripts.economic_world_model.prepare_phase4_unitree_bringup_readiness import (  # noqa: E402
+    run_prepare_phase4_unitree_bringup_readiness,
+)
 from scripts.economic_world_model.prepare_phase65_meta_node_neuralization import (  # noqa: E402
     DEFAULT_OUTPUT_DIR as DEFAULT_PHASE65_DIR,
 )
@@ -43,6 +52,7 @@ from src.world_model.humanoid_readiness import (  # noqa: E402
     load_phase35_humanoid_refit_report,
     load_phase4_deployment_enabler_sweep_report,
     load_phase4_downstream_controller_scaffold_report,
+    load_phase4_unitree_bringup_readiness_report,
     load_phase65_meta_node_neuralization_report,
     save_phase35465_local_closure_audit,
 )
@@ -60,6 +70,7 @@ def _input_paths(
     phase35_bipedal_readiness_dir: Path,
     phase4_dir: Path,
     phase4_downstream_controller_dir: Path,
+    phase4_unitree_bringup_readiness_dir: Path,
     phase65_dir: Path,
 ) -> dict[str, Path]:
     return {
@@ -70,6 +81,8 @@ def _input_paths(
         / "humanoid_phase4_deployment_enabler_sweep_report_v1.json",
         "phase4_downstream_controller_report": phase4_downstream_controller_dir
         / "phase4_downstream_controller_scaffold_report_v1.json",
+        "phase4_unitree_bringup_readiness_report": phase4_unitree_bringup_readiness_dir
+        / "phase4_unitree_bringup_readiness_report_v1.json",
         "phase65_report": phase65_dir / "phase65_meta_node_neuralization_report_v1.json",
     }
 
@@ -89,6 +102,8 @@ def _write_markdown(path: Path, payload: Mapping[str, Any]) -> None:
         f"- Phase 4 complete: `{str(payload['local_phase4_complete']).lower()}`",
         "- Phase 4 downstream controller complete: "
         f"`{str(payload['local_phase4_downstream_controller_complete']).lower()}`",
+        "- Phase 4 Unitree bring-up readiness complete: "
+        f"`{str(payload['local_phase4_unitree_bringup_readiness_complete']).lower()}`",
         f"- Phase 6.5 complete: `{str(payload['local_phase65_complete']).lower()}`",
         f"- Ready for Phase 7 scaffold: "
         f"`{str(payload['ready_for_phase7_scaffold']).lower()}`",
@@ -118,9 +133,11 @@ def _write_markdown(path: Path, payload: Mapping[str, Any]) -> None:
 def _resolve_inputs(
     *,
     phase35_dir: Path,
+    bipedal_chassis_dir: Path,
     phase35_bipedal_readiness_dir: Path,
     phase4_dir: Path,
     phase4_downstream_controller_dir: Path,
+    phase4_unitree_bringup_readiness_dir: Path,
     phase65_dir: Path,
     run_dependencies_if_missing: bool,
 ) -> dict[str, Path]:
@@ -129,6 +146,7 @@ def _resolve_inputs(
         phase35_bipedal_readiness_dir,
         phase4_dir,
         phase4_downstream_controller_dir,
+        phase4_unitree_bringup_readiness_dir,
         phase65_dir,
     )
     if all(path.exists() for path in paths.values()):
@@ -144,12 +162,21 @@ def _resolve_inputs(
     )
     run_audit_phase35_bipedal_readiness(
         output_dir=phase35_bipedal_readiness_dir,
+        bipedal_chassis_dir=bipedal_chassis_dir,
         run_dependencies_if_missing=True,
     )
     run_prepare_phase4_downstream_controller_scaffold(
         output_dir=phase4_downstream_controller_dir,
         phase4_dir=phase4_dir,
+        bipedal_chassis_dir=bipedal_chassis_dir,
         phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
+        run_dependencies_if_missing=True,
+    )
+    run_prepare_phase4_unitree_bringup_readiness(
+        output_dir=phase4_unitree_bringup_readiness_dir,
+        bipedal_chassis_dir=bipedal_chassis_dir,
+        phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
+        phase4_downstream_controller_dir=phase4_downstream_controller_dir,
         run_dependencies_if_missing=True,
     )
     if not all(path.exists() for path in paths.values()):
@@ -165,12 +192,16 @@ def run_audit_phase35_4_65_local_closure(
     *,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     phase35_dir: str | Path = DEFAULT_PHASE35_DIR,
+    bipedal_chassis_dir: str | Path = DEFAULT_BIPEDAL_CHASSIS_DIR,
     phase35_bipedal_readiness_dir: str | Path = (
         DEFAULT_PHASE35_BIPEDAL_READINESS_DIR
     ),
     phase4_dir: str | Path = DEFAULT_PHASE4_DIR,
     phase4_downstream_controller_dir: str | Path = (
         DEFAULT_PHASE4_DOWNSTREAM_CONTROLLER_DIR
+    ),
+    phase4_unitree_bringup_readiness_dir: str | Path = (
+        DEFAULT_PHASE4_UNITREE_BRINGUP_READINESS_DIR
     ),
     phase65_dir: str | Path = DEFAULT_PHASE65_DIR,
     run_dependencies_if_missing: bool = True,
@@ -179,9 +210,13 @@ def run_audit_phase35_4_65_local_closure(
     output.mkdir(parents=True, exist_ok=True)
     input_paths = _resolve_inputs(
         phase35_dir=Path(phase35_dir),
+        bipedal_chassis_dir=Path(bipedal_chassis_dir),
         phase35_bipedal_readiness_dir=Path(phase35_bipedal_readiness_dir),
         phase4_dir=Path(phase4_dir),
         phase4_downstream_controller_dir=Path(phase4_downstream_controller_dir),
+        phase4_unitree_bringup_readiness_dir=Path(
+            phase4_unitree_bringup_readiness_dir
+        ),
         phase65_dir=Path(phase65_dir),
         run_dependencies_if_missing=run_dependencies_if_missing,
     )
@@ -195,6 +230,9 @@ def run_audit_phase35_4_65_local_closure(
         "phase4_report_path": str(input_paths["phase4_report"]),
         "phase4_downstream_controller_report_path": str(
             input_paths["phase4_downstream_controller_report"]
+        ),
+        "phase4_unitree_bringup_readiness_report_path": str(
+            input_paths["phase4_unitree_bringup_readiness_report"]
         ),
         "phase65_report_path": str(input_paths["phase65_report"]),
         "report_path": str(report_path),
@@ -215,6 +253,11 @@ def run_audit_phase35_4_65_local_closure(
                 input_paths["phase4_downstream_controller_report"]
             )
         ),
+        phase4_unitree_bringup_readiness_report=(
+            load_phase4_unitree_bringup_readiness_report(
+                input_paths["phase4_unitree_bringup_readiness_report"]
+            )
+        ),
         phase65_report=load_phase65_meta_node_neuralization_report(
             input_paths["phase65_report"]
         ),
@@ -231,6 +274,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--phase35-dir", default=str(DEFAULT_PHASE35_DIR))
+    parser.add_argument("--bipedal-chassis-dir", default=str(DEFAULT_BIPEDAL_CHASSIS_DIR))
     parser.add_argument(
         "--phase35-bipedal-readiness-dir",
         default=str(DEFAULT_PHASE35_BIPEDAL_READINESS_DIR),
@@ -239,6 +283,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--phase4-downstream-controller-dir",
         default=str(DEFAULT_PHASE4_DOWNSTREAM_CONTROLLER_DIR),
+    )
+    parser.add_argument(
+        "--phase4-unitree-bringup-readiness-dir",
+        default=str(DEFAULT_PHASE4_UNITREE_BRINGUP_READINESS_DIR),
     )
     parser.add_argument("--phase65-dir", default=str(DEFAULT_PHASE65_DIR))
     parser.add_argument("--no-run-dependencies", action="store_true")
@@ -250,9 +298,13 @@ def main() -> int:
     payload = run_audit_phase35_4_65_local_closure(
         output_dir=args.output_dir,
         phase35_dir=args.phase35_dir,
+        bipedal_chassis_dir=args.bipedal_chassis_dir,
         phase35_bipedal_readiness_dir=args.phase35_bipedal_readiness_dir,
         phase4_dir=args.phase4_dir,
         phase4_downstream_controller_dir=args.phase4_downstream_controller_dir,
+        phase4_unitree_bringup_readiness_dir=(
+            args.phase4_unitree_bringup_readiness_dir
+        ),
         phase65_dir=args.phase65_dir,
         run_dependencies_if_missing=not args.no_run_dependencies,
     )

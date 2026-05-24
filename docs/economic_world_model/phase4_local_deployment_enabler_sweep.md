@@ -134,15 +134,19 @@ Code and CLI surfaces:
 
 - `src/world_model/humanoid_readiness/phase4.py`
 - `src/world_model/humanoid_readiness/downstream_controller.py`
+- `src/world_model/humanoid_readiness/unitree_bringup_readiness.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
 - `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
+- `scripts/economic_world_model/prepare_phase4_unitree_bringup_readiness.py`
 - `tests/test_humanoid_phase35_4_65_scaffolds.py`
 - `tests/test_humanoid_phase4_downstream_controller.py`
+- `tests/test_humanoid_phase4_unitree_bringup_readiness.py`
 
 Current artifact output:
 
 - `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
 - `artifacts/economic_world_model/phase4_downstream_controller_scaffold/phase4_downstream_controller_scaffold_report_v1.json`
+- `artifacts/economic_world_model/phase4_unitree_bringup_readiness/phase4_unitree_bringup_readiness_report_v1.json`
 - `contract_surface_count=15`
 - `stub_surface_count=3`
 - phase counts: `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`
@@ -159,6 +163,16 @@ Current artifact output:
 - `g1pilot_fallback_contract_present=true`
 - `dry_run_controller_present=true`
 - `local_downstream_controller_scaffold_complete=true`
+- `block_count=9`
+- `dependency_target_count=8`
+- `dependency_verified_count=5` on the current local host
+- `asset_joint_subset_aligned=true`
+- `stream_contract_count=6`
+- `command_conformance_receipt_count=4`
+- `safety_preflight_receipt_count=5`
+- `operator_recovery_runbook_count=4`
+- `local_pre_purchase_prepared=true`
+- `honest_sim_or_hardware_evidence_present=false`
 
 Denied gates remain explicit:
 
@@ -166,6 +180,7 @@ Denied gates remain explicit:
 - `ros2_publish_attempted=false`
 - `unitree_sdk2_write_enabled=false`
 - `g1pilot_runtime_invoked=false`
+- `honest_sim_executed=false`
 - `training_executed=false`
 - `weights_written=false`
 - `provider_executed=false`
@@ -215,3 +230,31 @@ Key blockers before Phase 4 can move beyond local dry-run controller evidence:
 - measured control-loop timing and jitter;
 - physical safety calibration and rollback/demotion tests;
 - hardware or honest sim runtime evidence.
+
+## Unitree / G1 Bring-Up Readiness Pack
+
+The local bring-up readiness pass takes the open blockers one by one and
+materializes what can be done before GPU, sim runtime, or hardware:
+
+- `runtime_dependency_manifest`
+- `g1pilot_or_fallback_review`
+- `robot_asset_calibration_intake`
+- `live_stream_interface_contracts`
+- `command_interface_conformance`
+- `timing_jitter_probe`
+- `physical_safety_preflight`
+- `operator_estop_recovery_runbook`
+- `sim_hardware_evidence_ledger`
+
+The current host inventory records local roots for Unitree SDK2, Unitree
+models, Unitree RL Gym, Unitree IsaacLab-style sim work, and Unitree LeRobot
+work, while recording Unitree ROS2, G1Pilot, and Unitree MuJoCo roots as missing
+on this host. The local G1 29-DoF URDF path is parsed enough to confirm that the
+canonical 29 controlled joints are present as a subset; extra asset joints are
+recorded as fixed/sensor/helper joints rather than silently treated as canonical
+control channels.
+
+This closes the local pre-purchase preparation block only. It still does not
+build or run Unitree ROS2 / SDK2, invoke G1Pilot, launch MuJoCo/Isaac/Unitree
+sim, observe live low-state streams, write low commands, execute hardware,
+certify physical safety, run operator recovery drills, train, or promote.
