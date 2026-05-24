@@ -2771,7 +2771,7 @@ Current local implementation:
   `dry_run_controller_present=true`, and
   `local_downstream_controller_scaffold_complete=true`.
 - Current Unitree/G1 bring-up readiness result: `block_count=9`,
-  `dependency_target_count=8`, `dependency_verified_count=5` on the current
+  `dependency_target_count=8`, `dependency_verified_count=8` on the current
   host, `asset_joint_subset_aligned=true`, `stream_contract_count=6`,
   `command_conformance_receipt_count=4`, `safety_preflight_receipt_count=5`,
   `operator_recovery_runbook_count=4`, `local_pre_purchase_prepared=true`, and

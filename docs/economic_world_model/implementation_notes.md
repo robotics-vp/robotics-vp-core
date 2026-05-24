@@ -5369,7 +5369,7 @@ reward/trust/`w_econ`/lambda-controller mutation occurred.
 
 - `block_count=9`
 - `dependency_target_count=8`
-- `dependency_verified_count=5`
+- `dependency_verified_count=8`
 - `asset_joint_subset_aligned=true`
 - `stream_contract_count=6`
 - `command_conformance_receipt_count=4`

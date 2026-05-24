@@ -3591,9 +3591,9 @@ Verification for the Phase-5.1 pass:
   - `tests/test_humanoid_phase4_unitree_bringup_readiness.py`
 - Extended the integrated Phase 3.5 / 4 / 6.5 closure audit so Phase 4 local
   closure now requires `local_phase4_unitree_bringup_readiness_complete=true`.
-- Current local artifact result:
+- Current local artifact result after adding the remaining local OSS roots:
   `block_count=9`, `dependency_target_count=8`,
-  `dependency_verified_count=5`, `asset_joint_subset_aligned=true`,
+  `dependency_verified_count=8`, `asset_joint_subset_aligned=true`,
   `stream_contract_count=6`, `command_conformance_receipt_count=4`,
   `timing_jitter_probe_count=1`, `safety_preflight_receipt_count=5`,
   `operator_recovery_runbook_count=4`, `evidence_ledger_count=1`,
@@ -3603,10 +3603,9 @@ Verification for the Phase-5.1 pass:
   robot asset joint conformance, live-stream contracts, command-interface
   conformance, timing probe, physical safety preflight, operator e-stop/recovery
   runbooks, and a sim/hardware evidence ledger.
-- The local host currently has verified layouts for Unitree SDK2, Unitree
-  models, Unitree RL Gym, Unitree IsaacLab-style sim work, and Unitree LeRobot
-  work. Unitree ROS2, G1Pilot, and Unitree MuJoCo remain missing local roots on
-  this host.
+- The local host currently has verified source layouts for Unitree SDK2,
+  Unitree ROS2, G1Pilot, Unitree models, Unitree RL Gym, Unitree MuJoCo,
+  Unitree IsaacLab-style sim work, and Unitree LeRobot work.
 - Boundary preserved: no ROS2/DDS publish, Unitree SDK2 write, G1Pilot runtime
   invocation, Unitree MuJoCo/RL Gym/IsaacLab sim execution, hardware execution,
   training, weight writes, promotion, live policy control, reward math mutation,

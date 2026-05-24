@@ -908,7 +908,11 @@ def _dependency_specs() -> list[dict[str, Any]]:
             "source_project": "unitreerobotics/unitree_ros2",
             "source_url": "https://github.com/unitreerobotics/unitree_ros2",
             "source_license": "BSD-3-Clause",
-            "expected_markers": ["example", "unitree_api", "unitree_go"],
+            "expected_markers": [
+                "example",
+                "cyclonedds_ws/src/unitree/unitree_api",
+                "cyclonedds_ws/src/unitree/unitree_go",
+            ],
         },
         {
             "local_root_key": "g1pilot",
@@ -940,7 +944,12 @@ def _dependency_specs() -> list[dict[str, Any]]:
             "source_project": "unitreerobotics/unitree_mujoco",
             "source_url": "https://github.com/unitreerobotics/unitree_mujoco",
             "source_license": "BSD-3-Clause",
-            "expected_markers": ["README.md", "unitree_mujoco"],
+            "expected_markers": [
+                "readme.md",
+                "simulate",
+                "simulate_python",
+                "unitree_robots/g1",
+            ],
         },
         {
             "local_root_key": "unitree_sim_isaaclab",

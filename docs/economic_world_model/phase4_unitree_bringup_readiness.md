@@ -36,7 +36,7 @@ Current result:
 
 - `block_count=9`
 - `dependency_target_count=8`
-- `dependency_verified_count=5`
+- `dependency_verified_count=8`
 - `asset_joint_subset_aligned=true`
 - `stream_contract_count=6`
 - `command_conformance_receipt_count=4`
@@ -47,10 +47,10 @@ Current result:
 - `local_pre_purchase_prepared=true`
 - `honest_sim_or_hardware_evidence_present=false`
 
-The current host has verified local layouts for Unitree SDK2, Unitree models,
-Unitree RL Gym, Unitree IsaacLab-style sim work, and Unitree LeRobot work.
-Unitree ROS2, G1Pilot, and Unitree MuJoCo remain missing local roots on this
-host.
+The current host has verified local layouts for Unitree SDK2, Unitree ROS2,
+G1Pilot, Unitree models, Unitree RL Gym, Unitree MuJoCo, Unitree IsaacLab-style
+sim work, and Unitree LeRobot work. These are source-layout checks only; no
+build, import, launch, sim, or hardware execution is claimed.
 
 ## Closure Boundary
 

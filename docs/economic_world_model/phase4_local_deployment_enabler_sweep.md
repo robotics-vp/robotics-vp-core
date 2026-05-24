@@ -165,7 +165,7 @@ Current artifact output:
 - `local_downstream_controller_scaffold_complete=true`
 - `block_count=9`
 - `dependency_target_count=8`
-- `dependency_verified_count=5` on the current local host
+- `dependency_verified_count=8` on the current local host
 - `asset_joint_subset_aligned=true`
 - `stream_contract_count=6`
 - `command_conformance_receipt_count=4`
@@ -246,13 +246,12 @@ materializes what can be done before GPU, sim runtime, or hardware:
 - `operator_estop_recovery_runbook`
 - `sim_hardware_evidence_ledger`
 
-The current host inventory records local roots for Unitree SDK2, Unitree
-models, Unitree RL Gym, Unitree IsaacLab-style sim work, and Unitree LeRobot
-work, while recording Unitree ROS2, G1Pilot, and Unitree MuJoCo roots as missing
-on this host. The local G1 29-DoF URDF path is parsed enough to confirm that the
-canonical 29 controlled joints are present as a subset; extra asset joints are
-recorded as fixed/sensor/helper joints rather than silently treated as canonical
-control channels.
+The current host inventory records verified local source layouts for Unitree
+SDK2, Unitree ROS2, G1Pilot, Unitree models, Unitree RL Gym, Unitree MuJoCo,
+Unitree IsaacLab-style sim work, and Unitree LeRobot work. The local G1 29-DoF
+URDF path is parsed enough to confirm that the canonical 29 controlled joints
+are present as a subset; extra asset joints are recorded as fixed/sensor/helper
+joints rather than silently treated as canonical control channels.
 
 This closes the local pre-purchase preparation block only. It still does not
 build or run Unitree ROS2 / SDK2, invoke G1Pilot, launch MuJoCo/Isaac/Unitree
