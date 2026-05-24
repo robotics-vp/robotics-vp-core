@@ -14,6 +14,9 @@ from scripts.economic_world_model.audit_phase35_bipedal_readiness import (
 from scripts.economic_world_model.prepare_phase4_deployment_enabler_sweep import (
     run_prepare_phase4_deployment_enabler_sweep,
 )
+from scripts.economic_world_model.prepare_phase4_downstream_controller_scaffold import (
+    run_prepare_phase4_downstream_controller_scaffold,
+)
 from scripts.economic_world_model.prepare_phase65_meta_node_neuralization import (
     run_prepare_phase65_meta_node_neuralization,
 )
@@ -71,6 +74,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     bipedal_chassis_dir = tmp_path / "bipedal_chassis"
     phase35_bipedal_readiness_dir = tmp_path / "phase35_bipedal_readiness"
     phase4_dir = tmp_path / "phase4"
+    phase4_downstream_controller_dir = tmp_path / "phase4_downstream_controller"
     phase65_dir = tmp_path / "phase65"
     phase6_dir = tmp_path / "phase6_closure"
     closure_dir = tmp_path / "closure"
@@ -152,6 +156,23 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert all(stub.explicit_stub and stub.planning_only for stub in stubs)
     assert {stub.phase_key for stub in stubs} == {"4B", "4C", "4D"}
 
+    phase4_downstream = run_prepare_phase4_downstream_controller_scaffold(
+        output_dir=phase4_downstream_controller_dir,
+        phase4_dir=phase4_dir,
+        bipedal_chassis_dir=bipedal_chassis_dir,
+        phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
+        run_dependencies_if_missing=False,
+    )
+    assert phase4_downstream["status"] == "ok"
+    assert phase4_downstream["local_downstream_controller_scaffold_complete"] is True
+    assert phase4_downstream["unitree_bridge_contract_present"] is True
+    assert phase4_downstream["g1pilot_fallback_contract_present"] is True
+    assert phase4_downstream["dry_run_controller_present"] is True
+    assert phase4_downstream["hardware_dispatch_enabled"] is False
+    assert phase4_downstream["ros2_publish_attempted"] is False
+    assert phase4_downstream["unitree_sdk2_write_enabled"] is False
+    assert phase4_downstream["promotion_eligible"] is False
+
     phase65 = run_prepare_phase65_meta_node_neuralization(
         output_dir=phase65_dir,
         phase35_dir=phase35_dir,
@@ -198,6 +219,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
         phase35_dir=phase35_dir,
         phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
         phase4_dir=phase4_dir,
+        phase4_downstream_controller_dir=phase4_downstream_controller_dir,
         phase65_dir=phase65_dir,
         run_dependencies_if_missing=False,
     )
@@ -205,6 +227,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert closure["local_phase35_complete"] is True
     assert closure["local_phase35_bipedal_readiness_complete"] is True
     assert closure["local_phase4_complete"] is True
+    assert closure["local_phase4_downstream_controller_complete"] is True
     assert closure["local_phase65_complete"] is True
     assert closure["all_local_structures_complete"] is True
     assert closure["ready_for_phase7_scaffold"] is True
@@ -213,4 +236,5 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert closure["reward_math_mutation"] is False
     assert closure["promotion_eligible"] is False
     assert "phase35_whole_body_replay_row_slots" in closure["closed_local_surfaces"]
+    assert "phase4_dry_run_command_frames" in closure["closed_local_surfaces"]
     assert "phase65_denied_promotion_gates" in closure["closed_local_surfaces"]

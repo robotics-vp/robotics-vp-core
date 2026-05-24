@@ -18,6 +18,9 @@ from src.world_model.humanoid_readiness.phase35 import HumanoidPhase35RefitRepor
 from src.world_model.humanoid_readiness.phase4 import (
     Phase4DeploymentEnablerSweepReport,
 )
+from src.world_model.humanoid_readiness.downstream_controller import (
+    Phase4DownstreamControllerScaffoldReport,
+)
 from src.world_model.humanoid_readiness.phase65 import (
     Phase65MetaNodeNeuralizationReport,
 )
@@ -45,11 +48,13 @@ class Phase35465LocalClosureAudit:
     phase35_report_id: str
     phase35_bipedal_readiness_audit_id: str
     phase4_report_id: str
+    phase4_downstream_controller_report_id: str
     phase65_report_id: str
     status: str
     local_phase35_complete: bool
     local_phase35_bipedal_readiness_complete: bool
     local_phase4_complete: bool
+    local_phase4_downstream_controller_complete: bool
     local_phase65_complete: bool
     all_local_structures_complete: bool
     ready_for_phase7_scaffold: bool
@@ -77,6 +82,9 @@ class Phase35465LocalClosureAudit:
                 self.phase35_bipedal_readiness_audit_id
             ),
             "phase4_report_id": self.phase4_report_id,
+            "phase4_downstream_controller_report_id": (
+                self.phase4_downstream_controller_report_id
+            ),
             "phase65_report_id": self.phase65_report_id,
             "status": self.status,
             "local_phase35_complete": bool(self.local_phase35_complete),
@@ -84,6 +92,9 @@ class Phase35465LocalClosureAudit:
                 self.local_phase35_bipedal_readiness_complete
             ),
             "local_phase4_complete": bool(self.local_phase4_complete),
+            "local_phase4_downstream_controller_complete": bool(
+                self.local_phase4_downstream_controller_complete
+            ),
             "local_phase65_complete": bool(self.local_phase65_complete),
             "all_local_structures_complete": bool(
                 self.all_local_structures_complete
@@ -113,6 +124,9 @@ class Phase35465LocalClosureAudit:
                 payload.get("phase35_bipedal_readiness_audit_id", "")
             ),
             phase4_report_id=str(payload.get("phase4_report_id", "")),
+            phase4_downstream_controller_report_id=str(
+                payload.get("phase4_downstream_controller_report_id", "")
+            ),
             phase65_report_id=str(payload.get("phase65_report_id", "")),
             status=str(payload.get("status", "blocked")),
             local_phase35_complete=bool(payload.get("local_phase35_complete", False)),
@@ -120,6 +134,9 @@ class Phase35465LocalClosureAudit:
                 payload.get("local_phase35_bipedal_readiness_complete", False)
             ),
             local_phase4_complete=bool(payload.get("local_phase4_complete", False)),
+            local_phase4_downstream_controller_complete=bool(
+                payload.get("local_phase4_downstream_controller_complete", False)
+            ),
             local_phase65_complete=bool(payload.get("local_phase65_complete", False)),
             all_local_structures_complete=bool(
                 payload.get("all_local_structures_complete", False)
@@ -155,6 +172,7 @@ def build_phase35465_local_closure_audit(
     phase35_report: HumanoidPhase35RefitReport,
     phase35_bipedal_readiness_audit: Phase35BipedalReadinessAudit,
     phase4_report: Phase4DeploymentEnablerSweepReport,
+    phase4_downstream_controller_report: Phase4DownstreamControllerScaffoldReport,
     phase65_report: Phase65MetaNodeNeuralizationReport,
     artifact_refs: Mapping[str, Any] | None = None,
 ) -> Phase35465LocalClosureAudit:
@@ -173,11 +191,25 @@ def build_phase35465_local_closure_audit(
         and not phase35_bipedal_readiness_audit.promotion_eligible
     )
     phase4_complete = phase4_report.local_non_hardware_scaffold_complete
+    phase4_downstream_controller_complete = (
+        phase4_downstream_controller_report.status == "ok"
+        and phase4_downstream_controller_report.local_downstream_controller_scaffold_complete
+        and phase4_downstream_controller_report.unitree_bridge_contract_present
+        and phase4_downstream_controller_report.g1pilot_fallback_contract_present
+        and phase4_downstream_controller_report.dry_run_controller_present
+        and not phase4_downstream_controller_report.hardware_dispatch_enabled
+        and not phase4_downstream_controller_report.ros2_publish_attempted
+        and not phase4_downstream_controller_report.unitree_sdk2_write_enabled
+        and not phase4_downstream_controller_report.g1pilot_runtime_invoked
+        and not phase4_downstream_controller_report.live_policy_control
+        and not phase4_downstream_controller_report.promotion_eligible
+    )
     phase65_complete = phase65_report.local_meta_node_scaffold_complete
     all_complete = (
         phase35_complete
         and phase35_bipedal_readiness_complete
         and phase4_complete
+        and phase4_downstream_controller_complete
         and phase65_complete
     )
     closed_surfaces = [
@@ -192,6 +224,10 @@ def build_phase35465_local_closure_audit(
         "phase35_bipedal_balance_geometry_reports",
         "phase35_whole_body_replay_row_slots",
         "phase4a_control_loop_separation_contracts",
+        "phase4_downstream_controller_bridge_targets",
+        "phase4_downstream_controller_modes",
+        "phase4_dry_run_command_frames",
+        "phase4_controller_safety_and_dispatch_receipts",
         "phase4e_companion_compute_comms_contracts",
         "phase4f_operator_teleop_recovery_contracts",
         "phase4b_4c_4d_explicit_stubs",
@@ -207,6 +243,9 @@ def build_phase35465_local_closure_audit(
             phase35_bipedal_readiness_audit.audit_id
         ),
         "phase4_report_id": phase4_report.report_id,
+        "phase4_downstream_controller_report_id": (
+            phase4_downstream_controller_report.report_id
+        ),
         "phase65_report_id": phase65_report.report_id,
         "all_local_structures_complete": all_complete,
         "artifact_refs": mapping(artifact_refs),
@@ -218,6 +257,9 @@ def build_phase35465_local_closure_audit(
             phase35_bipedal_readiness_audit.audit_id
         ),
         phase4_report_id=phase4_report.report_id,
+        phase4_downstream_controller_report_id=(
+            phase4_downstream_controller_report.report_id
+        ),
         phase65_report_id=phase65_report.report_id,
         status="ok" if all_complete else "blocked",
         local_phase35_complete=phase35_complete,
@@ -225,6 +267,9 @@ def build_phase35465_local_closure_audit(
             phase35_bipedal_readiness_complete
         ),
         local_phase4_complete=phase4_complete,
+        local_phase4_downstream_controller_complete=(
+            phase4_downstream_controller_complete
+        ),
         local_phase65_complete=phase65_complete,
         all_local_structures_complete=all_complete,
         ready_for_phase7_scaffold=all_complete,

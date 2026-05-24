@@ -133,20 +133,39 @@ CLI.
 Code and CLI surfaces:
 
 - `src/world_model/humanoid_readiness/phase4.py`
+- `src/world_model/humanoid_readiness/downstream_controller.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
+- `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
 - `tests/test_humanoid_phase35_4_65_scaffolds.py`
+- `tests/test_humanoid_phase4_downstream_controller.py`
 
 Current artifact output:
 
 - `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
+- `artifacts/economic_world_model/phase4_downstream_controller_scaffold/phase4_downstream_controller_scaffold_report_v1.json`
 - `contract_surface_count=15`
 - `stub_surface_count=3`
 - phase counts: `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`
 - `local_non_hardware_scaffold_complete=true`
 - `ready_for_phase65_local_meta_nodes=true`
+- `bridge_target_count=5`
+- `mode_count=6`
+- `proposal_count=6`
+- `command_frame_count=6`
+- `safety_receipt_count=6`
+- `invocation_count=6`
+- `controller_receipt_count=6`
+- `unitree_bridge_contract_present=true`
+- `g1pilot_fallback_contract_present=true`
+- `dry_run_controller_present=true`
+- `local_downstream_controller_scaffold_complete=true`
 
 Denied gates remain explicit:
 
+- `hardware_dispatch_enabled=false`
+- `ros2_publish_attempted=false`
+- `unitree_sdk2_write_enabled=false`
+- `g1pilot_runtime_invoked=false`
 - `training_executed=false`
 - `weights_written=false`
 - `provider_executed=false`
@@ -155,3 +174,44 @@ Denied gates remain explicit:
 - `live_policy_control=false`
 - `reward_math_mutation=false`
 - `promotion_eligible=false`
+
+## Downstream Controller Scaffold
+
+The local downstream controller pass creates a primitive/fallback controller
+surface below WM proposals without granting actuator authority. It is inspired
+by the Unitree ROS2 / SDK2 DDS command split and G1Pilot-style upper-body
+fallback control, but it does not vendor or invoke those projects.
+
+Current local surfaces:
+
+- `ControllerBridgeTarget` rows for Unitree ROS2 low-level command shape,
+  Unitree sport-request fallback shape, G1Pilot joint fallback, G1Pilot
+  Cartesian fallback, and an offline OCS2/TSID/Crocoddyl whole-body-control
+  reference target;
+- `ControllerModeSpec` rows for `hold_pose`, `joint_pd_tracking`,
+  `cartesian_upper_body_tracking`, `stable_base_fallback`,
+  `operator_teleop_pass_through`, and `e_stop_veto`;
+- `DownstreamControllerProposal` rows tied to Phase 3.5 whole-body replay rows;
+- `LowLevelCommandFrame` rows with dry-run joint-PD / Cartesian / fallback /
+  veto payloads;
+- `ControllerSafetyReceipt` rows for joint-limit clamp, stale-data watchdog,
+  support-phase, operator override, and e-stop gates;
+- `ControllerInvocation` and `ControllerReceipt` rows that deny dispatch while
+  keeping replay/training-aware evidence.
+
+The scaffold intentionally includes a synthetic joint-limit clamp probe and an
+e-stop veto probe so Phase 4 can test the safety receipt path locally. It still
+does not publish `/lowcmd`, `/api/sport/request`, invoke G1Pilot, dispatch to
+Unitree SDK2, or claim hardware/sim execution.
+
+Key blockers before Phase 4 can move beyond local dry-run controller evidence:
+
+- Unitree ROS2 / SDK2 runtime installed and verified;
+- G1Pilot or equivalent fallback runtime vendored, pinned, or replaced by a
+  repo-native equivalent after license/dependency review;
+- real robot description, joint map, and calibration sidecars;
+- live low-state, IMU, command, and operator/e-stop streams;
+- validated low-command, sport-request, or upper-body controller interface;
+- measured control-loop timing and jitter;
+- physical safety calibration and rollback/demotion tests;
+- hardware or honest sim runtime evidence.

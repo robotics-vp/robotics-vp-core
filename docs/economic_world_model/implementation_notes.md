@@ -5279,3 +5279,64 @@ No Unitree sim runtime, hardware execution, provider execution, GPU training,
 weight writes, hardware-calibrated limits, promotion, live policy control,
 reward math mutation, or frozen reward/trust/`w_econ`/lambda-controller mutation
 occurred.
+
+## 2026-05-24 — Phase-4 downstream controller dry-run scaffold
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/downstream_controller.py`.
+- Added `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`.
+- Added `tests/test_humanoid_phase4_downstream_controller.py`.
+- Extended `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
+  and `src/world_model/humanoid_readiness/closure.py` so integrated local
+  closure requires the downstream-controller scaffold.
+
+### New local surfaces
+
+- `ControllerBridgeTarget`
+- `ControllerModeSpec`
+- `DownstreamControllerProposal`
+- `LowLevelCommandFrame`
+- `ControllerSafetyReceipt`
+- `ControllerInvocation`
+- `ControllerReceipt`
+- `Phase4DownstreamControllerScaffoldReport`
+
+### Current artifact result
+
+- `bridge_target_count=5`
+- `mode_count=6`
+- `proposal_count=6`
+- `command_frame_count=6`
+- `safety_receipt_count=6`
+- `invocation_count=6`
+- `controller_receipt_count=6`
+- `unitree_bridge_contract_present=true`
+- `g1pilot_fallback_contract_present=true`
+- `dry_run_controller_present=true`
+- `local_downstream_controller_scaffold_complete=true`
+- integrated closure now reports
+  `local_phase4_downstream_controller_complete=true`
+
+### OSS Direction
+
+The scaffold is shaped by Unitree ROS2 / SDK2 and G1Pilot-style boundaries:
+Unitree-style low-command and sport-request bridge targets, plus G1Pilot-style
+upper-body joint and Cartesian fallback targets. OCS2/TSID/Crocoddyl remain
+future whole-body-control design references rather than runtime dependencies in
+this local pass.
+
+No OSS code was vendored in this pass. Before vendoring or forking, Phase 4
+still needs dependency pinning, license review, runtime build verification, and
+interface tests against honest sim or hardware.
+
+### Boundary
+
+This is a downstream controller primitive, but it is still dispatch-denied. It
+emits dry-run command frames, safety receipts, invocations, and replay-ready
+controller receipts only.
+
+No ROS2/DDS publish, Unitree SDK2 write, G1Pilot runtime invocation, Unitree sim
+runtime, hardware execution, provider execution, training, weight writes,
+promotion, live policy control, reward math mutation, or frozen
+reward/trust/`w_econ`/lambda-controller mutation occurred.

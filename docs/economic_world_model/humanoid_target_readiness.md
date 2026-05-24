@@ -131,6 +131,12 @@ earlier docs-only posture:
   operator/recovery contract artifacts exist under
   `src/world_model/humanoid_readiness/phase4.py` and
   `artifacts/economic_world_model/phase4_deployment_enabler_sweep/`;
+- Phase 4 now also has a dry-run downstream-controller scaffold under
+  `src/world_model/humanoid_readiness/downstream_controller.py` and
+  `artifacts/economic_world_model/phase4_downstream_controller_scaffold/`,
+  with Unitree ROS2 / SDK2-shaped bridge targets, G1Pilot-style fallback bridge
+  targets, controller modes, command frames, safety receipts, dispatch-denied
+  invocations, and replay-ready controller receipts;
 - Phase 6.5 local meta-node state/receipt/target/robustness/gate artifacts
   exist under `src/world_model/humanoid_readiness/phase65.py` and
   `artifacts/economic_world_model/phase65_meta_node_neuralization/`.
@@ -242,6 +248,7 @@ Status key:
 | Perception / grounding for humanoids | egocentric + depth + 3D grounding + body-aware scene state | `src/vision/scene_ir_tracker/io/scene_tracks_runner.py`, `src/vision/reconstruction/four_d_reconstruction.py` | `partial` | GPU/SAM3D and canonical perception WM still pending |
 | Sensor fusion | IMU, proprio, camera, depth, force/torque fusion | `src/ingestion/x_humanoid_adapter.py`, `src/runtime/observation_adapter_v2.py` | `partial` | no real fusion stack yet |
 | Real-time control split | reflex/servo loop separated from governance loop | `src/world_model/humanoid_readiness/phase4.py` | `partial` | contract surfaces exist; no measured control interface or jitter traces yet |
+| Downstream controller primitive | bounded low-level command frame, safety receipt, dispatch receipt | `src/world_model/humanoid_readiness/downstream_controller.py` | `partial` | dry-run command frames exist; no ROS2/SDK2 publish, hardware, or sim dispatch yet |
 | Physical safety layer | joint limits, self-collision, e-stop, fall protection | local `JointLimitEnvelope` planning receipts | `partial` | joint-limit envelopes are not hardware-calibrated safety limits |
 | Spatial state / SLAM | localization, mapping, navigation state | none canonical yet | `missing` | current envs are mostly fixed-workcell |
 | Companion compute / comms | onboard/offboard split, QoS, degraded-link handling | `src/world_model/humanoid_readiness/phase4.py` | `partial` | local middleware contracts exist; no ROS2/DDS/Unitree runtime evidence yet |

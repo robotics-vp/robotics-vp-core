@@ -3550,3 +3550,35 @@ Verification for the Phase-5.1 pass:
   GPU training, weight writes, hardware-calibrated limits, promotion, live
   policy control, reward math mutation, or frozen reward/trust/`w_econ`/lambda
   mutation claim.
+
+### 2026-05-24: Phase-4 downstream controller dry-run scaffold
+
+- Committed and pushed the Phase 3.5 / 4 / 6.5 local readiness tranche as
+  `1265e1e feat: add humanoid local readiness scaffolds`.
+- Added the Phase 4 downstream-controller layer:
+  - `src/world_model/humanoid_readiness/downstream_controller.py`
+  - `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
+  - `tests/test_humanoid_phase4_downstream_controller.py`
+- Extended the integrated Phase 3.5 / 4 / 6.5 closure audit so Phase 4 local
+  closure now requires `local_phase4_downstream_controller_complete=true`.
+- Current local artifact result:
+  `bridge_target_count=5`, `mode_count=6`, `proposal_count=6`,
+  `command_frame_count=6`, `safety_receipt_count=6`,
+  `invocation_count=6`, `controller_receipt_count=6`,
+  `unitree_bridge_contract_present=true`,
+  `g1pilot_fallback_contract_present=true`,
+  `dry_run_controller_present=true`, and
+  `local_downstream_controller_scaffold_complete=true`.
+- The scaffold emits Unitree ROS2 / SDK2-shaped bridge targets, G1Pilot-style
+  fallback bridge targets, controller modes, dry-run command frames,
+  joint-limit clamp / stale-data / e-stop safety receipts, dispatch-denied
+  invocations, and replay-ready controller receipts.
+- Key blockers are now explicit: Unitree ROS2 / SDK2 runtime verification,
+  G1Pilot or equivalent runtime review, real robot description and calibration,
+  live low-state streams, actual low-command or sport-request validation,
+  measured timing/jitter, physical safety calibration, operator e-stop and
+  recovery validation, and hardware or honest sim runtime evidence.
+- Boundary preserved: no ROS2/DDS publish, Unitree SDK2 write, G1Pilot runtime
+  invocation, sim/hardware execution, training, weight writes, promotion, live
+  policy control, reward math mutation, or frozen reward/trust/`w_econ`/lambda
+  mutation claim.

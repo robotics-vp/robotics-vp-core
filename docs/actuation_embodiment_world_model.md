@@ -67,6 +67,16 @@ whole-body replay row slots. It can parse a supplied local URDF/MJCF/SRDF-style
 asset enough to test joint-name alignment, but that is still contract evidence,
 not calibrated Unitree runtime, hardware, training, or promotion evidence.
 
+The Phase 4 downstream-controller layer is
+`src/world_model/humanoid_readiness/downstream_controller.py`, materialized by
+`scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`.
+It consumes the bipedal chassis/readiness artifacts and emits dry-run controller
+bridge targets, modes, proposals, low-level command frames, safety receipts,
+dispatch-denied invocations, and replay-ready controller receipts. It is shaped
+for Unitree ROS2 / SDK2 and G1Pilot-style fallback integration, but it does not
+publish ROS2/DDS messages, write Unitree commands, invoke G1Pilot, or claim
+live actuator authority.
+
 ---
 
 ## How Our WM Topology Differs from the Dominant Framing

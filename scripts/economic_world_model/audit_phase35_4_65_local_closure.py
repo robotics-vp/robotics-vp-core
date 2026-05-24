@@ -26,6 +26,12 @@ from scripts.economic_world_model.audit_phase35_bipedal_readiness import (  # no
 from scripts.economic_world_model.prepare_phase4_deployment_enabler_sweep import (  # noqa: E402
     DEFAULT_OUTPUT_DIR as DEFAULT_PHASE4_DIR,
 )
+from scripts.economic_world_model.prepare_phase4_downstream_controller_scaffold import (  # noqa: E402
+    DEFAULT_OUTPUT_DIR as DEFAULT_PHASE4_DOWNSTREAM_CONTROLLER_DIR,
+)
+from scripts.economic_world_model.prepare_phase4_downstream_controller_scaffold import (  # noqa: E402
+    run_prepare_phase4_downstream_controller_scaffold,
+)
 from scripts.economic_world_model.prepare_phase65_meta_node_neuralization import (  # noqa: E402
     DEFAULT_OUTPUT_DIR as DEFAULT_PHASE65_DIR,
 )
@@ -36,6 +42,7 @@ from src.world_model.humanoid_readiness import (  # noqa: E402
     build_phase35465_local_closure_audit,
     load_phase35_humanoid_refit_report,
     load_phase4_deployment_enabler_sweep_report,
+    load_phase4_downstream_controller_scaffold_report,
     load_phase65_meta_node_neuralization_report,
     save_phase35465_local_closure_audit,
 )
@@ -52,6 +59,7 @@ def _input_paths(
     phase35_dir: Path,
     phase35_bipedal_readiness_dir: Path,
     phase4_dir: Path,
+    phase4_downstream_controller_dir: Path,
     phase65_dir: Path,
 ) -> dict[str, Path]:
     return {
@@ -60,6 +68,8 @@ def _input_paths(
         / "phase35_bipedal_readiness_audit_v1.json",
         "phase4_report": phase4_dir
         / "humanoid_phase4_deployment_enabler_sweep_report_v1.json",
+        "phase4_downstream_controller_report": phase4_downstream_controller_dir
+        / "phase4_downstream_controller_scaffold_report_v1.json",
         "phase65_report": phase65_dir / "phase65_meta_node_neuralization_report_v1.json",
     }
 
@@ -77,6 +87,8 @@ def _write_markdown(path: Path, payload: Mapping[str, Any]) -> None:
         "- Phase 3.5 bipedal readiness complete: "
         f"`{str(payload['local_phase35_bipedal_readiness_complete']).lower()}`",
         f"- Phase 4 complete: `{str(payload['local_phase4_complete']).lower()}`",
+        "- Phase 4 downstream controller complete: "
+        f"`{str(payload['local_phase4_downstream_controller_complete']).lower()}`",
         f"- Phase 6.5 complete: `{str(payload['local_phase65_complete']).lower()}`",
         f"- Ready for Phase 7 scaffold: "
         f"`{str(payload['ready_for_phase7_scaffold']).lower()}`",
@@ -108,6 +120,7 @@ def _resolve_inputs(
     phase35_dir: Path,
     phase35_bipedal_readiness_dir: Path,
     phase4_dir: Path,
+    phase4_downstream_controller_dir: Path,
     phase65_dir: Path,
     run_dependencies_if_missing: bool,
 ) -> dict[str, Path]:
@@ -115,6 +128,7 @@ def _resolve_inputs(
         phase35_dir,
         phase35_bipedal_readiness_dir,
         phase4_dir,
+        phase4_downstream_controller_dir,
         phase65_dir,
     )
     if all(path.exists() for path in paths.values()):
@@ -130,6 +144,12 @@ def _resolve_inputs(
     )
     run_audit_phase35_bipedal_readiness(
         output_dir=phase35_bipedal_readiness_dir,
+        run_dependencies_if_missing=True,
+    )
+    run_prepare_phase4_downstream_controller_scaffold(
+        output_dir=phase4_downstream_controller_dir,
+        phase4_dir=phase4_dir,
+        phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
         run_dependencies_if_missing=True,
     )
     if not all(path.exists() for path in paths.values()):
@@ -149,6 +169,9 @@ def run_audit_phase35_4_65_local_closure(
         DEFAULT_PHASE35_BIPEDAL_READINESS_DIR
     ),
     phase4_dir: str | Path = DEFAULT_PHASE4_DIR,
+    phase4_downstream_controller_dir: str | Path = (
+        DEFAULT_PHASE4_DOWNSTREAM_CONTROLLER_DIR
+    ),
     phase65_dir: str | Path = DEFAULT_PHASE65_DIR,
     run_dependencies_if_missing: bool = True,
 ) -> dict[str, Any]:
@@ -158,6 +181,7 @@ def run_audit_phase35_4_65_local_closure(
         phase35_dir=Path(phase35_dir),
         phase35_bipedal_readiness_dir=Path(phase35_bipedal_readiness_dir),
         phase4_dir=Path(phase4_dir),
+        phase4_downstream_controller_dir=Path(phase4_downstream_controller_dir),
         phase65_dir=Path(phase65_dir),
         run_dependencies_if_missing=run_dependencies_if_missing,
     )
@@ -169,6 +193,9 @@ def run_audit_phase35_4_65_local_closure(
             input_paths["phase35_bipedal_readiness_audit"]
         ),
         "phase4_report_path": str(input_paths["phase4_report"]),
+        "phase4_downstream_controller_report_path": str(
+            input_paths["phase4_downstream_controller_report"]
+        ),
         "phase65_report_path": str(input_paths["phase65_report"]),
         "report_path": str(report_path),
         "markdown_path": str(markdown_path),
@@ -182,6 +209,11 @@ def run_audit_phase35_4_65_local_closure(
         ),
         phase4_report=load_phase4_deployment_enabler_sweep_report(
             input_paths["phase4_report"]
+        ),
+        phase4_downstream_controller_report=(
+            load_phase4_downstream_controller_scaffold_report(
+                input_paths["phase4_downstream_controller_report"]
+            )
         ),
         phase65_report=load_phase65_meta_node_neuralization_report(
             input_paths["phase65_report"]
@@ -204,6 +236,10 @@ def _parse_args() -> argparse.Namespace:
         default=str(DEFAULT_PHASE35_BIPEDAL_READINESS_DIR),
     )
     parser.add_argument("--phase4-dir", default=str(DEFAULT_PHASE4_DIR))
+    parser.add_argument(
+        "--phase4-downstream-controller-dir",
+        default=str(DEFAULT_PHASE4_DOWNSTREAM_CONTROLLER_DIR),
+    )
     parser.add_argument("--phase65-dir", default=str(DEFAULT_PHASE65_DIR))
     parser.add_argument("--no-run-dependencies", action="store_true")
     return parser.parse_args()
@@ -216,6 +252,7 @@ def main() -> int:
         phase35_dir=args.phase35_dir,
         phase35_bipedal_readiness_dir=args.phase35_bipedal_readiness_dir,
         phase4_dir=args.phase4_dir,
+        phase4_downstream_controller_dir=args.phase4_downstream_controller_dir,
         phase65_dir=args.phase65_dir,
         run_dependencies_if_missing=not args.no_run_dependencies,
     )

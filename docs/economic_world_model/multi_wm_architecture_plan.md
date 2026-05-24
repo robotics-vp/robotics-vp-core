@@ -2747,13 +2747,25 @@ Current local sweep artifact:
 Current local implementation:
 
 - `src/world_model/humanoid_readiness/phase4.py`
+- `src/world_model/humanoid_readiness/downstream_controller.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
+- `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
 - Current artifact report:
   `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
+- Current downstream-controller artifact:
+  `artifacts/economic_world_model/phase4_downstream_controller_scaffold/phase4_downstream_controller_scaffold_report_v1.json`
 - Current local result: `contract_surface_count=15`, `stub_surface_count=3`,
   phase counts `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`,
   `local_non_hardware_scaffold_complete=true`, and
   `ready_for_phase65_local_meta_nodes=true`.
+- Current downstream-controller result: `bridge_target_count=5`,
+  `mode_count=6`, `proposal_count=6`, `command_frame_count=6`,
+  `safety_receipt_count=6`, `invocation_count=6`,
+  `controller_receipt_count=6`,
+  `unitree_bridge_contract_present=true`,
+  `g1pilot_fallback_contract_present=true`,
+  `dry_run_controller_present=true`, and
+  `local_downstream_controller_scaffold_complete=true`.
 - Full closure still waits for live streams, control interfaces,
   timing/jitter traces, measured companion middleware, operator/recovery traces,
   and hardware or honest sim runtime evidence.
@@ -2762,6 +2774,9 @@ Cross-phase rule here too:
 
 - if an enabler phase introduces learned routing, calibration, safety scoring, operator-handoff selection, or degradation handling, that seam should ship as a bounded helper/runtime contract from the first landing
 - do not strand those decisions in untyped helper code and plan to “neuralize later”
+- downstream controller work should remain dispatch-denied until Unitree ROS2 /
+  SDK2 or a replacement runtime is installed and measured; local command frames
+  are replay/training-aware evidence, not live actuator authority
 
 ### Phase 4A - Real-Time Control Loop Separation
 
