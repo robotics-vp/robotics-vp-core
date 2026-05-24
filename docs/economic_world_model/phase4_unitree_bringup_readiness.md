@@ -72,3 +72,18 @@ No ROS2/DDS publish, Unitree SDK2 write, G1Pilot invocation, Unitree MuJoCo /
 RL Gym / IsaacLab sim execution, hardware execution, provider execution,
 training, weight writes, live policy control, reward mutation, or promotion
 occurred.
+
+## Local Harness Follow-On
+
+The next local pass materialized
+`artifacts/economic_world_model/phase4_unitree_local_harnesses/phase4_unitree_local_harness_report_v1.json`
+from the same Unitree/G1 preparation lane. It goes further than this readiness
+pack by executing local-only harnesses for synthetic low-state / IMU /
+wireless-e-stop / contact traces, JSONL import/export, mock receivers,
+stale-data validation, no-publish Unitree ROS2 command-shape parsing, mock
+timing/watchdog receipts, safety/recovery state transitions, and Unitree ROS2 /
+MuJoCo / G1Pilot preflight receipts.
+
+That follow-on still does not remove the core external blockers: no live
+stream, ROS2/DDS publish, SDK2 write, G1Pilot invocation, MuJoCo launch,
+hardware execution, safety calibration, training, or promotion is claimed.

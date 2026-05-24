@@ -3610,3 +3610,42 @@ Verification for the Phase-5.1 pass:
   invocation, Unitree MuJoCo/RL Gym/IsaacLab sim execution, hardware execution,
   training, weight writes, promotion, live policy control, reward math mutation,
   or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-24: Phase-4 Unitree/G1 local harness pass
+
+- Added executable local harnesses for the non-GPU, non-hardware blockers that
+  can be burned down before honest sim or robot access:
+  - `src/world_model/humanoid_readiness/unitree_local_harness.py`
+  - `scripts/economic_world_model/prepare_phase4_unitree_local_harnesses.py`
+  - `tests/test_humanoid_phase4_unitree_local_harnesses.py`
+  - `docs/economic_world_model/phase4_unitree_local_harnesses.md`
+- Extended the integrated Phase 3.5 / 4 / 6.5 closure audit so Phase 4 local
+  closure now requires `local_phase4_unitree_local_harness_complete=true`.
+- Current local artifact result:
+  `low_state_trace_count=12`, `imu_trace_count=12`,
+  `wireless_estop_trace_count=12`, `contact_trace_count=12`,
+  `trace_replay_receipt_count=4`, `mock_receiver_receipt_count=4`,
+  `stale_validation_receipt_count=4`,
+  `ros_message_definition_count=7`,
+  `command_shape_validation_receipt_count=2`,
+  `mock_timing_run_receipt_count=1`,
+  `watchdog_demotion_receipt_count=1`,
+  `safety_transition_count=5`,
+  `synthetic_safety_drill_receipt_count=1`,
+  `runtime_preflight_receipt_count=7`, and
+  `local_harnesses_complete=true`.
+- The pass emits `LowStateTrace`, `ImuTrace`, `WirelessEStopTrace`,
+  `ContactTrace`, replay/mock-receiver/stale-data receipts, Unitree ROS2
+  message-definition parses, no-publish command-shape conformance receipts,
+  mock timing and watchdog-demotion receipts, safety/recovery state
+  transitions, synthetic drill receipts, and Unitree ROS2 / MuJoCo / G1Pilot
+  preflight receipts.
+- Current host preflight notes: Unitree ROS2 message files are present; Unitree
+  MuJoCo G1 XML parses; G1Pilot source layout is present; `colcon` and `ros2`
+  are not installed; Python `mujoco` import is available; no runtime is
+  launched.
+- Boundary preserved: no live stream observed, no ROS2/DDS publish, no Unitree
+  SDK2 write, no G1Pilot invocation, no Unitree MuJoCo launch, no hardware
+  execution, no training, no weight writes, no promotion, no live policy
+  control, no reward math mutation, and no frozen
+  reward/trust/`w_econ`/lambda mutation claim.

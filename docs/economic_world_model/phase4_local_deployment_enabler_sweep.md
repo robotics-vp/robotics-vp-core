@@ -135,18 +135,22 @@ Code and CLI surfaces:
 - `src/world_model/humanoid_readiness/phase4.py`
 - `src/world_model/humanoid_readiness/downstream_controller.py`
 - `src/world_model/humanoid_readiness/unitree_bringup_readiness.py`
+- `src/world_model/humanoid_readiness/unitree_local_harness.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
 - `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_bringup_readiness.py`
+- `scripts/economic_world_model/prepare_phase4_unitree_local_harnesses.py`
 - `tests/test_humanoid_phase35_4_65_scaffolds.py`
 - `tests/test_humanoid_phase4_downstream_controller.py`
 - `tests/test_humanoid_phase4_unitree_bringup_readiness.py`
+- `tests/test_humanoid_phase4_unitree_local_harnesses.py`
 
 Current artifact output:
 
 - `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
 - `artifacts/economic_world_model/phase4_downstream_controller_scaffold/phase4_downstream_controller_scaffold_report_v1.json`
 - `artifacts/economic_world_model/phase4_unitree_bringup_readiness/phase4_unitree_bringup_readiness_report_v1.json`
+- `artifacts/economic_world_model/phase4_unitree_local_harnesses/phase4_unitree_local_harness_report_v1.json`
 - `contract_surface_count=15`
 - `stub_surface_count=3`
 - phase counts: `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`
@@ -172,6 +176,21 @@ Current artifact output:
 - `safety_preflight_receipt_count=5`
 - `operator_recovery_runbook_count=4`
 - `local_pre_purchase_prepared=true`
+- `low_state_trace_count=12`
+- `imu_trace_count=12`
+- `wireless_estop_trace_count=12`
+- `contact_trace_count=12`
+- `trace_replay_receipt_count=4`
+- `mock_receiver_receipt_count=4`
+- `stale_validation_receipt_count=4`
+- `ros_message_definition_count=7`
+- `command_shape_validation_receipt_count=2`
+- `mock_timing_run_receipt_count=1`
+- `watchdog_demotion_receipt_count=1`
+- `safety_transition_count=5`
+- `synthetic_safety_drill_receipt_count=1`
+- `runtime_preflight_receipt_count=7`
+- `local_harnesses_complete=true`
 - `honest_sim_or_hardware_evidence_present=false`
 
 Denied gates remain explicit:
@@ -257,3 +276,32 @@ This closes the local pre-purchase preparation block only. It still does not
 build or run Unitree ROS2 / SDK2, invoke G1Pilot, launch MuJoCo/Isaac/Unitree
 sim, observe live low-state streams, write low commands, execute hardware,
 certify physical safety, run operator recovery drills, train, or promote.
+
+## Unitree / G1 Local Harnesses
+
+The local harness pass converts the remaining scaffoldable blocker roots into
+executable local checks:
+
+- synthetic low-state, IMU, wireless/e-stop, and contact trace rows with JSONL
+  export/import receipts;
+- mock receivers and stale-data validators that emit veto-ready receipts;
+- Unitree ROS2 `.msg` parsing for `LowCmd`, `MotorCmd`, `LowState`,
+  `IMUState`, `Request`, `RequestHeader`, and `WirelessController`;
+- no-publish command-shape validation for low-level joint-PD and sport-request
+  payloads;
+- local producer/consumer timing, jitter histogram, stale-event, and watchdog
+  demotion receipts;
+- executable local safety transitions for stale-data veto, joint clamp, e-stop
+  latch, stable-base demotion, and operator recovery;
+- Unitree ROS2 / MuJoCo / G1Pilot source-layout, build-tool/import,
+  XML-parse, and launch-request preflight receipts.
+
+On the current host, the harness sees Unitree ROS2 message files, parses
+Unitree MuJoCo G1 XML, and materializes G1Pilot launch requests. It also records
+that `colcon` and `ros2` are not installed locally. The Python `mujoco` module
+is importable, but no MuJoCo simulation is launched.
+
+This closes the local harness roots only. It still does not publish ROS2/DDS
+messages, write Unitree SDK2 commands, invoke G1Pilot, observe real robot or
+sim streams, launch Unitree MuJoCo, certify physical safety, run teleop
+recovery drills, train, or promote.

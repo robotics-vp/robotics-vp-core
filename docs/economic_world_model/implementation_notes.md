@@ -5411,3 +5411,84 @@ ROS2 / SDK2, invoke G1Pilot, launch Unitree MuJoCo/RL Gym/IsaacLab sim, observe
 live low-state streams, write low commands, execute hardware, certify physical
 safety, run operator recovery drills, train weights, mutate reward math, or
 promote authority.
+
+## 2026-05-24 — Phase-4 Unitree/G1 local harness pass
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/unitree_local_harness.py`.
+- Added `scripts/economic_world_model/prepare_phase4_unitree_local_harnesses.py`.
+- Added `tests/test_humanoid_phase4_unitree_local_harnesses.py`.
+- Added `docs/economic_world_model/phase4_unitree_local_harnesses.md`.
+- Extended `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
+  and `src/world_model/humanoid_readiness/closure.py` so integrated local
+  closure requires the Unitree/G1 local harness report.
+
+### New local surfaces
+
+- `LowStateTrace`
+- `ImuTrace`
+- `WirelessEStopTrace`
+- `ContactTrace`
+- `TraceReplayReceipt`
+- `MockReceiverReceipt`
+- `StaleDataValidationReceipt`
+- `RosMessageDefinition`
+- `CommandShapeValidationReceipt`
+- `MockTimingRunReceipt`
+- `WatchdogDemotionReceipt`
+- `SafetyStateTransition`
+- `SyntheticSafetyDrillReceipt`
+- `RuntimePreflightReceipt`
+- `Phase4UnitreeLocalHarnessReport`
+
+### Current artifact result
+
+- `low_state_trace_count=12`
+- `imu_trace_count=12`
+- `wireless_estop_trace_count=12`
+- `contact_trace_count=12`
+- `trace_replay_receipt_count=4`
+- `mock_receiver_receipt_count=4`
+- `stale_validation_receipt_count=4`
+- `ros_message_definition_count=7`
+- `command_shape_validation_receipt_count=2`
+- `mock_timing_run_receipt_count=1`
+- `watchdog_demotion_receipt_count=1`
+- `safety_transition_count=5`
+- `synthetic_safety_drill_receipt_count=1`
+- `runtime_preflight_receipt_count=7`
+- `trace_stream_harness_complete=true`
+- `command_shape_harness_complete=true`
+- `mock_timing_watchdog_harness_complete=true`
+- `safety_recovery_harness_complete=true`
+- `runtime_preflight_harness_complete=true`
+- `local_harnesses_complete=true`
+- integrated closure now reports
+  `local_phase4_unitree_local_harness_complete=true`
+
+### Block-by-block status
+
+- Trace / stream: synthetic low-state, IMU, wireless/e-stop, and contact trace
+  rows are exported and imported through JSONL; mock receivers and stale-data
+  validators emit replay-ready receipts.
+- Command shape: Unitree ROS2 `.msg` files are parsed for `LowCmd`,
+  `MotorCmd`, `LowState`, `IMUState`, `Request`, `RequestHeader`, and
+  `WirelessController`; dry-run low-level and sport-request payloads are
+  conformance-checked without publish authority.
+- Timing / watchdog: local producer/consumer loops emit latency, jitter
+  histogram, stale-event, and stable-base demotion receipts.
+- Safety / recovery: the local state machine exercises stale-data veto,
+  joint-limit clamp, e-stop latch, stable-base demotion, and operator recovery
+  transitions.
+- Preflight: Unitree ROS2 source/message layout, Unitree MuJoCo source/XML
+  layout, G1Pilot source layout, build-tool/import availability, and
+  launch-request materialization are receipted. On this host `colcon` and
+  `ros2` are missing; Python `mujoco` import is available; no launch is run.
+
+### Boundary
+
+This is executable local scaffolding only. It does not observe live streams,
+publish ROS2/DDS messages, write Unitree SDK2 commands, invoke G1Pilot, launch
+MuJoCo, execute hardware, certify physical safety, run real teleop recovery,
+train weights, mutate reward math, or promote authority.

@@ -88,6 +88,18 @@ It is a pre-purchase readiness pack only: no Unitree ROS2 / SDK2 build or write,
 G1Pilot invocation, sim launch, hardware execution, safety certification,
 training, reward mutation, or promotion is claimed.
 
+The Phase 4 Unitree/G1 local harness layer is
+`src/world_model/humanoid_readiness/unitree_local_harness.py`, materialized by
+`scripts/economic_world_model/prepare_phase4_unitree_local_harnesses.py`. It
+executes synthetic low-state, IMU, wireless/e-stop, and contact trace
+import/export; parses Unitree ROS2 command and stream message definitions;
+validates no-publish `LowCmd` and sport-request payload shapes; runs local
+timing/watchdog loops; drives a local safety/recovery state machine; and emits
+Unitree ROS2 / MuJoCo / G1Pilot preflight receipts. It remains local harness
+evidence only: no live streams, ROS2/DDS publish, SDK2 write, G1Pilot
+invocation, MuJoCo launch, hardware execution, safety certification, training,
+reward mutation, or promotion is claimed.
+
 ---
 
 ## How Our WM Topology Differs from the Dominant Framing

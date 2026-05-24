@@ -144,6 +144,14 @@ earlier docs-only posture:
   joint-conformance receipts, stream and command contracts, a local-only timing
   probe, physical safety preflight receipts, operator e-stop/recovery runbooks,
   and a sim/hardware evidence ledger;
+- Phase 4 now also has executable local Unitree/G1 harnesses under
+  `src/world_model/humanoid_readiness/unitree_local_harness.py` and
+  `artifacts/economic_world_model/phase4_unitree_local_harnesses/`, with
+  synthetic low-state / IMU / wireless-e-stop / contact traces, JSONL replay
+  receipts, mock receivers, stale-data validators, Unitree ROS2 message parses,
+  no-publish command-shape receipts, mock timing/watchdog receipts,
+  safety/recovery state transitions, and Unitree ROS2 / MuJoCo / G1Pilot
+  preflight receipts;
 - Phase 6.5 local meta-node state/receipt/target/robustness/gate artifacts
   exist under `src/world_model/humanoid_readiness/phase65.py` and
   `artifacts/economic_world_model/phase65_meta_node_neuralization/`.
@@ -160,7 +168,10 @@ turning local dependency discovery, public G1 asset parsing, dry-run command
 conformance, timing-probe slots, safety preflight slots, and operator recovery
 runbooks into receipts; it does not remove the need for runtime build
 verification, live DDS/SDK streams, hardware calibration, honest sim launch
-evidence, or on-robot safety drills.
+evidence, or on-robot safety drills. The local harness pack goes one level
+deeper for preflight by executing synthetic trace, command-shape,
+timing/watchdog, and safety/recovery checks, but it is still not live stream,
+command echo, sim launch, physical calibration, or robot evidence.
 
 The repo already has strong substrate worth preserving:
 

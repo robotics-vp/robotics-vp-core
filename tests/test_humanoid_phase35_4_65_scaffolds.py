@@ -20,6 +20,9 @@ from scripts.economic_world_model.prepare_phase4_downstream_controller_scaffold 
 from scripts.economic_world_model.prepare_phase4_unitree_bringup_readiness import (
     run_prepare_phase4_unitree_bringup_readiness,
 )
+from scripts.economic_world_model.prepare_phase4_unitree_local_harnesses import (
+    run_prepare_phase4_unitree_local_harnesses,
+)
 from scripts.economic_world_model.prepare_phase65_meta_node_neuralization import (
     run_prepare_phase65_meta_node_neuralization,
 )
@@ -138,6 +141,108 @@ def _fake_unitree_roots(tmp_path: Path, joint_names: list[str]) -> dict[str, str
     }
 
 
+def _fake_unitree_local_harness_roots(tmp_path: Path) -> dict[str, str]:
+    roots = tmp_path / "unitree_local_harness_roots"
+    ros2 = roots / "unitree_ros2"
+    ros_tree = ros2 / "cyclonedds_ws/src/unitree"
+    _write(ros2 / "setup.sh", "#!/usr/bin/env bash\n")
+    _write(
+        ros_tree / "unitree_hg/msg/LowCmd.msg",
+        "\n".join(
+            [
+                "uint8 mode_pr",
+                "uint8 mode_machine",
+                "MotorCmd[35] motor_cmd",
+                "uint32[4] reserve",
+                "uint32 crc",
+                "",
+            ]
+        ),
+    )
+    _write(
+        ros_tree / "unitree_hg/msg/MotorCmd.msg",
+        "\n".join(
+            [
+                "uint8 mode",
+                "float32 q",
+                "float32 dq",
+                "float32 tau",
+                "float32 kp",
+                "float32 kd",
+                "uint32[3] reserve",
+                "",
+            ]
+        ),
+    )
+    _write(
+        ros_tree / "unitree_hg/msg/LowState.msg",
+        "\n".join(
+            [
+                "uint8[2] version",
+                "uint8 mode_pr",
+                "uint8 mode_machine",
+                "uint32 tick",
+                "IMUState imu_state",
+                "MotorState[35] motor_state",
+                "uint8[40] wireless_remote",
+                "uint32[4] reserve",
+                "uint32 crc",
+                "",
+            ]
+        ),
+    )
+    _write(
+        ros_tree / "unitree_hg/msg/IMUState.msg",
+        "\n".join(
+            [
+                "float32[4] quaternion",
+                "float32[3] gyroscope",
+                "float32[3] accelerometer",
+                "float32[3] rpy",
+                "int8 temperature",
+                "",
+            ]
+        ),
+    )
+    _write(
+        ros_tree / "unitree_api/msg/Request.msg",
+        "\n".join(["RequestHeader header", "string parameter", "uint8[] binary", ""]),
+    )
+    _write(
+        ros_tree / "unitree_api/msg/RequestHeader.msg",
+        "\n".join(["uint32 identity", "int64 lease_id", ""]),
+    )
+    _write(
+        ros_tree / "unitree_go/msg/WirelessController.msg",
+        "\n".join(["float32 lx", "float32 ly", "float32 rx", "float32 ry", "uint16 keys", ""]),
+    )
+
+    mujoco = roots / "unitree_mujoco"
+    _write(mujoco / "simulate_python/unitree_mujoco.py", "print('no launch')\n")
+    _write(mujoco / "simulate_python/unitree_sdk2py_bridge.py", "BRIDGE = True\n")
+    _write(
+        mujoco / "unitree_robots/g1/scene_29dof.xml",
+        '<mujoco model="synthetic_g1_scene"><worldbody /></mujoco>\n',
+    )
+    _write(
+        mujoco / "unitree_robots/g1/g1_29dof.xml",
+        '<mujoco model="synthetic_g1"><worldbody /></mujoco>\n',
+    )
+
+    g1pilot = roots / "g1pilot"
+    _write(g1pilot / "package.xml", "<package><name>g1pilot</name></package>\n")
+    _write(g1pilot / "launch/bringup_launcher.launch.py", "# no launch\n")
+    _write(g1pilot / "launch/teleoperation_launcher.launch.py", "# no launch\n")
+    _write(g1pilot / "g1pilot/__init__.py", "")
+    _write(g1pilot / "description_files/urdf/g1.urdf", "<robot name='g1'/>\n")
+
+    return {
+        "unitree_ros2": str(ros2),
+        "unitree_mujoco": str(mujoco),
+        "g1pilot": str(g1pilot),
+    }
+
+
 def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     phase35_dir = tmp_path / "phase35"
     bipedal_chassis_dir = tmp_path / "bipedal_chassis"
@@ -145,6 +250,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     phase4_dir = tmp_path / "phase4"
     phase4_downstream_controller_dir = tmp_path / "phase4_downstream_controller"
     phase4_unitree_bringup_dir = tmp_path / "phase4_unitree_bringup"
+    phase4_unitree_local_harness_dir = tmp_path / "phase4_unitree_local_harnesses"
     phase65_dir = tmp_path / "phase65"
     phase6_dir = tmp_path / "phase6_closure"
     closure_dir = tmp_path / "closure"
@@ -264,6 +370,28 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert phase4_unitree["hardware_executed"] is False
     assert phase4_unitree["promotion_eligible"] is False
 
+    phase4_unitree_local = run_prepare_phase4_unitree_local_harnesses(
+        output_dir=phase4_unitree_local_harness_dir,
+        bipedal_chassis_dir=bipedal_chassis_dir,
+        phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
+        phase4_downstream_controller_dir=phase4_downstream_controller_dir,
+        local_roots=_fake_unitree_local_harness_roots(tmp_path),
+        sample_count=8,
+        timing_iterations=8,
+        run_dependencies_if_missing=False,
+    )
+    assert phase4_unitree_local["status"] == "ok"
+    assert phase4_unitree_local["local_harnesses_complete"] is True
+    assert phase4_unitree_local["trace_stream_harness_complete"] is True
+    assert phase4_unitree_local["command_shape_harness_complete"] is True
+    assert phase4_unitree_local["mock_timing_watchdog_harness_complete"] is True
+    assert phase4_unitree_local["safety_recovery_harness_complete"] is True
+    assert phase4_unitree_local["runtime_preflight_harness_complete"] is True
+    assert phase4_unitree_local["mujoco_launch_executed"] is False
+    assert phase4_unitree_local["ros2_launch_executed"] is False
+    assert phase4_unitree_local["hardware_executed"] is False
+    assert phase4_unitree_local["promotion_eligible"] is False
+
     phase65 = run_prepare_phase65_meta_node_neuralization(
         output_dir=phase65_dir,
         phase35_dir=phase35_dir,
@@ -312,6 +440,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
         phase4_dir=phase4_dir,
         phase4_downstream_controller_dir=phase4_downstream_controller_dir,
         phase4_unitree_bringup_readiness_dir=phase4_unitree_bringup_dir,
+        phase4_unitree_local_harness_dir=phase4_unitree_local_harness_dir,
         phase65_dir=phase65_dir,
         run_dependencies_if_missing=False,
     )
@@ -321,6 +450,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert closure["local_phase4_complete"] is True
     assert closure["local_phase4_downstream_controller_complete"] is True
     assert closure["local_phase4_unitree_bringup_readiness_complete"] is True
+    assert closure["local_phase4_unitree_local_harness_complete"] is True
     assert closure["local_phase65_complete"] is True
     assert closure["all_local_structures_complete"] is True
     assert closure["ready_for_phase7_scaffold"] is True
@@ -336,6 +466,14 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     )
     assert (
         "phase4_unitree_sim_hardware_evidence_ledger"
+        in closure["closed_local_surfaces"]
+    )
+    assert (
+        "phase4_unitree_command_shape_validation_harness"
+        in closure["closed_local_surfaces"]
+    )
+    assert (
+        "phase4_unitree_safety_recovery_state_machine_harness"
         in closure["closed_local_surfaces"]
     )
     assert "phase65_denied_promotion_gates" in closure["closed_local_surfaces"]

@@ -2749,15 +2749,19 @@ Current local implementation:
 - `src/world_model/humanoid_readiness/phase4.py`
 - `src/world_model/humanoid_readiness/downstream_controller.py`
 - `src/world_model/humanoid_readiness/unitree_bringup_readiness.py`
+- `src/world_model/humanoid_readiness/unitree_local_harness.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
 - `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_bringup_readiness.py`
+- `scripts/economic_world_model/prepare_phase4_unitree_local_harnesses.py`
 - Current artifact report:
   `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
 - Current downstream-controller artifact:
   `artifacts/economic_world_model/phase4_downstream_controller_scaffold/phase4_downstream_controller_scaffold_report_v1.json`
 - Current Unitree/G1 bring-up readiness artifact:
   `artifacts/economic_world_model/phase4_unitree_bringup_readiness/phase4_unitree_bringup_readiness_report_v1.json`
+- Current Unitree/G1 local harness artifact:
+  `artifacts/economic_world_model/phase4_unitree_local_harnesses/phase4_unitree_local_harness_report_v1.json`
 - Current local result: `contract_surface_count=15`, `stub_surface_count=3`,
   phase counts `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`,
   `local_non_hardware_scaffold_complete=true`, and
@@ -2776,6 +2780,16 @@ Current local implementation:
   `command_conformance_receipt_count=4`, `safety_preflight_receipt_count=5`,
   `operator_recovery_runbook_count=4`, `local_pre_purchase_prepared=true`, and
   `honest_sim_or_hardware_evidence_present=false`.
+- Current Unitree/G1 local harness result: `local_harnesses_complete=true`,
+  `trace_stream_harness_complete=true`,
+  `command_shape_harness_complete=true`,
+  `mock_timing_watchdog_harness_complete=true`,
+  `safety_recovery_harness_complete=true`, and
+  `runtime_preflight_harness_complete=true`, with synthetic trace JSONL,
+  mock receivers, stale-data validators, Unitree ROS2 message parses,
+  no-publish command-shape receipts, timing/watchdog receipts,
+  safety/recovery transitions, and Unitree ROS2 / MuJoCo / G1Pilot preflight
+  receipts emitted.
 - Full closure still waits for live streams, control interfaces,
   runtime build/interface verification, timing/jitter traces, measured
   companion middleware, operator/recovery drills, physical safety calibration,
@@ -2793,6 +2807,10 @@ Cross-phase rule here too:
   operator-recovery, and evidence-ledger receipts; it should still deny live
   control until runtime builds, live streams, safety drills, and honest sim or
   hardware evidence exist
+- Unitree/G1 local harness work should stay portable: mock traces, message
+  parsers, stale-data validators, timing loops, and safety/recovery state
+  machines are valid CI and preflight roots, but they must remain clearly
+  separated from real DDS, SDK2, MuJoCo, or hardware evidence
 
 ### Phase 4A - Real-Time Control Loop Separation
 
