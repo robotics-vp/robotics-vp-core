@@ -43,6 +43,30 @@ the local capacity bands, observation/action schema deltas, env taxonomy,
 Unitree sim integration target, and benchmark taxonomy that this WM should use
 when returning from Phase-6 local transport closure.
 
+As of 2026-05-24, that refit is also code-backed by
+`src/world_model/humanoid_readiness/phase35.py` and
+`scripts/economic_world_model/prepare_phase35_humanoid_capacity_env_refit.py`.
+The current local artifact reports `local_structural_refit_complete=true`, but
+this remains scaffold evidence only: no Unitree sim runtime, hardware execution,
+training, promotion, live policy control, or reward-math mutation is claimed.
+
+The local bipedal chassis layer is
+`src/world_model/embodiment_actuation/bipedal_chassis.py`, materialized by
+`scripts/economic_world_model/prepare_phase35_bipedal_chassis_scaffold.py`.
+It adds a 29-DoF chassis profile, limb coordinate frames, planning joint-limit
+envelopes, whole-body observation/action schemas, support-state slots, and
+balance receipts. Those envelopes are not hardware-calibrated safety limits;
+they are canonical local surfaces for future URDF/sim/hardware evidence.
+
+The no-GPU/no-hardware readiness layer is
+`src/world_model/embodiment_actuation/bipedal_readiness.py`, materialized by
+`scripts/economic_world_model/audit_phase35_bipedal_readiness.py`. It adds
+asset intake contracts, local asset parse receipts, kinematic consistency
+reports, joint-vector validation receipts, balance-geometry reports, and
+whole-body replay row slots. It can parse a supplied local URDF/MJCF/SRDF-style
+asset enough to test joint-name alignment, but that is still contract evidence,
+not calibrated Unitree runtime, hardware, training, or promotion evidence.
+
 ---
 
 ## How Our WM Topology Differs from the Dominant Framing

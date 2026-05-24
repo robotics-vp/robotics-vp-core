@@ -109,6 +109,41 @@ Current status is:
 
 That is not a criticism of the current stack. It is an honest statement about scope.
 
+As of 2026-05-24, the local structural readiness surface is stronger than the
+earlier docs-only posture:
+
+- Phase 3.5 typed capacity/schema/env/benchmark artifacts exist under
+  `src/world_model/humanoid_readiness/phase35.py` and
+  `artifacts/economic_world_model/phase35_humanoid_capacity_env_refit/`;
+- Phase 3.5 now also has a canonical bipedal chassis scaffold under
+  `src/world_model/embodiment_actuation/bipedal_chassis.py` and
+  `artifacts/economic_world_model/phase35_bipedal_chassis_scaffold/`, with a
+  29-DoF local chassis profile, limb frame tree, joint-limit envelopes,
+  whole-body observation/action schemas, bipedal support states, and balance
+  receipts;
+- Phase 3.5 also has a no-GPU/no-hardware bipedal readiness audit under
+  `src/world_model/embodiment_actuation/bipedal_readiness.py` and
+  `artifacts/economic_world_model/phase35_bipedal_readiness_audit/`, with robot
+  asset intake contracts, parse receipts, kinematic consistency reports,
+  joint-vector validation receipts, balance geometry reports, and whole-body
+  replay row slots;
+- Phase 4 local non-hardware control-loop, companion-compute/comms, and
+  operator/recovery contract artifacts exist under
+  `src/world_model/humanoid_readiness/phase4.py` and
+  `artifacts/economic_world_model/phase4_deployment_enabler_sweep/`;
+- Phase 6.5 local meta-node state/receipt/target/robustness/gate artifacts
+  exist under `src/world_model/humanoid_readiness/phase65.py` and
+  `artifacts/economic_world_model/phase65_meta_node_neuralization/`.
+
+These artifacts close local scaffold gaps only. The bipedal chassis scaffold and
+readiness audit are still not a hardware-calibrated body model: their joint
+envelopes are local planning envelopes, their asset parser is contract-level,
+and their balance/replay receipts are schema/evidence slots. They do not change the
+not-humanoid-ready deployment status because Unitree assets/runtime,
+calibration, live streams, control interfaces, timing/jitter traces,
+hardware or honest sim evidence, trained weights, and promotion-grade
+benchmarks are still missing.
+
 The repo already has strong substrate worth preserving:
 
 - typed runtime contracts in `src/runtime/packets.py`
@@ -200,20 +235,20 @@ Status key:
 | Canonical runtime substrate | packets, events, governance, replayable receipts | `src/runtime/packets.py`, `src/runtime/event_spine.py`, `src/governance/trace.py` | `present` | needs broader embodied deployment consumers later |
 | Semantic state substrate | typed semantic state and meta-node context | `src/world_model/semantic_world_model.py` | `present` | still not a humanoid embodiment model |
 | Embodiment normalization | capability profiles, action/observation schema refs | `src/embodiment/registry.py`, `src/runtime/observation_adapter_v2.py`, `src/runtime/action_adapter_v2.py` | `partial` | fixed-base assumptions still dominate |
-| Whole-body embodiment state | torso, limbs, balance, contact, gait, dexterity | none canonical yet | `missing` | no G1/R1-class body state model |
-| Compute envelope / placement budgeting | onboard/companion compute headroom, reserve, placement class, QoS | none canonical yet | `missing` | compute is not yet canonical allocatable state |
-| Battery / power resource state | state of charge, reserve, discharge ceiling, allocatable spend, thermal coupling | none canonical yet | `missing` | current “energy” is not yet concrete battery-state truth |
+| Whole-body embodiment state | torso, limbs, balance, contact, gait, dexterity | `src/world_model/embodiment_actuation/bipedal_chassis.py` | `partial` | local chassis/frame/schema/balance slots exist; no calibrated sim/hardware stream yet |
+| Compute envelope / placement budgeting | onboard/companion compute headroom, reserve, placement class, QoS | `src/world_model/humanoid_readiness/phase35.py`, `src/world_model/humanoid_readiness/phase4.py` | `partial` | local planning contracts exist; no measured runtime telemetry yet |
+| Battery / power resource state | state of charge, reserve, discharge ceiling, allocatable spend, thermal coupling | `src/world_model/humanoid_readiness/phase35.py`, `src/world_model/humanoid_readiness/phase4.py` | `partial` | local planning contracts exist; no real battery/thermal stream yet |
 | Humanoid sim env integration | Unitree-class sim lane under typed backend contract | `src/envs/physics/isaac_backend.py`, `src/motor_backend/*` | `missing` | no real G1/R1 sim integration |
 | Perception / grounding for humanoids | egocentric + depth + 3D grounding + body-aware scene state | `src/vision/scene_ir_tracker/io/scene_tracks_runner.py`, `src/vision/reconstruction/four_d_reconstruction.py` | `partial` | GPU/SAM3D and canonical perception WM still pending |
 | Sensor fusion | IMU, proprio, camera, depth, force/torque fusion | `src/ingestion/x_humanoid_adapter.py`, `src/runtime/observation_adapter_v2.py` | `partial` | no real fusion stack yet |
-| Real-time control split | reflex/servo loop separated from governance loop | none canonical yet | `missing` | no 200-1000 Hz layer split |
-| Physical safety layer | joint limits, self-collision, e-stop, fall protection | governance/econ safety only today | `missing` | safety is not yet physical-control-grade |
+| Real-time control split | reflex/servo loop separated from governance loop | `src/world_model/humanoid_readiness/phase4.py` | `partial` | contract surfaces exist; no measured control interface or jitter traces yet |
+| Physical safety layer | joint limits, self-collision, e-stop, fall protection | local `JointLimitEnvelope` planning receipts | `partial` | joint-limit envelopes are not hardware-calibrated safety limits |
 | Spatial state / SLAM | localization, mapping, navigation state | none canonical yet | `missing` | current envs are mostly fixed-workcell |
-| Companion compute / comms | onboard/offboard split, QoS, degraded-link handling | none canonical yet | `missing` | no ROS2/DDS/Unitree middleware contract |
-| Robot asset + calibration | URDF/Xacro/SRDF, extrinsics, calibration sidecars | none canonical yet | `missing` | robot identity/calibration not managed canonically |
-| Teleop / recovery fallback | operator override and recovery trace path | none canonical yet | `missing` | no bounded human-recovery lane |
+| Companion compute / comms | onboard/offboard split, QoS, degraded-link handling | `src/world_model/humanoid_readiness/phase4.py` | `partial` | local middleware contracts exist; no ROS2/DDS/Unitree runtime evidence yet |
+| Robot asset + calibration | URDF/Xacro/SRDF, extrinsics, calibration sidecars | `src/world_model/embodiment_actuation/bipedal_readiness.py` | `partial` | asset intake/parser receipts exist; no real calibrated transforms yet |
+| Teleop / recovery fallback | operator override and recovery trace path | `src/world_model/humanoid_readiness/phase4.py` | `partial` | local operator/recovery contracts exist; no live recovery traces yet |
 | Humanoid benchmark gates | benchmark taxonomy and promotion rules | workcell/grounding benchmark gates only | `missing` | no humanoid benchmark layer |
-| Model-capacity audit | explicit sizing review by subsystem | none yet | `missing` | no formal capacity audit for 21+ DoF target |
+| Model-capacity audit | explicit sizing review by subsystem | `src/world_model/humanoid_readiness/phase35.py` | `partial` | local capacity bands exist; no trained capacity evidence yet |
 
 ## Benchmark Matrix
 
@@ -329,8 +364,9 @@ The concrete Phase 3.5 return artifact is
 `docs/economic_world_model/phase35_humanoid_capacity_env_refit.md`. It records
 the local capacity bands, onboard/companion/battery assumptions, humanoid
 observation/action schema deltas, posture-tagged environment taxonomy, Unitree
-sim integration target, and benchmark taxonomy. It remains planning-only until
-sim assets, runtime evidence, hardware evidence, training, and promotion-grade
+sim integration target, benchmark taxonomy, canonical bipedal chassis scaffold,
+and no-GPU/no-hardware readiness audit. It remains planning-only until sim
+assets, runtime evidence, hardware evidence, training, and promotion-grade
 benchmarks exist.
 
 ## Contract Deltas Required For Humanoid Targeting

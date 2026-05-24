@@ -5114,3 +5114,168 @@ mutation occurred.
 
 No meta-node training, weights, provider or hardware execution, live policy
 control, reward math mutation, promotion, or Phase 7 authority was claimed.
+
+## 2026-05-24 — Phase-3.5 / 4 / 6.5 local structural closure
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/` as the typed local scaffold
+  package for the humanoid-readiness return sequence.
+- Phase 3.5 surfaces:
+  - `HumanoidCapacityBandContract`
+  - `HumanoidSchemaDeltaContract`
+  - `HumanoidEnvTaxonomyReceipt`
+  - `HumanoidBenchmarkTarget`
+  - `HumanoidPhase35RefitReport`
+- Phase 4 surfaces:
+  - `Phase4ContractSurface`
+  - `Phase4StubSurface`
+  - `Phase4DeploymentEnablerSweepReport`
+- Phase 6.5 surfaces:
+  - `MetaNodeState`
+  - `MetaNodeTrajectoryReceipt`
+  - `MetaNodeInterventionReceipt`
+  - `MetaNodeCounterfactualTarget`
+  - `MetaNodeRobustnessReport`
+  - `MetaNodePromotionGate`
+  - `Phase65MetaNodeNeuralizationReport`
+- Added integrated closure:
+  - `Phase35465LocalClosureAudit`
+
+### Current local artifact result
+
+- Phase 3.5:
+  - `capacity_band_count=5`
+  - `schema_delta_count=10`
+  - `env_taxonomy_count=3`
+  - `benchmark_target_count=7`
+  - `local_structural_refit_complete=true`
+- Phase 4:
+  - `contract_surface_count=15`
+  - `stub_surface_count=3`
+  - phase counts `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`
+  - `local_non_hardware_scaffold_complete=true`
+- Phase 6.5:
+  - `node_state_count=5`
+  - `trajectory_receipt_count=5`
+  - `intervention_receipt_count=5`
+  - `counterfactual_target_count=5`
+  - `robustness_report_count=5`
+  - `promotion_gate_count=5`
+  - `local_meta_node_scaffold_complete=true`
+  - `ready_for_phase7_scaffold=true`
+  - `phase7_authority_granted=false`
+- Integrated audit:
+  - `local_phase35_bipedal_readiness_complete=true`
+  - `all_local_structures_complete=true`
+  - `ready_for_phase7_scaffold=true`
+
+### Artifact CLIs
+
+- `python3 scripts/economic_world_model/prepare_phase35_humanoid_capacity_env_refit.py`
+- `python3 scripts/economic_world_model/audit_phase35_bipedal_readiness.py`
+- `python3 scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
+- `python3 scripts/economic_world_model/prepare_phase65_meta_node_neuralization.py`
+- `python3 scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
+
+### Boundary
+
+These phases are locally structurally complete only. Remaining blockers are
+Unitree assets/backend runtime/calibration, live streams and control
+interfaces, timing/jitter traces, companion middleware, operator/recovery
+runtime, counterfactual meta-node corpus density, GPU/provider/hardware
+evidence, trained weights, heldout robustness benchmarks, and promotion-grade
+humanoid/governance benchmarks.
+
+No Unitree sim runtime, hardware execution, provider execution, GPU training,
+weight writes, promotion, live policy control, Phase 7 authority, reward math
+mutation, or frozen reward/trust/`w_econ`/lambda-controller mutation occurred.
+
+## 2026-05-24 — Phase-3.5 canonical bipedal chassis scaffold
+
+### What was built
+
+- Added `src/world_model/embodiment_actuation/bipedal_chassis.py`.
+- Added `scripts/economic_world_model/prepare_phase35_bipedal_chassis_scaffold.py`.
+- Added `tests/test_humanoid_phase35_bipedal_chassis.py`.
+- Updated `scripts/economic_world_model/prepare_phase35_humanoid_capacity_env_refit.py`
+  so the Phase 3.5 refit consumes the chassis scaffold and reports its fields.
+
+### New local surfaces
+
+- `HumanoidChassisProfile`
+- `LimbCoordinateFrame`
+- `HumanoidFrameTree`
+- `JointLimitEnvelope`
+- `WholeBodyObservationSchema`
+- `WholeBodyActionSchema`
+- `BipedalSupportState`
+- `BalanceEnvelopeReceipt`
+- `BipedalChassisScaffoldReport`
+
+### Current artifact result
+
+- `controlled_joint_count=29`
+- `frame_count=22`
+- `joint_limit_envelope_count=29`
+- `support_state_count=3`
+- `balance_receipt_count=3`
+- `canonical_bipedal_chassis_present=true`
+- `limb_frame_tree_present=true`
+- `joint_limit_envelope_present=true`
+- `whole_body_observation_schema_present=true`
+- `whole_body_action_schema_present=true`
+- `balance_envelope_present=true`
+- `local_structural_scaffold_complete=true`
+
+### Boundary
+
+This is the local bipedal body/balance contract layer. Numeric joint envelopes
+are local planning envelopes so future URDF, sim, and hardware evidence has a
+canonical place to land. They are not hardware-calibrated safety limits.
+
+No Unitree sim runtime, hardware execution, provider execution, training, weight
+writes, promotion, live policy control, reward math mutation, or frozen
+reward/trust/`w_econ`/lambda-controller mutation occurred.
+
+## 2026-05-24 — Phase-3.5 bipedal readiness audit
+
+### What was built
+
+- Added `src/world_model/embodiment_actuation/bipedal_readiness.py`.
+- Added `scripts/economic_world_model/audit_phase35_bipedal_readiness.py`.
+- Added `tests/test_humanoid_phase35_bipedal_readiness.py`.
+- Updated Phase 3.5, humanoid readiness, Embodiment / Actuation WM, roadmap,
+  and multi-WM docs to point at the new readiness audit.
+
+### New local surfaces
+
+- `HumanoidRobotAssetContract`
+- `RobotAssetParseReceipt`
+- `KinematicConsistencyReport`
+- `JointVectorValidationReceipt`
+- `BalanceGeometryReport`
+- `WholeBodyReplayRow`
+- `Phase35BipedalReadinessAudit`
+
+### Current artifact result
+
+- `local_asset_ingestion_contract_present=true`
+- `asset_parse_receipt_count=1`
+- `real_asset_parsed=false` in the default no-asset run
+- `kinematic_validators_present=true`
+- `joint_vector_validation_receipt_count=2`
+- `balance_geometry_report_count=3`
+- `whole_body_replay_row_count=3`
+- `phase35_no_gpu_no_hardware_prepared=true`
+
+### Boundary
+
+The readiness audit closes local contract, validator, and replay-row slots only.
+Its parser can inspect a supplied local URDF/MJCF/SRDF-style file enough to
+check joint-name alignment, but that is not calibrated robot evidence.
+
+No Unitree sim runtime, hardware execution, provider execution, GPU training,
+weight writes, hardware-calibrated limits, promotion, live policy control,
+reward math mutation, or frozen reward/trust/`w_econ`/lambda-controller mutation
+occurred.

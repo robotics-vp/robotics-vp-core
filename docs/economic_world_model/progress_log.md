@@ -3454,3 +3454,99 @@ Verification for the Phase-5.1 pass:
 - Boundary preserved: docs-only scaffold; no meta-node training, weight writes,
   provider/hardware execution, promotion, live policy control, reward math
   mutation, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-24: Phase-3.5 / 4 / 6.5 local structural closure
+
+- Added code-backed humanoid readiness scaffolds:
+  - `src/world_model/humanoid_readiness/phase35.py`
+  - `src/world_model/humanoid_readiness/phase4.py`
+  - `src/world_model/humanoid_readiness/phase65.py`
+  - `src/world_model/humanoid_readiness/closure.py`
+- Added artifact CLIs:
+  - `scripts/economic_world_model/prepare_phase35_humanoid_capacity_env_refit.py`
+  - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
+  - `scripts/economic_world_model/prepare_phase65_meta_node_neuralization.py`
+  - `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
+- Added focused coverage in `tests/test_humanoid_phase35_4_65_scaffolds.py`.
+- Current Phase 3.5 artifact result:
+  `capacity_band_count=5`, `schema_delta_count=10`, `env_taxonomy_count=3`,
+  `benchmark_target_count=7`, `local_structural_refit_complete=true`.
+- Current Phase 4 artifact result:
+  `contract_surface_count=15`, `stub_surface_count=3`, phase counts
+  `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`,
+  `local_non_hardware_scaffold_complete=true`.
+- Current Phase 6.5 artifact result:
+  `node_state_count=5`, `trajectory_receipt_count=5`,
+  `intervention_receipt_count=5`, `counterfactual_target_count=5`,
+  `robustness_report_count=5`, `promotion_gate_count=5`,
+  `local_meta_node_scaffold_complete=true`, `ready_for_phase7_scaffold=true`,
+  and `phase7_authority_granted=false`.
+- Added an integrated local closure audit:
+  `artifacts/economic_world_model/phase35_4_65_local_closure/phase35_4_65_local_closure_audit_v1.json`
+  reports `all_local_structures_complete=true`; the audit now also requires
+  the Phase 3.5 bipedal readiness audit before local Phase 3.5 is treated as
+  structurally complete.
+- Refreshed roadmap, multi-WM, humanoid readiness, Embodiment / Actuation WM,
+  phase docs, and the training backlog to point at the code-backed artifacts.
+- Boundary preserved: no Unitree sim runtime, hardware/provider execution,
+  GPU training, weight writes, promotion, live policy control, Phase 7
+  authority, reward math mutation, or frozen reward/trust/`w_econ`/lambda
+  mutation claim.
+
+### 2026-05-24: Phase-3.5 canonical bipedal chassis scaffold
+
+- Added the bipedal chassis layer:
+  - `src/world_model/embodiment_actuation/bipedal_chassis.py`
+  - `scripts/economic_world_model/prepare_phase35_bipedal_chassis_scaffold.py`
+  - `tests/test_humanoid_phase35_bipedal_chassis.py`
+- Updated the Phase 3.5 refit CLI so
+  `prepare_phase35_humanoid_capacity_env_refit.py` consumes the bipedal chassis
+  report and exposes the chassis/balance fields in the Phase 3.5 report.
+- Current bipedal chassis artifact result:
+  `controlled_joint_count=29`, `frame_count=22`,
+  `joint_limit_envelope_count=29`, `support_state_count=3`,
+  `balance_receipt_count=3`,
+  `canonical_bipedal_chassis_present=true`,
+  `limb_frame_tree_present=true`, `joint_limit_envelope_present=true`,
+  `whole_body_observation_schema_present=true`,
+  `whole_body_action_schema_present=true`,
+  `balance_envelope_present=true`, and
+  `local_structural_scaffold_complete=true`.
+- The scaffold moves Phase 3.5 beyond hand/gripper-only models by naming the
+  floating-base 29-DoF chassis profile, pelvis/torso/head/limb/foot/hand/IMU/
+  camera frame tree, per-joint planning limit envelopes, whole-body
+  observation/action schemas, support-state slots, and balance receipts.
+- Boundary preserved: joint envelopes are planning envelopes, not
+  hardware-calibrated safety limits. No Unitree sim runtime, hardware/provider
+  execution, training, weight writes, promotion, live policy control, reward
+  math mutation, or frozen reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-24: Phase-3.5 bipedal readiness audit
+
+- Added the no-GPU/no-hardware readiness layer:
+  - `src/world_model/embodiment_actuation/bipedal_readiness.py`
+  - `scripts/economic_world_model/audit_phase35_bipedal_readiness.py`
+  - `tests/test_humanoid_phase35_bipedal_readiness.py`
+- Added typed surfaces for:
+  - `HumanoidRobotAssetContract`
+  - `RobotAssetParseReceipt`
+  - `KinematicConsistencyReport`
+  - `JointVectorValidationReceipt`
+  - `BalanceGeometryReport`
+  - `WholeBodyReplayRow`
+  - `Phase35BipedalReadinessAudit`
+- Current local artifact result:
+  `local_asset_ingestion_contract_present=true`,
+  `asset_parse_receipt_count=1`,
+  `real_asset_parsed=false` in the default no-asset run,
+  `kinematic_validators_present=true`,
+  `joint_vector_validation_receipt_count=2`,
+  `balance_geometry_report_count=3`,
+  `whole_body_replay_row_count=3`, and
+  `phase35_no_gpu_no_hardware_prepared=true`.
+- The parser path can exercise a supplied local URDF/MJCF/SRDF-style asset for
+  joint-name alignment, but that remains contract evidence only.
+- Boundary preserved: no Unitree sim runtime, hardware/provider execution,
+  GPU training, weight writes, hardware-calibrated limits, promotion, live
+  policy control, reward math mutation, or frozen reward/trust/`w_econ`/lambda
+  mutation claim.

@@ -155,3 +155,109 @@ Remaining blockers:
 - hardware or hardware-in-loop evidence;
 - trained whole-body models;
 - promotion-grade humanoid benchmarks.
+
+## Local Scaffold Implementation
+
+As of 2026-05-24 this phase is backed by typed local artifacts, not only this
+planning note.
+
+Code and CLI surfaces:
+
+- `src/world_model/humanoid_readiness/phase35.py`
+- `scripts/economic_world_model/prepare_phase35_humanoid_capacity_env_refit.py`
+- `src/world_model/embodiment_actuation/bipedal_readiness.py`
+- `scripts/economic_world_model/audit_phase35_bipedal_readiness.py`
+- `tests/test_humanoid_phase35_4_65_scaffolds.py`
+- `tests/test_humanoid_phase35_bipedal_readiness.py`
+
+Current artifact output:
+
+- `artifacts/economic_world_model/phase35_humanoid_capacity_env_refit/humanoid_phase35_refit_report_v1.json`
+- `artifacts/economic_world_model/phase35_bipedal_chassis_scaffold/bipedal_chassis_scaffold_report_v1.json`
+- `artifacts/economic_world_model/phase35_bipedal_readiness_audit/phase35_bipedal_readiness_audit_v1.json`
+- `capacity_band_count=5`
+- `schema_delta_count=10`
+- `env_taxonomy_count=3`
+- `benchmark_target_count=7`
+- `bipedal_chassis_joint_count=29`
+- `bipedal_chassis_frame_count=22`
+- `bipedal_chassis_joint_limit_envelope_count=29`
+- `bipedal_balance_receipt_count=3`
+- `canonical_bipedal_chassis_present=true`
+- `limb_frame_tree_present=true`
+- `joint_limit_envelope_present=true`
+- `whole_body_observation_schema_present=true`
+- `whole_body_action_schema_present=true`
+- `balance_envelope_present=true`
+- `local_structural_refit_complete=true`
+- `ready_for_phase4_local_sweep=true`
+- `local_asset_ingestion_contract_present=true`
+- `asset_parse_receipt_count=1` in the default no-asset local run
+- `real_asset_parsed=false` in the default no-asset local run
+- `kinematic_validators_present=true`
+- `joint_vector_validation_receipt_count=2`
+- `balance_geometry_report_count=3`
+- `whole_body_replay_row_count=3`
+- `phase35_no_gpu_no_hardware_prepared=true`
+
+Denied gates remain explicit:
+
+- `ready_for_training=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+## Bipedal Chassis Scaffold Boundary
+
+The Phase 3.5 chassis scaffold moves the local surface beyond hand/gripper
+models by adding:
+
+- `HumanoidChassisProfile` for a `g1_29dof` bipedal whole-body target;
+- `HumanoidFrameTree` plus `LimbCoordinateFrame` rows for pelvis, torso, head,
+  IMU/camera, left/right legs, feet, arms, wrists, and hands;
+- one `JointLimitEnvelope` per controlled joint;
+- `WholeBodyObservationSchema` and `WholeBodyActionSchema`;
+- `BipedalSupportState` rows for double support, left single support, and right
+  single support;
+- `BalanceEnvelopeReceipt` rows that keep balance evidence observational only.
+
+Numeric joint envelopes are local planning envelopes, not hardware-calibrated
+safety limits. They exist so replay rows, schemas, and future sim/hardware
+checks have a canonical place to land. Promotion still requires URDF/sim asset
+parsing, calibrated transforms, measured IMU/contact/balance streams, Unitree
+sim or hardware evidence, and balance benchmark receipts.
+
+## No-GPU / No-Hardware Readiness Audit
+
+The additional Phase 3.5 readiness audit closes the local work that can be done
+before real Unitree assets, sim runtime, hardware, or GPU training are
+available:
+
+- `HumanoidRobotAssetContract` names required URDF/MJCF/SRDF/USD, joint-map,
+  limit, collision-geometry, frame-transform, and calibration roles;
+- `RobotAssetParseReceipt` emits either an explicit unavailable-asset receipt
+  or a local XML parse receipt for URDF/MJCF/SRDF-style files;
+- `KinematicConsistencyReport` checks 21+ DoF coverage, action-channel
+  alignment, joint-limit coverage, frame-tree health, left/right symmetry, and
+  optional asset joint alignment;
+- `JointVectorValidationReceipt` validates neutral planning vectors and a
+  synthetic limit-violation probe without live policy authority;
+- `BalanceGeometryReport` computes support polygon area and schema-level
+  COM/ZMP/COP inclusion where local support slots provide enough geometry;
+- `WholeBodyReplayRow` creates shadow replay row slots that tie posture,
+  support state, balance receipt, schema refs, joint-limit validation, asset
+  contract, kinematic report, and resource-timing refs together.
+
+The default local run intentionally emits `real_asset_parsed=false` because no
+real robot asset path is supplied. A local synthetic URDF path can exercise the
+parser and alignment validator, but that still remains asset-contract evidence,
+not calibrated hardware evidence. The audit keeps `ready_for_unitree_runtime`,
+`ready_for_training`, `hardware_calibrated_limits`,
+`unitree_sim_runtime_executed`, `hardware_executed`, `training_executed`,
+`weights_written`, `live_policy_control`, `reward_math_mutation`, and
+`promotion_eligible` false.

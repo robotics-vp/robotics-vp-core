@@ -124,3 +124,34 @@ not closed for deployment until:
 
 After this local sweep, the roadmap can move to Phase 6.5 local meta-node
 neuralization and robustness without claiming Phase 4 hardware closure.
+
+## Local Scaffold Implementation
+
+As of 2026-05-24 this phase is backed by typed local artifacts and a repeatable
+CLI.
+
+Code and CLI surfaces:
+
+- `src/world_model/humanoid_readiness/phase4.py`
+- `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
+- `tests/test_humanoid_phase35_4_65_scaffolds.py`
+
+Current artifact output:
+
+- `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
+- `contract_surface_count=15`
+- `stub_surface_count=3`
+- phase counts: `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`
+- `local_non_hardware_scaffold_complete=true`
+- `ready_for_phase65_local_meta_nodes=true`
+
+Denied gates remain explicit:
+
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`

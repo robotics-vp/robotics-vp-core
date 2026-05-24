@@ -3,7 +3,7 @@
     "description": "Training script migration backlog for @regal_training wrapper",
     "goal": "Reduce pending count to 0",
     "created_at": "2026-01-13",
-    "updated_at": "2026-05-22",
+    "updated_at": "2026-05-24",
     "backlog": [
         {
             "script": "train_orchestration_transformer_v1_curriculum.py",
@@ -168,15 +168,15 @@
             "script": "train_embodiment_phase34_neural_architectures.py",
             "priority": "P1",
             "owner": "codex",
-            "blocked_by": "gpu training capacity, provider/runtime eval receipts, benchmark promotion evidence, latency/watchdog evidence, Phase 3 sidecar corpus scale",
+            "blocked_by": "local Phase-3.5 bipedal chassis and readiness scaffolds now exist with 29-DoF chassis/profile/frame/joint-limit/schema/balance surfaces, asset intake/parser receipts, kinematic validators, joint-vector validation, balance-geometry reports, and whole-body replay row slots; actual embodiment training remains blocked by GPU training capacity, calibrated Unitree sim or hardware assets, provider/runtime eval receipts, benchmark promotion evidence, latency/watchdog evidence, and Phase 3 sidecar corpus scale",
             "downstream_dependents": [
                 "phase3 embodiment/action proposal promotion",
                 "unitree g1 provider-season validation",
                 "governed video world model embodiment conditioning"
             ],
-            "notes": "Planned trainer for Phase 3.4+ neural scaffolds over embodiment sidecars: temporal JEPA-style latent prediction, ACT-style action chunks, Diffusion Policy-style denoising, and topology-contrastive morphology consistency. Local architecture manifests and rows are now emitted; actual training/promotion remains GPU/provider/benchmark gated.",
+            "notes": "Planned trainer for Phase 3.4+ and Phase 3.5 embodiment scaffolds over sidecars and bipedal chassis/readiness rows: temporal JEPA-style latent prediction, ACT-style action chunks, Diffusion Policy-style denoising, topology-contrastive morphology consistency, bipedal support/balance prediction, joint-limit feasibility, and asset/schema alignment. Local architecture manifests, rows, bipedal chassis contracts, readiness validators, and replay slots are emitted; actual training/promotion remains GPU/provider/benchmark gated.",
             "created_at": "2026-05-20",
-            "updated_at": "2026-05-20"
+            "updated_at": "2026-05-24"
         },
         {
             "script": "train_economic_world_model_v0.py",
@@ -205,6 +205,20 @@
             "notes": "Non-training Phase-6.3 trainer scaffold now exists and is intentionally denied promotion: source-exporter/isomorphic-bridge/target-receiver component configs, 14 loss definitions, CPU smoke-forward evidence, and trainer scaffold manifests are emitted without weight writes. Future real trainer must consume transport rows, round-trip receipts, topology/causal metrics, uncertainty calibration receipts, shadow outcomes, and postmortem counterfactual labels once GPU/provider evidence exists.",
             "created_at": "2026-05-22",
             "updated_at": "2026-05-22"
+        },
+        {
+            "script": "train_meta_node_neuralization_v0.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "Phase-6.5 local meta-node states, trajectory/intervention receipts, counterfactual target rows, robustness reports, and denied promotion gates now exist; actual meta-node training remains blocked by counterfactual corpus density, GPU/provider capacity, heldout robustness benchmarks, hardware/deployment evidence, and real governance benchmark evidence",
+            "downstream_dependents": [
+                "phase7 meta-regal-node control WM scaffold",
+                "meta-node robustness evaluation",
+                "phase8 production-loop runtime"
+            ],
+            "notes": "Future real trainer must consume MetaNodeState rows, trajectory receipts, intervention receipts, counterfactual target slots, robustness reports, Phase-6 transport evals, Phase-3.5 posture/schema refs, and Phase-4 timing/resource/recovery contracts. No local trainer has run and no weights or authority are granted by the Phase-6.5 scaffold.",
+            "created_at": "2026-05-24",
+            "updated_at": "2026-05-24"
         }
     ],
     "migrated": [
@@ -350,9 +364,9 @@
         }
     ],
     "summary": {
-        "total": 45,
+        "total": 46,
         "P0": 0,
-        "P1": 12,
+        "P1": 13,
         "P2": 5,
         "migrated": 28
     }

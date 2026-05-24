@@ -2695,6 +2695,41 @@ Reference artifact:
 - `docs/economic_world_model/humanoid_target_readiness.md`
 - `docs/economic_world_model/phase35_humanoid_capacity_env_refit.md`
 
+Current local implementation:
+
+- `src/world_model/humanoid_readiness/phase35.py`
+- `src/world_model/embodiment_actuation/bipedal_chassis.py`
+- `src/world_model/embodiment_actuation/bipedal_readiness.py`
+- `scripts/economic_world_model/prepare_phase35_humanoid_capacity_env_refit.py`
+- `scripts/economic_world_model/prepare_phase35_bipedal_chassis_scaffold.py`
+- `scripts/economic_world_model/audit_phase35_bipedal_readiness.py`
+- Current artifact report:
+  `artifacts/economic_world_model/phase35_humanoid_capacity_env_refit/humanoid_phase35_refit_report_v1.json`
+- Current bipedal chassis artifact:
+  `artifacts/economic_world_model/phase35_bipedal_chassis_scaffold/bipedal_chassis_scaffold_report_v1.json`
+- Current bipedal readiness artifact:
+  `artifacts/economic_world_model/phase35_bipedal_readiness_audit/phase35_bipedal_readiness_audit_v1.json`
+- Current local result: `capacity_band_count=5`, `schema_delta_count=10`,
+  `env_taxonomy_count=3`, `benchmark_target_count=7`,
+  `bipedal_chassis_joint_count=29`, `bipedal_chassis_frame_count=22`,
+  `bipedal_chassis_joint_limit_envelope_count=29`,
+  `bipedal_balance_receipt_count=3`,
+  `joint_vector_validation_receipt_count=2`,
+  `balance_geometry_report_count=3`,
+  `whole_body_replay_row_count=3`,
+  `local_structural_refit_complete=true`, and
+  `ready_for_phase4_local_sweep=true`.
+- The bipedal chassis scaffold provides a canonical local 21+ DoF surface:
+  chassis profile, limb coordinate frame tree, per-joint planning envelopes,
+  whole-body observation/action schemas, double/left/right support-state slots,
+  and balance receipts.
+- The bipedal readiness audit adds asset intake/parser receipts, kinematic
+  consistency validation, joint-vector validation, balance-geometry checks, and
+  whole-body replay row slots without requiring GPU, sim runtime, or hardware.
+- Boundary: no Unitree sim runtime, hardware/provider execution, training,
+  weight writes, hardware-calibrated limits, promotion, live policy control, or
+  reward-math mutation.
+
 ### Phase 4 - Deployment Enabler Phases
 
 These are not optional side quests. They are named future phases that must exist before serious embodied deployment.
@@ -2708,6 +2743,20 @@ Current local sweep artifact:
   contracts, and explicit 4B/4C/4D schema/runbook/interface stubs.
 - It does not claim live streams, control interfaces, hardware/sim runtime
   evidence, training, promotion, or live authority.
+
+Current local implementation:
+
+- `src/world_model/humanoid_readiness/phase4.py`
+- `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
+- Current artifact report:
+  `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
+- Current local result: `contract_surface_count=15`, `stub_surface_count=3`,
+  phase counts `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`,
+  `local_non_hardware_scaffold_complete=true`, and
+  `ready_for_phase65_local_meta_nodes=true`.
+- Full closure still waits for live streams, control interfaces,
+  timing/jitter traces, measured companion middleware, operator/recovery traces,
+  and hardware or honest sim runtime evidence.
 
 Cross-phase rule here too:
 
@@ -3168,6 +3217,25 @@ Current local scaffold note:
 - It keeps Phase 6.5 local and preparatory. It does not claim trained
   meta-node weights, provider/hardware evidence, live policy control, reward
   mutation, promotion, or Phase 7 control-WM authority.
+
+Current local implementation:
+
+- `src/world_model/humanoid_readiness/phase65.py`
+- `src/world_model/humanoid_readiness/closure.py`
+- `scripts/economic_world_model/prepare_phase65_meta_node_neuralization.py`
+- `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
+- Current artifact report:
+  `artifacts/economic_world_model/phase65_meta_node_neuralization/phase65_meta_node_neuralization_report_v1.json`
+- Current integrated closure audit:
+  `artifacts/economic_world_model/phase35_4_65_local_closure/phase35_4_65_local_closure_audit_v1.json`
+- Current local result: `node_state_count=5`,
+  `trajectory_receipt_count=5`, `intervention_receipt_count=5`,
+  `counterfactual_target_count=5`, `robustness_report_count=5`,
+  `promotion_gate_count=5`, `local_meta_node_scaffold_complete=true`,
+  `all_local_structures_complete=true`, and `phase7_authority_granted=false`.
+- Remaining blockers are counterfactual corpus density, trained meta-node
+  weights, heldout robustness benchmarks, provider/hardware/deployment
+  evidence, and real governance benchmark evidence.
 
 ### Phase 7 - Meta-Regal-Node Superposition / Control WM
 
