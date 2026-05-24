@@ -83,3 +83,18 @@ Denied gates remain explicit: `ros2_publish_attempted=false`,
 `hardware_executed=false`, `training_executed=false`,
 `weights_written=false`, `reward_math_mutation=false`, and
 `promotion_eligible=false`.
+
+## Runtime Evidence Bridge Follow-On
+
+The follow-on runtime-evidence bridge materialized
+`artifacts/economic_world_model/phase4_unitree_runtime_evidence_bridge/phase4_unitree_runtime_evidence_bridge_report_v1.json`.
+It goes beyond this local harness by attempting a guarded no-policy MuJoCo
+headless step, adding ROS2/colcon build readiness receipts, adding rosbag2/MCAP
+trace-ingestion adapter receipts, expanding the physical safety envelope slots,
+and running scripted local operator-recovery drills.
+
+On the current host, that follow-on emitted `mujoco_trace_row_count=5` and
+`minimal_mujoco_headless_step_executed=true`. That is only local no-policy
+simulation evidence; it still does not claim ROS2 bridge runtime, command echo,
+policy-controlled sim, physical calibration, teleop runtime, hardware, training,
+or promotion.

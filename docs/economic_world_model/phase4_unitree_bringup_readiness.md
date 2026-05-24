@@ -87,3 +87,16 @@ MuJoCo / G1Pilot preflight receipts.
 That follow-on still does not remove the core external blockers: no live
 stream, ROS2/DDS publish, SDK2 write, G1Pilot invocation, MuJoCo launch,
 hardware execution, safety calibration, training, or promotion is claimed.
+
+## Runtime Evidence Bridge Follow-On
+
+The runtime-evidence bridge now materializes
+`artifacts/economic_world_model/phase4_unitree_runtime_evidence_bridge/phase4_unitree_runtime_evidence_bridge_report_v1.json`.
+It adds ROS2/colcon readiness receipts, rosbag2/MCAP import adapters, expanded
+safety envelope receipts, scripted operator recovery drills, and a guarded
+no-policy Unitree MuJoCo headless step.
+
+On the current host, that bridge emitted 5 MuJoCo headless trace rows. This is
+useful narrow simulation evidence, but it is still not ROS2 bridge execution,
+command echo, policy-controlled sim, physical calibration, teleop runtime,
+hardware execution, training, or promotion.

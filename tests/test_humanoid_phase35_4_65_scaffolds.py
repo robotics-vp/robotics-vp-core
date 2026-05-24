@@ -23,6 +23,9 @@ from scripts.economic_world_model.prepare_phase4_unitree_bringup_readiness impor
 from scripts.economic_world_model.prepare_phase4_unitree_local_harnesses import (
     run_prepare_phase4_unitree_local_harnesses,
 )
+from scripts.economic_world_model.prepare_phase4_unitree_runtime_evidence_bridge import (
+    run_prepare_phase4_unitree_runtime_evidence_bridge,
+)
 from scripts.economic_world_model.prepare_phase65_meta_node_neuralization import (
     run_prepare_phase65_meta_node_neuralization,
 )
@@ -251,6 +254,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     phase4_downstream_controller_dir = tmp_path / "phase4_downstream_controller"
     phase4_unitree_bringup_dir = tmp_path / "phase4_unitree_bringup"
     phase4_unitree_local_harness_dir = tmp_path / "phase4_unitree_local_harnesses"
+    phase4_unitree_runtime_bridge_dir = tmp_path / "phase4_unitree_runtime_bridge"
     phase65_dir = tmp_path / "phase65"
     phase6_dir = tmp_path / "phase6_closure"
     closure_dir = tmp_path / "closure"
@@ -392,6 +396,28 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert phase4_unitree_local["hardware_executed"] is False
     assert phase4_unitree_local["promotion_eligible"] is False
 
+    phase4_unitree_runtime = run_prepare_phase4_unitree_runtime_evidence_bridge(
+        output_dir=phase4_unitree_runtime_bridge_dir,
+        bipedal_chassis_dir=bipedal_chassis_dir,
+        phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
+        phase4_downstream_controller_dir=phase4_downstream_controller_dir,
+        phase4_unitree_local_harness_dir=phase4_unitree_local_harness_dir,
+        local_roots=_fake_unitree_local_harness_roots(tmp_path),
+        mujoco_steps=4,
+        run_dependencies_if_missing=False,
+    )
+    assert phase4_unitree_runtime["status"] == "ok"
+    assert phase4_unitree_runtime["local_runtime_evidence_bridge_complete"] is True
+    assert phase4_unitree_runtime["ros2_runtime_preflight_complete"] is True
+    assert phase4_unitree_runtime["mujoco_headless_trace_attempt_complete"] is True
+    assert phase4_unitree_runtime["trace_ingestion_adapters_complete"] is True
+    assert phase4_unitree_runtime["safety_envelope_expansion_complete"] is True
+    assert phase4_unitree_runtime["operator_drill_runner_complete"] is True
+    assert phase4_unitree_runtime["ros2_publish_attempted"] is False
+    assert phase4_unitree_runtime["unitree_sdk2_write_enabled"] is False
+    assert phase4_unitree_runtime["hardware_executed"] is False
+    assert phase4_unitree_runtime["promotion_eligible"] is False
+
     phase65 = run_prepare_phase65_meta_node_neuralization(
         output_dir=phase65_dir,
         phase35_dir=phase35_dir,
@@ -441,6 +467,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
         phase4_downstream_controller_dir=phase4_downstream_controller_dir,
         phase4_unitree_bringup_readiness_dir=phase4_unitree_bringup_dir,
         phase4_unitree_local_harness_dir=phase4_unitree_local_harness_dir,
+        phase4_unitree_runtime_bridge_dir=phase4_unitree_runtime_bridge_dir,
         phase65_dir=phase65_dir,
         run_dependencies_if_missing=False,
     )
@@ -451,6 +478,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert closure["local_phase4_downstream_controller_complete"] is True
     assert closure["local_phase4_unitree_bringup_readiness_complete"] is True
     assert closure["local_phase4_unitree_local_harness_complete"] is True
+    assert closure["local_phase4_unitree_runtime_bridge_complete"] is True
     assert closure["local_phase65_complete"] is True
     assert closure["all_local_structures_complete"] is True
     assert closure["ready_for_phase7_scaffold"] is True
@@ -474,6 +502,14 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     )
     assert (
         "phase4_unitree_safety_recovery_state_machine_harness"
+        in closure["closed_local_surfaces"]
+    )
+    assert (
+        "phase4_unitree_mujoco_headless_step_trace"
+        in closure["closed_local_surfaces"]
+    )
+    assert (
+        "phase4_unitree_scripted_operator_recovery_drills"
         in closure["closed_local_surfaces"]
     )
     assert "phase65_denied_promotion_gates" in closure["closed_local_surfaces"]

@@ -152,6 +152,12 @@ earlier docs-only posture:
   no-publish command-shape receipts, mock timing/watchdog receipts,
   safety/recovery state transitions, and Unitree ROS2 / MuJoCo / G1Pilot
   preflight receipts;
+- Phase 4 now has a runtime-evidence bridge under
+  `src/world_model/humanoid_readiness/unitree_runtime_bridge.py` and
+  `artifacts/economic_world_model/phase4_unitree_runtime_evidence_bridge/`,
+  with ROS2/colcon readiness receipts, a guarded Unitree MuJoCo no-policy
+  headless step receipt, JSONL/rosbag2/MCAP trace adapter receipts, expanded
+  safety-envelope receipts, and scripted operator-recovery drill receipts;
 - Phase 6.5 local meta-node state/receipt/target/robustness/gate artifacts
   exist under `src/world_model/humanoid_readiness/phase65.py` and
   `artifacts/economic_world_model/phase65_meta_node_neuralization/`.
@@ -171,7 +177,10 @@ verification, live DDS/SDK streams, hardware calibration, honest sim launch
 evidence, or on-robot safety drills. The local harness pack goes one level
 deeper for preflight by executing synthetic trace, command-shape,
 timing/watchdog, and safety/recovery checks, but it is still not live stream,
-command echo, sim launch, physical calibration, or robot evidence.
+command echo, physical calibration, or robot evidence. The runtime-evidence
+bridge now adds minimal local MuJoCo no-policy stepping evidence, but still does
+not prove ROS2 bridge integration, policy-controlled sim, command echo,
+physical calibration, teleop runtime, hardware, or deployment-grade readiness.
 
 The repo already has strong substrate worth preserving:
 

@@ -2750,10 +2750,12 @@ Current local implementation:
 - `src/world_model/humanoid_readiness/downstream_controller.py`
 - `src/world_model/humanoid_readiness/unitree_bringup_readiness.py`
 - `src/world_model/humanoid_readiness/unitree_local_harness.py`
+- `src/world_model/humanoid_readiness/unitree_runtime_bridge.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
 - `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_bringup_readiness.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_local_harnesses.py`
+- `scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py`
 - Current artifact report:
   `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
 - Current downstream-controller artifact:
@@ -2762,6 +2764,8 @@ Current local implementation:
   `artifacts/economic_world_model/phase4_unitree_bringup_readiness/phase4_unitree_bringup_readiness_report_v1.json`
 - Current Unitree/G1 local harness artifact:
   `artifacts/economic_world_model/phase4_unitree_local_harnesses/phase4_unitree_local_harness_report_v1.json`
+- Current Unitree/G1 runtime-evidence bridge artifact:
+  `artifacts/economic_world_model/phase4_unitree_runtime_evidence_bridge/phase4_unitree_runtime_evidence_bridge_report_v1.json`
 - Current local result: `contract_surface_count=15`, `stub_surface_count=3`,
   phase counts `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`,
   `local_non_hardware_scaffold_complete=true`, and
@@ -2790,6 +2794,16 @@ Current local implementation:
   no-publish command-shape receipts, timing/watchdog receipts,
   safety/recovery transitions, and Unitree ROS2 / MuJoCo / G1Pilot preflight
   receipts emitted.
+- Current Unitree/G1 runtime-evidence bridge result:
+  `local_runtime_evidence_bridge_complete=true`,
+  `ros2_runtime_preflight_complete=true`,
+  `minimal_mujoco_headless_step_executed=true`,
+  `mujoco_trace_row_count=5`,
+  `trace_ingestion_adapters_complete=true`,
+  `safety_envelope_expansion_complete=true`, and
+  `operator_drill_runner_complete=true`. This is narrow local evidence: the
+  MuJoCo trace is no-policy headless stepping, not ROS2 bridge, command echo,
+  policy-controlled sim, hardware, or safety calibration evidence.
 - Full closure still waits for live streams, control interfaces,
   runtime build/interface verification, timing/jitter traces, measured
   companion middleware, operator/recovery drills, physical safety calibration,
@@ -2811,6 +2825,10 @@ Cross-phase rule here too:
   parsers, stale-data validators, timing loops, and safety/recovery state
   machines are valid CI and preflight roots, but they must remain clearly
   separated from real DDS, SDK2, MuJoCo, or hardware evidence
+- Unitree/G1 runtime-evidence bridge work should keep the same separation:
+  minimal local MuJoCo stepping is useful evidence, but it does not grant live
+  policy authority or replace ROS2/SDK2 command echo, rosbag/MCAP stream import,
+  physical safety calibration, operator teleop runtime, or DDS/on-robot timing
 
 ### Phase 4A - Real-Time Control Loop Separation
 

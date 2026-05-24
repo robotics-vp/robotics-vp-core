@@ -47,6 +47,12 @@ from scripts.economic_world_model.prepare_phase4_unitree_local_harnesses import 
 from scripts.economic_world_model.prepare_phase4_unitree_local_harnesses import (  # noqa: E402
     run_prepare_phase4_unitree_local_harnesses,
 )
+from scripts.economic_world_model.prepare_phase4_unitree_runtime_evidence_bridge import (  # noqa: E402
+    DEFAULT_OUTPUT_DIR as DEFAULT_PHASE4_UNITREE_RUNTIME_BRIDGE_DIR,
+)
+from scripts.economic_world_model.prepare_phase4_unitree_runtime_evidence_bridge import (  # noqa: E402
+    run_prepare_phase4_unitree_runtime_evidence_bridge,
+)
 from scripts.economic_world_model.prepare_phase65_meta_node_neuralization import (  # noqa: E402
     DEFAULT_OUTPUT_DIR as DEFAULT_PHASE65_DIR,
 )
@@ -60,6 +66,7 @@ from src.world_model.humanoid_readiness import (  # noqa: E402
     load_phase4_downstream_controller_scaffold_report,
     load_phase4_unitree_local_harness_report,
     load_phase4_unitree_bringup_readiness_report,
+    load_phase4_unitree_runtime_evidence_bridge_report,
     load_phase65_meta_node_neuralization_report,
     save_phase35465_local_closure_audit,
 )
@@ -79,6 +86,7 @@ def _input_paths(
     phase4_downstream_controller_dir: Path,
     phase4_unitree_bringup_readiness_dir: Path,
     phase4_unitree_local_harness_dir: Path,
+    phase4_unitree_runtime_bridge_dir: Path,
     phase65_dir: Path,
 ) -> dict[str, Path]:
     return {
@@ -93,6 +101,8 @@ def _input_paths(
         / "phase4_unitree_bringup_readiness_report_v1.json",
         "phase4_unitree_local_harness_report": phase4_unitree_local_harness_dir
         / "phase4_unitree_local_harness_report_v1.json",
+        "phase4_unitree_runtime_bridge_report": phase4_unitree_runtime_bridge_dir
+        / "phase4_unitree_runtime_evidence_bridge_report_v1.json",
         "phase65_report": phase65_dir / "phase65_meta_node_neuralization_report_v1.json",
     }
 
@@ -116,6 +126,8 @@ def _write_markdown(path: Path, payload: Mapping[str, Any]) -> None:
         f"`{str(payload['local_phase4_unitree_bringup_readiness_complete']).lower()}`",
         "- Phase 4 Unitree local harness complete: "
         f"`{str(payload['local_phase4_unitree_local_harness_complete']).lower()}`",
+        "- Phase 4 Unitree runtime bridge complete: "
+        f"`{str(payload['local_phase4_unitree_runtime_bridge_complete']).lower()}`",
         f"- Phase 6.5 complete: `{str(payload['local_phase65_complete']).lower()}`",
         f"- Ready for Phase 7 scaffold: "
         f"`{str(payload['ready_for_phase7_scaffold']).lower()}`",
@@ -133,7 +145,9 @@ def _write_markdown(path: Path, payload: Mapping[str, Any]) -> None:
             "",
             "## Boundary",
             "",
-            "This audit closes local scaffolding only. It does not claim Unitree",
+            "This audit closes local scaffolding only. It may include a minimal",
+            "local no-policy MuJoCo headless step if the runtime bridge report",
+            "actually emitted one, but it does not claim deployment-grade Unitree",
             "sim runtime, hardware execution, provider execution, GPU training,",
             "weight writes, promotion, live policy control, reward-math mutation,",
             "or Phase 7 authority.",
@@ -151,6 +165,7 @@ def _resolve_inputs(
     phase4_downstream_controller_dir: Path,
     phase4_unitree_bringup_readiness_dir: Path,
     phase4_unitree_local_harness_dir: Path,
+    phase4_unitree_runtime_bridge_dir: Path,
     phase65_dir: Path,
     run_dependencies_if_missing: bool,
 ) -> dict[str, Path]:
@@ -161,6 +176,7 @@ def _resolve_inputs(
         phase4_downstream_controller_dir,
         phase4_unitree_bringup_readiness_dir,
         phase4_unitree_local_harness_dir,
+        phase4_unitree_runtime_bridge_dir,
         phase65_dir,
     )
     if all(path.exists() for path in paths.values()):
@@ -200,6 +216,14 @@ def _resolve_inputs(
         phase4_downstream_controller_dir=phase4_downstream_controller_dir,
         run_dependencies_if_missing=True,
     )
+    run_prepare_phase4_unitree_runtime_evidence_bridge(
+        output_dir=phase4_unitree_runtime_bridge_dir,
+        bipedal_chassis_dir=bipedal_chassis_dir,
+        phase35_bipedal_readiness_dir=phase35_bipedal_readiness_dir,
+        phase4_downstream_controller_dir=phase4_downstream_controller_dir,
+        phase4_unitree_local_harness_dir=phase4_unitree_local_harness_dir,
+        run_dependencies_if_missing=True,
+    )
     if not all(path.exists() for path in paths.values()):
         missing = [str(path) for path in paths.values() if not path.exists()]
         raise FileNotFoundError(
@@ -227,6 +251,9 @@ def run_audit_phase35_4_65_local_closure(
     phase4_unitree_local_harness_dir: str | Path = (
         DEFAULT_PHASE4_UNITREE_LOCAL_HARNESS_DIR
     ),
+    phase4_unitree_runtime_bridge_dir: str | Path = (
+        DEFAULT_PHASE4_UNITREE_RUNTIME_BRIDGE_DIR
+    ),
     phase65_dir: str | Path = DEFAULT_PHASE65_DIR,
     run_dependencies_if_missing: bool = True,
 ) -> dict[str, Any]:
@@ -242,6 +269,7 @@ def run_audit_phase35_4_65_local_closure(
             phase4_unitree_bringup_readiness_dir
         ),
         phase4_unitree_local_harness_dir=Path(phase4_unitree_local_harness_dir),
+        phase4_unitree_runtime_bridge_dir=Path(phase4_unitree_runtime_bridge_dir),
         phase65_dir=Path(phase65_dir),
         run_dependencies_if_missing=run_dependencies_if_missing,
     )
@@ -261,6 +289,9 @@ def run_audit_phase35_4_65_local_closure(
         ),
         "phase4_unitree_local_harness_report_path": str(
             input_paths["phase4_unitree_local_harness_report"]
+        ),
+        "phase4_unitree_runtime_bridge_report_path": str(
+            input_paths["phase4_unitree_runtime_bridge_report"]
         ),
         "phase65_report_path": str(input_paths["phase65_report"]),
         "report_path": str(report_path),
@@ -289,6 +320,11 @@ def run_audit_phase35_4_65_local_closure(
         phase4_unitree_local_harness_report=(
             load_phase4_unitree_local_harness_report(
                 input_paths["phase4_unitree_local_harness_report"]
+            )
+        ),
+        phase4_unitree_runtime_bridge_report=(
+            load_phase4_unitree_runtime_evidence_bridge_report(
+                input_paths["phase4_unitree_runtime_bridge_report"]
             )
         ),
         phase65_report=load_phase65_meta_node_neuralization_report(
@@ -325,6 +361,10 @@ def _parse_args() -> argparse.Namespace:
         "--phase4-unitree-local-harness-dir",
         default=str(DEFAULT_PHASE4_UNITREE_LOCAL_HARNESS_DIR),
     )
+    parser.add_argument(
+        "--phase4-unitree-runtime-bridge-dir",
+        default=str(DEFAULT_PHASE4_UNITREE_RUNTIME_BRIDGE_DIR),
+    )
     parser.add_argument("--phase65-dir", default=str(DEFAULT_PHASE65_DIR))
     parser.add_argument("--no-run-dependencies", action="store_true")
     return parser.parse_args()
@@ -343,6 +383,7 @@ def main() -> int:
             args.phase4_unitree_bringup_readiness_dir
         ),
         phase4_unitree_local_harness_dir=args.phase4_unitree_local_harness_dir,
+        phase4_unitree_runtime_bridge_dir=args.phase4_unitree_runtime_bridge_dir,
         phase65_dir=args.phase65_dir,
         run_dependencies_if_missing=not args.no_run_dependencies,
     )

@@ -136,14 +136,17 @@ Code and CLI surfaces:
 - `src/world_model/humanoid_readiness/downstream_controller.py`
 - `src/world_model/humanoid_readiness/unitree_bringup_readiness.py`
 - `src/world_model/humanoid_readiness/unitree_local_harness.py`
+- `src/world_model/humanoid_readiness/unitree_runtime_bridge.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
 - `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_bringup_readiness.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_local_harnesses.py`
+- `scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py`
 - `tests/test_humanoid_phase35_4_65_scaffolds.py`
 - `tests/test_humanoid_phase4_downstream_controller.py`
 - `tests/test_humanoid_phase4_unitree_bringup_readiness.py`
 - `tests/test_humanoid_phase4_unitree_local_harnesses.py`
+- `tests/test_humanoid_phase4_unitree_runtime_evidence_bridge.py`
 
 Current artifact output:
 
@@ -151,6 +154,7 @@ Current artifact output:
 - `artifacts/economic_world_model/phase4_downstream_controller_scaffold/phase4_downstream_controller_scaffold_report_v1.json`
 - `artifacts/economic_world_model/phase4_unitree_bringup_readiness/phase4_unitree_bringup_readiness_report_v1.json`
 - `artifacts/economic_world_model/phase4_unitree_local_harnesses/phase4_unitree_local_harness_report_v1.json`
+- `artifacts/economic_world_model/phase4_unitree_runtime_evidence_bridge/phase4_unitree_runtime_evidence_bridge_report_v1.json`
 - `contract_surface_count=15`
 - `stub_surface_count=3`
 - phase counts: `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`
@@ -191,6 +195,13 @@ Current artifact output:
 - `synthetic_safety_drill_receipt_count=1`
 - `runtime_preflight_receipt_count=7`
 - `local_harnesses_complete=true`
+- `ros2_runtime_readiness_receipt_count=2`
+- `mujoco_trace_row_count=5`
+- `trace_import_adapter_receipt_count=3`
+- `safety_envelope_expansion_receipt_count=5`
+- `operator_recovery_drill_receipt_count=4`
+- `local_runtime_evidence_bridge_complete=true`
+- `minimal_mujoco_headless_step_executed=true`
 - `honest_sim_or_hardware_evidence_present=false`
 
 Denied gates remain explicit:
@@ -305,3 +316,25 @@ This closes the local harness roots only. It still does not publish ROS2/DDS
 messages, write Unitree SDK2 commands, invoke G1Pilot, observe real robot or
 sim streams, launch Unitree MuJoCo, certify physical safety, run teleop
 recovery drills, train, or promote.
+
+## Unitree / G1 Runtime Evidence Bridge
+
+The runtime-evidence bridge burns down the next layer of local blockers:
+
+- ROS2/colcon build and generated-message import readiness receipts;
+- a guarded no-policy Unitree MuJoCo G1 headless step attempt;
+- JSONL, rosbag2, and MCAP trace-ingestion adapter receipts;
+- expanded safety envelopes for joint clamps, self-collision hooks,
+  fall/posture guards, stop-distance slots, and calibrated-limit sidecars;
+- scripted operator-recovery scenario files and local drill receipts.
+
+On the current host, the MuJoCo probe truly loaded the local G1
+`scene_29dof.xml` and emitted 5 headless no-policy trace rows. That narrows the
+remaining sim blocker: the stack now has minimal local MuJoCo stepping evidence,
+but still lacks ROS2 bridge integration, policy-controlled sim, command echo,
+contact/task metrics, and longer runtime traces.
+
+The bridge also records that ROS2/colcon build/import is not executed yet,
+rosbag2/MCAP real stream files are absent, safety limits are not calibrated,
+operator drills are local scripted drills only, and DDS/on-robot timing is still
+missing.

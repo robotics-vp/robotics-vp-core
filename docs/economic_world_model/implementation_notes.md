@@ -5492,3 +5492,70 @@ This is executable local scaffolding only. It does not observe live streams,
 publish ROS2/DDS messages, write Unitree SDK2 commands, invoke G1Pilot, launch
 MuJoCo, execute hardware, certify physical safety, run real teleop recovery,
 train weights, mutate reward math, or promote authority.
+
+## 2026-05-24 — Phase-4 Unitree/G1 runtime-evidence bridge
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/unitree_runtime_bridge.py`.
+- Added `scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py`.
+- Added `tests/test_humanoid_phase4_unitree_runtime_evidence_bridge.py`.
+- Added `docs/economic_world_model/phase4_unitree_runtime_evidence_bridge.md`.
+- Extended `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
+  and `src/world_model/humanoid_readiness/closure.py` so integrated local
+  closure requires the runtime-evidence bridge report.
+
+### New local surfaces
+
+- `Ros2RuntimeReadinessReceipt`
+- `MujocoHeadlessStepReceipt`
+- `MujocoHeadlessTraceRow`
+- `TraceImportAdapterReceipt`
+- `SafetyEnvelopeExpansionReceipt`
+- `OperatorRecoveryScenario`
+- `OperatorRecoveryDrillReceipt`
+- `Phase4UnitreeRuntimeEvidenceBridgeReport`
+
+### Current artifact result
+
+- `ros2_runtime_readiness_receipt_count=2`
+- `mujoco_headless_step_receipt_count=1`
+- `mujoco_trace_row_count=5`
+- `trace_import_adapter_receipt_count=3`
+- `safety_envelope_expansion_receipt_count=5`
+- `operator_recovery_scenario_count=4`
+- `operator_recovery_drill_receipt_count=4`
+- `ros2_runtime_preflight_complete=true`
+- `mujoco_headless_trace_attempt_complete=true`
+- `minimal_mujoco_headless_step_executed=true`
+- `trace_ingestion_adapters_complete=true`
+- `safety_envelope_expansion_complete=true`
+- `operator_drill_runner_complete=true`
+- `local_runtime_evidence_bridge_complete=true`
+- integrated closure now reports
+  `local_phase4_unitree_runtime_bridge_complete=true`
+
+### Block-by-block status
+
+- ROS2/colcon: native and container readiness receipts exist with tool
+  inventory, build commands, setup commands, generated-message import checks,
+  and runbook steps. Native host preflight currently records missing `cmake`,
+  `colcon`, and `ros2`; the container profile records missing `docker`.
+  Build/import is still not executed.
+- MuJoCo: the current host loaded the local Unitree G1 `scene_29dof.xml` and
+  emitted 5 no-policy headless trace rows. The Unitree MuJoCo app was not
+  launched, ROS2 bridge was not active, and no policy control was used.
+- Trace import: the existing JSONL trace bundle imports through typed trace
+  adapters; rosbag2 and MCAP adapters are materialized but await real files.
+- Safety: joint clamp, self-collision hook, fall/posture guard, stop-distance
+  slot, and calibrated-limit sidecar receipts exist with dispatch-veto default.
+- Operator recovery: stale stream, e-stop latch, low balance margin, and teleop
+  takeover scenarios run through local scripted drills and emit replay-ready
+  receipts.
+
+### Boundary
+
+The MuJoCo step is minimal local no-policy simulation evidence only. This pass
+does not publish ROS2/DDS messages, write Unitree SDK2 commands, invoke G1Pilot,
+run hardware, certify physical safety, run real teleop, train weights, mutate
+reward math, or promote authority.

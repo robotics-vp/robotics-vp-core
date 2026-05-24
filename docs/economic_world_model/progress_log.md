@@ -3649,3 +3649,49 @@ Verification for the Phase-5.1 pass:
   execution, no training, no weight writes, no promotion, no live policy
   control, no reward math mutation, and no frozen
   reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-24: Phase-4 Unitree/G1 runtime-evidence bridge
+
+- Added the next Phase 4 / Embodiment WM bridge layer:
+  - `src/world_model/humanoid_readiness/unitree_runtime_bridge.py`
+  - `scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py`
+  - `tests/test_humanoid_phase4_unitree_runtime_evidence_bridge.py`
+  - `docs/economic_world_model/phase4_unitree_runtime_evidence_bridge.md`
+- Extended the integrated Phase 3.5 / 4 / 6.5 closure audit so Phase 4 local
+  closure now requires `local_phase4_unitree_runtime_bridge_complete=true`.
+- Current local artifact result:
+  `ros2_runtime_readiness_receipt_count=2`,
+  `mujoco_headless_step_receipt_count=1`,
+  `mujoco_trace_row_count=5`,
+  `trace_import_adapter_receipt_count=3`,
+  `safety_envelope_expansion_receipt_count=5`,
+  `operator_recovery_scenario_count=4`,
+  `operator_recovery_drill_receipt_count=4`,
+  `ros2_runtime_preflight_complete=true`,
+  `mujoco_headless_trace_attempt_complete=true`,
+  `minimal_mujoco_headless_step_executed=true`,
+  `trace_ingestion_adapters_complete=true`,
+  `safety_envelope_expansion_complete=true`,
+  `operator_drill_runner_complete=true`, and
+  `local_runtime_evidence_bridge_complete=true`.
+- The pass materializes ROS2/colcon native and container readiness receipts,
+  build/import commands for generated Unitree messages, JSONL/rosbag2/MCAP
+  trace-ingestion adapter receipts, expanded physical safety envelope receipts,
+  scripted operator-recovery scenarios, and local drill receipts.
+- Current ROS2 readiness receipts record missing native `cmake`, `colcon`, and
+  `ros2`, plus missing `docker` for the container profile; no ROS2 build or
+  generated-message import check was run.
+- The current host successfully executed a minimal no-policy MuJoCo headless
+  step over the local Unitree G1 `scene_29dof.xml` and emitted 5 trace rows.
+  This is intentionally narrow simulation evidence; it is not ROS2 bridge,
+  command echo, policy-controlled sim, hardware, calibrated safety, teleop
+  runtime, or deployment-grade runtime evidence.
+- Remaining blockers are now more specific: ROS2/colcon build and generated
+  message import execution, ROS2/SDK2/G1Pilot command echo, real rosbag2/MCAP
+  stream import, policy-controlled MuJoCo or hardware traces, physical stop
+  distance and calibrated safety limits, operator teleop runtime drills, and
+  DDS/network/on-robot timing.
+- Boundary preserved: no ROS2/DDS publish, Unitree SDK2 write, G1Pilot runtime
+  invocation, hardware execution, training, weight writes, promotion, live
+  policy control, reward math mutation, or frozen
+  reward/trust/`w_econ`/lambda mutation claim.

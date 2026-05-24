@@ -27,6 +27,9 @@ from src.world_model.humanoid_readiness.unitree_bringup_readiness import (
 from src.world_model.humanoid_readiness.unitree_local_harness import (
     Phase4UnitreeLocalHarnessReport,
 )
+from src.world_model.humanoid_readiness.unitree_runtime_bridge import (
+    Phase4UnitreeRuntimeEvidenceBridgeReport,
+)
 from src.world_model.humanoid_readiness.phase65 import (
     Phase65MetaNodeNeuralizationReport,
 )
@@ -43,7 +46,7 @@ PHASE35465_REMAINING_BLOCKERS = (
     "unitree_runtime_dependency_build_and_interface_verification_missing",
     "real_unitree_stream_command_timing_and_recovery_runtime_missing",
     "unitree_physical_safety_and_estop_recovery_drills_missing",
-    "honest_unitree_sim_or_hardware_runtime_evidence_missing",
+    "deployment_grade_unitree_sim_or_hardware_runtime_evidence_missing",
     "counterfactual_meta_node_corpus_density_missing",
     "gpu_training_provider_hardware_evidence_missing",
     "promotion_grade_humanoid_governance_benchmarks_missing",
@@ -61,6 +64,7 @@ class Phase35465LocalClosureAudit:
     phase4_downstream_controller_report_id: str
     phase4_unitree_bringup_readiness_report_id: str
     phase4_unitree_local_harness_report_id: str
+    phase4_unitree_runtime_bridge_report_id: str
     phase65_report_id: str
     status: str
     local_phase35_complete: bool
@@ -69,6 +73,7 @@ class Phase35465LocalClosureAudit:
     local_phase4_downstream_controller_complete: bool
     local_phase4_unitree_bringup_readiness_complete: bool
     local_phase4_unitree_local_harness_complete: bool
+    local_phase4_unitree_runtime_bridge_complete: bool
     local_phase65_complete: bool
     all_local_structures_complete: bool
     ready_for_phase7_scaffold: bool
@@ -105,6 +110,9 @@ class Phase35465LocalClosureAudit:
             "phase4_unitree_local_harness_report_id": (
                 self.phase4_unitree_local_harness_report_id
             ),
+            "phase4_unitree_runtime_bridge_report_id": (
+                self.phase4_unitree_runtime_bridge_report_id
+            ),
             "phase65_report_id": self.phase65_report_id,
             "status": self.status,
             "local_phase35_complete": bool(self.local_phase35_complete),
@@ -120,6 +128,9 @@ class Phase35465LocalClosureAudit:
             ),
             "local_phase4_unitree_local_harness_complete": bool(
                 self.local_phase4_unitree_local_harness_complete
+            ),
+            "local_phase4_unitree_runtime_bridge_complete": bool(
+                self.local_phase4_unitree_runtime_bridge_complete
             ),
             "local_phase65_complete": bool(self.local_phase65_complete),
             "all_local_structures_complete": bool(
@@ -159,6 +170,9 @@ class Phase35465LocalClosureAudit:
             phase4_unitree_local_harness_report_id=str(
                 payload.get("phase4_unitree_local_harness_report_id", "")
             ),
+            phase4_unitree_runtime_bridge_report_id=str(
+                payload.get("phase4_unitree_runtime_bridge_report_id", "")
+            ),
             phase65_report_id=str(payload.get("phase65_report_id", "")),
             status=str(payload.get("status", "blocked")),
             local_phase35_complete=bool(payload.get("local_phase35_complete", False)),
@@ -174,6 +188,9 @@ class Phase35465LocalClosureAudit:
             ),
             local_phase4_unitree_local_harness_complete=bool(
                 payload.get("local_phase4_unitree_local_harness_complete", False)
+            ),
+            local_phase4_unitree_runtime_bridge_complete=bool(
+                payload.get("local_phase4_unitree_runtime_bridge_complete", False)
             ),
             local_phase65_complete=bool(payload.get("local_phase65_complete", False)),
             all_local_structures_complete=bool(
@@ -213,6 +230,7 @@ def build_phase35465_local_closure_audit(
     phase4_downstream_controller_report: Phase4DownstreamControllerScaffoldReport,
     phase4_unitree_bringup_readiness_report: Phase4UnitreeBringupReadinessReport,
     phase4_unitree_local_harness_report: Phase4UnitreeLocalHarnessReport,
+    phase4_unitree_runtime_bridge_report: Phase4UnitreeRuntimeEvidenceBridgeReport,
     phase65_report: Phase65MetaNodeNeuralizationReport,
     artifact_refs: Mapping[str, Any] | None = None,
 ) -> Phase35465LocalClosureAudit:
@@ -289,6 +307,25 @@ def build_phase35465_local_closure_audit(
         and not phase4_unitree_local_harness_report.reward_math_mutation
         and not phase4_unitree_local_harness_report.promotion_eligible
     )
+    phase4_unitree_runtime_bridge_complete = (
+        phase4_unitree_runtime_bridge_report.status == "ok"
+        and phase4_unitree_runtime_bridge_report.local_runtime_evidence_bridge_complete
+        and phase4_unitree_runtime_bridge_report.ros2_runtime_preflight_complete
+        and phase4_unitree_runtime_bridge_report.mujoco_headless_trace_attempt_complete
+        and phase4_unitree_runtime_bridge_report.trace_ingestion_adapters_complete
+        and phase4_unitree_runtime_bridge_report.safety_envelope_expansion_complete
+        and phase4_unitree_runtime_bridge_report.operator_drill_runner_complete
+        and not phase4_unitree_runtime_bridge_report.live_stream_observed
+        and not phase4_unitree_runtime_bridge_report.ros2_publish_attempted
+        and not phase4_unitree_runtime_bridge_report.unitree_sdk2_write_enabled
+        and not phase4_unitree_runtime_bridge_report.g1pilot_runtime_invoked
+        and not phase4_unitree_runtime_bridge_report.hardware_executed
+        and not phase4_unitree_runtime_bridge_report.live_policy_control
+        and not phase4_unitree_runtime_bridge_report.training_executed
+        and not phase4_unitree_runtime_bridge_report.weights_written
+        and not phase4_unitree_runtime_bridge_report.reward_math_mutation
+        and not phase4_unitree_runtime_bridge_report.promotion_eligible
+    )
     phase65_complete = phase65_report.local_meta_node_scaffold_complete
     all_complete = (
         phase35_complete
@@ -297,6 +334,7 @@ def build_phase35465_local_closure_audit(
         and phase4_downstream_controller_complete
         and phase4_unitree_bringup_readiness_complete
         and phase4_unitree_local_harness_complete
+        and phase4_unitree_runtime_bridge_complete
         and phase65_complete
     )
     closed_surfaces = [
@@ -327,6 +365,11 @@ def build_phase35465_local_closure_audit(
         "phase4_unitree_mock_timing_watchdog_harness",
         "phase4_unitree_safety_recovery_state_machine_harness",
         "phase4_unitree_mujoco_ros2_preflight_receipts",
+        "phase4_unitree_ros2_colcon_runtime_readiness_receipts",
+        "phase4_unitree_mujoco_headless_step_trace",
+        "phase4_unitree_rosbag2_mcap_trace_ingestion_adapters",
+        "phase4_unitree_expanded_safety_envelope_receipts",
+        "phase4_unitree_scripted_operator_recovery_drills",
         "phase4e_companion_compute_comms_contracts",
         "phase4f_operator_teleop_recovery_contracts",
         "phase4b_4c_4d_explicit_stubs",
@@ -351,6 +394,9 @@ def build_phase35465_local_closure_audit(
         "phase4_unitree_local_harness_report_id": (
             phase4_unitree_local_harness_report.report_id
         ),
+        "phase4_unitree_runtime_bridge_report_id": (
+            phase4_unitree_runtime_bridge_report.report_id
+        ),
         "phase65_report_id": phase65_report.report_id,
         "all_local_structures_complete": all_complete,
         "artifact_refs": mapping(artifact_refs),
@@ -371,6 +417,9 @@ def build_phase35465_local_closure_audit(
         phase4_unitree_local_harness_report_id=(
             phase4_unitree_local_harness_report.report_id
         ),
+        phase4_unitree_runtime_bridge_report_id=(
+            phase4_unitree_runtime_bridge_report.report_id
+        ),
         phase65_report_id=phase65_report.report_id,
         status="ok" if all_complete else "blocked",
         local_phase35_complete=phase35_complete,
@@ -386,6 +435,9 @@ def build_phase35465_local_closure_audit(
         ),
         local_phase4_unitree_local_harness_complete=(
             phase4_unitree_local_harness_complete
+        ),
+        local_phase4_unitree_runtime_bridge_complete=(
+            phase4_unitree_runtime_bridge_complete
         ),
         local_phase65_complete=phase65_complete,
         all_local_structures_complete=all_complete,

@@ -100,6 +100,17 @@ evidence only: no live streams, ROS2/DDS publish, SDK2 write, G1Pilot
 invocation, MuJoCo launch, hardware execution, safety certification, training,
 reward mutation, or promotion is claimed.
 
+The Phase 4 Unitree/G1 runtime-evidence bridge is
+`src/world_model/humanoid_readiness/unitree_runtime_bridge.py`, materialized by
+`scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py`.
+It adds ROS2/colcon readiness receipts, a guarded no-policy Unitree MuJoCo
+headless step, JSONL/rosbag2/MCAP trace adapter receipts, expanded safety
+envelope receipts, and scripted operator-recovery drill receipts. On the current
+host it emits a real minimal MuJoCo headless trace, but this remains narrow
+simulation evidence: no ROS2 bridge, command echo, policy-controlled sim,
+hardware execution, physical calibration, live teleop, training, reward
+mutation, or promotion is claimed.
+
 ---
 
 ## How Our WM Topology Differs from the Dominant Framing
