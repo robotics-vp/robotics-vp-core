@@ -106,6 +106,58 @@ sidecars. It is still shadow-only. It records what the Meta-Regal layer would
 shape or join; it does not dispatch actions, hard vetoes, policy changes,
 reward mutations, weight writes, or promotions.
 
+## Meta-Governance Evaluation / Outcome Joins
+
+Current CLI:
+
+```bash
+python3 scripts/economic_world_model/evaluate_phase7_meta_governance_shadow.py --no-run-dependencies
+```
+
+Current artifact directory:
+
+```text
+artifacts/economic_world_model/phase7_meta_governance_eval
+```
+
+Current local result:
+
+- `control_field_eval_count=14`
+- `conflict_join_eval_count=12`
+- `pareto_regime_eval_count=2`
+- `outcome_join_row_count=28`
+- `phase7_event_count=26`
+- `phase7_decision_count=26`
+- `control_field_only_eval_complete=true`
+- `conflict_join_eval_complete=true`
+- `pareto_regime_eval_complete=true`
+- `outcome_join_slots_complete=true`
+- `local_meta_governance_eval_complete=true`
+- `replay_export_ready=true`
+- `phase7_authority_granted=false`
+- `live_dispatch_allowed=false`
+- `hard_veto_dispatch=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+The evaluation harness decomposes Phase 7 event-spine rows into:
+
+- control-field-only eval reports
+- conflict-join eval reports
+- Pareto/regime eval reports
+- replay-ready outcome join rows
+
+The outcome rows carry false-veto, false-allow, counterfactual composition,
+regime-label, policy-regret, and downstream-effect slots for later labeled
+benchmarks. These are training targets only; no training or promotion is
+performed.
+
 ## Governance Node Surfaces
 
 The scaffold defines these domain-governance surfaces:
@@ -198,6 +250,10 @@ exist. Runtime authority, training, and promotion remain blocked by:
 - real governance benchmark evidence
 - live runtime wiring execution
 - provider/hardware deployment evidence
+- ground-truth outcome labels
+- false-veto / false-allow labels
+- counterfactual composition benchmarks
+- trained meta-composition policy
 
 ## Boundary
 

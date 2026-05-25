@@ -3399,6 +3399,10 @@ Current local scaffold:
   `src/shadow_runtime/control_plane.py`, and
   `scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py`
   wire the scaffold into the shadow runtime event spine and decision ledger.
+- `src/world_model/humanoid_readiness/phase7_eval.py` and
+  `scripts/economic_world_model/evaluate_phase7_meta_governance_shadow.py`
+  decompose the shadow runtime rows into control-field evals, conflict-join
+  evals, Pareto/regime evals, and replay-ready outcome-join rows.
 - Current artifact result:
   `governance_node_surface_count=8`, `composition_mode_count=5`,
   `conflict_override_receipt_count=6`, `admissible_region_count=6`,
@@ -3415,6 +3419,16 @@ Current local scaffold:
   training, weight-write, provider, hardware, Unitree-runtime, reward-mutation,
   hard-veto-dispatch, lower-WM-replacement, scalar-collapse, and promotion
   gates remain denied.
+- Current meta-governance evaluation result:
+  `control_field_eval_count=14`, `conflict_join_eval_count=12`,
+  `pareto_regime_eval_count=2`, `outcome_join_row_count=28`,
+  `control_field_only_eval_complete=true`,
+  `conflict_join_eval_complete=true`,
+  `pareto_regime_eval_complete=true`,
+  `outcome_join_slots_complete=true`,
+  `local_meta_governance_eval_complete=true`, and
+  `replay_export_ready=true`, while all live authority and promotion gates
+  remain denied.
 - The scaffold is not runtime authority. It does not train, write weights, run
   providers or hardware, claim Unitree runtime, mutate reward math, promote,
   replace lower WMs, collapse governance into a scalar score, or control live

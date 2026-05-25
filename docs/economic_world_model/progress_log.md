@@ -3804,3 +3804,37 @@ Verification for the Phase-5.1 pass:
   writes, provider execution, hardware execution, Unitree runtime claims, live
   policy control, reward math mutation, promotion, lower-WM replacement,
   scalar governance collapse, or frozen reward/trust/`w_econ`/lambda mutation.
+
+### 2026-05-25: Phase 7 meta-governance evaluation / outcome joins
+
+- Added the decomposed Phase 7 evaluation harness:
+  - `src/world_model/humanoid_readiness/phase7_eval.py`
+  - `scripts/economic_world_model/evaluate_phase7_meta_governance_shadow.py`
+  - `tests/test_humanoid_phase7_meta_governance_eval.py`
+- The harness consumes the Phase 7 shadow runtime `event_spine.json`,
+  `decision_ledger.json`, control-field runtime receipts, conflict runtime
+  join receipts, and shadow summary. It emits control-field eval reports,
+  conflict-join eval reports, Pareto/regime eval reports, and replay-ready
+  outcome-join rows.
+- Current local artifact run:
+  `control_field_eval_count=14`,
+  `conflict_join_eval_count=12`,
+  `pareto_regime_eval_count=2`,
+  `outcome_join_row_count=28`,
+  `phase7_event_count=26`,
+  `phase7_decision_count=26`,
+  `control_field_only_eval_complete=true`,
+  `conflict_join_eval_complete=true`,
+  `pareto_regime_eval_complete=true`,
+  `outcome_join_slots_complete=true`,
+  `local_meta_governance_eval_complete=true`, and
+  `replay_export_ready=true`.
+- Outcome join rows now carry explicit slots for false-veto, false-allow,
+  override correctness, Pareto frontier deltas, regime-label confirmation,
+  policy-regret deltas, downstream effects, and counterfactual composition
+  outcomes.
+- Boundary preserved: this is eval/replay-export plumbing only. It does not
+  grant Phase 7 authority, live dispatch, hard-veto dispatch, training, weight
+  writes, provider execution, hardware execution, Unitree runtime claims, live
+  policy control, reward math mutation, promotion, lower-WM replacement,
+  scalar governance collapse, or frozen reward/trust/`w_econ`/lambda mutation.

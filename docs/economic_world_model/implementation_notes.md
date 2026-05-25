@@ -5760,3 +5760,71 @@ This pass connects Phase 7 artifacts to the shadow runtime event spine and
 decision ledger only. It does not dispatch actions, execute hard vetoes,
 replace lower WMs, train, write weights, mutate reward math, promote outputs,
 or claim provider, hardware, Unitree sim, or live policy authority.
+
+## 2026-05-25 — Phase 7 meta-governance evaluation / outcome joins
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/phase7_eval.py`.
+- Added `scripts/economic_world_model/evaluate_phase7_meta_governance_shadow.py`.
+- Added `tests/test_humanoid_phase7_meta_governance_eval.py`.
+- Updated Phase 7 docs, roadmap, implementation notes, and progress log.
+
+### New local surfaces
+
+- `Phase7ControlFieldEvalReport`
+- `Phase7ConflictJoinEvalReport`
+- `Phase7ParetoRegimeEvalReport`
+- `Phase7OutcomeJoinRow`
+- `Phase7MetaGovernanceEvaluationReport`
+
+### Current artifact result
+
+- `control_field_eval_count=14`
+- `conflict_join_eval_count=12`
+- `pareto_regime_eval_count=2`
+- `outcome_join_row_count=28`
+- `phase7_event_count=26`
+- `phase7_decision_count=26`
+- `control_field_only_eval_complete=true`
+- `conflict_join_eval_complete=true`
+- `pareto_regime_eval_complete=true`
+- `outcome_join_slots_complete=true`
+- `local_meta_governance_eval_complete=true`
+- `replay_export_ready=true`
+- `phase7_authority_granted=false`
+- `live_dispatch_allowed=false`
+- `hard_veto_dispatch=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+### Implementation notes
+
+- The eval harness loads Phase 7 runtime sidecars from the shadow runtime
+  directory: `event_spine.json`, `decision_ledger.json`, `summary.json`,
+  `phase7_control_field_runtime_receipts.jsonl`, and
+  `phase7_conflict_runtime_join_receipts.jsonl`.
+- Control-field evals verify event joins, decision joins, shadow-only posture,
+  live dispatch denial, reward-mutation denial, and promotion denial.
+- Conflict-join evals verify conflict event/decision joins, related
+  control-field event references, hard-veto dispatch denial, live dispatch
+  denial, and promotion denial.
+- Pareto/regime evals group Phase 7 rows by episode and label the observed
+  composition modes and active conflicts for later Pareto/frontier benchmarks.
+- Outcome rows are replay-ready and training-target-only. They expose
+  false-veto, false-allow, override-correctness, regime-label, Pareto-frontier,
+  policy-regret, and downstream-effect join slots.
+
+### Boundary
+
+This pass performs evaluation and outcome-slot materialization only. It does
+not train, write weights, dispatch live actions, execute hard vetoes, mutate
+reward math, promote outputs, replace lower WMs, collapse governance into a
+scalar score, or claim provider, hardware, Unitree sim, or live policy
+authority.

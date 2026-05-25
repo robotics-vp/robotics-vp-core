@@ -1081,6 +1081,22 @@ Compute and battery sequencing rule:
   `hardware_executed=false`, `unitree_sim_runtime_executed=false`,
   `live_policy_control=false`, `reward_math_mutation=false`, and
   `promotion_eligible=false`
+- The local Phase 7 eval harness is
+  `scripts/economic_world_model/evaluate_phase7_meta_governance_shadow.py`
+  with code in `src/world_model/humanoid_readiness/phase7_eval.py`. The
+  current artifact run emits `control_field_eval_count=14`,
+  `conflict_join_eval_count=12`, `pareto_regime_eval_count=2`,
+  `outcome_join_row_count=28`, `phase7_event_count=26`,
+  `phase7_decision_count=26`,
+  `control_field_only_eval_complete=true`,
+  `conflict_join_eval_complete=true`,
+  `pareto_regime_eval_complete=true`,
+  `outcome_join_slots_complete=true`,
+  `local_meta_governance_eval_complete=true`, and
+  `replay_export_ready=true`, while all Phase 7 authority, live dispatch,
+  hard-veto dispatch, training, weight-write, provider, hardware,
+  Unitree-runtime, live-policy, reward-mutation, lower-WM replacement,
+  scalar-collapse, and promotion gates remain denied
 
 Suggested RL staging for those resources:
 
