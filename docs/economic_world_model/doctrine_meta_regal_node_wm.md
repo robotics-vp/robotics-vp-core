@@ -2,9 +2,20 @@
 
 ## Status
 
-Future-architecture doctrine. This WM has not been built. This document
-defines its structural role, why it is needed, how it relates to the
-Economic WM, and what it must compose.
+Future-architecture doctrine with a local Stage A scaffold now present. The
+current scaffold defines typed non-neural governance surfaces, composition
+modes, conflict/override receipts, admissible regions, shadow control-field
+slots, training-row slots, and denied promotion gates. It does not grant
+runtime authority.
+
+The current implementation is:
+
+- `src/world_model/humanoid_readiness/phase7.py`
+- `scripts/economic_world_model/prepare_phase7_meta_regal_control_scaffold.py`
+- `docs/economic_world_model/phase7_meta_regal_control_scaffold.md`
+
+Runtime wiring, governance-node training, benchmark evidence, provider or
+hardware execution, promotion, and live policy control remain future work.
 
 ## Why the Economic WM cannot be sovereign
 

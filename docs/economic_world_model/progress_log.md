@@ -3737,3 +3737,42 @@ Verification for the Phase-5.1 pass:
   invocation, hardware execution, policy control, training, weight writes,
   promotion, live policy control, reward math mutation, or frozen
   reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-25: Phase 7 Meta-Regal-Node / control WM scaffold
+
+- Added Stage A typed non-neural Phase 7 scaffold surfaces:
+  - `src/world_model/humanoid_readiness/phase7.py`
+  - `scripts/economic_world_model/prepare_phase7_meta_regal_control_scaffold.py`
+  - `tests/test_humanoid_phase7_meta_regal_control_scaffold.py`
+  - `docs/economic_world_model/phase7_meta_regal_control_scaffold.md`
+- The scaffold consumes the Phase 6.5 meta-node report plus the integrated
+  Phase 3.5 / 4 / 6.5 local closure audit and emits governance node surfaces,
+  composition mode specs, conflict/override receipts, admissible-region specs,
+  shadow control-field slots, training-row slots, and denied promotion gates.
+- Current local artifact result:
+  `governance_node_surface_count=8`, `composition_mode_count=5`,
+  `conflict_override_receipt_count=6`, `admissible_region_count=6`,
+  `control_field_slot_count=7`, `training_row_slot_count=6`,
+  `promotion_gate_count=8`, `local_phase7_scaffold_complete=true`,
+  `ready_for_runtime_wiring=true`, `runtime_wiring_executed=false`,
+  `phase7_authority_granted=false`, and `live_control_authority=false`.
+- Governance node surfaces now cover economic allocation, reward integrity,
+  plausibility/geometry, deployment truth, safety constraints, data value,
+  embodiment limits, and coordination/operator recovery.
+- Composition modes are explicit and typed: Pareto relation, lexicographic
+  priority, veto constraint, advisory evidence, and confidence-weighted
+  composition. Even veto outputs are shadow candidates only.
+- Shadow control fields include cross-WM shaping, economic budget constraints,
+  safety veto, deployment truth veto, operator handoff, data collection
+  priority, and embodiment-mode demotion. The embodiment field preserves
+  bipedal whole-body as primary, stable-base mobile manipulation as degraded
+  safety fallback, and fixed-base tabletop as curriculum/regression only.
+- Remaining blockers are lower-WM bounded runtime authority, governance-node
+  training and benchmarks, cross-WM governance corpus density,
+  meta-composition learning, real governance benchmark evidence, live runtime
+  wiring, and provider/hardware deployment evidence.
+- Boundary preserved: no training, weight writes, provider execution,
+  hardware execution, Unitree runtime claim, live policy control, reward math
+  mutation, promotion, live cross-WM control, hard-veto dispatch, lower-WM
+  replacement, scalar governance collapse, or frozen
+  reward/trust/`w_econ`/lambda mutation claim.

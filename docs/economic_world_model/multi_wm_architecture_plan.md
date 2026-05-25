@@ -3383,6 +3383,30 @@ Complete-subsystem rule:
   real governance benchmark evidence, not absent runtime packaging or absent
   live-loop wiring
 
+Current local scaffold:
+
+- `docs/economic_world_model/phase7_meta_regal_control_scaffold.md` records
+  the Stage A typed non-neural Phase 7 surfaces.
+- `src/world_model/humanoid_readiness/phase7.py` defines
+  `Phase7GovernanceNodeSurface`, `Phase7CompositionModeSpec`,
+  `Phase7ConflictOverrideReceipt`, `Phase7AdmissibleRegionSpec`,
+  `Phase7ControlFieldSlot`, `Phase7TrainingRowSlot`,
+  `Phase7PromotionGate`, and `Phase7MetaRegalControlScaffoldReport`.
+- `scripts/economic_world_model/prepare_phase7_meta_regal_control_scaffold.py`
+  materializes the artifact set from the Phase 6.5 report and integrated
+  Phase 3.5 / 4 / 6.5 closure audit.
+- Current artifact result:
+  `governance_node_surface_count=8`, `composition_mode_count=5`,
+  `conflict_override_receipt_count=6`, `admissible_region_count=6`,
+  `control_field_slot_count=7`, `training_row_slot_count=6`,
+  `promotion_gate_count=8`, `local_phase7_scaffold_complete=true`,
+  `ready_for_runtime_wiring=true`, `runtime_wiring_executed=false`,
+  `phase7_authority_granted=false`, and `live_control_authority=false`.
+- The scaffold is not runtime authority. It does not train, write weights, run
+  providers or hardware, claim Unitree runtime, mutate reward math, promote,
+  replace lower WMs, collapse governance into a scalar score, or control live
+  policy.
+
 Preconditions:
 
 - lower WMs are robust and honest

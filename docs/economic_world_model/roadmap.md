@@ -1052,6 +1052,19 @@ Compute and battery sequencing rule:
 - only later should transport and meta-node layers learn over those allocations as higher-order governance objects
 - The local Phase 6.5 scaffold note is `phase65_local_meta_node_neuralization.md`: it names `MetaNodeState`, trajectory/intervention receipts, counterfactual targets, robustness reports, and denied-by-default promotion gates before any Phase 7 control-WM authority exists
 - As of 2026-05-24, Phase 6.5 has typed local scaffolds in `src/world_model/humanoid_readiness/phase65.py` and `src/world_model/humanoid_readiness/closure.py` plus `scripts/economic_world_model/prepare_phase65_meta_node_neuralization.py` and `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`; the current artifact run emits `node_state_count=5`, `counterfactual_target_count=5`, `robustness_report_count=5`, `promotion_gate_count=5`, `local_meta_node_scaffold_complete=true`, `local_phase4_unitree_bringup_readiness_complete=true`, `local_phase4_unitree_local_harness_complete=true`, `local_phase4_unitree_runtime_bridge_complete=true`, `local_phase4_unitree_blocker_stress_probe_complete=true`, and `ready_for_phase7_scaffold=true`, while `phase7_authority_granted=false`
+- The local Phase 7 scaffold note is `phase7_meta_regal_control_scaffold.md`:
+  it starts the Meta-Regal-Node / control WM as Stage A typed non-neural
+  governance scaffolding. As of 2026-05-25, `src/world_model/humanoid_readiness/phase7.py`
+  and `scripts/economic_world_model/prepare_phase7_meta_regal_control_scaffold.py`
+  emit `governance_node_surface_count=8`, `composition_mode_count=5`,
+  `conflict_override_receipt_count=6`, `admissible_region_count=6`,
+  `control_field_slot_count=7`, `training_row_slot_count=6`,
+  `promotion_gate_count=8`, `local_phase7_scaffold_complete=true`, and
+  `ready_for_runtime_wiring=true`, while `runtime_wiring_executed=false`,
+  `phase7_authority_granted=false`, `live_control_authority=false`, and all
+  training, weight-write, provider, hardware, Unitree-runtime, live-policy,
+  reward-mutation, lower-WM-replacement, scalar-collapse, and promotion gates
+  remain denied
 
 Suggested RL staging for those resources:
 

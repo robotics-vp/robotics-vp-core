@@ -5624,3 +5624,74 @@ These probes are static, import-only, compile-only, or no-policy MuJoCo checks.
 They do not publish ROS2/DDS messages, write Unitree SDK2 commands, invoke
 G1Pilot, run hardware, execute policy control, train weights, mutate reward
 math, or promote authority.
+
+## 2026-05-25 — Phase 7 Meta-Regal-Node / control WM scaffold
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/phase7.py`.
+- Added `scripts/economic_world_model/prepare_phase7_meta_regal_control_scaffold.py`.
+- Added `tests/test_humanoid_phase7_meta_regal_control_scaffold.py`.
+- Added `docs/economic_world_model/phase7_meta_regal_control_scaffold.md`.
+- Updated roadmap and doctrine docs so Phase 7 is now recorded as a local
+  Stage A scaffold, not runtime authority.
+
+### New local surfaces
+
+- `Phase7GovernanceNodeSurface`
+- `Phase7CompositionModeSpec`
+- `Phase7ConflictOverrideReceipt`
+- `Phase7AdmissibleRegionSpec`
+- `Phase7ControlFieldSlot`
+- `Phase7TrainingRowSlot`
+- `Phase7PromotionGate`
+- `Phase7MetaRegalControlScaffoldReport`
+
+### Current artifact result
+
+- `governance_node_surface_count=8`
+- `composition_mode_count=5`
+- `conflict_override_receipt_count=6`
+- `admissible_region_count=6`
+- `control_field_slot_count=7`
+- `training_row_slot_count=6`
+- `promotion_gate_count=8`
+- `local_phase7_scaffold_complete=true`
+- `ready_for_runtime_wiring=true`
+- `runtime_wiring_executed=false`
+- `phase7_authority_granted=false`
+- `live_control_authority=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+### Implementation notes
+
+- The scaffold consumes the Phase 6.5 meta-node neuralization report and the
+  integrated Phase 3.5 / 4 / 6.5 local closure audit.
+- Governance node surfaces cover economic allocation, anti-reward-hacking /
+  reward integrity, plausibility/geometry, deployment truth, safety, data
+  value, embodiment limits, and operator/coordination recovery.
+- The Economic WM remains first-class but non-sovereign. Phase 7 composes it
+  with safety, deployment truth, reward integrity, plausibility, data value,
+  embodiment, and coordination surfaces.
+- The composition modes are typed as `pareto_relation`,
+  `lexicographic_priority`, `veto_constraint`, `advisory_evidence`, and
+  `confidence_weighted`.
+- `Phase7ControlFieldSlot` outputs are shadow-only. `veto_constraint` creates
+  typed candidate fields and receipts, not live hard-veto dispatch.
+- `Phase7TrainingRowSlot` makes later learning explicit through replay-ready
+  row families while preserving `weights_written=false` and
+  `training_target_only=true`.
+
+### Boundary
+
+No training, weight writes, provider execution, hardware execution, Unitree
+runtime claim, live policy control, reward math mutation, promotion, live
+cross-WM control, hard-veto dispatch, lower-WM replacement, scalar governance
+collapse, or frozen reward/trust/`w_econ`/lambda mutation was claimed.
