@@ -3776,3 +3776,31 @@ Verification for the Phase-5.1 pass:
   mutation, promotion, live cross-WM control, hard-veto dispatch, lower-WM
   replacement, scalar governance collapse, or frozen
   reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-25: Phase 7 shadow runtime / event-spine wiring
+
+- Added shadow-only Phase 7 runtime wiring:
+  - `src/world_model/humanoid_readiness/phase7_runtime.py`
+  - `scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py`
+  - `tests/test_humanoid_phase7_shadow_runtime_wiring.py`
+- Extended `src/shadow_runtime/control_plane.py` with an explicit opt-in
+  `include_phase7_meta_regal_shadow` path that loads Phase 7 scaffold
+  artifacts and appends Phase 7 control-field and conflict-join rows to the
+  normal `event_spine.json` and `decision_ledger.json` sidecars.
+- Current local artifact run:
+  `phase7_meta_regal_shadow.enabled=true`,
+  `phase7_meta_regal_shadow.episode_report_count=2`,
+  `phase7_meta_regal_shadow.control_field_runtime_receipt_count=14`,
+  `phase7_meta_regal_shadow.conflict_runtime_join_receipt_count=12`,
+  `phase7_meta_regal_shadow.shadow_event_spine_wiring_executed=true`,
+  `phase7_meta_regal_shadow.decision_ledger_wiring_executed=true`, and
+  `phase7_meta_regal_shadow.local_shadow_runtime_wiring_complete=true`.
+- The event spine now records `phase7_control_field_shadow_emitted` and
+  `phase7_conflict_override_shadow_joined` events when the opt-in path is
+  enabled. The decision ledger records `phase7_control_field_shadow_recorded`
+  and `phase7_conflict_override_shadow_recorded` entries.
+- Boundary preserved: the new wiring is shadow-only and opt-in. It does not
+  grant Phase 7 authority, live dispatch, hard-veto dispatch, training, weight
+  writes, provider execution, hardware execution, Unitree runtime claims, live
+  policy control, reward math mutation, promotion, lower-WM replacement,
+  scalar governance collapse, or frozen reward/trust/`w_econ`/lambda mutation.

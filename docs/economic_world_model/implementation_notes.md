@@ -5695,3 +5695,68 @@ No training, weight writes, provider execution, hardware execution, Unitree
 runtime claim, live policy control, reward math mutation, promotion, live
 cross-WM control, hard-veto dispatch, lower-WM replacement, scalar governance
 collapse, or frozen reward/trust/`w_econ`/lambda mutation was claimed.
+
+## 2026-05-25 — Phase 7 shadow runtime / event-spine wiring
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/phase7_runtime.py`.
+- Added `scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py`.
+- Added `tests/test_humanoid_phase7_shadow_runtime_wiring.py`.
+- Extended `src/shadow_runtime/control_plane.py` with explicit opt-in Phase 7
+  shadow runtime wiring.
+
+### New local surfaces
+
+- `Phase7ControlFieldRuntimeReceipt`
+- `Phase7ConflictRuntimeJoinReceipt`
+- `Phase7ShadowRuntimeWiringReport`
+- `Phase7RuntimeScaffoldInputs`
+
+### Current artifact result
+
+- `phase7_meta_regal_shadow.enabled=true`
+- `phase7_meta_regal_shadow.episode_report_count=2`
+- `phase7_meta_regal_shadow.control_field_runtime_receipt_count=14`
+- `phase7_meta_regal_shadow.conflict_runtime_join_receipt_count=12`
+- `phase7_meta_regal_shadow.shadow_event_spine_wiring_executed=true`
+- `phase7_meta_regal_shadow.decision_ledger_wiring_executed=true`
+- `phase7_meta_regal_shadow.local_shadow_runtime_wiring_complete=true`
+- `phase7_meta_regal_shadow.phase7_authority_granted=false`
+- `phase7_meta_regal_shadow.live_dispatch_allowed=false`
+- `phase7_meta_regal_shadow.hard_veto_dispatch=false`
+- `phase7_meta_regal_shadow.training_executed=false`
+- `phase7_meta_regal_shadow.weights_written=false`
+- `phase7_meta_regal_shadow.provider_executed=false`
+- `phase7_meta_regal_shadow.hardware_executed=false`
+- `phase7_meta_regal_shadow.unitree_sim_runtime_executed=false`
+- `phase7_meta_regal_shadow.live_policy_control=false`
+- `phase7_meta_regal_shadow.reward_math_mutation=false`
+- `phase7_meta_regal_shadow.promotion_eligible=false`
+
+### Implementation notes
+
+- Phase 7 runtime wiring is opt-in through
+  `include_phase7_meta_regal_shadow=True` and requires a
+  `phase7_scaffold_dir`.
+- The path loads the Phase 7 scaffold report, control-field slots, and
+  conflict/override receipts.
+- Each control-field slot emits a `RuntimeEvent` with
+  `event_kind=phase7_control_field_shadow_emitted` and a matching
+  `DecisionLedgerEntry` with
+  `decision_kind=phase7_control_field_shadow_recorded`.
+- Each conflict/override receipt emits a `RuntimeEvent` with
+  `event_kind=phase7_conflict_override_shadow_joined` and a matching
+  `DecisionLedgerEntry` with
+  `decision_kind=phase7_conflict_override_shadow_recorded`.
+- Conflict rows join back to related control-field event IDs when source
+  governance nodes overlap.
+- The standard shadow runtime `summary.json` now includes a
+  `phase7_meta_regal_shadow` block when the opt-in path is enabled.
+
+### Boundary
+
+This pass connects Phase 7 artifacts to the shadow runtime event spine and
+decision ledger only. It does not dispatch actions, execute hard vetoes,
+replace lower WMs, train, write weights, mutate reward math, promote outputs,
+or claim provider, hardware, Unitree sim, or live policy authority.

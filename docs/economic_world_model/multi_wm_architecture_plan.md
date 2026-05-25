@@ -3395,6 +3395,10 @@ Current local scaffold:
 - `scripts/economic_world_model/prepare_phase7_meta_regal_control_scaffold.py`
   materializes the artifact set from the Phase 6.5 report and integrated
   Phase 3.5 / 4 / 6.5 closure audit.
+- `src/world_model/humanoid_readiness/phase7_runtime.py`,
+  `src/shadow_runtime/control_plane.py`, and
+  `scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py`
+  wire the scaffold into the shadow runtime event spine and decision ledger.
 - Current artifact result:
   `governance_node_surface_count=8`, `composition_mode_count=5`,
   `conflict_override_receipt_count=6`, `admissible_region_count=6`,
@@ -3402,6 +3406,15 @@ Current local scaffold:
   `promotion_gate_count=8`, `local_phase7_scaffold_complete=true`,
   `ready_for_runtime_wiring=true`, `runtime_wiring_executed=false`,
   `phase7_authority_granted=false`, and `live_control_authority=false`.
+- Current shadow runtime wiring result:
+  `phase7_meta_regal_shadow.control_field_runtime_receipt_count=14`,
+  `phase7_meta_regal_shadow.conflict_runtime_join_receipt_count=12`,
+  `shadow_event_spine_wiring_executed=true`,
+  `decision_ledger_wiring_executed=true`, and
+  `local_shadow_runtime_wiring_complete=true`, while all live authority,
+  training, weight-write, provider, hardware, Unitree-runtime, reward-mutation,
+  hard-veto-dispatch, lower-WM-replacement, scalar-collapse, and promotion
+  gates remain denied.
 - The scaffold is not runtime authority. It does not train, write weights, run
   providers or hardware, claim Unitree runtime, mutate reward math, promote,
   replace lower WMs, collapse governance into a scalar score, or control live

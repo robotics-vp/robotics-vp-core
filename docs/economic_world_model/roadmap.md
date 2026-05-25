@@ -1065,6 +1065,22 @@ Compute and battery sequencing rule:
   training, weight-write, provider, hardware, Unitree-runtime, live-policy,
   reward-mutation, lower-WM-replacement, scalar-collapse, and promotion gates
   remain denied
+- As of 2026-05-25, Phase 7 also has shadow runtime/event-spine wiring through
+  `src/world_model/humanoid_readiness/phase7_runtime.py`,
+  `src/shadow_runtime/control_plane.py`, and
+  `scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py`.
+  The current artifact run emits
+  `phase7_meta_regal_shadow.control_field_runtime_receipt_count=14`,
+  `phase7_meta_regal_shadow.conflict_runtime_join_receipt_count=12`,
+  `shadow_event_spine_wiring_executed=true`,
+  `decision_ledger_wiring_executed=true`, and
+  `local_shadow_runtime_wiring_complete=true`, while
+  `phase7_authority_granted=false`, `live_dispatch_allowed=false`,
+  `hard_veto_dispatch=false`, `training_executed=false`,
+  `weights_written=false`, `provider_executed=false`,
+  `hardware_executed=false`, `unitree_sim_runtime_executed=false`,
+  `live_policy_control=false`, `reward_math_mutation=false`, and
+  `promotion_eligible=false`
 
 Suggested RL staging for those resources:
 

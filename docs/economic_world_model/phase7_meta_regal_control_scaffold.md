@@ -61,6 +61,51 @@ Current local result:
 - `reward_math_mutation=false`
 - `promotion_eligible=false`
 
+## Shadow Runtime / Event-Spine Wiring
+
+Current CLI:
+
+```bash
+python3 scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py --no-run-dependencies --episodes 2 --run-id phase7_shadow_runtime_local
+```
+
+Current artifact directory:
+
+```text
+artifacts/economic_world_model/phase7_meta_regal_shadow_runtime
+```
+
+Current local result:
+
+- `phase7_meta_regal_shadow.enabled=true`
+- `phase7_meta_regal_shadow.episode_report_count=2`
+- `phase7_meta_regal_shadow.control_field_runtime_receipt_count=14`
+- `phase7_meta_regal_shadow.conflict_runtime_join_receipt_count=12`
+- `phase7_meta_regal_shadow.shadow_event_spine_wiring_executed=true`
+- `phase7_meta_regal_shadow.decision_ledger_wiring_executed=true`
+- `phase7_meta_regal_shadow.local_shadow_runtime_wiring_complete=true`
+- event spine contains `phase7_control_field_shadow_emitted`
+- event spine contains `phase7_conflict_override_shadow_joined`
+- decision ledger contains `phase7_control_field_shadow_recorded`
+- decision ledger contains `phase7_conflict_override_shadow_recorded`
+- `phase7_authority_granted=false`
+- `live_dispatch_allowed=false`
+- `hard_veto_dispatch=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+This wiring connects the Phase 7 control-field slots and conflict receipts to
+the existing shadow runtime `event_spine.json` and `decision_ledger.json`
+sidecars. It is still shadow-only. It records what the Meta-Regal layer would
+shape or join; it does not dispatch actions, hard vetoes, policy changes,
+reward mutations, weight writes, or promotions.
+
 ## Governance Node Surfaces
 
 The scaffold defines these domain-governance surfaces:

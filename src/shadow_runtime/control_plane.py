@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
@@ -33,6 +33,14 @@ from src.runtime.packets import (
 from src.shadow_runtime.demo_source import ShadowEpisodeTrace, generate_workcell_shadow_batch
 from src.utils.config_digest import sha256_json
 from src.utils.json_safe import to_json_safe
+from src.world_model.humanoid_readiness.phase7_runtime import (
+    Phase7ConflictRuntimeJoinReceipt,
+    Phase7ControlFieldRuntimeReceipt,
+    Phase7RuntimeScaffoldInputs,
+    Phase7ShadowRuntimeWiringReport,
+    build_phase7_shadow_runtime_wiring,
+    load_phase7_runtime_scaffold_inputs,
+)
 
 
 @dataclass(frozen=True)
@@ -108,6 +116,8 @@ def run_shadow_control_plane(
     timestamp_base: Optional[str] = None,
     run_id: Optional[str] = None,
     episode_traces: Optional[Sequence[ShadowEpisodeTrace]] = None,
+    include_phase7_meta_regal_shadow: bool = False,
+    phase7_scaffold_dir: Optional[str | Path] = None,
 ) -> ShadowRunResult:
     """Run the full shadow accounting, pricing, and governance loop."""
 
@@ -156,6 +166,27 @@ def run_shadow_control_plane(
         "summary_json": str(output_root / "summary.json"),
         "summary_md": str(output_root / "summary.md"),
     }
+    phase7_inputs: Optional[Phase7RuntimeScaffoldInputs] = None
+    if include_phase7_meta_regal_shadow:
+        if phase7_scaffold_dir is None:
+            raise ValueError(
+                "phase7_scaffold_dir is required when "
+                "include_phase7_meta_regal_shadow=True"
+            )
+        phase7_inputs = load_phase7_runtime_scaffold_inputs(phase7_scaffold_dir)
+        artifact_paths.update(
+            {
+                "phase7_shadow_runtime_wiring": str(
+                    output_root / "phase7_shadow_runtime_wiring.json"
+                ),
+                "phase7_control_field_runtime_receipts": str(
+                    output_root / "phase7_control_field_runtime_receipts.jsonl"
+                ),
+                "phase7_conflict_runtime_join_receipts": str(
+                    output_root / "phase7_conflict_runtime_join_receipts.jsonl"
+                ),
+            }
+        )
     _reset_output_files([artifact_paths["pricing_ticks"], artifact_paths["value_ledger"]])
     ledger = ValueLedger(artifact_paths["value_ledger"])
 
@@ -180,6 +211,9 @@ def run_shadow_control_plane(
     runtime_packets: list[RuntimePacket] = []
     runtime_events: list[RuntimeEvent] = []
     decision_entries: list[DecisionLedgerEntry] = []
+    phase7_reports: list[Phase7ShadowRuntimeWiringReport] = []
+    phase7_field_receipts: list[Phase7ControlFieldRuntimeReceipt] = []
+    phase7_conflict_join_receipts: list[Phase7ConflictRuntimeJoinReceipt] = []
     event_sequence_idx = 0
     decision_sequence_idx = 0
 
@@ -421,6 +455,47 @@ def run_shadow_control_plane(
         runtime_events.extend(episode_events)
         decision_entries.extend(episode_decisions)
 
+        if phase7_inputs is not None:
+            (
+                phase7_report,
+                episode_phase7_field_receipts,
+                episode_phase7_conflict_receipts,
+                episode_phase7_events,
+                episode_phase7_decisions,
+                event_sequence_idx,
+                decision_sequence_idx,
+            ) = build_phase7_shadow_runtime_wiring(
+                phase7_report=phase7_inputs.report,
+                control_fields=phase7_inputs.control_fields,
+                conflict_receipts=phase7_inputs.conflict_receipts,
+                run_id=run_id,
+                episode_id=trace.episode_id,
+                timestamp=trace.ended_at,
+                runtime_packet_id=runtime_packet.packet_id,
+                contract_id=runtime_packet.contract.contract_id,
+                artifact_refs={
+                    **_episode_artifact_refs(),
+                    "phase7_scaffold_report": (
+                        "phase7_meta_regal_control_scaffold_report_v1.json"
+                    ),
+                    "phase7_control_fields": (
+                        "phase7_control_field_slots_v1.jsonl"
+                    ),
+                    "phase7_conflict_receipts": (
+                        "phase7_conflict_override_receipts_v1.jsonl"
+                    ),
+                },
+                event_sequence_start=event_sequence_idx,
+                decision_sequence_start=decision_sequence_idx,
+            )
+            phase7_reports.append(phase7_report)
+            phase7_field_receipts.extend(episode_phase7_field_receipts)
+            phase7_conflict_join_receipts.extend(episode_phase7_conflict_receipts)
+            episode_events.extend(episode_phase7_events)
+            episode_decisions.extend(episode_phase7_decisions)
+            runtime_events.extend(episode_phase7_events)
+            decision_entries.extend(episode_phase7_decisions)
+
         episode_artifacts.append(
             ShadowEpisodeArtifacts(
                 episode_id=trace.episode_id,
@@ -460,6 +535,25 @@ def run_shadow_control_plane(
         artifact_paths["decision_ledger"],
         decision_ledger_sidecar_payload(run_id=run_id, decisions=decision_entries),
     )
+    if phase7_inputs is not None:
+        _write_json(
+            artifact_paths["phase7_shadow_runtime_wiring"],
+            _phase7_shadow_runtime_wiring_payload(
+                run_id=run_id,
+                phase7_inputs=phase7_inputs,
+                reports=phase7_reports,
+                field_receipts=phase7_field_receipts,
+                conflict_join_receipts=phase7_conflict_join_receipts,
+            ),
+        )
+        _write_jsonl(
+            artifact_paths["phase7_control_field_runtime_receipts"],
+            [receipt.to_dict() for receipt in phase7_field_receipts],
+        )
+        _write_jsonl(
+            artifact_paths["phase7_conflict_runtime_join_receipts"],
+            [receipt.to_dict() for receipt in phase7_conflict_join_receipts],
+        )
     _write_json(
         artifact_paths["shadow_episode_traces"],
         {
@@ -478,6 +572,9 @@ def run_shadow_control_plane(
         decision_entries=decision_entries,
         pricing_rows=pricing_rows,
         artifact_paths=artifact_paths,
+        phase7_reports=phase7_reports,
+        phase7_field_receipts=phase7_field_receipts,
+        phase7_conflict_join_receipts=phase7_conflict_join_receipts,
     )
     _write_json(artifact_paths["summary_json"], summary)
     Path(artifact_paths["summary_md"]).write_text(_summary_markdown(summary), encoding="utf-8")
@@ -1100,6 +1197,9 @@ def _build_summary(
     decision_entries: Sequence[DecisionLedgerEntry],
     pricing_rows: Sequence[Mapping[str, Any]],
     artifact_paths: Mapping[str, str],
+    phase7_reports: Sequence[Phase7ShadowRuntimeWiringReport],
+    phase7_field_receipts: Sequence[Phase7ControlFieldRuntimeReceipt],
+    phase7_conflict_join_receipts: Sequence[Phase7ConflictRuntimeJoinReceipt],
 ) -> Dict[str, Any]:
     episode_summaries = []
     deploy_counter: Counter[str] = Counter()
@@ -1138,6 +1238,11 @@ def _build_summary(
         event_kind_counter[event.event_kind] += 1
     for decision in decision_entries:
         decision_kind_counter[decision.decision_kind] += 1
+    phase7_summary = _phase7_shadow_runtime_summary(
+        reports=phase7_reports,
+        field_receipts=phase7_field_receipts,
+        conflict_join_receipts=phase7_conflict_join_receipts,
+    )
     return {
         "run_id": run_id,
         "objective_profile_id": objective_profile.profile_id,
@@ -1157,7 +1262,61 @@ def _build_summary(
         "decision_kind_counts": dict(decision_kind_counter),
         "determinism": get_context_summary(),
         "artifact_paths": dict(artifact_paths),
+        "phase7_meta_regal_shadow": phase7_summary,
         "episode_summaries": episode_summaries,
+    }
+
+
+def _phase7_shadow_runtime_wiring_payload(
+    *,
+    run_id: str,
+    phase7_inputs: Phase7RuntimeScaffoldInputs,
+    reports: Sequence[Phase7ShadowRuntimeWiringReport],
+    field_receipts: Sequence[Phase7ControlFieldRuntimeReceipt],
+    conflict_join_receipts: Sequence[Phase7ConflictRuntimeJoinReceipt],
+) -> Dict[str, Any]:
+    summary = _phase7_shadow_runtime_summary(
+        reports=reports,
+        field_receipts=field_receipts,
+        conflict_join_receipts=conflict_join_receipts,
+    )
+    return {
+        "version": "phase7_shadow_runtime_wiring_run_v1",
+        "run_id": run_id,
+        "phase7_scaffold_report_id": phase7_inputs.report.report_id,
+        "summary": summary,
+        "reports": [report.to_dict() for report in reports],
+    }
+
+
+def _phase7_shadow_runtime_summary(
+    *,
+    reports: Sequence[Phase7ShadowRuntimeWiringReport],
+    field_receipts: Sequence[Phase7ControlFieldRuntimeReceipt],
+    conflict_join_receipts: Sequence[Phase7ConflictRuntimeJoinReceipt],
+) -> Dict[str, Any]:
+    complete = bool(reports) and all(
+        report.local_shadow_runtime_wiring_complete for report in reports
+    )
+    return {
+        "enabled": bool(reports),
+        "episode_report_count": len(reports),
+        "control_field_runtime_receipt_count": len(field_receipts),
+        "conflict_runtime_join_receipt_count": len(conflict_join_receipts),
+        "shadow_event_spine_wiring_executed": complete,
+        "decision_ledger_wiring_executed": complete,
+        "local_shadow_runtime_wiring_complete": complete,
+        "phase7_authority_granted": False,
+        "live_dispatch_allowed": False,
+        "hard_veto_dispatch": False,
+        "training_executed": False,
+        "weights_written": False,
+        "provider_executed": False,
+        "hardware_executed": False,
+        "unitree_sim_runtime_executed": False,
+        "live_policy_control": False,
+        "reward_math_mutation": False,
+        "promotion_eligible": False,
     }
 
 
