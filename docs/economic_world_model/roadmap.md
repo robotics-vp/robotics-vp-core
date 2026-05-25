@@ -1052,6 +1052,15 @@ Compute and battery sequencing rule:
 - only later should transport and meta-node layers learn over those allocations as higher-order governance objects
 - The local Phase 6.5 scaffold note is `phase65_local_meta_node_neuralization.md`: it names `MetaNodeState`, trajectory/intervention receipts, counterfactual targets, robustness reports, and denied-by-default promotion gates before any Phase 7 control-WM authority exists
 - As of 2026-05-24, Phase 6.5 has typed local scaffolds in `src/world_model/humanoid_readiness/phase65.py` and `src/world_model/humanoid_readiness/closure.py` plus `scripts/economic_world_model/prepare_phase65_meta_node_neuralization.py` and `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`; the current artifact run emits `node_state_count=5`, `counterfactual_target_count=5`, `robustness_report_count=5`, `promotion_gate_count=5`, `local_meta_node_scaffold_complete=true`, `local_phase4_unitree_bringup_readiness_complete=true`, `local_phase4_unitree_local_harness_complete=true`, `local_phase4_unitree_runtime_bridge_complete=true`, `local_phase4_unitree_blocker_stress_probe_complete=true`, and `ready_for_phase7_scaffold=true`, while `phase7_authority_granted=false`
+- As of 2026-05-25, Phase 6.5 also has a non-training trainer/loss scaffold in
+  `src/world_model/humanoid_readiness/phase65_trainer.py` and
+  `scripts/economic_world_model/build_phase65_meta_node_trainer_scaffold.py`.
+  The current artifact run emits `dataset_contract_ready=true`,
+  `losses_defined=true`, `model_config_ready=true`,
+  `cpu_smoke_forward_passed=true`, `loss_count=8`,
+  `ready_for_training=false`, `ready_for_gpu_training=false`,
+  `training_executed=false`, `weights_written=false`, and
+  `promotion_eligible=false`.
 - The local Phase 7 scaffold note is `phase7_meta_regal_control_scaffold.md`:
   it starts the Meta-Regal-Node / control WM as Stage A typed non-neural
   governance scaffolding. As of 2026-05-25, `src/world_model/humanoid_readiness/phase7.py`
@@ -1113,6 +1122,23 @@ Compute and battery sequencing rule:
   authority, live dispatch, hard-veto dispatch, training, weight-write,
   provider, hardware, Unitree-runtime, live-policy, reward-mutation,
   lower-WM replacement, scalar-collapse, and promotion gates remain denied
+- As of 2026-05-25, Phase 7 also has a meta-composition hypernetwork scaffold
+  in `src/world_model/humanoid_readiness/phase7_hypernetwork.py` and
+  `scripts/economic_world_model/build_phase7_meta_composition_hypernetwork_scaffold.py`.
+  This wires current Phase 7 receipts into future conditioning specs for
+  node signals, conflict context, Pareto/regime rows, shadow outcome joins,
+  and runtime denial masks. It records future advisory output heads for node
+  gates, activation strengths, composition-mode logits, conflict override
+  deltas, Pareto-regime parameters, advisory control-field decoding,
+  veto-candidate calibration, and uncertainty calibration. The current
+  artifact run emits `conditioning_spec_count=5`, `output_head_count=8`,
+  `loss_count=9`, `conditioning_wiring_complete=true`,
+  `future_meta_composition_explicit=true`,
+  `cpu_smoke_forward_passed=true`,
+  `local_hypernetwork_scaffold_complete=true`, `ready_for_training=false`,
+  `ready_for_gpu_training=false`, `training_executed=false`,
+  `weights_written=false`, `live_dispatch_allowed=false`,
+  `hard_veto_dispatch=false`, and `promotion_eligible=false`.
 
 Suggested RL staging for those resources:
 

@@ -5892,3 +5892,75 @@ signals into shadow runtime metadata only. It does not train, write weights,
 dispatch live actions, execute hard vetoes, mutate reward math, promote outputs,
 replace lower WMs, claim provider/hardware/Unitree runtime authority, or close
 the need for live lower-WM streams and labeled governance outcomes.
+
+## 2026-05-25 — Phase 6.5 trainer and Phase 7 hypernetwork scaffolds
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/phase65_trainer.py`.
+- Added `scripts/economic_world_model/build_phase65_meta_node_trainer_scaffold.py`.
+- Added `tests/test_humanoid_phase65_meta_node_trainer_scaffold.py`.
+- Added `src/world_model/humanoid_readiness/phase7_hypernetwork.py`.
+- Added `scripts/economic_world_model/build_phase7_meta_composition_hypernetwork_scaffold.py`.
+- Added `tests/test_humanoid_phase7_hypernetwork_scaffold.py`.
+
+### Current artifact result
+
+Phase 6.5 trainer scaffold:
+
+- `dataset_contract_ready=true`
+- `losses_defined=true`
+- `model_config_ready=true`
+- `cpu_smoke_forward_passed=true`
+- `loss_count=8`
+- `ready_for_training=false`
+- `ready_for_gpu_training=false`
+- `training_executed=false`
+- `weights_written=false`
+- `promotion_eligible=false`
+
+Phase 7 hypernetwork scaffold:
+
+- `conditioning_spec_count=5`
+- `output_head_count=8`
+- `loss_count=9`
+- `conditioning_wiring_complete=true`
+- `future_meta_composition_explicit=true`
+- `cpu_smoke_forward_passed=true`
+- `local_hypernetwork_scaffold_complete=true`
+- `ready_for_training=false`
+- `ready_for_gpu_training=false`
+- `phase7_authority_granted=false`
+- `live_dispatch_allowed=false`
+- `hard_veto_dispatch=false`
+- `training_executed=false`
+- `weights_written=false`
+- `promotion_eligible=false`
+
+### Hypernetwork conditioning posture
+
+The Phase 7 hypernetwork scaffold does not train a hypernetwork. It records the
+intended future wiring so the training path is not vague:
+
+- node-signal conditioning from the eight governance-node receipts;
+- conflict-context conditioning from conflict/override receipts and eval joins;
+- Pareto/regime conditioning from observed modes, conflicts, and regime rows;
+- shadow-outcome conditioning from false-veto, false-allow, policy-regret,
+  downstream-effect, and ground-truth join slots;
+- runtime-truth conditioning from explicit denial masks for training, weights,
+  provider, hardware, live dispatch, hard-veto dispatch, reward mutation, and
+  promotion.
+
+The future generated heads are advisory-only: node gates, activation strengths,
+composition-mode logits, conflict override deltas, Pareto-regime parameters,
+advisory control-field decoder parameters, veto-candidate calibration, and
+uncertainty calibration. These heads are represented as training/output
+contracts now, not executable live-control authority.
+
+### Boundary
+
+This pass adds neural and hypernetwork scaffolds only. It does not train,
+initialize or write weights, dispatch live actions, execute hard vetoes, mutate
+reward math, promote outputs, replace lower WMs, collapse governance into a
+scalar score, or claim provider, hardware, Unitree sim, or live policy
+authority.

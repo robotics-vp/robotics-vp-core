@@ -7,7 +7,9 @@ current scaffold defines typed non-neural governance surfaces, composition
 modes, conflict/override receipts, admissible regions, shadow control-field
 slots, training-row slots, denied promotion gates, and shadow-only event-spine
 wiring plus local evaluation/outcome-join rows and lower-WM receipt-backed
-signal adapters. It does not grant live runtime authority.
+signal adapters. A local meta-composition hypernetwork scaffold now records the
+future conditioning and output-head contracts, but it does not train or grant
+live runtime authority.
 
 The current implementation is:
 
@@ -15,19 +17,24 @@ The current implementation is:
 - `src/world_model/humanoid_readiness/phase7_runtime.py`
 - `src/world_model/humanoid_readiness/phase7_eval.py`
 - `src/world_model/humanoid_readiness/phase7_signal_adapters.py`
+- `src/world_model/humanoid_readiness/phase7_hypernetwork.py`
 - `scripts/economic_world_model/prepare_phase7_meta_regal_control_scaffold.py`
 - `scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py`
 - `scripts/economic_world_model/evaluate_phase7_meta_governance_shadow.py`
 - `scripts/economic_world_model/adapt_phase7_governance_node_signals.py`
+- `scripts/economic_world_model/build_phase7_meta_composition_hypernetwork_scaffold.py`
 - `docs/economic_world_model/phase7_meta_regal_control_scaffold.md`
 
 Shadow runtime wiring is present through the event spine and decision ledger.
 Local decomposed evaluation and outcome-join rows are present. All eight
 governance-node surfaces now have local lower-WM receipt-backed signal
 adapters, and the shadow runtime can join those signal receipt IDs into
-Phase 7 events and receipts. Governance-node training, benchmark labels,
-provider or hardware execution, promotion, hard-veto dispatch, and live policy
-control remain future work.
+Phase 7 events and receipts. The hypernetwork scaffold wires those receipts,
+conflict/eval rows, Pareto/regime rows, shadow outcomes, and denial masks into
+explicit future conditioning specs with advisory-only output heads. Governance
+node training, hypernetwork training, benchmark labels, provider or hardware
+execution, promotion, hard-veto dispatch, and live policy control remain
+future work.
 
 ## Why the Economic WM cannot be sovereign
 
@@ -251,8 +258,28 @@ The meta-layer learns how to compose node outputs:
 - persistence / hysteresis in governance mode
 
 Architecture: multi-objective actor-critic with Pareto front tracking,
-conditioned on regime state and node confidence. Possibly hypernetwork-
-conditioned policy over the composition space.
+conditioned on regime state and node confidence. The local scaffold now makes
+the stricter hypernetwork path explicit without training it:
+
+- `node_signal_conditioning` consumes eight governance-node receipts, node
+  roles, confidence priors, provenance masks, and hard-constraint masks
+- `conflict_context_conditioning` consumes conflict receipts, severity priors,
+  source-node pairs, composition modes, and related control-field joins
+- `pareto_regime_conditioning` consumes regime labels, active conflicts,
+  composition-mode histograms, and non-scalar Pareto dimensions
+- `shadow_outcome_conditioning` consumes false-veto, false-allow,
+  policy-regret, downstream-effect, and ground-truth join slots
+- `runtime_truth_and_denial_conditioning` consumes event/decision counts plus
+  denial masks for training, weight writes, provider/hardware evidence, live
+  dispatch, hard-veto dispatch, reward mutation, and promotion
+
+The future hypernetwork may generate advisory node gates, activation strengths,
+composition-mode logits, conflict override deltas, Pareto-regime parameters,
+advisory control-field decoder parameters, veto-candidate calibration, and
+uncertainty calibration. These outputs are contracts and training targets until
+separate promotion evidence exists. They do not write runtime policy, execute
+hard vetoes, mutate reward math, replace lower WMs, collapse governance into a
+scalar, or grant live dispatch.
 
 ### Stage D: transport and feedback
 

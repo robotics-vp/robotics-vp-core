@@ -208,6 +208,72 @@ This is still a shadow feed. The signals are typed inputs for governance-node
 evaluation and later training labels; they do not grant authority or execute
 hard vetoes.
 
+## Meta-Composition Hypernetwork Scaffold
+
+Current CLI:
+
+```bash
+python3 scripts/economic_world_model/build_phase7_meta_composition_hypernetwork_scaffold.py --no-run-dependencies
+```
+
+Current artifact directory:
+
+```text
+artifacts/economic_world_model/phase7_meta_composition_hypernetwork
+```
+
+Current local result:
+
+- `conditioning_spec_count=5`
+- `output_head_count=8`
+- `loss_count=9`
+- `conditioning_wiring_complete=true`
+- `future_meta_composition_explicit=true`
+- `cpu_smoke_forward_passed=true`
+- `local_hypernetwork_scaffold_complete=true`
+- `ready_for_training=false`
+- `ready_for_gpu_training=false`
+- `phase7_authority_granted=false`
+- `live_dispatch_allowed=false`
+- `hard_veto_dispatch=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+The hypernetwork scaffold makes the future meta-composition path explicit
+without training it. It wires current Phase 7 artifacts into five conditioning
+families:
+
+- `node_signal_conditioning`: eight governance-node signals, confidence
+  priors, lower-WM provenance, and hard-constraint masks
+- `conflict_context_conditioning`: conflict receipts, severity priors,
+  source-node pairs, related control-field joins, and composition modes
+- `pareto_regime_conditioning`: regime labels, active conflicts, composition
+  mode histograms, and non-scalar Pareto dimensions
+- `shadow_outcome_conditioning`: false-veto, false-allow, policy-regret,
+  downstream-effect, and ground-truth join slots
+- `runtime_truth_and_denial_conditioning`: event/decision counts plus
+  training, weight-write, provider, hardware, live-dispatch, and promotion
+  denial masks
+
+The future learned component is a parameter generator over these conditioning
+tensors. It may later generate advisory node gates, activation strengths,
+composition-mode logits, conflict override deltas, Pareto-regime parameters,
+advisory control-field decoder parameters, veto-candidate calibration, and
+uncertainty calibration. The scaffold records those output heads now, but all
+heads have `output_authority=shadow_advisory_only` and cannot write runtime
+policy, hard-veto dispatch, reward math, weights, or promotion status.
+
+The Economic WM's role is explicitly modeled as one conditioned governance
+voice inside the Pareto/meta-composition surface. It remains a first-class
+allocative contributor, but it does not become the scalar objective or
+sovereign governance layer.
+
 ## Governance Node Surfaces
 
 The scaffold defines these domain-governance surfaces:
@@ -307,6 +373,10 @@ exist. Runtime authority, training, and promotion remain blocked by:
 - live lower-WM runtime streams
 - labeled governance signal outcomes
 - trained governance signal weights
+- GPU hypernetwork training
+- hypernetwork weight writes
+- labeled meta-composition outcomes
+- promotion-grade meta-composition benchmarks
 
 ## Boundary
 

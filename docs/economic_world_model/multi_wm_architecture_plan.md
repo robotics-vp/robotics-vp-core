@@ -3309,11 +3309,15 @@ Current local scaffold note:
 Current local implementation:
 
 - `src/world_model/humanoid_readiness/phase65.py`
+- `src/world_model/humanoid_readiness/phase65_trainer.py`
 - `src/world_model/humanoid_readiness/closure.py`
 - `scripts/economic_world_model/prepare_phase65_meta_node_neuralization.py`
+- `scripts/economic_world_model/build_phase65_meta_node_trainer_scaffold.py`
 - `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
 - Current artifact report:
   `artifacts/economic_world_model/phase65_meta_node_neuralization/phase65_meta_node_neuralization_report_v1.json`
+- Current trainer scaffold:
+  `artifacts/economic_world_model/phase65_meta_node_trainer_scaffold/phase65_meta_node_trainer_scaffold_manifest_v1.json`
 - Current integrated closure audit:
   `artifacts/economic_world_model/phase35_4_65_local_closure/phase35_4_65_local_closure_audit_v1.json`
 - Current local result: `node_state_count=5`,
@@ -3321,6 +3325,12 @@ Current local implementation:
   `counterfactual_target_count=5`, `robustness_report_count=5`,
   `promotion_gate_count=5`, `local_meta_node_scaffold_complete=true`,
   `all_local_structures_complete=true`, and `phase7_authority_granted=false`.
+- Current trainer result: `dataset_contract_ready=true`,
+  `losses_defined=true`, `model_config_ready=true`,
+  `cpu_smoke_forward_passed=true`, `loss_count=8`,
+  `ready_for_training=false`, `ready_for_gpu_training=false`,
+  `training_executed=false`, `weights_written=false`, and
+  `promotion_eligible=false`.
 - Remaining blockers are counterfactual corpus density, trained meta-node
   weights, heldout robustness benchmarks, provider/hardware/deployment
   evidence, and real governance benchmark evidence.
@@ -3408,6 +3418,13 @@ Current local scaffold:
   adapt existing lower-WM receipts into eight governance-node signal receipts
   and let the shadow runtime join those signal IDs into Phase 7 events and
   receipts.
+- `src/world_model/humanoid_readiness/phase7_hypernetwork.py` and
+  `scripts/economic_world_model/build_phase7_meta_composition_hypernetwork_scaffold.py`
+  materialize the future meta-composition hypernetwork contract: conditioning
+  specs over node signals, conflict context, Pareto/regime rows, shadow
+  outcome joins, and runtime denial masks; output-head specs for advisory node
+  gates, composition modes, Pareto parameters, conflict deltas, veto
+  calibration, and uncertainty; and loss/model/dataset/CPU-shape artifacts.
 - Current artifact result:
   `governance_node_surface_count=8`, `composition_mode_count=5`,
   `conflict_override_receipt_count=6`, `admissible_region_count=6`,
@@ -3444,6 +3461,16 @@ Current local scaffold:
   `phase7_meta_regal_shadow.node_signal_receipt_count=8`, and
   `phase7_meta_regal_shadow.lower_wm_signal_backed=true`, while all live
   authority and promotion gates remain denied.
+- Current meta-composition hypernetwork result:
+  `conditioning_spec_count=5`, `output_head_count=8`, `loss_count=9`,
+  `conditioning_wiring_complete=true`,
+  `future_meta_composition_explicit=true`,
+  `cpu_smoke_forward_passed=true`,
+  `local_hypernetwork_scaffold_complete=true`,
+  `ready_for_training=false`, `ready_for_gpu_training=false`,
+  `training_executed=false`, `weights_written=false`,
+  `live_dispatch_allowed=false`, `hard_veto_dispatch=false`, and
+  `promotion_eligible=false`.
 - The scaffold is not runtime authority. It does not train, write weights, run
   providers or hardware, claim Unitree runtime, mutate reward math, promote,
   replace lower WMs, collapse governance into a scalar score, or control live

@@ -3872,3 +3872,53 @@ Verification for the Phase-5.1 pass:
   runtime claims, live policy control, reward math mutation, promotion,
   lower-WM replacement, scalar governance collapse, or frozen
   reward/trust/`w_econ`/lambda mutation.
+
+### 2026-05-25: Phase 6.5 trainer scaffold and Phase 7 hypernetwork scaffold
+
+- Added Phase 6.5 non-training trainer/loss surfaces:
+  - `src/world_model/humanoid_readiness/phase65_trainer.py`
+  - `scripts/economic_world_model/build_phase65_meta_node_trainer_scaffold.py`
+  - `tests/test_humanoid_phase65_meta_node_trainer_scaffold.py`
+- Current Phase 6.5 trainer artifact run:
+  `dataset_contract_ready=true`,
+  `losses_defined=true`,
+  `model_config_ready=true`,
+  `cpu_smoke_forward_passed=true`,
+  `loss_count=8`,
+  `ready_for_training=false`,
+  `ready_for_gpu_training=false`,
+  `training_executed=false`,
+  `weights_written=false`, and
+  `promotion_eligible=false`.
+- Added Phase 7 meta-composition hypernetwork scaffold:
+  - `src/world_model/humanoid_readiness/phase7_hypernetwork.py`
+  - `scripts/economic_world_model/build_phase7_meta_composition_hypernetwork_scaffold.py`
+  - `tests/test_humanoid_phase7_hypernetwork_scaffold.py`
+- Current Phase 7 hypernetwork artifact run:
+  `conditioning_spec_count=5`,
+  `output_head_count=8`,
+  `loss_count=9`,
+  `conditioning_wiring_complete=true`,
+  `future_meta_composition_explicit=true`,
+  `cpu_smoke_forward_passed=true`,
+  `local_hypernetwork_scaffold_complete=true`,
+  `ready_for_training=false`,
+  `ready_for_gpu_training=false`,
+  `phase7_authority_granted=false`,
+  `live_dispatch_allowed=false`,
+  `hard_veto_dispatch=false`,
+  `training_executed=false`,
+  `weights_written=false`, and
+  `promotion_eligible=false`.
+- The hypernetwork scaffold records current wiring for future
+  meta-composition conditioning: node signals, conflict context,
+  Pareto/regime rows, shadow outcome joins, and runtime denial masks. It also
+  records future advisory output heads for node gates, activation strengths,
+  composition modes, conflict override deltas, Pareto-regime parameters,
+  advisory control-field decoding, veto-candidate calibration, and uncertainty
+  calibration.
+- Boundary preserved: these are neural/hypernetwork training contracts and
+  CPU shape checks only. They do not train, initialize or write weights, grant
+  Phase 7 authority, dispatch live actions, execute hard vetoes, mutate reward
+  math, promote outputs, replace lower WMs, collapse governance into a scalar,
+  or claim provider/hardware/Unitree runtime evidence.

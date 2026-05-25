@@ -143,3 +143,42 @@ Denied gates remain explicit:
 - `live_policy_control=false`
 - `reward_math_mutation=false`
 - `promotion_eligible=false`
+
+## Local Trainer / Loss Scaffold
+
+As of 2026-05-25, Phase 6.5 also has a non-training trainer/loss scaffold for
+the local meta-node rows.
+
+Code and CLI surfaces:
+
+- `src/world_model/humanoid_readiness/phase65_trainer.py`
+- `scripts/economic_world_model/build_phase65_meta_node_trainer_scaffold.py`
+- `tests/test_humanoid_phase65_meta_node_trainer_scaffold.py`
+
+Current CLI:
+
+```bash
+python3 scripts/economic_world_model/build_phase65_meta_node_trainer_scaffold.py --no-run-dependencies
+```
+
+Current artifact output:
+
+- `artifacts/economic_world_model/phase65_meta_node_trainer_scaffold/phase65_meta_node_trainer_scaffold_manifest_v1.json`
+- `dataset_contract_ready=true`
+- `losses_defined=true`
+- `model_config_ready=true`
+- `cpu_smoke_forward_passed=true`
+- `loss_count=8`
+- `ready_for_training=false`
+- `ready_for_gpu_training=false`
+- `phase7_authority_granted=false`
+- `training_executed=false`
+- `weights_written=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+The loss ledger defines activation timing, activation strength, intervention
+kind, target selection, counterfactual downstream effect, neighbor
+consistency, robustness-shift, and promotion-denial losses. These are shape
+and training-contract surfaces only. They do not optimize, initialize weights,
+write weights, grant Phase 7 control-WM authority, or promote any meta-node.
