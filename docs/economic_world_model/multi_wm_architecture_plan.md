@@ -3403,6 +3403,11 @@ Current local scaffold:
   `scripts/economic_world_model/evaluate_phase7_meta_governance_shadow.py`
   decompose the shadow runtime rows into control-field evals, conflict-join
   evals, Pareto/regime evals, and replay-ready outcome-join rows.
+- `src/world_model/humanoid_readiness/phase7_signal_adapters.py` and
+  `scripts/economic_world_model/adapt_phase7_governance_node_signals.py`
+  adapt existing lower-WM receipts into eight governance-node signal receipts
+  and let the shadow runtime join those signal IDs into Phase 7 events and
+  receipts.
 - Current artifact result:
   `governance_node_surface_count=8`, `composition_mode_count=5`,
   `conflict_override_receipt_count=6`, `admissible_region_count=6`,
@@ -3429,6 +3434,16 @@ Current local scaffold:
   `local_meta_governance_eval_complete=true`, and
   `replay_export_ready=true`, while all live authority and promotion gates
   remain denied.
+- Current governance signal adapter result:
+  `adapter_count=8`, `signal_receipt_count=8`,
+  `source_artifact_count=35`, `missing_source_artifact_count=0`,
+  `lower_wm_receipt_backed_node_count=8`,
+  `all_eight_nodes_signal_backed=true`,
+  `shadow_runtime_feed_ready=true`,
+  `local_signal_adapter_complete=true`,
+  `phase7_meta_regal_shadow.node_signal_receipt_count=8`, and
+  `phase7_meta_regal_shadow.lower_wm_signal_backed=true`, while all live
+  authority and promotion gates remain denied.
 - The scaffold is not runtime authority. It does not train, write weights, run
   providers or hardware, claim Unitree runtime, mutate reward math, promote,
   replace lower WMs, collapse governance into a scalar score, or control live

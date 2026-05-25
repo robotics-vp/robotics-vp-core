@@ -41,6 +41,10 @@ from src.world_model.humanoid_readiness.phase7_runtime import (
     build_phase7_shadow_runtime_wiring,
     load_phase7_runtime_scaffold_inputs,
 )
+from src.world_model.humanoid_readiness.phase7_signal_adapters import (
+    Phase7GovernanceNodeSignalReceipt,
+    load_phase7_governance_node_signal_receipts,
+)
 
 
 @dataclass(frozen=True)
@@ -118,6 +122,7 @@ def run_shadow_control_plane(
     episode_traces: Optional[Sequence[ShadowEpisodeTrace]] = None,
     include_phase7_meta_regal_shadow: bool = False,
     phase7_scaffold_dir: Optional[str | Path] = None,
+    phase7_signal_adapter_dir: Optional[str | Path] = None,
 ) -> ShadowRunResult:
     """Run the full shadow accounting, pricing, and governance loop."""
 
@@ -167,6 +172,7 @@ def run_shadow_control_plane(
         "summary_md": str(output_root / "summary.md"),
     }
     phase7_inputs: Optional[Phase7RuntimeScaffoldInputs] = None
+    phase7_node_signal_receipts: list[Phase7GovernanceNodeSignalReceipt] = []
     if include_phase7_meta_regal_shadow:
         if phase7_scaffold_dir is None:
             raise ValueError(
@@ -174,6 +180,19 @@ def run_shadow_control_plane(
                 "include_phase7_meta_regal_shadow=True"
             )
         phase7_inputs = load_phase7_runtime_scaffold_inputs(phase7_scaffold_dir)
+        signal_receipts_path = ""
+        if phase7_signal_adapter_dir is not None:
+            signal_receipts_file = (
+                Path(phase7_signal_adapter_dir)
+                / "phase7_governance_node_signal_receipts_v1.jsonl"
+            )
+            signal_receipts_path = str(signal_receipts_file)
+            if signal_receipts_file.exists():
+                phase7_node_signal_receipts = (
+                    load_phase7_governance_node_signal_receipts(
+                        signal_receipts_file
+                    )
+                )
         artifact_paths.update(
             {
                 "phase7_shadow_runtime_wiring": str(
@@ -185,6 +204,7 @@ def run_shadow_control_plane(
                 "phase7_conflict_runtime_join_receipts": str(
                     output_root / "phase7_conflict_runtime_join_receipts.jsonl"
                 ),
+                "phase7_governance_node_signal_receipts": signal_receipts_path,
             }
         )
     _reset_output_files([artifact_paths["pricing_ticks"], artifact_paths["value_ledger"]])
@@ -473,6 +493,7 @@ def run_shadow_control_plane(
                 timestamp=trace.ended_at,
                 runtime_packet_id=runtime_packet.packet_id,
                 contract_id=runtime_packet.contract.contract_id,
+                node_signal_receipts=phase7_node_signal_receipts,
                 artifact_refs={
                     **_episode_artifact_refs(),
                     "phase7_scaffold_report": (
@@ -484,6 +505,11 @@ def run_shadow_control_plane(
                     "phase7_conflict_receipts": (
                         "phase7_conflict_override_receipts_v1.jsonl"
                     ),
+                    "phase7_governance_node_signal_receipts": (
+                        "phase7_governance_node_signal_receipts_v1.jsonl"
+                    )
+                    if phase7_node_signal_receipts
+                    else "",
                 },
                 event_sequence_start=event_sequence_idx,
                 decision_sequence_start=decision_sequence_idx,
@@ -544,6 +570,7 @@ def run_shadow_control_plane(
                 reports=phase7_reports,
                 field_receipts=phase7_field_receipts,
                 conflict_join_receipts=phase7_conflict_join_receipts,
+                node_signal_receipts=phase7_node_signal_receipts,
             ),
         )
         _write_jsonl(
@@ -575,6 +602,7 @@ def run_shadow_control_plane(
         phase7_reports=phase7_reports,
         phase7_field_receipts=phase7_field_receipts,
         phase7_conflict_join_receipts=phase7_conflict_join_receipts,
+        phase7_node_signal_receipts=phase7_node_signal_receipts,
     )
     _write_json(artifact_paths["summary_json"], summary)
     Path(artifact_paths["summary_md"]).write_text(_summary_markdown(summary), encoding="utf-8")
@@ -1200,6 +1228,7 @@ def _build_summary(
     phase7_reports: Sequence[Phase7ShadowRuntimeWiringReport],
     phase7_field_receipts: Sequence[Phase7ControlFieldRuntimeReceipt],
     phase7_conflict_join_receipts: Sequence[Phase7ConflictRuntimeJoinReceipt],
+    phase7_node_signal_receipts: Sequence[Phase7GovernanceNodeSignalReceipt],
 ) -> Dict[str, Any]:
     episode_summaries = []
     deploy_counter: Counter[str] = Counter()
@@ -1242,6 +1271,7 @@ def _build_summary(
         reports=phase7_reports,
         field_receipts=phase7_field_receipts,
         conflict_join_receipts=phase7_conflict_join_receipts,
+        node_signal_receipts=phase7_node_signal_receipts,
     )
     return {
         "run_id": run_id,
@@ -1274,11 +1304,13 @@ def _phase7_shadow_runtime_wiring_payload(
     reports: Sequence[Phase7ShadowRuntimeWiringReport],
     field_receipts: Sequence[Phase7ControlFieldRuntimeReceipt],
     conflict_join_receipts: Sequence[Phase7ConflictRuntimeJoinReceipt],
+    node_signal_receipts: Sequence[Phase7GovernanceNodeSignalReceipt],
 ) -> Dict[str, Any]:
     summary = _phase7_shadow_runtime_summary(
         reports=reports,
         field_receipts=field_receipts,
         conflict_join_receipts=conflict_join_receipts,
+        node_signal_receipts=node_signal_receipts,
     )
     return {
         "version": "phase7_shadow_runtime_wiring_run_v1",
@@ -1294,15 +1326,21 @@ def _phase7_shadow_runtime_summary(
     reports: Sequence[Phase7ShadowRuntimeWiringReport],
     field_receipts: Sequence[Phase7ControlFieldRuntimeReceipt],
     conflict_join_receipts: Sequence[Phase7ConflictRuntimeJoinReceipt],
+    node_signal_receipts: Sequence[Phase7GovernanceNodeSignalReceipt],
 ) -> Dict[str, Any]:
     complete = bool(reports) and all(
         report.local_shadow_runtime_wiring_complete for report in reports
+    )
+    signal_backed = bool(node_signal_receipts) and all(
+        receipt.lower_wm_receipt_backed for receipt in node_signal_receipts
     )
     return {
         "enabled": bool(reports),
         "episode_report_count": len(reports),
         "control_field_runtime_receipt_count": len(field_receipts),
         "conflict_runtime_join_receipt_count": len(conflict_join_receipts),
+        "node_signal_receipt_count": len(node_signal_receipts),
+        "lower_wm_signal_backed": signal_backed,
         "shadow_event_spine_wiring_executed": complete,
         "decision_ledger_wiring_executed": complete,
         "local_shadow_runtime_wiring_complete": complete,

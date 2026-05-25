@@ -578,14 +578,28 @@ def _build_control_field_eval(
             not receipt.promotion_eligible
             and not bool(event_metadata.get("promotion_eligible", True))
         ),
+        "node_signal_receipt_join_count": float(
+            len(strings(event_metadata.get("node_signal_receipt_ids")))
+        ),
+        "lower_wm_signal_backed": float(
+            bool(event_metadata.get("lower_wm_signal_backed", False))
+        ),
     }
-    status = "ok" if all(value == 1.0 for value in checks.values()) else "blocked"
+    required_checks = {
+        key: value
+        for key, value in checks.items()
+        if key not in {"node_signal_receipt_join_count", "lower_wm_signal_backed"}
+    }
+    status = "ok" if all(value == 1.0 for value in required_checks.values()) else "blocked"
     outcome_slots = {
         "false_allow_observed": None,
         "false_veto_observed": None,
         "shadow_downstream_effect": None,
         "policy_regret_delta": None,
         "operator_recovery_delta": None,
+        "node_signal_receipt_ids": strings(
+            event_metadata.get("node_signal_receipt_ids")
+        ),
         "ground_truth_join_status": "awaiting_runtime_or_benchmark_outcome",
     }
     return Phase7ControlFieldEvalReport(
@@ -651,14 +665,28 @@ def _build_conflict_join_eval(
             not receipt.promotion_eligible
             and not bool(event_metadata.get("promotion_eligible", True))
         ),
+        "node_signal_receipt_join_count": float(
+            len(strings(event_metadata.get("node_signal_receipt_ids")))
+        ),
+        "lower_wm_signal_backed": float(
+            bool(event_metadata.get("lower_wm_signal_backed", False))
+        ),
     }
-    status = "ok" if all(value == 1.0 for value in checks.values()) else "blocked"
+    required_checks = {
+        key: value
+        for key, value in checks.items()
+        if key not in {"node_signal_receipt_join_count", "lower_wm_signal_backed"}
+    }
+    status = "ok" if all(value == 1.0 for value in required_checks.values()) else "blocked"
     outcome_slots = {
         "false_veto_observed": None,
         "false_allow_observed": None,
         "override_correctness": None,
         "conflict_resolution_quality": None,
         "counterfactual_composition_delta": None,
+        "node_signal_receipt_ids": strings(
+            event_metadata.get("node_signal_receipt_ids")
+        ),
         "ground_truth_join_status": "awaiting_counterfactual_governance_benchmark",
     }
     return Phase7ConflictJoinEvalReport(

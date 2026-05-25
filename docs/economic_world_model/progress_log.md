@@ -3838,3 +3838,37 @@ Verification for the Phase-5.1 pass:
   writes, provider execution, hardware execution, Unitree runtime claims, live
   policy control, reward math mutation, promotion, lower-WM replacement,
   scalar governance collapse, or frozen reward/trust/`w_econ`/lambda mutation.
+
+### 2026-05-25: Phase 7 governance-node signal adapters
+
+- Added receipt-backed signal adapters for all eight Phase 7 governance nodes:
+  - `src/world_model/humanoid_readiness/phase7_signal_adapters.py`
+  - `scripts/economic_world_model/adapt_phase7_governance_node_signals.py`
+  - `tests/test_humanoid_phase7_signal_adapters.py`
+- The adapters read existing local lower-WM artifacts from Phase 3.5, Phase 4,
+  Phase 6, Phase 6.5, and Phase 7, then emit
+  `Phase7GovernanceNodeSignalAdapter` and
+  `Phase7GovernanceNodeSignalReceipt` rows.
+- Current adapter artifact run:
+  `adapter_count=8`,
+  `signal_receipt_count=8`,
+  `source_artifact_count=35`,
+  `missing_source_artifact_count=0`,
+  `lower_wm_receipt_backed_node_count=8`,
+  `all_eight_nodes_signal_backed=true`,
+  `shadow_runtime_feed_ready=true`, and
+  `local_signal_adapter_complete=true`.
+- Phase 7 shadow runtime now accepts an optional
+  `--phase7-signal-adapter-dir` and records signal joins in the event/receipt
+  layer. Current runtime result includes
+  `phase7_meta_regal_shadow.node_signal_receipt_count=8` and
+  `phase7_meta_regal_shadow.lower_wm_signal_backed=true`.
+- Phase 7 eval reports now expose non-gating signal-backed metrics for
+  control-field and conflict-join rows while preserving old shadow-only status
+  semantics.
+- Boundary preserved: this is signal adaptation and shadow metadata joining
+  only. It does not grant Phase 7 authority, live dispatch, hard-veto dispatch,
+  training, weight writes, provider execution, hardware execution, Unitree
+  runtime claims, live policy control, reward math mutation, promotion,
+  lower-WM replacement, scalar governance collapse, or frozen
+  reward/trust/`w_econ`/lambda mutation.

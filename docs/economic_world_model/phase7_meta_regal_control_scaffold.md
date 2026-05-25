@@ -158,6 +158,56 @@ regime-label, policy-regret, and downstream-effect slots for later labeled
 benchmarks. These are training targets only; no training or promotion is
 performed.
 
+## Governance Signal Adapters
+
+Current CLI:
+
+```bash
+python3 scripts/economic_world_model/adapt_phase7_governance_node_signals.py --no-run-dependencies
+python3 scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py --no-run-dependencies --run-id phase7_shadow_runtime_local --phase7-signal-adapter-dir artifacts/economic_world_model/phase7_governance_signal_adapters
+```
+
+Current artifact directory:
+
+```text
+artifacts/economic_world_model/phase7_governance_signal_adapters
+```
+
+Current local result:
+
+- `adapter_count=8`
+- `signal_receipt_count=8`
+- `source_artifact_count=35`
+- `missing_source_artifact_count=0`
+- `lower_wm_receipt_backed_node_count=8`
+- `all_eight_nodes_signal_backed=true`
+- `shadow_runtime_feed_ready=true`
+- `local_signal_adapter_complete=true`
+- `phase7_meta_regal_shadow.node_signal_receipt_count=8`
+- `phase7_meta_regal_shadow.lower_wm_signal_backed=true`
+- `phase7_authority_granted=false`
+- `live_dispatch_allowed=false`
+- `hard_veto_dispatch=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+The adapter layer maps actual local lower-WM receipts into the eight governance
+nodes: Phase 3.5 bipedal/refit receipts, Phase 4 controller/safety/Unitree
+receipts, Phase 6 transport advisory/eval receipts, Phase 6.5 meta-node
+receipts, and Phase 7 shadow runtime/eval receipts. Runtime events and
+receipts now carry `node_signal_receipt_ids` and `lower_wm_signal_backed`
+metadata when the adapter directory is provided.
+
+This is still a shadow feed. The signals are typed inputs for governance-node
+evaluation and later training labels; they do not grant authority or execute
+hard vetoes.
+
 ## Governance Node Surfaces
 
 The scaffold defines these domain-governance surfaces:
@@ -254,6 +304,9 @@ exist. Runtime authority, training, and promotion remain blocked by:
 - false-veto / false-allow labels
 - counterfactual composition benchmarks
 - trained meta-composition policy
+- live lower-WM runtime streams
+- labeled governance signal outcomes
+- trained governance signal weights
 
 ## Boundary
 

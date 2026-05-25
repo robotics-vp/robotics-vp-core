@@ -31,6 +31,9 @@ from src.world_model.humanoid_readiness.phase7 import (
     load_phase7_control_field_slots,
     load_phase7_meta_regal_control_scaffold_report,
 )
+from src.world_model.humanoid_readiness.phase7_signal_adapters import (
+    Phase7GovernanceNodeSignalReceipt,
+)
 
 PHASE7_SHADOW_RUNTIME_WIRING_REPORT_VERSION = (
     "phase7_shadow_runtime_wiring_report_v1"
@@ -77,6 +80,8 @@ class Phase7ControlFieldRuntimeReceipt:
     composition_mode: str
     target_surface: str
     source_node_ids: list[str] = field(default_factory=list)
+    node_signal_receipt_ids: list[str] = field(default_factory=list)
+    lower_wm_signal_backed: bool = False
     output_authority: str = "shadow_field_only"
     shadow_only: bool = True
     live_dispatch_allowed: bool = False
@@ -98,6 +103,8 @@ class Phase7ControlFieldRuntimeReceipt:
             "composition_mode": self.composition_mode,
             "target_surface": self.target_surface,
             "source_node_ids": list(self.source_node_ids),
+            "node_signal_receipt_ids": list(self.node_signal_receipt_ids),
+            "lower_wm_signal_backed": bool(self.lower_wm_signal_backed),
             "output_authority": self.output_authority,
             "shadow_only": bool(self.shadow_only),
             "live_dispatch_allowed": bool(self.live_dispatch_allowed),
@@ -121,6 +128,10 @@ class Phase7ControlFieldRuntimeReceipt:
             composition_mode=str(payload.get("composition_mode", "")),
             target_surface=str(payload.get("target_surface", "")),
             source_node_ids=strings(payload.get("source_node_ids")),
+            node_signal_receipt_ids=strings(payload.get("node_signal_receipt_ids")),
+            lower_wm_signal_backed=bool(
+                payload.get("lower_wm_signal_backed", False)
+            ),
             output_authority=str(payload.get("output_authority", "shadow_field_only")),
             shadow_only=bool(payload.get("shadow_only", True)),
             live_dispatch_allowed=bool(payload.get("live_dispatch_allowed", False)),
@@ -144,6 +155,8 @@ class Phase7ConflictRuntimeJoinReceipt:
     contract_id: str | None
     source_node_ids: list[str]
     related_control_field_event_ids: list[str] = field(default_factory=list)
+    node_signal_receipt_ids: list[str] = field(default_factory=list)
+    lower_wm_signal_backed: bool = False
     composition_mode: str = ""
     override_policy: str = ""
     severity_prior: float = 0.0
@@ -168,6 +181,8 @@ class Phase7ConflictRuntimeJoinReceipt:
             "related_control_field_event_ids": list(
                 self.related_control_field_event_ids
             ),
+            "node_signal_receipt_ids": list(self.node_signal_receipt_ids),
+            "lower_wm_signal_backed": bool(self.lower_wm_signal_backed),
             "composition_mode": self.composition_mode,
             "override_policy": self.override_policy,
             "severity_prior": float(self.severity_prior),
@@ -193,6 +208,10 @@ class Phase7ConflictRuntimeJoinReceipt:
             source_node_ids=strings(payload.get("source_node_ids")),
             related_control_field_event_ids=strings(
                 payload.get("related_control_field_event_ids")
+            ),
+            node_signal_receipt_ids=strings(payload.get("node_signal_receipt_ids")),
+            lower_wm_signal_backed=bool(
+                payload.get("lower_wm_signal_backed", False)
             ),
             composition_mode=str(payload.get("composition_mode", "")),
             override_policy=str(payload.get("override_policy", "")),
@@ -222,6 +241,8 @@ class Phase7ShadowRuntimeWiringReport:
     shadow_event_spine_wiring_executed: bool
     decision_ledger_wiring_executed: bool
     local_shadow_runtime_wiring_complete: bool
+    node_signal_receipt_count: int = 0
+    lower_wm_signal_backed: bool = False
     phase7_authority_granted: bool = False
     live_dispatch_allowed: bool = False
     hard_veto_dispatch: bool = False
@@ -252,6 +273,8 @@ class Phase7ShadowRuntimeWiringReport:
             "conflict_runtime_join_receipt_count": int(
                 self.conflict_runtime_join_receipt_count
             ),
+            "node_signal_receipt_count": int(self.node_signal_receipt_count),
+            "lower_wm_signal_backed": bool(self.lower_wm_signal_backed),
             "runtime_event_count": int(self.runtime_event_count),
             "decision_ledger_entry_count": int(self.decision_ledger_entry_count),
             "shadow_event_spine_wiring_executed": bool(
@@ -296,6 +319,12 @@ class Phase7ShadowRuntimeWiringReport:
             ),
             conflict_runtime_join_receipt_count=int(
                 payload.get("conflict_runtime_join_receipt_count", 0) or 0
+            ),
+            node_signal_receipt_count=int(
+                payload.get("node_signal_receipt_count", 0) or 0
+            ),
+            lower_wm_signal_backed=bool(
+                payload.get("lower_wm_signal_backed", False)
             ),
             runtime_event_count=int(payload.get("runtime_event_count", 0) or 0),
             decision_ledger_entry_count=int(
@@ -368,6 +397,7 @@ def build_phase7_shadow_runtime_wiring(
     timestamp: str,
     runtime_packet_id: str | None,
     contract_id: str | None,
+    node_signal_receipts: Sequence[Phase7GovernanceNodeSignalReceipt] = (),
     artifact_refs: Mapping[str, Any] | None = None,
     event_sequence_start: int = 0,
     decision_sequence_start: int = 0,
@@ -388,8 +418,14 @@ def build_phase7_shadow_runtime_wiring(
     conflict_join_receipts: list[Phase7ConflictRuntimeJoinReceipt] = []
     event_sequence_idx = int(event_sequence_start)
     decision_sequence_idx = int(decision_sequence_start)
+    signal_ids_by_surface_id = _signal_ids_by_surface_id(node_signal_receipts)
 
     for field_slot in control_fields:
+        node_signal_ids = _node_signal_receipt_ids(
+            source_node_ids=field_slot.source_node_ids,
+            signal_ids_by_surface_id=signal_ids_by_surface_id,
+        )
+        lower_wm_signal_backed = bool(node_signal_ids)
         event = RuntimeEvent.from_components(
             run_id=run_id,
             episode_id=episode_id,
@@ -416,6 +452,8 @@ def build_phase7_shadow_runtime_wiring(
                 "slot_id": field_slot.slot_id,
                 "composition_mode": field_slot.composition_mode,
                 "source_node_ids": list(field_slot.source_node_ids),
+                "node_signal_receipt_ids": node_signal_ids,
+                "lower_wm_signal_backed": lower_wm_signal_backed,
                 "output_authority": field_slot.output_authority,
                 "shadow_only": True,
                 "live_dispatch_allowed": False,
@@ -448,6 +486,8 @@ def build_phase7_shadow_runtime_wiring(
             metadata={
                 "field_key": field_slot.field_key,
                 "composition_mode": field_slot.composition_mode,
+                "node_signal_receipt_ids": node_signal_ids,
+                "lower_wm_signal_backed": lower_wm_signal_backed,
                 "shadow_only": True,
                 "live_dispatch_allowed": False,
             },
@@ -473,12 +513,19 @@ def build_phase7_shadow_runtime_wiring(
                 composition_mode=field_slot.composition_mode,
                 target_surface=field_slot.target_surface,
                 source_node_ids=list(field_slot.source_node_ids),
+                node_signal_receipt_ids=node_signal_ids,
+                lower_wm_signal_backed=lower_wm_signal_backed,
                 output_authority=field_slot.output_authority,
                 denied_authority=denied,
             )
         )
 
     for conflict_receipt in conflict_receipts:
+        node_signal_ids = _node_signal_receipt_ids(
+            source_node_ids=conflict_receipt.source_node_ids,
+            signal_ids_by_surface_id=signal_ids_by_surface_id,
+        )
+        lower_wm_signal_backed = bool(node_signal_ids)
         related_field_event_ids = _related_control_field_event_ids(
             conflict_receipt=conflict_receipt,
             field_receipts=field_receipts,
@@ -512,6 +559,8 @@ def build_phase7_shadow_runtime_wiring(
             metadata={
                 "conflict_receipt_id": conflict_receipt.receipt_id,
                 "source_node_ids": list(conflict_receipt.source_node_ids),
+                "node_signal_receipt_ids": node_signal_ids,
+                "lower_wm_signal_backed": lower_wm_signal_backed,
                 "override_policy": conflict_receipt.override_policy,
                 "severity_prior": float(conflict_receipt.severity_prior),
                 "related_control_field_event_ids": related_field_event_ids,
@@ -548,6 +597,8 @@ def build_phase7_shadow_runtime_wiring(
                 "conflict_key": conflict_receipt.conflict_key,
                 "composition_mode": conflict_receipt.composition_mode,
                 "override_policy": conflict_receipt.override_policy,
+                "node_signal_receipt_ids": node_signal_ids,
+                "lower_wm_signal_backed": lower_wm_signal_backed,
                 "shadow_only": True,
                 "hard_veto_dispatch": False,
             },
@@ -572,6 +623,8 @@ def build_phase7_shadow_runtime_wiring(
                 contract_id=contract_id,
                 source_node_ids=list(conflict_receipt.source_node_ids),
                 related_control_field_event_ids=related_field_event_ids,
+                node_signal_receipt_ids=node_signal_ids,
+                lower_wm_signal_backed=lower_wm_signal_backed,
                 composition_mode=conflict_receipt.composition_mode,
                 override_policy=conflict_receipt.override_policy,
                 severity_prior=float(conflict_receipt.severity_prior),
@@ -585,12 +638,18 @@ def build_phase7_shadow_runtime_wiring(
         and phase7_report.ready_for_runtime_wiring
         and not phase7_report.phase7_authority_granted
     )
+    signal_backing_required = bool(node_signal_receipts)
+    signal_backing_complete = not signal_backing_required or (
+        all(receipt.lower_wm_signal_backed for receipt in field_receipts)
+        and all(receipt.lower_wm_signal_backed for receipt in conflict_join_receipts)
+    )
     complete = (
         input_ready
         and len(field_receipts) == len(control_fields)
         and len(conflict_join_receipts) == len(conflict_receipts)
         and len(events) == len(decisions)
         and len(events) == len(control_fields) + len(conflict_receipts)
+        and signal_backing_complete
     )
     report_payload = {
         "phase7_scaffold_report_id": phase7_report.report_id,
@@ -598,6 +657,7 @@ def build_phase7_shadow_runtime_wiring(
         "episode_id": episode_id,
         "control_field_runtime_receipt_count": len(field_receipts),
         "conflict_runtime_join_receipt_count": len(conflict_join_receipts),
+        "node_signal_receipt_count": len(node_signal_receipts),
         "runtime_event_count": len(events),
         "artifact_refs": refs,
     }
@@ -614,6 +674,8 @@ def build_phase7_shadow_runtime_wiring(
         shadow_event_spine_wiring_executed=complete,
         decision_ledger_wiring_executed=complete,
         local_shadow_runtime_wiring_complete=complete,
+        node_signal_receipt_count=len(node_signal_receipts),
+        lower_wm_signal_backed=signal_backing_required and signal_backing_complete,
         denied_gates=_phase7_runtime_denied_gates(),
         remaining_blockers=list(PHASE7_REMAINING_BLOCKERS),
         artifact_refs=refs,
@@ -642,6 +704,28 @@ def _related_control_field_event_ids(
         if conflict_sources.intersection(slot_sources.get(field_receipt.slot_id, set())):
             related.append(field_receipt.runtime_event_id)
     return related
+
+
+def _signal_ids_by_surface_id(
+    receipts: Sequence[Phase7GovernanceNodeSignalReceipt],
+) -> dict[str, list[str]]:
+    output: dict[str, list[str]] = {}
+    for receipt in receipts:
+        if not receipt.lower_wm_receipt_backed:
+            continue
+        output.setdefault(receipt.surface_id, []).append(receipt.signal_id)
+    return output
+
+
+def _node_signal_receipt_ids(
+    *,
+    source_node_ids: Sequence[str],
+    signal_ids_by_surface_id: Mapping[str, Sequence[str]],
+) -> list[str]:
+    signal_ids: list[str] = []
+    for source_node_id in source_node_ids:
+        signal_ids.extend(signal_ids_by_surface_id.get(source_node_id, ()))
+    return sorted(dict.fromkeys(signal_ids))
 
 
 def save_phase7_shadow_runtime_wiring(

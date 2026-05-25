@@ -5828,3 +5828,67 @@ not train, write weights, dispatch live actions, execute hard vetoes, mutate
 reward math, promote outputs, replace lower WMs, collapse governance into a
 scalar score, or claim provider, hardware, Unitree sim, or live policy
 authority.
+
+## 2026-05-25 — Phase 7 governance-node signal adapters
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/phase7_signal_adapters.py`.
+- Added `scripts/economic_world_model/adapt_phase7_governance_node_signals.py`.
+- Added `tests/test_humanoid_phase7_signal_adapters.py`.
+- Extended Phase 7 shadow runtime receipts/events with optional
+  `node_signal_receipt_ids` and `lower_wm_signal_backed` fields.
+- Extended Phase 7 eval metrics with non-gating signal-backed join metrics.
+
+### Current artifact result
+
+- `adapter_count=8`
+- `signal_receipt_count=8`
+- `source_artifact_count=35`
+- `missing_source_artifact_count=0`
+- `lower_wm_receipt_backed_node_count=8`
+- `all_eight_nodes_signal_backed=true`
+- `shadow_runtime_feed_ready=true`
+- `local_signal_adapter_complete=true`
+- `phase7_meta_regal_shadow.node_signal_receipt_count=8`
+- `phase7_meta_regal_shadow.lower_wm_signal_backed=true`
+- `phase7_meta_regal_shadow.local_shadow_runtime_wiring_complete=true`
+- `phase7_authority_granted=false`
+- `live_dispatch_allowed=false`
+- `hard_veto_dispatch=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+### Adapter mapping
+
+- `economic_allocation_governance`: Phase 7 shadow summary plus Phase 6
+  transport advisory/eval/closure receipts.
+- `reward_integrity_governance`: Phase 7 eval/outcome rows plus reward-math
+  denial and transport advisory receipts.
+- `plausibility_geometry_governance`: Phase 3.5 bipedal geometry and joint
+  validation receipts plus local MuJoCo model-stress probe receipts.
+- `deployment_truth_governance`: Phase 4 bringup, runtime bridge, ROS2
+  readiness, and blocker probe receipts.
+- `safety_constraint_governance`: downstream controller safety, safety
+  preflight, stale-data, watchdog, safety transition, and safety envelope
+  expansion receipts.
+- `data_value_governance`: datapack/economic shadow summary, Phase 6 transport
+  eval rows, Phase 7 outcome joins, and Phase 6.5 trajectory receipts.
+- `embodiment_limit_governance`: Phase 3.5 bipedal chassis/refit/readiness and
+  Phase 4 low-level command-frame receipts.
+- `coordination_operator_governance`: Phase 4 operator recovery runbooks,
+  synthetic drills, drill transitions, and runtime bridge receipts.
+
+### Boundary
+
+This pass adapts local receipts into typed Phase 7 node signals and joins those
+signals into shadow runtime metadata only. It does not train, write weights,
+dispatch live actions, execute hard vetoes, mutate reward math, promote outputs,
+replace lower WMs, claim provider/hardware/Unitree runtime authority, or close
+the need for live lower-WM streams and labeled governance outcomes.

@@ -1097,6 +1097,22 @@ Compute and battery sequencing rule:
   hard-veto dispatch, training, weight-write, provider, hardware,
   Unitree-runtime, live-policy, reward-mutation, lower-WM replacement,
   scalar-collapse, and promotion gates remain denied
+- The local Phase 7 governance signal adapter harness is
+  `scripts/economic_world_model/adapt_phase7_governance_node_signals.py`
+  with code in `src/world_model/humanoid_readiness/phase7_signal_adapters.py`.
+  The current artifact run emits `adapter_count=8`,
+  `signal_receipt_count=8`, `source_artifact_count=35`,
+  `missing_source_artifact_count=0`,
+  `lower_wm_receipt_backed_node_count=8`,
+  `all_eight_nodes_signal_backed=true`,
+  `shadow_runtime_feed_ready=true`, and
+  `local_signal_adapter_complete=true`. When the adapter directory is passed
+  back into the Phase 7 shadow runtime, the current runtime emits
+  `phase7_meta_regal_shadow.node_signal_receipt_count=8` and
+  `phase7_meta_regal_shadow.lower_wm_signal_backed=true`, while all Phase 7
+  authority, live dispatch, hard-veto dispatch, training, weight-write,
+  provider, hardware, Unitree-runtime, live-policy, reward-mutation,
+  lower-WM replacement, scalar-collapse, and promotion gates remain denied
 
 Suggested RL staging for those resources:
 

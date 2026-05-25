@@ -70,6 +70,7 @@ def run_wire_phase7_meta_regal_runtime_shadow(
     objective_profile_id: str = "balanced_contract",
     timestamp_base: str | None = "2026-05-25T00:00:00+00:00",
     run_id: str | None = None,
+    phase7_signal_adapter_dir: str | Path | None = None,
     run_dependencies_if_missing: bool = True,
 ) -> dict[str, Any]:
     output = Path(output_dir)
@@ -88,6 +89,7 @@ def run_wire_phase7_meta_regal_runtime_shadow(
         run_id=run_id,
         include_phase7_meta_regal_shadow=True,
         phase7_scaffold_dir=scaffold_dir,
+        phase7_signal_adapter_dir=phase7_signal_adapter_dir,
     )
     payload: Mapping[str, Any] = result.summary
     print(json.dumps(payload, indent=2, sort_keys=True))
@@ -106,6 +108,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--objective-profile-id", default="balanced_contract")
     parser.add_argument("--timestamp-base", default="2026-05-25T00:00:00+00:00")
     parser.add_argument("--run-id")
+    parser.add_argument("--phase7-signal-adapter-dir")
     parser.add_argument("--no-run-dependencies", action="store_true")
     return parser.parse_args()
 
@@ -120,6 +123,7 @@ def main() -> int:
         objective_profile_id=args.objective_profile_id,
         timestamp_base=args.timestamp_base,
         run_id=args.run_id,
+        phase7_signal_adapter_dir=args.phase7_signal_adapter_dir,
         run_dependencies_if_missing=not args.no_run_dependencies,
     )
     phase7 = payload["phase7_meta_regal_shadow"]

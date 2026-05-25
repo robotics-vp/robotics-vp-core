@@ -6,23 +6,28 @@ Future-architecture doctrine with a local Stage A scaffold now present. The
 current scaffold defines typed non-neural governance surfaces, composition
 modes, conflict/override receipts, admissible regions, shadow control-field
 slots, training-row slots, denied promotion gates, and shadow-only event-spine
-wiring plus local evaluation/outcome-join rows. It does not grant live runtime
-authority.
+wiring plus local evaluation/outcome-join rows and lower-WM receipt-backed
+signal adapters. It does not grant live runtime authority.
 
 The current implementation is:
 
 - `src/world_model/humanoid_readiness/phase7.py`
 - `src/world_model/humanoid_readiness/phase7_runtime.py`
 - `src/world_model/humanoid_readiness/phase7_eval.py`
+- `src/world_model/humanoid_readiness/phase7_signal_adapters.py`
 - `scripts/economic_world_model/prepare_phase7_meta_regal_control_scaffold.py`
 - `scripts/economic_world_model/wire_phase7_meta_regal_runtime_shadow.py`
 - `scripts/economic_world_model/evaluate_phase7_meta_governance_shadow.py`
+- `scripts/economic_world_model/adapt_phase7_governance_node_signals.py`
 - `docs/economic_world_model/phase7_meta_regal_control_scaffold.md`
 
 Shadow runtime wiring is present through the event spine and decision ledger.
-Local decomposed evaluation and outcome-join rows are present. Governance-node
-training, benchmark labels, provider or hardware execution, promotion,
-hard-veto dispatch, and live policy control remain future work.
+Local decomposed evaluation and outcome-join rows are present. All eight
+governance-node surfaces now have local lower-WM receipt-backed signal
+adapters, and the shadow runtime can join those signal receipt IDs into
+Phase 7 events and receipts. Governance-node training, benchmark labels,
+provider or hardware execution, promotion, hard-veto dispatch, and live policy
+control remain future work.
 
 ## Why the Economic WM cannot be sovereign
 
