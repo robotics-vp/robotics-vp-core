@@ -98,3 +98,16 @@ On the current host, that follow-on emitted `mujoco_trace_row_count=5` and
 simulation evidence; it still does not claim ROS2 bridge runtime, command echo,
 policy-controlled sim, physical calibration, teleop runtime, hardware, training,
 or promotion.
+
+## Blocker Stress-Probe Follow-On
+
+The blocker stress-probe pass now materializes
+`artifacts/economic_world_model/phase4_unitree_blocker_stress_probes/phase4_unitree_blocker_stress_probe_report_v1.json`.
+It keeps the local harness boundary while pressing harder on the open blockers:
+five G1 MuJoCo XMLs step headlessly, CycloneDDS headers compile, and G1Pilot /
+Unitree RL Gym / Unitree IsaacLab / Unitree LeRobot static surfaces are visible.
+The same artifact records what still does not work locally: ROS2/colcon,
+generated-message imports, SDK2 compile/runtime on this macOS host, rosbag2/MCAP
+imports and stream files, physical calibration sidecars, G1Pilot runtime deps,
+teleop runtime drills, DDS/network timing, command echo, policy control,
+hardware, training, and promotion.

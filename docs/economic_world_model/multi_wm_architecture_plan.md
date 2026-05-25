@@ -2751,11 +2751,13 @@ Current local implementation:
 - `src/world_model/humanoid_readiness/unitree_bringup_readiness.py`
 - `src/world_model/humanoid_readiness/unitree_local_harness.py`
 - `src/world_model/humanoid_readiness/unitree_runtime_bridge.py`
+- `src/world_model/humanoid_readiness/unitree_blocker_probes.py`
 - `scripts/economic_world_model/prepare_phase4_deployment_enabler_sweep.py`
 - `scripts/economic_world_model/prepare_phase4_downstream_controller_scaffold.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_bringup_readiness.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_local_harnesses.py`
 - `scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py`
+- `scripts/economic_world_model/probe_phase4_unitree_blockers.py`
 - Current artifact report:
   `artifacts/economic_world_model/phase4_deployment_enabler_sweep/humanoid_phase4_deployment_enabler_sweep_report_v1.json`
 - Current downstream-controller artifact:
@@ -2766,6 +2768,8 @@ Current local implementation:
   `artifacts/economic_world_model/phase4_unitree_local_harnesses/phase4_unitree_local_harness_report_v1.json`
 - Current Unitree/G1 runtime-evidence bridge artifact:
   `artifacts/economic_world_model/phase4_unitree_runtime_evidence_bridge/phase4_unitree_runtime_evidence_bridge_report_v1.json`
+- Current Unitree/G1 blocker stress-probe artifact:
+  `artifacts/economic_world_model/phase4_unitree_blocker_stress_probes/phase4_unitree_blocker_stress_probe_report_v1.json`
 - Current local result: `contract_surface_count=15`, `stub_surface_count=3`,
   phase counts `4A=5`, `4B=1`, `4C=1`, `4D=1`, `4E=5`, `4F=5`,
   `local_non_hardware_scaffold_complete=true`, and
@@ -2804,6 +2808,19 @@ Current local implementation:
   `operator_drill_runner_complete=true`. This is narrow local evidence: the
   MuJoCo trace is no-policy headless stepping, not ROS2 bridge, command echo,
   policy-controlled sim, hardware, or safety calibration evidence.
+- Current Unitree/G1 blocker stress-probe result:
+  `local_phase4_probe_expansion_complete=true`,
+  `probe_receipt_count=14`, `succeeded_probe_count=8`,
+  `blocked_probe_count=6`, `mujoco_model_stress_receipt_count=5`,
+  `mujoco_model_stress_success_count=5`,
+  `g1pilot_static_surface_succeeded=true`,
+  `cyclonedds_header_compile_succeeded=true`,
+  `policy_checkpoint_visible=true`,
+  `isaaclab_task_surface_visible=true`, and
+  `lerobot_adapter_surface_visible=true`. The blocked probes preserve missing
+  ROS2/colcon and `/opt/ros`, SDK2 Linux compile/runtime, rosbag2/MCAP modules,
+  calibration sidecar, G1Pilot runtime dependencies, command echo, teleop
+  runtime, DDS/network timing, and policy-controlled trace evidence.
 - Full closure still waits for live streams, control interfaces,
   runtime build/interface verification, timing/jitter traces, measured
   companion middleware, operator/recovery drills, physical safety calibration,
@@ -2829,6 +2846,10 @@ Cross-phase rule here too:
   minimal local MuJoCo stepping is useful evidence, but it does not grant live
   policy authority or replace ROS2/SDK2 command echo, rosbag/MCAP stream import,
   physical safety calibration, operator teleop runtime, or DDS/on-robot timing
+- Unitree/G1 blocker stress-probe work should continue that discipline:
+  static source surfaces, compile-only headers, visible policy/assets, and
+  no-policy MuJoCo stepping can reduce uncertainty, but they do not become
+  deployment-grade runtime, safety, teleop, command, or promotion evidence
 
 ### Phase 4A - Real-Time Control Loop Separation
 

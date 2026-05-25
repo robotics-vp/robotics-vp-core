@@ -26,6 +26,9 @@ from scripts.economic_world_model.prepare_phase4_unitree_local_harnesses import 
 from scripts.economic_world_model.prepare_phase4_unitree_runtime_evidence_bridge import (
     run_prepare_phase4_unitree_runtime_evidence_bridge,
 )
+from scripts.economic_world_model.probe_phase4_unitree_blockers import (
+    run_probe_phase4_unitree_blockers,
+)
 from scripts.economic_world_model.prepare_phase65_meta_node_neuralization import (
     run_prepare_phase65_meta_node_neuralization,
 )
@@ -107,11 +110,11 @@ def _fake_unitree_roots(tmp_path: Path, joint_names: list[str]) -> dict[str, str
     roots = tmp_path / "unitree_roots"
     sdk2 = roots / "unitree_sdk2"
     _write(sdk2 / "CMakeLists.txt", "cmake_minimum_required(VERSION 3.16)\n")
-    (sdk2 / "include/unitree").mkdir(parents=True)
-    (sdk2 / "lib").mkdir(parents=True)
+    (sdk2 / "include/unitree").mkdir(parents=True, exist_ok=True)
+    (sdk2 / "lib").mkdir(parents=True, exist_ok=True)
 
     models = roots / "unitree_models"
-    (models / "G1/29dof/usd").mkdir(parents=True)
+    (models / "G1/29dof/usd").mkdir(parents=True, exist_ok=True)
     _write(models / "README.md", "synthetic unitree model root\n")
 
     rl_gym = roots / "unitree_rl_gym"
@@ -119,17 +122,17 @@ def _fake_unitree_roots(tmp_path: Path, joint_names: list[str]) -> dict[str, str
         rl_gym / "resources/robots/g1_description/g1_29dof.urdf",
         joint_names,
     )
-    (rl_gym / "legged_gym").mkdir(parents=True)
-    (rl_gym / "deploy").mkdir(parents=True)
+    (rl_gym / "legged_gym").mkdir(parents=True, exist_ok=True)
+    (rl_gym / "deploy").mkdir(parents=True, exist_ok=True)
 
     isaaclab = roots / "unitree_sim_isaaclab"
-    (isaaclab / "tasks/g1_tasks").mkdir(parents=True)
-    (isaaclab / "layeredcontrol").mkdir(parents=True)
-    (isaaclab / "tools").mkdir(parents=True)
+    (isaaclab / "tasks/g1_tasks").mkdir(parents=True, exist_ok=True)
+    (isaaclab / "layeredcontrol").mkdir(parents=True, exist_ok=True)
+    (isaaclab / "tools").mkdir(parents=True, exist_ok=True)
 
     il_lerobot = roots / "unitree_IL_lerobot"
-    (il_lerobot / "unitree_lerobot/eval_robot").mkdir(parents=True)
-    (il_lerobot / "unitree_lerobot/utils").mkdir(parents=True)
+    (il_lerobot / "unitree_lerobot/eval_robot").mkdir(parents=True, exist_ok=True)
+    (il_lerobot / "unitree_lerobot/utils").mkdir(parents=True, exist_ok=True)
     _write(il_lerobot / "pyproject.toml", "[project]\nname='synthetic'\n")
 
     return {
@@ -255,6 +258,9 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     phase4_unitree_bringup_dir = tmp_path / "phase4_unitree_bringup"
     phase4_unitree_local_harness_dir = tmp_path / "phase4_unitree_local_harnesses"
     phase4_unitree_runtime_bridge_dir = tmp_path / "phase4_unitree_runtime_bridge"
+    phase4_unitree_blocker_stress_probe_dir = (
+        tmp_path / "phase4_unitree_blocker_stress_probes"
+    )
     phase65_dir = tmp_path / "phase65"
     phase6_dir = tmp_path / "phase6_closure"
     closure_dir = tmp_path / "closure"
@@ -418,6 +424,27 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert phase4_unitree_runtime["hardware_executed"] is False
     assert phase4_unitree_runtime["promotion_eligible"] is False
 
+    blocker_roots = {
+        **_fake_unitree_roots(tmp_path, chassis.joint_names),
+        **_fake_unitree_local_harness_roots(tmp_path),
+    }
+    phase4_unitree_blockers = run_probe_phase4_unitree_blockers(
+        output_dir=phase4_unitree_blocker_stress_probe_dir,
+        local_roots=blocker_roots,
+        stress_steps=4,
+    )
+    assert phase4_unitree_blockers["status"] == "ok"
+    assert phase4_unitree_blockers["local_phase4_probe_expansion_complete"] is True
+    assert phase4_unitree_blockers["all_local_probe_attempts_complete"] is True
+    assert phase4_unitree_blockers["probe_receipt_count"] >= 10
+    assert phase4_unitree_blockers["mujoco_model_stress_receipt_count"] >= 1
+    assert phase4_unitree_blockers["g1pilot_static_surface_succeeded"] is True
+    assert phase4_unitree_blockers["ros2_publish_attempted"] is False
+    assert phase4_unitree_blockers["unitree_sdk2_write_enabled"] is False
+    assert phase4_unitree_blockers["g1pilot_runtime_invoked"] is False
+    assert phase4_unitree_blockers["hardware_executed"] is False
+    assert phase4_unitree_blockers["promotion_eligible"] is False
+
     phase65 = run_prepare_phase65_meta_node_neuralization(
         output_dir=phase65_dir,
         phase35_dir=phase35_dir,
@@ -468,6 +495,9 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
         phase4_unitree_bringup_readiness_dir=phase4_unitree_bringup_dir,
         phase4_unitree_local_harness_dir=phase4_unitree_local_harness_dir,
         phase4_unitree_runtime_bridge_dir=phase4_unitree_runtime_bridge_dir,
+        phase4_unitree_blocker_stress_probe_dir=(
+            phase4_unitree_blocker_stress_probe_dir
+        ),
         phase65_dir=phase65_dir,
         run_dependencies_if_missing=False,
     )
@@ -479,6 +509,7 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     assert closure["local_phase4_unitree_bringup_readiness_complete"] is True
     assert closure["local_phase4_unitree_local_harness_complete"] is True
     assert closure["local_phase4_unitree_runtime_bridge_complete"] is True
+    assert closure["local_phase4_unitree_blocker_stress_probe_complete"] is True
     assert closure["local_phase65_complete"] is True
     assert closure["all_local_structures_complete"] is True
     assert closure["ready_for_phase7_scaffold"] is True
@@ -510,6 +541,14 @@ def test_phase35_phase4_phase65_local_scaffolds_and_gates(tmp_path):
     )
     assert (
         "phase4_unitree_scripted_operator_recovery_drills"
+        in closure["closed_local_surfaces"]
+    )
+    assert (
+        "phase4_unitree_blocker_stress_probe_receipts"
+        in closure["closed_local_surfaces"]
+    )
+    assert (
+        "phase4_unitree_multi_model_mujoco_stress_receipts"
         in closure["closed_local_surfaces"]
     )
     assert "phase65_denied_promotion_gates" in closure["closed_local_surfaces"]

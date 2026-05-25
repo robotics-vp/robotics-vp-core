@@ -338,3 +338,40 @@ The bridge also records that ROS2/colcon build/import is not executed yet,
 rosbag2/MCAP real stream files are absent, safety limits are not calibrated,
 operator drills are local scripted drills only, and DDS/on-robot timing is still
 missing.
+
+## Unitree / G1 Blocker Stress Probes
+
+The blocker stress-probe pass presses directly on the remaining Phase 4
+blockers and stores each result as a receipt:
+
+- ROS2/colcon host toolchain and Python runtime import probes;
+- Unitree ROS2 static message surface parse;
+- G1Pilot static launch/teleop surface parse plus runtime dependency scan;
+- CycloneDDS and Unitree SDK2 compile-only header probes;
+- five-model Unitree G1 MuJoCo no-policy stress stepping;
+- Unitree RL Gym policy/asset visibility checks;
+- Unitree IsaacLab task-surface and Unitree LeRobot adapter-surface checks;
+- rosbag2/MCAP import-module probes;
+- calibration-sidecar and teleop-runtime surface probes.
+
+Current result:
+
+- `probe_receipt_count=14`
+- `succeeded_probe_count=8`
+- `blocked_probe_count=6`
+- `mujoco_model_stress_receipt_count=5`
+- `mujoco_model_stress_success_count=5`
+- `local_phase4_probe_expansion_complete=true`
+
+The successful probes unlock more local evidence surfaces, but not live
+authority. The five G1 MuJoCo XMLs step headlessly for 100 no-policy steps each;
+CycloneDDS headers compile locally; G1Pilot static launch surfaces parse; and
+Unitree RL Gym, IsaacLab, and LeRobot assets/adapters are visible. The blocked
+probes confirm the remaining work is runtime/provider/robot work: ROS2/colcon
+and `/opt/ros`, SDK2 compile on a Linux runtime, rosbag2/MCAP modules and real
+stream files, calibrated safety sidecars, G1Pilot runtime dependencies, command
+echo, teleop runtime drills, DDS/network timing, and policy-controlled traces.
+
+The integrated local closure audit now includes
+`local_phase4_unitree_blocker_stress_probe_complete=true` before reporting
+`ready_for_phase7_scaffold=true`.

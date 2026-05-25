@@ -76,6 +76,28 @@ Denied gates remain explicit:
 - `operator_teleop_runtime_drill_missing`
 - `dds_network_or_on_robot_timing_missing`
 
+## Follow-On Stress Probe
+
+The next local pass materialized
+`docs/economic_world_model/phase4_unitree_blocker_stress_probes.md` and
+`artifacts/economic_world_model/phase4_unitree_blocker_stress_probes/phase4_unitree_blocker_stress_probe_report_v1.json`.
+
+That pass confirms:
+
+- five local Unitree G1 MuJoCo XMLs load and step headlessly for 100 no-policy
+  steps each;
+- CycloneDDS headers compile locally in a no-network compile-only probe;
+- G1Pilot launch/teleop source surfaces parse statically;
+- Unitree RL Gym G1 policy/assets, Unitree IsaacLab G1 task surfaces, and
+  Unitree LeRobot eval/conversion adapters are visible locally.
+
+It also confirms the remaining blockers are real rather than checklist residue:
+ROS2/colcon and `/opt/ros` are missing, SDK2 headers do not compile on this
+macOS host because they depend on Linux `sys/sysinfo.h`, `rosbag2_py` and
+`mcap` are missing, G1Pilot runtime dependencies are missing, no physical
+calibration sidecar exists, and no command echo, teleop runtime, live stream, or
+policy-controlled trace was executed.
+
 ## Boundary
 
 This bridge runs local checks only. It does not publish ROS2/DDS messages, write

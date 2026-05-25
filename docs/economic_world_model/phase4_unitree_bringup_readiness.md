@@ -100,3 +100,15 @@ On the current host, that bridge emitted 5 MuJoCo headless trace rows. This is
 useful narrow simulation evidence, but it is still not ROS2 bridge execution,
 command echo, policy-controlled sim, physical calibration, teleop runtime,
 hardware execution, training, or promotion.
+
+## Blocker Stress-Probe Follow-On
+
+The blocker stress-probe pass now materializes
+`artifacts/economic_world_model/phase4_unitree_blocker_stress_probes/phase4_unitree_blocker_stress_probe_report_v1.json`.
+It confirms five local G1 MuJoCo XMLs can be loaded and stepped headlessly,
+CycloneDDS headers compile locally, and G1Pilot / Unitree RL Gym / Unitree
+IsaacLab / Unitree LeRobot static surfaces are visible. It also preserves the
+true remaining blockers: missing ROS2/colcon runtime, Linux SDK2 compile and
+runtime evidence, rosbag2/MCAP modules and real streams, physical calibration
+sidecar, G1Pilot runtime dependencies, command echo, teleop runtime drills,
+DDS/network timing, policy-controlled traces, hardware, training, and promotion.

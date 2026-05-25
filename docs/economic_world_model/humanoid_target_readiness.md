@@ -158,6 +158,12 @@ earlier docs-only posture:
   with ROS2/colcon readiness receipts, a guarded Unitree MuJoCo no-policy
   headless step receipt, JSONL/rosbag2/MCAP trace adapter receipts, expanded
   safety-envelope receipts, and scripted operator-recovery drill receipts;
+- Phase 4 now has blocker stress probes under
+  `src/world_model/humanoid_readiness/unitree_blocker_probes.py` and
+  `artifacts/economic_world_model/phase4_unitree_blocker_stress_probes/`,
+  with host-toolchain, runtime-import, static source-surface, compile-only,
+  multi-model MuJoCo, policy/asset, IsaacLab, LeRobot, trace-module,
+  calibration-sidecar, and teleop-surface receipts;
 - Phase 6.5 local meta-node state/receipt/target/robustness/gate artifacts
   exist under `src/world_model/humanoid_readiness/phase65.py` and
   `artifacts/economic_world_model/phase65_meta_node_neuralization/`.
@@ -181,6 +187,12 @@ command echo, physical calibration, or robot evidence. The runtime-evidence
 bridge now adds minimal local MuJoCo no-policy stepping evidence, but still does
 not prove ROS2 bridge integration, policy-controlled sim, command echo,
 physical calibration, teleop runtime, hardware, or deployment-grade readiness.
+The blocker stress probes go further by stepping five G1 MuJoCo XMLs, compiling
+CycloneDDS headers, and confirming local G1Pilot / RL Gym / IsaacLab / LeRobot
+static surfaces. They also prove that the remaining blockers are runtime
+installation, Linux SDK2 compile/runtime, stream files, calibration sidecars,
+teleop/runtime drills, DDS timing, command echo, and policy-controlled or
+hardware evidence.
 
 The repo already has strong substrate worth preserving:
 

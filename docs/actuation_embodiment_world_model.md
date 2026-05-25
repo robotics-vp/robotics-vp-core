@@ -111,6 +111,20 @@ simulation evidence: no ROS2 bridge, command echo, policy-controlled sim,
 hardware execution, physical calibration, live teleop, training, reward
 mutation, or promotion is claimed.
 
+The Phase 4 Unitree/G1 blocker stress-probe layer is
+`src/world_model/humanoid_readiness/unitree_blocker_probes.py`, materialized by
+`scripts/economic_world_model/probe_phase4_unitree_blockers.py`. It presses on
+the remaining runtime blockers with static, import-only, compile-only, and
+no-policy MuJoCo probes. On the current host it records five successful G1
+MuJoCo model stress receipts, a successful CycloneDDS header compile, visible
+G1Pilot static launch/teleop surfaces, visible Unitree RL Gym policy/assets,
+visible Unitree IsaacLab task surfaces, and visible Unitree LeRobot adapters.
+It also records the hard blockers: missing ROS2/colcon and `/opt/ros`, SDK2
+compile blocked on this macOS host by Linux-only headers, missing rosbag2/MCAP
+modules, missing calibration sidecar, missing G1Pilot runtime dependencies, and
+no command echo, teleop runtime, DDS/network timing, live stream, policy
+control, hardware, training, reward mutation, or promotion claim.
+
 ---
 
 ## How Our WM Topology Differs from the Dominant Framing

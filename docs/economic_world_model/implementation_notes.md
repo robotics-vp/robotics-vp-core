@@ -5559,3 +5559,68 @@ The MuJoCo step is minimal local no-policy simulation evidence only. This pass
 does not publish ROS2/DDS messages, write Unitree SDK2 commands, invoke G1Pilot,
 run hardware, certify physical safety, run real teleop, train weights, mutate
 reward math, or promote authority.
+
+## 2026-05-24 — Phase-4 Unitree/G1 blocker stress probes
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/unitree_blocker_probes.py`.
+- Added `scripts/economic_world_model/probe_phase4_unitree_blockers.py`.
+- Added `tests/test_humanoid_phase4_unitree_blocker_stress_probes.py`.
+- Added `docs/economic_world_model/phase4_unitree_blocker_stress_probes.md`.
+- Extended `scripts/economic_world_model/audit_phase35_4_65_local_closure.py`
+  and `src/world_model/humanoid_readiness/closure.py` so integrated local
+  closure requires the blocker stress-probe report.
+
+### New local surfaces
+
+- `UnitreeBlockerStressProbeReceipt`
+- `UnitreeMujocoModelStressReceipt`
+- `Phase4UnitreeBlockerStressProbeReport`
+
+### Current artifact result
+
+- `probe_receipt_count=14`
+- `succeeded_probe_count=8`
+- `blocked_probe_count=6`
+- `mujoco_model_stress_receipt_count=5`
+- `mujoco_model_stress_success_count=5`
+- `g1_mujoco_model_stress_succeeded=true`
+- `g1pilot_static_surface_succeeded=true`
+- `cyclonedds_header_compile_succeeded=true`
+- `unitree_sdk2_header_compile_succeeded=false`
+- `ros2_runtime_available=false`
+- `trace_import_modules_available=false`
+- `policy_checkpoint_visible=true`
+- `isaaclab_task_surface_visible=true`
+- `lerobot_adapter_surface_visible=true`
+- `local_phase4_probe_expansion_complete=true`
+- integrated closure now reports
+  `local_phase4_unitree_blocker_stress_probe_complete=true`
+
+### Block-by-block status
+
+- ROS2/colcon: still blocked locally by missing `/opt/ros`, `cmake`,
+  `colcon`, `ros2`, and `docker`.
+- Python runtime: `mujoco` is importable; ROS2, rosbag2, MCAP, generated
+  Unitree messages, `unitree_sdk2py`, Pinocchio, and HPP-FCL imports are not.
+- Unitree ROS2 static surface: local package/message layout is visible, but
+  generated-message imports still need a ROS2/colcon build.
+- G1Pilot: static source and launch/teleop surfaces parse, but runtime deps are
+  missing and no launch or command echo ran.
+- DDS/SDK2: CycloneDDS headers compile locally; Unitree SDK2 headers fail on
+  this macOS host at Linux-only `sys/sysinfo.h`, so SDK2 compile/runtime should
+  move to a Linux ROS2 profile.
+- MuJoCo: five G1 XMLs load and step for 100 no-policy headless steps each.
+- Policy/assets: Unitree RL Gym G1 checkpoint/assets, Unitree IsaacLab G1 task
+  surfaces, and Unitree LeRobot adapter surfaces are visible, but none are run.
+- Trace/calibration/operator: rosbag2/MCAP modules and real stream files are
+  missing, no physical calibration sidecar exists, and teleop runtime drills
+  remain unexecuted.
+
+### Boundary
+
+These probes are static, import-only, compile-only, or no-policy MuJoCo checks.
+They do not publish ROS2/DDS messages, write Unitree SDK2 commands, invoke
+G1Pilot, run hardware, execute policy control, train weights, mutate reward
+math, or promote authority.

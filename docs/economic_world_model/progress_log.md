@@ -3695,3 +3695,45 @@ Verification for the Phase-5.1 pass:
   invocation, hardware execution, training, weight writes, promotion, live
   policy control, reward math mutation, or frozen
   reward/trust/`w_econ`/lambda mutation claim.
+
+### 2026-05-24: Phase-4 Unitree/G1 blocker stress probes
+
+- Added a direct blocker stress-probe layer:
+  - `src/world_model/humanoid_readiness/unitree_blocker_probes.py`
+  - `scripts/economic_world_model/probe_phase4_unitree_blockers.py`
+  - `tests/test_humanoid_phase4_unitree_blocker_stress_probes.py`
+  - `docs/economic_world_model/phase4_unitree_blocker_stress_probes.md`
+- Extended the integrated Phase 3.5 / 4 / 6.5 closure audit so Phase 4 local
+  closure now requires
+  `local_phase4_unitree_blocker_stress_probe_complete=true`.
+- Current local artifact result:
+  `probe_receipt_count=14`,
+  `succeeded_probe_count=8`,
+  `blocked_probe_count=6`,
+  `mujoco_model_stress_receipt_count=5`,
+  `mujoco_model_stress_success_count=5`,
+  `g1_mujoco_model_stress_succeeded=true`,
+  `g1pilot_static_surface_succeeded=true`,
+  `cyclonedds_header_compile_succeeded=true`,
+  `unitree_sdk2_header_compile_succeeded=false`,
+  `ros2_runtime_available=false`,
+  `trace_import_modules_available=false`,
+  `policy_checkpoint_visible=true`,
+  `isaaclab_task_surface_visible=true`,
+  `lerobot_adapter_surface_visible=true`, and
+  `local_phase4_probe_expansion_complete=true`.
+- Successful probes now have durable receipts: Unitree ROS2 static message
+  surfaces, G1Pilot static launch/teleop surfaces, CycloneDDS header compile,
+  five G1 MuJoCo model stress receipts, Unitree RL Gym policy/assets, Unitree
+  IsaacLab task surfaces, Unitree LeRobot adapter surfaces, and static teleop
+  surface visibility.
+- The blocked probes are now concrete: missing `/opt/ros`, `cmake`, `colcon`,
+  `ros2`, and `docker`; missing ROS2/trace/runtime Python modules; Unitree SDK2
+  header compile failure on macOS due Linux-only `sys/sysinfo.h`; missing
+  `rosbag2_py`/`mcap`; missing physical calibration sidecar; missing G1Pilot
+  runtime dependencies; and no command echo, teleop runtime, DDS/network timing,
+  policy-controlled trace, live stream, or hardware evidence.
+- Boundary preserved: no ROS2/DDS publish, Unitree SDK2 write, G1Pilot runtime
+  invocation, hardware execution, policy control, training, weight writes,
+  promotion, live policy control, reward math mutation, or frozen
+  reward/trust/`w_econ`/lambda mutation claim.
