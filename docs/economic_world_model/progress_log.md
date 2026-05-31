@@ -3922,3 +3922,117 @@ Verification for the Phase-5.1 pass:
   Phase 7 authority, dispatch live actions, execute hard vetoes, mutate reward
   math, promote outputs, replace lower WMs, collapse governance into a scalar,
   or claim provider/hardware/Unitree runtime evidence.
+
+### 2026-05-30: CPU/non-GPU August-gap execution tranche
+
+- Added a lower-WM-first CPU tranche runner:
+  - `src/world_model/humanoid_readiness/cpu_august_gap.py`
+  - `scripts/economic_world_model/run_cpu_august_gap_tranche.py`
+  - `tests/test_cpu_august_gap_tranche.py`
+  - `docs/economic_world_model/cpu_august_gap_execution_tranche.md`
+- The tranche follows the 2026-05-25 CPU/non-GPU notes [ad-hoc note] and starts
+  with ROS2 / Unitree SDK2 build and message validation before joining trace,
+  command dry-run, timing/watchdog, safety/recovery, CPU MuJoCo, event-spine,
+  replay, and lower-WM ingestion surfaces.
+- Current artifact run:
+  `status=ok`,
+  `cpu_august_gap_tranche_complete=true`,
+  `ros2_sdk2_build_message_validation_complete=true`,
+  `trace_import_complete=true`,
+  `command_dry_run_complete=true`,
+  `timing_watchdog_complete=true`,
+  `safety_recovery_complete=true`,
+  `cpu_mujoco_probe_complete=true`,
+  `event_spine_replay_joins_complete=true`,
+  `lower_wm_ingestion_complete=true`,
+  `validation_receipt_count=5`,
+  `event_count=11`,
+  `decision_count=7`,
+  `replay_step_count=12`, and
+  `lower_wm_ingestion_row_count=4`.
+- Runtime truth stayed explicit: generated Unitree message imports are still
+  blocked without ROS2/colcon-generated packages, ROS2 colcon build was not
+  attempted on this host, SDK2 header/CMake build remains a Linux/runtime
+  blocker, and no ROS2/DDS publish or SDK2 write happened.
+- Boundary preserved: no GPU/provider execution, no hardware execution, no
+  G1Pilot invocation, no live policy control, no reward math mutation, no Phase
+  7 authority expansion, no training, no weight writes, and no promotion.
+
+### 2026-05-30: Post-gap GPU/data/hardware readiness manifests
+
+- Added a planning-only readiness compiler for the post-gap items in the
+  2026-05-25 CPU-capable August-gap note [ad-hoc note]:
+  - `src/world_model/economic_world_model/post_gap_readiness.py`
+  - `scripts/economic_world_model/compile_post_gap_readiness.py`
+  - `tests/test_economic_wm_post_gap_readiness.py`
+  - `docs/economic_world_model/post_gap_readiness.md`
+- The compiler emits GPU day-one runbooks, external dataset/corpus plans,
+  train/eval split and replay-indexer plans, data-quality receipts,
+  label-gap ledgers, false-veto/false-allow governance labels,
+  transport/meta-node corpus plans, benchmark gates, provider/runtime packaging
+  specs, perception/embodiment replay-loop specs, G1/R1 purchase readiness,
+  and automation/evidence hygiene specs.
+- External datasets identified for staged bring-in:
+  `open_x_embodiment_oxe`, `droid`, `bridgedata_v2`,
+  `lerobot_hub_curated`, `robomind_v2`, `rh20t`,
+  `ego4d_ego_exo4d`, and `agibot_world_watchlist`, plus
+  `local_robotics_vp_artifacts` as the local fixture corpus.
+- Current artifact run:
+  `status=ok_planning_complete_launch_blocked`,
+  `all_post_gap_items_manifested=true`,
+  `ready_for_august_gpu_window=true`,
+  `gpu_day_one_runbook_count=5`,
+  `external_dataset_count=9`,
+  `corpus_prep_artifact_count=54`,
+  `benchmark_gate_count=6`,
+  `provider_runtime_packaging_count=6`,
+  `replay_loop_count=5`,
+  `g1_r1_purchase_readiness_count=10`,
+  `evidence_hygiene_count=7`,
+  `launch_authority_granted=false`,
+  `external_download_executed=false`,
+  `provider_executed=false`,
+  `gpu_training_executed=false`,
+  `promotion_eligible=false`, and
+  `phase7_constraint_honored=true`.
+- Boundary preserved: this is manifest and receipt preparation only. It does
+  not download external datasets, launch RunPod/cloud providers, run GPU
+  training, purchase or operate hardware, grant promotion, mutate reward math,
+  or expand Phase 7 vocabulary.
+
+### 2026-05-31: External LeRobot corpus import proof
+
+- Executed the first real external corpus import from the post-gap dataset plan:
+  - `src/world_model/economic_world_model/external_corpus_import.py`
+  - `scripts/economic_world_model/import_lerobot_corpus_slice.py`
+  - `tests/test_external_lerobot_corpus_import.py`
+  - `docs/economic_world_model/external_lerobot_corpus_import.md`
+- Downloaded the minimal LeRobot Parquet files for `lerobot/pusht_keypoints`
+  and converted a small selected slice into repo-native replay rows, split
+  manifests, replay index rows, data-quality receipts, label-gap ledgers,
+  false-veto/false-allow governance label specs, and Economic WM shadow
+  ingestion rows.
+- Current artifact run:
+  `status=ok_external_corpus_slice_imported_shadow_only`,
+  `dataset_id=lerobot/pusht_keypoints`,
+  `source_total_bytes=2253085`,
+  `selected_episode_count=3`,
+  `selected_step_count=420`,
+  `replay_episode_count=3`,
+  `replay_step_count=420`,
+  `quality_receipt_count=11`,
+  `quality_passed_count=11`,
+  `label_gap_count=5`,
+  `governance_label_count=4`,
+  `ingestion_row_count=1`,
+  `ready_for_shadow_eval=true`,
+  `ready_for_training=false`,
+  `provider_executed=false`,
+  `gpu_training_executed=false`,
+  `unitree_hardware_truth=false`,
+  `promotion_eligible=false`, and
+  `phase7_authority_granted=false`.
+- Boundary preserved: this is real external-data ingestion, but shadow-only. It
+  does not claim Unitree hardware truth, provider/GPU execution, benchmark-grade
+  corpus scale, perception video import, reward math mutation, promotion, or
+  Phase 7 authority.

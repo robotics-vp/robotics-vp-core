@@ -5964,3 +5964,206 @@ initialize or write weights, dispatch live actions, execute hard vetoes, mutate
 reward math, promote outputs, replace lower WMs, collapse governance into a
 scalar score, or claim provider, hardware, Unitree sim, or live policy
 authority.
+
+## 2026-05-30 — CPU/non-GPU August-gap execution tranche
+
+### What was built
+
+- Added `src/world_model/humanoid_readiness/cpu_august_gap.py`.
+- Added `scripts/economic_world_model/run_cpu_august_gap_tranche.py`.
+- Added `tests/test_cpu_august_gap_tranche.py`.
+- Added `docs/economic_world_model/cpu_august_gap_execution_tranche.md`.
+
+The pass follows the 2026-05-25 CPU/non-GPU tranche notes [ad-hoc note]. It
+does not add new Phase 7 abstractions; it re-consumes lower-WM receipts and
+joins them into event/replay/economic-shadow surfaces.
+
+### Current artifact result
+
+Primary artifact:
+
+- `artifacts/economic_world_model/cpu_august_gap_execution/cpu_august_gap_execution_report_v1.json`
+
+Current result:
+
+- `status=ok`
+- `cpu_august_gap_tranche_complete=true`
+- `ros2_sdk2_build_message_validation_complete=true`
+- `trace_import_complete=true`
+- `command_dry_run_complete=true`
+- `timing_watchdog_complete=true`
+- `safety_recovery_complete=true`
+- `cpu_mujoco_probe_complete=true`
+- `event_spine_replay_joins_complete=true`
+- `lower_wm_ingestion_complete=true`
+- `validation_receipt_count=5`
+- `event_count=11`
+- `decision_count=7`
+- `replay_step_count=12`
+- `lower_wm_ingestion_row_count=4`
+
+### Runtime truth
+
+The ROS2 / Unitree SDK2 starting pass now emits build/message validation
+receipts. Static Unitree ROS2 `.msg` definitions parse locally, but generated
+message imports are blocked because ROS2/colcon-generated packages are not
+available on this host. ROS2 colcon build was not attempted because the host is
+missing the required ROS2/colcon runtime. SDK2 header/CMake build remains
+blocked by the current macOS host and needs a supported Linux/ROS2 runtime.
+
+The subsequent pass joins the already-local trace/import, command dry-run,
+timing/watchdog, safety/recovery, no-policy MuJoCo, event-spine/replay, and
+lower-WM ingestion surfaces. It emits replay rows and lower-WM ingestion rows
+for Embodiment / Actuation, Sim / Synth / Physics, Perception / Grounding
+absence truth, and Economic WM shadow ingestion.
+
+### Boundary
+
+This is local CPU validation and receipt joining only. It does not publish
+ROS2/DDS messages, write Unitree SDK2 commands, invoke G1Pilot, run hardware,
+grant live policy control, run GPU/provider training, write weights, mutate
+reward math, expand Phase 7 authority, or promote any model.
+
+## 2026-05-30 — Post-gap GPU/data/hardware readiness manifests
+
+### What was built
+
+- Added `src/world_model/economic_world_model/post_gap_readiness.py`.
+- Added `scripts/economic_world_model/compile_post_gap_readiness.py`.
+- Added `tests/test_economic_wm_post_gap_readiness.py`.
+- Added `docs/economic_world_model/post_gap_readiness.md`.
+
+The pass implements the post-gap to-dos from the 2026-05-25 CPU-capable
+August-gap note [ad-hoc note]. It emits planning-only typed records for:
+
+- GPU day-one runbooks with provider bring-up commands, expected artifacts,
+  failure receipts, cost/time estimates, checkpoint/storage paths, first-hour,
+  first-eight-hour, weekend, RunPod/cloud/local Linux variants, and stop
+  conditions.
+- Dataset and corpus prep with identified external datasets, repo-native schema
+  targets, train/eval split plans, replay indexer plans, data-quality receipts,
+  label-gap ledgers, false-veto/false-allow governance labels, and
+  transport/meta-node training-corpus plans.
+- Benchmark harnesses before models: transport eval thresholds, perception
+  replay consistency, command/timing/safety gates, economic allocation shadow
+  gates, Phase 7 governance outcome scoring, and fail-closed promotion gates.
+- Provider/runtime packaging: Linux/Docker setup notes, host scanners,
+  dependency matrix, path/root discovery, artifact pack contracts, unavailable
+  receipts, and CPU no-op wrappers.
+- Perception/embodiment replay loop: canonical replay fixtures, CPU/light
+  inference placeholders, perception packets from media, mapping to
+  embodiment/economic receipts, and event-spine proof from recorded data.
+- G1/R1 purchase readiness: variant criteria, workspace safety, e-stop and
+  recovery, network/DDS, companion compute, camera/sensor mounting,
+  storage/logging, calibration, first-week bring-up, and do-not-run-until gates.
+- Automation/evidence hygiene: nightly audit hardening, retention, run
+  manifests, stale artifact detection, claim-vs-evidence checks, focused CI
+  suites, and readiness-state report generation.
+
+### External datasets selected for staged bring-in
+
+- `open_x_embodiment_oxe`
+- `droid`
+- `bridgedata_v2`
+- `lerobot_hub_curated`
+- `robomind_v2`
+- `rh20t`
+- `ego4d_ego_exo4d`
+- `agibot_world_watchlist`
+- `local_robotics_vp_artifacts`
+
+External datasets are manifest-only in this pass. No download, license approval,
+schema conversion, quality pass, or training-ready claim has happened yet.
+
+### Current artifact result
+
+Primary artifact:
+
+- `artifacts/economic_world_model/post_gap_readiness/post_gap_readiness_report_v1.json`
+
+Current result:
+
+- `status=ok_planning_complete_launch_blocked`
+- `all_post_gap_items_manifested=true`
+- `ready_for_august_gpu_window=true`
+- `gpu_day_one_runbook_count=5`
+- `external_dataset_count=9`
+- `corpus_prep_artifact_count=54`
+- `benchmark_gate_count=6`
+- `provider_runtime_packaging_count=6`
+- `replay_loop_count=5`
+- `g1_r1_purchase_readiness_count=10`
+- `evidence_hygiene_count=7`
+- `launch_authority_granted=false`
+- `external_download_executed=false`
+- `provider_executed=false`
+- `gpu_training_executed=false`
+- `promotion_eligible=false`
+- `phase7_constraint_honored=true`
+
+### Boundary
+
+This is a post-gap readiness manifest only. It does not download external
+datasets, launch providers, run GPU training, purchase or operate G1/R1
+hardware, promote a model, mutate reward math, or expand Phase 7 authority.
+
+## 2026-05-31 — External LeRobot corpus import proof
+
+### What was built
+
+- Added `src/world_model/economic_world_model/external_corpus_import.py`.
+- Added `scripts/economic_world_model/import_lerobot_corpus_slice.py`.
+- Added `tests/test_external_lerobot_corpus_import.py`.
+- Added `docs/economic_world_model/external_lerobot_corpus_import.md`.
+
+This is the first actual external-corpus execution after the readiness
+manifest. The importer downloads or consumes a minimal LeRobot-format Parquet
+source, converts selected rows into repo-native replay records, writes a
+train/eval split manifest, replay index, data-quality receipts, label-gap
+ledger, false-veto/false-allow governance label specs, and Economic WM shadow
+ingestion rows.
+
+### Current artifact result
+
+Command:
+
+```bash
+python3 scripts/economic_world_model/import_lerobot_corpus_slice.py \
+  --repo-id lerobot/pusht_keypoints \
+  --output-dir artifacts/economic_world_model/external_lerobot_import \
+  --max-episodes 3 \
+  --max-steps-per-episode 200
+```
+
+Primary artifact:
+
+- `artifacts/economic_world_model/external_lerobot_import/external_lerobot_corpus_import_report_v1.json`
+
+Current result:
+
+- `status=ok_external_corpus_slice_imported_shadow_only`
+- `dataset_id=lerobot/pusht_keypoints`
+- `source_total_bytes=2253085`
+- `selected_episode_count=3`
+- `selected_step_count=420`
+- `replay_episode_count=3`
+- `replay_step_count=420`
+- `quality_receipt_count=11`
+- `quality_passed_count=11`
+- `label_gap_count=5`
+- `governance_label_count=4`
+- `ingestion_row_count=1`
+- `ready_for_shadow_eval=true`
+- `ready_for_training=false`
+- `provider_executed=false`
+- `gpu_training_executed=false`
+- `unitree_hardware_truth=false`
+- `promotion_eligible=false`
+- `phase7_authority_granted=false`
+
+### Boundary
+
+This pass proves real external Parquet download/decoding and repo-native
+shadow ingestion. It does not prove Unitree hardware behavior, provider
+execution, GPU training, perception video handling, benchmark-grade corpus
+scale, reward-math mutation, promotion, or Phase 7 authority.
