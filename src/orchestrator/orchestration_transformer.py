@@ -4,15 +4,19 @@ Stub orchestration transformer that selects tool calls given context + instructi
 Scaffolding only; outputs tool logits over domain-specific tool names and a small
 argument vector. No integration with RL/econ math.
 """
+
 from __future__ import annotations
 
-from typing import List
+from typing import Any, List, cast
 
 import torch
 import torch.nn as nn
 import numpy as np
 
-from src.evidence.preconditions import build_execution_preconditions, build_execution_work_order
+from src.evidence.preconditions import (
+    build_execution_preconditions,
+    build_execution_work_order,
+)
 from src.orchestrator.toolspecs import ToolName, ToolCall, OrchestrationStep
 from src.orchestrator.context import OrchestratorContext, OrchestratorResult
 from src.orchestrator.semantic_transformer_bridge import (
@@ -66,7 +70,7 @@ class OrchestrationTransformer(nn.Module):
         self.step_queries = nn.Parameter(torch.zeros(self.max_tool_steps, hidden))
         nn.init.normal_(self.step_queries, mean=0.0, std=0.02)
         self.tool_head = nn.Linear(hidden, len(TOOL_SEQUENCE_LABELS))
-        self.arg_head = nn.Linear(hidden, 12)   # a few continuous knobs as stub
+        self.arg_head = nn.Linear(hidden, 12)  # a few continuous knobs as stub
 
     def forward(self, instr_tokens: torch.Tensor, ctx_vec: torch.Tensor):
         """
@@ -105,7 +109,9 @@ def decode_tool_sequence_logits(
             break
         tool_name = str(label)
         if tool_name in TOOL_NAMES and tool_name not in sequence:
-            sequence.append(tool_name)  # keep bounded sequence unique and ordered
+            sequence.append(
+                cast(ToolName, tool_name)
+            )  # keep bounded sequence unique and ordered
     return sequence
 
 
@@ -131,32 +137,52 @@ def _encode_ctx(ctx: OrchestratorContext) -> np.ndarray:
     base_profile = []
     for name in ["BASE", "BOOST", "SAVER", "SAFE"]:
         prof = ctx.profile_summaries.get(name, {})
-        base_profile.extend([
-            prof.get("mpl", 0.0),
-            prof.get("error", 0.0),
-            prof.get("energy_Wh", 0.0),
-        ])
+        base_profile.extend(
+            [
+                prof.get("mpl", 0.0),
+                prof.get("error", 0.0),
+                prof.get("energy_Wh", 0.0),
+            ]
+        )
 
-    base_vec = np.concatenate([
-        engine,
-        task,
-        customer,
-        np.array(ctx.objective_vector, dtype=np.float32),
-        np.array([ctx.wage_human, ctx.energy_price_kWh], dtype=np.float32),
-        np.array([ctx.mean_delta_mpl, ctx.mean_delta_error, ctx.mean_delta_j, ctx.mean_trust, ctx.mean_w_econ], dtype=np.float32),
-        np.array(base_profile, dtype=np.float32),
-    ])
+    base_vec = np.concatenate(
+        [
+            engine,
+            task,
+            customer,
+            np.array(ctx.objective_vector, dtype=np.float32),
+            np.array([ctx.wage_human, ctx.energy_price_kWh], dtype=np.float32),
+            np.array(
+                [
+                    ctx.mean_delta_mpl,
+                    ctx.mean_delta_error,
+                    ctx.mean_delta_j,
+                    ctx.mean_trust,
+                    ctx.mean_w_econ,
+                ],
+                dtype=np.float32,
+            ),
+            np.array(base_profile, dtype=np.float32),
+        ]
+    )
     semantic_summary = build_semantic_world_model_summary(context=ctx)
     semantic_vec = encode_semantic_world_model_features(semantic_summary)
     selection_summary = {}
     if isinstance(getattr(ctx, "semantic_metadata", None), dict):
-        selection_summary = dict(ctx.semantic_metadata.get("selection_summary", {}) or {})
+        selection_summary = dict(
+            ctx.semantic_metadata.get("selection_summary", {}) or {}
+        )
     selection_vec = encode_selection_feedback_features(selection_summary)
     vec = np.concatenate([base_vec, semantic_vec, selection_vec])
     return vec.astype(np.float32)
 
 
-def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: OrchestratorContext, instruction: str, steps: int = 4) -> OrchestratorResult:
+def propose_orchestrated_plan(
+    model: OrchestrationTransformer,
+    ctx: OrchestratorContext,
+    instruction: str,
+    steps: int = 4,
+) -> OrchestratorResult:
     vocab = model.instr_embed.num_embeddings
     ctx_vec = torch.from_numpy(_encode_ctx(ctx))
     # Pad/trim ctx to expected dim
@@ -177,8 +203,12 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
     datapack_signals = {
         "data_coverage_score": max(0.0, min(1.0, ctx.mean_trust)),
         "embedding_diversity": max(0.0, min(1.0, abs(ctx.mean_w_econ))),
-        "vla_annotation_fraction": 1.0 if semantic_summary.get("fusion_bridge", 0.0) >= 0.5 else 0.0,
-        "guidance_annotation_fraction": 1.0 if semantic_summary.get("stage2_bridge", 0.0) >= 0.5 else 0.0,
+        "vla_annotation_fraction": 1.0
+        if semantic_summary.get("fusion_bridge", 0.0) >= 0.5
+        else 0.0,
+        "guidance_annotation_fraction": 1.0
+        if semantic_summary.get("stage2_bridge", 0.0) >= 0.5
+        else 0.0,
         "data_gaps": list(ctx.semantic_metadata.get("data_gaps", []) or []),
     }
     objective_preset = derive_objective_preset(
@@ -219,17 +249,18 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         datapack_signals=datapack_signals,
         instruction=instruction,
     )
-    tool_scores = {}
+    tool_scores: dict[ToolName, float] = {}
     for index, tool_name in enumerate(TOOL_NAMES):
-        tool_scores[tool_name] = (
-            float(torch.max(logits[0, :, index]).item()) * 0.1
-            + float(tool_biases.get(tool_name, 0.0))
-        )
-    model_predicted_tools = decode_tool_sequence_logits(logits[0], max_steps=max(steps, 1))
-    sequence_trace = []
+        tool_scores[tool_name] = float(
+            torch.max(logits[0, :, index]).item()
+        ) * 0.1 + float(tool_biases.get(tool_name, 0.0))
+    model_predicted_tools = decode_tool_sequence_logits(
+        logits[0], max_steps=max(steps, 1)
+    )
+    sequence_trace: list[dict[str, Any]] = []
     for step_idx, step_logits in enumerate(logits[0][: max(steps, 1)]):
         probs = torch.softmax(step_logits, dim=-1).detach().cpu().numpy()
-        ranked_step_labels = sorted(
+        ranked_step_labels: list[dict[str, Any]] = sorted(
             (
                 {
                     "tool": TOOL_SEQUENCE_LABELS[label_idx],
@@ -237,7 +268,7 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
                 }
                 for label_idx in range(len(TOOL_SEQUENCE_LABELS))
             ),
-            key=lambda row: row["probability"],
+            key=lambda row: float(cast(float, row["probability"])),
             reverse=True,
         )
         sequence_trace.append(
@@ -255,7 +286,7 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
     selected_set = set(model_predicted_tools)
     if len(selected_set) < max(steps, 1):
         selected_set |= set(ranked_tools[: max(steps, 1)])
-    preferred_order = [
+    preferred_order: list[ToolName] = [
         "SET_OBJECTIVE_PRESET",
         "SET_ENERGY_PROFILE",
         "SET_DATA_MIX",
@@ -265,7 +296,9 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         "CALL_VLA_FOR_DATAPACK_CLASS",
         "CALL_VLA_SINGLE_STEP",
     ]
-    chosen_tools = [tool_name for tool_name in model_predicted_tools if tool_name in TOOL_NAMES]
+    chosen_tools: list[ToolName] = [
+        tool_name for tool_name in model_predicted_tools if tool_name in TOOL_NAMES
+    ]
     chosen_tools.extend(
         tool_name
         for tool_name in preferred_order
@@ -276,9 +309,9 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
             chosen_tools.append(tool_name)
         if len(chosen_tools) >= max(steps, 1):
             break
-    steps_out = []
+    steps_out: list[OrchestrationStep] = []
     for tool in chosen_tools[: max(steps, 1)]:
-        args = {}
+        args: dict[str, Any] = {}
         if tool == "SET_BACKEND":
             args["backend"] = chosen_backend
         elif tool == "SET_OBJECTIVE_PRESET":
@@ -290,11 +323,19 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         elif tool == "QUERY_ENERGY_SURFACE":
             args["profile_query"] = True
         elif tool == "QUERY_DATAPACKS":
-            args["filter"] = {"env": ctx.env_name, "engine": chosen_backend, "focus": datapack_signals["data_gaps"]}
+            args["filter"] = {
+                "env": ctx.env_name,
+                "engine": chosen_backend,
+                "focus": datapack_signals["data_gaps"],
+            }
         elif tool == "CALL_VLA_FOR_DATAPACK_CLASS":
-            args["class_filter"] = list(semantic_summary.get("top_object_labels", []) or [])
+            args["class_filter"] = list(
+                semantic_summary.get("top_object_labels", []) or []
+            )
         elif tool == "CALL_VLA_SINGLE_STEP":
-            args["focus_meta_node"] = next(iter(semantic_summary.get("top_meta_nodes", []) or []), "")
+            args["focus_meta_node"] = next(
+                iter(semantic_summary.get("top_meta_nodes", []) or []), ""
+            )
         steps_out.append(
             OrchestrationStep(
                 instruction=instruction,
@@ -306,9 +347,13 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
             )
         )
     readiness = build_execution_preconditions(
-        subject_id=str(semantic_summary.get("task_id") or ctx.task_type or ctx.env_name),
+        subject_id=str(
+            semantic_summary.get("task_id") or ctx.task_type or ctx.env_name
+        ),
         subject_kind="orchestration_transformer",
-        artifact_refs={"semantic_world_model_id": semantic_summary.get("world_model_id")},
+        artifact_refs={
+            "semantic_world_model_id": semantic_summary.get("world_model_id")
+        },
         required_artifact_refs=["semantic_world_model_id"],
         signal_values={
             "semantic_present": 1.0 if semantic_summary.get("present") else 0.0,
@@ -343,15 +388,18 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         if isinstance(ctx.semantic_metadata, dict)
         else {}
     )
-    selection_feedback_features = encode_selection_feedback_features(selection_summary).tolist()
-    activation_plan = {
+    selection_feedback_features = encode_selection_feedback_features(
+        selection_summary
+    ).tolist()
+    bounded_actions = [
+        "set_objective_preset",
+        "set_energy_profile",
+        "set_data_mix",
+        "set_backend",
+    ]
+    activation_plan: dict[str, Any] = {
         "mode": execution_mode,
-        "bounded_actions": [
-            "set_objective_preset",
-            "set_energy_profile",
-            "set_data_mix",
-            "set_backend",
-        ],
+        "bounded_actions": bounded_actions,
         "tool_sequence": [step.tool_call.name for step in steps_out],
         "model_predicted_tool_sequence": list(model_predicted_tools),
         "model_sequence_trace": list(sequence_trace),
@@ -377,14 +425,18 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
         activation_plan["bounded_actions"].append("prioritize_gap_fill")
     activation_work_order = build_execution_work_order(
         order_type="transformer_routing",
-        subject_id=str(semantic_summary.get("task_id") or ctx.task_type or ctx.env_name),
+        subject_id=str(
+            semantic_summary.get("task_id") or ctx.task_type or ctx.env_name
+        ),
         subject_kind="orchestration_transformer",
         decision="activate_orchestration_transformer",
         priority=float(max(semantic_summary.get("capability_mean", 0.0), 0.1)),
         recommended_mode=execution_mode,
         readiness=readiness,
         reasons=list(activation_plan["bounded_actions"]),
-        artifact_refs={"semantic_world_model_id": semantic_summary.get("world_model_id")},
+        artifact_refs={
+            "semantic_world_model_id": semantic_summary.get("world_model_id")
+        },
         metadata={
             "semantic_world_model_summary": semantic_summary,
             "selection_summary": selection_summary,
@@ -412,10 +464,12 @@ def propose_orchestrated_plan(model: OrchestrationTransformer, ctx: Orchestrator
             "model_predicted_tool_sequence": list(model_predicted_tools),
             "model_sequence_trace": list(sequence_trace),
             "execution_preconditions": readiness.to_dict(),
-            "coverage_feedback_summary": dict(semantic_summary.get("coverage_feedback_summary", {}) or {}),
+            "coverage_feedback_summary": dict(
+                semantic_summary.get("coverage_feedback_summary", {}) or {}
+            ),
         },
     )
 
 
-def tool_call_from(name: ToolName, args: dict) -> ToolCall:
+def tool_call_from(name: ToolName, args: dict[str, Any]) -> ToolCall:
     return ToolCall(name=name, args=args)

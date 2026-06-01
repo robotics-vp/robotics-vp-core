@@ -15,7 +15,10 @@ from .calibration import (
 )
 from .common import mapping, stable_id
 from .compiler import compile_sim_synth_physics_world_state
-from .diffusion_contracts import GapDrivenDiffusionPlan, compile_gap_driven_diffusion_plans
+from .diffusion_contracts import (
+    GapDrivenDiffusionPlan,
+    compile_gap_driven_diffusion_plans,
+)
 from .gen2sim_admission import build_gen2sim_admission_receipt
 from .phase1x_receipts import (
     build_backend_mismatch_receipt,
@@ -97,7 +100,9 @@ class SimSynthPhysicsLoopResult:
     branch_validity_receipts: list[BranchValidityReceipt] = field(default_factory=list)
     sensor_alignment_receipt: Optional[SensorAlignmentReceipt] = None
     replay_validity_receipts: list[ReplayValidityReceipt] = field(default_factory=list)
-    backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt] = field(default_factory=list)
+    backend_runtime_work_orders: list[BackendRuntimeWorkOrderReceipt] = field(
+        default_factory=list
+    )
     backend_runtime_execution_receipt: Optional[BackendRuntimeExecutionReceipt] = None
     backend_runtime_adapter_receipt: Optional[BackendRuntimeAdapterReceipt] = None
     backend_runtime_launch_receipt: Optional[BackendRuntimeLaunchReceipt] = None
@@ -167,7 +172,9 @@ class SimSynthPhysicsLoopResult:
             "render_provider_receipts": [
                 receipt.to_dict() for receipt in self.render_provider_receipts
             ],
-            "outcome_receipts": [receipt.to_dict() for receipt in self.outcome_receipts],
+            "outcome_receipts": [
+                receipt.to_dict() for receipt in self.outcome_receipts
+            ],
             "training_feedback_manifest": mapping(self.training_feedback_manifest),
             "runtime_receipt_manifest": mapping(self.runtime_receipt_manifest),
             "artifact_paths": mapping(self.artifact_paths),
@@ -177,7 +184,9 @@ class SimSynthPhysicsLoopResult:
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8"
+    )
 
 
 def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
@@ -187,18 +196,24 @@ def _artifact_paths(output_dir: str | Path) -> dict[str, Path]:
         "physics_execution_contract": root / "physics_execution_contract.json",
         "physics_adaptation_receipt": root / "physics_adaptation_receipt.json",
         "gen2sim_admission_receipt": root / "gen2sim_admission_receipt.json",
-        "backend_execution_binding_receipt": root / "backend_execution_binding_receipt.json",
+        "backend_execution_binding_receipt": root
+        / "backend_execution_binding_receipt.json",
         "robot_asset_contract_receipt": root / "robot_asset_contract_receipt.json",
         "backend_runtime_bridge_receipt": root / "backend_runtime_bridge_receipt.json",
         "backend_runtime_work_orders": root / "backend_runtime_work_orders.json",
-        "backend_runtime_execution_receipt": root / "backend_runtime_execution_receipt.json",
-        "backend_runtime_adapter_receipt": root / "backend_runtime_adapter_receipt.json",
-        "backend_runtime_adapter_realization": root / "backend_runtime_adapter_realization.json",
+        "backend_runtime_execution_receipt": root
+        / "backend_runtime_execution_receipt.json",
+        "backend_runtime_adapter_receipt": root
+        / "backend_runtime_adapter_receipt.json",
+        "backend_runtime_adapter_realization": root
+        / "backend_runtime_adapter_realization.json",
         "backend_upstream_runtime_pack": root / "backend_upstream_runtime_pack.json",
         "backend_runtime_binding": root / "backend_runtime_binding.json",
         "backend_runtime_launch_receipt": root / "backend_runtime_launch_receipt.json",
-        "backend_runtime_outcome_receipt": root / "backend_runtime_outcome_receipt.json",
-        "backend_shadow_execution_receipt": root / "backend_shadow_execution_receipt.json",
+        "backend_runtime_outcome_receipt": root
+        / "backend_runtime_outcome_receipt.json",
+        "backend_shadow_execution_receipt": root
+        / "backend_shadow_execution_receipt.json",
         "physics_calibration_receipt": root / "physics_calibration_receipt.json",
         "task_measurement_receipt": root / "task_measurement_receipt.json",
         "sim_real_gap_receipt": root / "sim_real_gap_receipt.json",
@@ -286,7 +301,9 @@ def _build_backend_runtime_outcome_receipt(
 ) -> Optional[BackendRuntimeOutcomeReceipt]:
     if backend_runtime_execution_receipt is None:
         return None
-    payload = mapping(backend_runtime_execution_receipt.metadata.get("runtime_outcome_receipt"))
+    payload = mapping(
+        backend_runtime_execution_receipt.metadata.get("runtime_outcome_receipt")
+    )
     if not payload:
         return None
     return BackendRuntimeOutcomeReceipt(
@@ -337,7 +354,8 @@ def _build_outcome_receipts(
     )
     job_by_id = {job.job_id: job for job in world_state.simulation_agenda.jobs}
     render_receipts_by_plan = {
-        str(receipt.branch_plan_id): receipt for receipt in (render_provider_receipts or [])
+        str(receipt.branch_plan_id): receipt
+        for receipt in (render_provider_receipts or [])
     }
     receipts: list[SimulationOutcomeReceipt] = []
     for index, plan in enumerate(world_state.synthetic_branch_plans):
@@ -394,13 +412,19 @@ def _build_outcome_receipts(
                     "expected_yield_score": float(plan.expected_yield_score),
                     "branch_selection_policy": plan.selection_policy,
                     "render_provider_id": (
-                        "" if render_provider is None else str(render_provider.provider_id)
+                        ""
+                        if render_provider is None
+                        else str(render_provider.provider_id)
                     ),
                     "render_provider_kind": (
-                        "" if render_provider is None else str(render_provider.provider_kind)
+                        ""
+                        if render_provider is None
+                        else str(render_provider.provider_kind)
                     ),
                     "render_provider_status": (
-                        "" if render_provider is None else str(render_provider.provider_status)
+                        ""
+                        if render_provider is None
+                        else str(render_provider.provider_status)
                     ),
                     "job_rank": int(job.rank) if job is not None else index + 1,
                     "artifact_materialization": (
@@ -409,18 +433,25 @@ def _build_outcome_receipts(
                         else str(render_receipt.materialization_status)
                     ),
                     "render_materialization_mode": (
-                        "" if render_receipt is None else str(render_receipt.materialization_mode)
+                        ""
+                        if render_receipt is None
+                        else str(render_receipt.materialization_mode)
                     ),
                     "render_provider_receipt_id": (
                         "" if render_receipt is None else str(render_receipt.receipt_id)
                     ),
                     "render_artifact_refs": (
-                        [] if render_receipt is None else list(render_receipt.artifact_refs)
+                        []
+                        if render_receipt is None
+                        else list(render_receipt.artifact_refs)
                     ),
                     "render_unsatisfied_preconditions": (
                         []
                         if render_receipt is None
-                        else list(render_receipt.metadata.get("unsatisfied_preconditions", []) or [])
+                        else list(
+                            render_receipt.metadata.get("unsatisfied_preconditions", [])
+                            or []
+                        )
                     ),
                     "backend_shadow_execution_receipt_id": (
                         ""
@@ -497,8 +528,9 @@ def _build_outcome_receipts(
     return receipts
 
 
-
-def _manifest_artifact_ref(artifact_paths: Mapping[str, Path], artifact_key: str) -> str:
+def _manifest_artifact_ref(
+    artifact_paths: Mapping[str, Path], artifact_key: str
+) -> str:
     artifact_path = artifact_paths.get(artifact_key)
     return "" if artifact_path is None else str(artifact_path.resolve())
 
@@ -762,7 +794,9 @@ def _build_runtime_receipt_manifest(
         for entry in entries
         if not entry["required"] and entry["status"] != "emitted"
     ]
-    family_counts = {str(entry["family"]): int(entry["receipt_count"]) for entry in entries}
+    family_counts = {
+        str(entry["family"]): int(entry["receipt_count"]) for entry in entries
+    }
     emitted_receipt_ids = {
         str(entry["family"]): list(entry["receipt_ids"])
         for entry in entries
@@ -796,7 +830,9 @@ def _build_runtime_receipt_manifest(
         "training_feedback_manifest_ref": _manifest_artifact_ref(
             artifact_paths, "training_feedback_manifest"
         ),
-        "training_feedback_row_count": len(list(training_feedback_manifest.get("rows") or [])),
+        "training_feedback_row_count": len(
+            list(training_feedback_manifest.get("rows") or [])
+        ),
         "route_status": execution_contract.route_status,
         "requested_backend": execution_contract.requested_backend,
         "resolved_backend": execution_contract.resolved_backend,
@@ -810,6 +846,7 @@ def _build_runtime_receipt_manifest(
             "provider_truth_claim": "no_provider_bringup_claimed",
         },
     }
+
 
 def _build_training_feedback_manifest(
     world_state: SimSynthPhysicsWorldState,
@@ -870,9 +907,9 @@ def _build_training_feedback_manifest(
         if backend_runtime_execution_receipt is None
         else mapping(
             mapping(backend_runtime_execution_receipt.metadata).get("runtime_binding")
-            or mapping(backend_runtime_execution_receipt.metadata).get("runtime_bundle", {}).get(
-                "runtime_binding"
-            )
+            or mapping(backend_runtime_execution_receipt.metadata)
+            .get("runtime_bundle", {})
+            .get("runtime_binding")
         )
     )
     rows: list[dict[str, Any]] = []
@@ -884,8 +921,12 @@ def _build_training_feedback_manifest(
     }
     for receipt in outcome_receipts:
         render_receipt = render_receipts_by_plan.get(str(receipt.branch_plan_id))
-        branch_validity_receipt = branch_validity_by_plan.get(str(receipt.branch_plan_id))
-        replay_validity_receipt = replay_validity_by_plan.get(str(receipt.branch_plan_id))
+        branch_validity_receipt = branch_validity_by_plan.get(
+            str(receipt.branch_plan_id)
+        )
+        replay_validity_receipt = replay_validity_by_plan.get(
+            str(receipt.branch_plan_id)
+        )
         rows.append(
             {
                 "branch_plan_id": str(receipt.branch_plan_id),
@@ -899,12 +940,17 @@ def _build_training_feedback_manifest(
                     [] if render_receipt is None else list(render_receipt.artifact_refs)
                 ),
                 "render_materialization_status": (
-                    "" if render_receipt is None else str(render_receipt.materialization_status)
+                    ""
+                    if render_receipt is None
+                    else str(render_receipt.materialization_status)
                 ),
                 "render_unsatisfied_preconditions": (
                     []
                     if render_receipt is None
-                    else list(render_receipt.metadata.get("unsatisfied_preconditions", []) or [])
+                    else list(
+                        render_receipt.metadata.get("unsatisfied_preconditions", [])
+                        or []
+                    )
                 ),
                 "transfer_evidence": dict(transfer_evidence),
                 "branch_validity": (
@@ -981,9 +1027,15 @@ def _build_training_feedback_manifest(
             1 for receipt in replay_validity_receipts if receipt.reject_reasons
         ),
         "route_status": execution_contract.route_status,
-        "gen2sim_benchmark_gate_ready": bool(gen2sim_admission_receipt.benchmark_gate_ready),
-        "gen2sim_admissible_branch_count": len(gen2sim_admission_receipt.admissible_branch_ids),
-        "gen2sim_blocked_branch_count": len(gen2sim_admission_receipt.blocked_branch_ids),
+        "gen2sim_benchmark_gate_ready": bool(
+            gen2sim_admission_receipt.benchmark_gate_ready
+        ),
+        "gen2sim_admissible_branch_count": len(
+            gen2sim_admission_receipt.admissible_branch_ids
+        ),
+        "gen2sim_blocked_branch_count": len(
+            gen2sim_admission_receipt.blocked_branch_ids
+        ),
         "backend_shadow_execution_status": (
             ""
             if backend_shadow_execution_receipt is None
@@ -1004,7 +1056,9 @@ def _build_training_feedback_manifest(
             if backend_runtime_adapter_receipt is None
             else backend_runtime_adapter_receipt.execution_path
         ),
-        "backend_runtime_binding_status": str(runtime_binding.get("binding_status", "") or ""),
+        "backend_runtime_binding_status": str(
+            runtime_binding.get("binding_status", "") or ""
+        ),
         "backend_runtime_binding_selected_profile": str(
             runtime_binding.get("selected_profile", "") or ""
         ),
@@ -1037,21 +1091,25 @@ def _build_training_feedback_manifest(
         "backend_runtime_bridge_status": backend_runtime_bridge_receipt.bridge_status,
         "bridge_execution_authority": backend_runtime_bridge_receipt.execution_authority,
         "bridge_transport_profile": backend_runtime_bridge_receipt.transport_profile,
-        "bridge_readiness_score": float(backend_runtime_bridge_receipt.bridge_readiness_score),
+        "bridge_readiness_score": float(
+            backend_runtime_bridge_receipt.bridge_readiness_score
+        ),
         "backend_upstream_runtime_pack": mapping(
             backend_runtime_bridge_receipt.metadata.get("upstream_runtime_pack")
         ),
         "backend_upstream_runtime_pack_status": str(
-            mapping(backend_runtime_bridge_receipt.metadata.get("upstream_runtime_pack")).get(
-                "pack_status", ""
-            )
+            mapping(
+                backend_runtime_bridge_receipt.metadata.get("upstream_runtime_pack")
+            ).get("pack_status", "")
             or ""
         ),
         "backend_runtime_work_order_count": len(backend_runtime_work_orders),
         "backend_runtime_work_order_statuses": [
             receipt.status for receipt in backend_runtime_work_orders
         ],
-        "robot_asset_readiness_score": float(robot_asset_contract_receipt.readiness_score),
+        "robot_asset_readiness_score": float(
+            robot_asset_contract_receipt.readiness_score
+        ),
         "render_provider_receipt_count": len(render_provider_receipts),
         "materialized_render_provider_count": sum(
             1
@@ -1062,10 +1120,14 @@ def _build_training_feedback_manifest(
             getattr(world_state.gen2sim_admission, "benchmark_gate_ready", False)
         ),
         "blocked_branch_count": sum(
-            1 for receipt in outcome_receipts if str(receipt.status).startswith("blocked_")
+            1
+            for receipt in outcome_receipts
+            if str(receipt.status).startswith("blocked_")
         ),
         "planned_branch_count": sum(
-            1 for receipt in outcome_receipts if str(receipt.status).startswith("planned_")
+            1
+            for receipt in outcome_receipts
+            if str(receipt.status).startswith("planned_")
         ),
         "rows": rows,
     }
@@ -1119,8 +1181,12 @@ def _build_backend_execution_binding_receipt(
                 "runtime_layout_contract", {}
             ),
             "policy_contract": mapping(binding.metadata).get("policy_contract", {}),
-            "deployment_contract": mapping(binding.metadata).get("deployment_contract", {}),
-            "upstream_runtime_pack": mapping(binding.metadata).get("upstream_runtime_pack", {}),
+            "deployment_contract": mapping(binding.metadata).get(
+                "deployment_contract", {}
+            ),
+            "upstream_runtime_pack": mapping(binding.metadata).get(
+                "upstream_runtime_pack", {}
+            ),
             "normalized_asset_manifest": mapping(binding.metadata).get(
                 "normalized_asset_manifest", {}
             ),
@@ -1154,7 +1220,9 @@ def _build_robot_asset_contract_receipt(
         contract_id=contract.contract_id,
         asset_profile=contract.asset_profile,
         target_hardware_class=contract.target_hardware_class,
-        readiness_score=float(contract.metadata.get("asset_readiness_score", 0.0) or 0.0),
+        readiness_score=float(
+            contract.metadata.get("asset_readiness_score", 0.0) or 0.0
+        ),
         required_assets=list(contract.required_assets),
         available_assets=list(contract.available_assets),
         missing_assets=list(contract.missing_assets),
@@ -1285,9 +1353,12 @@ class SimSynthPhysicsRuntime:
         external_launch_cwd: str | Path | None = None,
     ) -> SimSynthPhysicsLoopResult:
         artifact_paths = _artifact_paths(output_dir) if output_dir is not None else {}
-        execution_contract = world_state.physics_execution_contract or build_physics_execution_contract(
-            world_state,
-            fallback_backend=self.config.fallback_backend,
+        execution_contract = (
+            world_state.physics_execution_contract
+            or build_physics_execution_contract(
+                world_state,
+                fallback_backend=self.config.fallback_backend,
+            )
         )
         backend_binding_receipt = _build_backend_execution_binding_receipt(
             world_state,
@@ -1310,8 +1381,11 @@ class SimSynthPhysicsRuntime:
         backend_runtime_outcome_receipt = _build_backend_runtime_outcome_receipt(
             backend_runtime_execution_receipt
         )
+        gen2sim_admission = world_state.gen2sim_admission
+        if gen2sim_admission is None:
+            raise ValueError("sim/synth world state missing gen2sim admission state")
         gen2sim_admission_receipt = build_gen2sim_admission_receipt(
-            world_state.gen2sim_admission,
+            gen2sim_admission,
             world_state.synthetic_branch_plans,
             world_state.simulation_agenda.jobs,
         )
@@ -1595,7 +1669,9 @@ class SimSynthPhysicsRuntime:
                 artifact_paths["backend_runtime_work_orders"],
                 {
                     "version": "backend_runtime_work_order_bundle_v1",
-                    "receipts": [receipt.to_dict() for receipt in backend_runtime_work_orders],
+                    "receipts": [
+                        receipt.to_dict() for receipt in backend_runtime_work_orders
+                    ],
                 },
             )
             if backend_runtime_execution_receipt is not None:
@@ -1610,14 +1686,18 @@ class SimSynthPhysicsRuntime:
                 )
                 _write_json(
                     artifact_paths["backend_runtime_adapter_realization"],
-                    mapping(backend_runtime_adapter_receipt.metadata.get("realization")),
+                    mapping(
+                        backend_runtime_adapter_receipt.metadata.get("realization")
+                    ),
                 )
             upstream_runtime_pack = mapping(
                 backend_runtime_bridge_receipt.metadata.get("upstream_runtime_pack")
             ) or mapping(
                 {}
                 if backend_runtime_execution_receipt is None
-                else mapping(backend_runtime_execution_receipt.metadata).get("runtime_bundle", {})
+                else mapping(backend_runtime_execution_receipt.metadata).get(
+                    "runtime_bundle", {}
+                )
             ).get("upstream_runtime_pack", {})
             if upstream_runtime_pack:
                 _write_json(
@@ -1627,11 +1707,15 @@ class SimSynthPhysicsRuntime:
             runtime_binding = mapping(
                 {}
                 if backend_runtime_execution_receipt is None
-                else mapping(backend_runtime_execution_receipt.metadata).get("runtime_binding")
+                else mapping(backend_runtime_execution_receipt.metadata).get(
+                    "runtime_binding"
+                )
             ) or mapping(
                 {}
                 if backend_runtime_execution_receipt is None
-                else mapping(backend_runtime_execution_receipt.metadata).get("runtime_bundle", {})
+                else mapping(backend_runtime_execution_receipt.metadata).get(
+                    "runtime_bundle", {}
+                )
             ).get("runtime_binding", {})
             if runtime_binding:
                 _write_json(
@@ -1681,7 +1765,9 @@ class SimSynthPhysicsRuntime:
                 artifact_paths["branch_validity_receipts"],
                 {
                     "version": "branch_validity_receipt_bundle_v1",
-                    "receipts": [receipt.to_dict() for receipt in branch_validity_receipts],
+                    "receipts": [
+                        receipt.to_dict() for receipt in branch_validity_receipts
+                    ],
                 },
             )
             _write_json(
@@ -1692,14 +1778,18 @@ class SimSynthPhysicsRuntime:
                 artifact_paths["replay_validity_receipts"],
                 {
                     "version": "replay_validity_receipt_bundle_v1",
-                    "receipts": [receipt.to_dict() for receipt in replay_validity_receipts],
+                    "receipts": [
+                        receipt.to_dict() for receipt in replay_validity_receipts
+                    ],
                 },
             )
             _write_json(
                 artifact_paths["render_provider_receipts"],
                 {
                     "version": "render_provider_receipt_bundle_v1",
-                    "receipts": [receipt.to_dict() for receipt in render_provider_receipts],
+                    "receipts": [
+                        receipt.to_dict() for receipt in render_provider_receipts
+                    ],
                 },
             )
             _write_json(
@@ -1724,14 +1814,22 @@ class SimSynthPhysicsRuntime:
                     "world_state_id": world_state.state_id,
                     "physics_execution_contract_id": execution_contract.contract_id,
                     "physics_adaptation_receipt_id": adaptation_receipt.receipt_id,
-                    "runtime_receipt_manifest_id": runtime_receipt_manifest["manifest_id"],
+                    "runtime_receipt_manifest_id": runtime_receipt_manifest[
+                        "manifest_id"
+                    ],
                     "runtime_receipt_manifest_status": runtime_receipt_manifest[
                         "manifest_status"
                     ],
                     "gen2sim_admission_receipt_id": gen2sim_admission_receipt.receipt_id,
-                    "gen2sim_benchmark_gate_ready": bool(gen2sim_admission_receipt.benchmark_gate_ready),
-                    "gen2sim_admissible_branch_count": len(gen2sim_admission_receipt.admissible_branch_ids),
-                    "gen2sim_blocked_branch_count": len(gen2sim_admission_receipt.blocked_branch_ids),
+                    "gen2sim_benchmark_gate_ready": bool(
+                        gen2sim_admission_receipt.benchmark_gate_ready
+                    ),
+                    "gen2sim_admissible_branch_count": len(
+                        gen2sim_admission_receipt.admissible_branch_ids
+                    ),
+                    "gen2sim_blocked_branch_count": len(
+                        gen2sim_admission_receipt.blocked_branch_ids
+                    ),
                     "backend_execution_binding_receipt_id": backend_binding_receipt.receipt_id,
                     "robot_asset_contract_receipt_id": robot_asset_contract_receipt.receipt_id,
                     "backend_runtime_bridge_receipt_id": backend_runtime_bridge_receipt.receipt_id,
@@ -1770,7 +1868,9 @@ class SimSynthPhysicsRuntime:
                     "bridge_readiness_score": float(
                         backend_runtime_bridge_receipt.bridge_readiness_score
                     ),
-                    "backend_runtime_work_order_count": len(backend_runtime_work_orders),
+                    "backend_runtime_work_order_count": len(
+                        backend_runtime_work_orders
+                    ),
                     "backend_runtime_work_order_statuses": [
                         receipt.status for receipt in backend_runtime_work_orders
                     ],
@@ -1801,7 +1901,9 @@ class SimSynthPhysicsRuntime:
                         mapping(
                             {}
                             if backend_runtime_adapter_receipt is None
-                            else backend_runtime_adapter_receipt.metadata.get("realization")
+                            else backend_runtime_adapter_receipt.metadata.get(
+                                "realization"
+                            )
                         ).get("realization_path", "")
                         or ""
                     ),
@@ -1809,7 +1911,9 @@ class SimSynthPhysicsRuntime:
                         mapping(
                             {}
                             if backend_runtime_adapter_receipt is None
-                            else backend_runtime_adapter_receipt.metadata.get("realization")
+                            else backend_runtime_adapter_receipt.metadata.get(
+                                "realization"
+                            )
                         ).get("realization_status", "")
                         or ""
                     ),
@@ -1833,9 +1937,9 @@ class SimSynthPhysicsRuntime:
                         mapping(
                             {}
                             if backend_runtime_execution_receipt is None
-                            else mapping(backend_runtime_execution_receipt.metadata).get(
-                                "runtime_binding"
-                            )
+                            else mapping(
+                                backend_runtime_execution_receipt.metadata
+                            ).get("runtime_binding")
                         ).get("binding_status", "")
                         or ""
                     ),
@@ -1843,9 +1947,9 @@ class SimSynthPhysicsRuntime:
                         mapping(
                             {}
                             if backend_runtime_execution_receipt is None
-                            else mapping(backend_runtime_execution_receipt.metadata).get(
-                                "runtime_binding"
-                            )
+                            else mapping(
+                                backend_runtime_execution_receipt.metadata
+                            ).get("runtime_binding")
                         ).get("selected_profile", "")
                         or ""
                     ),

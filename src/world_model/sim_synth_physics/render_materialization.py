@@ -11,15 +11,23 @@ import numpy as np
 from .common import mapping
 from .physics_contracts import PhysicsExecutionContract
 from .receipts import PhysicsAdaptationReceipt, RenderProviderReceipt
-from .state import BranchRenderProviderState, SimSynthPhysicsWorldState, SyntheticBranchPlan
+from .state import (
+    BranchRenderProviderState,
+    SimSynthPhysicsWorldState,
+    SyntheticBranchPlan,
+)
 
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8"
+    )
 
 
-def _provider_output_dir(output_dir: Optional[str | Path], plan_id: str) -> Optional[Path]:
+def _provider_output_dir(
+    output_dir: Optional[str | Path], plan_id: str
+) -> Optional[Path]:
     if output_dir is None:
         return None
     return Path(output_dir) / "render_provider_materializations" / plan_id
@@ -79,7 +87,11 @@ def _materialize_lsd_scene(
         _write_json(contract_path, provider.to_dict())
         _write_json(
             config_path,
-            mapping(provider.provider_config.get("lsd_vector_scene", provider.provider_config)),
+            mapping(
+                provider.provider_config.get(
+                    "lsd_vector_scene", provider.provider_config
+                )
+            ),
         )
         _write_json(
             manifest_path,
@@ -89,12 +101,18 @@ def _materialize_lsd_scene(
                 "provider_kind": provider.provider_kind,
                 "materialization_mode": "scene_config",
                 "materialization_status": "scene_materialized",
-                "scene_hierarchy_ref": mapping(plan.metadata.get("scene_hierarchy_ref")),
+                "scene_hierarchy_ref": mapping(
+                    plan.metadata.get("scene_hierarchy_ref")
+                ),
                 "unsatisfied_preconditions": [],
             },
         )
         artifact_refs.extend(
-            [_artifact_ref(contract_path), _artifact_ref(config_path), _artifact_ref(manifest_path)]
+            [
+                _artifact_ref(contract_path),
+                _artifact_ref(config_path),
+                _artifact_ref(manifest_path),
+            ]
         )
     return "scene_materialized", "scene_config", artifact_refs, metadata
 
@@ -108,12 +126,13 @@ def _materialize_nag_counterfactual(
 ) -> tuple[str, str, list[str], dict[str, Any]]:
     artifact_refs: list[str] = []
     source_context = _render_source_context(world_state, plan)
-    metadata = {
+    metadata: dict[str, Any] = {
         "provider_truth_class": "counterfactual_work_order",
         "unsatisfied_preconditions": [],
     }
     backend_episode = mapping(
-        source_context.get("source_lsd_episode") or source_context.get("lsd_backend_episode")
+        source_context.get("source_lsd_episode")
+        or source_context.get("lsd_backend_episode")
     )
     if not backend_episode:
         metadata["unsatisfied_preconditions"].append("source_lsd_episode")
@@ -135,12 +154,21 @@ def _materialize_nag_counterfactual(
                 "counterfactual_mode": provider.counterfactual_mode,
                 "provider_config": mapping(provider.provider_config),
                 "source_context_keys": sorted(source_context),
-                "unsatisfied_preconditions": list(metadata["unsatisfied_preconditions"]),
+                "unsatisfied_preconditions": list(
+                    metadata["unsatisfied_preconditions"]
+                ),
             },
         )
-        artifact_refs.extend([_artifact_ref(contract_path), _artifact_ref(work_order_path)])
+        artifact_refs.extend(
+            [_artifact_ref(contract_path), _artifact_ref(work_order_path)]
+        )
     if metadata["unsatisfied_preconditions"]:
-        return "work_order_materialized_with_preconditions", "counterfactual_work_order", artifact_refs, metadata
+        return (
+            "work_order_materialized_with_preconditions",
+            "counterfactual_work_order",
+            artifact_refs,
+            metadata,
+        )
     try:
         from src.vision.nag.integration_lsd_backend import (
             NAGEditPolicyConfig,
@@ -178,7 +206,9 @@ def _materialize_nag_counterfactual(
                 summary_path = output_root / f"nag_counterfactual_{index:03d}.json"
                 np.savez_compressed(payload_path, frames=datapack.frames)
                 _write_json(summary_path, datapack.to_dict())
-                artifact_refs.extend([_artifact_ref(payload_path), _artifact_ref(summary_path)])
+                artifact_refs.extend(
+                    [_artifact_ref(payload_path), _artifact_ref(summary_path)]
+                )
                 manifest_rows.append(
                     {
                         "counterfactual_id": datapack.counterfactual_id,
@@ -197,7 +227,12 @@ def _materialize_nag_counterfactual(
                 },
             )
             artifact_refs.append(_artifact_ref(manifest_path))
-        return "counterfactuals_materialized", "counterfactual_datapacks", artifact_refs, metadata
+        return (
+            "counterfactuals_materialized",
+            "counterfactual_datapacks",
+            artifact_refs,
+            metadata,
+        )
     except Exception as exc:
         metadata = {
             "provider_truth_class": "counterfactual_generation_failure",
@@ -215,7 +250,12 @@ def _materialize_nag_counterfactual(
                 },
             )
             artifact_refs.append(_artifact_ref(failure_path))
-        return "counterfactual_generation_failed", "counterfactual_datapacks", artifact_refs, metadata
+        return (
+            "counterfactual_generation_failed",
+            "counterfactual_datapacks",
+            artifact_refs,
+            metadata,
+        )
 
 
 def _materialize_ggds_scene(
@@ -227,7 +267,7 @@ def _materialize_ggds_scene(
 ) -> tuple[str, str, list[str], dict[str, Any]]:
     artifact_refs: list[str] = []
     source_context = _render_source_context(world_state, plan)
-    metadata = {
+    metadata: dict[str, Any] = {
         "provider_truth_class": "ggds_work_order",
         "unsatisfied_preconditions": [],
     }
@@ -235,7 +275,9 @@ def _materialize_ggds_scene(
     source_scene_path = str(source_context.get("source_gaussian_scene_path", "") or "")
     if not source_scene_payload and source_scene_path:
         try:
-            source_scene_payload = json.loads(Path(source_scene_path).read_text(encoding="utf-8"))
+            source_scene_payload = json.loads(
+                Path(source_scene_path).read_text(encoding="utf-8")
+            )
         except Exception:
             source_scene_payload = {}
     if not source_scene_payload:
@@ -259,16 +301,29 @@ def _materialize_ggds_scene(
                 "provider_kind": provider.provider_kind,
                 "render_mode": provider.render_mode,
                 "ggds_mode": provider.ggds_mode,
-                "provider_config": mapping(provider.provider_config.get("ggds", provider.provider_config)),
+                "provider_config": mapping(
+                    provider.provider_config.get("ggds", provider.provider_config)
+                ),
                 "source_context_keys": sorted(source_context),
-                "unsatisfied_preconditions": list(metadata["unsatisfied_preconditions"]),
+                "unsatisfied_preconditions": list(
+                    metadata["unsatisfied_preconditions"]
+                ),
             },
         )
         artifact_refs.extend(
-            [_artifact_ref(contract_path), _artifact_ref(lsd_config_path), _artifact_ref(ggds_path)]
+            [
+                _artifact_ref(contract_path),
+                _artifact_ref(lsd_config_path),
+                _artifact_ref(ggds_path),
+            ]
         )
     if metadata["unsatisfied_preconditions"]:
-        return "work_order_materialized_with_preconditions", "ggds_work_order", artifact_refs, metadata
+        return (
+            "work_order_materialized_with_preconditions",
+            "ggds_work_order",
+            artifact_refs,
+            metadata,
+        )
     try:
         from src.envs.lsd3d_env.gaussian_scene import GaussianScene
         from src.envs.lsd3d_env.ggds import CameraRig, create_default_optimizer
@@ -294,7 +349,9 @@ def _materialize_ggds_scene(
         metadata = {
             "provider_truth_class": "ggds_scene_materialization",
             "unsatisfied_preconditions": [],
-            "optimized_gaussian_count": int(getattr(optimized_scene, "num_gaussians", 0)),
+            "optimized_gaussian_count": int(
+                getattr(optimized_scene, "num_gaussians", 0)
+            ),
         }
         if output_root is not None:
             scene_path = output_root / "optimized_gaussian_scene.json"
@@ -306,11 +363,20 @@ def _materialize_ggds_scene(
                     "version": "ggds_scene_manifest_v1",
                     "branch_plan_id": plan.plan_id,
                     "provider_kind": provider.provider_kind,
-                    "optimized_gaussian_count": int(getattr(optimized_scene, "num_gaussians", 0)),
+                    "optimized_gaussian_count": int(
+                        getattr(optimized_scene, "num_gaussians", 0)
+                    ),
                 },
             )
-            artifact_refs.extend([_artifact_ref(scene_path), _artifact_ref(manifest_path)])
-        return "ggds_scene_materialized", "ggds_scene_optimization", artifact_refs, metadata
+            artifact_refs.extend(
+                [_artifact_ref(scene_path), _artifact_ref(manifest_path)]
+            )
+        return (
+            "ggds_scene_materialized",
+            "ggds_scene_optimization",
+            artifact_refs,
+            metadata,
+        )
     except Exception as exc:
         metadata = {
             "provider_truth_class": "ggds_generation_failure",
@@ -328,7 +394,12 @@ def _materialize_ggds_scene(
                 },
             )
             artifact_refs.append(_artifact_ref(failure_path))
-        return "ggds_scene_generation_failed", "ggds_scene_optimization", artifact_refs, metadata
+        return (
+            "ggds_scene_generation_failed",
+            "ggds_scene_optimization",
+            artifact_refs,
+            metadata,
+        )
 
 
 def materialize_render_provider_receipts(
@@ -360,7 +431,9 @@ def materialize_render_provider_receipts(
                 materialization_mode,
                 artifact_refs,
                 provider_metadata,
-            ) = _materialize_lsd_scene(output_root=output_root, provider=provider, plan=plan)
+            ) = _materialize_lsd_scene(
+                output_root=output_root, provider=provider, plan=plan
+            )
         elif provider.provider_kind == "nag_lsd_counterfactual":
             (
                 materialization_status,
@@ -402,7 +475,9 @@ def materialize_render_provider_receipts(
                     "world_state_id": world_state.state_id,
                     "physics_execution_contract_id": execution_contract.contract_id,
                     "physics_adaptation_receipt_id": (
-                        "" if adaptation_receipt is None else adaptation_receipt.receipt_id
+                        ""
+                        if adaptation_receipt is None
+                        else adaptation_receipt.receipt_id
                     ),
                     "generation_mode": plan.generation_mode,
                     "fallback_provider": provider.fallback_provider,
@@ -415,7 +490,9 @@ def materialize_render_provider_receipts(
                         else adaptation_receipt.target_hardware_class
                     ),
                     "provider_metadata": mapping(provider.metadata),
-                    "provider_truth_class": str(provider_metadata.get("provider_truth_class", "")),
+                    "provider_truth_class": str(
+                        provider_metadata.get("provider_truth_class", "")
+                    ),
                     "unsatisfied_preconditions": list(
                         provider_metadata.get("unsatisfied_preconditions", [])
                     ),

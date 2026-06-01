@@ -166,7 +166,9 @@ class HumanoidChassisProfile:
                 **_denied_gates(),
                 **{
                     str(key): bool(value)
-                    for key, value in dict(payload.get("denied_gates", {}) or {}).items()
+                    for key, value in dict(
+                        payload.get("denied_gates", {}) or {}
+                    ).items()
                 },
             },
             version=str(payload.get("version", HUMANOID_CHASSIS_PROFILE_VERSION)),
@@ -320,16 +322,14 @@ class JointLimitEnvelope:
             velocity_limit_rad_s=(
                 None
                 if payload.get("velocity_limit_rad_s") is None
-                else float(payload.get("velocity_limit_rad_s"))
+                else safe_float(payload.get("velocity_limit_rad_s"))
             ),
             effort_limit_nm=(
                 None
                 if payload.get("effort_limit_nm") is None
-                else float(payload.get("effort_limit_nm"))
+                else safe_float(payload.get("effort_limit_nm"))
             ),
-            hardware_limit_verified=bool(
-                payload.get("hardware_limit_verified", False)
-            ),
+            hardware_limit_verified=bool(payload.get("hardware_limit_verified", False)),
             source_class=str(
                 payload.get(
                     "source_class", "local_planning_envelope_not_hardware_calibrated"
@@ -383,15 +383,11 @@ class WholeBodyObservationSchema:
             },
             frame_tree_ref=str(payload.get("frame_tree_ref", "")),
             joint_limit_envelope_ref=str(payload.get("joint_limit_envelope_ref", "")),
-            replay_training_awareness=strings(
-                payload.get("replay_training_awareness")
-            ),
+            replay_training_awareness=strings(payload.get("replay_training_awareness")),
             authority_class=str(
                 payload.get("authority_class", "whole_body_observation_schema_only")
             ),
-            version=str(
-                payload.get("version", WHOLE_BODY_OBSERVATION_SCHEMA_VERSION)
-            ),
+            version=str(payload.get("version", WHOLE_BODY_OBSERVATION_SCHEMA_VERSION)),
         )
 
 
@@ -435,12 +431,12 @@ class WholeBodyActionSchema:
             action_dimension=int(payload.get("action_dimension", 0) or 0),
             action_channels=strings(payload.get("action_channels")),
             horizon_steps=int(payload.get("horizon_steps", 1) or 1),
-            support_phase_constraints=strings(
-                payload.get("support_phase_constraints")
-            ),
+            support_phase_constraints=strings(payload.get("support_phase_constraints")),
             joint_limit_envelope_ref=str(payload.get("joint_limit_envelope_ref", "")),
             fallback_envelope_ref=str(
-                payload.get("fallback_envelope_ref", "stable_base_fallback_ref_required")
+                payload.get(
+                    "fallback_envelope_ref", "stable_base_fallback_ref_required"
+                )
             ),
             normalized=bool(payload.get("normalized", True)),
             authority_class=str(
@@ -521,13 +517,17 @@ class BipedalSupportState:
             balance_margin_m=(
                 None
                 if payload.get("balance_margin_m") is None
-                else float(payload.get("balance_margin_m"))
+                else safe_float(payload.get("balance_margin_m"))
             ),
             slip_risk=(
-                None if payload.get("slip_risk") is None else float(payload.get("slip_risk"))
+                None
+                if payload.get("slip_risk") is None
+                else safe_float(payload.get("slip_risk"))
             ),
             fall_risk=(
-                None if payload.get("fall_risk") is None else float(payload.get("fall_risk"))
+                None
+                if payload.get("fall_risk") is None
+                else safe_float(payload.get("fall_risk"))
             ),
             truth_class=str(payload.get("truth_class", "schema_slot_not_measured")),
             missing_evidence=strings(payload.get("missing_evidence")),
@@ -677,9 +677,7 @@ class BipedalChassisScaffoldReport:
             canonical_bipedal_chassis_present=bool(
                 payload.get("canonical_bipedal_chassis_present", False)
             ),
-            limb_frame_tree_present=bool(
-                payload.get("limb_frame_tree_present", False)
-            ),
+            limb_frame_tree_present=bool(payload.get("limb_frame_tree_present", False)),
             joint_limit_envelope_present=bool(
                 payload.get("joint_limit_envelope_present", False)
             ),
@@ -716,7 +714,9 @@ class BipedalChassisScaffoldReport:
                 **_denied_gates(),
                 **{
                     str(key): bool(value)
-                    for key, value in dict(payload.get("denied_gates", {}) or {}).items()
+                    for key, value in dict(
+                        payload.get("denied_gates", {}) or {}
+                    ).items()
                 },
             },
             remaining_blockers=strings(payload.get("remaining_blockers")),
@@ -728,7 +728,7 @@ class BipedalChassisScaffoldReport:
 
 
 def _joint_limb_groups(joint_names: Iterable[str]) -> dict[str, list[str]]:
-    groups = {
+    groups: dict[str, list[str]] = {
         "left_leg": [],
         "right_leg": [],
         "waist": [],
@@ -793,7 +793,9 @@ def _build_frame_specs(joint_names: list[str]) -> list[LimbCoordinateFrame]:
     missing = ["calibrated_transform_missing"]
     frames = [
         LimbCoordinateFrame("world", "", "world", missing_evidence=[]),
-        LimbCoordinateFrame("pelvis", "world", "floating_base", missing_evidence=missing),
+        LimbCoordinateFrame(
+            "pelvis", "world", "floating_base", missing_evidence=missing
+        ),
         LimbCoordinateFrame("torso", "pelvis", "torso", missing_evidence=missing),
         LimbCoordinateFrame("head", "torso", "head", missing_evidence=missing),
         LimbCoordinateFrame(
@@ -1170,7 +1172,8 @@ def build_bipedal_chassis_scaffold(
         balance_receipt_count=len(balance_receipts),
         canonical_bipedal_chassis_present=True,
         limb_frame_tree_present=frame_tree.status == "ok_contract_only",
-        joint_limit_envelope_present=len(joint_limits) == chassis.controlled_joint_count,
+        joint_limit_envelope_present=len(joint_limits)
+        == chassis.controlled_joint_count,
         whole_body_observation_schema_present=bool(observation_schema.channel_groups),
         whole_body_action_schema_present=(
             action_schema.action_dimension == chassis.controlled_joint_count
@@ -1225,7 +1228,9 @@ def save_bipedal_chassis_scaffold(
     _write_jsonl(paths["joint_limits_path"], [item.to_dict() for item in joint_limits])
     _write_json(paths["observation_schema_path"], observation_schema.to_dict())
     _write_json(paths["action_schema_path"], action_schema.to_dict())
-    _write_jsonl(paths["support_states_path"], [item.to_dict() for item in support_states])
+    _write_jsonl(
+        paths["support_states_path"], [item.to_dict() for item in support_states]
+    )
     _write_jsonl(
         paths["balance_receipts_path"], [item.to_dict() for item in balance_receipts]
     )

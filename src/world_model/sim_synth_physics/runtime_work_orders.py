@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, Sequence
 
 from .common import mapping, stable_id, strings
 from .receipts import (
@@ -17,7 +17,9 @@ from .receipts import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-NON_TRAINING_GPU_RUN_BACKLOG_PATH = REPO_ROOT / "scripts" / "NON_TRAINING_GPU_RUN_BACKLOG.json"
+NON_TRAINING_GPU_RUN_BACKLOG_PATH = (
+    REPO_ROOT / "scripts" / "NON_TRAINING_GPU_RUN_BACKLOG.json"
+)
 BACKEND_BACKLOG_IDS = {
     "isaac": ["isaac_unitree_runtime_smoke"],
     "holosoma": ["holosoma_runtime_eval_smoke"],
@@ -31,6 +33,12 @@ VALIDATED_RUNTIME_OUTCOME_STATUSES = {
     "no_expected_selected_refs",
     "legacy_unchecked",
 }
+
+
+def _optional_strings(payload: Any) -> list[str]:
+    if isinstance(payload, Sequence) and not isinstance(payload, (str, bytes)):
+        return strings(payload)
+    return []
 
 
 def _load_command_hints(loop_run_ids: list[str]) -> list[str]:
@@ -64,7 +72,9 @@ def _artifact_refs(
     for source in (
         list(bridge_receipt.artifact_refs),
         [] if runtime_receipt is None else list(runtime_receipt.artifact_refs),
-        [] if runtime_outcome_receipt is None else list(runtime_outcome_receipt.artifact_refs),
+        []
+        if runtime_outcome_receipt is None
+        else list(runtime_outcome_receipt.artifact_refs),
     ):
         for ref in source:
             if ref and ref not in refs:
@@ -147,29 +157,36 @@ def build_backend_runtime_work_orders(
     runtime_layout_install_blocked_profiles = strings(
         runtime_layout_contract.get("install_blocked_profiles")
     )
-    runtime_metadata = {} if runtime_receipt is None else mapping(runtime_receipt.metadata)
+    runtime_metadata = (
+        {} if runtime_receipt is None else mapping(runtime_receipt.metadata)
+    )
     upstream_runtime_pack = mapping(
         runtime_metadata.get("upstream_runtime_pack")
     ) or mapping(bridge_metadata.get("upstream_runtime_pack"))
-    runtime_binding = mapping(
-        runtime_metadata.get("runtime_binding")
-    ) or mapping(
-        mapping(runtime_metadata.get("runtime_bundle")).get("runtime_binding")
-    ) or mapping(
-        mapping(runtime_metadata.get("launch_spec")).get("runtime_binding")
+    runtime_binding = (
+        mapping(runtime_metadata.get("runtime_binding"))
+        or mapping(
+            mapping(runtime_metadata.get("runtime_bundle")).get("runtime_binding")
+        )
+        or mapping(mapping(runtime_metadata.get("launch_spec")).get("runtime_binding"))
     )
     missing_runtime_targets = strings(
         runtime_target_contract.get("missing_required_target_ids")
     )
     missing_assets = list(
         bridge_metadata.get("missing_assets")
-        or ([] if robot_asset_contract_receipt is None else robot_asset_contract_receipt.missing_assets)
+        or (
+            []
+            if robot_asset_contract_receipt is None
+            else robot_asset_contract_receipt.missing_assets
+        )
     )
-    missing_preconditions = strings(
-        {}
+    raw_missing_preconditions = (
+        []
         if runtime_receipt is None
         else mapping(runtime_receipt.metadata).get("missing_preconditions")
     )
+    missing_preconditions = _optional_strings(raw_missing_preconditions)
     pack_missing_components = strings(upstream_runtime_pack.get("missing_components"))
     for item in pack_missing_components:
         if item not in missing_preconditions:
@@ -181,10 +198,14 @@ def build_backend_runtime_work_orders(
         if item not in missing_preconditions:
             missing_preconditions.append(item)
     outcome_metadata = (
-        {} if runtime_outcome_receipt is None else mapping(runtime_outcome_receipt.metadata)
+        {}
+        if runtime_outcome_receipt is None
+        else mapping(runtime_outcome_receipt.metadata)
     )
-    launch_metadata = {} if runtime_receipt is None else mapping(
-        mapping(runtime_metadata.get("launch_receipt")).get("metadata")
+    launch_metadata = (
+        {}
+        if runtime_receipt is None
+        else mapping(mapping(runtime_metadata.get("launch_receipt")).get("metadata"))
     )
     structured_outputs = mapping(outcome_metadata.get("structured_outputs"))
     selected_ref_validation = mapping(outcome_metadata.get("selected_ref_validation"))
@@ -208,7 +229,9 @@ def build_backend_runtime_work_orders(
     launch_command = str(launch_spec.get("command", "") or "")
     if launch_command and launch_command not in command_hints:
         command_hints.append(launch_command)
-    work_order_kind = BACKEND_WORK_ORDER_KINDS.get(backend, f"{backend}_runtime_bringup")
+    work_order_kind = BACKEND_WORK_ORDER_KINDS.get(
+        backend, f"{backend}_runtime_bringup"
+    )
     status = _work_order_status(
         bridge_receipt=bridge_receipt,
         runtime_receipt=runtime_receipt,
@@ -266,7 +289,9 @@ def build_backend_runtime_work_orders(
                     if runtime_outcome_receipt is None
                     else runtime_outcome_receipt.harvested_output_count
                 ),
-                "backend_runtime_ready_surfaces": strings(structured_outputs.get("ready_surfaces")),
+                "backend_runtime_ready_surfaces": strings(
+                    structured_outputs.get("ready_surfaces")
+                ),
                 "backend_runtime_primary_policy_ref": str(
                     structured_outputs.get("primary_policy_ref", "") or ""
                 ),
@@ -279,11 +304,15 @@ def build_backend_runtime_work_orders(
                 "backend_runtime_selected_ref_validation_missing_components": strings(
                     selected_ref_validation.get("missing_components")
                 ),
-                "backend_runtime_metric_keys": strings(structured_outputs.get("metric_keys")),
+                "backend_runtime_metric_keys": strings(
+                    structured_outputs.get("metric_keys")
+                ),
                 "execution_authority": bridge_receipt.execution_authority,
                 "transport_profile": bridge_receipt.transport_profile,
                 "bridge_readiness_score": bridge_receipt.bridge_readiness_score,
-                "target_hardware_class": bridge_metadata.get("target_hardware_class", ""),
+                "target_hardware_class": bridge_metadata.get(
+                    "target_hardware_class", ""
+                ),
                 "runtime_targets_ready": runtime_target_contract.get(
                     "runtime_targets_ready", False
                 ),
@@ -309,13 +338,15 @@ def build_backend_runtime_work_orders(
                     upstream_runtime_pack.get("profile_candidate_counts")
                 ),
                 "upstream_runtime_profile_install_preflight_status": str(
-                    upstream_runtime_pack.get("profile_install_preflight_status", "") or ""
+                    upstream_runtime_pack.get("profile_install_preflight_status", "")
+                    or ""
                 ),
                 "upstream_runtime_profile_install_missing_components": strings(
                     upstream_runtime_pack.get("profile_install_missing_components")
                 ),
                 "upstream_runtime_profile_primary_entrypoint_ref": str(
-                    upstream_runtime_pack.get("profile_primary_entrypoint_ref", "") or ""
+                    upstream_runtime_pack.get("profile_primary_entrypoint_ref", "")
+                    or ""
                 ),
                 "upstream_runtime_pack_ready_surfaces": strings(
                     upstream_runtime_pack.get("ready_surfaces")
@@ -333,7 +364,8 @@ def build_backend_runtime_work_orders(
                     upstream_runtime_pack.get("primary_deploy_config_ref", "") or ""
                 ),
                 "upstream_runtime_primary_deploy_config_ref_source": str(
-                    upstream_runtime_pack.get("primary_deploy_config_ref_source", "") or ""
+                    upstream_runtime_pack.get("primary_deploy_config_ref_source", "")
+                    or ""
                 ),
                 "upstream_runtime_deploy_candidate_evidence_summary": mapping(
                     upstream_runtime_pack.get("deploy_candidate_evidence_summary")
@@ -342,10 +374,13 @@ def build_backend_runtime_work_orders(
                     upstream_runtime_pack.get("primary_runtime_report_ref", "") or ""
                 ),
                 "upstream_runtime_primary_runtime_report_ref_source": str(
-                    upstream_runtime_pack.get("primary_runtime_report_ref_source", "") or ""
+                    upstream_runtime_pack.get("primary_runtime_report_ref_source", "")
+                    or ""
                 ),
                 "upstream_runtime_runtime_report_candidate_evidence_summary": mapping(
-                    upstream_runtime_pack.get("runtime_report_candidate_evidence_summary")
+                    upstream_runtime_pack.get(
+                        "runtime_report_candidate_evidence_summary"
+                    )
                 ),
                 "upstream_runtime_verified_asset_ids": strings(
                     upstream_runtime_pack.get("verified_asset_ids")
@@ -357,7 +392,9 @@ def build_backend_runtime_work_orders(
                     upstream_runtime_pack.get("existing_motion_sources")
                 ),
                 "runtime_binding": runtime_binding,
-                "runtime_binding_status": str(runtime_binding.get("binding_status", "") or ""),
+                "runtime_binding_status": str(
+                    runtime_binding.get("binding_status", "") or ""
+                ),
                 "runtime_binding_selected_profile": str(
                     runtime_binding.get("selected_profile", "") or ""
                 ),
@@ -383,13 +420,15 @@ def build_backend_runtime_work_orders(
                     runtime_binding.get("selected_launch_root", "") or ""
                 ),
                 "runtime_binding_selected_profile_install_preflight_status": str(
-                    runtime_binding.get("selected_profile_install_preflight_status", "") or ""
+                    runtime_binding.get("selected_profile_install_preflight_status", "")
+                    or ""
                 ),
                 "runtime_binding_selected_profile_install_missing_components": strings(
                     runtime_binding.get("selected_profile_install_missing_components")
                 ),
                 "runtime_binding_selected_profile_primary_entrypoint_ref": str(
-                    runtime_binding.get("selected_profile_primary_entrypoint_ref", "") or ""
+                    runtime_binding.get("selected_profile_primary_entrypoint_ref", "")
+                    or ""
                 ),
                 "runtime_binding_selected_verified_target_ids": strings(
                     runtime_binding.get("selected_verified_target_ids")

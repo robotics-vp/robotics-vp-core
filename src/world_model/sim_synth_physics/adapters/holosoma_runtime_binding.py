@@ -12,7 +12,9 @@ from ..ref_evidence import (
 )
 
 
-def _mode_contract(deployment_contract: Mapping[str, Any], deployment_mode: str) -> dict[str, Any]:
+def _mode_contract(
+    deployment_contract: Mapping[str, Any], deployment_mode: str
+) -> dict[str, Any]:
     for row in list(deployment_contract.get("deployment_modes", []) or []):
         row_mapping = mapping(row)
         if str(row_mapping.get("mode_id", "") or "") == deployment_mode:
@@ -20,7 +22,13 @@ def _mode_contract(deployment_contract: Mapping[str, Any], deployment_mode: str)
     return {}
 
 
-def _target_rows_by_id(runtime_target_contract: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+def _optional_mapping(payload: Any) -> dict[str, Any]:
+    return mapping(payload) if isinstance(payload, Mapping) else {}
+
+
+def _target_rows_by_id(
+    runtime_target_contract: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
     payload: dict[str, dict[str, Any]] = {}
     for row in list(runtime_target_contract.get("targets", []) or []):
         row_mapping = mapping(row)
@@ -57,7 +65,8 @@ def _target_ref_evidence(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
         **fallback,
         "verification_status": str(
-            row.get("verification_status", fallback.get("verification_status", "")) or ""
+            row.get("verification_status", fallback.get("verification_status", ""))
+            or ""
         ),
         "ready": bool(row.get("verified", fallback.get("ready", False))),
         "verified": bool(row.get("verified", fallback.get("verified", False))),
@@ -125,7 +134,10 @@ def _relevant_pack_missing_components(
             "expected_path::"
         ):
             continue
-        if local_runtime_binding and item in {"preferred_runtime_profile", "runtime_targets"}:
+        if local_runtime_binding and item in {
+            "preferred_runtime_profile",
+            "runtime_targets",
+        }:
             continue
         if item == "preferred_runtime_profile" and local_runtime_binding:
             continue
@@ -192,7 +204,9 @@ def build_holosoma_runtime_binding(
     )
     deployment_mode = str(
         selected_launch_spec.get("deployment_mode")
-        or ("motion_train" if selected_profile == "holosoma_motion_bank" else "sim_eval")
+        or (
+            "motion_train" if selected_profile == "holosoma_motion_bank" else "sim_eval"
+        )
         or "sim_eval"
     )
     if explicit_policy_ref:
@@ -206,7 +220,9 @@ def build_holosoma_runtime_binding(
             [
                 ("policy_contract.policy_ref", policy_contract.get("policy_ref")),
                 ("pack.primary_policy_ref", pack.get("primary_policy_ref")),
-                *_named_candidates("pack.policy_candidates", strings(pack.get("policy_candidates"))),
+                *_named_candidates(
+                    "pack.policy_candidates", strings(pack.get("policy_candidates"))
+                ),
                 *_named_candidates(
                     "pack.checkpoint_candidates",
                     strings(pack.get("checkpoint_candidates")),
@@ -225,15 +241,17 @@ def build_holosoma_runtime_binding(
                 "pack.runtime_report_candidates",
                 strings(pack.get("runtime_report_candidates")),
             ),
-            *_named_candidates("pack.data_candidates", strings(pack.get("data_candidates"))),
+            *_named_candidates(
+                "pack.data_candidates", strings(pack.get("data_candidates"))
+            ),
         ]
     )
     selected_runtime_report = str(runtime_report_selection.get("ref", "") or "")
-    selected_runtime_report_source = str(runtime_report_selection.get("source", "") or "")
+    selected_runtime_report_source = str(
+        runtime_report_selection.get("source", "") or ""
+    )
     selected_launch_root = str(
-        selected_launch_spec.get("root")
-        or pack.get("profile_root")
-        or ""
+        selected_launch_spec.get("root") or pack.get("profile_root") or ""
     )
     selected_command = str(selected_launch_spec.get("command", "") or "")
     selected_profile_install = mapping(
@@ -261,7 +279,9 @@ def build_holosoma_runtime_binding(
     )
     mode_contract = _mode_contract(deployment_contract, deployment_mode)
     pack_ready_surfaces = strings(pack.get("ready_surfaces"))
-    local_runtime_binding = bool(runtime_target_contract.get("python_bridge_available", False))
+    local_runtime_binding = bool(
+        runtime_target_contract.get("python_bridge_available", False)
+    )
     required_surfaces = (
         _local_required_surfaces(deployment_mode)
         if local_runtime_binding
@@ -272,14 +292,22 @@ def build_holosoma_runtime_binding(
         mode_contract=mode_contract,
         local_runtime_binding=local_runtime_binding,
     )
-    selected_target_refs, missing_targets = _target_refs(runtime_target_contract, required_target_ids)
+    selected_target_refs, missing_targets = _target_refs(
+        runtime_target_contract, required_target_ids
+    )
     target_rows = _target_rows_by_id(runtime_target_contract)
-    selected_retargeting_root = str(selected_target_refs.get("retargeting_root", "") or "")
+    selected_retargeting_root = str(
+        selected_target_refs.get("retargeting_root", "") or ""
+    )
     selected_ref_evidence = {
-        "policy_ref": mapping(policy_selection.get("evidence")),
+        "policy_ref": _optional_mapping(policy_selection.get("evidence")),
         "launch_root": describe_ref_evidence(selected_launch_root),
-        "profile_entrypoint": describe_ref_evidence(selected_profile_primary_entrypoint_ref),
-        "runtime_report_ref": mapping(runtime_report_selection.get("evidence")),
+        "profile_entrypoint": describe_ref_evidence(
+            selected_profile_primary_entrypoint_ref
+        ),
+        "runtime_report_ref": _optional_mapping(
+            runtime_report_selection.get("evidence")
+        ),
         "retargeting_root": describe_ref_evidence(selected_retargeting_root),
     }
     selected_target_ref_evidence = {
@@ -339,7 +367,10 @@ def build_holosoma_runtime_binding(
             continue
         if item == "whole_body_retargeting_contract" and selected_retargeting_root:
             continue
-        if item == "whole_body_retargeting_contract" and "retargeting_surface" not in required_surfaces:
+        if (
+            item == "whole_body_retargeting_contract"
+            and "retargeting_surface" not in required_surfaces
+        ):
             continue
         if item not in missing_components:
             missing_components.append(item)
@@ -349,15 +380,35 @@ def build_holosoma_runtime_binding(
     for item in missing_targets:
         if item not in missing_components:
             missing_components.append(item)
-    if "policy_surface" in required_surfaces and not selected_policy_ref and "policy_checkpoint" not in missing_components:
+    if (
+        "policy_surface" in required_surfaces
+        and not selected_policy_ref
+        and "policy_checkpoint" not in missing_components
+    ):
         missing_components.append("policy_checkpoint")
-    if "motion_surface" in required_surfaces and not selected_motion_sources and "motion_sources" not in missing_components:
+    if (
+        "motion_surface" in required_surfaces
+        and not selected_motion_sources
+        and "motion_sources" not in missing_components
+    ):
         missing_components.append("motion_sources")
-    if "retargeting_surface" in required_surfaces and not selected_retargeting_root and "retargeting_root" not in missing_components:
+    if (
+        "retargeting_surface" in required_surfaces
+        and not selected_retargeting_root
+        and "retargeting_root" not in missing_components
+    ):
         missing_components.append("retargeting_root")
-    if not local_runtime_binding and not selected_launch_root and "launch_root" not in missing_components:
+    if (
+        not local_runtime_binding
+        and not selected_launch_root
+        and "launch_root" not in missing_components
+    ):
         missing_components.append("launch_root")
-    if not local_runtime_binding and not selected_command and "launch_command" not in missing_components:
+    if (
+        not local_runtime_binding
+        and not selected_command
+        and "launch_command" not in missing_components
+    ):
         missing_components.append("launch_command")
     if not local_runtime_binding:
         for item in selected_profile_install_missing_components:
@@ -369,7 +420,10 @@ def build_holosoma_runtime_binding(
         preflight_required_components.append("policy_ref")
     if not local_runtime_binding:
         preflight_required_components.append("launch_root")
-        if selected_profile_primary_entrypoint_ref or "profile_entrypoint" in selected_profile_install_missing_components:
+        if (
+            selected_profile_primary_entrypoint_ref
+            or "profile_entrypoint" in selected_profile_install_missing_components
+        ):
             preflight_required_components.append("profile_entrypoint")
     for target_id in required_target_ids:
         preflight_required_components.append(f"target::{target_id}")

@@ -27,6 +27,7 @@ from src.regal.bio_neuro_anomaly import (  # noqa: E402
 from src.runtime.action_adapter_v2 import ActionAdapterV2  # noqa: E402
 from src.runtime.observation_adapter_v2 import ObservationAdapterV2  # noqa: E402
 from src.world_model.economic_world_model import (  # noqa: E402
+    build_bio_neuro_receipt_join_from_paths,
     build_economic_wm_scaffold_report,
     build_regime_acknowledgment,
     build_regime_broadcast,
@@ -188,6 +189,8 @@ def run_check(output_dir: Path) -> dict[str, Any]:
     receipt_rows = [row for row in receipt_rows if row]
     receipts_path = output_dir / "bio_neuro_substrate_receipts_v1.jsonl"
     report_path = output_dir / "bio_neuro_substrate_report_v1.json"
+    join_report_path = output_dir / "bio_neuro_receipt_join_report_v1.json"
+    join_rows_path = output_dir / "bio_neuro_receipt_join_rows_v1.jsonl"
     _write_jsonl(receipts_path, receipt_rows)
 
     report = {
@@ -209,8 +212,25 @@ def run_check(output_dir: Path) -> dict[str, Any]:
         "output_paths": {
             "receipts_path": str(receipts_path),
             "report_path": str(report_path),
+            "receipt_join_report_path": str(join_report_path),
+            "receipt_join_rows_path": str(join_rows_path),
         },
     }
+    _write_json(report_path, report)
+    join_report = build_bio_neuro_receipt_join_from_paths(
+        receipts_path=receipts_path,
+        output_dir=output_dir,
+        source_report_path=report_path,
+        report_path=join_report_path,
+        join_rows_path=join_rows_path,
+        metadata={"source": "check_bio_neuro_substrate"},
+    )
+    report["receipt_join_status"] = join_report.status
+    report["receipt_join_row_count"] = join_report.row_count
+    report["receipt_join_promotion_eligible"] = join_report.promotion_eligible
+    report["receipt_join_phase7_abstraction_expanded"] = (
+        join_report.phase7_abstraction_expanded
+    )
     _write_json(report_path, report)
     return report
 

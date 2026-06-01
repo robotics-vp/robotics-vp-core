@@ -1,8 +1,9 @@
 """
 SemanticOrchestratorV2: semantic routing shell that can emit bounded activation plans.
 """
+
 from dataclasses import dataclass, field, asdict, replace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 import json
 
 from src.evidence.preconditions import build_execution_work_order
@@ -55,8 +56,13 @@ class SemanticOrchestratorV2:
                 package_path=self.config.get("shell_policy_package_path"),
             )
 
-    def _normalize_strategy_overrides(self, strategy_overrides: Dict[str, float]) -> Dict[str, float]:
-        clean = {str(key): float(max(0.0, value)) for key, value in strategy_overrides.items()}
+    def _normalize_strategy_overrides(
+        self, strategy_overrides: Dict[str, float]
+    ) -> Dict[str, float]:
+        clean = {
+            str(key): float(max(0.0, value))
+            for key, value in strategy_overrides.items()
+        }
         total = sum(clean.values())
         if total <= 0.0:
             return {"balanced": 1.0}
@@ -66,7 +72,7 @@ class SemanticOrchestratorV2:
         econ = snapshot.econ_slice
         meta = snapshot.meta_slice
         focus_presets = list(meta.presets or ["balanced"])
-        execution_summary = {}
+        execution_summary: Mapping[str, Any] = {}
         if snapshot.metadata:
             execution_summary = (
                 snapshot.metadata.get("execution_precondition_summary")
@@ -74,7 +80,11 @@ class SemanticOrchestratorV2:
                 or {}
             )
 
-        strategy_overrides = {"balanced": 0.5, "frontier_prioritized": 0.3, "econ_urgency": 0.2}
+        strategy_overrides = {
+            "balanced": 0.5,
+            "frontier_prioritized": 0.3,
+            "econ_urgency": 0.2,
+        }
         if econ.avg_wage_parity < 1.0:
             strategy_overrides["econ_urgency"] = 0.5
             strategy_overrides["frontier_prioritized"] = 0.3
@@ -106,9 +116,13 @@ class SemanticOrchestratorV2:
         if recap:
             mean_good = float(recap.get("mean_goodness", 0.0))
             if mean_good > 0:
-                strategy_overrides["frontier_prioritized"] = min(1.0, strategy_overrides.get("frontier_prioritized", 0.3) + 0.1)
+                strategy_overrides["frontier_prioritized"] = min(
+                    1.0, strategy_overrides.get("frontier_prioritized", 0.3) + 0.1
+                )
             if mean_good < 0:
-                strategy_overrides["balanced"] = min(1.0, strategy_overrides.get("balanced", 0.5) + 0.1)
+                strategy_overrides["balanced"] = min(
+                    1.0, strategy_overrides.get("balanced", 0.5) + 0.1
+                )
             if recap.get("top_episodes"):
                 priority_tags.append("recap_top")
             priority_tags = sorted(list(set(priority_tags)))
@@ -118,8 +132,7 @@ class SemanticOrchestratorV2:
         topology: Dict[str, Any] = {}
         if world_model is not None:
             meta_node_weights = {
-                node.node_type: float(node.score)
-                for node in world_model.meta_nodes
+                node.node_type: float(node.score) for node in world_model.meta_nodes
             }
             capability_scores = dict(world_model.capability_scores or {})
             topology = dict(world_model.topology or {})
@@ -131,10 +144,14 @@ class SemanticOrchestratorV2:
                 priority_tags.append("risk_triage")
             if meta_node_weights.get("recovery_router", 0.0) >= 0.45:
                 priority_tags.append("recovery_router")
-                strategy_overrides["frontier_prioritized"] = strategy_overrides.get("frontier_prioritized", 0.3) + 0.05
+                strategy_overrides["frontier_prioritized"] = (
+                    strategy_overrides.get("frontier_prioritized", 0.3) + 0.05
+                )
             if meta_node_weights.get("semantic_memory_refresh", 0.0) >= 0.45:
                 priority_tags.append("semantic_memory_refresh")
-                strategy_overrides["frontier_prioritized"] = strategy_overrides.get("frontier_prioritized", 0.3) + 0.1
+                strategy_overrides["frontier_prioritized"] = (
+                    strategy_overrides.get("frontier_prioritized", 0.3) + 0.1
+                )
             if meta_node_weights.get("fusion_bridge", 0.0) >= 0.45:
                 priority_tags.append("fusion_backbone")
             if meta_node_weights.get("ontology_router", 0.0) >= 0.4:
@@ -145,7 +162,10 @@ class SemanticOrchestratorV2:
                 priority_tags.append("efficiency_router")
                 if "energy_saver" not in focus_presets:
                     focus_presets.append("energy_saver")
-            if capability_scores.get("risk_reasoning", 0.0) < 0.5 and "safety" not in focus_presets:
+            if (
+                capability_scores.get("risk_reasoning", 0.0) < 0.5
+                and "safety" not in focus_presets
+            ):
                 focus_presets.append("safety")
             if capability_scores.get("stage2_bridge", 0.0) < 0.35:
                 priority_tags.append("stage2_bridge_gap")
@@ -157,7 +177,11 @@ class SemanticOrchestratorV2:
         ood_trust = float(self.trust_matrix.get("OODTag", {}).get("trust_score", 0.0))
         max_ood_sev = 0.0
         if snapshot.metadata:
-            max_ood_sev = float(snapshot.metadata.get("max_ood_severity", snapshot.metadata.get("ood_severity", 0.0)))
+            max_ood_sev = float(
+                snapshot.metadata.get(
+                    "max_ood_severity", snapshot.metadata.get("ood_severity", 0.0)
+                )
+            )
         if ood_trust > 0.8 and max_ood_sev > 0.9:
             safety_emphasis = 1.0
             priority_tags.append("safety_stop")
@@ -171,20 +195,26 @@ class SemanticOrchestratorV2:
                 priority_tags.append("precondition_repair")
                 safety_emphasis = max(safety_emphasis, 0.7)
             if ready_count == 0:
-                strategy_overrides["balanced"] = min(1.0, strategy_overrides.get("balanced", 0.5) + 0.1)
+                strategy_overrides["balanced"] = min(
+                    1.0, strategy_overrides.get("balanced", 0.5) + 0.1
+                )
             priority_tags = sorted(list(set(priority_tags)))
 
-        segmentation_meta = {
+        recovery_segment_fraction = float(
+            getattr(snapshot, "recovery_segment_fraction", 0.0)
+        )
+        mobility_drift_rate = float(getattr(snapshot, "mobility_drift_rate", 0.0))
+        segmentation_meta: Dict[str, Any] = {
             "num_segments": getattr(snapshot, "num_segments", 0),
             "segment_types": getattr(snapshot, "segment_types", {}),
             "subtask_label_histogram": getattr(snapshot, "subtask_label_histogram", {}),
-            "mobility_drift_rate": getattr(snapshot, "mobility_drift_rate", 0.0),
-            "recovery_segment_fraction": getattr(snapshot, "recovery_segment_fraction", 0.0),
+            "mobility_drift_rate": mobility_drift_rate,
+            "recovery_segment_fraction": recovery_segment_fraction,
         }
         mobility_priority = "MEDIUM"
-        if segmentation_meta["recovery_segment_fraction"] > 0.2 or segmentation_meta["mobility_drift_rate"] > 0.5:
+        if recovery_segment_fraction > 0.2 or mobility_drift_rate > 0.5:
             mobility_priority = "HIGH"
-        if segmentation_meta["mobility_drift_rate"] < 0.1:
+        if mobility_drift_rate < 0.1:
             mobility_priority = "LOW"
 
         shell_activation = evaluate_shell_activation_backlog(
@@ -200,28 +230,43 @@ class SemanticOrchestratorV2:
         activation_plan: Dict[str, Any] = {}
         activation_work_order: Optional[Dict[str, Any]] = None
         if routing_activation and routing_activation.get("state") == "activated":
-            execution_mode = str(routing_activation.get("target_mode", "preconditioned_routing"))
+            execution_mode = str(
+                routing_activation.get("target_mode", "preconditioned_routing")
+            )
             priority_tags.append("precondition_ready")
             priority_tags = sorted(list(set(priority_tags)))
             activation_plan = {
                 "activation_id": routing_activation.get("activation_id"),
                 "mode": execution_mode,
-                "apply_sampler_strategy_overrides": self._normalize_strategy_overrides(strategy_overrides),
-                "apply_priority_tags": priority_tags,
-                "bounded_actions": list(routing_activation.get("bounded_actions", []) or []),
-                "repair_backlog": list(
-                    shell_activation.get("pending", [])
+                "apply_sampler_strategy_overrides": self._normalize_strategy_overrides(
+                    strategy_overrides
                 ),
+                "apply_priority_tags": priority_tags,
+                "bounded_actions": list(
+                    routing_activation.get("bounded_actions", []) or []
+                ),
+                "repair_backlog": list(shell_activation.get("pending", [])),
             }
             activation_work_order = build_execution_work_order(
                 order_type="shell_activation",
                 subject_id=snapshot.task_id,
                 subject_kind="semantic_orchestrator_v2",
-                decision=str(routing_activation.get("activation_decision", "activate_semantic_routing")),
-                priority=float(routing_activation.get("readiness", {}).get("readiness_score", 1.0)),
-                recommended_mode=str(routing_activation.get("recommended_mode", "bounded_execution")),
+                decision=str(
+                    routing_activation.get(
+                        "activation_decision", "activate_semantic_routing"
+                    )
+                ),
+                priority=float(
+                    routing_activation.get("readiness", {}).get("readiness_score", 1.0)
+                ),
+                recommended_mode=str(
+                    routing_activation.get("recommended_mode", "bounded_execution")
+                ),
                 readiness=dict(routing_activation.get("readiness", {}) or {}),
-                reasons=list(routing_activation.get("bounded_actions", []) or ["activate_semantic_routing"]),
+                reasons=list(
+                    routing_activation.get("bounded_actions", [])
+                    or ["activate_semantic_routing"]
+                ),
                 metadata={
                     "activation_id": routing_activation.get("activation_id"),
                     "task_id": snapshot.task_id,
@@ -231,11 +276,15 @@ class SemanticOrchestratorV2:
         advisory = OrchestratorAdvisory(
             task_id=snapshot.task_id,
             focus_objective_presets=sorted(list(set(focus_presets))),
-            sampler_strategy_overrides=self._normalize_strategy_overrides(strategy_overrides),
+            sampler_strategy_overrides=self._normalize_strategy_overrides(
+                strategy_overrides
+            ),
             datapack_priority_tags=priority_tags,
             safety_emphasis=float(min(max(safety_emphasis, 0.0), 1.0)),
             execution_mode=execution_mode,
-            meta_node_weights=dict(sorted(meta_node_weights.items(), key=lambda item: item[0])),
+            meta_node_weights=dict(
+                sorted(meta_node_weights.items(), key=lambda item: item[0])
+            ),
             activation_plan=activation_plan,
             activation_work_order=activation_work_order,
             metadata={
@@ -257,22 +306,48 @@ class SemanticOrchestratorV2:
                 helper_mode=self.shell_policy_helper_mode,
             )
             metadata = dict(advisory.metadata)
-            metadata["shell_policy_helper"] = dict(helper_update.get("helper_trace", {}) or {})
+            metadata["shell_policy_helper"] = dict(
+                helper_update.get("helper_trace", {}) or {}
+            )
             metadata["shell_policy_helper_mode"] = self.shell_policy_helper_mode
             advisory = replace(
                 advisory,
-                focus_objective_presets=list(helper_update.get("focus_objective_presets", advisory.focus_objective_presets) or advisory.focus_objective_presets),
+                focus_objective_presets=list(
+                    helper_update.get(
+                        "focus_objective_presets", advisory.focus_objective_presets
+                    )
+                    or advisory.focus_objective_presets
+                ),
                 sampler_strategy_overrides=self._normalize_strategy_overrides(
-                    dict(helper_update.get("sampler_strategy_overrides", advisory.sampler_strategy_overrides) or advisory.sampler_strategy_overrides)
+                    dict(
+                        helper_update.get(
+                            "sampler_strategy_overrides",
+                            advisory.sampler_strategy_overrides,
+                        )
+                        or advisory.sampler_strategy_overrides
+                    )
                 ),
                 safety_emphasis=float(
                     helper_update.get("safety_emphasis", advisory.safety_emphasis)
                 ),
-                execution_mode=str(helper_update.get("execution_mode", advisory.execution_mode) or advisory.execution_mode),
-                policy_source=str(helper_update.get("policy_source", "heuristic_plus_learned_helper") or "heuristic_plus_learned_helper"),
-                promotion_stage=str(helper_update.get("promotion_stage", "shadow_candidate") or "shadow_candidate"),
-                activation_plan=dict(helper_update.get("activation_plan", advisory.activation_plan) or {}),
-                activation_work_order=helper_update.get("activation_work_order", advisory.activation_work_order),
+                execution_mode=str(
+                    helper_update.get("execution_mode", advisory.execution_mode)
+                    or advisory.execution_mode
+                ),
+                policy_source=str(
+                    helper_update.get("policy_source", "heuristic_plus_learned_helper")
+                    or "heuristic_plus_learned_helper"
+                ),
+                promotion_stage=str(
+                    helper_update.get("promotion_stage", "shadow_candidate")
+                    or "shadow_candidate"
+                ),
+                activation_plan=dict(
+                    helper_update.get("activation_plan", advisory.activation_plan) or {}
+                ),
+                activation_work_order=helper_update.get(
+                    "activation_work_order", advisory.activation_work_order
+                ),
                 helper_trace=dict(helper_update.get("helper_trace", {}) or {}),
                 metadata=metadata,
             )
@@ -289,8 +364,12 @@ class SemanticOrchestratorV2:
             f.write(json.dumps(advisory.to_json(), sort_keys=True))
             f.write("\n")
 
-def load_latest_advisory(task_id: str, output_dir: str = "results/orchestrator") -> Optional[OrchestratorAdvisory]:
+
+def load_latest_advisory(
+    task_id: str, output_dir: str = "results/orchestrator"
+) -> Optional[OrchestratorAdvisory]:
     import os
+
     path = os.path.join(output_dir, f"advisories_{task_id}.jsonl")
     if not os.path.exists(path):
         return None

@@ -15,6 +15,9 @@ from src.orchestrator.pipeline_stage_policy import (
 )
 from src.utils.config_digest import sha256_json
 
+torch: Any
+nn: Any
+
 try:
     import torch
     import torch.nn as nn
@@ -66,7 +69,9 @@ class PipelineStageTrainingExample:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "row_id": self.row_id,
-            "feature_map": {str(key): float(value) for key, value in self.feature_map.items()},
+            "feature_map": {
+                str(key): float(value) for key, value in self.feature_map.items()
+            },
             "stage_distribution": {
                 str(key): float(value) for key, value in self.stage_distribution.items()
             },
@@ -130,27 +135,35 @@ def build_pipeline_stage_training_dataset(
             continue
         target = extract_pipeline_stage_policy_target(activation_plan)
         row_id = str(
-            state.get("pipeline_id")
-            or state.get("name")
-            or f"pipeline_state_{index}"
+            state.get("pipeline_id") or state.get("name") or f"pipeline_state_{index}"
         )
         target_source = "pipeline_manager_activation_receipt"
         policy_source = str(target.get("policy_source", "heuristic_fallback"))
         promotion_stage = str(target.get("promotion_stage", "heuristic_fallback"))
-        target_source_counts[target_source] = target_source_counts.get(target_source, 0) + 1
-        policy_source_counts[policy_source] = policy_source_counts.get(policy_source, 0) + 1
-        promotion_stage_counts[promotion_stage] = promotion_stage_counts.get(promotion_stage, 0) + 1
+        target_source_counts[target_source] = (
+            target_source_counts.get(target_source, 0) + 1
+        )
+        policy_source_counts[policy_source] = (
+            policy_source_counts.get(policy_source, 0) + 1
+        )
+        promotion_stage_counts[promotion_stage] = (
+            promotion_stage_counts.get(promotion_stage, 0) + 1
+        )
         activated_rows += int(_safe_float(target.get("activation_label", 0.0)) > 0.5)
         examples.append(
             PipelineStageTrainingExample(
                 row_id=row_id,
                 feature_map=feature_map,
                 stage_distribution={
-                    label: _safe_float(dict(target.get("stage_distribution", {}) or {}).get(label, 0.0))
+                    label: _safe_float(
+                        dict(target.get("stage_distribution", {}) or {}).get(label, 0.0)
+                    )
                     for label in PIPELINE_STAGE_LABELS
                 },
                 config_flag_scores={
-                    key: _safe_float(dict(target.get("config_flag_scores", {}) or {}).get(key, 0.0))
+                    key: _safe_float(
+                        dict(target.get("config_flag_scores", {}) or {}).get(key, 0.0)
+                    )
                     for key in PIPELINE_CONFIG_FLAG_KEYS
                 },
                 activation_label=_safe_float(target.get("activation_label", 0.0)),
@@ -164,7 +177,9 @@ def build_pipeline_stage_training_dataset(
                     "stage_order": [
                         str(row.get("stage", ""))
                         for row in list(
-                            dict(activation_plan.get("stage_activation_plan", {}) or {}).get("stages", [])
+                            dict(
+                                activation_plan.get("stage_activation_plan", {}) or {}
+                            ).get("stages", [])
                         )
                         if isinstance(row, Mapping)
                     ],
@@ -203,25 +218,39 @@ def save_pipeline_stage_training_dataset(
 ) -> str:
     candidate = Path(path)
     candidate.parent.mkdir(parents=True, exist_ok=True)
-    candidate.write_text(json.dumps(dataset.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    candidate.write_text(
+        json.dumps(dataset.to_dict(), indent=2, sort_keys=True), encoding="utf-8"
+    )
     return str(candidate)
 
 
-def load_pipeline_stage_training_dataset(path: str | Path) -> PipelineStageTrainingDataset:
+def load_pipeline_stage_training_dataset(
+    path: str | Path,
+) -> PipelineStageTrainingDataset:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     examples = [
         PipelineStageTrainingExample(
             row_id=str(example.get("row_id", "")),
-            feature_map={str(key): float(value) for key, value in dict(example.get("feature_map", {}) or {}).items()},
+            feature_map={
+                str(key): float(value)
+                for key, value in dict(example.get("feature_map", {}) or {}).items()
+            },
             stage_distribution={
-                str(key): float(value) for key, value in dict(example.get("stage_distribution", {}) or {}).items()
+                str(key): float(value)
+                for key, value in dict(
+                    example.get("stage_distribution", {}) or {}
+                ).items()
             },
             config_flag_scores={
                 str(key): float(value)
-                for key, value in dict(example.get("config_flag_scores", {}) or {}).items()
+                for key, value in dict(
+                    example.get("config_flag_scores", {}) or {}
+                ).items()
             },
             activation_label=float(example.get("activation_label", 0.0)),
-            target_source=str(example.get("target_source", "pipeline_manager_activation_receipt")),
+            target_source=str(
+                example.get("target_source", "pipeline_manager_activation_receipt")
+            ),
             policy_source=str(example.get("policy_source", "heuristic_fallback")),
             promotion_stage=str(example.get("promotion_stage", "heuristic_fallback")),
             metadata=dict(example.get("metadata", {}) or {}),
@@ -238,7 +267,11 @@ def load_pipeline_stage_training_dataset(path: str | Path) -> PipelineStageTrain
 if TORCH_AVAILABLE:
 
     class PipelineStagePolicyNet(nn.Module):
-        def __init__(self, input_dim: int = len(PIPELINE_STAGE_POLICY_FEATURE_NAMES), hidden_dim: int = 32) -> None:
+        def __init__(
+            self,
+            input_dim: int = len(PIPELINE_STAGE_POLICY_FEATURE_NAMES),
+            hidden_dim: int = 32,
+        ) -> None:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(int(input_dim), int(hidden_dim)),
@@ -247,10 +280,14 @@ if TORCH_AVAILABLE:
                 nn.ReLU(),
             )
             self.stage_head = nn.Linear(int(hidden_dim), len(PIPELINE_STAGE_LABELS))
-            self.config_head = nn.Linear(int(hidden_dim), len(PIPELINE_CONFIG_FLAG_KEYS))
+            self.config_head = nn.Linear(
+                int(hidden_dim), len(PIPELINE_CONFIG_FLAG_KEYS)
+            )
             self.activation_head = nn.Linear(int(hidden_dim), 1)
 
-        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        def forward(
+            self, x: torch.Tensor
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             hidden = self.net(x)
             return (
                 self.stage_head(hidden),
@@ -281,26 +318,38 @@ def train_pipeline_stage_policy_model(
 
     X = np.asarray(
         [
-            [float(example.feature_map.get(name, 0.0)) for name in PIPELINE_STAGE_POLICY_FEATURE_NAMES]
+            [
+                float(example.feature_map.get(name, 0.0))
+                for name in PIPELINE_STAGE_POLICY_FEATURE_NAMES
+            ]
             for example in dataset.examples
         ],
         dtype=np.float32,
     )
     y_stage = np.asarray(
         [
-            [float(example.stage_distribution.get(label, 0.0)) for label in PIPELINE_STAGE_LABELS]
+            [
+                float(example.stage_distribution.get(label, 0.0))
+                for label in PIPELINE_STAGE_LABELS
+            ]
             for example in dataset.examples
         ],
         dtype=np.float32,
     )
     y_config = np.asarray(
         [
-            [float(example.config_flag_scores.get(key, 0.0)) for key in PIPELINE_CONFIG_FLAG_KEYS]
+            [
+                float(example.config_flag_scores.get(key, 0.0))
+                for key in PIPELINE_CONFIG_FLAG_KEYS
+            ]
             for example in dataset.examples
         ],
         dtype=np.float32,
     )
-    y_activation = np.asarray([[float(example.activation_label)] for example in dataset.examples], dtype=np.float32)
+    y_activation = np.asarray(
+        [[float(example.activation_label)] for example in dataset.examples],
+        dtype=np.float32,
+    )
 
     X_tensor = torch.from_numpy(X)
     y_stage_tensor = torch.from_numpy(y_stage)

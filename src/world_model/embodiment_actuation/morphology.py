@@ -17,13 +17,9 @@ from src.embodiment.registry import CapabilityProfile, EmbodimentRegistryEntry
 
 from .common import mapping, safe_float, safe_int, stable_id, strings
 
-UNITREE_RL_GYM_G1_CONFIG_URL = (
-    "https://github.com/unitreerobotics/unitree_rl_gym/blob/main/legged_gym/envs/g1/g1_config.py"
-)
+UNITREE_RL_GYM_G1_CONFIG_URL = "https://github.com/unitreerobotics/unitree_rl_gym/blob/main/legged_gym/envs/g1/g1_config.py"
 UNITREE_RL_LAB_URL = "https://github.com/unitreerobotics/unitree_rl_lab"
-NVIDIA_SIM2REAL_COTRAINING_URL = (
-    "https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/13-strategy2-cotraining.html"
-)
+NVIDIA_SIM2REAL_COTRAINING_URL = "https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/13-strategy2-cotraining.html"
 
 G1_LOCOMOTION_12DOF_JOINTS: tuple[str, ...] = (
     "left_hip_yaw_joint",
@@ -175,7 +171,9 @@ class G1MorphologyProfile:
             },
         )
 
-    def to_registry_entry(self, embodiment_id: str = "unitree_g1_shadow") -> EmbodimentRegistryEntry:
+    def to_registry_entry(
+        self, embodiment_id: str = "unitree_g1_shadow"
+    ) -> EmbodimentRegistryEntry:
         return EmbodimentRegistryEntry(
             embodiment_id=embodiment_id,
             robot_id="unitree_g1",
@@ -195,7 +193,9 @@ class G1MorphologyProfile:
             "joint_count": self.joint_count,
             "action_dimension": int(self.action_dimension),
             "observation_dimension": int(self.observation_dimension),
-            "privileged_observation_dimension": int(self.privileged_observation_dimension),
+            "privileged_observation_dimension": int(
+                self.privileged_observation_dimension
+            ),
             "joint_specs": [joint.to_dict() for joint in self.joint_specs],
             "group_counts": self.group_counts(),
             "morphology_truth_class": self.morphology_truth_class,
@@ -241,7 +241,12 @@ def _joint_group(joint_name: str) -> str:
         return "waist"
     if "shoulder" in joint_name or "elbow" in joint_name or "wrist" in joint_name:
         return "arms"
-    if "hand" in joint_name or "thumb" in joint_name or "index" in joint_name or "middle" in joint_name:
+    if (
+        "hand" in joint_name
+        or "thumb" in joint_name
+        or "index" in joint_name
+        or "middle" in joint_name
+    ):
         return "hands"
     return "other"
 
@@ -318,7 +323,7 @@ def scan_unitree_g1_public_evidence(
     This scan intentionally records repository/config visibility. It does not
     treat public configs as hardware calibration.
     """
-    roots = [Path(root).expanduser() for root in roots]
+    root_paths = [Path(root).expanduser() for root in roots]
     observed: dict[str, Any] = {
         "g1_config_paths": [],
         "urdf_paths": [],
@@ -326,7 +331,7 @@ def scan_unitree_g1_public_evidence(
         "usd_paths": [],
         "isaac_task_paths": [],
     }
-    for root in roots:
+    for root in root_paths:
         if not root.exists():
             continue
         for path in root.rglob("*"):
@@ -383,7 +388,10 @@ def scan_unitree_g1_public_evidence(
     )
     receipts = [
         MorphologyEvidenceReceipt(
-            receipt_id=stable_id("morphology_evidence_receipt", {"profile_id": profile.profile_id, "kind": "unitree_rl_gym_config"}),
+            receipt_id=stable_id(
+                "morphology_evidence_receipt",
+                {"profile_id": profile.profile_id, "kind": "unitree_rl_gym_config"},
+            ),
             profile_id=profile.profile_id,
             source_id="unitree_rl_gym_g1_config",
             evidence_kind="locomotion_config",
@@ -396,21 +404,31 @@ def scan_unitree_g1_public_evidence(
                 "added_mass_range": base_mass_range,
             },
             missing_evidence=[] if observed["g1_config_paths"] else ["g1_config.py"],
-            source_refs={"paths": observed["g1_config_paths"], "public_url": UNITREE_RL_GYM_G1_CONFIG_URL},
+            source_refs={
+                "paths": observed["g1_config_paths"],
+                "public_url": UNITREE_RL_GYM_G1_CONFIG_URL,
+            },
         ),
         MorphologyEvidenceReceipt(
-            receipt_id=stable_id("morphology_evidence_receipt", {"profile_id": profile.profile_id, "kind": "model_assets"}),
+            receipt_id=stable_id(
+                "morphology_evidence_receipt",
+                {"profile_id": profile.profile_id, "kind": "model_assets"},
+            ),
             profile_id=profile.profile_id,
             source_id="unitree_g1_model_assets",
             evidence_kind="morphology_asset_visibility",
-            status="observed" if (observed["urdf_paths"] or observed["usd_paths"]) else "missing",
+            status="observed"
+            if (observed["urdf_paths"] or observed["usd_paths"])
+            else "missing",
             extracted_fields={
                 "urdf_count": len(observed["urdf_paths"]),
                 "xml_count": len(observed["xml_paths"]),
                 "usd_count": len(observed["usd_paths"]),
                 "detected_variant": detected_variant,
             },
-            missing_evidence=[] if (observed["urdf_paths"] or observed["usd_paths"]) else ["g1_urdf_or_usd"],
+            missing_evidence=[]
+            if (observed["urdf_paths"] or observed["usd_paths"])
+            else ["g1_urdf_or_usd"],
             source_refs={
                 "urdf_paths": observed["urdf_paths"][:10],
                 "xml_paths": observed["xml_paths"][:10],
@@ -419,7 +437,10 @@ def scan_unitree_g1_public_evidence(
             },
         ),
         MorphologyEvidenceReceipt(
-            receipt_id=stable_id("morphology_evidence_receipt", {"profile_id": profile.profile_id, "kind": "external_blockers"}),
+            receipt_id=stable_id(
+                "morphology_evidence_receipt",
+                {"profile_id": profile.profile_id, "kind": "external_blockers"},
+            ),
             profile_id=profile.profile_id,
             source_id="phase3_external_evidence",
             evidence_kind="remaining_calibration_blockers",

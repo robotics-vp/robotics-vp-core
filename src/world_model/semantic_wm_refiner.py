@@ -7,6 +7,7 @@ post-build deltas over:
 
 The learned outputs are always routed through the existing governed packet path.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,8 +17,15 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 import json
 import numpy as np
 
-from src.world_model.semantic_feedback_packets import GraphMutationProposal, WMValidationPacket
-from src.world_model.semantic_state_encoder import encode_object, encode_relation, encode_wm_state_flat
+from src.world_model.semantic_feedback_packets import (
+    GraphMutationProposal,
+    WMValidationPacket,
+)
+from src.world_model.semantic_state_encoder import (
+    encode_object,
+    encode_relation,
+    encode_wm_state_flat,
+)
 from src.world_model.semantic_wm_correction import SemanticWMCorrectionOverlay
 from src.world_model.semantic_world_model import SemanticWorldModelState
 
@@ -78,15 +86,21 @@ def _coerce_overlay(value: Any) -> SemanticWMCorrectionOverlay:
         return SemanticWMCorrectionOverlay(
             object_confidence_adjustments={
                 str(key): _safe_float(item, 0.0)
-                for key, item in dict(value.get("object_confidence_adjustments", {}) or {}).items()
+                for key, item in dict(
+                    value.get("object_confidence_adjustments", {}) or {}
+                ).items()
             },
             relation_confidence_adjustments={
                 str(key): _safe_float(item, 0.0)
-                for key, item in dict(value.get("relation_confidence_adjustments", {}) or {}).items()
+                for key, item in dict(
+                    value.get("relation_confidence_adjustments", {}) or {}
+                ).items()
             },
             capability_adjustments={
                 str(key): _safe_float(item, 0.0)
-                for key, item in dict(value.get("capability_adjustments", {}) or {}).items()
+                for key, item in dict(
+                    value.get("capability_adjustments", {}) or {}
+                ).items()
             },
             topology_adjustments=dict(value.get("topology_adjustments", {}) or {}),
             meta_node_pressure=_safe_float(value.get("meta_node_pressure", 0.0), 0.0),
@@ -96,7 +110,9 @@ def _coerce_overlay(value: Any) -> SemanticWMCorrectionOverlay:
     return SemanticWMCorrectionOverlay()
 
 
-def _coerce_validation_packets(values: Optional[Iterable[Any]]) -> List[WMValidationPacket]:
+def _coerce_validation_packets(
+    values: Optional[Iterable[Any]],
+) -> List[WMValidationPacket]:
     packets: List[WMValidationPacket] = []
     for item in values or []:
         if isinstance(item, WMValidationPacket):
@@ -133,7 +149,8 @@ def _validation_error_for_ref(
     matches = [
         _safe_float(item.error_score, 0.0)
         for item in packets
-        if item.target_ref == target_ref or str(item.metadata.get("relation_id", "")) == target_ref
+        if item.target_ref == target_ref
+        or str(item.metadata.get("relation_id", "")) == target_ref
     ]
     return float(max(matches) if matches else 0.0)
 
@@ -155,12 +172,22 @@ def _wm_global_features(
         [
             _safe_float(overlay.meta_node_pressure, 0.0),
             float(
-                np.mean([abs(_safe_float(v, 0.0)) for v in overlay.object_confidence_adjustments.values()])
+                np.mean(
+                    [
+                        abs(_safe_float(v, 0.0))
+                        for v in overlay.object_confidence_adjustments.values()
+                    ]
+                )
                 if overlay.object_confidence_adjustments
                 else 0.0
             ),
             float(
-                np.mean([abs(_safe_float(v, 0.0)) for v in overlay.relation_confidence_adjustments.values()])
+                np.mean(
+                    [
+                        abs(_safe_float(v, 0.0))
+                        for v in overlay.relation_confidence_adjustments.values()
+                    ]
+                )
                 if overlay.relation_confidence_adjustments
                 else 0.0
             ),
@@ -251,7 +278,7 @@ def generate_graph_mutation_candidates(
 ) -> List[GraphMutationProposal]:
     world_model = _coerce_world_model(semantic_world_model)
     if world_model is None:
-        return _coerce_proposals(base_proposals)[:max(max_candidates, 0)]
+        return _coerce_proposals(base_proposals)[: max(max_candidates, 0)]
     packets = _coerce_validation_packets(wm_validation_packets)
     proposals = list(_coerce_proposals(base_proposals))
     seen = {(item.action, item.target_ref) for item in proposals}
@@ -276,11 +303,18 @@ def generate_graph_mutation_candidates(
                 confidence=_clip01(0.35 + 0.45 * _safe_float(packet.error_score, 0.0)),
                 rationale=f"WM validation suggests unresolved semantic target {target_ref}",
                 source_refs=[packet.target_ref],
-                metadata={"validation_kind": packet.validation_kind, "candidate_source": "wm_validation"},
+                metadata={
+                    "validation_kind": packet.validation_kind,
+                    "candidate_source": "wm_validation",
+                },
             )
         )
     for meta_node in list(world_model.meta_nodes or []):
-        if meta_node.node_type not in {"ontology_router", "state_validation_router", "semantic_memory_refresh"}:
+        if meta_node.node_type not in {
+            "ontology_router",
+            "state_validation_router",
+            "semantic_memory_refresh",
+        }:
             continue
         for target_ref in list(meta_node.target_refs or [])[:2]:
             action = _infer_candidate_action(target_ref, meta_node.node_type)
@@ -300,7 +334,7 @@ def generate_graph_mutation_candidates(
                     metadata={"candidate_source": "meta_node"},
                 )
             )
-    return proposals[:max(max_candidates, 0)]
+    return proposals[: max(max_candidates, 0)]
 
 
 def build_semantic_wm_refinement_dataset_from_examples(
@@ -356,7 +390,9 @@ def build_semantic_wm_refinement_dataset_from_examples(
                     np.array(
                         [
                             _validation_error_for_ref(packets, obj.object_id),
-                            1.0 if obj.object_id in set(overlay.target_refs or []) else 0.0,
+                            1.0
+                            if obj.object_id in set(overlay.target_refs or [])
+                            else 0.0,
                             min(float(len(obj.track_refs or [])) / 4.0, 1.0),
                         ],
                         dtype=np.float32,
@@ -375,7 +411,9 @@ def build_semantic_wm_refinement_dataset_from_examples(
                     np.array(
                         [
                             _validation_error_for_ref(packets, rel.relation_id),
-                            1.0 if rel.relation_id in set(overlay.target_refs or []) else 0.0,
+                            1.0
+                            if rel.relation_id in set(overlay.target_refs or [])
+                            else 0.0,
                             1.0 if rel.object_id == rel.subject_id else 0.0,
                         ],
                         dtype=np.float32,
@@ -388,7 +426,11 @@ def build_semantic_wm_refinement_dataset_from_examples(
         capability_features.append(global_features.tolist())
         capability_targets.append(
             [
-                _clip(_safe_float(overlay.capability_adjustments.get(key, 0.0), 0.0), -0.5, 0.5)
+                _clip(
+                    _safe_float(overlay.capability_adjustments.get(key, 0.0), 0.0),
+                    -0.5,
+                    0.5,
+                )
                 for key in CAPABILITY_KEYS
             ]
             + [_clip01(_safe_float(overlay.meta_node_pressure, 0.0))]
@@ -396,7 +438,11 @@ def build_semantic_wm_refinement_dataset_from_examples(
 
         target_refs = {str(ref) for ref in overlay.target_refs or []}
         for proposal in proposals:
-            action = proposal.action if proposal.action in PROPOSAL_ACTIONS else "mark_for_review"
+            action = (
+                proposal.action
+                if proposal.action in PROPOSAL_ACTIONS
+                else "mark_for_review"
+            )
             target_kind = _proposal_target_kind(proposal.target_ref, action)
             target_matches = 1.0 if proposal.target_ref in target_refs else 0.0
             feature_vec = np.concatenate(
@@ -415,7 +461,11 @@ def build_semantic_wm_refinement_dataset_from_examples(
                 ]
             )
             status = execution_records.get(proposal.proposal_id, "")
-            accept_target = 1.0 if status == "applied" else (1.0 if proposal.confidence >= 0.55 else 0.0)
+            accept_target = (
+                1.0
+                if status == "applied"
+                else (1.0 if proposal.confidence >= 0.55 else 0.0)
+            )
             confidence_target = (
                 _clip01(_safe_float(proposal.confidence, 0.0))
                 if accept_target > 0.0
@@ -447,7 +497,10 @@ def build_semantic_wm_refinement_dataset_from_artifact_dirs(
     for artifact_dir in artifact_dirs:
         root = Path(artifact_dir)
         world_model_payload: Dict[str, Any] = {}
-        for name in ("input_semantic_world_model.json", "corrected_semantic_world_model.json"):
+        for name in (
+            "input_semantic_world_model.json",
+            "corrected_semantic_world_model.json",
+        ):
             path = root / name
             if path.exists():
                 world_model_payload = json.loads(path.read_text(encoding="utf-8"))
@@ -465,9 +518,21 @@ def build_semantic_wm_refinement_dataset_from_artifact_dirs(
             {
                 "semantic_world_model": world_model_payload,
                 "correction_overlay": overlay_payload,
-                "feedback_summary": json.loads(feedback_path.read_text(encoding="utf-8")) if feedback_path.exists() else {},
-                "graph_mutation_proposals": json.loads(proposals_path.read_text(encoding="utf-8")) if proposals_path.exists() else [],
-                "graph_mutation_execution": json.loads(execution_path.read_text(encoding="utf-8")) if execution_path.exists() else {},
+                "feedback_summary": json.loads(
+                    feedback_path.read_text(encoding="utf-8")
+                )
+                if feedback_path.exists()
+                else {},
+                "graph_mutation_proposals": json.loads(
+                    proposals_path.read_text(encoding="utf-8")
+                )
+                if proposals_path.exists()
+                else [],
+                "graph_mutation_execution": json.loads(
+                    execution_path.read_text(encoding="utf-8")
+                )
+                if execution_path.exists()
+                else {},
             }
         )
     return build_semantic_wm_refinement_dataset_from_examples(examples)
@@ -494,7 +559,6 @@ try:
         def forward(self, inputs: torch.Tensor) -> torch.Tensor:
             return self.net(inputs).squeeze(-1)
 
-
     class _VectorNet(nn.Module):
         def __init__(self, input_dim: int, hidden_dim: int, output_dim: int) -> None:
             super().__init__()
@@ -508,7 +572,6 @@ try:
 
         def forward(self, inputs: torch.Tensor) -> torch.Tensor:
             return self.net(inputs)
-
 
     @dataclass
     class SemanticWMRefinerPackage:
@@ -530,18 +593,37 @@ try:
             }
 
         @classmethod
-        def from_checkpoint(cls, payload: Mapping[str, Any]) -> "SemanticWMRefinerPackage":
+        def from_checkpoint(
+            cls, payload: Mapping[str, Any]
+        ) -> "SemanticWMRefinerPackage":
             metadata = dict(payload.get("metadata", {}) or {})
-            object_model = _ScalarNet(int(metadata.get("object_dim", 1)), int(metadata.get("hidden_dim", 48)))
-            relation_model = _ScalarNet(int(metadata.get("relation_dim", 1)), int(metadata.get("hidden_dim", 48)))
-            capability_model = _VectorNet(int(metadata.get("capability_dim", 1)), int(metadata.get("hidden_dim", 48)), len(CAPABILITY_KEYS) + 1)
-            proposal_accept_model = _ScalarNet(int(metadata.get("proposal_dim", 1)), int(metadata.get("hidden_dim", 48)))
-            proposal_confidence_model = _ScalarNet(int(metadata.get("proposal_dim", 1)), int(metadata.get("hidden_dim", 48)))
+            object_model = _ScalarNet(
+                int(metadata.get("object_dim", 1)), int(metadata.get("hidden_dim", 48))
+            )
+            relation_model = _ScalarNet(
+                int(metadata.get("relation_dim", 1)),
+                int(metadata.get("hidden_dim", 48)),
+            )
+            capability_model = _VectorNet(
+                int(metadata.get("capability_dim", 1)),
+                int(metadata.get("hidden_dim", 48)),
+                len(CAPABILITY_KEYS) + 1,
+            )
+            proposal_accept_model = _ScalarNet(
+                int(metadata.get("proposal_dim", 1)),
+                int(metadata.get("hidden_dim", 48)),
+            )
+            proposal_confidence_model = _ScalarNet(
+                int(metadata.get("proposal_dim", 1)),
+                int(metadata.get("hidden_dim", 48)),
+            )
             object_model.load_state_dict(payload["object_state_dict"])
             relation_model.load_state_dict(payload["relation_state_dict"])
             capability_model.load_state_dict(payload["capability_state_dict"])
             proposal_accept_model.load_state_dict(payload["proposal_accept_state_dict"])
-            proposal_confidence_model.load_state_dict(payload["proposal_confidence_state_dict"])
+            proposal_confidence_model.load_state_dict(
+                payload["proposal_confidence_state_dict"]
+            )
             object_model.eval()
             relation_model.eval()
             capability_model.eval()
@@ -585,7 +667,10 @@ try:
                             np.array(
                                 [
                                     _validation_error_for_ref(packets, obj.object_id),
-                                    1.0 if _validation_error_for_ref(packets, obj.object_id) > 0.0 else 0.0,
+                                    1.0
+                                    if _validation_error_for_ref(packets, obj.object_id)
+                                    > 0.0
+                                    else 0.0,
                                     min(float(len(obj.track_refs or [])) / 4.0, 1.0),
                                 ],
                                 dtype=np.float32,
@@ -605,7 +690,12 @@ try:
                             np.array(
                                 [
                                     _validation_error_for_ref(packets, rel.relation_id),
-                                    1.0 if _validation_error_for_ref(packets, rel.relation_id) > 0.0 else 0.0,
+                                    1.0
+                                    if _validation_error_for_ref(
+                                        packets, rel.relation_id
+                                    )
+                                    > 0.0
+                                    else 0.0,
                                     1.0 if rel.object_id == rel.subject_id else 0.0,
                                 ],
                                 dtype=np.float32,
@@ -617,13 +707,21 @@ try:
                     if abs(delta) >= 0.02:
                         relation_adjustments[rel.relation_id] = delta
                         target_refs.append(rel.relation_id)
-                capability_vec = torch.tensor(global_features, dtype=torch.float32).unsqueeze(0)
-                capability_outputs = self.capability_model(capability_vec).squeeze(0).tolist()
+                capability_vec = torch.tensor(
+                    global_features, dtype=torch.float32
+                ).unsqueeze(0)
+                capability_outputs = (
+                    self.capability_model(capability_vec).squeeze(0).tolist()
+                )
             capability_adjustments = {
                 key: _clip(_safe_float(value, 0.0), -0.5, 0.5)
-                for key, value in zip(CAPABILITY_KEYS, capability_outputs[: len(CAPABILITY_KEYS)])
+                for key, value in zip(
+                    CAPABILITY_KEYS, capability_outputs[: len(CAPABILITY_KEYS)]
+                )
             }
-            pressure = _clip01(_safe_float(capability_outputs[len(CAPABILITY_KEYS)], 0.0))
+            pressure = _clip01(
+                _safe_float(capability_outputs[len(CAPABILITY_KEYS)], 0.0)
+            )
             pressure = max(
                 pressure,
                 max([abs(value) for value in object_adjustments.values()] + [0.0]),
@@ -673,7 +771,11 @@ try:
             scored: List[GraphMutationProposal] = []
             with torch.no_grad():
                 for proposal in candidates:
-                    action = proposal.action if proposal.action in PROPOSAL_ACTIONS else "mark_for_review"
+                    action = (
+                        proposal.action
+                        if proposal.action in PROPOSAL_ACTIONS
+                        else "mark_for_review"
+                    )
                     target_kind = _proposal_target_kind(proposal.target_ref, action)
                     feature_vec = np.concatenate(
                         [
@@ -683,17 +785,33 @@ try:
                             np.array(
                                 [
                                     _clip01(_safe_float(proposal.confidence, 0.0)),
-                                    min(float(len(proposal.source_refs or [])) / 4.0, 1.0),
-                                    1.0 if _validation_error_for_ref(packets, proposal.target_ref) > 0.0 else 0.0,
+                                    min(
+                                        float(len(proposal.source_refs or [])) / 4.0,
+                                        1.0,
+                                    ),
+                                    1.0
+                                    if _validation_error_for_ref(
+                                        packets, proposal.target_ref
+                                    )
+                                    > 0.0
+                                    else 0.0,
                                 ],
                                 dtype=np.float32,
                             ),
                         ]
                     )
                     tensor = torch.tensor(feature_vec, dtype=torch.float32).unsqueeze(0)
-                    accept = _clip01(float(torch.sigmoid(self.proposal_accept_model(tensor)).item()))
-                    confidence = _clip01(float(torch.sigmoid(self.proposal_confidence_model(tensor)).item()))
-                    merged_confidence = _clip01(0.4 * _safe_float(proposal.confidence, 0.0) + 0.6 * confidence)
+                    accept = _clip01(
+                        float(torch.sigmoid(self.proposal_accept_model(tensor)).item())
+                    )
+                    confidence = _clip01(
+                        float(
+                            torch.sigmoid(self.proposal_confidence_model(tensor)).item()
+                        )
+                    )
+                    merged_confidence = _clip01(
+                        0.4 * _safe_float(proposal.confidence, 0.0) + 0.6 * confidence
+                    )
                     if max(accept, merged_confidence) < min_confidence:
                         continue
                     scored.append(
@@ -713,7 +831,6 @@ try:
                         )
                     )
             return scored
-
 
     def _train_scalar_net(
         features: Sequence[Sequence[float]],
@@ -737,7 +854,6 @@ try:
         model.eval()
         return model
 
-
     def _train_vector_net(
         features: Sequence[Sequence[float]],
         targets: Sequence[Sequence[float]],
@@ -760,7 +876,6 @@ try:
         model.eval()
         return model
 
-
     def train_semantic_wm_refiner_package(
         dataset: SemanticWMRefinementDataset,
         *,
@@ -770,13 +885,23 @@ try:
     ) -> SemanticWMRefinerPackage:
         if not dataset.object_features and not dataset.relation_features:
             raise ValueError("no semantic WM refinement samples available")
-        object_features = dataset.object_features or [[0.0] * max(dataset.global_feature_dim, 1)]
+        object_features = dataset.object_features or [
+            [0.0] * max(dataset.global_feature_dim, 1)
+        ]
         object_targets = dataset.object_targets or [0.0]
-        relation_features = dataset.relation_features or [[0.0] * max(dataset.global_feature_dim, 1)]
+        relation_features = dataset.relation_features or [
+            [0.0] * max(dataset.global_feature_dim, 1)
+        ]
         relation_targets = dataset.relation_targets or [0.0]
-        capability_features = dataset.capability_features or [[0.0] * max(dataset.global_feature_dim, 1)]
-        capability_targets = dataset.capability_targets or [[0.0] * (len(CAPABILITY_KEYS) + 1)]
-        proposal_features = dataset.proposal_features or [[0.0] * max(dataset.global_feature_dim, 1)]
+        capability_features = dataset.capability_features or [
+            [0.0] * max(dataset.global_feature_dim, 1)
+        ]
+        capability_targets = dataset.capability_targets or [
+            [0.0] * (len(CAPABILITY_KEYS) + 1)
+        ]
+        proposal_features = dataset.proposal_features or [
+            [0.0] * max(dataset.global_feature_dim, 1)
+        ]
         proposal_accept_targets = dataset.proposal_accept_targets or [0.0]
         proposal_confidence_targets = dataset.proposal_confidence_targets or [0.0]
         package = SemanticWMRefinerPackage(
@@ -828,7 +953,6 @@ try:
         )
         return package
 
-
     def shadow_fit_semantic_wm_refiner_package(
         semantic_world_model: Any,
         *,
@@ -840,7 +964,10 @@ try:
         min_object_samples: int = 1,
     ) -> Optional[SemanticWMRefinerPackage]:
         world_model = _coerce_world_model(semantic_world_model)
-        if world_model is None or len(list(world_model.objects or [])) < min_object_samples:
+        if (
+            world_model is None
+            or len(list(world_model.objects or [])) < min_object_samples
+        ):
             return None
         dataset = build_semantic_wm_refinement_dataset_from_examples(
             [
@@ -848,8 +975,14 @@ try:
                     "semantic_world_model": world_model,
                     "correction_overlay": _coerce_overlay(correction_overlay).to_dict(),
                     "feedback_summary": dict(feedback_summary or {}),
-                    "wm_validation_packets": [item.to_dict() for item in _coerce_validation_packets(wm_validation_packets)],
-                    "graph_mutation_proposals": [item.to_dict() for item in _coerce_proposals(graph_mutation_proposals)],
+                    "wm_validation_packets": [
+                        item.to_dict()
+                        for item in _coerce_validation_packets(wm_validation_packets)
+                    ],
+                    "graph_mutation_proposals": [
+                        item.to_dict()
+                        for item in _coerce_proposals(graph_mutation_proposals)
+                    ],
                     "graph_mutation_execution": dict(graph_mutation_execution or {}),
                 }
             ]
@@ -857,7 +990,9 @@ try:
         if not dataset.object_features:
             return None
         try:
-            return train_semantic_wm_refiner_package(dataset, epochs=16, learning_rate=2e-3)
+            return train_semantic_wm_refiner_package(
+                dataset, epochs=16, learning_rate=2e-3
+            )
         except Exception:
             return None
 
@@ -873,7 +1008,9 @@ except Exception:
             return {"metadata": dict(self.metadata)}
 
         @classmethod
-        def from_checkpoint(cls, payload: Mapping[str, Any]) -> "SemanticWMRefinerPackage":
+        def from_checkpoint(
+            cls, payload: Mapping[str, Any]
+        ) -> "SemanticWMRefinerPackage":
             return cls(metadata=dict(payload.get("metadata", {}) or {}))
 
         def predict_correction_overlay(
@@ -897,7 +1034,9 @@ except Exception:
                 relation_confidence_adjustments={},
                 capability_adjustments={},
                 topology_adjustments={"learned_refiner_active": True},
-                meta_node_pressure=max([abs(value) for value in adjustments.values()] + [0.0]),
+                meta_node_pressure=max(
+                    [abs(value) for value in adjustments.values()] + [0.0]
+                ),
                 target_refs=sorted(adjustments.keys()),
                 metadata={"source": "semantic_wm_refiner", "model_type": "fallback"},
             )
@@ -915,12 +1054,17 @@ except Exception:
             if world_model is None:
                 return []
             packets = _coerce_validation_packets(wm_validation_packets)
-            candidates = generate_graph_mutation_candidates(world_model, base_proposals=proposals, wm_validation_packets=packets)
+            candidates = generate_graph_mutation_candidates(
+                world_model, base_proposals=proposals, wm_validation_packets=packets
+            )
             scored: List[GraphMutationProposal] = []
             for proposal in candidates:
                 confidence = max(
                     _clip01(_safe_float(proposal.confidence, 0.0)),
-                    _clip01(0.3 + 0.5 * _validation_error_for_ref(packets, proposal.target_ref)),
+                    _clip01(
+                        0.3
+                        + 0.5 * _validation_error_for_ref(packets, proposal.target_ref)
+                    ),
                 )
                 if confidence < min_confidence:
                     continue
@@ -932,17 +1076,23 @@ except Exception:
                         confidence=confidence,
                         rationale=proposal.rationale,
                         source_refs=list(proposal.source_refs),
-                        metadata={**dict(proposal.metadata or {}), "source": "semantic_wm_refiner", "model_type": "fallback"},
+                        metadata={
+                            **dict(proposal.metadata or {}),
+                            "source": "semantic_wm_refiner",
+                            "model_type": "fallback",
+                        },
                     )
                 )
             return scored
 
-
-    def train_semantic_wm_refiner_package(*args: Any, **kwargs: Any) -> SemanticWMRefinerPackage:  # type: ignore[no-redef]
+    def train_semantic_wm_refiner_package(  # type: ignore[misc,no-redef]
+        *args: Any, **kwargs: Any
+    ) -> SemanticWMRefinerPackage:
         raise ImportError("train_semantic_wm_refiner_package requires torch")
 
-
-    def shadow_fit_semantic_wm_refiner_package(*args: Any, **kwargs: Any) -> Optional[SemanticWMRefinerPackage]:  # type: ignore[no-redef]
+    def shadow_fit_semantic_wm_refiner_package(  # type: ignore[misc,no-redef]
+        *args: Any, **kwargs: Any
+    ) -> Optional[SemanticWMRefinerPackage]:
         return None
 
 
@@ -958,14 +1108,22 @@ def merge_semantic_wm_correction_overlays(
         return base
     weight = _clip01(learned_weight)
     inv_weight = 1.0 - weight
-    object_keys = set(base.object_confidence_adjustments) | set(learned.object_confidence_adjustments)
-    relation_keys = set(base.relation_confidence_adjustments) | set(learned.relation_confidence_adjustments)
-    capability_keys = set(base.capability_adjustments) | set(learned.capability_adjustments)
+    object_keys = set(base.object_confidence_adjustments) | set(
+        learned.object_confidence_adjustments
+    )
+    relation_keys = set(base.relation_confidence_adjustments) | set(
+        learned.relation_confidence_adjustments
+    )
+    capability_keys = set(base.capability_adjustments) | set(
+        learned.capability_adjustments
+    )
     return SemanticWMCorrectionOverlay(
         object_confidence_adjustments={
             key: _clip(
-                inv_weight * _safe_float(base.object_confidence_adjustments.get(key, 0.0), 0.0)
-                + weight * _safe_float(learned.object_confidence_adjustments.get(key, 0.0), 0.0),
+                inv_weight
+                * _safe_float(base.object_confidence_adjustments.get(key, 0.0), 0.0)
+                + weight
+                * _safe_float(learned.object_confidence_adjustments.get(key, 0.0), 0.0),
                 -0.5,
                 0.5,
             )
@@ -973,8 +1131,12 @@ def merge_semantic_wm_correction_overlays(
         },
         relation_confidence_adjustments={
             key: _clip(
-                inv_weight * _safe_float(base.relation_confidence_adjustments.get(key, 0.0), 0.0)
-                + weight * _safe_float(learned.relation_confidence_adjustments.get(key, 0.0), 0.0),
+                inv_weight
+                * _safe_float(base.relation_confidence_adjustments.get(key, 0.0), 0.0)
+                + weight
+                * _safe_float(
+                    learned.relation_confidence_adjustments.get(key, 0.0), 0.0
+                ),
                 -0.5,
                 0.5,
             )
@@ -983,7 +1145,8 @@ def merge_semantic_wm_correction_overlays(
         capability_adjustments={
             key: _clip(
                 inv_weight * _safe_float(base.capability_adjustments.get(key, 0.0), 0.0)
-                + weight * _safe_float(learned.capability_adjustments.get(key, 0.0), 0.0),
+                + weight
+                * _safe_float(learned.capability_adjustments.get(key, 0.0), 0.0),
                 -0.5,
                 0.5,
             )
@@ -994,8 +1157,13 @@ def merge_semantic_wm_correction_overlays(
             **dict(learned.topology_adjustments or {}),
             "learned_overlay_blend_weight": float(weight),
         },
-        meta_node_pressure=max(_safe_float(base.meta_node_pressure, 0.0), _safe_float(learned.meta_node_pressure, 0.0)),
-        target_refs=sorted(set(list(base.target_refs or []) + list(learned.target_refs or []))),
+        meta_node_pressure=max(
+            _safe_float(base.meta_node_pressure, 0.0),
+            _safe_float(learned.meta_node_pressure, 0.0),
+        ),
+        target_refs=sorted(
+            set(list(base.target_refs or []) + list(learned.target_refs or []))
+        ),
         metadata={
             **dict(base.metadata or {}),
             "learned_overlay": learned.to_dict(),
@@ -1025,9 +1193,13 @@ def merge_graph_mutation_proposals(
             proposal_id=existing.proposal_id or item.proposal_id,
             action=existing.action,
             target_ref=existing.target_ref,
-            confidence=max(_safe_float(existing.confidence, 0.0), _safe_float(item.confidence, 0.0)),
+            confidence=max(
+                _safe_float(existing.confidence, 0.0), _safe_float(item.confidence, 0.0)
+            ),
             rationale=existing.rationale or item.rationale,
-            source_refs=sorted(set(list(existing.source_refs or []) + list(item.source_refs or []))),
+            source_refs=sorted(
+                set(list(existing.source_refs or []) + list(item.source_refs or []))
+            ),
             metadata={
                 **dict(existing.metadata or {}),
                 "learned_refiner": dict(item.metadata or {}),

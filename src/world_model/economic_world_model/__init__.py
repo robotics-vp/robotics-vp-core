@@ -8,6 +8,16 @@ from src.world_model.economic_world_model.allocation_eval import (
     load_economic_wm_shadow_allocation_eval,
     save_economic_wm_shadow_allocation_eval,
 )
+from src.world_model.economic_world_model.bio_neuro_receipt_join import (
+    BioNeuroReceiptJoinReport,
+    BioNeuroReceiptJoinRow,
+    build_bio_neuro_receipt_join,
+    build_bio_neuro_receipt_join_from_paths,
+    load_bio_neuro_receipt_join_report,
+    load_bio_neuro_receipt_join_rows,
+    load_bio_neuro_receipts_jsonl,
+    save_bio_neuro_receipt_join,
+)
 from src.world_model.economic_world_model.evidence_contracts import (
     EconomicWMEvidenceRequirement,
     EconomicWMTeacherProviderContract,
@@ -217,6 +227,8 @@ __all__ = [
     "AllocationEnvelope",
     "DENIED_REGIME_BROADCAST_AUTHORITIES",
     "EconomicWMAllocationCandidate",
+    "BioNeuroReceiptJoinReport",
+    "BioNeuroReceiptJoinRow",
     "ArtifactRetentionReceipt",
     "ClaimEvidenceReceipt",
     "EvidenceHygieneReport",
@@ -270,6 +282,8 @@ __all__ = [
     "EconomicWMNeuralComponentSpec",
     "RegimeAcknowledgmentReceipt",
     "RegimeBroadcast",
+    "build_bio_neuro_receipt_join",
+    "build_bio_neuro_receipt_join_from_paths",
     "build_economic_wm_neural_architecture_manifest",
     "build_regime_acknowledgment",
     "build_regime_broadcast",
@@ -277,6 +291,9 @@ __all__ = [
     "import_lerobot_corpus_slice",
     "load_external_corpus_quality_receipts",
     "load_external_lerobot_corpus_import_report",
+    "load_bio_neuro_receipt_join_report",
+    "load_bio_neuro_receipt_join_rows",
+    "load_bio_neuro_receipts_jsonl",
     "build_economic_wm_neural_architecture_manifest_from_path",
     "load_economic_wm_neural_architecture_manifest",
     "save_economic_wm_neural_architecture_manifest",
@@ -374,4 +391,5 @@ __all__ = [
     "save_economic_wm_shadow_allocation_eval",
     "save_economic_wm_teacher_provider_contract",
     "save_economic_wm_training_corpus",
+    "save_bio_neuro_receipt_join",
 ]

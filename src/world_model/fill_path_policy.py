@@ -6,6 +6,7 @@ The ``LearnedFillPathPolicy`` classifies gap features into the optimal
 fill method (real_sim, diffusion, synthetic_branch, blocked), trained
 on historical fill-outcome records to maximize coverage improvement.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -121,7 +122,9 @@ try:
                 confidences = conf.squeeze(-1).cpu().numpy().tolist()
             details: List[Dict[str, Any]] = []
             for probs_row, confidence in zip(probs.tolist(), confidences):
-                method_idx = int(max(range(len(probs_row)), key=lambda idx: probs_row[idx]))
+                method_idx = int(
+                    max(range(len(probs_row)), key=lambda idx: probs_row[idx])
+                )
                 details.append(
                     {
                         "fill_method": FILL_METHODS[method_idx],
@@ -152,6 +155,7 @@ except ImportError:
 
     class LearnedFillPathPolicy:  # type: ignore[no-redef]
         """Stub when torch is unavailable."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("LearnedFillPathPolicy requires torch")
 
@@ -167,6 +171,7 @@ except ImportError:
 # Training
 # ---------------------------------------------------------------------------
 
+
 def _best_method_for_edge(
     records: Sequence[Any],
 ) -> str:
@@ -174,7 +179,9 @@ def _best_method_for_edge(
     by_method: Dict[str, List[float]] = {}
     for rec in records:
         method = str(getattr(rec, "fill_method", ""))
-        by_method.setdefault(method, []).append(float(getattr(rec, "marginal_value", 0.0)))
+        by_method.setdefault(method, []).append(
+            float(getattr(rec, "marginal_value", 0.0))
+        )
 
     best_method = "blocked"
     best_avg = -float("inf")
@@ -246,13 +253,16 @@ def train_fill_path_policy(
     model.eval()
 
     if save_path:
-        torch.save({
-            "model_state_dict": model.state_dict(),
-            "input_dim": GapFeatureExtractor.FEATURE_DIM,
-            "hidden_dim": hidden_dim,
-            "epochs": epochs,
-            "n_records": len(outcome_records),
-        }, save_path)
+        torch.save(
+            {
+                "model_state_dict": model.state_dict(),
+                "input_dim": GapFeatureExtractor.FEATURE_DIM,
+                "hidden_dim": hidden_dim,
+                "epochs": epochs,
+                "n_records": len(outcome_records),
+            },
+            save_path,
+        )
 
     return model
 
@@ -269,11 +279,18 @@ def load_fill_path_helper_predictions(
         for detail in details:
             payload = dict(detail or {})
             probabilities = {
-                method: float(dict(payload.get("method_probabilities", {}) or {}).get(method, 0.0))
+                method: float(
+                    dict(payload.get("method_probabilities", {}) or {}).get(method, 0.0)
+                )
                 for method in FILL_METHODS
             }
-            fill_method = str(payload.get("fill_method") or max(probabilities, key=probabilities.get))
-            confidence = float(payload.get("confidence", max(probabilities.values(), default=0.0)))
+            fill_method = str(
+                payload.get("fill_method")
+                or max(probabilities, key=lambda method: probabilities[method])
+            )
+            confidence = float(
+                payload.get("confidence", max(probabilities.values(), default=0.0))
+            )
             normalized.append(
                 {
                     "fill_method": fill_method,
@@ -291,10 +308,10 @@ def load_fill_path_helper_predictions(
             confidence_value = float(confidence)
             background = 0.0
             if len(FILL_METHODS) > 1:
-                background = max(0.0, (1.0 - confidence_value) / float(len(FILL_METHODS) - 1))
-            probabilities = {
-                fill_method: background for fill_method in FILL_METHODS
-            }
+                background = max(
+                    0.0, (1.0 - confidence_value) / float(len(FILL_METHODS) - 1)
+                )
+            probabilities = {fill_method: background for fill_method in FILL_METHODS}
             probabilities[method_name] = confidence_value
             normalized.append(
                 {
@@ -305,7 +322,9 @@ def load_fill_path_helper_predictions(
             )
         return normalized
 
-    raise TypeError("fill-path helper must define predict_batch_details() or predict_batch()")
+    raise TypeError(
+        "fill-path helper must define predict_batch_details() or predict_batch()"
+    )
 
 
 def fill_path_helper_benchmark_gate(helper: Any) -> Mapping[str, Any]:

@@ -207,8 +207,7 @@ class PerceptionSeamRegistry:
         """
         if seam_type not in SEAM_TYPES:
             raise ValueError(
-                f"Unknown seam type: {seam_type}. "
-                f"Available: {list(SEAM_TYPES.keys())}"
+                f"Unknown seam type: {seam_type}. Available: {list(SEAM_TYPES.keys())}"
             )
 
         merged_params = dict(SEAM_DEFAULTS.get(seam_type, {}))
@@ -321,6 +320,7 @@ class PerceptionSeamRegistry:
         seam = self._seams[seam_id]
         descriptor = self._descriptors[seam_id]
 
+        save_path: Optional[Path]
         if checkpoint_path:
             save_path = Path(checkpoint_path)
         else:
@@ -361,9 +361,7 @@ class PerceptionSeamRegistry:
             "registered_count": len(self._descriptors),
             "loaded_count": len(self._seams),
             "total_params": total_params,
-            "seams": {
-                sid: desc.to_dict() for sid, desc in self._descriptors.items()
-            },
+            "seams": {sid: desc.to_dict() for sid, desc in self._descriptors.items()},
         }
 
     def _resolve_checkpoint_path(

@@ -67,6 +67,109 @@ Broad mypy by WM bucket:
 | Embodiment / Actuation + humanoid readiness | 65 |
 | Economic WM | 20 |
 
+## Post Local WM-Surface Pass Update
+
+The first debt-burn pass cleared the narrowed local WM-surface gate and wired
+the local RunPod provider ledger plus bio/neuro receipt joins. The following
+checks now pass:
+
+```bash
+python3 -m ruff check \
+  src/world_model \
+  src/training/perception_seam_data.py \
+  scripts/economic_world_model \
+  scripts/runpod \
+  tests/test_bio_neuro_substrate.py \
+  tests/test_humanoid_phase7_signal_adapters.py \
+  tests/test_humanoid_phase7_shadow_runtime_wiring.py
+
+python3 -m mypy --follow-imports=silent \
+  src/world_model \
+  src/training/perception_seam_data.py \
+  src/runpod \
+  scripts/economic_world_model \
+  scripts/runpod
+```
+
+The residual debt is now full-repo static hygiene outside that narrowed gate.
+It should still be burned down, because these modules are lower-WM producers,
+trainer/runtime lanes, curriculum sources, or receipt consumers. They are not
+automatically obsolete just because the WM architecture now governs them.
+
+Current residual broad ruff:
+
+| Area | Count |
+| --- | ---: |
+| `scripts/` | 38 |
+| `src/vision/` | 34 |
+| `src/envs/` | 26 |
+| `src/process_reward/` | 20 |
+| `src/utils/` | 10 |
+| `src/analytics/` | 9 |
+| `src/hrl/` | 9 |
+| `src/vla/` | 9 |
+| `tests/` | 9 |
+| `src/orchestrator/` | 8 |
+| `src/rl/` | 8 |
+| other checked-in support surfaces | 86 |
+| **Total** | **266** |
+
+Current residual broad ruff by code:
+
+| Code | Meaning | Count | Disposition |
+| --- | --- | ---: | --- |
+| `F401` | unused imports | 180 | mostly safe mechanical cleanup |
+| `F841` | unused locals | 62 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
+| `F821` | undefined names | 9 | treat as bugs before mechanical cleanup |
+| other `E`/`F` rules | style/ambiguous names/bare except | 15 | mechanical except where exceptions hide provider/runtime failures |
+
+Current residual full-repo mypy:
+
+| Area | Count |
+| --- | ---: |
+| `src/vision/` | 34 |
+| `src/vla/` | 22 |
+| `src/envs/` | 18 |
+| `src/rl/` | 15 |
+| `src/scene/` | 12 |
+| `src/motor_backend/` | 12 |
+| `src/replay/` | 8 |
+| `src/representation/` | 7 |
+| `src/process_reward/` | 6 |
+| `src/hrl/` | 6 |
+| `src/regal/` | 6 |
+| `src/analytics/` | 5 |
+| `src/encoders/` | 5 |
+| `src/evidence/` | 5 |
+| `src/policies/` | 5 |
+| other checked-in support surfaces | 40 |
+| **Total actual `error:` records** | **206** |
+
+Current residual full-repo mypy by kind:
+
+| Kind | Count | Meaning |
+| --- | ---: | --- |
+| `arg-type` | 48 | interface drift and weak payload narrowing |
+| `assignment` | 45 | optional dependency/module typing, tensor/list reuse, schema mismatch |
+| `var-annotated` | 18 | untyped mutable containers |
+| `dict-item` | 15 | dicts typed too narrowly for receipt/config payloads |
+| `misc` | 13 | dynamic torch bases and optional provider call sites |
+| `attr-defined` | 12 | object payloads not narrowed before attribute access |
+| `union-attr` | 10 | optional values used without proof |
+| `no-redef` | 9 | conditional import/fallback patterns |
+| other codes | 36 | smaller call/index/import/override issues |
+
+Legacy/support-surface disposition:
+
+| Surface family | Not superseded because | What should happen |
+| --- | --- | --- |
+| `src/envs/`, `src/physics/`, `src/scenarios/`, `src/datasets/`, `src/replay/` | curriculum, regression, replay, and data-generation substrate for WMs | keep, type, and posture-tag as fixed-base curriculum or G1-relevant producer; do not treat fixed-base success as humanoid proof |
+| `src/vision/`, `src/scene/`, `src/sima2/`, `src/vla/` | provider-facing perception/semantic algorithms and VLA scaffolds | wrap as Perception/Grounding producers or advisory provider adapters; real provider outputs remain external proof |
+| `src/rl/`, `src/hrl/`, `src/policies/`, `src/process_reward/`, `src/encoders/`, `src/representation/` | trainer/runtime lanes for future lower-WM or policy components | keep but gate with manifests, receipts, no weight writes in local cleanup, and no promotion claims |
+| `src/motor_backend/`, `src/embodiment/`, `src/ingestion/`, `src/runtime/` | hardware/provider/runtime adapter layer | keep as honest unavailable/proof-emitting adapters; do not collapse stubs into hardware truth |
+| `src/economics/`, `src/valuation/`, `src/ontology/`, `src/evidence/`, `src/contracts/` | cross-cutting economic, receipt, and evidence contracts | keep; avoid mutating frozen Phase B math or controller equations |
+| `scripts/`, `third_party/`, old demos/trainers | operational glue and historical smoke/prototype entrypoints | fix undefined names and safe lint; then either document as legacy/dev-only or migrate into receipt-emitting scripts |
+
 ## G1 / Humanoid Neuralization Posture
 
 The direct body/control neural scaffolds should be read as humanoid-first:
@@ -176,43 +279,53 @@ Not implemented as proof:
 
 ## Ranked Next-Session Work
 
-1. **RunPod prerequisite closeout**
+1. **Full-repo mypy burn-down by support-surface family**
+   - What: burn down the residual full-repo mypy debt in this order:
+     `src/vision/`, `src/vla/`, `src/envs/`, `src/rl/`, `src/scene/`,
+     `src/motor_backend/`, then replay/representation/process-reward/HRL.
+   - Why now: these are the lower-WM producers, provider adapters,
+     curriculum/replay surfaces, and trainer/runtime lanes that the WM stack
+     consumes. Leaving them noisy makes future provider/GPU proof harder to
+     trust.
+   - Verify: `python3 -m mypy src/`.
+   - Do not: change reward math, write weights, promote local scaffolds, or
+     convert fixed-base curriculum into G1 proof while typing.
+
+2. **Full-repo ruff burn-down with bug-first handling**
+   - What: fix `F821` undefined names first, then safe `F401`/`F841`
+     mechanical cleanup, then the remaining small `E`/`F` rules.
+   - Why now: most residual ruff is mechanical, but undefined names and bare
+     exceptions can hide broken scripts or provider/runtime blockers.
+   - Verify: `python3 -m ruff check .`.
+   - Do not: delete historical scripts blindly; either keep them working,
+     mark them dev-only, or migrate them into receipt-emitting paths.
+
+3. **Legacy/support-surface disposition**
+   - What: for each now-typed support family, decide whether it is a
+     lower-WM producer, trainer/runtime lane, curriculum/regression source,
+     provider/hardware adapter, or legacy/dev-only tool.
+   - Why now: the repo is mostly encompassed by the WM architecture, but not
+     every directory belongs under `src/world_model/`; some should remain as
+     substrate with explicit contracts.
+   - Verify: doc updates plus focused tests for the family touched.
+   - Do not: move modules or rename public APIs unless the tests and docs prove
+     the migration boundary.
+
+4. **RunPod prerequisite closeout**
    - What: install/auth `runpodctl`, set `RUNPOD_API_KEY`, and set
      `RUNPOD_VOLUME_ID`.
-   - Why now: without this, provider/loop/train profiles are only manifests.
+   - Why now: provider/loop/train profiles and the new provider readiness
+     ledger are still local planning surfaces until these prerequisites exist.
    - Verify: `./scripts/runpod/ensure_cli.sh`.
-   - Do not: launch training before provider/loop proof-of-life manifests are
-     reviewed.
+   - Do not: call manifest preparation or ledger generation a remote run.
 
-2. **Orchestration / semantic type debt**
-   - What: fix the largest mypy bucket:
-     `src/orchestrator/pipeline_manager.py`,
-     `src/orchestrator/orchestration_transformer.py`,
-     `src/world_model/semantic_feedback_packets.py`, and
-     `src/world_model/semantic_world_model.py`.
-   - Why now: these surfaces are shared glue for multiple WMs.
-   - Verify: `python3 -m mypy --follow-imports=silent src/orchestrator src/world_model/semantic_feedback_packets.py src/world_model/semantic_world_model.py`.
-   - Do not: change routing semantics while doing type cleanup.
-
-3. **Perception seam static hygiene**
-   - What: fix ruff/mypy clusters in perception seam trainer/loss/data and
-     neural seams.
-   - Why now: provider bring-up will be easier if seam code is quiet.
-   - Verify: `python3 -m ruff check src/training/perception_seam_trainer.py src/training/perception_seam_losses.py src/world_model/perception_grounding/neural_seams.py`.
-   - Do not: turn provisional evidence into promotion evidence.
-
-4. **Sim/Synth type and naming cleanup**
-   - What: type `synthetic_branches.py`, `render_materialization.py`, and
-     runtime target/layout payloads; add G1/curriculum aliases where naming is
-     misleading.
-   - Why now: Phase 1.x is the documented current implementation priority once
-     local cheap hardening is useful.
-   - Verify: `python3 -m pytest -q tests/test_sim_synth_runtime_targets.py tests/test_sim_synth_runtime_bundles.py tests/test_sim_synth_phase1x_subsystems.py`.
-   - Do not: claim Isaac/Unitree runtime truth from local type cleanup.
-
-5. **Embodiment/humanoid type cleanup**
-   - What: fix optional/annotation mypy debt in `bipedal_chassis.py` and
-     `downstream_controller.py`.
-   - Why now: these are direct G1 readiness surfaces.
-   - Verify: `python3 -m pytest -q tests/test_humanoid_phase35_bipedal_chassis.py tests/test_humanoid_phase4_downstream_controller.py`.
-   - Do not: edit physical limits or safety thresholds without measured evidence.
+5. **External/provider/hardware proof lanes**
+   - What: after local static debt is quiet, run the provider bring-up,
+     G1 loop, and training profiles only on configured RunPod/provider/hardware
+     planes with manifests under `.agent/runs/<run_id>/manifest.json`.
+   - Why now: this is the remaining gap between local typed receipts and real
+     roadmap proof.
+   - Verify: provider/runtime receipts, run manifests, focused smoke tests, and
+     nightly audit updates.
+   - Do not: claim provider, GPU, Isaac/Unitree, Holosoma, or promotion proof
+     without real execution artifacts.

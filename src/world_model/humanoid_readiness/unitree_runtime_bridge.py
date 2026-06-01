@@ -57,9 +57,7 @@ SAFETY_ENVELOPE_EXPANSION_RECEIPT_VERSION = (
     "unitree_safety_envelope_expansion_receipt_v1"
 )
 OPERATOR_RECOVERY_SCENARIO_VERSION = "unitree_operator_recovery_scenario_v1"
-OPERATOR_RECOVERY_DRILL_RECEIPT_VERSION = (
-    "unitree_operator_recovery_drill_receipt_v1"
-)
+OPERATOR_RECOVERY_DRILL_RECEIPT_VERSION = "unitree_operator_recovery_drill_receipt_v1"
 
 DENIED_UNITREE_RUNTIME_BRIDGE_AUTHORITIES = (
     "ros2_publish_attempted",
@@ -227,7 +225,9 @@ class MujocoHeadlessTraceRow:
             trace_id=str(payload.get("trace_id", "")),
             sample_index=int(payload.get("sample_index", 0) or 0),
             sim_time_s=_safe_float(payload.get("sim_time_s")),
-            qpos_head=[_safe_float(value) for value in list(payload.get("qpos_head", []))],
+            qpos_head=[
+                _safe_float(value) for value in list(payload.get("qpos_head", []))
+            ],
             qvel_norm=_safe_float(payload.get("qvel_norm")),
             ctrl_dim=int(payload.get("ctrl_dim", 0) or 0),
             policy_controlled=bool(payload.get("policy_controlled", False)),
@@ -409,9 +409,7 @@ class SafetyEnvelopeExpansionReceipt:
         }
 
     @classmethod
-    def from_dict(
-        cls, payload: Mapping[str, Any]
-    ) -> "SafetyEnvelopeExpansionReceipt":
+    def from_dict(cls, payload: Mapping[str, Any]) -> "SafetyEnvelopeExpansionReceipt":
         return cls(
             receipt_id=str(payload.get("receipt_id", "")),
             envelope_key=str(payload.get("envelope_key", "")),
@@ -524,9 +522,7 @@ class OperatorRecoveryDrillReceipt:
             final_state=str(payload.get("final_state", "")),
             transition_ids=strings(payload.get("transition_ids")),
             replay_export_ready=bool(payload.get("replay_export_ready", True)),
-            teleop_runtime_executed=bool(
-                payload.get("teleop_runtime_executed", False)
-            ),
+            teleop_runtime_executed=bool(payload.get("teleop_runtime_executed", False)),
             command_dispatch_allowed=bool(
                 payload.get("command_dispatch_allowed", False)
             ),
@@ -609,9 +605,7 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
             "safety_envelope_expansion_complete": bool(
                 self.safety_envelope_expansion_complete
             ),
-            "operator_drill_runner_complete": bool(
-                self.operator_drill_runner_complete
-            ),
+            "operator_drill_runner_complete": bool(self.operator_drill_runner_complete),
             "local_runtime_evidence_bridge_complete": bool(
                 self.local_runtime_evidence_bridge_complete
             ),
@@ -696,7 +690,9 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
                 **_denied_gates(),
                 **{
                     str(key): bool(value)
-                    for key, value in dict(payload.get("denied_gates", {}) or {}).items()
+                    for key, value in dict(
+                        payload.get("denied_gates", {}) or {}
+                    ).items()
                 },
             },
             remaining_evidence_blockers=strings(
@@ -704,9 +700,7 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
             ),
             artifact_refs=mapping(payload.get("artifact_refs")),
             version=str(
-                payload.get(
-                    "version", PHASE4_UNITREE_RUNTIME_BRIDGE_REPORT_VERSION
-                )
+                payload.get("version", PHASE4_UNITREE_RUNTIME_BRIDGE_REPORT_VERSION)
             ),
         )
 
@@ -754,7 +748,10 @@ def build_ros2_runtime_readiness_receipts(
         }
         status = (
             "ready_for_build_attempt"
-            if setup_present and package_xml_count and msg_definition_count and not missing
+            if setup_present
+            and package_xml_count
+            and msg_definition_count
+            and not missing
             else "blocked_missing_host_tools"
         )
         if profile_key == "container_ros2_colcon" and shutil.which("docker"):
@@ -778,8 +775,8 @@ def build_ros2_runtime_readiness_receipts(
                 build_command=build_command,
                 setup_command=setup_command,
                 generated_import_check_command=(
-                    "python3 -c \"from unitree_hg.msg import LowCmd; "
-                    "from unitree_api.msg import Request\""
+                    'python3 -c "from unitree_hg.msg import LowCmd; '
+                    'from unitree_api.msg import Request"'
                 ),
                 generated_import_modules=[
                     "unitree_hg.msg.LowCmd",
@@ -824,7 +821,7 @@ def attempt_mujoco_headless_step(
             rows,
         )
     try:
-        import mujoco  # type: ignore[import-not-found]
+        import mujoco  # type: ignore[import-not-found,import-untyped]
 
         model = mujoco.MjModel.from_xml_path(str(target_xml))
         data = mujoco.MjData(model)
@@ -1032,7 +1029,9 @@ def build_safety_envelope_expansion_receipts(
                 envelope_key=envelope_key,
                 status=status,
                 local_check_executed=local_executed,
-                thresholds=thresholds,
+                thresholds=mapping(thresholds)
+                if isinstance(thresholds, Mapping)
+                else {},
                 sidecar_path=str(sidecar),
                 sidecar_present=sidecar.exists(),
                 calibrated_from_hardware=False,
@@ -1127,7 +1126,9 @@ def run_operator_recovery_drills(
         }
         receipts.append(
             OperatorRecoveryDrillReceipt(
-                receipt_id=stable_id("unitree_operator_recovery_drill", receipt_payload),
+                receipt_id=stable_id(
+                    "unitree_operator_recovery_drill", receipt_payload
+                ),
                 scenario_id=scenario.scenario_id,
                 scenario_key=scenario.scenario_key,
                 local_drill_executed=True,
@@ -1207,7 +1208,10 @@ def build_phase4_unitree_runtime_evidence_bridge(
     drill_complete = (
         bool(scenarios)
         and bool(drill_receipts)
-        and all(receipt.local_drill_executed and receipt.passed for receipt in drill_receipts)
+        and all(
+            receipt.local_drill_executed and receipt.passed
+            for receipt in drill_receipts
+        )
         and not any(receipt.teleop_runtime_executed for receipt in drill_receipts)
     )
     complete = (
@@ -1281,8 +1285,7 @@ def save_phase4_unitree_runtime_evidence_bridge(
 ) -> dict[str, str]:
     output = Path(output_dir)
     paths = {
-        "report_path": output
-        / "phase4_unitree_runtime_evidence_bridge_report_v1.json",
+        "report_path": output / "phase4_unitree_runtime_evidence_bridge_report_v1.json",
         "ros2_runtime_readiness_receipts_path": output
         / "unitree_ros2_runtime_readiness_receipts_v1.jsonl",
         "mujoco_headless_step_receipts_path": output

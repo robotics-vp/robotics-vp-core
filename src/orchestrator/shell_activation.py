@@ -35,11 +35,11 @@ def _count_mapping(value: Any) -> Dict[str, int]:
                 counts[str(key)] = 0
         return counts
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        counts: Dict[str, int] = {}
+        sequence_counts: Dict[str, int] = {}
         for key in value:
             normalized = str(key)
-            counts[normalized] = counts.get(normalized, 0) + 1
-        return counts
+            sequence_counts[normalized] = sequence_counts.get(normalized, 0) + 1
+        return sequence_counts
     return {}
 
 
@@ -56,7 +56,9 @@ def normalize_execution_summary(summary: Optional[Mapping[str, Any]]) -> Dict[st
 
     report_count = int(payload.get("report_count", inferred_report_count) or 0)
     ready_flag = bool(payload.get("ready", False))
-    ready_count = int(payload.get("ready_count", 1 if ready_flag and report_count else 0) or 0)
+    ready_count = int(
+        payload.get("ready_count", 1 if ready_flag and report_count else 0) or 0
+    )
     if report_count <= 0 and (ready_flag or blocking_counts or satisfied_counts):
         report_count = 1
         ready_count = 1 if ready_flag else 0
@@ -94,15 +96,21 @@ class ActivationThresholds:
     def from_dict(cls, payload: Optional[Mapping[str, Any]]) -> "ActivationThresholds":
         payload = dict(payload or {})
         required = payload.get("required_satisfied_preconditions", {})
-        if isinstance(required, Sequence) and not isinstance(required, (str, bytes, bytearray)):
+        if isinstance(required, Sequence) and not isinstance(
+            required, (str, bytes, bytearray)
+        ):
             required = {str(value): 1 for value in required}
         return cls(
             min_report_count=int(payload.get("min_report_count", 0) or 0),
             min_ready_count=int(payload.get("min_ready_count", 0) or 0),
             max_blocked_count=int(payload.get("max_blocked_count", 0) or 0),
-            min_mean_readiness_score=float(payload.get("min_mean_readiness_score", 0.0) or 0.0),
+            min_mean_readiness_score=float(
+                payload.get("min_mean_readiness_score", 0.0) or 0.0
+            ),
             required_satisfied_preconditions=_count_mapping(required),
-            forbidden_blocking_preconditions=_string_list(payload.get("forbidden_blocking_preconditions")),
+            forbidden_blocking_preconditions=_string_list(
+                payload.get("forbidden_blocking_preconditions")
+            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -111,8 +119,12 @@ class ActivationThresholds:
             "min_ready_count": self.min_ready_count,
             "max_blocked_count": self.max_blocked_count,
             "min_mean_readiness_score": self.min_mean_readiness_score,
-            "required_satisfied_preconditions": dict(sorted(self.required_satisfied_preconditions.items())),
-            "forbidden_blocking_preconditions": list(self.forbidden_blocking_preconditions),
+            "required_satisfied_preconditions": dict(
+                sorted(self.required_satisfied_preconditions.items())
+            ),
+            "forbidden_blocking_preconditions": list(
+                self.forbidden_blocking_preconditions
+            ),
         }
 
 
@@ -145,14 +157,18 @@ class ShellActivationBacklogItem:
             title=str(payload.get("title", "")),
             current_mode=str(payload.get("current_mode", "advisory")),
             target_mode=str(payload.get("target_mode", "advisory")),
-            activation_decision=str(payload.get("activation_decision", "activate_shell")),
+            activation_decision=str(
+                payload.get("activation_decision", "activate_shell")
+            ),
             recommended_mode=str(payload.get("recommended_mode", "bounded_execution")),
             priority=str(payload.get("priority", "P1")),
             owner=str(payload.get("owner", "codex")),
             auto_activate=bool(payload.get("auto_activate", True)),
             future_training_only=bool(payload.get("future_training_only", False)),
             bounded_actions=_string_list(payload.get("bounded_actions")),
-            thresholds=ActivationThresholds.from_dict(payload.get("activation_thresholds")),
+            thresholds=ActivationThresholds.from_dict(
+                payload.get("activation_thresholds")
+            ),
             notes=str(payload.get("notes", "")),
             created_at=str(payload.get("created_at", "")),
             updated_at=str(payload.get("updated_at", "")),
@@ -257,8 +273,13 @@ def _pending_requirements(
         pending.append(f"ready_count<{thresholds.min_ready_count}")
     if summary.get("blocked_count", 0) > thresholds.max_blocked_count:
         pending.append(f"blocked_count>{thresholds.max_blocked_count}")
-    if float(summary.get("mean_readiness_score", 0.0) or 0.0) < thresholds.min_mean_readiness_score:
-        pending.append(f"mean_readiness_score<{thresholds.min_mean_readiness_score:.2f}")
+    if (
+        float(summary.get("mean_readiness_score", 0.0) or 0.0)
+        < thresholds.min_mean_readiness_score
+    ):
+        pending.append(
+            f"mean_readiness_score<{thresholds.min_mean_readiness_score:.2f}"
+        )
 
     satisfied_counts = _count_mapping(summary.get("satisfied_preconditions"))
     for key, expected in sorted(thresholds.required_satisfied_preconditions.items()):
@@ -402,9 +423,13 @@ def evaluate_shell_activation_backlog(
             "schema_version": "shell_activation_assessment_v1",
             "execution_summary": normalized,
             "activated": [a.to_dict() for a in assessments if a.state == "activated"],
-            "activation_ready": [a.to_dict() for a in assessments if a.state == "activation_ready"],
+            "activation_ready": [
+                a.to_dict() for a in assessments if a.state == "activation_ready"
+            ],
             "pending": [a.to_dict() for a in assessments if a.state == "advisory"],
-            "future_training": [a.to_dict() for a in assessments if a.state == "future_pending"],
+            "future_training": [
+                a.to_dict() for a in assessments if a.state == "future_pending"
+            ],
             "assessments": [a.to_dict() for a in assessments],
         }
     )

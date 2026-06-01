@@ -163,9 +163,7 @@ class ControllerBridgeTarget:
                 payload.get("unitree_sdk2_write_enabled", False)
             ),
             authority_class=str(
-                payload.get(
-                    "authority_class", "controller_bridge_target_contract_only"
-                )
+                payload.get("authority_class", "controller_bridge_target_contract_only")
             ),
             version=str(payload.get("version", CONTROLLER_BRIDGE_TARGET_VERSION)),
         )
@@ -300,9 +298,7 @@ class DownstreamControllerProposal:
             requested_cartesian_targets=mapping(
                 payload.get("requested_cartesian_targets")
             ),
-            requested_command_payload=mapping(
-                payload.get("requested_command_payload")
-            ),
+            requested_command_payload=mapping(payload.get("requested_command_payload")),
             source_replay_row_id=str(payload.get("source_replay_row_id", "")),
             observation_schema_ref=str(payload.get("observation_schema_ref", "")),
             action_schema_ref=str(payload.get("action_schema_ref", "")),
@@ -315,13 +311,9 @@ class DownstreamControllerProposal:
                 payload.get("hardware_dispatch_allowed", False)
             ),
             authority_class=str(
-                payload.get(
-                    "authority_class", "downstream_controller_proposal_only"
-                )
+                payload.get("authority_class", "downstream_controller_proposal_only")
             ),
-            version=str(
-                payload.get("version", DOWNSTREAM_CONTROLLER_PROPOSAL_VERSION)
-            ),
+            version=str(payload.get("version", DOWNSTREAM_CONTROLLER_PROPOSAL_VERSION)),
         )
 
 
@@ -774,7 +766,9 @@ class Phase4DownstreamControllerScaffoldReport:
                 **_denied_gates(),
                 **{
                     str(key): bool(value)
-                    for key, value in dict(payload.get("denied_gates", {}) or {}).items()
+                    for key, value in dict(
+                        payload.get("denied_gates", {}) or {}
+                    ).items()
                 },
             },
             key_blockers=strings(payload.get("key_blockers")),
@@ -786,7 +780,7 @@ class Phase4DownstreamControllerScaffoldReport:
 
 
 def build_controller_bridge_targets() -> list[ControllerBridgeTarget]:
-    specs = [
+    specs: list[dict[str, Any]] = [
         {
             "target_name": "unitree_ros2_lowcmd_joint_pd",
             "source_project": "unitreerobotics/unitree_ros2",
@@ -869,7 +863,7 @@ def build_controller_mode_specs(
         "operator_override",
         "e_stop_veto",
     ]
-    specs = [
+    specs: list[tuple[str, str, str, str, float, str, str]] = [
         (
             "hold_pose",
             "bipedal_whole_body",
@@ -926,7 +920,15 @@ def build_controller_mode_specs(
         ),
     ]
     modes: list[ControllerModeSpec] = []
-    for mode_name, posture, target_name, command_kind, rate, placement, fallback in specs:
+    for (
+        mode_name,
+        posture,
+        target_name,
+        command_kind,
+        rate,
+        placement,
+        fallback,
+    ) in specs:
         target = target_by_name[target_name]
         modes.append(
             ControllerModeSpec(
@@ -997,7 +999,7 @@ def build_downstream_controller_proposals(
     violating = dict(neutral)
     if joint_limits:
         violating[joint_limits[0].joint_name] = joint_limits[0].upper_rad + 0.75
-    specs = [
+    specs: list[dict[str, Any]] = [
         {
             "proposal_name": "hold_pose_neutral_dry_run",
             "mode_name": "hold_pose",
@@ -1215,9 +1217,7 @@ def build_controller_invocations(
     modes: list[ControllerModeSpec],
 ) -> list[ControllerInvocation]:
     frame_by_proposal = {frame.proposal_id: frame for frame in frames}
-    safety_by_proposal = {
-        receipt.proposal_id: receipt for receipt in safety_receipts
-    }
+    safety_by_proposal = {receipt.proposal_id: receipt for receipt in safety_receipts}
     mode_by_name = {mode.mode_name: mode for mode in modes}
     invocations: list[ControllerInvocation] = []
     for proposal in proposals:
@@ -1328,7 +1328,9 @@ def build_phase4_downstream_controller_scaffold(
         modes=modes,
     )
     controller_receipts = build_controller_receipts(invocations)
-    unitree_present = any("unitree_ros2" in target.target_name for target in bridge_targets)
+    unitree_present = any(
+        "unitree_ros2" in target.target_name for target in bridge_targets
+    )
     g1pilot_present = any("g1pilot" in target.target_name for target in bridge_targets)
     dry_run_present = (
         len(command_frames) == len(proposals)
@@ -1410,10 +1412,14 @@ def save_phase4_downstream_controller_scaffold(
         "controller_receipts_path": output / "controller_receipts_v1.jsonl",
     }
     write_json(paths["report_path"], report.to_dict())
-    write_jsonl(paths["bridge_targets_path"], [item.to_dict() for item in bridge_targets])
+    write_jsonl(
+        paths["bridge_targets_path"], [item.to_dict() for item in bridge_targets]
+    )
     write_jsonl(paths["modes_path"], [item.to_dict() for item in modes])
     write_jsonl(paths["proposals_path"], [item.to_dict() for item in proposals])
-    write_jsonl(paths["command_frames_path"], [item.to_dict() for item in command_frames])
+    write_jsonl(
+        paths["command_frames_path"], [item.to_dict() for item in command_frames]
+    )
     write_jsonl(
         paths["safety_receipts_path"],
         [item.to_dict() for item in safety_receipts],

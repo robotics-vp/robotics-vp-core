@@ -17,7 +17,7 @@ This is additive infrastructure - no changes to Phase B math or RL training loop
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, Literal, List, Optional, cast
 from src.evidence.preconditions import build_execution_work_order
 from src.orchestrator.orchestration_transformer import propose_orchestrated_plan
 from src.orchestrator.semantic_runtime_scorers import (
@@ -45,9 +45,21 @@ from datetime import datetime
 import json
 import uuid
 
+CoverageHelperMode = Literal["disabled", "auto", "required"]
+
+
+def _coverage_helper_mode(
+    value: Any, default: CoverageHelperMode = "auto"
+) -> CoverageHelperMode:
+    candidate = str(value or default)
+    if candidate in {"disabled", "auto", "required"}:
+        return cast(CoverageHelperMode, candidate)
+    return default
+
 
 class PipelineStage(Enum):
     """Stages in the learning pipeline."""
+
     OBJECTIVE_SOLVING = "objective_solving"  # Stage 1: Solve for optimal objectives
     DATA_COLLECTION = "data_collection"  # Stage 2: Collect/annotate data
     POLICY_TRAINING = "policy_training"  # Stage 3: Train policies (advisory)
@@ -57,6 +69,7 @@ class PipelineStage(Enum):
 
 class StageStatus(Enum):
     """Status of a pipeline stage."""
+
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -67,6 +80,7 @@ class StageStatus(Enum):
 @dataclass
 class StageResult:
     """Result from executing a pipeline stage."""
+
     stage: PipelineStage
     status: StageStatus
     started_at: str = ""
@@ -130,6 +144,7 @@ class PipelineIteration:
 
     Tracks progress through all stages and accumulates results.
     """
+
     iteration_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     iteration_number: int = 0
     started_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -275,6 +290,7 @@ class PipelineManager:
     bounded activation plans when explicit execution preconditions are satisfied.
     It does NOT directly execute training or modify Phase B.
     """
+
     pipeline_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = "Default Pipeline"
     description: str = ""
@@ -293,9 +309,13 @@ class PipelineManager:
 
     # Advisory recommendations
     global_recommendations: List[str] = field(default_factory=list)
-    _stage_policy_helper: Any = field(default=None, init=False, repr=False, compare=False)
+    _stage_policy_helper: Any = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
-    def start_new_iteration(self, config: Optional[Dict[str, Any]] = None) -> PipelineIteration:
+    def start_new_iteration(
+        self, config: Optional[Dict[str, Any]] = None
+    ) -> PipelineIteration:
         """Start a new pipeline iteration."""
         iteration_number = len(self.iterations) + 1
         iteration = PipelineIteration(
@@ -381,8 +401,12 @@ class PipelineManager:
         )
         context = {
             "execution_precondition_summary": self._execution_summary(),
-            "inferential_admission_summary": dict(payload.get("inferential_admission_summary", {}) or {}),
-            "control_plane_context": dict(payload.get("control_plane_context", {}) or {}),
+            "inferential_admission_summary": dict(
+                payload.get("inferential_admission_summary", {}) or {}
+            ),
+            "control_plane_context": dict(
+                payload.get("control_plane_context", {}) or {}
+            ),
             "work_order_count": len(work_orders),
             "canonical_metadata_count": len(metadata_receipts),
             "consumed_receipt_kinds": consumed_receipt_kinds,
@@ -406,7 +430,10 @@ class PipelineManager:
         return last_results
 
     def _resolve_stage_policy_helper(self):
-        helper_mode = str(self.config.get("pipeline_stage_policy_helper_mode", "disabled") or "disabled")
+        helper_mode = str(
+            self.config.get("pipeline_stage_policy_helper_mode", "disabled")
+            or "disabled"
+        )
         if helper_mode == "disabled":
             self._stage_policy_helper = None
             return None
@@ -447,7 +474,8 @@ class PipelineManager:
             if last_results.get("summary_metrics", {}).get("mpl_delta", 0) < 1.0
             else 0.0,
             "repair_execution_preconditions": 1.0
-            if execution_summary and int(execution_summary.get("blocked_count", 0) or 0) > 0
+            if execution_summary
+            and int(execution_summary.get("blocked_count", 0) or 0) > 0
             else 0.0,
         }
         feature_map = build_pipeline_stage_feature_map(
@@ -460,12 +488,17 @@ class PipelineManager:
             suggested_config=heuristic_flag_scores,
         )
         heuristic_flag_scores = heuristic_config_flag_scores(feature_map)
-        heuristic_stage_distribution = heuristic_stage_priority_distribution(feature_map)
+        heuristic_stage_distribution = heuristic_stage_priority_distribution(
+            feature_map
+        )
 
         execution_mode = "advisory"
         activation_work_order = None
         stage_activation_plan: Dict[str, Any] = {}
-        helper_mode = str(self.config.get("pipeline_stage_policy_helper_mode", "disabled") or "disabled")
+        helper_mode = str(
+            self.config.get("pipeline_stage_policy_helper_mode", "disabled")
+            or "disabled"
+        )
         policy_source = "heuristic_fallback"
         promotion_stage = "heuristic_fallback"
         stage_policy_trace: Dict[str, Any] = {
@@ -485,19 +518,34 @@ class PipelineManager:
                     heuristic_policy={
                         "stage_distribution": heuristic_stage_distribution,
                         "config_flag_scores": heuristic_flag_scores,
-                        "activation_label": 0.0 if activation is None or activation.get("state") != "activated" else 1.0,
+                        "activation_label": 0.0
+                        if activation is None or activation.get("state") != "activated"
+                        else 1.0,
                     },
                     helper_mode=helper_mode,
                 )
-                heuristic_stage_distribution = dict(helper_policy.get("stage_distribution", {}) or heuristic_stage_distribution)
-                heuristic_flag_scores = dict(helper_policy.get("config_flag_scores", {}) or heuristic_flag_scores)
-                policy_source = str(helper_policy.get("policy_source", "heuristic_fallback") or "heuristic_fallback")
-                promotion_stage = str(helper_policy.get("promotion_stage", "heuristic_fallback") or "heuristic_fallback")
+                heuristic_stage_distribution = dict(
+                    helper_policy.get("stage_distribution", {})
+                    or heuristic_stage_distribution
+                )
+                heuristic_flag_scores = dict(
+                    helper_policy.get("config_flag_scores", {}) or heuristic_flag_scores
+                )
+                policy_source = str(
+                    helper_policy.get("policy_source", "heuristic_fallback")
+                    or "heuristic_fallback"
+                )
+                promotion_stage = str(
+                    helper_policy.get("promotion_stage", "heuristic_fallback")
+                    or "heuristic_fallback"
+                )
                 stage_policy_trace.update(
                     {
                         "final_stage_distribution": dict(heuristic_stage_distribution),
                         "final_config_flags": dict(heuristic_flag_scores),
-                        "helper_trace": dict(helper_policy.get("helper_trace", {}) or {}),
+                        "helper_trace": dict(
+                            helper_policy.get("helper_trace", {}) or {}
+                        ),
                     }
                 )
         suggested_config = self.config.copy()
@@ -505,7 +553,9 @@ class PipelineManager:
             if float(heuristic_flag_scores.get(key, 0.0) or 0.0) >= 0.55:
                 suggested_config[key] = True
         if activation and activation.get("state") == "activated":
-            execution_mode = str(activation.get("target_mode", "preconditioned_iteration"))
+            execution_mode = str(
+                activation.get("target_mode", "preconditioned_iteration")
+            )
             ranked_stage_labels = [
                 label
                 for label, _ in sorted(
@@ -522,7 +572,9 @@ class PipelineManager:
                 "promotion_stage": promotion_stage,
                 "stages": [],
                 "repair_hints": list(activation.get("pending_requirements", []) or []),
-                "future_training_backlog": list(shell_activation.get("future_training", [])),
+                "future_training_backlog": list(
+                    shell_activation.get("future_training", [])
+                ),
                 "input_receipt_context": input_receipt_context,
             }
             for rank, stage_label in enumerate(ranked_stage_labels, start=1):
@@ -530,7 +582,9 @@ class PipelineManager:
                     {
                         "stage": stage_label,
                         "decision": "activate_stage",
-                        "priority_score": float(heuristic_stage_distribution.get(stage_label, 0.0)),
+                        "priority_score": float(
+                            heuristic_stage_distribution.get(stage_label, 0.0)
+                        ),
                         "priority_rank": rank,
                         "config": dict(suggested_config),
                         "policy_source": policy_source,
@@ -540,19 +594,34 @@ class PipelineManager:
                 order_type="shell_activation",
                 subject_id=self.pipeline_id,
                 subject_kind="pipeline_manager",
-                decision=str(activation.get("activation_decision", "activate_pipeline_iteration")),
-                priority=float(activation.get("readiness", {}).get("readiness_score", 1.0)),
-                recommended_mode=str(activation.get("recommended_mode", "bounded_execution")),
+                decision=str(
+                    activation.get("activation_decision", "activate_pipeline_iteration")
+                ),
+                priority=float(
+                    activation.get("readiness", {}).get("readiness_score", 1.0)
+                ),
+                recommended_mode=str(
+                    activation.get("recommended_mode", "bounded_execution")
+                ),
                 readiness=dict(activation.get("readiness", {}) or {}),
-                reasons=list(activation.get("bounded_actions", []) or ["activate_pipeline_iteration"]),
+                reasons=list(
+                    activation.get("bounded_actions", [])
+                    or ["activate_pipeline_iteration"]
+                ),
                 metadata={
                     "activation_id": activation.get("activation_id"),
                     "pipeline_id": self.pipeline_id,
-                    "future_training_backlog_count": len(shell_activation.get("future_training", [])),
+                    "future_training_backlog_count": len(
+                        shell_activation.get("future_training", [])
+                    ),
                     "policy_source": policy_source,
                     "promotion_stage": promotion_stage,
-                    "consumed_receipt_kinds": list(input_receipt_context.get("consumed_receipt_kinds", [])),
-                    "work_order_count": int(input_receipt_context.get("work_order_count", 0)),
+                    "consumed_receipt_kinds": list(
+                        input_receipt_context.get("consumed_receipt_kinds", [])
+                    ),
+                    "work_order_count": int(
+                        input_receipt_context.get("work_order_count", 0)
+                    ),
                 },
             ).to_dict()
 
@@ -567,7 +636,9 @@ class PipelineManager:
             "shell_activation": shell_activation,
             "stage_activation_plan": stage_activation_plan,
             "activation_work_order": activation_work_order,
-            "future_training_ready": bool(future_training and future_training.get("state") == "activation_ready"),
+            "future_training_ready": bool(
+                future_training and future_training.get("state") == "activation_ready"
+            ),
             "policy_source": policy_source,
             "promotion_stage": promotion_stage,
             "stage_policy_trace": stage_policy_trace,
@@ -581,10 +652,18 @@ class PipelineManager:
         """
         activation_plan = self.build_iteration_activation_plan()
         report: Dict[str, Any] = {
-            "receipt_kind": activation_plan.get("receipt_kind", "pipeline_stage_activation_receipt_v1"),
-            "authority_class": activation_plan.get("authority_class", "remain_advisory"),
-            "decision_scope": activation_plan.get("decision_scope", "pipeline_shell_coordination"),
-            "reward_math_mutation": bool(activation_plan.get("reward_math_mutation", False)),
+            "receipt_kind": activation_plan.get(
+                "receipt_kind", "pipeline_stage_activation_receipt_v1"
+            ),
+            "authority_class": activation_plan.get(
+                "authority_class", "remain_advisory"
+            ),
+            "decision_scope": activation_plan.get(
+                "decision_scope", "pipeline_shell_coordination"
+            ),
+            "reward_math_mutation": bool(
+                activation_plan.get("reward_math_mutation", False)
+            ),
             "pipeline_id": self.pipeline_id,
             "name": self.name,
             "total_iterations": len(self.iterations),
@@ -599,7 +678,9 @@ class PipelineManager:
             "stage_activation_plan": activation_plan.get("stage_activation_plan", {}),
             "activation_work_order": activation_plan.get("activation_work_order"),
             "policy_source": activation_plan.get("policy_source", "heuristic_fallback"),
-            "promotion_stage": activation_plan.get("promotion_stage", "heuristic_fallback"),
+            "promotion_stage": activation_plan.get(
+                "promotion_stage", "heuristic_fallback"
+            ),
             "stage_policy_trace": activation_plan.get("stage_policy_trace", {}),
         }
 
@@ -637,7 +718,9 @@ class PipelineManager:
             if all_warnings:
                 stage_stats["common_warnings"] = list(set(all_warnings))[:3]
             if all_recommendations:
-                stage_stats["common_recommendations"] = list(set(all_recommendations))[:3]
+                stage_stats["common_recommendations"] = list(set(all_recommendations))[
+                    :3
+                ]
 
             report["stage_summaries"][stage.value] = stage_stats
 
@@ -685,13 +768,23 @@ class PipelineManager:
         execution_summary = self._execution_summary()
 
         return {
-            "receipt_kind": activation_plan.get("receipt_kind", "pipeline_stage_activation_receipt_v1"),
-            "authority_class": activation_plan.get("authority_class", "remain_advisory"),
-            "decision_scope": activation_plan.get("decision_scope", "pipeline_shell_coordination"),
-            "reward_math_mutation": bool(activation_plan.get("reward_math_mutation", False)),
+            "receipt_kind": activation_plan.get(
+                "receipt_kind", "pipeline_stage_activation_receipt_v1"
+            ),
+            "authority_class": activation_plan.get(
+                "authority_class", "remain_advisory"
+            ),
+            "decision_scope": activation_plan.get(
+                "decision_scope", "pipeline_shell_coordination"
+            ),
+            "reward_math_mutation": bool(
+                activation_plan.get("reward_math_mutation", False)
+            ),
             "iteration_number": len(self.iterations) + 1,
             "last_iteration_summary": last_results,
-            "suggested_config": activation_plan.get("suggested_config", self.config.copy()),
+            "suggested_config": activation_plan.get(
+                "suggested_config", self.config.copy()
+            ),
             "expected_stages": [stage.value for stage in PipelineStage],
             "advisory_notes": self.global_recommendations,
             "execution_preconditions": execution_summary,
@@ -701,7 +794,9 @@ class PipelineManager:
             "stage_activation_plan": activation_plan.get("stage_activation_plan", {}),
             "activation_work_order": activation_plan.get("activation_work_order"),
             "policy_source": activation_plan.get("policy_source", "heuristic_fallback"),
-            "promotion_stage": activation_plan.get("promotion_stage", "heuristic_fallback"),
+            "promotion_stage": activation_plan.get(
+                "promotion_stage", "heuristic_fallback"
+            ),
             "stage_policy_trace": activation_plan.get("stage_policy_trace", {}),
         }
 
@@ -713,7 +808,9 @@ class PipelineManager:
             "description": self.description,
             "config": self.config,
             "iterations": [it.to_dict() for it in self.iterations],
-            "current_iteration": self.current_iteration.to_dict() if self.current_iteration else None,
+            "current_iteration": self.current_iteration.to_dict()
+            if self.current_iteration
+            else None,
             "metadata": self.metadata,
             "global_recommendations": self.global_recommendations,
             "progress": self.get_progress_metrics(),
@@ -894,7 +991,9 @@ def run_semantic_feedback_pass(
       2) SemanticOrchestrator exports SemanticMetrics
       3) Feed metrics back into Econ/Datapack facades for advisory tweaks
     """
-    econ_signals: Dict[str, Any] = getattr(econ, "compute_signals", lambda dps, episodes=None: {})([])
+    econ_signals: Dict[str, Any] = getattr(
+        econ, "compute_signals", lambda dps, episodes=None: {}
+    )([])
     datapack_signals: Dict[str, Any] = getattr(
         datapacks,
         "compute_signals",
@@ -958,20 +1057,32 @@ def run_pipeline_step_with_causal_order(
     datapack_signals = datapack_engine.compute_signals(datapacks or [], econ_signals)
 
     # STEP 2.5: Coverage loop feedback (OPTIONAL)
-    cov_result = None
+    cov_result: Any = None
     if semantic_coverage_config is not None:
         try:
             from src.orchestrator.coverage_loop import run_coverage_loop
 
             cov_rows = list(semantic_coverage_config.get("runtime_rows", []))
-            feedback_adapter_package = semantic_coverage_config.get("feedback_adapter_package")
+            feedback_adapter_package = semantic_coverage_config.get(
+                "feedback_adapter_package"
+            )
             if feedback_adapter_package is None:
-                feedback_adapter_package = semantic_coverage_config.get("feedback_adapter_runtime_package")
-            feedback_adapter_checkpoint = semantic_coverage_config.get("feedback_adapter_checkpoint")
-            semantic_wm_refiner_package = semantic_coverage_config.get("semantic_wm_refiner_package")
+                feedback_adapter_package = semantic_coverage_config.get(
+                    "feedback_adapter_runtime_package"
+                )
+            feedback_adapter_checkpoint = semantic_coverage_config.get(
+                "feedback_adapter_checkpoint"
+            )
+            semantic_wm_refiner_package = semantic_coverage_config.get(
+                "semantic_wm_refiner_package"
+            )
             if semantic_wm_refiner_package is None:
-                semantic_wm_refiner_package = semantic_coverage_config.get("semantic_wm_refiner_runtime_package")
-            semantic_wm_refiner_checkpoint = semantic_coverage_config.get("semantic_wm_refiner_checkpoint")
+                semantic_wm_refiner_package = semantic_coverage_config.get(
+                    "semantic_wm_refiner_runtime_package"
+                )
+            semantic_wm_refiner_checkpoint = semantic_coverage_config.get(
+                "semantic_wm_refiner_checkpoint"
+            )
             if feedback_adapter_package is None:
                 feedback_adapter_package = feedback_adapter_checkpoint
             if semantic_wm_refiner_package is None:
@@ -981,66 +1092,133 @@ def run_pipeline_step_with_causal_order(
                 econ_signals=econ_signals.to_dict(),
                 trust_state=semantic_coverage_config.get("trust_state"),
                 governance_traces=semantic_coverage_config.get("governance_traces"),
-                process_reward_summaries=semantic_coverage_config.get("process_reward_summaries"),
-                fill_outcome_records=semantic_coverage_config.get("fill_outcome_records"),
+                process_reward_summaries=semantic_coverage_config.get(
+                    "process_reward_summaries"
+                ),
+                fill_outcome_records=semantic_coverage_config.get(
+                    "fill_outcome_records"
+                ),
                 coverage_outcomes=semantic_coverage_config.get("coverage_outcomes"),
-                wm_validation_packets=semantic_coverage_config.get("wm_validation_packets"),
-                stage2_ontology_proposals=semantic_coverage_config.get("stage2_ontology_proposals"),
-                backend_health_reports=semantic_coverage_config.get("backend_health_reports"),
+                wm_validation_packets=semantic_coverage_config.get(
+                    "wm_validation_packets"
+                ),
+                stage2_ontology_proposals=semantic_coverage_config.get(
+                    "stage2_ontology_proposals"
+                ),
+                backend_health_reports=semantic_coverage_config.get(
+                    "backend_health_reports"
+                ),
                 env_names=semantic_coverage_config.get("env_names"),
                 hrl_skills=semantic_coverage_config.get("hrl_skills", True),
                 sima_sequences=semantic_coverage_config.get("sima_sequences"),
                 vla_hints=semantic_coverage_config.get("vla_hints"),
                 semantic_world_model=semantic_world_model,
                 feedback_adapter_package=feedback_adapter_package,
-                feedback_adapter_mode=str(semantic_coverage_config.get("feedback_adapter_mode", "auto")),
-                shadow_fit_feedback_adapter=bool(semantic_coverage_config.get("shadow_fit_feedback_adapter", True)),
+                feedback_adapter_mode=_coverage_helper_mode(
+                    semantic_coverage_config.get("feedback_adapter_mode", "auto")
+                ),
+                shadow_fit_feedback_adapter=bool(
+                    semantic_coverage_config.get("shadow_fit_feedback_adapter", True)
+                ),
                 semantic_wm_refiner_package=semantic_wm_refiner_package,
-                semantic_wm_refiner_mode=str(semantic_coverage_config.get("semantic_wm_refiner_mode", "auto")),
-                shadow_fit_semantic_wm_refiner=bool(semantic_coverage_config.get("shadow_fit_semantic_wm_refiner", True)),
-                economic_weight=float(semantic_coverage_config.get("economic_weight", 1.0)),
+                semantic_wm_refiner_mode=_coverage_helper_mode(
+                    semantic_coverage_config.get("semantic_wm_refiner_mode", "auto")
+                ),
+                shadow_fit_semantic_wm_refiner=bool(
+                    semantic_coverage_config.get("shadow_fit_semantic_wm_refiner", True)
+                ),
+                economic_weight=float(
+                    semantic_coverage_config.get("economic_weight", 1.0)
+                ),
                 trust_weight=float(semantic_coverage_config.get("trust_weight", 1.0)),
-                readiness_weight=float(semantic_coverage_config.get("readiness_weight", 1.0)),
-                sim_agenda_limit=int(semantic_coverage_config.get("sim_agenda_limit", 10)),
-                diffusion_limit=int(semantic_coverage_config.get("diffusion_limit", 10)),
-                write_artifacts=bool(semantic_coverage_config.get("write_artifacts", False)),
-                artifact_dir=str(semantic_coverage_config.get("artifact_dir", "data/coverage")),
+                readiness_weight=float(
+                    semantic_coverage_config.get("readiness_weight", 1.0)
+                ),
+                sim_agenda_limit=int(
+                    semantic_coverage_config.get("sim_agenda_limit", 10)
+                ),
+                diffusion_limit=int(
+                    semantic_coverage_config.get("diffusion_limit", 10)
+                ),
+                write_artifacts=bool(
+                    semantic_coverage_config.get("write_artifacts", False)
+                ),
+                artifact_dir=str(
+                    semantic_coverage_config.get("artifact_dir", "data/coverage")
+                ),
             )
             if orchestrator_context is not None:
-                semantic_metadata = dict(getattr(orchestrator_context, "semantic_metadata", {}) or {})
+                semantic_metadata = dict(
+                    getattr(orchestrator_context, "semantic_metadata", {}) or {}
+                )
                 semantic_metadata["semantic_coverage"] = {
                     "coverage_summary": dict(cov_result.coverage_summary),
                     "feedback_summary": dict(cov_result.feedback_summary),
                     "wm_validation_summary": dict(cov_result.wm_validation_summary),
-                    "trust_calibration_overlay": dict(cov_result.trust_calibration_overlay),
-                    "econ_calibration_overlay": dict(cov_result.econ_calibration_overlay),
-                    "graph_mutation_proposals": list(cov_result.graph_mutation_proposals),
-                    "graph_mutation_execution": dict(cov_result.graph_mutation_execution),
-                    "semantic_wm_correction_overlay": dict(cov_result.semantic_wm_correction_overlay),
-                    "semantic_wm_refiner_summary": dict(cov_result.semantic_wm_refiner_summary),
+                    "trust_calibration_overlay": dict(
+                        cov_result.trust_calibration_overlay
+                    ),
+                    "econ_calibration_overlay": dict(
+                        cov_result.econ_calibration_overlay
+                    ),
+                    "graph_mutation_proposals": list(
+                        cov_result.graph_mutation_proposals
+                    ),
+                    "graph_mutation_execution": dict(
+                        cov_result.graph_mutation_execution
+                    ),
+                    "semantic_wm_correction_overlay": dict(
+                        cov_result.semantic_wm_correction_overlay
+                    ),
+                    "semantic_wm_refiner_summary": dict(
+                        cov_result.semantic_wm_refiner_summary
+                    ),
                     "fill_decisions": list(cov_result.fill_decisions[:6]),
                 }
-                semantic_metadata["coverage_feedback_summary"] = dict(cov_result.feedback_summary)
-                semantic_metadata["wm_validation_summary"] = dict(cov_result.wm_validation_summary)
-                semantic_metadata["trust_calibration_overlay"] = dict(cov_result.trust_calibration_overlay)
-                semantic_metadata["econ_calibration_overlay"] = dict(cov_result.econ_calibration_overlay)
-                semantic_metadata["graph_mutation_proposals"] = list(cov_result.graph_mutation_proposals)
-                semantic_metadata["graph_mutation_execution"] = dict(cov_result.graph_mutation_execution)
-                semantic_metadata["semantic_wm_correction_overlay"] = dict(cov_result.semantic_wm_correction_overlay)
-                semantic_metadata["semantic_wm_refiner_summary"] = dict(cov_result.semantic_wm_refiner_summary)
+                semantic_metadata["coverage_feedback_summary"] = dict(
+                    cov_result.feedback_summary
+                )
+                semantic_metadata["wm_validation_summary"] = dict(
+                    cov_result.wm_validation_summary
+                )
+                semantic_metadata["trust_calibration_overlay"] = dict(
+                    cov_result.trust_calibration_overlay
+                )
+                semantic_metadata["econ_calibration_overlay"] = dict(
+                    cov_result.econ_calibration_overlay
+                )
+                semantic_metadata["graph_mutation_proposals"] = list(
+                    cov_result.graph_mutation_proposals
+                )
+                semantic_metadata["graph_mutation_execution"] = dict(
+                    cov_result.graph_mutation_execution
+                )
+                semantic_metadata["semantic_wm_correction_overlay"] = dict(
+                    cov_result.semantic_wm_correction_overlay
+                )
+                semantic_metadata["semantic_wm_refiner_summary"] = dict(
+                    cov_result.semantic_wm_refiner_summary
+                )
                 semantic_metadata["data_gaps"] = list(
                     dict.fromkeys(
                         list(semantic_metadata.get("data_gaps", []) or [])
-                        + list(cov_result.coverage_summary.get("top_missing_edges", []) or [])
+                        + list(
+                            cov_result.coverage_summary.get("top_missing_edges", [])
+                            or []
+                        )
                     )
                 )[:12]
                 orchestrator_context.semantic_metadata = semantic_metadata
                 if cov_result.corrected_semantic_world_model:
                     try:
-                        from src.world_model.semantic_world_model import SemanticWorldModelState
+                        from src.world_model.semantic_world_model import (
+                            SemanticWorldModelState,
+                        )
 
-                        orchestrator_context.semantic_world_model = SemanticWorldModelState.from_dict(
-                            cov_result.corrected_semantic_world_model
+                        orchestrator_context.semantic_world_model = (
+                            SemanticWorldModelState.from_dict(
+                                cov_result.corrected_semantic_world_model
+                            )
                         )
                     except Exception:
                         pass
@@ -1085,7 +1263,8 @@ def run_pipeline_step_with_causal_order(
         orchestration_result = propose_orchestrated_plan(
             model=orchestration_transformer,
             ctx=orchestrator_context,
-            instruction=orchestration_instruction or str(getattr(orchestrator_context, "task_type", "semantic_routing")),
+            instruction=orchestration_instruction
+            or str(getattr(orchestrator_context, "task_type", "semantic_routing")),
         )
 
     run_specs = {
@@ -1108,19 +1287,35 @@ def run_pipeline_step_with_causal_order(
         run_specs["meta_transformer_execution"] = {
             "execution_mode": getattr(meta_out, "execution_mode", "advisory"),
             "bounded_actions": list(getattr(meta_out, "bounded_actions", []) or []),
-            "execution_preconditions": dict(getattr(meta_out, "execution_preconditions", {}) or {}),
+            "execution_preconditions": dict(
+                getattr(meta_out, "execution_preconditions", {}) or {}
+            ),
             "execution_work_order": getattr(meta_out, "execution_work_order", None),
             "metadata": dict(getattr(meta_out, "metadata", {}) or {}),
         }
     if orchestration_result is not None:
         run_specs["orchestration_transformer_execution"] = {
-            "execution_mode": getattr(orchestration_result, "execution_mode", "advisory"),
-            "activation_plan": dict(getattr(orchestration_result, "activation_plan", {}) or {}),
-            "activation_work_order": getattr(orchestration_result, "activation_work_order", None),
-            "chosen_backend": getattr(orchestration_result, "chosen_backend", "pybullet"),
-            "objective_preset": getattr(orchestration_result, "objective_preset", "balanced"),
-            "energy_profile_weights": dict(getattr(orchestration_result, "energy_profile_weights", {}) or {}),
-            "data_mix_weights": dict(getattr(orchestration_result, "data_mix_weights", {}) or {}),
+            "execution_mode": getattr(
+                orchestration_result, "execution_mode", "advisory"
+            ),
+            "activation_plan": dict(
+                getattr(orchestration_result, "activation_plan", {}) or {}
+            ),
+            "activation_work_order": getattr(
+                orchestration_result, "activation_work_order", None
+            ),
+            "chosen_backend": getattr(
+                orchestration_result, "chosen_backend", "pybullet"
+            ),
+            "objective_preset": getattr(
+                orchestration_result, "objective_preset", "balanced"
+            ),
+            "energy_profile_weights": dict(
+                getattr(orchestration_result, "energy_profile_weights", {}) or {}
+            ),
+            "data_mix_weights": dict(
+                getattr(orchestration_result, "data_mix_weights", {}) or {}
+            ),
             "tool_sequence": [
                 str(step.tool_call.name)
                 for step in list(getattr(orchestration_result, "steps", []) or [])
@@ -1205,6 +1400,7 @@ def verify_dependency_hierarchy():
     # Check EconomicController doesn't import downstream
     try:
         import src.orchestrator.economic_controller as ec
+
         source = open(ec.__file__).read()
         if "SemanticOrchestrator" in source or "MetaTransformer" in source:
             results["violations"].append(
@@ -1217,11 +1413,10 @@ def verify_dependency_hierarchy():
     # Check DatapackEngine doesn't import downstream
     try:
         import src.orchestrator.datapack_engine as de
+
         source = open(de.__file__).read()
         if "SemanticOrchestrator" in source or "MetaTransformer" in source:
-            results["violations"].append(
-                "DatapackEngine imports downstream modules"
-            )
+            results["violations"].append("DatapackEngine imports downstream modules")
             results["hierarchy_valid"] = False
     except Exception:
         pass
@@ -1229,6 +1424,7 @@ def verify_dependency_hierarchy():
     # Check SemanticOrchestrator imports upstream
     try:
         import src.orchestrator.semantic_orchestrator as so
+
         source = open(so.__file__).read()
         if "EconomicController" not in source:
             results["violations"].append(

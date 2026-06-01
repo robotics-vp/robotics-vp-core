@@ -4,6 +4,7 @@ The semantic WM builder remains deterministic. Runtime validation packets
 flow into this module, which compiles a bounded correction overlay and
 applies it to a copy of the world model for downstream routing.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
@@ -42,7 +43,9 @@ class SemanticWMCorrectionOverlay:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "object_confidence_adjustments": dict(self.object_confidence_adjustments),
-            "relation_confidence_adjustments": dict(self.relation_confidence_adjustments),
+            "relation_confidence_adjustments": dict(
+                self.relation_confidence_adjustments
+            ),
             "capability_adjustments": dict(self.capability_adjustments),
             "topology_adjustments": dict(self.topology_adjustments),
             "meta_node_pressure": float(self.meta_node_pressure),
@@ -69,7 +72,9 @@ def compile_semantic_wm_correction_overlay(
         return SemanticWMCorrectionOverlay()
     if isinstance(semantic_world_model, Mapping):
         try:
-            semantic_world_model = SemanticWorldModelState.from_dict(semantic_world_model)
+            semantic_world_model = SemanticWorldModelState.from_dict(
+                semantic_world_model
+            )
         except Exception:
             return SemanticWMCorrectionOverlay()
     packets = _coerce_packets(wm_validation_packets)
@@ -87,14 +92,22 @@ def compile_semantic_wm_correction_overlay(
         max_error = max(max_error, error)
         target_refs.append(packet.target_ref)
         if packet.target_ref in object_ids:
-            object_adjustments[packet.target_ref] = object_adjustments.get(packet.target_ref, 0.0) - 0.35 * error
+            object_adjustments[packet.target_ref] = (
+                object_adjustments.get(packet.target_ref, 0.0) - 0.35 * error
+            )
         if packet.target_ref in relation_ids:
-            relation_adjustments[packet.target_ref] = relation_adjustments.get(packet.target_ref, 0.0) - 0.4 * error
+            relation_adjustments[packet.target_ref] = (
+                relation_adjustments.get(packet.target_ref, 0.0) - 0.4 * error
+            )
         relation_ref = str(packet.metadata.get("relation_id", ""))
         if relation_ref in relation_ids:
-            relation_adjustments[relation_ref] = relation_adjustments.get(relation_ref, 0.0) - 0.4 * error
+            relation_adjustments[relation_ref] = (
+                relation_adjustments.get(relation_ref, 0.0) - 0.4 * error
+            )
 
-    error_mean = sum(_safe_float(packet.error_score, 0.0) for packet in packets) / float(len(packets))
+    error_mean = sum(
+        _safe_float(packet.error_score, 0.0) for packet in packets
+    ) / float(len(packets))
     capability_adjustments = {
         "object_memory": -0.25 * error_mean,
         "affordance_grounding": -0.2 * error_mean,
@@ -128,7 +141,9 @@ def apply_semantic_wm_correction_overlay(
         return semantic_world_model
     if isinstance(semantic_world_model, Mapping):
         try:
-            semantic_world_model = SemanticWorldModelState.from_dict(semantic_world_model)
+            semantic_world_model = SemanticWorldModelState.from_dict(
+                semantic_world_model
+            )
         except Exception:
             return semantic_world_model
     if not overlay.metadata:
@@ -139,16 +154,24 @@ def apply_semantic_wm_correction_overlay(
         delta = overlay.object_confidence_adjustments.get(item.object_id, 0.0)
         if delta == 0.0 and item.label in overlay.object_confidence_adjustments:
             delta = overlay.object_confidence_adjustments[item.label]
-        corrected_objects.append(replace(item, confidence=_clip01(float(item.confidence) + float(delta))))
+        corrected_objects.append(
+            replace(item, confidence=_clip01(float(item.confidence) + float(delta)))
+        )
 
     corrected_relations: List[SemanticRelationState] = []
-    for item in semantic_world_model.relations:
-        delta = overlay.relation_confidence_adjustments.get(item.relation_id, 0.0)
-        corrected_relations.append(replace(item, confidence=_clip01(float(item.confidence) + float(delta))))
+    for relation in semantic_world_model.relations:
+        delta = overlay.relation_confidence_adjustments.get(relation.relation_id, 0.0)
+        corrected_relations.append(
+            replace(
+                relation, confidence=_clip01(float(relation.confidence) + float(delta))
+            )
+        )
 
     capability_scores = dict(semantic_world_model.capability_scores or {})
     for key, delta in overlay.capability_adjustments.items():
-        capability_scores[key] = _clip01(_safe_float(capability_scores.get(key, 0.0), 0.0) + _safe_float(delta, 0.0))
+        capability_scores[key] = _clip01(
+            _safe_float(capability_scores.get(key, 0.0), 0.0) + _safe_float(delta, 0.0)
+        )
 
     topology = dict(semantic_world_model.topology or {})
     topology.update(dict(overlay.topology_adjustments or {}))
@@ -163,12 +186,19 @@ def apply_semantic_wm_correction_overlay(
                 score=_clip01(0.3 + overlay.meta_node_pressure),
                 rationale="Runtime WM validation packets requested semantic state correction",
                 target_refs=list(overlay.target_refs[:8]),
-                suggested_actions=["request_wm_state_validation", "refresh_semantic_memory"],
+                suggested_actions=[
+                    "request_wm_state_validation",
+                    "refresh_semantic_memory",
+                ],
                 metadata={"overlay": overlay.to_dict()},
             )
         )
 
-    semantic_tags = list(dict.fromkeys(list(semantic_world_model.semantic_tags or []) + ["feedback:wm_correction"]))
+    semantic_tags = list(
+        dict.fromkeys(
+            list(semantic_world_model.semantic_tags or []) + ["feedback:wm_correction"]
+        )
+    )
     metadata = dict(semantic_world_model.metadata or {})
     metadata["semantic_wm_correction_overlay"] = overlay.to_dict()
     return replace(

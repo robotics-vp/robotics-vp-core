@@ -341,7 +341,13 @@ def run_stage1_bridge_readiness_sweep(
                     f"{video_id}:{key}: expected {expected[key]!r}, got {observed.get(key)!r}"
                 )
         blocker = expected.get("blocking_precondition")
-        if blocker and blocker not in observed["benchmark_blocking_preconditions"]:
+        raw_observed_blockers = observed.get("benchmark_blocking_preconditions", [])
+        observed_blockers = (
+            list(raw_observed_blockers)
+            if isinstance(raw_observed_blockers, (list, tuple, set))
+            else []
+        )
+        if blocker and blocker not in observed_blockers:
             scenario_failures.append(f"{video_id}: missing blocker {blocker}")
         if observed["rlds_benchmark_ready"] != observed["benchmark_ready"]:
             scenario_failures.append(f"{video_id}: RLDS benchmark gate drift")

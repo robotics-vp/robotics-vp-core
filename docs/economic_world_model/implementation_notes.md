@@ -1,5 +1,53 @@
 # Economic World Model Implementation Notes
 
+## 2026-06-01 - WM subsystem debt sweep and local receipt joins
+
+### What changed
+
+- Cleared the narrowed local WM-surface static gate:
+  - orchestration/semantic runtime mypy debt
+  - perception seam trainer/loss/data and neural seam typing
+  - Sim/Synth/Physics runtime target, bundle, parser, binding, and receipt payload typing
+  - embodiment/humanoid bipedal readiness, Unitree harness/bridge, morphology, and Phase 7 signal/eval typing
+  - Economic WM scaffold/provider/resource mypy cluster
+  - RunPod scripts used by local readiness assessment
+- Added `src/runpod/provider_readiness_ledger.py` plus `scripts/runpod/build_provider_readiness_ledger.py`.
+  - The ledger maps SAM/SAM3D, DINO/SigLIP, V-JEPA2, OpenVLA, Isaac/Unitree, and Holosoma to owner WM, RunPod profile, command, expected receipts, missing local prerequisites, unavailable mode, and external blockers.
+  - The generated report is ledger-only: `provider_execution_attempted=false`, `promotion_eligible=false`.
+- Added `src/world_model/economic_world_model/bio_neuro_receipt_join.py`.
+  - `check_bio_neuro_substrate.py` now writes `bio_neuro_receipt_join_report_v1.json` and `bio_neuro_receipt_join_rows_v1.jsonl`.
+  - The join rows map local bio/neuro receipts into queryable Economic WM consumption slots such as `efference_copy`, `active_sensing_value_of_information`, `regime_broadcast_conditioning`, and `anomaly_governance`.
+  - The join report records `phase7_abstraction_expanded=false`, `ready_for_training=false`, `provider_or_hardware_proof=false`, and `trained_model_proof=false`.
+
+### Boundary
+
+- G1 / bipedal whole-body remains the primary doctrine; stable-base mobile manipulation remains fallback/degraded mode, and fixed-base surfaces remain curriculum/regression sources.
+- No provider ran, no GPU training ran, no hardware or Unitree command path ran, no weights were written, no frozen Phase B math changed, no reward/trust/`w_econ`/lambda-controller math changed, and no artifact became promotion evidence.
+- Phase 7 remains a shadow/advisory consumer of lower-WM receipts. This pass only fixed typing and verified bounded adapters; it did not add new Phase 7 authority or abstractions.
+- Full repo static checks are still not clean. After the WM-surface pass, `python3 -m ruff check . --statistics` reports `266` legacy issues and `python3 -m mypy src/` reports `210` errors in `103` files. The narrowed WM-surface gate used for this debt sweep is clean.
+
+### Verification
+
+- Static gates:
+  - `python3 -m ruff check src/world_model src/training/perception_seam_data.py scripts/economic_world_model scripts/runpod tests/test_bio_neuro_substrate.py tests/test_humanoid_phase7_signal_adapters.py tests/test_humanoid_phase7_shadow_runtime_wiring.py` -> `All checks passed!`
+  - `python3 -m mypy --follow-imports=silent src/world_model src/training/perception_seam_data.py src/runpod scripts/economic_world_model scripts/runpod` -> `Success: no issues found in 235 source files`
+  - `python3 -m compileall src/ scripts/runpod scripts/economic_world_model -q`
+- Focused tests:
+  - semantic/perception seam set -> `98 passed`
+  - Sim/Synth/Physics set -> `20 passed`
+  - embodiment/humanoid/Phase 7 set -> `13 passed, 1 warning`
+  - Economic WM/provider ledger set -> `22 passed`
+  - RunPod launch/hygiene set -> `7 passed`
+- Local receipt/hygiene artifacts:
+  - `python3 scripts/economic_world_model/check_bio_neuro_substrate.py --output-dir artifacts/economic_world_model/bio_neuro_substrate` -> `receipt_join_status=ok_bio_neuro_receipts_joined`, `receipt_join_row_count=14`
+  - `python3 scripts/runpod/build_provider_readiness_ledger.py --output-dir artifacts/runpod/provider_readiness_ledger` -> `entry_count=6`, `status=blocked_local_runpod_prerequisites`
+  - `python3 scripts/economic_world_model/check_wm_surface_hygiene.py --output-dir artifacts/economic_world_model/wm_surface_hygiene_after_debt_sweep` -> `status=ok_wm_surface_hygiene_passed`
+  - `python3 scripts/economic_world_model/check_g1_primary_env_hygiene.py --output-dir artifacts/economic_world_model/g1_primary_env_hygiene_after_debt_sweep` -> `status=ok_g1_primary_env_hygiene_passed`
+  - `python3 scripts/economic_world_model/check_gpu_run_hygiene.py --manifest-dir configs/runpod/examples --output-dir artifacts/economic_world_model/gpu_run_hygiene_after_debt_sweep` -> `status=ok_gpu_run_hygiene_passed`
+  - `python3 scripts/economic_world_model/nightly_audit.py --output-json artifacts/economic_world_model/nightly_audit_after_debt_sweep.json --output-markdown artifacts/economic_world_model/nightly_audit_after_debt_sweep.md` -> `status=ok`
+- External prerequisite check:
+  - `./scripts/runpod/ensure_cli.sh` -> blocked locally because `runpodctl` is not installed and `RUNPOD_API_KEY` is unset; `RUNPOD_VOLUME_ID` is also unset.
+
 ## 2026-05-21 - Native lower-WM refs in Stage-1 and Economic rows
 
 ### What changed

@@ -272,7 +272,7 @@ def validate_economic_wm_provider_runbook_payload(
             sum(1 for template in runbook.templates if template.mode == "local")
         ),
     }
-    report_payload = {
+    report_payload: Dict[str, Any] = {
         "runbook_id": runbook.runbook_id,
         "status": "ok" if not errors else "failed",
         "safe_for_template_storage": not errors,

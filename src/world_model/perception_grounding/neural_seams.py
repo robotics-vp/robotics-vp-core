@@ -138,9 +138,7 @@ def encode_provider_features(
             kind_onehot[kind_idx] = 1.0
 
         avail = (
-            1.0
-            if provider_availability.get(pid, "unavailable") == "available"
-            else 0.0
+            1.0 if provider_availability.get(pid, "unavailable") == "available" else 0.0
         )
         truth = TRUTH_CLASS_SCORES.get(
             provider_truth_class.get(pid, "unavailable"), 0.1
@@ -210,7 +208,10 @@ class EvidenceFusionSeam(nn.Module):
 
         self.input_proj = nn.Linear(self.D_PROVIDER_RAW, d_model)
         self.self_attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True,
+            d_model,
+            n_heads,
+            dropout=dropout,
+            batch_first=True,
         )
         self.norm1 = nn.LayerNorm(d_model)
         self.ffn = nn.Sequential(
@@ -274,9 +275,9 @@ class EvidenceFusionSeam(nn.Module):
             pooled = (x * mask_f).sum(dim=1) / mask_f.sum(dim=1).clamp(min=1.0)
         else:
             pooled = x.mean(dim=1)
-        confidence = torch.sigmoid(
-            self.confidence_head(pooled)
-        ).squeeze(-1)  # (batch,) or scalar
+        confidence = torch.sigmoid(self.confidence_head(pooled)).squeeze(
+            -1
+        )  # (batch,) or scalar
 
         if unbatched:
             weights = weights.squeeze(0)
@@ -363,7 +364,10 @@ class SAMCalibrationSeam(nn.Module):
 
         self.input_proj = nn.Linear(d_mask, d_model)
         self.self_attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True,
+            d_model,
+            n_heads,
+            dropout=dropout,
+            batch_first=True,
         )
         self.norm1 = nn.LayerNorm(d_model)
         self.ffn = nn.Sequential(
@@ -418,12 +422,14 @@ class SAMCalibrationSeam(nn.Module):
             # Pad or truncate to expected d_mask
             if x.size(-1) < self.d_mask:
                 pad = torch.zeros(
-                    *x.shape[:-1], self.d_mask - x.size(-1),
-                    device=x.device, dtype=x.dtype
+                    *x.shape[:-1],
+                    self.d_mask - x.size(-1),
+                    device=x.device,
+                    dtype=x.dtype,
                 )
                 x = torch.cat([x, pad], dim=-1)
             else:
-                x = x[..., :self.d_mask]
+                x = x[..., : self.d_mask]
 
         x = self.input_proj(x)
 
@@ -687,10 +693,7 @@ class DepthMetricCalibrationSeam(nn.Module):
         }
 
         if unbatched:
-            result = {
-                k: v.squeeze(0) if v.dim() > 0 else v
-                for k, v in result.items()
-            }
+            result = {k: v.squeeze(0) if v.dim() > 0 else v for k, v in result.items()}
 
         return result
 
@@ -767,13 +770,19 @@ class VJEPATemporalAlignmentSeam(nn.Module):
 
         # Cross-attention: WM queries V-JEPA
         self.cross_attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True,
+            d_model,
+            n_heads,
+            dropout=dropout,
+            batch_first=True,
         )
         self.norm1 = nn.LayerNorm(d_model)
 
         # Self-attention among aligned tokens
         self.self_attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True,
+            d_model,
+            n_heads,
+            dropout=dropout,
+            batch_first=True,
         )
         self.norm2 = nn.LayerNorm(d_model)
 
@@ -830,10 +839,7 @@ class VJEPATemporalAlignmentSeam(nn.Module):
             if wm_mask is not None:
                 wm_mask = wm_mask.unsqueeze(0)
 
-        batch_size = vjepa_tokens.size(0)
         T = vjepa_tokens.size(1)
-        N_vjepa = vjepa_tokens.size(2)
-        N_obj = wm_object_tokens.size(1)
 
         # Project inputs
         vjepa_proj = self.vjepa_proj(vjepa_tokens)  # (batch, T, N_vjepa, d_model)
@@ -853,8 +859,8 @@ class VJEPATemporalAlignmentSeam(nn.Module):
             vjepa_proj = vjepa_proj + pos
 
         # Process each timestep
-        temporal_aligned = []
-        temporal_confidence = []
+        temporal_aligned_items: list[torch.Tensor] = []
+        temporal_confidence_items: list[torch.Tensor] = []
 
         for t in range(T):
             # V-JEPA keys/values for this timestep
@@ -862,9 +868,7 @@ class VJEPATemporalAlignmentSeam(nn.Module):
 
             # Cross-attention: WM objects query V-JEPA
             t_mask = vjepa_mask[:, t, :] if vjepa_mask is not None else None
-            cross_out, _ = self.cross_attn(
-                wm_query, kv, kv, key_padding_mask=t_mask
-            )
+            cross_out, _ = self.cross_attn(wm_query, kv, kv, key_padding_mask=t_mask)
             x = self.norm1(wm_query + cross_out)
 
             # Self-attention among objects
@@ -877,7 +881,7 @@ class VJEPATemporalAlignmentSeam(nn.Module):
 
             # Output projection
             aligned = self.output_proj(x)  # (batch, N_obj, d_out)
-            temporal_aligned.append(aligned)
+            temporal_aligned_items.append(aligned)
 
             # Timestep confidence from pooled features
             if wm_mask is not None:
@@ -886,13 +890,17 @@ class VJEPATemporalAlignmentSeam(nn.Module):
             else:
                 pooled = x.mean(dim=1)
             conf = self.confidence_head(pooled).squeeze(-1)
-            temporal_confidence.append(conf)
+            temporal_confidence_items.append(conf)
 
         # Stack outputs
-        temporal_aligned = torch.stack(temporal_aligned, dim=1)  # (batch, T, N_obj, d_out)
-        temporal_confidence = torch.stack(temporal_confidence, dim=1)  # (batch, T)
+        temporal_aligned = torch.stack(
+            temporal_aligned_items, dim=1
+        )  # (batch, T, N_obj, d_out)
+        temporal_confidence = torch.stack(
+            temporal_confidence_items, dim=1
+        )  # (batch, T)
 
-        result = {
+        result: Dict[str, torch.Tensor] = {
             "temporal_aligned": temporal_aligned,
             "temporal_confidence": temporal_confidence,
         }
@@ -1001,13 +1009,15 @@ class SceneGraphTransformerSeam(nn.Module):
         # Message-passing layers
         self.mp_layers = nn.ModuleList()
         for _ in range(n_layers):
-            self.mp_layers.append(_GraphMessagePassingLayer(
-                d_model=d_model,
-                d_edge=d_edge,
-                n_heads=n_heads,
-                d_ff=d_ff,
-                dropout=dropout,
-            ))
+            self.mp_layers.append(
+                _GraphMessagePassingLayer(
+                    d_model=d_model,
+                    d_edge=d_edge,
+                    n_heads=n_heads,
+                    d_ff=d_ff,
+                    dropout=dropout,
+                )
+            )
 
         # Output projections
         self.node_out_proj = nn.Linear(d_model, d_out)
@@ -1059,10 +1069,6 @@ class SceneGraphTransformerSeam(nn.Module):
             if node_mask is not None:
                 node_mask = node_mask.unsqueeze(0)
 
-        batch_size = node_features.size(0)
-        N = node_features.size(1)
-        E = edge_index.size(1)
-
         # Project nodes
         x = self.node_proj(node_features)  # (B, N, d_model)
 
@@ -1094,7 +1100,6 @@ class SceneGraphTransformerSeam(nn.Module):
 
         # Graph-level confidence from mean-pooled node features
         if node_mask is not None:
-            mask_f = (~node_mask).unsqueeze(-1).float()
             # node_mask True = valid, so we want to pool valid nodes
             valid_f = node_mask.unsqueeze(-1).float()
             pooled = (x * valid_f).sum(dim=1) / valid_f.sum(dim=1).clamp(min=1.0)
@@ -1336,7 +1341,7 @@ class _GraphMessagePassingLayer(nn.Module):
         Q_tgt = torch.gather(Q, 1, tgt_expand)  # (B, E, H, d_h)
 
         # Attention scores: dot product + edge bias
-        attn_logits = (Q_tgt * K_src).sum(dim=-1) / (d_h ** 0.5)  # (B, E, H)
+        attn_logits = (Q_tgt * K_src).sum(dim=-1) / (d_h**0.5)  # (B, E, H)
         edge_bias = self.edge_bias_proj(edge_embed)  # (B, E, H)
         attn_logits = attn_logits + edge_bias
 
@@ -1390,7 +1395,9 @@ def _edge_softmax(
 
     # For numerical stability, subtract max per target node
     tgt_expand = tgt_idx.unsqueeze(-1).expand(B, E, H)
-    max_logits = torch.full((B, N, H), float("-inf"), device=logits.device, dtype=logits.dtype)
+    max_logits = torch.full(
+        (B, N, H), float("-inf"), device=logits.device, dtype=logits.dtype
+    )
     max_logits.scatter_reduce_(1, tgt_expand, logits, reduce="amax", include_self=False)
     max_per_edge = torch.gather(max_logits, 1, tgt_expand)
     logits_shifted = logits - max_per_edge

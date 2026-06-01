@@ -8,11 +8,16 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from full_stack_training import (
+_REPO_ROOT_FOR_IMPORTS = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
+
+from scripts.runpod.full_stack_training import (
     DEFAULT_CONFIG_PATH,
     REPO_ROOT,
     discover_workspace_state,
@@ -35,15 +40,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bundle", type=str, default="auto", help="Bundle id or auto")
     parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
     parser.add_argument("--receipt-dir", type=str, default="")
-    parser.add_argument("--force", action="store_true", help="Run even when readiness gates are not satisfied")
-    parser.add_argument("--dry-run", action="store_true", help="Write the execution plan but do not run commands")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Run even when readiness gates are not satisfied",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Write the execution plan but do not run commands",
+    )
     parser.add_argument(
         "--teardown",
         choices=["auto", "stop", "remove", "none"],
         default="auto",
         help="When running inside Runpod and --self-teardown is enabled, choose how the pod should tear down itself.",
     )
-    parser.add_argument("--self-teardown", action="store_true", help="Attempt pod teardown at the end when inside Runpod")
+    parser.add_argument(
+        "--self-teardown",
+        action="store_true",
+        help="Attempt pod teardown at the end when inside Runpod",
+    )
     return parser.parse_args()
 
 
@@ -85,11 +102,19 @@ def _maybe_teardown(requested: str, receipt_dir: Path) -> Dict[str, Any]:
     if shutil.which("runpodctl") is None:
         result["error"] = "runpodctl not available inside container"
         return result
-    cmd = ["runpodctl", "stop", "pod", pod_id] if mode == "stop" else ["runpodctl", "remove", "pod", pod_id]
-    proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    cmd = (
+        ["runpodctl", "stop", "pod", pod_id]
+        if mode == "stop"
+        else ["runpodctl", "remove", "pod", pod_id]
+    )
+    proc = subprocess.run(
+        cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False
+    )
     teardown_log = receipt_dir / "teardown.log"
     teardown_log.write_text(
-        (proc.stdout or "") + ("\n" if proc.stdout and proc.stderr else "") + (proc.stderr or ""),
+        (proc.stdout or "")
+        + ("\n" if proc.stdout and proc.stderr else "")
+        + (proc.stderr or ""),
         encoding="utf-8",
     )
     result.update(
@@ -114,12 +139,17 @@ def main() -> None:
         raise SystemExit(f"No bundle found for selector: {args.bundle}")
     if not selected["manually_runnable"] and not args.force:
         raise SystemExit(
-            f"Bundle {selected['bundle_id']} is not runnable: " + "; ".join(selected["blockers"])
+            f"Bundle {selected['bundle_id']} is not runnable: "
+            + "; ".join(selected["blockers"])
         )
 
     started_at = datetime.now(timezone.utc).isoformat()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    receipt_dir = Path(args.receipt_dir) if args.receipt_dir else REPO_ROOT / "artifacts" / "runpod_training" / run_id
+    receipt_dir = (
+        Path(args.receipt_dir)
+        if args.receipt_dir
+        else REPO_ROOT / "artifacts" / "runpod_training" / run_id
+    )
     if not receipt_dir.is_absolute():
         receipt_dir = REPO_ROOT / receipt_dir
     receipt_dir.mkdir(parents=True, exist_ok=True)
@@ -135,7 +165,9 @@ def main() -> None:
         "dry_run": bool(args.dry_run),
         "force": bool(args.force),
     }
-    (receipt_dir / "execution_plan.json").write_text(json.dumps(plan, indent=2, sort_keys=True), encoding="utf-8")
+    (receipt_dir / "execution_plan.json").write_text(
+        json.dumps(plan, indent=2, sort_keys=True), encoding="utf-8"
+    )
 
     command_results: List[Dict[str, Any]] = []
     overall_passed = True
@@ -165,7 +197,9 @@ def main() -> None:
     if args.self_teardown:
         teardown_result = _maybe_teardown(args.teardown, receipt_dir)
     receipt["teardown"] = teardown_result
-    (receipt_dir / "execution_receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8")
+    (receipt_dir / "execution_receipt.json").write_text(
+        json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8"
+    )
     print(json.dumps(receipt, indent=2, sort_keys=True))
 
 

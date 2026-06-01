@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -38,10 +38,16 @@ from src.orchestrator.semantic_transformer_bridge import (
 )
 from src.utils.json_safe import to_json_safe
 
+torch: Any
+nn: Any
+Dataset: Any
+DataLoader: Any
+
 try:
     import torch
     import torch.nn as nn
     from torch.utils.data import Dataset, DataLoader
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -59,6 +65,7 @@ class MetaTransformerSample:
     - Ground truth authority (which stream should dominate)
     - Task context
     """
+
     sample_id: str
     vla_embedding: np.ndarray  # (vla_dim,) or (seq_len, vla_dim)
     dino_embedding: np.ndarray  # (dino_dim,) or (patch_len, dino_dim)
@@ -66,7 +73,9 @@ class MetaTransformerSample:
     authority_gt: str  # "vla" or "dino" - ground truth which to trust
     confidence_vla: float  # VLA confidence score
     confidence_dino: float  # DINO confidence score
-    task_context: Dict[str, Any]  # {"task_type": "drawer_open", "safety_critical": True}
+    task_context: Dict[
+        str, Any
+    ]  # {"task_type": "drawer_open", "safety_critical": True}
     objective_preset: str = "balanced"
     chosen_backend: str = "pybullet"
     energy_profile_weights: Dict[str, float] = field(default_factory=dict)
@@ -77,6 +86,7 @@ class MetaTransformerSample:
 @dataclass
 class MetaTransformerBatch:
     """Batched samples for training."""
+
     vla_embeddings: Any  # (B, vla_dim) or (B, seq_len, vla_dim)
     dino_embeddings: Any  # (B, dino_dim) or (B, patch_len, dino_dim)
     semantic_token_ids: Any  # (B, max_tokens)
@@ -96,11 +106,39 @@ class MetaTransformerBatch:
 # =============================================================================
 
 SEMANTIC_VOCAB = [
-    "<pad>", "<unk>", "drawer", "vase", "fragile", "grasp", "open", "close",
-    "avoid", "collision", "safe", "energy", "high_priority", "low_priority",
-    "careful", "fast", "slow", "robot_arm", "gripper", "handle", "surface",
-    "obstacle", "clearance", "retract", "approach", "skill", "primitive",
-    "affordance", "semantic", "visual", "action", "state", "goal",
+    "<pad>",
+    "<unk>",
+    "drawer",
+    "vase",
+    "fragile",
+    "grasp",
+    "open",
+    "close",
+    "avoid",
+    "collision",
+    "safe",
+    "energy",
+    "high_priority",
+    "low_priority",
+    "careful",
+    "fast",
+    "slow",
+    "robot_arm",
+    "gripper",
+    "handle",
+    "surface",
+    "obstacle",
+    "clearance",
+    "retract",
+    "approach",
+    "skill",
+    "primitive",
+    "affordance",
+    "semantic",
+    "visual",
+    "action",
+    "state",
+    "goal",
 ]
 SEMANTIC_TOKEN_TO_IDX = {tok: i for i, tok in enumerate(SEMANTIC_VOCAB)}
 IDX_TO_SEMANTIC_TOKEN = {i: tok for tok, i in SEMANTIC_TOKEN_TO_IDX.items()}
@@ -131,10 +169,13 @@ def decode_semantic_tokens(ids: np.ndarray) -> List[str]:
 # PyTorch Dataset
 # =============================================================================
 
-class MetaTransformerDataset(Dataset if TORCH_AVAILABLE else object):
+
+class MetaTransformerDataset(Dataset if TORCH_AVAILABLE else object):  # type: ignore[misc]
     """Dataset for meta-transformer training."""
 
-    def __init__(self, samples: List[MetaTransformerSample], max_semantic_tokens: int = 16):
+    def __init__(
+        self, samples: List[MetaTransformerSample], max_semantic_tokens: int = 16
+    ):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required for MetaTransformerDataset")
 
@@ -152,7 +193,9 @@ class MetaTransformerDataset(Dataset if TORCH_AVAILABLE else object):
         dino_emb = torch.from_numpy(sample.dino_embedding).float()
 
         # Encode semantic tokens
-        semantic_ids = encode_semantic_tokens(sample.semantic_tokens, self.max_semantic_tokens)
+        semantic_ids = encode_semantic_tokens(
+            sample.semantic_tokens, self.max_semantic_tokens
+        )
         semantic_ids = torch.from_numpy(semantic_ids).long()
 
         # Authority: 0 = dino, 1 = vla
@@ -194,18 +237,28 @@ def collate_meta_transformer_batch(batch):
         "vla_embeddings": torch.stack([s["vla_embedding"] for s in batch]),
         "dino_embeddings": torch.stack([s["dino_embedding"] for s in batch]),
         "semantic_token_ids": torch.stack([s["semantic_token_ids"] for s in batch]),
-        "authority_gt": torch.tensor([s["authority_gt"] for s in batch], dtype=torch.long),
-        "confidences_vla": torch.tensor([s["confidence_vla"] for s in batch], dtype=torch.float32),
-        "confidences_dino": torch.tensor([s["confidence_dino"] for s in batch], dtype=torch.float32),
+        "authority_gt": torch.tensor(
+            [s["authority_gt"] for s in batch], dtype=torch.long
+        ),
+        "confidences_vla": torch.tensor(
+            [s["confidence_vla"] for s in batch], dtype=torch.float32
+        ),
+        "confidences_dino": torch.tensor(
+            [s["confidence_dino"] for s in batch], dtype=torch.float32
+        ),
         "planning_context": torch.stack([s["planning_context"] for s in batch]),
         "objective_preset_gt": torch.tensor(
             [s["objective_preset_gt"] for s in batch],
             dtype=torch.long,
         ),
         "backend_gt": torch.tensor([s["backend_gt"] for s in batch], dtype=torch.long),
-        "energy_profile_targets": torch.stack([s["energy_profile_targets"] for s in batch]),
+        "energy_profile_targets": torch.stack(
+            [s["energy_profile_targets"] for s in batch]
+        ),
         "data_mix_targets": torch.stack([s["data_mix_targets"] for s in batch]),
-        "expected_delta_targets": torch.stack([s["expected_delta_targets"] for s in batch]),
+        "expected_delta_targets": torch.stack(
+            [s["expected_delta_targets"] for s in batch]
+        ),
     }
 
 
@@ -213,7 +266,8 @@ def collate_meta_transformer_batch(batch):
 # Meta-Transformer Model with Cross-Attention
 # =============================================================================
 
-class MetaTransformerNet(nn.Module if TORCH_AVAILABLE else object):
+
+class MetaTransformerNet(nn.Module if TORCH_AVAILABLE else object):  # type: ignore[misc]
     """
     Meta-transformer with cross-attention between VLA and DINO streams.
 
@@ -253,8 +307,12 @@ class MetaTransformerNet(nn.Module if TORCH_AVAILABLE else object):
         self.dino_proj = nn.Linear(dino_dim, hidden_dim)
 
         # Cross-attention layers
-        self.vla_to_dino_attn = nn.MultiheadAttention(hidden_dim, num_heads, batch_first=True)
-        self.dino_to_vla_attn = nn.MultiheadAttention(hidden_dim, num_heads, batch_first=True)
+        self.vla_to_dino_attn = nn.MultiheadAttention(
+            hidden_dim, num_heads, batch_first=True
+        )
+        self.dino_to_vla_attn = nn.MultiheadAttention(
+            hidden_dim, num_heads, batch_first=True
+        )
 
         # Fusion layers
         self.fusion_mlp = nn.Sequential(
@@ -322,7 +380,9 @@ class MetaTransformerNet(nn.Module if TORCH_AVAILABLE else object):
         dino_attended, _ = self.dino_to_vla_attn(dino_h, vla_h, vla_h)  # (B, 1, hidden)
 
         # Fuse
-        fused = torch.cat([vla_attended.squeeze(1), dino_attended.squeeze(1)], dim=-1)  # (B, hidden*2)
+        fused = torch.cat(
+            [vla_attended.squeeze(1), dino_attended.squeeze(1)], dim=-1
+        )  # (B, hidden*2)
         shared_repr = self.fusion_mlp(fused)  # (B, hidden)
 
         # Output heads
@@ -330,8 +390,12 @@ class MetaTransformerNet(nn.Module if TORCH_AVAILABLE else object):
         diffusion_cond = self.diffusion_head(shared_repr)  # (B, hidden)
 
         # Semantic token prediction: use learnable queries attending to shared repr
-        token_queries = self.token_queries.unsqueeze(0).expand(B, -1, -1)  # (B, max_tokens, hidden)
-        shared_repr_expanded = shared_repr.unsqueeze(1).expand(-1, self.max_output_tokens, -1)
+        token_queries = self.token_queries.unsqueeze(0).expand(
+            B, -1, -1
+        )  # (B, max_tokens, hidden)
+        shared_repr_expanded = shared_repr.unsqueeze(1).expand(
+            -1, self.max_output_tokens, -1
+        )
 
         # Simple: just project each query conditioned on shared repr
         token_input = token_queries + shared_repr_expanded
@@ -370,7 +434,8 @@ class MetaTransformerNet(nn.Module if TORCH_AVAILABLE else object):
 # Synthetic Data Generation
 # =============================================================================
 
-def generate_synthetic_meta_sample(seed: int = None) -> MetaTransformerSample:
+
+def generate_synthetic_meta_sample(seed: Optional[int] = None) -> MetaTransformerSample:
     """Generate synthetic sample for meta-transformer training."""
     if seed is not None:
         np.random.seed(seed)
@@ -383,14 +448,32 @@ def generate_synthetic_meta_sample(seed: int = None) -> MetaTransformerSample:
 
     # Random semantic tokens
     possible_tokens = [
-        "drawer", "vase", "fragile", "grasp", "open", "avoid", "collision",
-        "safe", "energy", "careful", "fast", "robot_arm", "gripper", "handle",
+        "drawer",
+        "vase",
+        "fragile",
+        "grasp",
+        "open",
+        "avoid",
+        "collision",
+        "safe",
+        "energy",
+        "careful",
+        "fast",
+        "robot_arm",
+        "gripper",
+        "handle",
     ]
     num_tokens = np.random.randint(3, 10)
-    semantic_tokens = list(np.random.choice(possible_tokens, size=num_tokens, replace=False))
+    semantic_tokens = list(
+        np.random.choice(possible_tokens, size=num_tokens, replace=False)
+    )
 
     # Determine authority based on tokens
-    if "fragile" in semantic_tokens or "safe" in semantic_tokens or "avoid" in semantic_tokens:
+    if (
+        "fragile" in semantic_tokens
+        or "safe" in semantic_tokens
+        or "avoid" in semantic_tokens
+    ):
         authority_gt = "dino"  # Semantic reasoning is critical
         confidence_dino = np.random.uniform(0.7, 1.0)
         confidence_vla = np.random.uniform(0.3, 0.7)
@@ -411,8 +494,12 @@ def generate_synthetic_meta_sample(seed: int = None) -> MetaTransformerSample:
         "present": True,
         "task_id": task_type,
         "objective_preset": "balanced",
-        "capability_mean": float(np.clip((confidence_vla + confidence_dino) / 2.0, 0.0, 1.0)),
-        "capability_max": float(np.clip(max(confidence_vla, confidence_dino), 0.0, 1.0)),
+        "capability_mean": float(
+            np.clip((confidence_vla + confidence_dino) / 2.0, 0.0, 1.0)
+        ),
+        "capability_max": float(
+            np.clip(max(confidence_vla, confidence_dino), 0.0, 1.0)
+        ),
         "object_count": 2 if task_type != "pick_place" else 3,
         "relation_density": 0.4 if "handle" in semantic_tokens else 0.2,
         "grounded_track_object_count": 2 if safety_critical else 1,
@@ -423,7 +510,9 @@ def generate_synthetic_meta_sample(seed: int = None) -> MetaTransformerSample:
         "risk_reasoning": 0.75 if safety_critical else 0.35,
         "object_memory": 0.65 if "drawer" in semantic_tokens else 0.45,
         "affordance_grounding": 0.72 if "grasp" in semantic_tokens else 0.48,
-        "fusion_bridge": 0.68 if confidence_vla >= 0.55 and confidence_dino >= 0.55 else 0.38,
+        "fusion_bridge": 0.68
+        if confidence_vla >= 0.55 and confidence_dino >= 0.55
+        else 0.38,
         "stage2_bridge": 0.55 if "open" in semantic_tokens else 0.32,
         "meta_node_orchestration": 0.74 if safety_critical else 0.52,
         "risk_triage_score": 0.82 if safety_critical else 0.12,
@@ -441,15 +530,23 @@ def generate_synthetic_meta_sample(seed: int = None) -> MetaTransformerSample:
         "graph_mutation_applied_count": 1 if task_type == "pick_place" else 0,
         "graph_mutation_blocked_count": 0,
         "wm_correction_pressure": 0.27 if safety_critical else 0.08,
-        "top_meta_nodes": ["risk_triage", "semantic_memory_refresh"] if safety_critical else ["efficiency_router"],
+        "top_meta_nodes": ["risk_triage", "semantic_memory_refresh"]
+        if safety_critical
+        else ["efficiency_router"],
     }
     econ_signals = {
         "mpl_urgency": float(np.clip(1.0 - confidence_dino, 0.0, 1.0)),
-        "error_urgency": float(np.clip(1.0 - max(confidence_vla, confidence_dino), 0.0, 1.0)),
-        "energy_urgency": float(np.clip(semantic_summary["efficiency_router_score"], 0.0, 1.0)),
+        "error_urgency": float(
+            np.clip(1.0 - max(confidence_vla, confidence_dino), 0.0, 1.0)
+        ),
+        "energy_urgency": float(
+            np.clip(semantic_summary["efficiency_router_score"], 0.0, 1.0)
+        ),
     }
     datapack_signals = {
-        "data_coverage_score": float(np.clip(0.35 + (0.25 if authority_gt == "dino" else 0.15), 0.0, 1.0)),
+        "data_coverage_score": float(
+            np.clip(0.35 + (0.25 if authority_gt == "dino" else 0.15), 0.0, 1.0)
+        ),
         "embedding_diversity": float(np.clip(np.std(dino_embedding) * 4.0, 0.0, 1.0)),
         "vla_annotation_fraction": 1.0 if authority_gt == "vla" else 0.55,
         "guidance_annotation_fraction": 0.8 if safety_critical else 0.45,
@@ -526,7 +623,9 @@ def generate_synthetic_meta_sample(seed: int = None) -> MetaTransformerSample:
     )
 
 
-def generate_meta_transformer_dataset(num_samples: int = 1000) -> List[MetaTransformerSample]:
+def generate_meta_transformer_dataset(
+    num_samples: int = 1000,
+) -> List[MetaTransformerSample]:
     """Generate synthetic dataset for meta-transformer."""
     samples = []
     for i in range(num_samples):
@@ -553,7 +652,9 @@ def sample_to_dict(sample: MetaTransformerSample) -> Dict[str, Any]:
     }
 
 
-def save_meta_transformer_dataset(samples: List[MetaTransformerSample], path: str) -> None:
+def save_meta_transformer_dataset(
+    samples: List[MetaTransformerSample], path: str
+) -> None:
     """Save dataset to JSON."""
     data = [sample_to_dict(s) for s in samples]
     os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
@@ -578,11 +679,26 @@ def load_meta_transformer_dataset(path: str) -> List[MetaTransformerSample]:
             confidence_vla=item["confidence_vla"],
             confidence_dino=item["confidence_dino"],
             task_context=item["task_context"],
-            objective_preset=item.get("objective_preset", item.get("task_context", {}).get("objective_preset", "balanced")),
-            chosen_backend=item.get("chosen_backend", item.get("task_context", {}).get("chosen_backend", "pybullet")),
-            energy_profile_weights=item.get("energy_profile_weights", item.get("task_context", {}).get("energy_profile_weights", {})),
-            data_mix_weights=item.get("data_mix_weights", item.get("task_context", {}).get("data_mix_weights", {})),
-            expected_deltas=item.get("expected_deltas", item.get("task_context", {}).get("expected_deltas", {})),
+            objective_preset=item.get(
+                "objective_preset",
+                item.get("task_context", {}).get("objective_preset", "balanced"),
+            ),
+            chosen_backend=item.get(
+                "chosen_backend",
+                item.get("task_context", {}).get("chosen_backend", "pybullet"),
+            ),
+            energy_profile_weights=item.get(
+                "energy_profile_weights",
+                item.get("task_context", {}).get("energy_profile_weights", {}),
+            ),
+            data_mix_weights=item.get(
+                "data_mix_weights",
+                item.get("task_context", {}).get("data_mix_weights", {}),
+            ),
+            expected_deltas=item.get(
+                "expected_deltas",
+                item.get("task_context", {}).get("expected_deltas", {}),
+            ),
         )
         samples.append(sample)
     return samples
@@ -591,6 +707,7 @@ def load_meta_transformer_dataset(path: str) -> List[MetaTransformerSample]:
 # =============================================================================
 # Training Loop (Placeholder)
 # =============================================================================
+
 
 def forward_pass_test(
     model: MetaTransformerNet,
@@ -628,7 +745,9 @@ def forward_pass_test(
         "authority_probs": outputs["authority_logits"].softmax(-1).mean(0).tolist(),
     }
     if include_shared_repr:
-        result["shared_repr"] = to_json_safe(outputs["shared_repr"], include_tensors=True)
+        result["shared_repr"] = to_json_safe(
+            outputs["shared_repr"], include_tensors=True
+        )
     return result
 
 
@@ -729,14 +848,20 @@ def evaluate_meta_transformer(
 
             # Authority accuracy
             pred_authority = outputs["authority_logits"].argmax(-1)
-            metrics["authority_acc"] += (pred_authority == batch["authority_gt"]).sum().item()
+            metrics["authority_acc"] += (
+                (pred_authority == batch["authority_gt"]).sum().item()
+            )
 
             # First token accuracy
             pred_first_token = outputs["token_logits"][:, 0, :].argmax(-1)
-            metrics["first_token_acc"] += (pred_first_token == batch["semantic_token_ids"][:, 0]).sum().item()
+            metrics["first_token_acc"] += (
+                (pred_first_token == batch["semantic_token_ids"][:, 0]).sum().item()
+            )
 
             pred_objective = outputs["objective_logits"].argmax(-1)
-            metrics["objective_acc"] += (pred_objective == batch["objective_preset_gt"]).sum().item()
+            metrics["objective_acc"] += (
+                (pred_objective == batch["objective_preset_gt"]).sum().item()
+            )
 
             pred_backend = outputs["backend_logits"].argmax(-1)
             metrics["backend_acc"] += (pred_backend == batch["backend_gt"]).sum().item()

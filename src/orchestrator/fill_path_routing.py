@@ -77,7 +77,9 @@ def _ranking_trace(item: Any) -> dict[str, Any]:
     if hasattr(item, "ranking_score"):
         return {
             "agenda_ranking_score": _safe_float(getattr(item, "ranking_score", 0.0)),
-            "agenda_heuristic_score": _safe_float(getattr(item, "heuristic_score", 0.0)),
+            "agenda_heuristic_score": _safe_float(
+                getattr(item, "heuristic_score", 0.0)
+            ),
             "agenda_heuristic_score_norm": _safe_float(
                 getattr(item, "heuristic_score_norm", 0.0)
             ),
@@ -85,7 +87,9 @@ def _ranking_trace(item: Any) -> dict[str, Any]:
             "agenda_learned_score_norm": _safe_float(
                 getattr(item, "learned_score_norm", 0.0)
             ),
-            "agenda_ranking_policy": str(getattr(item, "ranking_policy", "heuristic_only")),
+            "agenda_ranking_policy": str(
+                getattr(item, "ranking_policy", "heuristic_only")
+            ),
             "agenda_helper_status": dict(getattr(item, "helper_status", {}) or {}),
         }
     return {}
@@ -105,11 +109,15 @@ def _heuristic_decision(
     if bool(metadata.get("governance_blocked", False)):
         fill_method = "blocked"
         confidence = 0.95
-        rationale = "Governance trace blocked this edge; keep as meta-node review target"
+        rationale = (
+            "Governance trace blocked this edge; keep as meta-node review target"
+        )
     elif readiness < readiness_threshold:
         fill_method = "blocked"
         confidence = 0.3
-        rationale = f"Readiness {readiness:.2f} < {readiness_threshold}: prerequisites not met"
+        rationale = (
+            f"Readiness {readiness:.2f} < {readiness_threshold}: prerequisites not met"
+        )
     elif trust < trust_threshold:
         fill_method = "real_sim"
         confidence = 0.7
@@ -117,7 +125,9 @@ def _heuristic_decision(
     elif econ > 0.7:
         fill_method = "diffusion"
         confidence = 0.8
-        rationale = f"Economic priority {econ:.2f} > 0.7: diffusion for fast gap filling"
+        rationale = (
+            f"Economic priority {econ:.2f} > 0.7: diffusion for fast gap filling"
+        )
     elif econ > 0.3:
         fill_method = "synthetic_branch"
         confidence = 0.6
@@ -129,10 +139,15 @@ def _heuristic_decision(
 
     scores = {method: 0.05 for method in FILL_METHODS}
     scores[fill_method] = 1.0
-    scores["real_sim"] += _clip01((trust_threshold - trust) / max(trust_threshold, 1e-6)) * 0.6
+    scores["real_sim"] += (
+        _clip01((trust_threshold - trust) / max(trust_threshold, 1e-6)) * 0.6
+    )
     scores["diffusion"] += _clip01(econ) * 0.45
     scores["synthetic_branch"] += _clip01(econ * max(readiness, 0.1)) * 0.35
-    scores["blocked"] += _clip01((readiness_threshold - readiness) / max(readiness_threshold, 1e-6)) * 0.75
+    scores["blocked"] += (
+        _clip01((readiness_threshold - readiness) / max(readiness_threshold, 1e-6))
+        * 0.75
+    )
     return fill_method, confidence, rationale, _normalize_scores(scores)
 
 
@@ -159,14 +174,18 @@ def route_fill_paths(
     fill_path_policy: Any = None,
     fill_path_policy_mode: Literal["disabled", "auto", "required"] = "auto",
 ) -> tuple[list[FillPathRoutingDecision], Dict[str, Any]]:
-    helper, helper_status = resolve_fill_path_helper(fill_path_policy, mode=fill_path_policy_mode)
+    helper, helper_status = resolve_fill_path_helper(
+        fill_path_policy, mode=fill_path_policy_mode
+    )
     gaps = [_gap_from_ranked_item(item) for item in ranked_gaps]
     if helper is None:
-        decisions = []
+        heuristic_decisions: list[FillPathRoutingDecision] = []
         for item, gap in zip(ranked_gaps, gaps):
-            fill_method, confidence, rationale, heuristic_scores = _heuristic_decision(gap)
+            fill_method, confidence, rationale, heuristic_scores = _heuristic_decision(
+                gap
+            )
             edge_key = f"{gap.source_id} -> {gap.target_id}"
-            decisions.append(
+            heuristic_decisions.append(
                 FillPathRoutingDecision(
                     edge_key=edge_key,
                     fill_method=fill_method,
@@ -175,9 +194,13 @@ def route_fill_paths(
                     coverage_gap_score=_safe_float(
                         getattr(item, "ranking_score", None)
                         if hasattr(item, "ranking_score")
-                        else gap.gap_score() if callable(getattr(gap, "gap_score", None)) else 0.0
+                        else gap.gap_score()
+                        if callable(getattr(gap, "gap_score", None))
+                        else 0.0
                     ),
-                    economic_priority=_safe_float(getattr(gap, "economic_priority", 0.0)),
+                    economic_priority=_safe_float(
+                        getattr(gap, "economic_priority", 0.0)
+                    ),
                     trust_priority=_safe_float(getattr(gap, "trust_priority", 0.0)),
                     readiness=_safe_float(getattr(gap, "promotion_readiness", 0.0)),
                     routing_policy="heuristic_only",
@@ -193,10 +216,12 @@ def route_fill_paths(
                     },
                 )
             )
-        return decisions, dict(helper_status)
+        return heuristic_decisions, dict(helper_status)
 
     try:
-        learned_predictions = load_fill_path_helper_predictions(helper, gaps, coverage_graph)
+        learned_predictions = load_fill_path_helper_predictions(
+            helper, gaps, coverage_graph
+        )
     except Exception as exc:
         fallback_status = {
             **dict(helper_status),
@@ -205,11 +230,13 @@ def route_fill_paths(
             "benchmark_gate_ready": False,
             "error": str(exc),
         }
-        decisions = []
+        fallback_decisions: list[FillPathRoutingDecision] = []
         for item, gap in zip(ranked_gaps, gaps):
-            fill_method, confidence, rationale, heuristic_scores = _heuristic_decision(gap)
+            fill_method, confidence, rationale, heuristic_scores = _heuristic_decision(
+                gap
+            )
             edge_key = f"{gap.source_id} -> {gap.target_id}"
-            decisions.append(
+            fallback_decisions.append(
                 FillPathRoutingDecision(
                     edge_key=edge_key,
                     fill_method=fill_method,
@@ -218,9 +245,13 @@ def route_fill_paths(
                     coverage_gap_score=_safe_float(
                         getattr(item, "ranking_score", None)
                         if hasattr(item, "ranking_score")
-                        else gap.gap_score() if callable(getattr(gap, "gap_score", None)) else 0.0
+                        else gap.gap_score()
+                        if callable(getattr(gap, "gap_score", None))
+                        else 0.0
                     ),
-                    economic_priority=_safe_float(getattr(gap, "economic_priority", 0.0)),
+                    economic_priority=_safe_float(
+                        getattr(gap, "economic_priority", 0.0)
+                    ),
                     trust_priority=_safe_float(getattr(gap, "trust_priority", 0.0)),
                     readiness=_safe_float(getattr(gap, "promotion_readiness", 0.0)),
                     routing_policy="heuristic_only",
@@ -236,19 +267,30 @@ def route_fill_paths(
                     },
                 )
             )
-        return decisions, fallback_status
+        return fallback_decisions, fallback_status
     decisions: list[FillPathRoutingDecision] = []
     effective_helper_status = dict(helper_status)
     for item, gap, learned in zip(ranked_gaps, gaps, learned_predictions):
-        heuristic_fill_method, heuristic_confidence, heuristic_rationale, heuristic_scores = _heuristic_decision(gap)
-        learned_scores = _normalize_scores(dict(learned.get("method_probabilities", {}) or {}))
+        (
+            heuristic_fill_method,
+            heuristic_confidence,
+            heuristic_rationale,
+            heuristic_scores,
+        ) = _heuristic_decision(gap)
+        learned_scores = _normalize_scores(
+            dict(learned.get("method_probabilities", {}) or {})
+        )
         helper_weight = _helper_weight(helper_status, gap)
         blended_scores = {
-            method: ((1.0 - helper_weight) * heuristic_scores[method]) + (helper_weight * learned_scores[method])
+            method: ((1.0 - helper_weight) * heuristic_scores[method])
+            + (helper_weight * learned_scores[method])
             for method in FILL_METHODS
         }
         metadata = dict(getattr(gap, "metadata", {}) or {})
-        if bool(metadata.get("governance_blocked", False)) or _safe_float(getattr(gap, "promotion_readiness", 0.0)) < 0.5:
+        if (
+            bool(metadata.get("governance_blocked", False))
+            or _safe_float(getattr(gap, "promotion_readiness", 0.0)) < 0.5
+        ):
             fill_method = heuristic_fill_method
             confidence = heuristic_confidence
             rationale = heuristic_rationale
@@ -256,7 +298,7 @@ def route_fill_paths(
             helper_weight = 0.0
             routing_policy = "heuristic_hard_gate"
         else:
-            fill_method = max(blended_scores, key=blended_scores.get)
+            fill_method = max(blended_scores, key=lambda method: blended_scores[method])
             confidence = float(blended_scores[fill_method])
             routing_policy = "heuristic_plus_learned_fill_path_policy"
             rationale = (
@@ -273,7 +315,9 @@ def route_fill_paths(
                 coverage_gap_score=_safe_float(
                     getattr(item, "ranking_score", None)
                     if hasattr(item, "ranking_score")
-                    else gap.gap_score() if callable(getattr(gap, "gap_score", None)) else 0.0
+                    else gap.gap_score()
+                    if callable(getattr(gap, "gap_score", None))
+                    else 0.0
                 ),
                 economic_priority=_safe_float(getattr(gap, "economic_priority", 0.0)),
                 trust_priority=_safe_float(getattr(gap, "trust_priority", 0.0)),

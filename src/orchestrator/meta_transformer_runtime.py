@@ -26,6 +26,8 @@ from src.orchestrator.meta_transformer_training import (
     decode_semantic_tokens,
 )
 
+torch: Any
+
 if TORCH_AVAILABLE:  # pragma: no branch
     import torch
 else:  # pragma: no cover - handled by explicit errors in the loader
@@ -73,7 +75,9 @@ def _mapping(value: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     return dict(value or {})
 
 
-def load_meta_transformer_runtime_package(path: str | Path) -> MetaTransformerRuntimePackage:
+def load_meta_transformer_runtime_package(
+    path: str | Path,
+) -> MetaTransformerRuntimePackage:
     package_path = Path(path)
     payload = json.loads(package_path.read_text(encoding="utf-8"))
     return MetaTransformerRuntimePackage(
@@ -85,7 +89,9 @@ def load_meta_transformer_runtime_package(path: str | Path) -> MetaTransformerRu
         benchmark_gate=_mapping(payload.get("benchmark_gate")),
         execution_preconditions=_mapping(payload.get("execution_preconditions")),
         inference_contract=_mapping(payload.get("inference_contract")),
-        promotion_stage=str(payload.get("promotion_stage", "shadow_candidate") or "shadow_candidate"),
+        promotion_stage=str(
+            payload.get("promotion_stage", "shadow_candidate") or "shadow_candidate"
+        ),
         metadata=_mapping(payload.get("metadata")),
     )
 
@@ -95,21 +101,35 @@ class LoadedMetaTransformerRuntime:
 
     def __init__(self, package: MetaTransformerRuntimePackage) -> None:
         if not TORCH_AVAILABLE:
-            raise ImportError("PyTorch is required to load a trained meta-transformer package")
+            raise ImportError(
+                "PyTorch is required to load a trained meta-transformer package"
+            )
         self.package = package
         checkpoint_path = Path(package.best_checkpoint_path or package.checkpoint_path)
         if not checkpoint_path.exists():
-            raise FileNotFoundError(f"Meta-transformer checkpoint not found: {checkpoint_path}")
-        checkpoint_payload = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
-        model_config = dict(package.model_config or checkpoint_payload.get("model_config", {}) or {})
+            raise FileNotFoundError(
+                f"Meta-transformer checkpoint not found: {checkpoint_path}"
+            )
+        checkpoint_payload = torch.load(
+            str(checkpoint_path), map_location="cpu", weights_only=False
+        )
+        model_config = dict(
+            package.model_config or checkpoint_payload.get("model_config", {}) or {}
+        )
         self.vla_dim = int(model_config.get("vla_dim", 128))
         self.dino_dim = int(model_config.get("dino_dim", 256))
-        self.objective_labels = list(model_config.get("objective_labels") or META_OBJECTIVE_PRESET_LABELS)
-        self.backend_labels = list(model_config.get("backend_labels") or META_BACKEND_LABELS)
+        self.objective_labels = list(
+            model_config.get("objective_labels") or META_OBJECTIVE_PRESET_LABELS
+        )
+        self.backend_labels = list(
+            model_config.get("backend_labels") or META_BACKEND_LABELS
+        )
         self.energy_profile_labels = list(
             model_config.get("energy_profile_labels") or META_ENERGY_PROFILE_LABELS
         )
-        self.data_mix_labels = list(model_config.get("data_mix_labels") or META_DATA_MIX_LABELS)
+        self.data_mix_labels = list(
+            model_config.get("data_mix_labels") or META_DATA_MIX_LABELS
+        )
         self.planning_context_dim = int(
             model_config.get("planning_context_dim", META_PLANNING_CONTEXT_DIM)
         )
@@ -157,24 +177,36 @@ class LoadedMetaTransformerRuntime:
         if dino_vector.size < self.dino_dim:
             dino_vector = np.pad(dino_vector, (0, self.dino_dim - dino_vector.size))
         vla_tensor = torch.from_numpy(vla_vector[: self.vla_dim]).float().unsqueeze(0)
-        dino_tensor = torch.from_numpy(dino_vector[: self.dino_dim]).float().unsqueeze(0)
+        dino_tensor = (
+            torch.from_numpy(dino_vector[: self.dino_dim]).float().unsqueeze(0)
+        )
         context_vector = np.asarray(
-            planning_context if planning_context is not None else np.zeros(self.planning_context_dim, dtype=np.float32),
+            planning_context
+            if planning_context is not None
+            else np.zeros(self.planning_context_dim, dtype=np.float32),
             dtype=np.float32,
         ).reshape(-1)
         if context_vector.size < self.planning_context_dim:
-            context_vector = np.pad(context_vector, (0, self.planning_context_dim - context_vector.size))
+            context_vector = np.pad(
+                context_vector, (0, self.planning_context_dim - context_vector.size)
+            )
         context_vector = context_vector[: self.planning_context_dim]
         planning_context_tensor = torch.from_numpy(context_vector).float().unsqueeze(0)
         with torch.no_grad():
-            outputs = self.model(vla_tensor, dino_tensor, planning_context=planning_context_tensor)
-        authority_probs = torch.softmax(outputs["authority_logits"][0], dim=-1).cpu().numpy()
+            outputs = self.model(
+                vla_tensor, dino_tensor, planning_context=planning_context_tensor
+            )
+        authority_probs = (
+            torch.softmax(outputs["authority_logits"][0], dim=-1).cpu().numpy()
+        )
         authority_index = int(np.argmax(authority_probs))
         authority = "dino" if authority_index == 0 else "vla"
         alternate_authority_confidence = float(authority_probs[1 - authority_index])
         token_ids = torch.argmax(outputs["token_logits"][0], dim=-1).cpu().numpy()
         benchmark_gate_ready = bool(self.package.benchmark_gate.get("ready", False))
-        objective_probs = torch.softmax(outputs["objective_logits"][0], dim=-1).cpu().numpy()
+        objective_probs = (
+            torch.softmax(outputs["objective_logits"][0], dim=-1).cpu().numpy()
+        )
         objective_index = int(np.argmax(objective_probs))
         objective_sorted = np.sort(objective_probs)[::-1]
         objective_preset = (
@@ -182,7 +214,9 @@ class LoadedMetaTransformerRuntime:
             if objective_index < len(self.objective_labels)
             else decode_objective_preset(objective_index)
         )
-        backend_probs = torch.softmax(outputs["backend_logits"][0], dim=-1).cpu().numpy()
+        backend_probs = (
+            torch.softmax(outputs["backend_logits"][0], dim=-1).cpu().numpy()
+        )
         backend_index = int(np.argmax(backend_probs))
         backend_sorted = np.sort(backend_probs)[::-1]
         chosen_backend = (
@@ -198,14 +232,21 @@ class LoadedMetaTransformerRuntime:
             authority_confidence=float(authority_probs[authority_index]),
             alternate_authority_confidence=alternate_authority_confidence,
             policy_state=outputs["policy_state"][0].cpu().numpy().astype(np.float32),
-            diffusion_conditioning=outputs["diffusion_cond"][0].cpu().numpy().astype(np.float32),
+            diffusion_conditioning=outputs["diffusion_cond"][0]
+            .cpu()
+            .numpy()
+            .astype(np.float32),
             ontology_tokens=decode_semantic_tokens(token_ids),
             objective_preset=objective_preset,
             objective_confidence=float(objective_probs[objective_index]),
-            objective_alternate_confidence=float(objective_sorted[1] if objective_sorted.size > 1 else 0.0),
+            objective_alternate_confidence=float(
+                objective_sorted[1] if objective_sorted.size > 1 else 0.0
+            ),
             chosen_backend=chosen_backend,
             backend_confidence=float(backend_probs[backend_index]),
-            backend_alternate_confidence=float(backend_sorted[1] if backend_sorted.size > 1 else 0.0),
+            backend_alternate_confidence=float(
+                backend_sorted[1] if backend_sorted.size > 1 else 0.0
+            ),
             energy_profile_weights=decode_named_distribution(
                 energy_logits,
                 self.energy_profile_labels,

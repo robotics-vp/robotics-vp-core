@@ -17,6 +17,9 @@ from src.orchestrator.orchestrator_shell_policy import (
 from src.semantic.models import SemanticSnapshot
 from src.utils.config_digest import sha256_json
 
+torch: Any
+nn: Any
+
 try:
     import torch
     import torch.nn as nn
@@ -76,12 +79,16 @@ class OrchestratorShellTrainingExample:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "row_id": self.row_id,
-            "feature_map": {str(key): float(value) for key, value in self.feature_map.items()},
+            "feature_map": {
+                str(key): float(value) for key, value in self.feature_map.items()
+            },
             "preset_distribution": {
-                str(key): float(value) for key, value in self.preset_distribution.items()
+                str(key): float(value)
+                for key, value in self.preset_distribution.items()
             },
             "strategy_distribution": {
-                str(key): float(value) for key, value in self.strategy_distribution.items()
+                str(key): float(value)
+                for key, value in self.strategy_distribution.items()
             },
             "safety_emphasis": float(self.safety_emphasis),
             "activation_label": float(self.activation_label),
@@ -134,7 +141,8 @@ def _load_snapshot_payload(row: Mapping[str, Any]) -> Dict[str, Any]:
         return {}
     snapshot_path = _resolve_ref(
         root_dir,
-        artifact_refs.get("semantic_snapshot_ref") or artifact_refs.get("semantic_snapshot_path"),
+        artifact_refs.get("semantic_snapshot_ref")
+        or artifact_refs.get("semantic_snapshot_path"),
     )
     if snapshot_path is None:
         return {}
@@ -153,7 +161,8 @@ def _load_advisory_payload(row: Mapping[str, Any]) -> Dict[str, Any]:
         return {}
     advisory_path = _resolve_ref(
         root_dir,
-        artifact_refs.get("orchestrator_advisory_ref") or artifact_refs.get("orchestrator_advisory_path"),
+        artifact_refs.get("orchestrator_advisory_ref")
+        or artifact_refs.get("orchestrator_advisory_path"),
     )
     if advisory_path is None:
         return {}
@@ -185,9 +194,15 @@ def build_orchestrator_shell_training_dataset(
         target_source = "orchestrator_advisory_receipt"
         policy_source = str(target.get("policy_source", "heuristic_fallback"))
         promotion_stage = str(target.get("promotion_stage", "heuristic_fallback"))
-        target_source_counts[target_source] = target_source_counts.get(target_source, 0) + 1
-        policy_source_counts[policy_source] = policy_source_counts.get(policy_source, 0) + 1
-        promotion_stage_counts[promotion_stage] = promotion_stage_counts.get(promotion_stage, 0) + 1
+        target_source_counts[target_source] = (
+            target_source_counts.get(target_source, 0) + 1
+        )
+        policy_source_counts[policy_source] = (
+            policy_source_counts.get(policy_source, 0) + 1
+        )
+        promotion_stage_counts[promotion_stage] = (
+            promotion_stage_counts.get(promotion_stage, 0) + 1
+        )
         activated_rows += int(target.get("activation_label", 0.0) > 0.5)
         row_id = str(
             row.get("sample_id")
@@ -200,7 +215,9 @@ def build_orchestrator_shell_training_dataset(
                 row_id=row_id,
                 feature_map=feature_map,
                 preset_distribution=dict(target.get("preset_distribution", {}) or {}),
-                strategy_distribution=dict(target.get("sampler_strategy_overrides", {}) or {}),
+                strategy_distribution=dict(
+                    target.get("sampler_strategy_overrides", {}) or {}
+                ),
                 safety_emphasis=_safe_float(target.get("safety_emphasis", 0.0)),
                 activation_label=_safe_float(target.get("activation_label", 0.0)),
                 target_source=target_source,
@@ -245,27 +262,40 @@ def save_orchestrator_shell_training_dataset(
 ) -> str:
     candidate = Path(path)
     candidate.parent.mkdir(parents=True, exist_ok=True)
-    candidate.write_text(json.dumps(dataset.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    candidate.write_text(
+        json.dumps(dataset.to_dict(), indent=2, sort_keys=True), encoding="utf-8"
+    )
     return str(candidate)
 
 
-def load_orchestrator_shell_training_dataset(path: str | Path) -> OrchestratorShellTrainingDataset:
+def load_orchestrator_shell_training_dataset(
+    path: str | Path,
+) -> OrchestratorShellTrainingDataset:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     examples = [
         OrchestratorShellTrainingExample(
             row_id=str(example.get("row_id", "")),
-            feature_map={str(key): float(value) for key, value in dict(example.get("feature_map", {}) or {}).items()},
+            feature_map={
+                str(key): float(value)
+                for key, value in dict(example.get("feature_map", {}) or {}).items()
+            },
             preset_distribution={
                 str(key): float(value)
-                for key, value in dict(example.get("preset_distribution", {}) or {}).items()
+                for key, value in dict(
+                    example.get("preset_distribution", {}) or {}
+                ).items()
             },
             strategy_distribution={
                 str(key): float(value)
-                for key, value in dict(example.get("strategy_distribution", {}) or {}).items()
+                for key, value in dict(
+                    example.get("strategy_distribution", {}) or {}
+                ).items()
             },
             safety_emphasis=float(example.get("safety_emphasis", 0.0)),
             activation_label=float(example.get("activation_label", 0.0)),
-            target_source=str(example.get("target_source", "orchestrator_advisory_receipt")),
+            target_source=str(
+                example.get("target_source", "orchestrator_advisory_receipt")
+            ),
             policy_source=str(example.get("policy_source", "heuristic_fallback")),
             promotion_stage=str(example.get("promotion_stage", "heuristic_fallback")),
             metadata=dict(example.get("metadata", {}) or {}),
@@ -282,7 +312,9 @@ def load_orchestrator_shell_training_dataset(path: str | Path) -> OrchestratorSh
 if TORCH_AVAILABLE:
 
     class OrchestratorShellPolicyNet(nn.Module):
-        def __init__(self, input_dim: int = len(SHELL_POLICY_FEATURE_NAMES), hidden_dim: int = 32) -> None:
+        def __init__(
+            self, input_dim: int = len(SHELL_POLICY_FEATURE_NAMES), hidden_dim: int = 32
+        ) -> None:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(int(input_dim), int(hidden_dim)),
@@ -290,12 +322,18 @@ if TORCH_AVAILABLE:
                 nn.Linear(int(hidden_dim), int(hidden_dim)),
                 nn.ReLU(),
             )
-            self.preset_head = nn.Linear(int(hidden_dim), len(SHELL_POLICY_PRESET_LABELS))
-            self.strategy_head = nn.Linear(int(hidden_dim), len(SHELL_POLICY_STRATEGY_KEYS))
+            self.preset_head = nn.Linear(
+                int(hidden_dim), len(SHELL_POLICY_PRESET_LABELS)
+            )
+            self.strategy_head = nn.Linear(
+                int(hidden_dim), len(SHELL_POLICY_STRATEGY_KEYS)
+            )
             self.safety_head = nn.Linear(int(hidden_dim), 1)
             self.activation_head = nn.Linear(int(hidden_dim), 1)
 
-        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        def forward(
+            self, x: torch.Tensor
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
             hidden = self.net(x)
             return (
                 self.preset_head(hidden),
@@ -327,27 +365,42 @@ def train_orchestrator_shell_policy_model(
 
     X = np.asarray(
         [
-            [float(example.feature_map.get(name, 0.0)) for name in SHELL_POLICY_FEATURE_NAMES]
+            [
+                float(example.feature_map.get(name, 0.0))
+                for name in SHELL_POLICY_FEATURE_NAMES
+            ]
             for example in dataset.examples
         ],
         dtype=np.float32,
     )
     y_preset = np.asarray(
         [
-            [float(example.preset_distribution.get(label, 0.0)) for label in SHELL_POLICY_PRESET_LABELS]
+            [
+                float(example.preset_distribution.get(label, 0.0))
+                for label in SHELL_POLICY_PRESET_LABELS
+            ]
             for example in dataset.examples
         ],
         dtype=np.float32,
     )
     y_strategy = np.asarray(
         [
-            [float(example.strategy_distribution.get(label, 0.0)) for label in SHELL_POLICY_STRATEGY_KEYS]
+            [
+                float(example.strategy_distribution.get(label, 0.0))
+                for label in SHELL_POLICY_STRATEGY_KEYS
+            ]
             for example in dataset.examples
         ],
         dtype=np.float32,
     )
-    y_safety = np.asarray([[float(example.safety_emphasis)] for example in dataset.examples], dtype=np.float32)
-    y_activation = np.asarray([[float(example.activation_label)] for example in dataset.examples], dtype=np.float32)
+    y_safety = np.asarray(
+        [[float(example.safety_emphasis)] for example in dataset.examples],
+        dtype=np.float32,
+    )
+    y_activation = np.asarray(
+        [[float(example.activation_label)] for example in dataset.examples],
+        dtype=np.float32,
+    )
 
     X_tensor = torch.from_numpy(X)
     y_preset_tensor = torch.from_numpy(y_preset)
@@ -370,7 +423,9 @@ def train_orchestrator_shell_policy_model(
 
     model.train()
     for _ in range(int(epochs)):
-        preset_logits, strategy_logits, safety_logits, activation_logits = model(X_tensor)
+        preset_logits, strategy_logits, safety_logits, activation_logits = model(
+            X_tensor
+        )
         preset_probs = torch.softmax(preset_logits, dim=-1)
         strategy_probs = torch.softmax(strategy_logits, dim=-1)
         safety_probs = torch.sigmoid(safety_logits)

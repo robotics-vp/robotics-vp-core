@@ -14,6 +14,9 @@ from src.orchestrator.queue_dispatch_policy import (
 )
 from src.utils.config_digest import sha256_json
 
+torch: Any
+nn: Any
+
 try:
     import torch
     import torch.nn as nn
@@ -60,9 +63,17 @@ def load_queue_selection_payloads(paths: Sequence[str | Path]) -> list[Dict[str,
 
 def _extract_entries(payload: Mapping[str, Any]) -> list[Dict[str, Any]]:
     if isinstance(payload.get("live_queue_selection"), Mapping):
-        return [dict(row) for row in list(payload["live_queue_selection"].get("entries", []) or []) if isinstance(row, Mapping)]
+        return [
+            dict(row)
+            for row in list(payload["live_queue_selection"].get("entries", []) or [])
+            if isinstance(row, Mapping)
+        ]
     if isinstance(payload.get("entries"), list):
-        return [dict(row) for row in list(payload.get("entries", []) or []) if isinstance(row, Mapping)]
+        return [
+            dict(row)
+            for row in list(payload.get("entries", []) or [])
+            if isinstance(row, Mapping)
+        ]
     return []
 
 
@@ -77,7 +88,9 @@ class QueueDispatchTrainingExample:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "row_id": self.row_id,
-            "feature_map": {str(key): float(value) for key, value in self.feature_map.items()},
+            "feature_map": {
+                str(key): float(value) for key, value in self.feature_map.items()
+            },
             "dispatch_score": float(self.dispatch_score),
             "target_source": self.target_source,
             "metadata": dict(self.metadata),
@@ -108,17 +121,24 @@ def build_queue_dispatch_training_dataset(
             feature_map = build_queue_dispatch_feature_map(entry)
             target = extract_queue_dispatch_target(entry)
             target_source = str(target.get("target_source", "heuristic_bootstrap"))
-            target_source_counts[target_source] = target_source_counts.get(target_source, 0) + 1
+            target_source_counts[target_source] = (
+                target_source_counts.get(target_source, 0) + 1
+            )
             receipt_rows += int(target_source == "receipt_feedback")
             examples.append(
                 QueueDispatchTrainingExample(
-                    row_id=str(entry.get("episode_id") or f"queue_entry_{payload_index}_{entry_index}"),
+                    row_id=str(
+                        entry.get("episode_id")
+                        or f"queue_entry_{payload_index}_{entry_index}"
+                    ),
                     feature_map=feature_map,
                     dispatch_score=float(target.get("dispatch_score", 0.0)),
                     target_source=target_source,
                     metadata={
                         "queue_name": payload.get("queue_name")
-                        or dict(payload.get("live_queue_selection", {}) or {}).get("queue_name")
+                        or dict(payload.get("live_queue_selection", {}) or {}).get(
+                            "queue_name"
+                        )
                         or "shadow_advisory_queue",
                         "replay_action": entry.get("replay_action", "holdout"),
                     },
@@ -144,19 +164,28 @@ def build_queue_dispatch_training_dataset(
     return QueueDispatchTrainingDataset(examples=examples, summary=summary)
 
 
-def save_queue_dispatch_training_dataset(dataset: QueueDispatchTrainingDataset, path: str | Path) -> str:
+def save_queue_dispatch_training_dataset(
+    dataset: QueueDispatchTrainingDataset, path: str | Path
+) -> str:
     candidate = Path(path)
     candidate.parent.mkdir(parents=True, exist_ok=True)
-    candidate.write_text(json.dumps(dataset.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    candidate.write_text(
+        json.dumps(dataset.to_dict(), indent=2, sort_keys=True), encoding="utf-8"
+    )
     return str(candidate)
 
 
-def load_queue_dispatch_training_dataset(path: str | Path) -> QueueDispatchTrainingDataset:
+def load_queue_dispatch_training_dataset(
+    path: str | Path,
+) -> QueueDispatchTrainingDataset:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     examples = [
         QueueDispatchTrainingExample(
             row_id=str(example.get("row_id", "")),
-            feature_map={str(key): float(value) for key, value in dict(example.get("feature_map", {}) or {}).items()},
+            feature_map={
+                str(key): float(value)
+                for key, value in dict(example.get("feature_map", {}) or {}).items()
+            },
             dispatch_score=float(example.get("dispatch_score", 0.0)),
             target_source=str(example.get("target_source", "heuristic_bootstrap")),
             metadata=dict(example.get("metadata", {}) or {}),
@@ -173,7 +202,11 @@ def load_queue_dispatch_training_dataset(path: str | Path) -> QueueDispatchTrain
 if TORCH_AVAILABLE:
 
     class QueueDispatchPolicyNet(nn.Module):
-        def __init__(self, input_dim: int = len(QUEUE_DISPATCH_FEATURE_NAMES), hidden_dim: int = 32) -> None:
+        def __init__(
+            self,
+            input_dim: int = len(QUEUE_DISPATCH_FEATURE_NAMES),
+            hidden_dim: int = 32,
+        ) -> None:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(int(input_dim), int(hidden_dim)),
@@ -209,12 +242,18 @@ def train_queue_dispatch_policy_model(
 
     X = np.asarray(
         [
-            [float(example.feature_map.get(name, 0.0)) for name in QUEUE_DISPATCH_FEATURE_NAMES]
+            [
+                float(example.feature_map.get(name, 0.0))
+                for name in QUEUE_DISPATCH_FEATURE_NAMES
+            ]
             for example in dataset.examples
         ],
         dtype=np.float32,
     )
-    y = np.asarray([[float(example.dispatch_score)] for example in dataset.examples], dtype=np.float32)
+    y = np.asarray(
+        [[float(example.dispatch_score)] for example in dataset.examples],
+        dtype=np.float32,
+    )
     X_tensor = torch.from_numpy(X)
     y_tensor = torch.from_numpy(y)
     model = QueueDispatchPolicyNet(input_dim=X.shape[1], hidden_dim=hidden_dim)

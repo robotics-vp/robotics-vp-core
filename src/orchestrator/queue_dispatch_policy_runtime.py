@@ -16,6 +16,8 @@ from src.orchestrator.queue_dispatch_policy_training import (
     TORCH_AVAILABLE,
 )
 
+torch: Any
+
 if TORCH_AVAILABLE:  # pragma: no branch
     import torch
 else:  # pragma: no cover
@@ -43,7 +45,9 @@ class QueueDispatchPolicyRuntimePackage:
     metadata: Dict[str, Any]
 
 
-def load_queue_dispatch_policy_runtime_package(path: str | Path) -> QueueDispatchPolicyRuntimePackage:
+def load_queue_dispatch_policy_runtime_package(
+    path: str | Path,
+) -> QueueDispatchPolicyRuntimePackage:
     package_path = Path(path)
     payload = json.loads(package_path.read_text(encoding="utf-8"))
     checkpoint_path = Path(str(payload.get("checkpoint_path") or ""))
@@ -57,7 +61,9 @@ def load_queue_dispatch_policy_runtime_package(path: str | Path) -> QueueDispatc
         benchmark_gate=dict(payload.get("benchmark_gate", {}) or {}),
         execution_preconditions=dict(payload.get("execution_preconditions", {}) or {}),
         inference_contract=dict(payload.get("inference_contract", {}) or {}),
-        promotion_stage=str(payload.get("promotion_stage", "shadow_candidate") or "shadow_candidate"),
+        promotion_stage=str(
+            payload.get("promotion_stage", "shadow_candidate") or "shadow_candidate"
+        ),
         metadata=dict(payload.get("metadata", {}) or {}),
     )
 
@@ -65,11 +71,17 @@ def load_queue_dispatch_policy_runtime_package(path: str | Path) -> QueueDispatc
 class LoadedQueueDispatchPolicyHelper:
     def __init__(self, package: QueueDispatchPolicyRuntimePackage) -> None:
         if not TORCH_AVAILABLE:
-            raise ImportError("PyTorch is required to load the queue dispatch policy helper")
+            raise ImportError(
+                "PyTorch is required to load the queue dispatch policy helper"
+            )
         checkpoint_path = Path(package.checkpoint_path)
         if not checkpoint_path.exists():
-            raise FileNotFoundError(f"queue dispatch policy checkpoint not found: {checkpoint_path}")
-        payload = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
+            raise FileNotFoundError(
+                f"queue dispatch policy checkpoint not found: {checkpoint_path}"
+            )
+        payload = torch.load(
+            str(checkpoint_path), map_location="cpu", weights_only=False
+        )
         input_dim = int(payload.get("input_dim", len(QUEUE_DISPATCH_FEATURE_NAMES)))
         hidden_dim = int(payload.get("hidden_dim", 32))
         self.package = package
@@ -83,7 +95,10 @@ class LoadedQueueDispatchPolicyHelper:
     def score_entry(self, entry: Mapping[str, Any]) -> Dict[str, Any]:
         feature_map = build_queue_dispatch_feature_map(entry)
         vector = np.asarray(
-            [float(feature_map.get(name, 0.0)) for name in QUEUE_DISPATCH_FEATURE_NAMES],
+            [
+                float(feature_map.get(name, 0.0))
+                for name in QUEUE_DISPATCH_FEATURE_NAMES
+            ],
             dtype=np.float32,
         )
         tensor = torch.from_numpy(vector).float().unsqueeze(0)
@@ -109,10 +124,13 @@ def resolve_queue_dispatch_policy_helper(
             raise ValueError("queue dispatch policy helper requires a package path")
         return None
     if package is None:
+        assert package_path is not None
         package = load_queue_dispatch_policy_runtime_package(package_path)
     helper = LoadedQueueDispatchPolicyHelper(package)
     if mode == "required" and not bool(helper.benchmark_gate.get("ready", False)):
-        raise ValueError("queue dispatch policy helper requires a benchmark-gated package")
+        raise ValueError(
+            "queue dispatch policy helper requires a benchmark-gated package"
+        )
     return helper
 
 

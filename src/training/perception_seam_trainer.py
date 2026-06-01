@@ -39,10 +39,10 @@ import json
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -53,9 +53,6 @@ from torch.utils.data import DataLoader
 from src.world_model.perception_grounding.seam_registry import (
     PerceptionSeamRegistry,
     SeamDescriptor,
-)
-from src.world_model.perception_grounding.receipts import (
-    ProviderInvocationReceipt,
 )
 
 from .perception_seam_losses import (
@@ -290,7 +287,9 @@ class PerceptionSeamTrainer:
         optimizer: Optional[Optimizer] = None,
         scheduler: Optional[LRScheduler] = None,
         loss_fn: Optional[Callable[..., SeamLossResult]] = None,
-        benchmark_evaluator: Optional[Callable[[nn.Module, DataLoader], Dict[str, float]]] = None,
+        benchmark_evaluator: Optional[
+            Callable[[nn.Module, DataLoader], Dict[str, float]]
+        ] = None,
     ) -> None:
         """Initialize trainer.
 
@@ -312,7 +311,10 @@ class PerceptionSeamTrainer:
         self.seam.to(self.config.device)
 
         # Get seam metadata
-        self.descriptor = registry.get_descriptor(seam_id)
+        descriptor = registry.get_descriptor(seam_id)
+        if descriptor is None:
+            raise ValueError(f"Unknown perception seam descriptor: {seam_id}")
+        self.descriptor: SeamDescriptor = descriptor
         self.seam_type = self.descriptor.seam_type
 
         # Initialize optimizer
@@ -326,6 +328,7 @@ class PerceptionSeamTrainer:
             )
 
         # Initialize scheduler
+        self.scheduler: Optional[LRScheduler]
         if scheduler is not None:
             self.scheduler = scheduler
         elif self.config.lr_scheduler == "cosine":
@@ -399,7 +402,9 @@ class PerceptionSeamTrainer:
         else:
             raise ValueError(f"Unknown seam type: {self.seam_type}")
 
-    def _compute_evidence_fusion_loss(self, batch: EvidenceFusionBatch) -> SeamLossResult:
+    def _compute_evidence_fusion_loss(
+        self, batch: EvidenceFusionBatch
+    ) -> SeamLossResult:
         """Compute evidence fusion loss."""
         # Forward pass: seam takes 12-dim encoded metadata, not raw features
         weights, confidence = self.seam(batch.seam_input_features)
@@ -415,7 +420,9 @@ class PerceptionSeamTrainer:
             provider_availability_mask=batch.provider_availability,
         )
 
-    def _compute_sam_calibration_loss(self, batch: SAMCalibrationBatch) -> SeamLossResult:
+    def _compute_sam_calibration_loss(
+        self, batch: SAMCalibrationBatch
+    ) -> SeamLossResult:
         """Compute SAM calibration loss."""
         # Forward pass
         result = self.seam(
@@ -435,7 +442,9 @@ class PerceptionSeamTrainer:
             mask_valid=batch.mask_valid,
         )
 
-    def _compute_depth_calibration_loss(self, batch: DepthCalibrationBatch) -> SeamLossResult:
+    def _compute_depth_calibration_loss(
+        self, batch: DepthCalibrationBatch
+    ) -> SeamLossResult:
         """Compute depth calibration loss."""
         # Forward pass
         result = self.seam(batch.relative_depth, batch.camera_intrinsics)
@@ -498,7 +507,15 @@ class PerceptionSeamTrainer:
             class_logits=result["class_logits"],
             confidence=result["confidence"],
             affordance_scores=result["affordance_scores"],
-            class_labels=batch.node_labels,
+            class_labels=(
+                batch.node_labels
+                if batch.node_labels is not None
+                else torch.zeros(
+                    result["class_logits"].shape[:2],
+                    dtype=torch.long,
+                    device=result["class_logits"].device,
+                )
+            ),
             confidence_targets=getattr(batch, "node_confidence_target", None),
             affordance_targets=getattr(batch, "affordance_targets", None),
             node_mask=batch.node_mask,
@@ -528,7 +545,9 @@ class PerceptionSeamTrainer:
             edge_mask=batch.edge_mask,
         )
 
-    def _training_step(self, batch: Any) -> Tuple[float, Dict[str, float], Dict[str, float]]:
+    def _training_step(
+        self, batch: Any
+    ) -> Tuple[float, Dict[str, float], Dict[str, float]]:
         """Execute a single training step.
 
         Returns:
@@ -559,7 +578,7 @@ class PerceptionSeamTrainer:
             # Gradient clipping
             if self.config.mixed_precision and self.scaler is not None:
                 self.scaler.unscale_(self.optimizer)
-            grad_norm = torch.nn.utils.clip_grad_norm_(
+            _grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.seam.parameters(), self.config.max_grad_norm
             )
 
@@ -578,7 +597,7 @@ class PerceptionSeamTrainer:
             elif self.scheduler is not None:
                 self.scheduler.step()
         else:
-            grad_norm = torch.tensor(0.0)
+            _grad_norm = torch.tensor(0.0)
 
         return (
             loss_result.total_loss.item(),
@@ -586,7 +605,9 @@ class PerceptionSeamTrainer:
             loss_result.metrics,
         )
 
-    def _validation_step(self, batch: Any) -> Tuple[float, Dict[str, float], Dict[str, float]]:
+    def _validation_step(
+        self, batch: Any
+    ) -> Tuple[float, Dict[str, float], Dict[str, float]]:
         """Execute a single validation step."""
         self.seam.eval()
         batch = self._batch_to_device(batch)
@@ -605,10 +626,9 @@ class PerceptionSeamTrainer:
         device = torch.device(self.config.device)
 
         if hasattr(batch, "_fields"):  # NamedTuple
-            return type(batch)(*(
-                t.to(device) if isinstance(t, torch.Tensor) else t
-                for t in batch
-            ))
+            return type(batch)(
+                *(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch)
+            )
 
         # Dataclass
         for field_name in batch.__dataclass_fields__:
@@ -618,7 +638,9 @@ class PerceptionSeamTrainer:
 
         return batch
 
-    def _validate(self, val_loader: DataLoader) -> Tuple[float, Dict[str, float], Dict[str, float]]:
+    def _validate(
+        self, val_loader: DataLoader
+    ) -> Tuple[float, Dict[str, float], Dict[str, float]]:
         """Run validation loop."""
         total_loss = 0.0
         total_samples = 0
@@ -633,13 +655,21 @@ class PerceptionSeamTrainer:
             total_samples += batch_size
 
             for k, v in components.items():
-                accumulated_components[k] = accumulated_components.get(k, 0.0) + v * batch_size
+                accumulated_components[k] = (
+                    accumulated_components.get(k, 0.0) + v * batch_size
+                )
             for k, v in metrics.items():
-                accumulated_metrics[k] = accumulated_metrics.get(k, 0.0) + v * batch_size
+                accumulated_metrics[k] = (
+                    accumulated_metrics.get(k, 0.0) + v * batch_size
+                )
 
         avg_loss = total_loss / max(1, total_samples)
-        avg_components = {k: v / max(1, total_samples) for k, v in accumulated_components.items()}
-        avg_metrics = {k: v / max(1, total_samples) for k, v in accumulated_metrics.items()}
+        avg_components = {
+            k: v / max(1, total_samples) for k, v in accumulated_components.items()
+        }
+        avg_metrics = {
+            k: v / max(1, total_samples) for k, v in accumulated_metrics.items()
+        }
 
         return avg_loss, avg_components, avg_metrics
 
@@ -675,7 +705,9 @@ class PerceptionSeamTrainer:
 
         if gate_passed and previous_stage in ("registered", "raw_provider_output"):
             new_stage = "promoted"
-        elif gate_score < self.config.demotion_threshold and previous_stage == "promoted":
+        elif (
+            gate_score < self.config.demotion_threshold and previous_stage == "promoted"
+        ):
             new_stage = "demoted_to_shadow"
         else:
             new_stage = previous_stage
@@ -798,7 +830,9 @@ class PerceptionSeamTrainer:
 
                 # Logging
                 if self.state.step % self.config.log_interval == 0:
-                    avg_loss = self.state.total_train_loss / max(1, self.state.total_train_samples)
+                    avg_loss = self.state.total_train_loss / max(
+                        1, self.state.total_train_samples
+                    )
                     logger.info(
                         f"Step {self.state.step}/{total_steps} | "
                         f"Epoch {self.state.epoch} | "
@@ -809,7 +843,10 @@ class PerceptionSeamTrainer:
                     self._emit_training_receipt(loss, components, metrics, 0.0)
 
                 # Validation
-                if val_loader is not None and self.state.step % self.config.val_check_interval == 0:
+                if (
+                    val_loader is not None
+                    and self.state.step % self.config.val_check_interval == 0
+                ):
                     val_loss, val_components, val_metrics = self._validate(val_loader)
                     is_best = val_loss < self.state.best_val_loss
 
@@ -821,7 +858,9 @@ class PerceptionSeamTrainer:
                     else:
                         self.state.patience_counter += 1
 
-                    self._emit_validation_receipt(val_loss, val_components, val_metrics, is_best)
+                    self._emit_validation_receipt(
+                        val_loss, val_components, val_metrics, is_best
+                    )
 
                     logger.info(
                         f"Validation | Step {self.state.step} | "
@@ -830,7 +869,10 @@ class PerceptionSeamTrainer:
                     )
 
                     # Early stopping
-                    if self.state.patience_counter >= self.config.early_stopping_patience:
+                    if (
+                        self.state.patience_counter
+                        >= self.config.early_stopping_patience
+                    ):
                         self.state.is_finished = True
                         self.state.finish_reason = "early_stopping"
                         break
@@ -840,7 +882,10 @@ class PerceptionSeamTrainer:
                     self.registry.save_seam(self.seam_id)
 
                 # Benchmark gate
-                if val_loader is not None and self.state.step % self.config.benchmark_gate_interval == 0:
+                if (
+                    val_loader is not None
+                    and self.state.step % self.config.benchmark_gate_interval == 0
+                ):
                     gate_receipt = self._evaluate_benchmark_gate(val_loader)
                     logger.info(
                         f"Benchmark Gate | Step {self.state.step} | "
@@ -850,7 +895,10 @@ class PerceptionSeamTrainer:
                     )
 
                 # Check max steps
-                if self.config.max_steps is not None and self.state.step >= self.config.max_steps:
+                if (
+                    self.config.max_steps is not None
+                    and self.state.step >= self.config.max_steps
+                ):
                     self.state.is_finished = True
                     self.state.finish_reason = "max_steps"
                     break

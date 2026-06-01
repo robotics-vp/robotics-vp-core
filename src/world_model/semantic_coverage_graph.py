@@ -17,6 +17,7 @@ compilation.
 
 Purely additive — no existing world-model code is modified.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -27,13 +28,14 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 # Core types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class CoverageNode:
     """Single node in the semantic coverage graph."""
 
     node_id: str
     node_type: str  # task | skill | env_primitive | backend | object_family |
-                    # risk_family | affordance_family
+    # risk_family | affordance_family
     label: str
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -44,7 +46,7 @@ class CoverageEdge:
 
     source_id: str
     target_id: str
-    edge_type: str          # requires | realizes | covers | supports
+    edge_type: str  # requires | realizes | covers | supports
     evidence_count: int = 0
     evidence_strength: float = 0.0
     economic_priority: float = 0.0
@@ -104,6 +106,7 @@ class CoverageEdge:
 # SemanticCoverageGraph
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SemanticCoverageGraph:
     """Typed graph of task × skill × env-primitive coverage and gaps."""
@@ -156,9 +159,7 @@ class SemanticCoverageGraph:
             of the heuristic ``gap_score()``.  Falls back to heuristic
             scoring when ``None``.
         """
-        gaps = [
-            e for e in self.edges if e.is_missing
-        ]
+        gaps = [e for e in self.edges if e.is_missing]
 
         if gap_ranker is not None:
             # Use learned ranking
@@ -196,7 +197,11 @@ class SemanticCoverageGraph:
         total = len(self.edges)
         covered = len(self.covered_edges)
         missing = len(self.missing_edges)
-        governance_blocked = sum(1 for edge in self.edges if bool(edge.metadata.get("governance_blocked", False)))
+        governance_blocked = sum(
+            1
+            for edge in self.edges
+            if bool(edge.metadata.get("governance_blocked", False))
+        )
         return {
             "total_edges": total,
             "covered_edges": covered,
@@ -250,9 +255,9 @@ class SemanticCoverageGraph:
         skill_graph: Any = None,
         env_inventories: Optional[Sequence[Any]] = None,
         semantic_wm: Any = None,
-        economic_priorities: Optional[Mapping[str, float]] = None,
-        trust_priorities: Optional[Mapping[str, float]] = None,
-        readiness_signals: Optional[Mapping[str, float]] = None,
+        economic_priorities: Optional[Mapping[Any, float]] = None,
+        trust_priorities: Optional[Mapping[Any, float]] = None,
+        readiness_signals: Optional[Mapping[Any, float]] = None,
         evidence_counts: Optional[Mapping[Tuple[str, str], int]] = None,
         edge_metadata: Optional[Mapping[Tuple[str, str], Mapping[str, Any]]] = None,
     ) -> "SemanticCoverageGraph":
@@ -283,7 +288,9 @@ class SemanticCoverageGraph:
             if isinstance(key, tuple) and len(key) == 2
         }
 
-        def _resolve_edge_signal(values: Mapping[Any, float], src: str, tgt: str) -> float:
+        def _resolve_edge_signal(
+            values: Mapping[Any, float], src: str, tgt: str
+        ) -> float:
             edge_key = (src, tgt)
             if edge_key in values:
                 try:
@@ -317,17 +324,19 @@ class SemanticCoverageGraph:
             count = ev_counts.get((src, tgt), 0)
             metadata = dict(kw.pop("metadata", {}) or {})
             metadata.update(edge_meta.get((src, tgt), {}))
-            edges.append(CoverageEdge(
-                source_id=src,
-                target_id=tgt,
-                edge_type=etype,
-                evidence_count=count,
-                economic_priority=_resolve_edge_signal(econ, src, tgt),
-                trust_priority=_resolve_edge_signal(trust, src, tgt),
-                promotion_readiness=_resolve_edge_signal(readiness, src, tgt),
-                metadata=metadata,
-                **kw,
-            ))
+            edges.append(
+                CoverageEdge(
+                    source_id=src,
+                    target_id=tgt,
+                    edge_type=etype,
+                    evidence_count=count,
+                    economic_priority=_resolve_edge_signal(econ, src, tgt),
+                    trust_priority=_resolve_edge_signal(trust, src, tgt),
+                    promotion_readiness=_resolve_edge_signal(readiness, src, tgt),
+                    metadata=metadata,
+                    **kw,
+                )
+            )
 
         # ── Skill-graph nodes + transition edges ────────────────────────
         if skill_graph is not None:
@@ -356,7 +365,7 @@ class SemanticCoverageGraph:
                 _edge(task_id, te.from_skill, "covers")
 
         # ── Env primitive inventories ───────────────────────────────────
-        for inv in (env_inventories or []):
+        for inv in env_inventories or []:
             backend_id = f"backend:{inv.env_id}"
             _add(backend_id, "backend", inv.env_id)
             for prim in getattr(inv, "primitives", []):

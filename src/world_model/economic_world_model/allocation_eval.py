@@ -172,13 +172,14 @@ def _candidate(
     denial_reasons: Iterable[str] = (),
     metadata: Optional[Mapping[str, Any]] = None,
 ) -> EconomicWMAllocationCandidate:
+    denial_reason_list = sorted(set(str(item) for item in denial_reasons))
     payload = {
         "label": label,
         "allowed": bool(allowed),
         "expected_value": float(expected_value),
         "resource_request": _float_dict(resource_request),
         "rationale": rationale,
-        "denial_reasons": sorted(set(str(item) for item in denial_reasons)),
+        "denial_reasons": denial_reason_list,
         "metadata": _mapping(metadata),
         "version": ECONOMIC_WM_ALLOCATION_CANDIDATE_VERSION,
     }
@@ -189,7 +190,7 @@ def _candidate(
         expected_value=float(expected_value),
         resource_request=_float_dict(resource_request),
         rationale=rationale,
-        denial_reasons=payload["denial_reasons"],
+        denial_reasons=denial_reason_list,
         metadata=_mapping(metadata),
     )
 

@@ -14,7 +14,7 @@ import json
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from .bipedal_chassis import (
     BipedalChassisScaffoldReport,
@@ -150,7 +150,9 @@ class HumanoidRobotAssetContract:
                 **_denied_gates(),
                 **{
                     str(key): bool(value)
-                    for key, value in dict(payload.get("denied_gates", {}) or {}).items()
+                    for key, value in dict(
+                        payload.get("denied_gates", {}) or {}
+                    ).items()
                 },
             },
             version=str(payload.get("version", HUMANOID_ROBOT_ASSET_CONTRACT_VERSION)),
@@ -200,9 +202,7 @@ class RobotAssetParseReceipt:
             asset_path=str(payload.get("asset_path", "")),
             asset_format=str(payload.get("asset_format", "unknown")),
             status=str(payload.get("status", "")),
-            parser_kind=str(
-                payload.get("parser_kind", "stdlib_xml_contract_parser")
-            ),
+            parser_kind=str(payload.get("parser_kind", "stdlib_xml_contract_parser")),
             extracted_joint_names=strings(payload.get("extracted_joint_names")),
             extracted_frame_names=strings(payload.get("extracted_frame_names")),
             extracted_limit_count=int(payload.get("extracted_limit_count", 0) or 0),
@@ -251,9 +251,7 @@ class KinematicConsistencyReport:
             "action_dimension": int(self.action_dimension),
             "joint_limit_envelope_count": int(self.joint_limit_envelope_count),
             "frame_count": int(self.frame_count),
-            "minimum_21dof_invariant_passed": bool(
-                self.minimum_21dof_invariant_passed
-            ),
+            "minimum_21dof_invariant_passed": bool(self.minimum_21dof_invariant_passed),
             "action_channel_alignment_passed": bool(
                 self.action_channel_alignment_passed
             ),
@@ -293,9 +291,7 @@ class KinematicConsistencyReport:
                 payload.get("joint_limit_coverage_passed", False)
             ),
             frame_tree_acyclic=bool(payload.get("frame_tree_acyclic", False)),
-            frame_tree_orphan_free=bool(
-                payload.get("frame_tree_orphan_free", False)
-            ),
+            frame_tree_orphan_free=bool(payload.get("frame_tree_orphan_free", False)),
             left_right_limb_symmetry_passed=bool(
                 payload.get("left_right_limb_symmetry_passed", False)
             ),
@@ -362,7 +358,9 @@ class JointVectorValidationReceipt:
             authority_class=str(
                 payload.get("authority_class", "joint_vector_validation_receipt_only")
             ),
-            version=str(payload.get("version", JOINT_VECTOR_VALIDATION_RECEIPT_VERSION)),
+            version=str(
+                payload.get("version", JOINT_VECTOR_VALIDATION_RECEIPT_VERSION)
+            ),
         )
 
 
@@ -394,9 +392,7 @@ class BalanceGeometryReport:
             "com_inside_support": self.com_inside_support,
             "zmp_inside_support": self.zmp_inside_support,
             "cop_inside_support": self.cop_inside_support,
-            "computed_from_measured_streams": bool(
-                self.computed_from_measured_streams
-            ),
+            "computed_from_measured_streams": bool(self.computed_from_measured_streams),
             "missing_evidence": strings(self.missing_evidence),
             "authority_class": self.authority_class,
         }
@@ -557,9 +553,7 @@ class Phase35BipedalReadinessAudit:
             "joint_vector_validation_receipt_count": int(
                 self.joint_vector_validation_receipt_count
             ),
-            "balance_geometry_report_count": int(
-                self.balance_geometry_report_count
-            ),
+            "balance_geometry_report_count": int(self.balance_geometry_report_count),
             "whole_body_replay_row_count": int(self.whole_body_replay_row_count),
             "phase35_no_gpu_no_hardware_prepared": bool(
                 self.phase35_no_gpu_no_hardware_prepared
@@ -632,7 +626,9 @@ class Phase35BipedalReadinessAudit:
                 **_denied_gates(),
                 **{
                     str(key): bool(value)
-                    for key, value in dict(payload.get("denied_gates", {}) or {}).items()
+                    for key, value in dict(
+                        payload.get("denied_gates", {}) or {}
+                    ).items()
                 },
             },
             closed_local_surfaces=strings(payload.get("closed_local_surfaces")),
@@ -795,7 +791,8 @@ def build_kinematic_consistency_report(
     limb_groups = chassis.limb_groups
     left_right_symmetry = (
         len(limb_groups.get("left_leg", [])) == len(limb_groups.get("right_leg", []))
-        and len(limb_groups.get("left_arm", [])) == len(limb_groups.get("right_arm", []))
+        and len(limb_groups.get("left_arm", []))
+        == len(limb_groups.get("right_arm", []))
         and len(limb_groups.get("left_hand", []))
         == len(limb_groups.get("right_hand", []))
     )
@@ -898,7 +895,7 @@ def build_joint_vector_validation_receipts(
     ]
 
 
-def _polygon_area(points: list[Mapping[str, float]]) -> float:
+def _polygon_area(points: Sequence[Mapping[str, float]]) -> float:
     if len(points) < 3:
         return 0.0
     area = 0.0
@@ -909,7 +906,10 @@ def _polygon_area(points: list[Mapping[str, float]]) -> float:
     return abs(area) / 2.0
 
 
-def _point_in_polygon(point: Mapping[str, float], polygon: list[Mapping[str, float]]) -> bool:
+def _point_in_polygon(
+    point: Mapping[str, float],
+    polygon: Sequence[Mapping[str, float]],
+) -> bool:
     if len(polygon) < 3:
         return False
     x = safe_float(point.get("x"))

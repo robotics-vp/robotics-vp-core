@@ -128,7 +128,9 @@ class Phase7GovernanceNodeSignalAdapter:
             domain_key=str(payload.get("domain_key", "")),
             source_artifact_refs={
                 str(key): str(value)
-                for key, value in dict(payload.get("source_artifact_refs") or {}).items()
+                for key, value in dict(
+                    payload.get("source_artifact_refs") or {}
+                ).items()
             },
             source_receipt_ids=strings(payload.get("source_receipt_ids")),
             source_receipt_families=strings(payload.get("source_receipt_families")),
@@ -136,27 +138,19 @@ class Phase7GovernanceNodeSignalAdapter:
             signal_slots=mapping(payload.get("signal_slots")),
             adapter_status=str(payload.get("adapter_status", "blocked")),
             evidence_class=str(
-                payload.get(
-                    "evidence_class", "lower_wm_receipt_backed_shadow_signal"
-                )
+                payload.get("evidence_class", "lower_wm_receipt_backed_shadow_signal")
             ),
-            lower_wm_receipt_backed=bool(
-                payload.get("lower_wm_receipt_backed", True)
-            ),
+            lower_wm_receipt_backed=bool(payload.get("lower_wm_receipt_backed", True)),
             shadow_only=bool(payload.get("shadow_only", True)),
             advisory_only=bool(payload.get("advisory_only", True)),
             training_aware=bool(payload.get("training_aware", True)),
             promotion_eligible=bool(payload.get("promotion_eligible", False)),
             authority_class=str(
-                payload.get(
-                    "authority_class", "phase7_governance_signal_adapter_only"
-                )
+                payload.get("authority_class", "phase7_governance_signal_adapter_only")
             ),
             denied_authority=strings(payload.get("denied_authority")),
             version=str(
-                payload.get(
-                    "version", PHASE7_GOVERNANCE_NODE_SIGNAL_ADAPTER_VERSION
-                )
+                payload.get("version", PHASE7_GOVERNANCE_NODE_SIGNAL_ADAPTER_VERSION)
             ),
         )
 
@@ -228,7 +222,9 @@ class Phase7GovernanceNodeSignalReceipt:
             source_receipt_ids=strings(payload.get("source_receipt_ids")),
             source_artifact_refs={
                 str(key): str(value)
-                for key, value in dict(payload.get("source_artifact_refs") or {}).items()
+                for key, value in dict(
+                    payload.get("source_artifact_refs") or {}
+                ).items()
             },
             confidence=float(payload.get("confidence", 0.0) or 0.0),
             candidate_outputs=mapping(payload.get("candidate_outputs")),
@@ -237,9 +233,7 @@ class Phase7GovernanceNodeSignalReceipt:
             ),
             shadow_only=bool(payload.get("shadow_only", True)),
             advisory_only=bool(payload.get("advisory_only", True)),
-            lower_wm_receipt_backed=bool(
-                payload.get("lower_wm_receipt_backed", True)
-            ),
+            lower_wm_receipt_backed=bool(payload.get("lower_wm_receipt_backed", True)),
             training_aware=bool(payload.get("training_aware", True)),
             live_dispatch_allowed=bool(payload.get("live_dispatch_allowed", False)),
             hard_veto_dispatch=bool(payload.get("hard_veto_dispatch", False)),
@@ -253,9 +247,7 @@ class Phase7GovernanceNodeSignalReceipt:
             ),
             denied_authority=strings(payload.get("denied_authority")),
             version=str(
-                payload.get(
-                    "version", PHASE7_GOVERNANCE_NODE_SIGNAL_RECEIPT_VERSION
-                )
+                payload.get("version", PHASE7_GOVERNANCE_NODE_SIGNAL_RECEIPT_VERSION)
             ),
         )
 
@@ -300,19 +292,13 @@ class Phase7GovernanceSignalAdapterReport:
             "adapter_count": int(self.adapter_count),
             "signal_receipt_count": int(self.signal_receipt_count),
             "source_artifact_count": int(self.source_artifact_count),
-            "missing_source_artifact_count": int(
-                self.missing_source_artifact_count
-            ),
+            "missing_source_artifact_count": int(self.missing_source_artifact_count),
             "lower_wm_receipt_backed_node_count": int(
                 self.lower_wm_receipt_backed_node_count
             ),
-            "all_eight_nodes_signal_backed": bool(
-                self.all_eight_nodes_signal_backed
-            ),
+            "all_eight_nodes_signal_backed": bool(self.all_eight_nodes_signal_backed),
             "shadow_runtime_feed_ready": bool(self.shadow_runtime_feed_ready),
-            "local_signal_adapter_complete": bool(
-                self.local_signal_adapter_complete
-            ),
+            "local_signal_adapter_complete": bool(self.local_signal_adapter_complete),
             "phase7_authority_granted": bool(self.phase7_authority_granted),
             "live_dispatch_allowed": bool(self.live_dispatch_allowed),
             "hard_veto_dispatch": bool(self.hard_veto_dispatch),
@@ -335,9 +321,7 @@ class Phase7GovernanceSignalAdapterReport:
     ) -> "Phase7GovernanceSignalAdapterReport":
         return cls(
             report_id=str(payload.get("report_id", "")),
-            phase7_scaffold_report_id=str(
-                payload.get("phase7_scaffold_report_id", "")
-            ),
+            phase7_scaffold_report_id=str(payload.get("phase7_scaffold_report_id", "")),
             status=str(payload.get("status", "blocked")),
             governance_node_surface_count=int(
                 payload.get("governance_node_surface_count", 0) or 0
@@ -379,9 +363,7 @@ class Phase7GovernanceSignalAdapterReport:
             remaining_blockers=strings(payload.get("remaining_blockers")),
             artifact_refs=mapping(payload.get("artifact_refs")),
             version=str(
-                payload.get(
-                    "version", PHASE7_GOVERNANCE_SIGNAL_ADAPTER_REPORT_VERSION
-                )
+                payload.get("version", PHASE7_GOVERNANCE_SIGNAL_ADAPTER_REPORT_VERSION)
             ),
         )
 
@@ -460,12 +442,10 @@ def build_phase7_governance_signal_adapters(
 def _load_lower_wm_evidence(root: Path) -> _EvidenceBundle:
     json_specs = {
         "phase35_refit_report": (
-            "phase35_humanoid_capacity_env_refit/"
-            "humanoid_phase35_refit_report_v1.json"
+            "phase35_humanoid_capacity_env_refit/humanoid_phase35_refit_report_v1.json"
         ),
         "phase35_bipedal_readiness_audit": (
-            "phase35_bipedal_readiness_audit/"
-            "phase35_bipedal_readiness_audit_v1.json"
+            "phase35_bipedal_readiness_audit/phase35_bipedal_readiness_audit_v1.json"
         ),
         "phase4_downstream_controller_report": (
             "phase4_downstream_controller_scaffold/"
@@ -476,8 +456,7 @@ def _load_lower_wm_evidence(root: Path) -> _EvidenceBundle:
             "phase4_unitree_bringup_readiness_report_v1.json"
         ),
         "phase4_local_harness_report": (
-            "phase4_unitree_local_harnesses/"
-            "phase4_unitree_local_harness_report_v1.json"
+            "phase4_unitree_local_harnesses/phase4_unitree_local_harness_report_v1.json"
         ),
         "phase4_runtime_bridge_report": (
             "phase4_unitree_runtime_evidence_bridge/"
@@ -492,16 +471,13 @@ def _load_lower_wm_evidence(root: Path) -> _EvidenceBundle:
             "wm_transport_advisory_runtime_report_v1.json"
         ),
         "phase6_closure_audit": (
-            "phase6_transport_closure_audit/"
-            "wm_transport_phase6_closure_audit_v1.json"
+            "phase6_transport_closure_audit/wm_transport_phase6_closure_audit_v1.json"
         ),
         "phase65_report": (
             "phase65_meta_node_neuralization/"
             "phase65_meta_node_neuralization_report_v1.json"
         ),
-        "phase7_shadow_summary": (
-            "phase7_meta_regal_shadow_runtime/summary.json"
-        ),
+        "phase7_shadow_summary": ("phase7_meta_regal_shadow_runtime/summary.json"),
         "phase7_eval_report": (
             "phase7_meta_governance_eval/"
             "phase7_meta_governance_evaluation_report_v1.json"
@@ -509,24 +485,19 @@ def _load_lower_wm_evidence(root: Path) -> _EvidenceBundle:
     }
     jsonl_specs = {
         "phase35_balance_geometry_reports": (
-            "phase35_bipedal_readiness_audit/"
-            "balance_geometry_reports_v1.jsonl"
+            "phase35_bipedal_readiness_audit/balance_geometry_reports_v1.jsonl"
         ),
         "phase35_joint_vector_receipts": (
-            "phase35_bipedal_readiness_audit/"
-            "joint_vector_validation_receipts_v1.jsonl"
+            "phase35_bipedal_readiness_audit/joint_vector_validation_receipts_v1.jsonl"
         ),
         "phase35_whole_body_replay_rows": (
-            "phase35_bipedal_readiness_audit/"
-            "whole_body_replay_rows_v1.jsonl"
+            "phase35_bipedal_readiness_audit/whole_body_replay_rows_v1.jsonl"
         ),
         "phase4_controller_safety_receipts": (
-            "phase4_downstream_controller_scaffold/"
-            "controller_safety_receipts_v1.jsonl"
+            "phase4_downstream_controller_scaffold/controller_safety_receipts_v1.jsonl"
         ),
         "phase4_low_level_command_frames": (
-            "phase4_downstream_controller_scaffold/"
-            "low_level_command_frames_v1.jsonl"
+            "phase4_downstream_controller_scaffold/low_level_command_frames_v1.jsonl"
         ),
         "phase4_safety_preflight_receipts": (
             "phase4_unitree_bringup_readiness/"
@@ -537,24 +508,20 @@ def _load_lower_wm_evidence(root: Path) -> _EvidenceBundle:
             "unitree_operator_recovery_runbooks_v1.jsonl"
         ),
         "phase4_mock_receivers": (
-            "phase4_unitree_local_harnesses/"
-            "unitree_mock_receiver_receipts_v1.jsonl"
+            "phase4_unitree_local_harnesses/unitree_mock_receiver_receipts_v1.jsonl"
         ),
         "phase4_stale_validations": (
             "phase4_unitree_local_harnesses/"
             "unitree_stale_data_validation_receipts_v1.jsonl"
         ),
         "phase4_watchdog_demotions": (
-            "phase4_unitree_local_harnesses/"
-            "unitree_watchdog_demotion_receipts_v1.jsonl"
+            "phase4_unitree_local_harnesses/unitree_watchdog_demotion_receipts_v1.jsonl"
         ),
         "phase4_safety_transitions": (
-            "phase4_unitree_local_harnesses/"
-            "unitree_safety_state_transitions_v1.jsonl"
+            "phase4_unitree_local_harnesses/unitree_safety_state_transitions_v1.jsonl"
         ),
         "phase4_trace_replay_receipts": (
-            "phase4_unitree_local_harnesses/"
-            "unitree_trace_replay_receipts_v1.jsonl"
+            "phase4_unitree_local_harnesses/unitree_trace_replay_receipts_v1.jsonl"
         ),
         "phase4_ros2_readiness_receipts": (
             "phase4_unitree_runtime_evidence_bridge/"
@@ -585,19 +552,16 @@ def _load_lower_wm_evidence(root: Path) -> _EvidenceBundle:
             "wm_transport_decomposed_eval_reports_v1.jsonl"
         ),
         "phase65_meta_node_trajectory_receipts": (
-            "phase65_meta_node_neuralization/"
-            "meta_node_trajectory_receipts_v1.jsonl"
+            "phase65_meta_node_neuralization/meta_node_trajectory_receipts_v1.jsonl"
         ),
         "phase65_meta_node_robustness_reports": (
-            "phase65_meta_node_neuralization/"
-            "meta_node_robustness_reports_v1.jsonl"
+            "phase65_meta_node_neuralization/meta_node_robustness_reports_v1.jsonl"
         ),
         "phase7_outcome_join_rows": (
             "phase7_meta_governance_eval/phase7_outcome_join_rows_v1.jsonl"
         ),
         "phase7_control_field_evals": (
-            "phase7_meta_governance_eval/"
-            "phase7_control_field_eval_reports_v1.jsonl"
+            "phase7_meta_governance_eval/phase7_control_field_eval_reports_v1.jsonl"
         ),
     }
     refs: dict[str, str] = {}
@@ -636,7 +600,9 @@ def _build_node_signal(
     refs, families, metrics, slots = _node_evidence(surface.node_key, bundle)
     source_receipt_ids = _source_ids(bundle=bundle, families=families)
     source_artifact_refs = {family: bundle.refs[family] for family in families}
-    lower_backed = bool(source_receipt_ids) and all(refs.get(family, False) for family in families)
+    lower_backed = bool(source_receipt_ids) and all(
+        refs.get(family, False) for family in families
+    )
     status = "ok" if lower_backed else "blocked"
     adapter_payload = {
         "surface_id": surface.surface_id,
@@ -714,6 +680,7 @@ def _node_evidence(
 ) -> tuple[dict[str, bool], list[str], dict[str, float], dict[str, Any]]:
     p = bundle.payloads
     r = bundle.rows
+    slots: dict[str, Any]
     if node_key == "economic_allocation_governance":
         families = [
             "phase7_shadow_summary",
@@ -746,7 +713,9 @@ def _node_evidence(
         eval_report = p["phase7_eval_report"]
         metrics = {
             "mean_reward_total": _number(summary, "mean_reward_total"),
-            "control_field_eval_count": _number(eval_report, "control_field_eval_count"),
+            "control_field_eval_count": _number(
+                eval_report, "control_field_eval_count"
+            ),
             "reward_mutation_denied": float(
                 not bool(eval_report.get("reward_math_mutation"))
             ),
@@ -879,11 +848,15 @@ def _node_evidence(
         audit = p["phase35_bipedal_readiness_audit"]
         downstream = p["phase4_downstream_controller_report"]
         metrics = {
-            "bipedal_chassis_joint_count": _number(refit, "bipedal_chassis_joint_count"),
+            "bipedal_chassis_joint_count": _number(
+                refit, "bipedal_chassis_joint_count"
+            ),
             "joint_limit_envelope_count": _number(
                 refit, "bipedal_chassis_joint_limit_envelope_count"
             ),
-            "whole_body_replay_row_count": _number(audit, "whole_body_replay_row_count"),
+            "whole_body_replay_row_count": _number(
+                audit, "whole_body_replay_row_count"
+            ),
             "command_frame_count": _number(downstream, "command_frame_count"),
         }
         slots = {

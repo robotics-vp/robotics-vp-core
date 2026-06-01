@@ -538,49 +538,56 @@ def _build_resource_receipt(
     placement_class = (
         "local_benchmark_fixture" if row.benchmark_ready else "local_shadow_gap_fixture"
     )
+    capacity_units = {
+        "local_cpu_budget": local_capacity,
+        "companion_compute_budget": 0.25 + 0.25 * benchmark_weight,
+        "gpu_training_budget": 0.0,
+        "provider_runtime_budget": 0.0,
+        "shadow_planning_budget": 1.0,
+    }
+    latency_ms = {
+        "canonical_state_ingest_ms": 5.0 + 10.0 * shadow_gap,
+        "shadow_planner_cycle_ms": 40.0 + 40.0 * provider_gap,
+        "companion_round_trip_ms": 25.0 + 25.0 * shadow_gap,
+        "gpu_training_latency_ms": 0.0,
+    }
+    thermal_headroom = {
+        "local_cpu_headroom": 0.75,
+        "companion_compute_headroom": 0.55 + 0.1 * benchmark_weight,
+        "gpu_training_headroom": 0.0,
+    }
+    battery_reserve = {
+        "minimum_reserve_fraction": 0.25,
+        "shadow_execution_reserve_fraction": 0.5 + 0.1 * benchmark_weight,
+        "provider_bringup_reserve_fraction": 0.0,
+    }
+    queue_depth = {
+        "shadow_gap_queue": shadow_gap,
+        "provider_evidence_queue": provider_gap,
+        "gpu_training_queue": gpu_gap,
+        "benchmark_fixture_queue": benchmark_weight,
+    }
+    telemetry_quality = {
+        "replay_row_contract": 1.0,
+        "lower_wm_reference_presence": 1.0
+        if row.source_refs.get("canonical_lower_wm_refs")
+        else 0.0,
+        "teacher_runtime_truth": 0.0 if provider_gap > 0.0 else 1.0,
+        "gpu_runtime_truth": 0.0,
+    }
+    blockers = _unique([*row.denied_promotion_reasons, *LOCAL_PHASE5_BLOCKERS])
     payload = {
         "source_row_id": row.row_id,
         "source_episode_id": row.source_episode_id,
         "receipt_kind": "capacity_latency_thermal_battery_queue",
-        "capacity_units": {
-            "local_cpu_budget": local_capacity,
-            "companion_compute_budget": 0.25 + 0.25 * benchmark_weight,
-            "gpu_training_budget": 0.0,
-            "provider_runtime_budget": 0.0,
-            "shadow_planning_budget": 1.0,
-        },
-        "latency_ms": {
-            "canonical_state_ingest_ms": 5.0 + 10.0 * shadow_gap,
-            "shadow_planner_cycle_ms": 40.0 + 40.0 * provider_gap,
-            "companion_round_trip_ms": 25.0 + 25.0 * shadow_gap,
-            "gpu_training_latency_ms": 0.0,
-        },
-        "thermal_headroom": {
-            "local_cpu_headroom": 0.75,
-            "companion_compute_headroom": 0.55 + 0.1 * benchmark_weight,
-            "gpu_training_headroom": 0.0,
-        },
-        "battery_reserve": {
-            "minimum_reserve_fraction": 0.25,
-            "shadow_execution_reserve_fraction": 0.5 + 0.1 * benchmark_weight,
-            "provider_bringup_reserve_fraction": 0.0,
-        },
-        "queue_depth": {
-            "shadow_gap_queue": shadow_gap,
-            "provider_evidence_queue": provider_gap,
-            "gpu_training_queue": gpu_gap,
-            "benchmark_fixture_queue": benchmark_weight,
-        },
-        "telemetry_quality": {
-            "replay_row_contract": 1.0,
-            "lower_wm_reference_presence": 1.0
-            if row.source_refs.get("canonical_lower_wm_refs")
-            else 0.0,
-            "teacher_runtime_truth": 0.0 if provider_gap > 0.0 else 1.0,
-            "gpu_runtime_truth": 0.0,
-        },
+        "capacity_units": capacity_units,
+        "latency_ms": latency_ms,
+        "thermal_headroom": thermal_headroom,
+        "battery_reserve": battery_reserve,
+        "queue_depth": queue_depth,
+        "telemetry_quality": telemetry_quality,
         "placement_class": placement_class,
-        "blockers": _unique([*row.denied_promotion_reasons, *LOCAL_PHASE5_BLOCKERS]),
+        "blockers": blockers,
         "source_refs": row.source_refs,
     }
     return EconomicWMResourceReceipt(
@@ -588,14 +595,14 @@ def _build_resource_receipt(
         source_row_id=row.row_id,
         source_episode_id=row.source_episode_id,
         receipt_kind=str(payload["receipt_kind"]),
-        capacity_units=_float_dict(payload["capacity_units"]),
-        latency_ms=_float_dict(payload["latency_ms"]),
-        thermal_headroom=_float_dict(payload["thermal_headroom"]),
-        battery_reserve=_float_dict(payload["battery_reserve"]),
-        queue_depth=_float_dict(payload["queue_depth"]),
-        telemetry_quality=_float_dict(payload["telemetry_quality"]),
+        capacity_units=_float_dict(capacity_units),
+        latency_ms=_float_dict(latency_ms),
+        thermal_headroom=_float_dict(thermal_headroom),
+        battery_reserve=_float_dict(battery_reserve),
+        queue_depth=_float_dict(queue_depth),
+        telemetry_quality=_float_dict(telemetry_quality),
         placement_class=placement_class,
-        blockers=list(payload["blockers"]),
+        blockers=list(blockers),
         source_refs=_mapping(row.source_refs),
         metadata={
             "boundary": "local Phase-5 resource schema only",

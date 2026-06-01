@@ -34,10 +34,9 @@ See ``neural_seams.py`` docstring for full training objective documentation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 
@@ -181,7 +180,6 @@ def evidence_fusion_loss(
         config = EvidenceFusionLossConfig()
 
     batch_size = predicted_weights.size(0)
-    n_providers = predicted_weights.size(1)
     device = predicted_weights.device
 
     component_losses: Dict[str, torch.Tensor] = {}
@@ -225,9 +223,9 @@ def evidence_fusion_loss(
     if provider_availability_mask is not None:
         # Encourage similar weight patterns for similar availability patterns
         # Simple approach: entropy on weights (lower entropy = more decisive)
-        weight_entropy = -(
-            predicted_weights * (predicted_weights + 1e-8).log()
-        ).sum(dim=-1).mean()
+        weight_entropy = (
+            -(predicted_weights * (predicted_weights + 1e-8).log()).sum(dim=-1).mean()
+        )
         avail_contrastive_loss = -weight_entropy  # Maximize entropy for robustness
         component_losses["availability_contrastive"] = avail_contrastive_loss
 
@@ -249,7 +247,10 @@ def evidence_fusion_loss(
     # Metrics
     metrics["mean_confidence"] = float(predicted_confidence.mean().item())
     metrics["weight_entropy"] = float(
-        -(predicted_weights * (predicted_weights + 1e-8).log()).sum(dim=-1).mean().item()
+        -(predicted_weights * (predicted_weights + 1e-8).log())
+        .sum(dim=-1)
+        .mean()
+        .item()
     )
 
     return SeamLossResult(
@@ -317,35 +318,46 @@ def sam_calibration_loss(
         n_valid = valid_mask.sum().clamp(min=1.0)
     else:
         valid_mask = torch.ones_like(calibrated_confidence)
-        n_valid = torch.tensor(calibrated_confidence.numel(), device=device, dtype=torch.float)
+        n_valid = torch.tensor(
+            calibrated_confidence.numel(), device=device, dtype=torch.float
+        )
 
     # Primary: calibration loss (calibrated confidence vs mask quality)
-    calibration_loss = F.mse_loss(
-        calibrated_confidence * valid_mask,
-        downstream_mask_quality * valid_mask,
-        reduction="sum",
-    ) / n_valid
+    calibration_loss = (
+        F.mse_loss(
+            calibrated_confidence * valid_mask,
+            downstream_mask_quality * valid_mask,
+            reduction="sum",
+        )
+        / n_valid
+    )
     component_losses["calibration"] = calibration_loss
 
     # Secondary: uncertainty correlation with disagreement
     uncertainty_loss = torch.tensor(0.0, device=device)
     if provider_disagreement is not None:
         # Uncertainty should be high where disagreement is high
-        uncertainty_loss = F.mse_loss(
-            epistemic_uncertainty * valid_mask,
-            provider_disagreement * valid_mask,
-            reduction="sum",
-        ) / n_valid
+        uncertainty_loss = (
+            F.mse_loss(
+                epistemic_uncertainty * valid_mask,
+                provider_disagreement * valid_mask,
+                reduction="sum",
+            )
+            / n_valid
+        )
         component_losses["uncertainty"] = uncertainty_loss
 
     # Auxiliary: prompt satisfaction correlation with IoU
     prompt_sat_loss = torch.tensor(0.0, device=device)
     if segmentation_iou is not None:
-        prompt_sat_loss = F.mse_loss(
-            prompt_satisfaction * valid_mask,
-            segmentation_iou * valid_mask,
-            reduction="sum",
-        ) / n_valid
+        prompt_sat_loss = (
+            F.mse_loss(
+                prompt_satisfaction * valid_mask,
+                segmentation_iou * valid_mask,
+                reduction="sum",
+            )
+            / n_valid
+        )
         component_losses["prompt_satisfaction"] = prompt_sat_loss
 
     # Total loss
@@ -356,7 +368,11 @@ def sam_calibration_loss(
     )
 
     # Metrics
-    valid_conf = calibrated_confidence[mask_valid] if mask_valid is not None else calibrated_confidence
+    valid_conf = (
+        calibrated_confidence[mask_valid]
+        if mask_valid is not None
+        else calibrated_confidence
+    )
     metrics["mean_calibrated_confidence"] = float(valid_conf.mean().item())
     metrics["calibration_mse"] = float(calibration_loss.item())
 
@@ -410,7 +426,6 @@ def vision_backbone_projection_loss(
 
     device = projected_features.device
     batch_size = projected_features.size(0)
-    n_tokens = projected_features.size(1)
     d_out = projected_features.size(2)
 
     component_losses: Dict[str, torch.Tensor] = {}
@@ -474,7 +489,9 @@ def vision_backbone_projection_loss(
         scene_mask_self = torch.eye(batch_size, device=device, dtype=torch.bool)
         scene_logits = scene_sim.masked_fill(scene_mask_self, -1e9) / config.temperature
         scene_targets = scene_match.masked_fill(scene_mask_self, 0)
-        scene_targets = scene_targets / scene_targets.sum(dim=1, keepdim=True).clamp(min=1e-8)
+        scene_targets = scene_targets / scene_targets.sum(dim=1, keepdim=True).clamp(
+            min=1e-8
+        )
 
         if not scene_targets.isnan().any():
             scene_contrastive_loss = F.cross_entropy(
@@ -574,11 +591,14 @@ def depth_metric_calibration_loss(
     # Secondary: uncertainty calibration
     # Uncertainty should be high where error is high
     uncertainty_target = depth_error.detach() / (depth_error.detach().max() + 1e-8)
-    uncertainty_loss = F.mse_loss(
-        predicted_uncertainty * valid_mask,
-        uncertainty_target * valid_mask,
-        reduction="sum",
-    ) / n_valid
+    uncertainty_loss = (
+        F.mse_loss(
+            predicted_uncertainty * valid_mask,
+            uncertainty_target * valid_mask,
+            reduction="sum",
+        )
+        / n_valid
+    )
     component_losses["uncertainty"] = uncertainty_loss
 
     # Gradient loss for edge preservation
@@ -591,8 +611,12 @@ def depth_metric_calibration_loss(
         mask_dx = valid_mask[:, :, :, 1:] * valid_mask[:, :, :, :-1]
         mask_dy = valid_mask[:, :, 1:, :] * valid_mask[:, :, :-1, :]
 
-        loss_dx = ((pred_dx - target_dx).abs() * mask_dx).sum() / mask_dx.sum().clamp(min=1.0)
-        loss_dy = ((pred_dy - target_dy).abs() * mask_dy).sum() / mask_dy.sum().clamp(min=1.0)
+        loss_dx = ((pred_dx - target_dx).abs() * mask_dx).sum() / mask_dx.sum().clamp(
+            min=1.0
+        )
+        loss_dy = ((pred_dy - target_dy).abs() * mask_dy).sum() / mask_dy.sum().clamp(
+            min=1.0
+        )
         return loss_dx + loss_dy
 
     gradient_loss = gradient_loss_fn(metric_depth, ground_truth_depth)
@@ -601,10 +625,9 @@ def depth_metric_calibration_loss(
     # Auxiliary: scale/shift consistency
     scale_consistency_loss = torch.tensor(0.0, device=device)
     if previous_scale is not None and previous_shift is not None:
-        scale_consistency_loss = (
-            F.mse_loss(predicted_scale, previous_scale)
-            + F.mse_loss(predicted_shift, previous_shift)
-        )
+        scale_consistency_loss = F.mse_loss(
+            predicted_scale, previous_scale
+        ) + F.mse_loss(predicted_shift, previous_shift)
     component_losses["scale_consistency"] = scale_consistency_loss
 
     # Total loss
@@ -676,7 +699,9 @@ def vjepa_temporal_alignment_loss(
 
     # Apply object mask
     if object_valid_mask is not None:
-        valid_mask = object_valid_mask.float().unsqueeze(1).unsqueeze(-1)  # (batch, 1, N_obj, 1)
+        valid_mask = (
+            object_valid_mask.float().unsqueeze(1).unsqueeze(-1)
+        )  # (batch, 1, N_obj, 1)
         n_valid = object_valid_mask.sum().clamp(min=1.0) * T
     else:
         valid_mask = torch.ones(batch_size, 1, N_obj, 1, device=device)
@@ -700,7 +725,9 @@ def vjepa_temporal_alignment_loss(
     ordering_loss = torch.tensor(0.0, device=device)
     if T > 1:
         # Pool features per timestep and compute ordering loss
-        pooled = (temporal_aligned * valid_mask).sum(dim=2) / valid_mask.sum(dim=2).clamp(min=1.0)
+        pooled = (temporal_aligned * valid_mask).sum(dim=2) / valid_mask.sum(
+            dim=2
+        ).clamp(min=1.0)
         # (batch, T, d_out)
 
         # Contrastive: adjacent timesteps should be more similar than distant
@@ -710,9 +737,13 @@ def vjepa_temporal_alignment_loss(
         sim_matrix = torch.mm(pooled_norm, pooled_norm.t())  # (batch*T, batch*T)
 
         # Create temporal distance matrix
-        timestep_idx = torch.arange(T, device=device).unsqueeze(0).expand(batch_size, -1)
+        timestep_idx = (
+            torch.arange(T, device=device).unsqueeze(0).expand(batch_size, -1)
+        )
         timestep_flat = timestep_idx.reshape(-1)  # (batch*T,)
-        temporal_dist = (timestep_flat.unsqueeze(0) - timestep_flat.unsqueeze(1)).abs().float()
+        temporal_dist = (
+            (timestep_flat.unsqueeze(0) - timestep_flat.unsqueeze(1)).abs().float()
+        )
 
         # Soft target: closer timesteps should be more similar
         temporal_sim_target = torch.exp(-temporal_dist / max(1, T // 2))
@@ -820,12 +851,16 @@ def scene_graph_transformer_loss(
     if node_mask is not None:
         mask_f = node_mask.unsqueeze(-1).float()
         recon_loss = (
-            ((refined_tokens - input_tokens[..., :refined_tokens.size(-1)]) ** 2 * mask_f)
-            .sum() / mask_f.sum().clamp(min=1.0) / refined_tokens.size(-1)
+            (
+                (refined_tokens - input_tokens[..., : refined_tokens.size(-1)]) ** 2
+                * mask_f
+            ).sum()
+            / mask_f.sum().clamp(min=1.0)
+            / refined_tokens.size(-1)
         )
     else:
         recon_loss = F.mse_loss(
-            refined_tokens, input_tokens[..., :refined_tokens.size(-1)]
+            refined_tokens, input_tokens[..., : refined_tokens.size(-1)]
         )
     component_losses["token_reconstruction"] = recon_loss
 
@@ -840,7 +875,11 @@ def scene_graph_transformer_loss(
 
         # Compute per-class centroids and use distance-based classification
         # Simple approach: prototype-based classification loss
-        valid_mask = node_mask.reshape(B * N) if node_mask is not None else torch.ones(B * N, dtype=torch.bool, device=device)
+        valid_mask = (
+            node_mask.reshape(B * N)
+            if node_mask is not None
+            else torch.ones(B * N, dtype=torch.bool, device=device)
+        )
         valid_tokens = flat_tokens[valid_mask]
         valid_labels = flat_labels[valid_mask]
 
@@ -856,11 +895,11 @@ def scene_graph_transformer_loss(
 
             # Distance to centroids (prototype loss)
             dists = torch.cdist(valid_tokens, centroids)  # (valid, n_categories)
-            target_dist = F.one_hot(valid_labels.clamp(0, n_categories - 1), n_categories).float()
             # Soft cross-entropy on negative distances
             logits = -dists
             node_cls_loss = F.cross_entropy(
-                logits, valid_labels.clamp(0, n_categories - 1),
+                logits,
+                valid_labels.clamp(0, n_categories - 1),
                 label_smoothing=config.label_smoothing,
             )
             # Accuracy metric
@@ -876,9 +915,8 @@ def scene_graph_transformer_loss(
         if edge_mask is not None:
             mask_e = edge_mask.float()
             edge_imp_loss = (
-                ((edge_weights - edge_importance_target) ** 2 * mask_e)
-                .sum() / mask_e.sum().clamp(min=1.0)
-            )
+                (edge_weights - edge_importance_target) ** 2 * mask_e
+            ).sum() / mask_e.sum().clamp(min=1.0)
         else:
             edge_imp_loss = F.mse_loss(edge_weights, edge_importance_target)
         component_losses["edge_importance"] = edge_imp_loss
@@ -893,9 +931,8 @@ def scene_graph_transformer_loss(
             mask_n = node_mask.float()
             conf_pred = graph_confidence.unsqueeze(-1).expand_as(node_confidence_target)
             node_conf_loss = (
-                ((conf_pred - node_confidence_target) ** 2 * mask_n)
-                .sum() / mask_n.sum().clamp(min=1.0)
-            )
+                (conf_pred - node_confidence_target) ** 2 * mask_n
+            ).sum() / mask_n.sum().clamp(min=1.0)
         else:
             node_conf_loss = F.mse_loss(
                 graph_confidence.unsqueeze(-1).expand_as(node_confidence_target),

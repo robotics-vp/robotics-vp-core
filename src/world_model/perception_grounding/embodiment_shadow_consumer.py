@@ -43,7 +43,7 @@ Current posture: heuristic shadow (disabled|auto|required applies).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .common import clip01, mapping, stable_id, strings
 
@@ -117,9 +117,7 @@ class EmbodimentShadowSurface:
     frame_index: int
 
     # Per-object action relevance
-    object_action_relevances: List[ObjectActionRelevance] = field(
-        default_factory=list
-    )
+    object_action_relevances: List[ObjectActionRelevance] = field(default_factory=list)
 
     # Scene-level embodiment summaries
     scene_contact_feasibility: float = 0.0
@@ -165,11 +163,12 @@ class EmbodimentShadowSurface:
             "actionable_object_count": int(self.actionable_object_count),
             "obstructed_object_count": int(self.obstructed_object_count),
             "body_object_engagement_summary": {
-                str(k): float(v)
-                for k, v in self.body_object_engagement_summary.items()
+                str(k): float(v) for k, v in self.body_object_engagement_summary.items()
             },
             "resource_readiness": mapping(self.resource_readiness),
-            "provider_truth_for_embodiment": mapping(self.provider_truth_for_embodiment),
+            "provider_truth_for_embodiment": mapping(
+                self.provider_truth_for_embodiment
+            ),
             "latency_headroom_for_embodiment": mapping(
                 self.latency_headroom_for_embodiment
             ),
@@ -275,9 +274,7 @@ def _object_action_relevance(
     # Affordance feasibility: bridge score modulated by confidence and deployment
     deployment_factor = 0.8 if deployment_posture != "unavailable" else 0.4
     affordance_feasibility = clip01(
-        bridge_affordance_score * 0.50
-        + confidence * 0.25
-        + deployment_factor * 0.25
+        bridge_affordance_score * 0.50 + confidence * 0.25 + deployment_factor * 0.25
     )
 
     # Contact precondition: needs visibility + low uncertainty + some affordance
@@ -290,9 +287,7 @@ def _object_action_relevance(
 
     # Misalignment risk: uncertainty + occlusion + risk hints
     misalignment = clip01(
-        0.35 * uncertainty
-        + 0.30 * occlusion
-        + 0.35 * min(len(risk_hints), 3) / 3.0
+        0.35 * uncertainty + 0.30 * occlusion + 0.35 * min(len(risk_hints), 3) / 3.0
     )
 
     # Embodiment-specific risk flags
@@ -413,12 +408,8 @@ def consume_perception_for_embodiment(
         object_relevances.append(
             _object_action_relevance(
                 track=track,
-                bridge_affordance_score=float(
-                    bridge_affordance_scores.get(tid, 0.3)
-                ),
-                bridge_affordance_classes=list(
-                    bridge_affordance_classes.get(tid, [])
-                ),
+                bridge_affordance_score=float(bridge_affordance_scores.get(tid, 0.3)),
+                bridge_affordance_classes=list(bridge_affordance_classes.get(tid, [])),
                 body_pairwise_score=float(body_pairwise.get(tid, 0.3)),
                 deployment_posture=deployment_posture,
             )
@@ -428,9 +419,7 @@ def consume_perception_for_embodiment(
     actionable_count = sum(
         1 for r in object_relevances if r.affordance_feasibility > 0.4
     )
-    obstructed_count = sum(
-        1 for r in object_relevances if r.obstruction_score > 0.5
-    )
+    obstructed_count = sum(1 for r in object_relevances if r.obstruction_score > 0.5)
     scene_contact_feasibility = clip01(
         sum(r.contact_precondition_met for r in object_relevances)
         / max(len(object_relevances), 1)
@@ -451,9 +440,7 @@ def consume_perception_for_embodiment(
         for body_id, scores in bops.items():
             if isinstance(scores, dict):
                 vals = [float(v) for v in scores.values()]
-                body_engagement[str(body_id)] = clip01(
-                    sum(vals) / max(len(vals), 1)
-                )
+                body_engagement[str(body_id)] = clip01(sum(vals) / max(len(vals), 1))
 
     # --- Resource readiness ---
     resource_readiness: dict[str, Any] = {
@@ -520,9 +507,7 @@ def consume_perception_for_embodiment(
     fusion_disagreement = 0.0
     fusion_method = "unknown"
     if evidence_routing is not None:
-        fusion_confidence = float(
-            getattr(evidence_routing, "fusion_confidence", 0.0)
-        )
+        fusion_confidence = float(getattr(evidence_routing, "fusion_confidence", 0.0))
         fusion_disagreement = float(
             getattr(evidence_routing, "fusion_disagreement", 0.0)
         )
@@ -587,9 +572,7 @@ def consume_perception_for_embodiment(
         obstructed_object_count=obstructed_count,
         scene_contact_feasibility=scene_contact_feasibility,
         scene_affordance_coverage=scene_affordance_coverage,
-        provider_truth_available=bool(
-            provider_truth.get("all_providers_real", False)
-        ),
+        provider_truth_available=bool(provider_truth.get("all_providers_real", False)),
         deployment_posture=deployment_posture,
         evidence_fusion_confidence=fusion_confidence,
         reduced_quality=reduced_quality,

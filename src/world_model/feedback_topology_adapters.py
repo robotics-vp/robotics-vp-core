@@ -1,4 +1,5 @@
 """Learned trust/econ/readiness/correction overlays over coverage feedback."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -88,9 +89,15 @@ def build_feedback_topology_dataset(coverage_graph: Any) -> FeedbackTopologyData
         features.append(edge_feature_vector(edge).tolist())
         metadata = dict(getattr(edge, "metadata", {}) or {})
         trust_targets.append(_clip01(_safe_float(getattr(edge, "trust_priority", 0.0))))
-        econ_targets.append(_clip01(_safe_float(getattr(edge, "economic_priority", 0.0))))
-        readiness_targets.append(_clip01(_safe_float(getattr(edge, "promotion_readiness", 0.0))))
-        correction_targets.append(_clip01(_safe_float(metadata.get("wm_validation_pressure", 0.0))))
+        econ_targets.append(
+            _clip01(_safe_float(getattr(edge, "economic_priority", 0.0)))
+        )
+        readiness_targets.append(
+            _clip01(_safe_float(getattr(edge, "promotion_readiness", 0.0)))
+        )
+        correction_targets.append(
+            _clip01(_safe_float(metadata.get("wm_validation_pressure", 0.0)))
+        )
     return FeedbackTopologyDataset(
         feature_names=list(FEATURE_NAMES),
         features=features,
@@ -132,7 +139,6 @@ try:
                 "correction": torch.sigmoid(self.correction_head(hidden)).squeeze(-1),
             }
 
-
     @dataclass
     class SemanticFeedbackAdapterPackage:
         model: _MultiHeadNet
@@ -142,7 +148,11 @@ try:
         def predict_edges(self, edges: Sequence[Any]) -> List[Dict[str, float]]:
             if not edges:
                 return []
-            features = torch.tensor(np.array([edge_feature_vector(edge) for edge in edges], dtype=np.float32))
+            features = torch.tensor(
+                np.array(
+                    [edge_feature_vector(edge) for edge in edges], dtype=np.float32
+                )
+            )
             with torch.no_grad():
                 predictions = self.model(features)
             results: List[Dict[str, float]] = []
@@ -151,8 +161,12 @@ try:
                     {
                         "trust_priority": float(predictions["trust"][idx].item()),
                         "economic_priority": float(predictions["econ"][idx].item()),
-                        "promotion_readiness": float(predictions["readiness"][idx].item()),
-                        "wm_correction_pressure": float(predictions["correction"][idx].item()),
+                        "promotion_readiness": float(
+                            predictions["readiness"][idx].item()
+                        ),
+                        "wm_correction_pressure": float(
+                            predictions["correction"][idx].item()
+                        ),
                     }
                 )
             return results
@@ -165,7 +179,9 @@ try:
             }
 
         @classmethod
-        def from_checkpoint(cls, payload: Mapping[str, Any]) -> "SemanticFeedbackAdapterPackage":
+        def from_checkpoint(
+            cls, payload: Mapping[str, Any]
+        ) -> "SemanticFeedbackAdapterPackage":
             metadata = dict(payload.get("metadata", {}) or {})
             model = _MultiHeadNet(
                 input_dim=len(payload.get("feature_names", FEATURE_NAMES)),
@@ -179,7 +195,6 @@ try:
                 metadata=metadata,
             )
 
-
     def train_semantic_feedback_adapter_package(
         dataset: FeedbackTopologyDataset,
         *,
@@ -192,9 +207,15 @@ try:
         inputs = torch.tensor(np.array(dataset.features, dtype=np.float32))
         trust_targets = torch.tensor(np.array(dataset.trust_targets, dtype=np.float32))
         econ_targets = torch.tensor(np.array(dataset.econ_targets, dtype=np.float32))
-        readiness_targets = torch.tensor(np.array(dataset.readiness_targets, dtype=np.float32))
-        correction_targets = torch.tensor(np.array(dataset.correction_targets, dtype=np.float32))
-        model = _MultiHeadNet(input_dim=len(dataset.feature_names), hidden_dim=hidden_dim)
+        readiness_targets = torch.tensor(
+            np.array(dataset.readiness_targets, dtype=np.float32)
+        )
+        correction_targets = torch.tensor(
+            np.array(dataset.correction_targets, dtype=np.float32)
+        )
+        model = _MultiHeadNet(
+            input_dim=len(dataset.feature_names), hidden_dim=hidden_dim
+        )
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
         loss_fn = nn.MSELoss()
         model.train()
@@ -221,7 +242,6 @@ try:
             },
         )
 
-
     def shadow_fit_feedback_adapter_package(
         coverage_graph: Any,
         *,
@@ -231,7 +251,9 @@ try:
         if len(dataset.features) < min_samples:
             return None
         try:
-            return train_semantic_feedback_adapter_package(dataset, epochs=16, learning_rate=2e-3)
+            return train_semantic_feedback_adapter_package(
+                dataset, epochs=16, learning_rate=2e-3
+            )
         except Exception:
             return None
 
@@ -248,12 +270,19 @@ except Exception:
             return []
 
         def to_checkpoint(self) -> Dict[str, Any]:
-            return {"feature_names": list(self.feature_names), "metadata": dict(self.metadata)}
+            return {
+                "feature_names": list(self.feature_names),
+                "metadata": dict(self.metadata),
+            }
 
-    def train_semantic_feedback_adapter_package(*args: Any, **kwargs: Any) -> SemanticFeedbackAdapterPackage:  # type: ignore[no-redef]
+    def train_semantic_feedback_adapter_package(  # type: ignore[misc,no-redef]
+        *args: Any, **kwargs: Any
+    ) -> SemanticFeedbackAdapterPackage:
         raise ImportError("train_semantic_feedback_adapter_package requires torch")
 
-    def shadow_fit_feedback_adapter_package(*args: Any, **kwargs: Any) -> Optional[SemanticFeedbackAdapterPackage]:  # type: ignore[no-redef]
+    def shadow_fit_feedback_adapter_package(  # type: ignore[misc,no-redef]
+        *args: Any, **kwargs: Any
+    ) -> Optional[SemanticFeedbackAdapterPackage]:
         return None
 
 

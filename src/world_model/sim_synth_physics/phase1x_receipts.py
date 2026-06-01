@@ -41,10 +41,12 @@ def build_sim_real_gap_receipt(
     gap_score = 1.0 - clip01(calibration_receipt.quality_score)
     if execution_contract.route_status == "fallback":
         gap_score += 0.12
-    if (
-        str(execution_contract.target_hardware_class) == "unitree_g1_r1_class"
-        and execution_contract.resolved_backend not in {"isaac", "holosoma"}
-    ):
+    if str(
+        execution_contract.target_hardware_class
+    ) == "unitree_g1_r1_class" and execution_contract.resolved_backend not in {
+        "isaac",
+        "holosoma",
+    }:
         gap_score += 0.12
     measured = bool(runtime_evidence.get("runtime_concrete_completed", False))
     payload = {
@@ -80,7 +82,9 @@ def build_task_measurement_receipt(
     surface = world_state.task_measurements
     task_contract = world_state.task_definition_contract
     surface_id = "" if surface is None else str(surface.surface_id)
-    task_definition_contract_id = "" if task_contract is None else str(task_contract.contract_id)
+    task_definition_contract_id = (
+        "" if task_contract is None else str(task_contract.contract_id)
+    )
     task_family = "unknown" if surface is None else str(surface.task_family)
     payload = {
         "state_id": world_state.state_id,
@@ -92,7 +96,9 @@ def build_task_measurement_receipt(
         surface_id=surface_id,
         task_definition_contract_id=task_definition_contract_id,
         task_family=task_family,
-        benchmark_gate_ready=False if surface is None else bool(surface.benchmark_gate_ready),
+        benchmark_gate_ready=False
+        if surface is None
+        else bool(surface.benchmark_gate_ready),
         measurement_values={} if surface is None else dict(surface.measurement_values),
         measurement_status={} if surface is None else dict(surface.measurement_status),
         metadata={
@@ -169,7 +175,9 @@ def build_surrogate_physics_receipt(
         metadata={
             "world_state_id": world_state.state_id,
             "provider_status": provider_status,
-            "provider_family": "" if provider is None else str(provider.provider_family),
+            "provider_family": ""
+            if provider is None
+            else str(provider.provider_family),
             "lane_authority": "advisory_provider_only",
         },
     )
@@ -208,7 +216,9 @@ def build_surrogate_calibration_receipt(
         metadata={
             "world_state_id": world_state.state_id,
             "physics_calibration_receipt_id": calibration_receipt.receipt_id,
-            "linked_receipts": [str(receipt_id) for receipt_id in linked_receipts if receipt_id],
+            "linked_receipts": [
+                str(receipt_id) for receipt_id in linked_receipts if receipt_id
+            ],
             "lane_authority": "advisory_provider_only",
         },
     )
@@ -220,7 +230,9 @@ def build_sensor_alignment_receipt(
     """Emit a CPU-local camera geometry / sensor-alignment receipt."""
 
     scene_hierarchy = world_state.scene_hierarchy
-    scene_metadata = mapping({} if scene_hierarchy is None else scene_hierarchy.metadata)
+    scene_metadata = mapping(
+        {} if scene_hierarchy is None else scene_hierarchy.metadata
+    )
     semantic_context = mapping(scene_metadata.get("semantic_context"))
     intrinsics_source = (
         semantic_context.get("camera_intrinsics")
@@ -244,14 +256,19 @@ def build_sensor_alignment_receipt(
         "round_trip": "not_run",
     }
     metrics: dict[str, float] = {}
+    asset_contract = world_state.robot_asset_contract
     metadata: dict[str, Any] = {
         "world_state_id": world_state.state_id,
         "scene_materialization_status": (
             "" if scene_hierarchy is None else scene_hierarchy.materialization_status
         ),
-        "asset_contract_id": world_state.robot_asset_contract.contract_id,
-        "asset_profile": world_state.robot_asset_contract.asset_profile,
-        "missing_assets": list(world_state.robot_asset_contract.missing_assets),
+        "asset_contract_id": ""
+        if asset_contract is None
+        else asset_contract.contract_id,
+        "asset_profile": {} if asset_contract is None else asset_contract.asset_profile,
+        "missing_assets": []
+        if asset_contract is None
+        else list(asset_contract.missing_assets),
         "semantic_context_keys": sorted(semantic_context),
     }
     status = "alignment_contract_missing"
@@ -287,7 +304,9 @@ def build_sensor_alignment_receipt(
                 status = "geometry_contract_validated"
             else:
                 status = "geometry_round_trip_mismatch"
-        except Exception as exc:  # pragma: no cover - exact exception type is metadata only
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - exact exception type is metadata only
             status = "alignment_contract_invalid"
             checks["round_trip"] = "failed"
             metadata["validation_error"] = str(exc)
@@ -299,22 +318,29 @@ def build_sensor_alignment_receipt(
 
     payload = {
         "state_id": world_state.state_id,
-        "scene_hierarchy_id": "" if scene_hierarchy is None else scene_hierarchy.hierarchy_id,
-        "sensor_profile": "" if scene_hierarchy is None else scene_hierarchy.sensor_profile,
+        "scene_hierarchy_id": ""
+        if scene_hierarchy is None
+        else scene_hierarchy.hierarchy_id,
+        "sensor_profile": ""
+        if scene_hierarchy is None
+        else scene_hierarchy.sensor_profile,
         "status": status,
         "checks": checks,
     }
     return SensorAlignmentReceipt(
         receipt_id=stable_id("sensor_alignment_receipt", payload),
-        scene_hierarchy_id="" if scene_hierarchy is None else scene_hierarchy.hierarchy_id,
-        sensor_profile="" if scene_hierarchy is None else scene_hierarchy.sensor_profile,
+        scene_hierarchy_id=""
+        if scene_hierarchy is None
+        else scene_hierarchy.hierarchy_id,
+        sensor_profile=""
+        if scene_hierarchy is None
+        else scene_hierarchy.sensor_profile,
         alignment_score=alignment_score,
         status=status,
         checks=checks,
         metrics=metrics,
         metadata=metadata,
     )
-
 
 
 def _average_clip(values: Sequence[float]) -> float:
@@ -347,11 +373,15 @@ def build_replay_validity_receipts(
     for outcome in outcome_receipts:
         outcome_metadata = mapping(outcome.metadata)
         branch_validity = branch_validity_by_plan.get(outcome.branch_plan_id)
-        branch_score = 0.0 if branch_validity is None else clip01(branch_validity.validity_score)
+        branch_score = (
+            0.0 if branch_validity is None else clip01(branch_validity.validity_score)
+        )
         outcome_score = clip01(
             outcome_metadata.get(
                 "realized_yield_score",
-                outcome_metadata.get("quality_score", outcome_metadata.get("expected_yield_score", 0.0)),
+                outcome_metadata.get(
+                    "quality_score", outcome_metadata.get("expected_yield_score", 0.0)
+                ),
             )
         )
         reject_reasons: list[str] = []
@@ -429,7 +459,6 @@ def build_replay_validity_receipts(
     return receipts
 
 
-
 def _branch_reject_reasons(
     *,
     plan_metadata: dict[str, Any],
@@ -439,14 +468,20 @@ def _branch_reject_reasons(
     admissible: bool,
 ) -> list[str]:
     reasons: list[str] = []
-    if bool(admission_preconditions.get("requires_benchmark_ready", False)) and not benchmark_gate_ready:
+    if (
+        bool(admission_preconditions.get("requires_benchmark_ready", False))
+        and not benchmark_gate_ready
+    ):
         reasons.append("benchmark_gate_not_ready")
     if (
         bool(admission_preconditions.get("requires_non_heuristic_grounding", False))
         and not semantic_grounding_non_heuristic
     ):
         reasons.append("semantic_grounding_heuristic")
-    if str(plan_metadata.get("scene_materialization_status", "")) == "asset_contract_incomplete":
+    if (
+        str(plan_metadata.get("scene_materialization_status", ""))
+        == "asset_contract_incomplete"
+    ):
         reasons.append("scene_asset_contract_incomplete")
     if not admissible and not reasons:
         reasons.append("admission_gate_blocked")
@@ -477,7 +512,9 @@ def build_branch_validity_receipts(
         admission_preconditions = mapping(plan.admission_preconditions)
         admissible = plan.plan_id in admissible_branch_ids
         admission_score = clip01(
-            admission_scores.get(plan.plan_id, getattr(plan, "expected_yield_score", 0.0))
+            admission_scores.get(
+                plan.plan_id, getattr(plan, "expected_yield_score", 0.0)
+            )
         )
         reject_reasons = _branch_reject_reasons(
             plan_metadata=plan_metadata,
@@ -512,7 +549,9 @@ def build_branch_validity_receipts(
                         "" if admission is None else str(admission.admission_id)
                     ),
                     "admission_preconditions": admission_preconditions,
-                    "scene_hierarchy_ref": mapping(plan_metadata.get("scene_hierarchy_ref")),
+                    "scene_hierarchy_ref": mapping(
+                        plan_metadata.get("scene_hierarchy_ref")
+                    ),
                     "scene_materialization_status": str(
                         plan_metadata.get("scene_materialization_status", "") or ""
                     ),

@@ -16,6 +16,8 @@ from src.world_model.economic_world_model import (
     build_economic_wm_scaffold_report,
     build_regime_acknowledgment,
     build_regime_broadcast,
+    load_bio_neuro_receipt_join_report,
+    load_bio_neuro_receipt_join_rows,
 )
 from src.world_model.embodiment_actuation import (
     build_embodiment_bio_neuro_substrate,
@@ -139,7 +141,9 @@ def test_economic_regime_broadcast_is_low_bandwidth_and_acknowledged() -> None:
     ack = build_regime_acknowledgment(
         broadcast,
         wm_id="embodiment_actuation",
-        accepted_settings={"trust_posture": broadcast.posture_settings["trust_posture"]},
+        accepted_settings={
+            "trust_posture": broadcast.posture_settings["trust_posture"]
+        },
     )
 
     payload = broadcast.to_dict()
@@ -193,3 +197,26 @@ def test_bio_neuro_substrate_check_script_writes_receipts(tmp_path: Path) -> Non
     assert report["promotion_eligible"] is False
     assert report["provider_or_hardware_proof"] is False
     assert (out_dir / "bio_neuro_substrate_receipts_v1.jsonl").exists()
+    assert report["receipt_join_status"] == "ok_bio_neuro_receipts_joined"
+    assert report["receipt_join_promotion_eligible"] is False
+
+    join_report_path = out_dir / "bio_neuro_receipt_join_report_v1.json"
+    join_rows_path = out_dir / "bio_neuro_receipt_join_rows_v1.jsonl"
+    assert join_report_path.exists()
+    assert join_rows_path.exists()
+
+    join_report = load_bio_neuro_receipt_join_report(join_report_path)
+    join_rows = load_bio_neuro_receipt_join_rows(join_rows_path)
+    assert join_report.row_count == len(join_rows)
+    assert join_report.promotion_eligible is False
+    assert join_report.provider_or_hardware_proof is False
+    assert join_report.trained_model_proof is False
+    assert join_report.phase7_abstraction_expanded is False
+    assert "efference_copy" in join_report.economic_consumption_slots
+    assert "active_sensing_value_of_information" in (
+        join_report.economic_consumption_slots
+    )
+    assert "anomaly_governance" in join_report.economic_consumption_slots
+    assert "regime_broadcast_conditioning" in join_report.economic_consumption_slots
+    assert all(row.promotion_eligible is False for row in join_rows)
+    assert all(row.ready_for_training is False for row in join_rows)

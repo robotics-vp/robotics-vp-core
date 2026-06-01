@@ -78,7 +78,9 @@ HOLOSOMA_PROFILE_COMMANDS = {
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(dict(payload), indent=2, sort_keys=True), encoding="utf-8"
+    )
 
 
 def _target_ref(runtime_target_contract: Mapping[str, Any], target_id: str) -> str:
@@ -125,9 +127,9 @@ def _usable_profiles(
     profiles = strings(runtime_layout_contract.get("usable_profiles")) or strings(
         runtime_layout_contract.get("ready_profiles")
     )
-    ready_targets = set(strings(runtime_target_contract.get("verified_target_ids"))) or set(
-        strings(runtime_target_contract.get("ready_target_ids"))
-    )
+    ready_targets = set(
+        strings(runtime_target_contract.get("verified_target_ids"))
+    ) or set(strings(runtime_target_contract.get("ready_target_ids")))
     for profile_id, target_ids in target_profile_map.items():
         if any(target_id in ready_targets for target_id in target_ids):
             if profile_id not in profiles:
@@ -147,7 +149,9 @@ def _preferred_profile(
         runtime_layout_contract=runtime_layout_contract,
         target_profile_map=target_profile_map,
     )
-    explicit_preferred = str(mapping(deployment_contract).get("preferred_profile", "") or "")
+    explicit_preferred = str(
+        mapping(deployment_contract).get("preferred_profile", "") or ""
+    )
     if explicit_preferred and explicit_preferred in ready_profiles:
         return explicit_preferred
     preferred_order = strings(
@@ -206,7 +210,10 @@ def _launch_specs_for_backend(
         target_profile_map = HOLOSOMA_PROFILE_TO_TARGET_IDS
         command_templates = HOLOSOMA_PROFILE_COMMANDS
         upstream_profiles = {
-            "holosoma_repo": {"repo": "holosoma", "url": "https://pypi.org/project/holosoma/"},
+            "holosoma_repo": {
+                "repo": "holosoma",
+                "url": "https://pypi.org/project/holosoma/",
+            },
         }
     ready_profiles = _usable_profiles(
         runtime_target_contract=runtime_target_contract,
@@ -218,7 +225,9 @@ def _launch_specs_for_backend(
     ) or strings(runtime_layout_contract.get("preferred_profile_order"))
     ordered_profiles = [
         profile_id for profile_id in preferred_order if profile_id in ready_profiles
-    ] + [profile_id for profile_id in ready_profiles if profile_id not in preferred_order]
+    ] + [
+        profile_id for profile_id in ready_profiles if profile_id not in preferred_order
+    ]
     specs: list[dict[str, Any]] = []
     for profile_id in ordered_profiles:
         command_template = command_templates.get(profile_id, "")
@@ -259,7 +268,9 @@ def build_backend_runtime_bundle(
     output_root: Optional[Path],
 ) -> tuple[list[str], dict[str, Any], dict[str, Any]]:
     target_profile_map = (
-        ISAAC_PROFILE_TO_TARGET_IDS if backend == "isaac" else HOLOSOMA_PROFILE_TO_TARGET_IDS
+        ISAAC_PROFILE_TO_TARGET_IDS
+        if backend == "isaac"
+        else HOLOSOMA_PROFILE_TO_TARGET_IDS
     )
     preferred_profile = _preferred_profile(
         runtime_target_contract=runtime_target_contract,
@@ -318,16 +329,24 @@ def build_backend_runtime_bundle(
             deployment_contract=mapping(deployment_contract),
             upstream_runtime_pack=mapping(upstream_runtime_pack),
         )
-        selected_profile = str(runtime_binding.get("selected_profile", "") or preferred_profile)
+        selected_profile = str(
+            runtime_binding.get("selected_profile", "") or preferred_profile
+        )
         if selected_profile and selected_profile != preferred_profile:
             preferred_profile = selected_profile
             preferred_launch_spec = next(
-                (spec for spec in launch_specs if spec.get("profile_id") == preferred_profile),
+                (
+                    spec
+                    for spec in launch_specs
+                    if spec.get("profile_id") == preferred_profile
+                ),
                 preferred_launch_spec,
             )
         runtime_bundle["preferred_profile"] = preferred_profile
         runtime_bundle["runtime_binding"] = runtime_binding
-        output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
+        output_contract = build_backend_runtime_output_contract(
+            runtime_bundle, preferred_launch_spec
+        )
         runtime_bundle["output_contract"] = output_contract
         executable_adapter_request = build_isaac_unitree_executable_adapter_request(
             task_id=task_id,
@@ -357,16 +376,24 @@ def build_backend_runtime_bundle(
             deployment_contract=mapping(deployment_contract),
             upstream_runtime_pack=mapping(upstream_runtime_pack),
         )
-        selected_profile = str(runtime_binding.get("selected_profile", "") or preferred_profile)
+        selected_profile = str(
+            runtime_binding.get("selected_profile", "") or preferred_profile
+        )
         if selected_profile and selected_profile != preferred_profile:
             preferred_profile = selected_profile
             preferred_launch_spec = next(
-                (spec for spec in launch_specs if spec.get("profile_id") == preferred_profile),
+                (
+                    spec
+                    for spec in launch_specs
+                    if spec.get("profile_id") == preferred_profile
+                ),
                 preferred_launch_spec,
             )
         runtime_bundle["preferred_profile"] = preferred_profile
         runtime_bundle["runtime_binding"] = runtime_binding
-        output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
+        output_contract = build_backend_runtime_output_contract(
+            runtime_bundle, preferred_launch_spec
+        )
         runtime_bundle["output_contract"] = output_contract
         executable_adapter_request = build_holosoma_executable_adapter_request(
             task_id=task_id,
@@ -386,9 +413,14 @@ def build_backend_runtime_bundle(
         runtime_bundle["executable_adapter_request"] = executable_adapter_request
         runtime_bundle["executable_adapter_consumer"] = executable_adapter_consumer
     runtime_bundle["preferred_profile"] = preferred_profile
-    output_contract = mapping(runtime_bundle.get("output_contract"))
+    raw_output_contract = runtime_bundle.get("output_contract")
+    output_contract = (
+        mapping(raw_output_contract) if isinstance(raw_output_contract, Mapping) else {}
+    )
     if not output_contract:
-        output_contract = build_backend_runtime_output_contract(runtime_bundle, preferred_launch_spec)
+        output_contract = build_backend_runtime_output_contract(
+            runtime_bundle, preferred_launch_spec
+        )
         runtime_bundle["output_contract"] = output_contract
     runtime_bundle["runtime_binding"] = runtime_binding
     launch_spec = {
@@ -398,7 +430,9 @@ def build_backend_runtime_bundle(
         "preferred_profile": preferred_profile,
         "policy_ref": policy_ref,
         "policy_ready": bool(policy_contract.get("policy_ready", False)),
-        "runtime_targets_ready": bool(runtime_target_contract.get("runtime_targets_ready", False)),
+        "runtime_targets_ready": bool(
+            runtime_target_contract.get("runtime_targets_ready", False)
+        ),
         "deployment_contract": mapping(deployment_contract),
         "upstream_runtime_pack": mapping(upstream_runtime_pack),
         "runtime_binding": runtime_binding,

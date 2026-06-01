@@ -4,6 +4,7 @@ Generates SemanticUpdatePlanV1 deterministically from SignalBundle.
 Maps ActionPlan → plan operations for hot-reload.
 Respects stability and transfer gates from probe discriminator.
 """
+
 from __future__ import annotations
 
 import json
@@ -11,7 +12,7 @@ import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 
 from src.contracts.schemas import (
@@ -109,15 +110,23 @@ class GateStatus:
             "transfer_patience_exceeded": self.transfer_patience_exceeded,
             "graph_failure_count": self.graph_failure_count,
             "regal_failure_count": self.regal_failure_count,
-            "regal_result": self.regal_result.model_dump() if self.regal_result else None,
+            "regal_result": self.regal_result.model_dump()
+            if self.regal_result
+            else None,
             "regal_forced_noop": self.regal_forced_noop,
             "delta_per_exposure": self.delta_per_exposure,
             "exposure_count": self.exposure_count,
-            "ledger_policy": self.ledger_policy.model_dump() if self.ledger_policy else None,
+            "ledger_policy": self.ledger_policy.model_dump()
+            if self.ledger_policy
+            else None,
             "knob_policy": self.knob_policy.model_dump() if self.knob_policy else None,
             "knob_policy_used": self.knob_policy_used,
-            "knob_regime_features": self.knob_regime_features.model_dump() if self.knob_regime_features else None,
-            "knob_base_config": self.knob_base_config.model_dump() if self.knob_base_config else None,
+            "knob_regime_features": self.knob_regime_features.model_dump()
+            if self.knob_regime_features
+            else None,
+            "knob_base_config": self.knob_base_config.model_dump()
+            if self.knob_base_config
+            else None,
         }
 
 
@@ -231,17 +240,28 @@ def build_signal_bundle_for_plan(
     )
 
 
-def _extract_epiplexity_signal(epiplexity_metrics: Dict[str, Any]) -> Tuple[float, Dict[str, Any]]:
+def _extract_epiplexity_signal(
+    epiplexity_metrics: Dict[str, Any],
+) -> Tuple[float, Dict[str, Any]]:
     if not isinstance(epiplexity_metrics, dict):
         return 0.5, {"source": "epiplexity_metrics", "mode": "fallback"}
 
     if "mean" in epiplexity_metrics:
-        mean = epiplexity_metrics.get("mean", {}) if isinstance(epiplexity_metrics.get("mean"), dict) else {}
+        mean = (
+            epiplexity_metrics.get("mean", {})
+            if isinstance(epiplexity_metrics.get("mean"), dict)
+            else {}
+        )
         return (
             float(
                 mean.get(
                     "epi_per_flop",
-                    mean.get("S_T_proxy", epiplexity_metrics.get("variance", epiplexity_metrics.get("mean_variance", 0.5))),
+                    mean.get(
+                        "S_T_proxy",
+                        epiplexity_metrics.get(
+                            "variance", epiplexity_metrics.get("mean_variance", 0.5)
+                        ),
+                    ),
                 )
                 or 0.5
             ),
@@ -257,7 +277,9 @@ def _extract_epiplexity_signal(epiplexity_metrics: Dict[str, Any]) -> Tuple[floa
     selector = select_default_epiplexity_summary(epiplexity_metrics)
     if selector is not None:
         budget_stats = (
-            epiplexity_metrics.get(selector["repr_id"], {}).get(selector["budget_id"], {})
+            epiplexity_metrics.get(selector["repr_id"], {}).get(
+                selector["budget_id"], {}
+            )
             if isinstance(epiplexity_metrics.get(selector["repr_id"]), dict)
             else {}
         )
@@ -268,7 +290,15 @@ def _extract_epiplexity_signal(epiplexity_metrics: Dict[str, Any]) -> Tuple[floa
 
     if "variance" in epiplexity_metrics or "S_T_proxy" in epiplexity_metrics:
         return (
-            float(epiplexity_metrics.get("epi_per_flop", epiplexity_metrics.get("S_T_proxy", epiplexity_metrics.get("variance", 0.5))) or 0.5),
+            float(
+                epiplexity_metrics.get(
+                    "epi_per_flop",
+                    epiplexity_metrics.get(
+                        "S_T_proxy", epiplexity_metrics.get("variance", 0.5)
+                    ),
+                )
+                or 0.5
+            ),
             {
                 "source": "epiplexity_metrics",
                 "mode": epiplexity_metrics.get("mode", "token_only"),
@@ -376,7 +406,7 @@ def check_gates(
 
     # Track transfer patience
     transfer_failure_count = previous_transfer_fail_count
-    
+
     if not transfer_pass:
         transfer_failure_count += 1
         if transfer_failure_count > config.max_transfer_failures:
@@ -404,21 +434,21 @@ def check_gates(
     if config.graph_gates:
         sigma_signal = signal_bundle.get_signal(SignalType.SMALL_WORLD_SIGMA)
         nav_signal = signal_bundle.get_signal(SignalType.NAV_SUCCESS_RATE)
-        
+
         # Check if any graph gate is violated
         graph_gate_failed = False
         graph_fail_reason = ""
-        
+
         if sigma_signal and sigma_signal.value < config.graph_gates.sigma_min:
             graph_gate_failed = True
             graph_fail_reason = f"Graph sigma collapsed: {sigma_signal.value:.2f} < {config.graph_gates.sigma_min}"
         elif nav_signal and nav_signal.value < config.graph_gates.nav_success_min:
             graph_gate_failed = True
             graph_fail_reason = f"Nav success too low: {nav_signal.value:.2f} < {config.graph_gates.nav_success_min}"
-        
+
         if graph_gate_failed:
             graph_failure_count = previous_graph_fail_count + 1
-            
+
             # Only trigger action if patience exceeded
             if graph_failure_count >= config.graph_gates.patience:
                 if config.graph_gates.penalty_mode == "noop":
@@ -454,7 +484,7 @@ def check_gates(
             plan=plan,
             signals=signal_bundle,
             policy_config=config,
-            context=regal_context,
+            context=cast(Any, regal_context),
         )
 
         if not regal_result.all_passed:
@@ -516,7 +546,7 @@ def map_action_to_plan_ops(
     current_weights: Optional[Dict[str, float]] = None,
 ) -> Tuple[List[TaskGraphOp], float, bool, Dict[str, Any]]:
     """Map ActionPlan actions to TaskGraphOp operations with gain scheduling.
-    
+
     Includes normalization and clamping tracking.
 
     Args:
@@ -528,7 +558,7 @@ def map_action_to_plan_ops(
     Returns:
         Tuple of (ops, applied_multiplier, was_clamped, metadata)
     """
-    
+
     # Helper for deterministic hashing (platform-stable)
     def _deterministic_weights(w: Dict[str, float]) -> Dict[str, float]:
         # Sort keys and round to 8 decimals to prevent float jitter
@@ -537,7 +567,7 @@ def map_action_to_plan_ops(
     weights = dict(current_weights or config.default_weights)
     pre_weights_sha = sha256_json(_deterministic_weights(weights))
     ops: List[TaskGraphOp] = []
-    
+
     schedule = config.gain_schedule
     applied_multiplier = 1.0
     was_clamped = False
@@ -546,17 +576,24 @@ def map_action_to_plan_ops(
     # If stability gate forces NOOP, return default/current weights only
     if gate_status.forced_noop:
         for task, weight in weights.items():
-            ops.append(TaskGraphOp(
-                op=PlanOpType.SET_WEIGHT,
-                task_family=task,
-                weight=weight,
-            ))
-        return ops, 1.0, False, {
-            "pre_weights_sha": pre_weights_sha,
-            "post_weights_sha": pre_weights_sha,
-            "renormalized": False,
-            "clamp_reasons": ["forced_noop"]
-        }
+            ops.append(
+                TaskGraphOp(
+                    op=PlanOpType.SET_WEIGHT,
+                    task_family=task,
+                    weight=weight,
+                )
+            )
+        return (
+            ops,
+            1.0,
+            False,
+            {
+                "pre_weights_sha": pre_weights_sha,
+                "post_weights_sha": pre_weights_sha,
+                "renormalized": False,
+                "clamp_reasons": ["forced_noop"],
+            },
+        )
 
     # Determine applied gain multiplier
     if gate_status.transfer_pass:
@@ -565,7 +602,7 @@ def map_action_to_plan_ops(
         applied_multiplier = schedule.conservative_multiplier
 
     increase_factor = applied_multiplier
-    
+
     # Apply actions to weights
     for action in action_plan.actions:
         if action == ActionType.NOOP:
@@ -575,29 +612,37 @@ def map_action_to_plan_ops(
 
         if action in (ActionType.INCREASE_DATA, ActionType.DECREASE_DATA):
             is_increase = action == ActionType.INCREASE_DATA
-            factor = increase_factor if is_increase else (1.0 / increase_factor if increase_factor != 0 else 0.0)
-            
+            factor = (
+                increase_factor
+                if is_increase
+                else (1.0 / increase_factor if increase_factor != 0 else 0.0)
+            )
+
             for task in task_list:
                 current_w = weights[task]
                 proposed = current_w * factor
-                
+
                 # Apply delta clamp
                 delta = proposed - current_w
                 if schedule.max_abs_weight_change is not None:
                     if abs(delta) > schedule.max_abs_weight_change:
-                        delta = schedule.max_abs_weight_change if delta > 0 else -schedule.max_abs_weight_change
+                        delta = (
+                            schedule.max_abs_weight_change
+                            if delta > 0
+                            else -schedule.max_abs_weight_change
+                        )
                         was_clamped = True
                         clamp_reasons.add("max_abs_weight_change")
-                
+
                 new_weight = current_w + delta
-                
+
                 # Apply min/max caps
                 if schedule.min_weight_clamp is not None:
                     if new_weight < schedule.min_weight_clamp:
                         new_weight = schedule.min_weight_clamp
                         was_clamped = True
                         clamp_reasons.add("min_weight_clamp")
-                        
+
                 if schedule.max_weight_clamp is not None:
                     if new_weight > schedule.max_weight_clamp:
                         new_weight = schedule.max_weight_clamp
@@ -614,17 +659,19 @@ def map_action_to_plan_ops(
         for task in weights:
             weights[task] *= norm_factor
         renormalized = True
-        
+
     # Generate ops
     for task, weight in weights.items():
-        ops.append(TaskGraphOp(
-            op=PlanOpType.SET_WEIGHT,
-            task_family=task,
-            weight=weight,
-        ))
-        
+        ops.append(
+            TaskGraphOp(
+                op=PlanOpType.SET_WEIGHT,
+                task_family=task,
+                weight=weight,
+            )
+        )
+
     post_weights_sha = sha256_json(_deterministic_weights(weights))
-        
+
     metadata = {
         "pre_weights_sha": pre_weights_sha,
         "post_weights_sha": post_weights_sha,
@@ -633,7 +680,6 @@ def map_action_to_plan_ops(
     }
 
     return ops, applied_multiplier, was_clamped, metadata
-
 
 
 def build_plan_from_signals(
@@ -722,7 +768,7 @@ def build_plan_from_signals(
             gain_schedule_override = econ_policy_provider.get_gain_schedule(
                 signal_bundle,
                 regal_result=None,  # Will be populated after gate check
-                context=regal_context,
+                context=cast(Any, regal_context),
             )
             # Track knob policy for provenance
             if econ_policy_provider.last_knob_policy:
@@ -730,21 +776,25 @@ def build_plan_from_signals(
                 knob_policy_used = knob_policy_result.policy_source
                 knob_regime_features = econ_policy_provider.last_regime_features
         else:
-            gain_schedule_override = econ_policy_provider.get_gain_schedule(signal_bundle)
+            gain_schedule_override = econ_policy_provider.get_gain_schedule(
+                signal_bundle
+            )
 
         if gain_schedule_override:
             # Create a shallow copy with new gain schedule
             config = config.model_copy(update={"gain_schedule": gain_schedule_override})
 
     # 2. Check Gates
-    gate_status = check_gates(signal_bundle, config, exposure_count, previous_transfer_fail_count)
-    
+    gate_status = check_gates(
+        signal_bundle, config, exposure_count, previous_transfer_fail_count
+    )
+
     # Check cooldown logic
     if steps_since_last_change is not None and config.min_apply_interval_steps > 0:
         if steps_since_last_change < config.min_apply_interval_steps:
-             if not gate_status.forced_noop:
-                 gate_status.forced_noop = True
-                 gate_status.reason = f"Cooldown: {steps_since_last_change} < {config.min_apply_interval_steps}"
+            if not gate_status.forced_noop:
+                gate_status.forced_noop = True
+                gate_status.reason = f"Cooldown: {steps_since_last_change} < {config.min_apply_interval_steps}"
 
     # 3. Generate Action Plan
     controller = HomeostaticController()
@@ -777,33 +827,37 @@ def build_plan_from_signals(
     # But if ops IS empty (e.g. NOOP action plan and no defaults needed?), then we append defaults.
     if not ops:
         for task, weight in config.default_weights.items():
-            ops.append(TaskGraphOp(
-                op=PlanOpType.SET_WEIGHT,
-                task_family=task,
-                weight=weight,
-            ))
+            ops.append(
+                TaskGraphOp(
+                    op=PlanOpType.SET_WEIGHT,
+                    task_family=task,
+                    weight=weight,
+                )
+            )
 
     # Calculate plan SHA
     config_dump = config.model_dump()
-    plan_sha = sha256_json({
-        "ops": [op.model_dump() for op in ops],
-        "signals": [asdict(s) for s in signal_bundle.signals],
-        "config": config_dump,
-    })
+    plan_sha = sha256_json(
+        {
+            "ops": [op.model_dump() for op in ops],
+            "signals": [asdict(s) for s in signal_bundle.signals],
+            "config": config_dump,
+        }
+    )
 
     # Create LedgerPlanPolicy record
     ledger_policy = LedgerPlanPolicyV1(
-         policy_config_sha=sha256_json(config_dump),
-         gain_schedule_sha=sha256_json(config.gain_schedule.model_dump()),
-         applied_multiplier=float(applied_multiplier),
-         gain_schedule_source="econ_override" if gain_schedule_override else "default",
-         clamped=was_clamped,
-         transfer_failure_count=gate_status.transfer_failure_count,
-         pre_weights_sha=normalization_meta.get("pre_weights_sha"),
-         post_weights_sha=normalization_meta.get("post_weights_sha"),
-         renormalized=normalization_meta.get("renormalized", False),
-         clamp_reasons=normalization_meta.get("clamp_reasons", []),
-         knob_policy=knob_policy_result,
+        policy_config_sha=sha256_json(config_dump),
+        gain_schedule_sha=sha256_json(config.gain_schedule.model_dump()),
+        applied_multiplier=float(applied_multiplier),
+        gain_schedule_source="econ_override" if gain_schedule_override else "default",
+        clamped=was_clamped,
+        transfer_failure_count=gate_status.transfer_failure_count,
+        pre_weights_sha=normalization_meta.get("pre_weights_sha"),
+        post_weights_sha=normalization_meta.get("post_weights_sha"),
+        renormalized=normalization_meta.get("renormalized", False),
+        clamp_reasons=normalization_meta.get("clamp_reasons", []),
+        knob_policy=knob_policy_result,
     )
 
     # Attach to GateStatus
@@ -816,7 +870,7 @@ def build_plan_from_signals(
     # Build notes
     notes = f"Priority: {action_plan.priority}. Actions: {[a.value for a in action_plan.actions]}."
     if applied_multiplier is not None:
-         notes += f" Multiplier: {applied_multiplier:.2f}."
+        notes += f" Multiplier: {applied_multiplier:.2f}."
     if gate_status.delta_epi_per_flop is not None:
         notes += f" ΔEpi/FLOP: {gate_status.delta_epi_per_flop:.2e}."
     notes += f" Gates: stability={gate_status.stability_pass}, transfer={gate_status.transfer_pass}."

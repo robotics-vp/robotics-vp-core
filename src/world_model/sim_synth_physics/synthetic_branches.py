@@ -36,7 +36,9 @@ def extract_branch_features(z_sequence: torch.Tensor) -> torch.Tensor:
     dim_var = z_sequence.mean(dim=1).std()
     diffs = torch.abs(z_sequence[1:] - z_sequence[:-1])
     smoothness = diffs.mean()
-    return torch.stack([global_mean, global_std, global_min, global_max, dim_var, smoothness])
+    return torch.stack(
+        [global_mean, global_std, global_min, global_max, dim_var, smoothness]
+    )
 
 
 def compute_branch_gap_labels(
@@ -95,7 +97,7 @@ def collect_local_synthetic_branch_records(
     brick_id_fn: Optional[Any] = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     branches: list[dict[str, Any]] = []
-    stats = {
+    stats: dict[str, Any] = {
         "total_attempted": 0,
         "passed_trust": 0,
         "passed_std": 0,
@@ -153,7 +155,9 @@ def collect_local_synthetic_branch_records(
                 env_id=env_id,
             )
             gap_score = float(gap_labels.get("coverage_gap_contribution", 0.0))
-            branch_value = trust_score * max(0.01, gap_score) if coverage_graph else trust_score
+            branch_value = (
+                trust_score * max(0.01, gap_score) if coverage_graph else trust_score
+            )
             branches.append(
                 {
                     "z_sequence": z_traj.detach().cpu().numpy(),
@@ -198,8 +202,12 @@ def build_synthetic_branch_corpus_metadata(
     gen2sim_validity_path: Optional[str],
     gen2sim_summary: Mapping[str, Any],
 ) -> dict[str, Any]:
-    trust_scores = np.array([float(branch.get("trust_score", 0.0)) for branch in branches], dtype=np.float32)
-    std_ratios = np.array([float(branch.get("std_ratio", 0.0)) for branch in branches], dtype=np.float32)
+    trust_scores = np.array(
+        [float(branch.get("trust_score", 0.0)) for branch in branches], dtype=np.float32
+    )
+    std_ratios = np.array(
+        [float(branch.get("std_ratio", 0.0)) for branch in branches], dtype=np.float32
+    )
     source_payload = dict(source_runtime_metadata or {})
     scene_truth = scene_tracks_truth_from_metadata(
         {
@@ -301,15 +309,25 @@ def _branch_helper_resolution(
     if trace_available and promotion_stage == "shadow_candidate":
         return (
             "heuristic_due_to_shadow_candidate",
-            "benchmark_gate_not_ready" if not benchmark_gate_ready else "shadow_candidate",
+            "benchmark_gate_not_ready"
+            if not benchmark_gate_ready
+            else "shadow_candidate",
             False,
         )
     if trace_available and promotion_stage == "heuristic_fallback":
         return "heuristic_due_to_helper_fallback", status or "heuristic_fallback", False
     if status in {"disabled", "missing", "package_missing"}:
-        return "heuristic_due_to_helper_unavailable", status or "helper_unavailable", False
+        return (
+            "heuristic_due_to_helper_unavailable",
+            status or "helper_unavailable",
+            False,
+        )
     if trace_available:
-        return "heuristic_due_to_unapplied_trace", status or promotion_stage or "trace_unapplied", False
+        return (
+            "heuristic_due_to_unapplied_trace",
+            status or promotion_stage or "trace_unapplied",
+            False,
+        )
     return "heuristic_only", status or promotion_stage or "no_helper_trace", False
 
 
@@ -356,7 +374,9 @@ def compile_synthetic_branch_plans(
             if learned_reject:
                 selection_policy = "heuristic_plus_learned_branch_planner_rejected"
             elif str(helper_status.get("promotion_stage")) == "promoted":
-                generation_mode = str(helper_payload.get("generation_mode") or heuristic_mode)
+                generation_mode = str(
+                    helper_payload.get("generation_mode") or heuristic_mode
+                )
                 expected_yield_score = clip01(
                     helper_payload.get("expected_yield_score", heuristic_score)
                 )
@@ -400,7 +420,9 @@ def compile_synthetic_branch_plans(
             semantic_context=semantic_context,
             economic_context=economic_context,
         )
-        inferential_signal_score = clip01(branch_contract.signal_yield.get("score", 0.0))
+        inferential_signal_score = clip01(
+            branch_contract.signal_yield.get("score", 0.0)
+        )
         inferential_replay_weight = clip01(branch_contract.inferential_replay_weight)
         expected_yield_score = adjusted_branch_yield_score(
             base_expected_yield_score=expected_yield_score,
@@ -410,7 +432,9 @@ def compile_synthetic_branch_plans(
             "requires_non_heuristic_grounding": bool(
                 job.data_collection_intent == "validate" and bool(job.risk_family)
             ),
-            "requires_benchmark_ready": bool(job.readiness >= 0.8 and job.economic_priority >= 0.8),
+            "requires_benchmark_ready": bool(
+                job.readiness >= 0.8 and job.economic_priority >= 0.8
+            ),
             "min_readiness": 0.0,
             "min_inferential_replay_weight": (
                 0.08 if job.data_collection_intent == "validate" else 0.04
@@ -424,7 +448,9 @@ def compile_synthetic_branch_plans(
                 generation_mode=generation_mode,
                 render_backend=physics_context.backend,
                 gap_target_refs=[
-                    ref for ref in [mapping(job.coverage_targets), scene_hierarchy_ref] if ref
+                    ref
+                    for ref in [mapping(job.coverage_targets), scene_hierarchy_ref]
+                    if ref
                 ],
                 admission_preconditions=admission_preconditions,
                 expected_yield_score=expected_yield_score,

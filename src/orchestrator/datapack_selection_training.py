@@ -14,6 +14,10 @@ from src.orchestrator.semantic_policy import (
 )
 from src.utils.config_digest import sha256_json
 
+torch: Any
+nn: Any
+optim: Any
+
 try:
     import torch
     import torch.nn as nn
@@ -22,7 +26,6 @@ try:
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
-
 
 DATAPACK_SELECTION_BENCHMARK_MIN_RUNS = 100
 DATAPACK_SELECTION_BENCHMARK_MIN_PAIRWISE = 200
@@ -60,7 +63,9 @@ class DatapackSelectionTrainingExample:
             "supervision_kind": self.supervision_kind,
             "target_score": float(self.target_score),
             "outcome_score": float(self.outcome_score),
-            "features": {str(key): float(value) for key, value in self.features.items()},
+            "features": {
+                str(key): float(value) for key, value in self.features.items()
+            },
             "selection_context": {
                 str(key): float(value) for key, value in self.selection_context.items()
             },
@@ -116,27 +121,40 @@ def build_datapack_selection_training_dataset(
             skipped_runs += 1
             continue
         top_candidates = list(selection_summary.get("top_candidates", []) or [])
-        selected_ids = {str(item) for item in selection_summary.get("selected_ids", []) or []}
+        selected_ids = {
+            str(item) for item in selection_summary.get("selected_ids", []) or []
+        }
         if not top_candidates or not selected_ids:
             skipped_runs += 1
             continue
         outcome_score = _run_outcome_score(row)
         outcome_scores.append(outcome_score)
-        run_id = str(row.get("scenario_id") or row.get("timestamp") or f"run_{len(examples)}")
+        run_id = str(
+            row.get("scenario_id") or row.get("timestamp") or f"run_{len(examples)}"
+        )
         selection_context = _selection_context_from_summary(selection_summary)
-        selection_policy = str(selection_summary.get("selection_policy", "heuristic_only") or "heuristic_only")
+        selection_policy = str(
+            selection_summary.get("selection_policy", "heuristic_only")
+            or "heuristic_only"
+        )
         policy_counts[selection_policy] = policy_counts.get(selection_policy, 0) + 1
         helper_status = selection_summary.get("selection_helper_status")
         if isinstance(helper_status, Mapping):
             promotion_stage = str(helper_status.get("promotion_stage", "") or "")
             if promotion_stage:
-                promotion_stage_counts[promotion_stage] = promotion_stage_counts.get(promotion_stage, 0) + 1
+                promotion_stage_counts[promotion_stage] = (
+                    promotion_stage_counts.get(promotion_stage, 0) + 1
+                )
         candidate_rows = [item for item in top_candidates if isinstance(item, Mapping)]
         selected_rows = [
-            item for item in candidate_rows if str(item.get("datapack_id", "")) in selected_ids
+            item
+            for item in candidate_rows
+            if str(item.get("datapack_id", "")) in selected_ids
         ]
         non_selected_rows = [
-            item for item in candidate_rows if str(item.get("datapack_id", "")) not in selected_ids
+            item
+            for item in candidate_rows
+            if str(item.get("datapack_id", "")) not in selected_ids
         ]
         if not selected_rows:
             skipped_runs += 1
@@ -161,10 +179,17 @@ def build_datapack_selection_training_dataset(
             if outcome_score >= 0.55 and non_selected_rows:
                 positive_runs += 1
                 for candidate in non_selected_rows:
-                    candidate_features = _feature_map(candidate.get("selection_features"))
+                    candidate_features = _feature_map(
+                        candidate.get("selection_features")
+                    )
                     feature_delta = {
-                        key: float(selected_features.get(key, 0.0) - candidate_features.get(key, 0.0))
-                        for key in sorted(set(selected_features) | set(candidate_features))
+                        key: float(
+                            selected_features.get(key, 0.0)
+                            - candidate_features.get(key, 0.0)
+                        )
+                        for key in sorted(
+                            set(selected_features) | set(candidate_features)
+                        )
                     }
                     examples.append(
                         DatapackSelectionTrainingExample(
@@ -223,10 +248,14 @@ def train_datapack_selection_scorer_package(
     feature_names = sorted(DatapackSelectionFeatures().to_dict().keys())
     context_feature_names = sorted(DatapackSelectionContext().to_dict().keys())
     regression_examples = [
-        example for example in dataset.examples if example.supervision_kind == "selected_outcome_regression"
+        example
+        for example in dataset.examples
+        if example.supervision_kind == "selected_outcome_regression"
     ]
     pairwise_examples = [
-        example for example in dataset.examples if example.supervision_kind == "selected_vs_alternative_pairwise"
+        example
+        for example in dataset.examples
+        if example.supervision_kind == "selected_vs_alternative_pairwise"
     ]
 
     weights = {name: 0.0 for name in feature_names}
@@ -263,12 +292,15 @@ def train_datapack_selection_scorer_package(
         abs(bias),
     )
     normalized_weights = {
-        feature_name: float(value / normalizer) for feature_name, value in weights.items()
+        feature_name: float(value / normalizer)
+        for feature_name, value in weights.items()
     }
     normalized_bias = float(bias / normalizer)
     context_normalizer = max(
         1.0,
-        max(abs(value) for value in context_weights.values()) if context_weights else 1.0,
+        max(abs(value) for value in context_weights.values())
+        if context_weights
+        else 1.0,
         abs(context_bias),
     )
     normalized_context_weights = {
@@ -277,7 +309,8 @@ def train_datapack_selection_scorer_package(
     }
     normalized_context_bias = float(context_bias / context_normalizer)
     support_factor = _clamp01(
-        len(pairwise_examples) / float(max(DATAPACK_SELECTION_BENCHMARK_MIN_PAIRWISE, 1))
+        len(pairwise_examples)
+        / float(max(DATAPACK_SELECTION_BENCHMARK_MIN_PAIRWISE, 1))
     )
     max_adjustment = 0.2 + (0.55 * support_factor)
     min_adjustment = min(max_adjustment, 0.05 + 0.1 * support_factor)
@@ -389,7 +422,8 @@ def _selection_context_from_summary(payload: Mapping[str, Any]) -> dict[str, flo
     return DatapackSelectionContext(
         required_tag_count_norm=_clamp01(len(list(required_tags or [])) / 8.0),
         gap_pressure=_clamp01(
-            len(list(selected_gap_fill_tags or [])) / float(max(len(list(required_tags or [])), 1))
+            len(list(selected_gap_fill_tags or []))
+            / float(max(len(list(required_tags or [])), 1))
         ),
         candidate_pool_size_norm=_clamp01(candidate_count / 10.0),
         objective_present=1.0 if payload.get("objective_hint") else 0.0,
@@ -401,15 +435,24 @@ def _train_neural_feature_model(
     examples: Sequence[DatapackSelectionTrainingExample],
     *,
     feature_names: Sequence[str],
-) -> tuple[list[str], list[list[float]], list[float], list[float], float, dict[str, Any]]:
+) -> tuple[
+    list[str], list[list[float]], list[float], list[float], float, dict[str, Any]
+]:
     if not TORCH_AVAILABLE:
-        return [], [], [], [], 0.0, {
-            "mode": "torch_unavailable",
-            "train_loss": 0.0,
-            "pairwise_margin_accuracy": 0.0,
-            "epochs": 0,
-            "hidden_dim": 0,
-        }
+        return (
+            [],
+            [],
+            [],
+            [],
+            0.0,
+            {
+                "mode": "torch_unavailable",
+                "train_loss": 0.0,
+                "pairwise_margin_accuracy": 0.0,
+                "epochs": 0,
+                "hidden_dim": 0,
+            },
+        )
 
     feature_names = list(feature_names)
     rows = np.asarray(
@@ -420,13 +463,20 @@ def _train_neural_feature_model(
         dtype=np.float32,
     )
     if rows.size == 0:
-        return [], [], [], [], 0.0, {
-            "mode": "empty_feature_rows",
-            "train_loss": 0.0,
-            "pairwise_margin_accuracy": 0.0,
-            "epochs": 0,
-            "hidden_dim": 0,
-        }
+        return (
+            [],
+            [],
+            [],
+            [],
+            0.0,
+            {
+                "mode": "empty_feature_rows",
+                "train_loss": 0.0,
+                "pairwise_margin_accuracy": 0.0,
+                "epochs": 0,
+                "hidden_dim": 0,
+            },
+        )
 
     targets = np.asarray(
         [
@@ -445,7 +495,9 @@ def _train_neural_feature_model(
     pair_indices = _pairwise_training_indices(examples)
     hidden_dim = min(24, max(8, len(feature_names) * 2))
 
-    model = _DatapackSelectionFeatureMLP(input_dim=len(feature_names), hidden_dim=hidden_dim)
+    model = _DatapackSelectionFeatureMLP(
+        input_dim=len(feature_names), hidden_dim=hidden_dim
+    )
     optimizer = optim.Adam(model.parameters(), lr=5e-3)
     x_tensor = torch.from_numpy(rows)
     y_tensor = torch.from_numpy(targets)
@@ -456,7 +508,10 @@ def _train_neural_feature_model(
         optimizer.zero_grad()
         logits = model(x_tensor).squeeze(-1)
         regression_loss = (
-            nn.functional.binary_cross_entropy_with_logits(logits, y_tensor, reduction="none") * w_tensor
+            nn.functional.binary_cross_entropy_with_logits(
+                logits, y_tensor, reduction="none"
+            )
+            * w_tensor
         ).mean()
         pairwise_loss = _pairwise_margin_loss(logits, pair_indices, examples)
         loss = regression_loss + (0.35 * pairwise_loss)
@@ -469,8 +524,12 @@ def _train_neural_feature_model(
         pairwise_margin_accuracy = _pairwise_margin_accuracy(logits, pair_indices)
         hidden_weights = model.hidden.weight.detach().cpu().numpy().astype(np.float32)
         hidden_bias = model.hidden.bias.detach().cpu().numpy().astype(np.float32)
-        output_weights = model.output.weight.detach().cpu().numpy().astype(np.float32)[0]
-        output_bias = float(model.output.bias.detach().cpu().numpy().astype(np.float32)[0])
+        output_weights = (
+            model.output.weight.detach().cpu().numpy().astype(np.float32)[0]
+        )
+        output_bias = float(
+            model.output.bias.detach().cpu().numpy().astype(np.float32)[0]
+        )
 
     return (
         list(feature_names),
@@ -521,7 +580,9 @@ def _pairwise_training_indices(
         alternative_indices = alternatives_by_run.get(run_id, [])
         if not alternative_indices:
             continue
-        outcome = max(_clamp01(examples[index].outcome_score) for index in selected_indices)
+        outcome = max(
+            _clamp01(examples[index].outcome_score) for index in selected_indices
+        )
         margin = 0.15 + (0.35 * outcome)
         for selected_index in selected_indices:
             for alternative_index in alternative_indices:
@@ -561,7 +622,7 @@ def _pairwise_margin_accuracy(
     return float(correct) / float(len(pair_indices))
 
 
-class _DatapackSelectionFeatureMLP(nn.Module if TORCH_AVAILABLE else object):
+class _DatapackSelectionFeatureMLP(nn.Module if TORCH_AVAILABLE else object):  # type: ignore[misc]
     def __init__(self, input_dim: int, hidden_dim: int):
         super().__init__()
         self.hidden = nn.Linear(input_dim, hidden_dim)
@@ -582,7 +643,11 @@ def _metrics_map(row: Mapping[str, Any]) -> dict[str, float]:
 
 
 def _run_outcome_score(row: Mapping[str, Any]) -> float:
-    metrics = row.get("eval_metrics") if isinstance(row.get("eval_metrics"), Mapping) else row.get("train_metrics")
+    metrics = (
+        row.get("eval_metrics")
+        if isinstance(row.get("eval_metrics"), Mapping)
+        else row.get("train_metrics")
+    )
     if not isinstance(metrics, Mapping):
         return 0.0
     mpl_norm = _clamp01(_safe_float(metrics.get("mpl_units_per_hour", 0.0)) / 100.0)
@@ -594,7 +659,9 @@ def _run_outcome_score(row: Mapping[str, Any]) -> float:
             _safe_float(metrics.get("arh_excluded", 0.0)),
         )
     )
-    reward_norm = _clamp01((_safe_float(metrics.get("reward_scalar_sum", 0.0)) + 10.0) / 20.0)
+    reward_norm = _clamp01(
+        (_safe_float(metrics.get("reward_scalar_sum", 0.0)) + 10.0) / 20.0
+    )
     return _clamp01(
         0.5 * mpl_norm
         + 0.15 * wage_norm

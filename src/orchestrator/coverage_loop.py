@@ -16,6 +16,7 @@ The loop is designed to be called:
 - As **Step 7** of ``run_pipeline_step_with_causal_order`` (automatic)
 - Standalone via ``scripts/run_coverage_loop.py`` (manual)
 """
+
 from __future__ import annotations
 
 import json
@@ -48,20 +49,27 @@ from src.world_model.graph_mutation_executor import (
     GovernedGraphMutationExecutor,
     GraphMutationExecutionResult,
 )
-from src.world_model.feedback_topology_adapters import shadow_fit_feedback_adapter_package
+from src.world_model.feedback_topology_adapters import (
+    shadow_fit_feedback_adapter_package,
+)
 from src.world_model.feedback_topology_runtime import resolve_feedback_adapter_helper
 from src.world_model.semantic_wm_refiner import (
     merge_graph_mutation_proposals,
     merge_semantic_wm_correction_overlays,
     shadow_fit_semantic_wm_refiner_package,
 )
-from src.world_model.semantic_wm_refiner_runtime import resolve_semantic_wm_refiner_helper
+from src.world_model.semantic_wm_refiner_runtime import (
+    resolve_semantic_wm_refiner_helper,
+)
 from src.hrl.skill_graph import SkillGraph
 from src.envs.primitive_inventory import for_env, list_registered_env_ids
 from src.orchestrator.fill_path_routing import route_fill_paths
 from src.orchestrator.gap_agenda_ranking import rank_gaps_for_agenda
 from src.orchestrator.diffusion_requests import build_diffusion_prompts_from_world_state
-from src.world_model.sim_synth_physics import SimSynthPhysicsRuntime, SimSynthPhysicsRuntimeConfig
+from src.world_model.sim_synth_physics import (
+    SimSynthPhysicsRuntime,
+    SimSynthPhysicsRuntimeConfig,
+)
 
 
 def _clip01(value: float) -> float:
@@ -73,7 +81,9 @@ def _bounded_blend(base_value: float, learned_value: float, weight: float) -> fl
     return _clip01((1.0 - weight) * float(base_value) + weight * float(learned_value))
 
 
-def _feedback_adapter_helper_weight(helper_status: Mapping[str, Any], helper: Any) -> float:
+def _feedback_adapter_helper_weight(
+    helper_status: Mapping[str, Any], helper: Any
+) -> float:
     inference_contract = dict(getattr(helper, "inference_contract", {}) or {})
     if bool(helper_status.get("benchmark_gate_ready", False)):
         return float(inference_contract.get("promoted_helper_weight", 0.42))
@@ -119,20 +129,27 @@ def _scale_graph_mutation_proposals(
                 confidence=_clip01(0.5 + ((float(proposal.confidence) - 0.5) * damp)),
                 rationale=str(proposal.rationale),
                 source_refs=list(proposal.source_refs or []),
-                metadata={**dict(proposal.metadata or {}), "bounded_scale": float(damp)},
+                metadata={
+                    **dict(proposal.metadata or {}),
+                    "bounded_scale": float(damp),
+                },
             )
         )
     return scaled
 
 
-def _semantic_wm_refiner_overlay_scale(helper_status: Mapping[str, Any], helper: Any) -> float:
+def _semantic_wm_refiner_overlay_scale(
+    helper_status: Mapping[str, Any], helper: Any
+) -> float:
     inference_contract = dict(getattr(helper, "inference_contract", {}) or {})
     if bool(helper_status.get("benchmark_gate_ready", False)):
         return float(inference_contract.get("promoted_overlay_scale", 0.62))
     return float(inference_contract.get("shadow_candidate_overlay_scale", 0.28))
 
 
-def _semantic_wm_refiner_proposal_scale(helper_status: Mapping[str, Any], helper: Any) -> float:
+def _semantic_wm_refiner_proposal_scale(
+    helper_status: Mapping[str, Any], helper: Any
+) -> float:
     inference_contract = dict(getattr(helper, "inference_contract", {}) or {})
     if bool(helper_status.get("benchmark_gate_ready", False)):
         return float(inference_contract.get("promoted_proposal_scale", 0.35))
@@ -142,6 +159,7 @@ def _semantic_wm_refiner_proposal_scale(helper_status: Mapping[str, Any], helper
 # ---------------------------------------------------------------------------
 # Fill-path decision
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class FillPathDecision:
@@ -196,11 +214,15 @@ def _decide_fill_path(
     # Decision logic
     if bool(metadata.get("governance_blocked", False)):
         method = "blocked"
-        rationale = "Governance trace blocked this edge; keep as meta-node review target"
+        rationale = (
+            "Governance trace blocked this edge; keep as meta-node review target"
+        )
         confidence = 0.95
     elif readiness < readiness_threshold:
         method = "blocked"
-        rationale = f"Readiness {readiness:.2f} < {readiness_threshold}: prerequisites not met"
+        rationale = (
+            f"Readiness {readiness:.2f} < {readiness_threshold}: prerequisites not met"
+        )
         confidence = 0.3
     elif trust < trust_threshold:
         # Low trust → prefer real sim (higher-fidelity data)
@@ -210,7 +232,9 @@ def _decide_fill_path(
     elif econ > 0.7:
         # High economic priority → diffusion (fast, cheap generation)
         method = "diffusion"
-        rationale = f"Economic priority {econ:.2f} > 0.7: diffusion for fast gap filling"
+        rationale = (
+            f"Economic priority {econ:.2f} > 0.7: diffusion for fast gap filling"
+        )
         confidence = 0.8
     elif econ > 0.3:
         # Moderate priority → synthetic branch (balanced cost/fidelity)
@@ -240,6 +264,7 @@ def _decide_fill_path(
 # ---------------------------------------------------------------------------
 # CoverageLoopResult
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CoverageLoopResult:
@@ -280,7 +305,9 @@ class CoverageLoopResult:
             "graph_mutation_execution": dict(self.graph_mutation_execution),
             "semantic_wm_correction_overlay": dict(self.semantic_wm_correction_overlay),
             "input_semantic_world_model": dict(self.input_semantic_world_model or {}),
-            "corrected_semantic_world_model": dict(self.corrected_semantic_world_model or {}),
+            "corrected_semantic_world_model": dict(
+                self.corrected_semantic_world_model or {}
+            ),
             "semantic_wm_refiner_summary": dict(self.semantic_wm_refiner_summary),
             "metadata": dict(self.metadata),
         }
@@ -333,19 +360,27 @@ class CoverageLoopResult:
         paths["graph_mutation_proposals"] = str(mutation_path)
 
         mutation_exec_path = out / "graph_mutation_execution.json"
-        mutation_exec_path.write_text(json.dumps(self.graph_mutation_execution, indent=2))
+        mutation_exec_path.write_text(
+            json.dumps(self.graph_mutation_execution, indent=2)
+        )
         paths["graph_mutation_execution"] = str(mutation_exec_path)
 
         correction_path = out / "semantic_wm_correction_overlay.json"
-        correction_path.write_text(json.dumps(self.semantic_wm_correction_overlay, indent=2))
+        correction_path.write_text(
+            json.dumps(self.semantic_wm_correction_overlay, indent=2)
+        )
         paths["semantic_wm_correction_overlay"] = str(correction_path)
 
         input_wm_path = out / "input_semantic_world_model.json"
-        input_wm_path.write_text(json.dumps(self.input_semantic_world_model or {}, indent=2))
+        input_wm_path.write_text(
+            json.dumps(self.input_semantic_world_model or {}, indent=2)
+        )
         paths["input_semantic_world_model"] = str(input_wm_path)
 
         corrected_wm_path = out / "corrected_semantic_world_model.json"
-        corrected_wm_path.write_text(json.dumps(self.corrected_semantic_world_model or {}, indent=2))
+        corrected_wm_path.write_text(
+            json.dumps(self.corrected_semantic_world_model or {}, indent=2)
+        )
         paths["corrected_semantic_world_model"] = str(corrected_wm_path)
 
         refiner_path = out / "semantic_wm_refiner_summary.json"
@@ -380,8 +415,12 @@ class CoverageLoopResult:
         # Recompute post coverage ratio
         total = self.coverage_summary.get("total_edges", 1)
         post_covered = sum(
-            1 for e in self.coverage_graph.edges
-            if (e.evidence_count > 0 or post_counts.get((e.source_id, e.target_id), 0) > 0)
+            1
+            for e in self.coverage_graph.edges
+            if (
+                e.evidence_count > 0
+                or post_counts.get((e.source_id, e.target_id), 0) > 0
+            )
         )
         post_ratio = post_covered / max(total, 1)
         delta = post_ratio - pre_ratio
@@ -432,6 +471,7 @@ class CoverageLoopResult:
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
+
 
 def run_coverage_loop(
     runtime_rows: Sequence[Mapping[str, Any]],
@@ -500,7 +540,9 @@ def run_coverage_loop(
         resolved_envs = list(list_registered_env_ids())
     skill_graph = SkillGraph.build_from_registry(
         hrl_skills=hrl_skills,
-        include_workcell_skills=any("workcell" in str(env_id) for env_id in resolved_envs),
+        include_workcell_skills=any(
+            "workcell" in str(env_id) for env_id in resolved_envs
+        ),
         sima_sequences=list(sima_sequences or []),
         vla_hints=list(vla_hints or []),
     )
@@ -533,7 +575,11 @@ def run_coverage_loop(
         semantic_wm_refiner_package,
         mode=semantic_wm_refiner_mode,
     )
-    if refiner is None and shadow_fit_semantic_wm_refiner and semantic_wm_refiner_mode != "required":
+    if (
+        refiner is None
+        and shadow_fit_semantic_wm_refiner
+        and semantic_wm_refiner_mode != "required"
+    ):
         refiner = shadow_fit_semantic_wm_refiner_package(
             semantic_world_model,
             correction_overlay=correction_overlay,
@@ -551,8 +597,12 @@ def run_coverage_loop(
     refiner_summary: Dict[str, Any] = {}
     learned_graph_mutation_proposals: List[Dict[str, Any]] = []
     if refiner is not None:
-        overlay_scale = _semantic_wm_refiner_overlay_scale(refiner_helper_status, refiner)
-        proposal_scale = _semantic_wm_refiner_proposal_scale(refiner_helper_status, refiner)
+        overlay_scale = _semantic_wm_refiner_overlay_scale(
+            refiner_helper_status, refiner
+        )
+        proposal_scale = _semantic_wm_refiner_proposal_scale(
+            refiner_helper_status, refiner
+        )
         learned_overlay = _scale_semantic_wm_overlay(
             refiner.predict_correction_overlay(
                 semantic_world_model,
@@ -584,10 +634,11 @@ def run_coverage_loop(
                 learned_scored_proposals,
             ),
         )
-        correction_overlay = merge_semantic_wm_correction_overlays(correction_overlay, learned_overlay)
+        correction_overlay = merge_semantic_wm_correction_overlays(
+            correction_overlay, learned_overlay
+        )
         learned_graph_mutation_proposals = [
-            item.to_dict()
-            for item in learned_scored_proposals
+            item.to_dict() for item in learned_scored_proposals
         ]
         refiner_summary = {
             "active": True,
@@ -595,7 +646,9 @@ def run_coverage_loop(
             "package_metadata": dict(getattr(refiner, "metadata", {}) or {}),
             "overlay_scale": float(overlay_scale),
             "proposal_scale": float(proposal_scale),
-            "learned_overlay_pressure": float(getattr(learned_overlay, "meta_node_pressure", 0.0)),
+            "learned_overlay_pressure": float(
+                getattr(learned_overlay, "meta_node_pressure", 0.0)
+            ),
             "learned_graph_mutation_count": len(learned_graph_mutation_proposals),
         }
     else:
@@ -628,7 +681,9 @@ def run_coverage_loop(
             base_value = float(dict(base).get(key, 0.0))
             overlay_value = float(dict(overlay).get(key, base_value))
             if key in overlay:
-                merged[key] = max(0.0, min(1.0, 0.55 * base_value + 0.45 * overlay_value))
+                merged[key] = max(
+                    0.0, min(1.0, 0.55 * base_value + 0.45 * overlay_value)
+                )
             else:
                 merged[key] = base_value
         return merged
@@ -658,7 +713,11 @@ def run_coverage_loop(
         feedback_adapter_package,
         mode=feedback_adapter_mode,
     )
-    if adapter is None and shadow_fit_feedback_adapter and feedback_adapter_mode != "required":
+    if (
+        adapter is None
+        and shadow_fit_feedback_adapter
+        and feedback_adapter_mode != "required"
+    ):
         adapter = shadow_fit_feedback_adapter_package(coverage_graph)
         if adapter is not None:
             feedback_adapter_helper_status = {
@@ -669,7 +728,9 @@ def run_coverage_loop(
             }
     feedback_adapter_weight = 0.0
     if adapter is not None:
-        feedback_adapter_weight = _feedback_adapter_helper_weight(feedback_adapter_helper_status, adapter)
+        feedback_adapter_weight = _feedback_adapter_helper_weight(
+            feedback_adapter_helper_status, adapter
+        )
         predictions = adapter.predict_edges(coverage_graph.edges)
         for edge, prediction in zip(coverage_graph.edges, predictions):
             edge.economic_priority = _bounded_blend(
@@ -685,7 +746,9 @@ def run_coverage_loop(
             if not bool(edge.metadata.get("governance_blocked", False)):
                 edge.promotion_readiness = _bounded_blend(
                     edge.promotion_readiness,
-                    float(prediction.get("promotion_readiness", edge.promotion_readiness)),
+                    float(
+                        prediction.get("promotion_readiness", edge.promotion_readiness)
+                    ),
                     feedback_adapter_weight,
                 )
             edge.metadata["wm_validation_pressure"] = _bounded_blend(
@@ -701,18 +764,40 @@ def run_coverage_loop(
     summary["trust_calibration_overlay"] = dict(feedback.trust_calibration_overlay)
     summary["econ_calibration_overlay"] = dict(feedback.econ_calibration_overlay)
     total_edges = max(summary.get("total_edges", 0), 1)
-    summary["feedback_loop"]["missing_edge_fraction"] = summary.get("missing_edges", 0) / float(total_edges)
-    summary["feedback_loop"]["governance_blocked_fraction"] = summary.get("governance_blocked_edges", 0) / float(total_edges)
-    summary["feedback_loop"]["graph_mutation_pressure"] = float(len(feedback.graph_mutation_proposals)) / float(total_edges)
-    summary["feedback_loop"]["graph_mutation_applied_count"] = int(mutation_result.metadata.get("applied_count", 0))
-    summary["feedback_loop"]["graph_mutation_blocked_count"] = int(mutation_result.metadata.get("blocked_count", 0))
-    summary["feedback_loop"]["wm_correction_pressure"] = float(correction_overlay.meta_node_pressure)
-    summary["feedback_loop"]["feedback_adapter_helper_status"] = dict(feedback_adapter_helper_status)
-    summary["feedback_loop"]["feedback_adapter_helper_weight"] = float(feedback_adapter_weight)
-    summary["feedback_loop"]["learned_refinement_active"] = bool(refiner_summary.get("active", False))
+    summary["feedback_loop"]["missing_edge_fraction"] = summary.get(
+        "missing_edges", 0
+    ) / float(total_edges)
+    summary["feedback_loop"]["governance_blocked_fraction"] = summary.get(
+        "governance_blocked_edges", 0
+    ) / float(total_edges)
+    summary["feedback_loop"]["graph_mutation_pressure"] = float(
+        len(feedback.graph_mutation_proposals)
+    ) / float(total_edges)
+    summary["feedback_loop"]["graph_mutation_applied_count"] = int(
+        mutation_result.metadata.get("applied_count", 0)
+    )
+    summary["feedback_loop"]["graph_mutation_blocked_count"] = int(
+        mutation_result.metadata.get("blocked_count", 0)
+    )
+    summary["feedback_loop"]["wm_correction_pressure"] = float(
+        correction_overlay.meta_node_pressure
+    )
+    summary["feedback_loop"]["feedback_adapter_helper_status"] = dict(
+        feedback_adapter_helper_status
+    )
+    summary["feedback_loop"]["feedback_adapter_helper_weight"] = float(
+        feedback_adapter_weight
+    )
+    summary["feedback_loop"]["learned_refinement_active"] = bool(
+        refiner_summary.get("active", False)
+    )
     if refiner_summary.get("active"):
-        summary["feedback_loop"]["learned_graph_mutation_count"] = int(refiner_summary.get("learned_graph_mutation_count", 0))
-        summary["feedback_loop"]["learned_overlay_pressure"] = float(refiner_summary.get("learned_overlay_pressure", 0.0))
+        summary["feedback_loop"]["learned_graph_mutation_count"] = int(
+            refiner_summary.get("learned_graph_mutation_count", 0)
+        )
+        summary["feedback_loop"]["learned_overlay_pressure"] = float(
+            refiner_summary.get("learned_overlay_pressure", 0.0)
+        )
 
     # Step 6: Compile WM-owned simulation and diffusion state once
     sim_synth_runtime = SimSynthPhysicsRuntime(
@@ -734,10 +819,14 @@ def run_coverage_loop(
         backend_selector=backend_selector,
         branch_planner=branch_planner,
     )
-    sim_agenda = sim_synth_world_state.simulation_agenda.to_legacy_items()[:sim_agenda_limit]
+    sim_agenda = sim_synth_world_state.simulation_agenda.to_legacy_items()[
+        :sim_agenda_limit
+    ]
     summary["sim_synth_physics_state_id"] = sim_synth_world_state.state_id
     summary["sim_synth_physics_backend"] = sim_synth_world_state.physics_context.backend
-    summary["sim_synth_physics_selection_policy"] = sim_synth_world_state.physics_context.selection_policy
+    summary["sim_synth_physics_selection_policy"] = (
+        sim_synth_world_state.physics_context.selection_policy
+    )
     summary["sim_synth_job_inferential_summary"] = dict(
         sim_synth_world_state.metadata.get("job_inferential_summary", {}) or {}
     )
@@ -779,7 +868,9 @@ def run_coverage_loop(
         }
     )
     summary["gap_ranking_policy"] = (
-        str(ranked_gap_records[0].ranking_policy) if ranked_gap_records else "heuristic_only"
+        str(ranked_gap_records[0].ranking_policy)
+        if ranked_gap_records
+        else "heuristic_only"
     )
     summary.setdefault(
         "top_missing_edges",
@@ -842,10 +933,13 @@ def run_coverage_loop(
 
     # Snapshot pre-evidence for outcome tracking
     pre_evidence = {
-        f"{g.source_id} -> {g.target_id}": g.evidence_count
-        for g in ranked_gaps
+        f"{g.source_id} -> {g.target_id}": g.evidence_count for g in ranked_gaps
     }
 
+    input_semantic_to_dict = getattr(semantic_world_model, "to_dict", None)
+    corrected_semantic_to_dict = getattr(
+        corrected_semantic_world_model, "to_dict", None
+    )
     result = CoverageLoopResult(
         coverage_graph=coverage_graph,
         coverage_summary=summary,
@@ -857,19 +951,21 @@ def run_coverage_loop(
         wm_validation_summary=feedback.wm_validation_summary,
         trust_calibration_overlay=feedback.trust_calibration_overlay,
         econ_calibration_overlay=feedback.econ_calibration_overlay,
-        graph_mutation_proposals=[item.to_dict() for item in feedback.graph_mutation_proposals],
+        graph_mutation_proposals=[
+            item.to_dict() for item in feedback.graph_mutation_proposals
+        ],
         graph_mutation_execution=mutation_result.to_dict(),
         semantic_wm_correction_overlay=correction_overlay.to_dict(),
         input_semantic_world_model=(
-            semantic_world_model.to_dict()
-            if getattr(semantic_world_model, "to_dict", None) is not None
+            input_semantic_to_dict()
+            if callable(input_semantic_to_dict)
             else dict(semantic_world_model)
             if isinstance(semantic_world_model, Mapping)
             else None
         ),
         corrected_semantic_world_model=(
-            corrected_semantic_world_model.to_dict()
-            if getattr(corrected_semantic_world_model, "to_dict", None) is not None
+            corrected_semantic_to_dict()
+            if callable(corrected_semantic_to_dict)
             else None
         ),
         semantic_wm_refiner_summary=refiner_summary,

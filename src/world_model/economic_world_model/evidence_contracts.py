@@ -215,6 +215,8 @@ def _requirement(
     promotion_gate: bool = True,
     metadata: Optional[Mapping[str, Any]] = None,
 ) -> EconomicWMEvidenceRequirement:
+    blocker_list = sorted(set(str(item) for item in blockers))
+    clamped_satisfaction_score = max(0.0, min(1.0, float(satisfaction_score)))
     payload = {
         "requirement_key": requirement_key,
         "provider_family": provider_family,
@@ -222,8 +224,8 @@ def _requirement(
         "current_status": current_status,
         "required_artifacts": list(required_artifacts),
         "local_prep_actions": list(local_prep_actions),
-        "blockers": sorted(set(str(item) for item in blockers)),
-        "satisfaction_score": max(0.0, min(1.0, float(satisfaction_score))),
+        "blockers": blocker_list,
+        "satisfaction_score": clamped_satisfaction_score,
         "promotion_gate": bool(promotion_gate),
         "metadata": _mapping(metadata),
         "version": ECONOMIC_WM_EVIDENCE_REQUIREMENT_VERSION,
@@ -236,8 +238,8 @@ def _requirement(
         current_status=current_status,
         required_artifacts=list(required_artifacts),
         local_prep_actions=list(local_prep_actions),
-        blockers=payload["blockers"],
-        satisfaction_score=payload["satisfaction_score"],
+        blockers=blocker_list,
+        satisfaction_score=clamped_satisfaction_score,
         promotion_gate=promotion_gate,
         metadata=_mapping(metadata),
     )

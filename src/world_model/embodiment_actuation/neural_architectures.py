@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, cast
 
 import torch
 from torch import nn
@@ -20,7 +20,9 @@ from torch.nn import functional as F
 from .common import mapping, safe_int, stable_id, strings
 from .neural_seams import encode_state_features
 
-NEURAL_ARCHITECTURE_MANIFEST_VERSION = "phase3_embodiment_neural_architecture_manifest_v1"
+NEURAL_ARCHITECTURE_MANIFEST_VERSION = (
+    "phase3_embodiment_neural_architecture_manifest_v1"
+)
 
 
 @dataclass(frozen=True)
@@ -110,11 +112,19 @@ class TemporalJEPALatentPredictor(nn.Module):
             nn.GELU(),
             nn.Linear(self.latent_dim, self.latent_dim),
         )
-        self.energy_head = nn.Sequential(nn.LayerNorm(self.latent_dim), nn.Linear(self.latent_dim, 1))
+        self.energy_head = nn.Sequential(
+            nn.LayerNorm(self.latent_dim), nn.Linear(self.latent_dim, 1)
+        )
 
-    def forward(self, state_features: torch.Tensor, action_context: torch.Tensor) -> dict[str, torch.Tensor]:
-        state_seq = _ensure_sequence(state_features.float(), feature_dim=self.feature_dim)
-        action_seq = _ensure_sequence(action_context.float(), feature_dim=self.action_dim)
+    def forward(
+        self, state_features: torch.Tensor, action_context: torch.Tensor
+    ) -> dict[str, torch.Tensor]:
+        state_seq = _ensure_sequence(
+            state_features.float(), feature_dim=self.feature_dim
+        )
+        action_seq = _ensure_sequence(
+            action_context.float(), feature_dim=self.action_dim
+        )
         state_seq, action_seq = _align_time(state_seq, action_seq)
         tokens = self.input(torch.cat([state_seq, action_seq], dim=-1))
         encoded = self.context_encoder(tokens)
@@ -130,8 +140,14 @@ class TemporalJEPALatentPredictor(nn.Module):
         return _module_description(
             self,
             family=self.architecture_family,
-            inputs={"state_features": ["B", "T", self.feature_dim], "action_context": ["B", "T", self.action_dim]},
-            outputs={"predicted_next_latent": ["B", self.latent_dim], "latent_energy": ["B"]},
+            inputs={
+                "state_features": ["B", "T", self.feature_dim],
+                "action_context": ["B", "T", self.action_dim],
+            },
+            outputs={
+                "predicted_next_latent": ["B", self.latent_dim],
+                "latent_energy": ["B"],
+            },
         )
 
 
@@ -155,7 +171,9 @@ class ActionChunkingTransformerHead(nn.Module):
         self.chunk_len = int(chunk_len)
         self.hidden_dim = int(hidden_dim)
         self.context_proj = nn.Linear(self.feature_dim, self.hidden_dim)
-        self.chunk_queries = nn.Parameter(torch.zeros(1, self.chunk_len, self.hidden_dim))
+        self.chunk_queries = nn.Parameter(
+            torch.zeros(1, self.chunk_len, self.hidden_dim)
+        )
         nn.init.normal_(self.chunk_queries, std=0.02)
         layer = nn.TransformerEncoderLayer(
             d_model=self.hidden_dim,
@@ -166,17 +184,23 @@ class ActionChunkingTransformerHead(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(layer, num_layers=max(1, depth))
         self.action_head = nn.Linear(self.hidden_dim, self.action_dim)
-        self.quality_head = nn.Sequential(nn.LayerNorm(self.hidden_dim), nn.Linear(self.hidden_dim, 1))
+        self.quality_head = nn.Sequential(
+            nn.LayerNorm(self.hidden_dim), nn.Linear(self.hidden_dim, 1)
+        )
 
     def forward(self, context_features: torch.Tensor) -> dict[str, torch.Tensor]:
-        context = _ensure_sequence(context_features.float(), feature_dim=self.feature_dim)
+        context = _ensure_sequence(
+            context_features.float(), feature_dim=self.feature_dim
+        )
         context_tokens = self.context_proj(context)
         queries = self.chunk_queries.expand(context.shape[0], -1, -1)
         encoded = self.encoder(torch.cat([context_tokens, queries], dim=1))
         chunk_tokens = encoded[:, -self.chunk_len :, :]
         return {
             "action_chunk": torch.tanh(self.action_head(chunk_tokens)),
-            "chunk_quality": torch.sigmoid(self.quality_head(chunk_tokens.mean(dim=1))).squeeze(-1),
+            "chunk_quality": torch.sigmoid(
+                self.quality_head(chunk_tokens.mean(dim=1))
+            ).squeeze(-1),
         }
 
     def describe(self) -> dict[str, Any]:
@@ -184,7 +208,10 @@ class ActionChunkingTransformerHead(nn.Module):
             self,
             family=self.architecture_family,
             inputs={"context_features": ["B", "T", self.feature_dim]},
-            outputs={"action_chunk": ["B", self.chunk_len, self.action_dim], "chunk_quality": ["B"]},
+            outputs={
+                "action_chunk": ["B", self.chunk_len, self.action_dim],
+                "chunk_quality": ["B"],
+            },
         )
 
 
@@ -206,7 +233,9 @@ class DiffusionActionDenoiserHead(nn.Module):
         self.action_dim = int(action_dim)
         self.chunk_len = int(chunk_len)
         self.timestep_dim = int(timestep_dim)
-        input_dim = self.feature_dim + self.action_dim * self.chunk_len + self.timestep_dim
+        input_dim = (
+            self.feature_dim + self.action_dim * self.chunk_len + self.timestep_dim
+        )
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
@@ -215,7 +244,9 @@ class DiffusionActionDenoiserHead(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_dim, self.action_dim * self.chunk_len),
         )
-        self.confidence = nn.Sequential(nn.Linear(input_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, 1))
+        self.confidence = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, 1)
+        )
 
     def forward(
         self,
@@ -223,18 +254,30 @@ class DiffusionActionDenoiserHead(nn.Module):
         condition_features: torch.Tensor,
         timesteps: Optional[torch.Tensor] = None,
     ) -> dict[str, torch.Tensor]:
-        chunk = _ensure_chunk(noisy_action_chunk.float(), self.chunk_len, self.action_dim)
-        cond = _ensure_sequence(condition_features.float(), feature_dim=self.feature_dim).mean(dim=1)
+        chunk = _ensure_chunk(
+            noisy_action_chunk.float(), self.chunk_len, self.action_dim
+        )
+        cond = _ensure_sequence(
+            condition_features.float(), feature_dim=self.feature_dim
+        ).mean(dim=1)
         if timesteps is None:
-            timesteps = torch.zeros((chunk.shape[0],), dtype=chunk.dtype, device=chunk.device)
-        timestep_embedding = _sinusoidal_timestep_embedding(timesteps.float(), self.timestep_dim)
+            timesteps = torch.zeros(
+                (chunk.shape[0],), dtype=chunk.dtype, device=chunk.device
+            )
+        timestep_embedding = _sinusoidal_timestep_embedding(
+            timesteps.float(), self.timestep_dim
+        )
         flat_chunk = chunk.reshape(chunk.shape[0], self.chunk_len * self.action_dim)
         model_input = torch.cat([flat_chunk, cond, timestep_embedding], dim=-1)
-        residual = self.net(model_input).reshape(chunk.shape[0], self.chunk_len, self.action_dim)
+        residual = self.net(model_input).reshape(
+            chunk.shape[0], self.chunk_len, self.action_dim
+        )
         return {
             "denoised_action_chunk": torch.tanh(chunk - residual),
             "predicted_noise": residual,
-            "denoise_confidence": torch.sigmoid(self.confidence(model_input)).squeeze(-1),
+            "denoise_confidence": torch.sigmoid(self.confidence(model_input)).squeeze(
+                -1
+            ),
         }
 
     def describe(self) -> dict[str, Any]:
@@ -276,14 +319,18 @@ class EmbodimentTopologyContrastiveHead(nn.Module):
             nn.GELU(),
             nn.Linear(self.embedding_dim, self.embedding_dim),
         )
-        self.adjacency_head = nn.Linear(self.embedding_dim, self.group_dim * self.group_dim)
+        self.adjacency_head = nn.Linear(
+            self.embedding_dim, self.group_dim * self.group_dim
+        )
 
     def forward(
         self,
         state_features: torch.Tensor,
         morphology_groups: Optional[torch.Tensor] = None,
     ) -> dict[str, torch.Tensor]:
-        features = _ensure_sequence(state_features.float(), feature_dim=self.feature_dim).mean(dim=1)
+        features = _ensure_sequence(
+            state_features.float(), feature_dim=self.feature_dim
+        ).mean(dim=1)
         if morphology_groups is None:
             morphology_groups = torch.zeros(
                 (features.shape[0], self.group_dim),
@@ -291,8 +338,12 @@ class EmbodimentTopologyContrastiveHead(nn.Module):
                 device=features.device,
             )
         groups = _fit_last_dim(morphology_groups.float(), self.group_dim)
-        embedding = F.normalize(self.projector(torch.cat([features, groups], dim=-1)), dim=-1)
-        logits = self.adjacency_head(embedding).reshape(features.shape[0], self.group_dim, self.group_dim)
+        embedding = F.normalize(
+            self.projector(torch.cat([features, groups], dim=-1)), dim=-1
+        )
+        logits = self.adjacency_head(embedding).reshape(
+            features.shape[0], self.group_dim, self.group_dim
+        )
         sim = embedding @ embedding.transpose(0, 1) / max(self.temperature, 1e-6)
         return {
             "embedding": embedding,
@@ -304,7 +355,10 @@ class EmbodimentTopologyContrastiveHead(nn.Module):
         return _module_description(
             self,
             family=self.architecture_family,
-            inputs={"state_features": ["B", "T", self.feature_dim], "morphology_groups": ["B", self.group_dim]},
+            inputs={
+                "state_features": ["B", "T", self.feature_dim],
+                "morphology_groups": ["B", self.group_dim],
+            },
             outputs={
                 "embedding": ["B", self.embedding_dim],
                 "adjacency_logits": ["B", self.group_dim, self.group_dim],
@@ -312,7 +366,9 @@ class EmbodimentTopologyContrastiveHead(nn.Module):
         )
 
 
-def build_embodiment_neural_architecture_specs(state: Any) -> list[EmbodimentNeuralArchitectureSpec]:
+def build_embodiment_neural_architecture_specs(
+    state: Any,
+) -> list[EmbodimentNeuralArchitectureSpec]:
     action_dim = _action_dim(state)
     joint_groups = _joint_group_count(state)
     blockers = _base_blockers(state)
@@ -324,52 +380,97 @@ def build_embodiment_neural_architecture_specs(state: Any) -> list[EmbodimentNeu
     }
     return [
         EmbodimentNeuralArchitectureSpec(
-            architecture_id=stable_id("embodiment_neural_arch", {"family": "jepa", **source_refs}),
+            architecture_id=stable_id(
+                "embodiment_neural_arch", {"family": "jepa", **source_refs}
+            ),
             family=TemporalJEPALatentPredictor.architecture_family,
             purpose="action_conditioned_latent_local_dynamics_prediction",
-            input_shapes={"state_features": ["B", "T", 32], "action_context": ["B", "T", action_dim]},
+            input_shapes={
+                "state_features": ["B", "T", 32],
+                "action_context": ["B", "T", action_dim],
+            },
             output_shapes={"predicted_next_latent": ["B", 64], "latent_energy": ["B"]},
-            oss_inspirations=["V-JEPA/V-JEPA2 masked latent prediction", "TD-MPC2 decoder-free latent control"],
-            training_objectives=["masked_next_latent_prediction", "action_conditioned_energy_ranking"],
+            oss_inspirations=[
+                "V-JEPA/V-JEPA2 masked latent prediction",
+                "TD-MPC2 decoder-free latent control",
+            ],
+            training_objectives=[
+                "masked_next_latent_prediction",
+                "action_conditioned_energy_ranking",
+            ],
             required_training_rows=["local_contact_dynamics", "drift_calibration"],
             promotion_requirements=_promotion_requirements(),
             blocker_reasons=blockers,
             metadata=common_metadata,
         ),
         EmbodimentNeuralArchitectureSpec(
-            architecture_id=stable_id("embodiment_neural_arch", {"family": "act", **source_refs}),
+            architecture_id=stable_id(
+                "embodiment_neural_arch", {"family": "act", **source_refs}
+            ),
             family=ActionChunkingTransformerHead.architecture_family,
             purpose="chunked_action_proposal_from_embodiment_context",
             input_shapes={"context_features": ["B", "T", 32]},
-            output_shapes={"action_chunk": ["B", 8, action_dim], "chunk_quality": ["B"]},
-            oss_inspirations=["Action Chunking Transformer", "LeRobot/ACT action chunking discipline"],
-            training_objectives=["chunk_imitation_loss", "temporal_ensembling_smoothness"],
+            output_shapes={
+                "action_chunk": ["B", 8, action_dim],
+                "chunk_quality": ["B"],
+            },
+            oss_inspirations=[
+                "Action Chunking Transformer",
+                "LeRobot/ACT action chunking discipline",
+            ],
+            training_objectives=[
+                "chunk_imitation_loss",
+                "temporal_ensembling_smoothness",
+            ],
             required_training_rows=["action_proposal", "inverse_retargeting"],
             promotion_requirements=_promotion_requirements(),
             blocker_reasons=blockers,
             metadata=common_metadata,
         ),
         EmbodimentNeuralArchitectureSpec(
-            architecture_id=stable_id("embodiment_neural_arch", {"family": "diffusion", **source_refs}),
+            architecture_id=stable_id(
+                "embodiment_neural_arch", {"family": "diffusion", **source_refs}
+            ),
             family=DiffusionActionDenoiserHead.architecture_family,
             purpose="multimodal_action_chunk_denoising_under_embodiment_constraints",
-            input_shapes={"noisy_action_chunk": ["B", 8, action_dim], "condition_features": ["B", "T", 32]},
+            input_shapes={
+                "noisy_action_chunk": ["B", 8, action_dim],
+                "condition_features": ["B", "T", 32],
+            },
             output_shapes={"denoised_action_chunk": ["B", 8, action_dim]},
             oss_inspirations=["Diffusion Policy conditional action denoising"],
-            training_objectives=["noise_prediction_loss", "constraint_conditioned_action_score_matching"],
+            training_objectives=[
+                "noise_prediction_loss",
+                "constraint_conditioned_action_score_matching",
+            ],
             required_training_rows=["action_proposal", "drift_calibration"],
             promotion_requirements=_promotion_requirements(),
             blocker_reasons=blockers,
             metadata=common_metadata,
         ),
         EmbodimentNeuralArchitectureSpec(
-            architecture_id=stable_id("embodiment_neural_arch", {"family": "topology_contrastive", **source_refs}),
+            architecture_id=stable_id(
+                "embodiment_neural_arch",
+                {"family": "topology_contrastive", **source_refs},
+            ),
             family=EmbodimentTopologyContrastiveHead.architecture_family,
             purpose="morphology_topology_and_action_feasibility_consistency",
-            input_shapes={"state_features": ["B", "T", 32], "morphology_groups": ["B", joint_groups]},
-            output_shapes={"embedding": ["B", 48], "adjacency_logits": ["B", joint_groups, joint_groups]},
-            oss_inspirations=["topology-aware contrastive representation learning", "morphology/action-space invariance"],
-            training_objectives=["positive_same_embodiment_contrast", "negative_mismatched_morphology_contrast"],
+            input_shapes={
+                "state_features": ["B", "T", 32],
+                "morphology_groups": ["B", joint_groups],
+            },
+            output_shapes={
+                "embedding": ["B", 48],
+                "adjacency_logits": ["B", joint_groups, joint_groups],
+            },
+            oss_inspirations=[
+                "topology-aware contrastive representation learning",
+                "morphology/action-space invariance",
+            ],
+            training_objectives=[
+                "positive_same_embodiment_contrast",
+                "negative_mismatched_morphology_contrast",
+            ],
             required_training_rows=["inverse_retargeting", "local_contact_dynamics"],
             promotion_requirements=_promotion_requirements(),
             blocker_reasons=blockers,
@@ -388,17 +489,21 @@ def smoke_forward_neural_architectures(state: Any) -> dict[str, dict[str, Any]]:
     action_context = torch.zeros((2, 3, action_dim), dtype=torch.float32)
     noisy_chunk = torch.zeros((2, 8, action_dim), dtype=torch.float32)
     morphology_groups = _morphology_group_tensor(state, group_dim).repeat(2, 1)
-    modules = {
+    modules: dict[str, tuple[nn.Module, tuple[Any, ...]]] = {
         TemporalJEPALatentPredictor.architecture_family: (
             TemporalJEPALatentPredictor(feature_dim=32, action_dim=action_dim),
             (features, action_context),
         ),
         ActionChunkingTransformerHead.architecture_family: (
-            ActionChunkingTransformerHead(feature_dim=32, action_dim=action_dim, chunk_len=8),
+            ActionChunkingTransformerHead(
+                feature_dim=32, action_dim=action_dim, chunk_len=8
+            ),
             (features,),
         ),
         DiffusionActionDenoiserHead.architecture_family: (
-            DiffusionActionDenoiserHead(feature_dim=32, action_dim=action_dim, chunk_len=8),
+            DiffusionActionDenoiserHead(
+                feature_dim=32, action_dim=action_dim, chunk_len=8
+            ),
             (noisy_chunk, features, torch.tensor([0.0, 3.0])),
         ),
         EmbodimentTopologyContrastiveHead.architecture_family: (
@@ -409,11 +514,17 @@ def smoke_forward_neural_architectures(state: Any) -> dict[str, dict[str, Any]]:
     results: dict[str, dict[str, Any]] = {}
     with torch.no_grad():
         for family, (module, args) in modules.items():
-            outputs = module(*args)
+            module_any = cast(Any, module)
+            outputs = module_any(*args)
             results[family] = {
-                "describe": module.describe(),
-                "output_shapes": {key: list(value.shape) for key, value in outputs.items()},
-                "finite": all(bool(torch.isfinite(value).all().item()) for value in outputs.values()),
+                "describe": module_any.describe(),
+                "output_shapes": {
+                    key: list(value.shape) for key, value in outputs.items()
+                },
+                "finite": all(
+                    bool(torch.isfinite(value).all().item())
+                    for value in outputs.values()
+                ),
                 "param_count": _param_count(module),
                 "authority_level": "none",
             }
@@ -433,7 +544,10 @@ def build_embodiment_neural_architecture_manifest(
     return EmbodimentNeuralArchitectureManifest(
         manifest_id=stable_id(
             "embodiment_neural_architecture_manifest",
-            {"state_id": refs.get("state_id", ""), "families": [spec.family for spec in specs]},
+            {
+                "state_id": refs.get("state_id", ""),
+                "families": [spec.family for spec in specs],
+            },
         ),
         architecture_specs=specs,
         smoke_results=smoke,
@@ -483,12 +597,16 @@ def _fit_last_dim(value: torch.Tensor, size: int) -> torch.Tensor:
     return torch.cat([value, pad], dim=-1)
 
 
-def _align_time(left: torch.Tensor, right: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def _align_time(
+    left: torch.Tensor, right: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
     steps = max(left.shape[1], right.shape[1])
     if left.shape[1] != steps:
         left = left.repeat(1, steps, 1) if left.shape[1] == 1 else left[:, :steps, :]
     if right.shape[1] != steps:
-        right = right.repeat(1, steps, 1) if right.shape[1] == 1 else right[:, :steps, :]
+        right = (
+            right.repeat(1, steps, 1) if right.shape[1] == 1 else right[:, :steps, :]
+        )
     return left, right
 
 
@@ -503,7 +621,9 @@ def _sinusoidal_timestep_embedding(timesteps: torch.Tensor, dim: int) -> torch.T
     return _fit_last_dim(embedding, dim)
 
 
-def _module_description(module: nn.Module, *, family: str, inputs: dict[str, Any], outputs: dict[str, Any]) -> dict[str, Any]:
+def _module_description(
+    module: nn.Module, *, family: str, inputs: dict[str, Any], outputs: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "family": family,
         "input_shapes": mapping(inputs),
@@ -529,7 +649,9 @@ def _joint_group_count(state: Any) -> int:
     group_counts = mapping(metadata.get("group_counts"))
     if group_counts:
         return max(1, len(group_counts))
-    joint_names = strings(getattr(getattr(state, "joint_state", None), "joint_names", []))
+    joint_names = strings(
+        getattr(getattr(state, "joint_state", None), "joint_names", [])
+    )
     if joint_names:
         groups = set()
         for name in joint_names:
@@ -539,7 +661,9 @@ def _joint_group_count(state: Any) -> int:
                 groups.add("waist")
             elif "shoulder" in name or "elbow" in name or "wrist" in name:
                 groups.add("arms")
-            elif "hand" in name or "thumb" in name or "index" in name or "middle" in name:
+            elif (
+                "hand" in name or "thumb" in name or "index" in name or "middle" in name
+            ):
                 groups.add("hands")
         return max(1, len(groups) or 4)
     return 4
@@ -548,7 +672,11 @@ def _joint_group_count(state: Any) -> int:
 def _morphology_group_tensor(state: Any, group_dim: int) -> torch.Tensor:
     metadata = mapping(getattr(getattr(state, "capability", None), "metadata", {}))
     group_counts = mapping(metadata.get("group_counts"))
-    values = [float(group_counts.get(key, 0.0)) for key in sorted(group_counts)] if group_counts else []
+    values = (
+        [float(group_counts.get(key, 0.0)) for key in sorted(group_counts)]
+        if group_counts
+        else []
+    )
     if not values:
         values = [0.0 for _ in range(group_dim)]
     tensor = torch.tensor(values, dtype=torch.float32).reshape(1, -1)

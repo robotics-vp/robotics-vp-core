@@ -12,7 +12,7 @@ from src.world_model.semantic_wm_refiner import SemanticWMRefinerPackage
 try:  # pragma: no cover - explicit failure paths below
     import torch
 except Exception:  # pragma: no cover
-    torch = None
+    torch = None  # type: ignore[assignment]
 
 
 def _mapping(payload: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -31,7 +31,9 @@ class SemanticWMRefinerRuntimePackage:
     metadata: Dict[str, Any]
 
 
-def load_semantic_wm_refiner_runtime_package(path: str | Path) -> SemanticWMRefinerRuntimePackage:
+def load_semantic_wm_refiner_runtime_package(
+    path: str | Path,
+) -> SemanticWMRefinerRuntimePackage:
     package_path = Path(path)
     payload = json.loads(package_path.read_text(encoding="utf-8"))
     checkpoint_path = Path(str(payload.get("checkpoint_path") or ""))
@@ -44,7 +46,9 @@ def load_semantic_wm_refiner_runtime_package(path: str | Path) -> SemanticWMRefi
         benchmark_gate=_mapping(payload.get("benchmark_gate")),
         execution_preconditions=_mapping(payload.get("execution_preconditions")),
         inference_contract=_mapping(payload.get("inference_contract")),
-        promotion_stage=str(payload.get("promotion_stage", "shadow_candidate") or "shadow_candidate"),
+        promotion_stage=str(
+            payload.get("promotion_stage", "shadow_candidate") or "shadow_candidate"
+        ),
         metadata=_mapping(payload.get("metadata")),
     )
 
@@ -65,7 +69,9 @@ def resolve_semantic_wm_refiner_helper(
         }
     if helper is None:
         if mode == "required":
-            raise ValueError("semantic-WM-refiner mode 'required' but no helper was provided")
+            raise ValueError(
+                "semantic-WM-refiner mode 'required' but no helper was provided"
+            )
         return None, {
             "mode": mode,
             "status": "package_missing",
@@ -73,13 +79,19 @@ def resolve_semantic_wm_refiner_helper(
             "benchmark_gate_ready": False,
         }
     if isinstance(helper, SemanticWMRefinerPackage):
-        benchmark_gate_ready = bool(getattr(helper, "benchmark_gate", {}).get("ready", False))
+        benchmark_gate_ready = bool(
+            getattr(helper, "benchmark_gate", {}).get("ready", False)
+        )
         if mode == "required" and not benchmark_gate_ready:
-            raise ValueError("semantic-WM-refiner mode 'required' requires a benchmark-gated package")
+            raise ValueError(
+                "semantic-WM-refiner mode 'required' requires a benchmark-gated package"
+            )
         return helper, {
             "mode": mode,
             "status": "loaded_direct",
-            "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
+            "promotion_stage": "promoted"
+            if benchmark_gate_ready
+            else "shadow_candidate",
             "benchmark_gate_ready": benchmark_gate_ready,
         }
 
@@ -101,7 +113,10 @@ def resolve_semantic_wm_refiner_helper(
                 benchmark_gate=_mapping(helper.get("benchmark_gate")),
                 execution_preconditions=_mapping(helper.get("execution_preconditions")),
                 inference_contract=_mapping(helper.get("inference_contract")),
-                promotion_stage=str(helper.get("promotion_stage", "shadow_candidate") or "shadow_candidate"),
+                promotion_stage=str(
+                    helper.get("promotion_stage", "shadow_candidate")
+                    or "shadow_candidate"
+                ),
                 metadata=_mapping(helper.get("metadata")),
             )
             checkpoint_path = Path(package.checkpoint_path)
@@ -116,7 +131,9 @@ def resolve_semantic_wm_refiner_helper(
 
     if checkpoint_path is None or not checkpoint_path.exists():
         if mode == "required":
-            raise ValueError("semantic-WM-refiner mode 'required' but no loadable checkpoint/package was found")
+            raise ValueError(
+                "semantic-WM-refiner mode 'required' but no loadable checkpoint/package was found"
+            )
         return None, {
             "mode": mode,
             "status": "package_missing",
@@ -127,19 +144,29 @@ def resolve_semantic_wm_refiner_helper(
         raise ImportError("PyTorch is required to load the semantic WM refiner helper")
     payload = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
     loaded = SemanticWMRefinerPackage.from_checkpoint(payload)
-    benchmark_gate_ready = bool(package.benchmark_gate.get("ready", False)) if package is not None else False
+    benchmark_gate_ready = (
+        bool(package.benchmark_gate.get("ready", False))
+        if package is not None
+        else False
+    )
     if package is not None:
         setattr(loaded, "benchmark_gate", dict(package.benchmark_gate))
-        setattr(loaded, "execution_preconditions", dict(package.execution_preconditions))
+        setattr(
+            loaded, "execution_preconditions", dict(package.execution_preconditions)
+        )
         setattr(loaded, "inference_contract", dict(package.inference_contract))
         setattr(loaded, "promotion_stage", str(package.promotion_stage))
     if mode == "required" and not benchmark_gate_ready:
-        raise ValueError("semantic-WM-refiner mode 'required' requires a benchmark-gated package")
+        raise ValueError(
+            "semantic-WM-refiner mode 'required' requires a benchmark-gated package"
+        )
     return loaded, {
         "mode": mode,
         "status": "loaded",
         "package_id": package.package_id if package is not None else None,
-        "package_path": package.package_path if package is not None else str(checkpoint_path),
+        "package_path": package.package_path
+        if package is not None
+        else str(checkpoint_path),
         "promotion_stage": "promoted" if benchmark_gate_ready else "shadow_candidate",
         "benchmark_gate_ready": benchmark_gate_ready,
         "unsatisfied_preconditions": list(

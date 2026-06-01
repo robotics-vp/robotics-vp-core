@@ -30,7 +30,11 @@ def apply_arh_penalty(
             hard_exclusion_threshold = cfg.hard_exclusion_threshold
     metrics = dict(econ_metrics)
     arh_score = _extract_arh_score(metrics)
-    if hard_exclusion_threshold is not None and arh_score is not None and arh_score > hard_exclusion_threshold:
+    if (
+        hard_exclusion_threshold is not None
+        and arh_score is not None
+        and arh_score > hard_exclusion_threshold
+    ):
         metrics["mpl_units_per_hour_adjusted"] = 0.0
         metrics["arh_excluded"] = 1.0
         return metrics
@@ -90,7 +94,9 @@ class DatapackSelectionFeatures:
             "history_support_score": float(self.history_support_score),
             "quality_score": float(self.quality_score),
             "novelty_score": float(self.novelty_score),
-            "semantic_grounding_non_heuristic": float(self.semantic_grounding_non_heuristic),
+            "semantic_grounding_non_heuristic": float(
+                self.semantic_grounding_non_heuristic
+            ),
             "benchmark_eligible": float(self.benchmark_eligible),
             "execution_ready": float(self.execution_ready),
             "cold_start_bonus": float(self.cold_start_bonus),
@@ -166,8 +172,12 @@ class DatapackSelectionScorerPackage:
                 [_safe_float(value) for value in row]
                 for row in self.neural_hidden_weights
             ],
-            "neural_hidden_bias": [_safe_float(value) for value in self.neural_hidden_bias],
-            "neural_output_weights": [_safe_float(value) for value in self.neural_output_weights],
+            "neural_hidden_bias": [
+                _safe_float(value) for value in self.neural_hidden_bias
+            ],
+            "neural_output_weights": [
+                _safe_float(value) for value in self.neural_output_weights
+            ],
             "neural_output_bias": float(self.neural_output_bias),
             "metadata": dict(self.metadata),
         }
@@ -254,7 +264,9 @@ def coerce_datapack_selection_scorer_package(
     }
     return DatapackSelectionScorerPackage(
         package_id=str(payload.get("package_id", "datapack_selection_helper")),
-        schema_version=str(payload.get("schema_version", "datapack_selection_scorer_v1")),
+        schema_version=str(
+            payload.get("schema_version", "datapack_selection_scorer_v1")
+        ),
         feature_weights=feature_weights,
         context_weights=context_weights,
         bias=_safe_float(payload.get("bias", 0.0)),
@@ -262,7 +274,10 @@ def coerce_datapack_selection_scorer_package(
         min_adjustment=max(0.0, _safe_float(payload.get("min_adjustment", 0.0))),
         max_adjustment=max(0.0, _safe_float(payload.get("max_adjustment", 0.75))),
         model_kind=str(
-            payload.get("model_kind", "linear_feature_weights_plus_context_conditioned_adjustment_v1")
+            payload.get(
+                "model_kind",
+                "linear_feature_weights_plus_context_conditioned_adjustment_v1",
+            )
         ),
         neural_feature_order=[
             str(name) for name in list(payload.get("neural_feature_order", []) or [])
@@ -272,10 +287,12 @@ def coerce_datapack_selection_scorer_package(
             for row in list(payload.get("neural_hidden_weights", []) or [])
         ],
         neural_hidden_bias=[
-            _safe_float(value) for value in list(payload.get("neural_hidden_bias", []) or [])
+            _safe_float(value)
+            for value in list(payload.get("neural_hidden_bias", []) or [])
         ],
         neural_output_weights=[
-            _safe_float(value) for value in list(payload.get("neural_output_weights", []) or [])
+            _safe_float(value)
+            for value in list(payload.get("neural_output_weights", []) or [])
         ],
         neural_output_bias=_safe_float(payload.get("neural_output_bias", 0.0)),
         metadata=dict(payload.get("metadata", {}) or {}),
@@ -300,7 +317,9 @@ def rank_datapacks_for_intent(
     scenarios: Sequence[ScenarioMetadata | Mapping[str, Any]],
     *,
     candidate_metadata_by_id: Mapping[str, Mapping[str, Any]] | None = None,
-    selection_scorer_package: DatapackSelectionScorerPackage | Mapping[str, Any] | None = None,
+    selection_scorer_package: DatapackSelectionScorerPackage
+    | Mapping[str, Any]
+    | None = None,
     source: str = "ontology",
 ) -> list[DatapackSelectionDecision]:
     if not candidates:
@@ -317,7 +336,9 @@ def rank_datapacks_for_intent(
         for key, value in dict(candidate_metadata_by_id or {}).items()
     }
     scorer_package = coerce_datapack_selection_scorer_package(selection_scorer_package)
-    eligible_candidates: list[tuple[DatapackConfig, set[str], list[str], dict[str, Any], dict[str, Any]]] = []
+    eligible_candidates: list[
+        tuple[DatapackConfig, set[str], list[str], dict[str, Any], dict[str, Any]]
+    ] = []
     for cfg in candidates:
         cfg_tags = {t.lower() for t in cfg.tags}
         matched_tags = sorted(required_tags & cfg_tags)
@@ -342,7 +363,15 @@ def rank_datapacks_for_intent(
                 },
             )
         )
-        eligible_candidates.append((cfg, cfg_tags, matched_tags, candidate_metadata, benchmark_support | {"history": history}))
+        eligible_candidates.append(
+            (
+                cfg,
+                cfg_tags,
+                matched_tags,
+                candidate_metadata,
+                benchmark_support | {"history": history},
+            )
+        )
     selection_context = _build_datapack_selection_context(
         required_tags=required_tags,
         gap_tags=gap_tags,
@@ -352,42 +381,70 @@ def rank_datapacks_for_intent(
     )
 
     decisions: list[DatapackSelectionDecision] = []
-    for cfg, cfg_tags, matched_tags, candidate_metadata, benchmark_payload in eligible_candidates:
+    for (
+        cfg,
+        cfg_tags,
+        matched_tags,
+        candidate_metadata,
+        benchmark_payload,
+    ) in eligible_candidates:
         benchmark_support = {
-            key: value
-            for key, value in benchmark_payload.items()
-            if key != "history"
+            key: value for key, value in benchmark_payload.items() if key != "history"
         }
         history = dict(benchmark_payload.get("history", {}) or {})
         robot_match = True
         execution_ready = bool(benchmark_support.get("execution_ready", False))
-        quality_score = _clamp01(_safe_float(candidate_metadata.get("quality_score", 0.0)))
-        novelty_score = _clamp01(_safe_float(candidate_metadata.get("novelty_score", 0.0)))
+        quality_score = _clamp01(
+            _safe_float(candidate_metadata.get("quality_score", 0.0))
+        )
+        novelty_score = _clamp01(
+            _safe_float(candidate_metadata.get("novelty_score", 0.0))
+        )
         objective_match = bool(
-            objective_norm and cfg.objective_hint and objective_norm in cfg.objective_hint.lower()
+            objective_norm
+            and cfg.objective_hint
+            and objective_norm in cfg.objective_hint.lower()
         )
         exact_tag_match = not required_tags or required_tags.issubset(cfg_tags)
         gap_fill_tags = sorted(gap_tags & cfg_tags)
-        tag_coverage = (len(matched_tags) / float(len(required_tags))) if required_tags else 1.0
-        gap_fill_score = (len(gap_fill_tags) / float(len(gap_tags))) if gap_tags else 0.0
+        tag_coverage = (
+            (len(matched_tags) / float(len(required_tags))) if required_tags else 1.0
+        )
+        gap_fill_score = (
+            (len(gap_fill_tags) / float(len(gap_tags))) if gap_tags else 0.0
+        )
         features = DatapackSelectionFeatures(
             tag_coverage=tag_coverage,
             exact_tag_match=1.0 if exact_tag_match else 0.0,
             gap_fill_score=gap_fill_score,
             objective_match=1.0 if objective_match else 0.0,
-            history_support_score=_clamp01(_safe_float(history.get("support_score", 0.0))),
+            history_support_score=_clamp01(
+                _safe_float(history.get("support_score", 0.0))
+            ),
             quality_score=quality_score,
             novelty_score=novelty_score,
             semantic_grounding_non_heuristic=(
-                1.0 if benchmark_support.get("semantic_grounding_non_heuristic", False) else 0.0
+                1.0
+                if benchmark_support.get("semantic_grounding_non_heuristic", False)
+                else 0.0
             ),
-            benchmark_eligible=1.0 if benchmark_support.get("benchmark_eligible", False) else 0.0,
+            benchmark_eligible=1.0
+            if benchmark_support.get("benchmark_eligible", False)
+            else 0.0,
             execution_ready=1.0 if execution_ready else 0.0,
-            cold_start_bonus=1.0 if history.get("scenario_count", 0) == 0 and exact_tag_match else 0.0,
+            cold_start_bonus=1.0
+            if history.get("scenario_count", 0) == 0 and exact_tag_match
+            else 0.0,
             max_arh_penalty=_clamp01(_safe_float(history.get("max_arh_penalty", 0.0))),
-            mean_adjusted_mpl_norm=_clamp01(_safe_float(history.get("mean_adjusted_mpl", 0.0)) / 100.0),
-            mean_reward_norm=_clamp01(_safe_float(history.get("mean_reward", 0.0)) / 10.0),
-            scenario_count_norm=_clamp01(_safe_float(history.get("scenario_count", 0)) / 10.0),
+            mean_adjusted_mpl_norm=_clamp01(
+                _safe_float(history.get("mean_adjusted_mpl", 0.0)) / 100.0
+            ),
+            mean_reward_norm=_clamp01(
+                _safe_float(history.get("mean_reward", 0.0)) / 10.0
+            ),
+            scenario_count_norm=_clamp01(
+                _safe_float(history.get("scenario_count", 0)) / 10.0
+            ),
             eval_count_norm=_clamp01(_safe_float(history.get("eval_count", 0)) / 10.0),
         )
         heuristic_score = _score_datapack_selection_prior(features)
@@ -420,22 +477,28 @@ def rank_datapacks_for_intent(
         if execution_ready:
             reasons.append("execution_ready")
         if _safe_float(history.get("max_arh_penalty", 0.0)) > 0.0:
-            reasons.append(f"arh_penalty:{_safe_float(history.get('max_arh_penalty', 0.0)):.2f}")
+            reasons.append(
+                f"arh_penalty:{_safe_float(history.get('max_arh_penalty', 0.0)):.2f}"
+            )
         if scorer_package is not None:
             reasons.append(f"learned_adjustment:{learned_score:+.2f}")
             top_contributors = scorer_trace.get("top_contributors", []) or []
             if top_contributors:
                 reasons.append(
-                    "learned_features:" + ",".join(
+                    "learned_features:"
+                    + ",".join(
                         str(item.get("feature"))
                         for item in list(top_contributors)[:3]
                         if item.get("feature")
                     )
                 )
-            top_context_contributors = scorer_trace.get("context_trace", {}).get("top_contributors", []) or []
+            top_context_contributors = (
+                scorer_trace.get("context_trace", {}).get("top_contributors", []) or []
+            )
             if top_context_contributors:
                 reasons.append(
-                    "learned_context:" + ",".join(
+                    "learned_context:"
+                    + ",".join(
                         str(item.get("feature"))
                         for item in list(top_context_contributors)[:3]
                         if item.get("feature")
@@ -450,7 +513,9 @@ def rank_datapacks_for_intent(
                 heuristic_score=float(heuristic_score),
                 learned_score=float(learned_score),
                 selection_policy=selection_policy,
-                scorer_package_id=(scorer_package.package_id if scorer_package is not None else None),
+                scorer_package_id=(
+                    scorer_package.package_id if scorer_package is not None else None
+                ),
                 matched_tags=matched_tags,
                 missing_tags=sorted(required_tags - cfg_tags),
                 gap_fill_tags=gap_fill_tags,
@@ -491,14 +556,12 @@ def summarize_datapack_selection(
 ) -> dict[str, Any]:
     selected_rows = list(selected or ranked)
     scorer_package_ids = sorted(
-        {
-            str(row.scorer_package_id)
-            for row in selected_rows
-            if row.scorer_package_id
-        }
+        {str(row.scorer_package_id) for row in selected_rows if row.scorer_package_id}
     )
     return {
-        "required_tags": sorted({str(tag).strip().lower() for tag in tags if str(tag).strip()}),
+        "required_tags": sorted(
+            {str(tag).strip().lower() for tag in tags if str(tag).strip()}
+        ),
         "robot_family": robot_family,
         "objective_hint": objective_hint,
         "candidate_count": len(ranked),
@@ -531,7 +594,9 @@ def select_datapacks_for_intent(
     scenarios: Sequence[ScenarioMetadata | Mapping[str, Any]],
     *,
     candidate_metadata_by_id: Mapping[str, Mapping[str, Any]] | None = None,
-    selection_scorer_package: DatapackSelectionScorerPackage | Mapping[str, Any] | None = None,
+    selection_scorer_package: DatapackSelectionScorerPackage
+    | Mapping[str, Any]
+    | None = None,
     source: str = "ontology",
 ) -> list[DatapackConfig]:
     ranked = rank_datapacks_for_intent(
@@ -573,13 +638,23 @@ def detect_semantic_gaps(
 def _scenario_tags(scenario: ScenarioMetadata | Mapping[str, Any]) -> set[str]:
     if isinstance(scenario, ScenarioMetadata):
         return {t.lower() for t in scenario.datapack_tags}
-    return {str(t).strip().lower() for t in scenario.get("datapack_tags") or [] if str(t).strip()}
+    return {
+        str(t).strip().lower()
+        for t in scenario.get("datapack_tags") or []
+        if str(t).strip()
+    }
 
 
-def _scenario_robot_families(scenario: ScenarioMetadata | Mapping[str, Any]) -> set[str]:
+def _scenario_robot_families(
+    scenario: ScenarioMetadata | Mapping[str, Any],
+) -> set[str]:
     if isinstance(scenario, ScenarioMetadata):
         return {t.lower() for t in scenario.robot_families}
-    return {str(t).strip().lower() for t in scenario.get("robot_families") or [] if str(t).strip()}
+    return {
+        str(t).strip().lower()
+        for t in scenario.get("robot_families") or []
+        if str(t).strip()
+    }
 
 
 def _arh_flags_by_datapack(
@@ -607,14 +682,26 @@ def _scenario_support_by_datapack(
     for scenario in scenarios:
         if isinstance(scenario, ScenarioMetadata):
             continue
-        datapack_ids = [str(dp_id) for dp_id in scenario.get("datapack_ids") or [] if str(dp_id)]
+        datapack_ids = [
+            str(dp_id) for dp_id in scenario.get("datapack_ids") or [] if str(dp_id)
+        ]
         if not datapack_ids:
             continue
         adjusted_train = _adjusted_metrics(scenario.get("train_metrics"))
         adjusted_eval = _adjusted_metrics(scenario.get("eval_metrics"))
         adjusted_mpl = max(
-            _safe_float(adjusted_eval.get("mpl_units_per_hour_adjusted", adjusted_eval.get("mpl_units_per_hour", 0.0))),
-            _safe_float(adjusted_train.get("mpl_units_per_hour_adjusted", adjusted_train.get("mpl_units_per_hour", 0.0))),
+            _safe_float(
+                adjusted_eval.get(
+                    "mpl_units_per_hour_adjusted",
+                    adjusted_eval.get("mpl_units_per_hour", 0.0),
+                )
+            ),
+            _safe_float(
+                adjusted_train.get(
+                    "mpl_units_per_hour_adjusted",
+                    adjusted_train.get("mpl_units_per_hour", 0.0),
+                )
+            ),
         )
         reward = max(
             _safe_float(adjusted_eval.get("reward_scalar_sum", 0.0)),
@@ -637,7 +724,9 @@ def _scenario_support_by_datapack(
                 row["eval_count"] += 1
             row["adjusted_mpl_samples"].append(adjusted_mpl)
             row["reward_samples"].append(reward)
-            row["max_arh_penalty"] = max(_safe_float(row.get("max_arh_penalty", 0.0)), arh_penalty)
+            row["max_arh_penalty"] = max(
+                _safe_float(row.get("max_arh_penalty", 0.0)), arh_penalty
+            )
 
     finalized: dict[str, dict[str, Any]] = {}
     for datapack_id, row in support.items():
@@ -645,7 +734,9 @@ def _scenario_support_by_datapack(
         reward_values = list(row.get("reward_samples", []) or [])
         mean_adjusted_mpl = sum(mpl_values) / float(max(len(mpl_values), 1))
         mean_reward = sum(reward_values) / float(max(len(reward_values), 1))
-        support_score = _clamp01((mean_adjusted_mpl / 100.0) * 0.7 + (mean_reward / 10.0) * 0.3)
+        support_score = _clamp01(
+            (mean_adjusted_mpl / 100.0) * 0.7 + (mean_reward / 10.0) * 0.3
+        )
         finalized[datapack_id] = {
             "scenario_count": int(row.get("scenario_count", 0)),
             "eval_count": int(row.get("eval_count", 0)),
@@ -679,7 +770,9 @@ def _observed_tags_for_robot(
     return observed
 
 
-def _candidate_benchmark_support(candidate_metadata: Mapping[str, Any]) -> dict[str, Any]:
+def _candidate_benchmark_support(
+    candidate_metadata: Mapping[str, Any],
+) -> dict[str, Any]:
     payload = dict(candidate_metadata or {})
     metadata = payload.get("metadata")
     if isinstance(metadata, Mapping):
@@ -709,7 +802,8 @@ def _candidate_benchmark_support(candidate_metadata: Mapping[str, Any]) -> dict[
     if not isinstance(execution_preconditions, Mapping):
         execution_preconditions = payload.get("execution_preconditions")
     signals["execution_ready"] = bool(
-        isinstance(execution_preconditions, Mapping) and execution_preconditions.get("ready", False)
+        isinstance(execution_preconditions, Mapping)
+        and execution_preconditions.get("ready", False)
     )
     return signals
 
@@ -717,7 +811,8 @@ def _candidate_benchmark_support(candidate_metadata: Mapping[str, Any]) -> dict[
 def _score_datapack_selection_prior(features: DatapackSelectionFeatures) -> float:
     feature_map = features.to_dict()
     return sum(
-        _safe_float(DEFAULT_DATAPACK_SELECTION_PRIOR_WEIGHTS.get(name, 0.0)) * _safe_float(value)
+        _safe_float(DEFAULT_DATAPACK_SELECTION_PRIOR_WEIGHTS.get(name, 0.0))
+        * _safe_float(value)
         for name, value in feature_map.items()
     )
 
@@ -756,7 +851,9 @@ def _score_datapack_selection_helper(
         ),
     )
     bounded_adjustment = (
-        math.tanh(raw_score) * effective_max_adjustment if effective_max_adjustment > 0.0 else 0.0
+        math.tanh(raw_score) * effective_max_adjustment
+        if effective_max_adjustment > 0.0
+        else 0.0
     )
     return {
         "policy": "heuristic_plus_learned_helper",
@@ -805,13 +902,20 @@ def _build_datapack_selection_context(
     ) / float(candidate_count)
     history_density = sum(
         _clamp01(
-            _safe_float(dict(benchmark_payload.get("history", {}) or {}).get("scenario_count", 0)) / 10.0
+            _safe_float(
+                dict(benchmark_payload.get("history", {}) or {}).get(
+                    "scenario_count", 0
+                )
+            )
+            / 10.0
         )
         for _cfg, _cfg_tags, _matched_tags, _metadata, benchmark_payload in eligible_candidates
     ) / float(candidate_count)
     return DatapackSelectionContext(
         required_tag_count_norm=_clamp01(len(required_tags) / 8.0),
-        gap_pressure=(len(gap_tags) / float(len(required_tags))) if required_tags else 0.0,
+        gap_pressure=(len(gap_tags) / float(len(required_tags)))
+        if required_tags
+        else 0.0,
         candidate_pool_size_norm=_clamp01(candidate_count / 10.0),
         benchmark_ready_ratio=_clamp01(benchmark_ready_ratio),
         execution_ready_ratio=_clamp01(execution_ready_ratio),
@@ -869,7 +973,9 @@ def _score_datapack_selection_context(
         reverse=True,
     )
     scale = 1.0 / (1.0 + math.exp(-raw_score))
-    effective_max_adjustment = min_adjustment + (max_adjustment - min_adjustment) * scale
+    effective_max_adjustment = (
+        min_adjustment + (max_adjustment - min_adjustment) * scale
+    )
     return {
         "policy": "context_conditioned_max_adjustment",
         "raw_score": float(raw_score),
@@ -886,30 +992,40 @@ def _score_datapack_selection_neural_helper(
     feature_map: Mapping[str, float],
     scorer_package: DatapackSelectionScorerPackage,
 ) -> dict[str, Any]:
-    feature_names = list(scorer_package.neural_feature_order or sorted(feature_map.keys()))
+    feature_names = list(
+        scorer_package.neural_feature_order or sorted(feature_map.keys())
+    )
     if (
         scorer_package.model_kind.startswith("neural_")
         and scorer_package.neural_hidden_weights
         and scorer_package.neural_output_weights
         and len(scorer_package.neural_hidden_weights[0]) == len(feature_names)
-        and len(scorer_package.neural_hidden_weights) == len(scorer_package.neural_output_weights)
+        and len(scorer_package.neural_hidden_weights)
+        == len(scorer_package.neural_output_weights)
     ):
         feature_vector = np.asarray(
             [_safe_float(feature_map.get(name, 0.0)) for name in feature_names],
             dtype=np.float32,
         )
-        hidden_weights = np.asarray(scorer_package.neural_hidden_weights, dtype=np.float32)
+        hidden_weights = np.asarray(
+            scorer_package.neural_hidden_weights, dtype=np.float32
+        )
         hidden_bias = np.asarray(scorer_package.neural_hidden_bias, dtype=np.float32)
         if hidden_bias.size != hidden_weights.shape[0]:
             hidden_bias = np.zeros(hidden_weights.shape[0], dtype=np.float32)
-        output_weights = np.asarray(scorer_package.neural_output_weights, dtype=np.float32)
+        output_weights = np.asarray(
+            scorer_package.neural_output_weights, dtype=np.float32
+        )
         hidden_pre = hidden_weights @ feature_vector + hidden_bias
         hidden_act = np.maximum(hidden_pre, 0.0)
-        raw_score = float(np.dot(output_weights, hidden_act) + _safe_float(scorer_package.neural_output_bias))
+        raw_score = float(
+            np.dot(output_weights, hidden_act)
+            + _safe_float(scorer_package.neural_output_bias)
+        )
 
         active_mask = (hidden_pre > 0.0).astype(np.float32)
         local_linear = (output_weights * active_mask) @ hidden_weights
-        contributions = [
+        neural_contributions = [
             {
                 "feature": name,
                 "feature_value": _safe_float(feature_map.get(name, 0.0)),
@@ -919,7 +1035,7 @@ def _score_datapack_selection_neural_helper(
             for index, name in enumerate(feature_names)
             if abs(float(local_linear[index] * feature_vector[index])) > 0.0
         ]
-        contributions.sort(
+        neural_contributions.sort(
             key=lambda row: abs(_safe_float(row.get("contribution", 0.0))),
             reverse=True,
         )
@@ -936,7 +1052,7 @@ def _score_datapack_selection_neural_helper(
         return {
             "policy": "neural_feature_mlp",
             "raw_score": raw_score,
-            "top_contributors": contributions[:5],
+            "top_contributors": neural_contributions[:5],
             "network_trace": {
                 "active_hidden_units": active_units,
                 "feature_order": feature_names,
@@ -997,7 +1113,10 @@ def _selection_meta_choice_summary(
     )
     selected_non_heuristic_grounding = bool(
         top_row.benchmark_support.get("semantic_grounding_non_heuristic", False)
-        or _safe_float(top_row.selection_features.get("semantic_grounding_non_heuristic", 0.0)) >= 0.5
+        or _safe_float(
+            top_row.selection_features.get("semantic_grounding_non_heuristic", 0.0)
+        )
+        >= 0.5
     )
     return {
         "selected_datapack_id": top_row.datapack.id,
@@ -1007,19 +1126,32 @@ def _selection_meta_choice_summary(
         "required_tag_count": required_tag_count,
         "selected_gap_fill_ratio": float(gap_fill_ratio),
         "top_score": float(top_row.score),
-        "margin_to_runner_up": float(top_row.score - runner_up.score) if runner_up is not None else float(top_row.score),
+        "margin_to_runner_up": float(top_row.score - runner_up.score)
+        if runner_up is not None
+        else float(top_row.score),
         "heuristic_score": float(top_row.heuristic_score),
         "learned_score": float(top_row.learned_score),
         "selected_execution_ready": selected_execution_ready,
         "selected_non_heuristic_grounding": selected_non_heuristic_grounding,
-        "selected_benchmark_eligible": bool(top_row.benchmark_support.get("benchmark_eligible", False)),
-        "selected_quality_score": float(top_row.candidate_metadata.get("quality_score", 0.0) or 0.0),
-        "selected_history_support": float(top_row.historical_support.get("support_score", 0.0) or 0.0),
+        "selected_benchmark_eligible": bool(
+            top_row.benchmark_support.get("benchmark_eligible", False)
+        ),
+        "selected_quality_score": float(
+            top_row.candidate_metadata.get("quality_score", 0.0) or 0.0
+        ),
+        "selected_history_support": float(
+            top_row.historical_support.get("support_score", 0.0) or 0.0
+        ),
         "helper_status": dict(selection_helper_status or {}),
         "top_reasons": list(top_row.reasons)[:5],
-        "top_contributors": list(top_row.scorer_trace.get("top_contributors", []) or [])[:3],
+        "top_contributors": list(
+            top_row.scorer_trace.get("top_contributors", []) or []
+        )[:3],
         "top_context_contributors": list(
-            (top_row.scorer_trace.get("context_trace", {}) or {}).get("top_contributors", []) or []
+            (top_row.scorer_trace.get("context_trace", {}) or {}).get(
+                "top_contributors", []
+            )
+            or []
         )[:3],
     }
 

@@ -33,12 +33,8 @@ from src.world_model.humanoid_readiness.unitree_bringup_readiness import (
 PHASE4_UNITREE_BLOCKER_STRESS_REPORT_VERSION = (
     "phase4_unitree_blocker_stress_probe_report_v1"
 )
-UNITREE_BLOCKER_STRESS_PROBE_RECEIPT_VERSION = (
-    "unitree_blocker_stress_probe_receipt_v1"
-)
-UNITREE_MUJOCO_MODEL_STRESS_RECEIPT_VERSION = (
-    "unitree_mujoco_model_stress_receipt_v1"
-)
+UNITREE_BLOCKER_STRESS_PROBE_RECEIPT_VERSION = "unitree_blocker_stress_probe_receipt_v1"
+UNITREE_MUJOCO_MODEL_STRESS_RECEIPT_VERSION = "unitree_mujoco_model_stress_receipt_v1"
 
 DENIED_UNITREE_BLOCKER_STRESS_AUTHORITIES = (
     "ros2_publish_attempted",
@@ -188,9 +184,7 @@ class UnitreeBlockerStressProbeReceipt:
             observed=mapping(payload.get("observed")),
             missing=strings(payload.get("missing")),
             blockers=strings(payload.get("blockers")),
-            follow_up_work_unlocked=strings(
-                payload.get("follow_up_work_unlocked")
-            ),
+            follow_up_work_unlocked=strings(payload.get("follow_up_work_unlocked")),
             external_requirement=str(payload.get("external_requirement", "")),
             build_executed=bool(payload.get("build_executed", False)),
             runtime_invoked=bool(payload.get("runtime_invoked", False)),
@@ -395,13 +389,9 @@ class Phase4UnitreeBlockerStressProbeReport:
                 self.unitree_sdk2_header_compile_succeeded
             ),
             "ros2_runtime_available": bool(self.ros2_runtime_available),
-            "trace_import_modules_available": bool(
-                self.trace_import_modules_available
-            ),
+            "trace_import_modules_available": bool(self.trace_import_modules_available),
             "policy_checkpoint_visible": bool(self.policy_checkpoint_visible),
-            "isaaclab_task_surface_visible": bool(
-                self.isaaclab_task_surface_visible
-            ),
+            "isaaclab_task_surface_visible": bool(self.isaaclab_task_surface_visible),
             "lerobot_adapter_surface_visible": bool(
                 self.lerobot_adapter_surface_visible
             ),
@@ -484,7 +474,9 @@ class Phase4UnitreeBlockerStressProbeReport:
                 **_denied_gates(),
                 **{
                     str(key): bool(value)
-                    for key, value in dict(payload.get("denied_gates", {}) or {}).items()
+                    for key, value in dict(
+                        payload.get("denied_gates", {}) or {}
+                    ).items()
                 },
             },
             remaining_evidence_blockers=strings(
@@ -493,9 +485,7 @@ class Phase4UnitreeBlockerStressProbeReport:
             unlocked_local_followups=strings(payload.get("unlocked_local_followups")),
             artifact_refs=mapping(payload.get("artifact_refs")),
             version=str(
-                payload.get(
-                    "version", PHASE4_UNITREE_BLOCKER_STRESS_REPORT_VERSION
-                )
+                payload.get("version", PHASE4_UNITREE_BLOCKER_STRESS_REPORT_VERSION)
             ),
         )
 
@@ -637,7 +627,7 @@ def build_mujoco_model_stress_receipts(
             )
             continue
         try:
-            import mujoco  # type: ignore[import-not-found]
+            import mujoco  # type: ignore[import-not-found,import-untyped]
 
             started = time.perf_counter()
             model = mujoco.MjModel.from_xml_path(str(xml))
@@ -752,7 +742,9 @@ def _parse_python_surfaces(root: Path) -> dict[str, Any]:
         "syntax_errors": syntax_errors,
         "external_import_roots": external,
         "launch_file_count": len(list(root.glob("launch/*.launch.py"))),
-        "teleop_launch_present": (root / "launch/teleoperation_launcher.launch.py").exists(),
+        "teleop_launch_present": (
+            root / "launch/teleoperation_launcher.launch.py"
+        ).exists(),
         "bringup_launch_present": (root / "launch/bringup_launcher.launch.py").exists(),
         "setup_py_present": setup.exists(),
     }
@@ -779,7 +771,9 @@ def build_blocker_stress_probe_receipts(
         _receipt(
             blocker_key="ros2_colcon_build_and_generated_message_import_not_executed",
             probe_key="host_ros2_colcon_toolchain",
-            status="ok" if not missing_tools and opt_ros_present else "blocked_missing_host_runtime_tools",
+            status="ok"
+            if not missing_tools and opt_ros_present
+            else "blocked_missing_host_runtime_tools",
             succeeded=not missing_tools and opt_ros_present,
             local_probe_executed=True,
             evidence_class="host_toolchain_probe",
@@ -787,7 +781,9 @@ def build_blocker_stress_probe_receipts(
             command_or_import="command -v cmake colcon ros2 docker",
             observed={"tool_status": tool_status, "opt_ros_present": opt_ros_present},
             missing=[*missing_tools, *(["/opt/ros"] if not opt_ros_present else [])],
-            blockers=["ros2_runtime_not_installed"] if missing_tools or not opt_ros_present else [],
+            blockers=["ros2_runtime_not_installed"]
+            if missing_tools or not opt_ros_present
+            else [],
             external_requirement="Install/source ROS2 and colcon before generated message imports.",
         )
     )
@@ -811,7 +807,9 @@ def build_blocker_stress_probe_receipts(
         _receipt(
             blocker_key="runtime_python_imports_missing",
             probe_key="python_runtime_imports",
-            status="partial_mujoco_only" if module_status.get("mujoco") else "blocked_missing_runtime_modules",
+            status="partial_mujoco_only"
+            if module_status.get("mujoco")
+            else "blocked_missing_runtime_modules",
             succeeded=all(module_status.values()),
             local_probe_executed=True,
             evidence_class="python_import_probe",
@@ -855,7 +853,9 @@ def build_blocker_stress_probe_receipts(
         )
     )
 
-    g1pilot_surface = _parse_python_surfaces(g1pilot_root) if g1pilot_root.exists() else {}
+    g1pilot_surface = (
+        _parse_python_surfaces(g1pilot_root) if g1pilot_root.exists() else {}
+    )
     g1pilot_static_ok = bool(g1pilot_surface) and not g1pilot_surface.get(
         "syntax_error_count", 1
     )
@@ -871,7 +871,10 @@ def build_blocker_stress_probe_receipts(
             evidence_class="g1pilot_static_parse_probe",
             target_path=str(g1pilot_root),
             observed=g1pilot_surface,
-            blockers=["g1pilot_runtime_dependencies_missing", "command_echo_not_executed"],
+            blockers=[
+                "g1pilot_runtime_dependencies_missing",
+                "command_echo_not_executed",
+            ],
             follow_up_work_unlocked=[
                 "g1pilot_launch_surface_receipts",
                 "teleop_runtime_dependency_receipts",
@@ -918,7 +921,9 @@ def build_blocker_stress_probe_receipts(
         _receipt(
             blocker_key="dds_network_or_on_robot_timing_missing",
             probe_key="cyclonedds_header_compile",
-            status="ok_header_compile_only" if dds_ok else "blocked_header_compile_failed",
+            status="ok_header_compile_only"
+            if dds_ok
+            else "blocked_header_compile_failed",
             succeeded=dds_ok,
             local_probe_executed=bool(dds_result.get("attempted")),
             evidence_class="compile_only_header_probe_no_network",
@@ -990,7 +995,11 @@ def build_blocker_stress_probe_receipts(
         )
     )
 
-    g1_tasks = list((isaaclab_root / "tasks/g1_tasks").glob("*")) if isaaclab_root.exists() else []
+    g1_tasks = (
+        list((isaaclab_root / "tasks/g1_tasks").glob("*"))
+        if isaaclab_root.exists()
+        else []
+    )
     isaac_runtime_modules = {
         "isaaclab": _module_available("isaaclab"),
         "omni": _module_available("omni"),
@@ -1011,9 +1020,7 @@ def build_blocker_stress_probe_receipts(
                 "runtime_module_status": isaac_runtime_modules,
             },
             blockers=[
-                name
-                for name, present in isaac_runtime_modules.items()
-                if not present
+                name for name, present in isaac_runtime_modules.items() if not present
             ],
             follow_up_work_unlocked=["isaaclab_task_manifest_receipts"]
             if g1_tasks
@@ -1051,7 +1058,10 @@ def build_blocker_stress_probe_receipts(
         )
     )
 
-    trace_modules = {"rosbag2_py": _module_available("rosbag2_py"), "mcap": _module_available("mcap")}
+    trace_modules = {
+        "rosbag2_py": _module_available("rosbag2_py"),
+        "mcap": _module_available("mcap"),
+    }
     receipts.append(
         _receipt(
             blocker_key="rosbag2_or_mcap_real_stream_import_missing",
@@ -1091,7 +1101,9 @@ def build_blocker_stress_probe_receipts(
                 "expected_sidecar_paths": [str(path) for path in calibration_sidecars],
                 "present_sidecar_paths": [str(path) for path in present_sidecars],
             },
-            blockers=[] if present_sidecars else ["physical_calibration_sidecar_missing"],
+            blockers=[]
+            if present_sidecars
+            else ["physical_calibration_sidecar_missing"],
             external_requirement="Measure stop distance, limits, and e-stop behavior on robot or honest sim.",
         )
     )
@@ -1108,7 +1120,9 @@ def build_blocker_stress_probe_receipts(
             evidence_class="static_teleop_surface_probe_no_launch",
             target_path=str(g1pilot_root / "launch/teleoperation_launcher.launch.py"),
             observed={
-                "teleop_launch_present": bool(g1pilot_surface.get("teleop_launch_present")),
+                "teleop_launch_present": bool(
+                    g1pilot_surface.get("teleop_launch_present")
+                ),
                 "runtime_missing_imports": runtime_missing,
             },
             blockers=["teleop_launch_not_executed", *runtime_missing],
@@ -1213,11 +1227,7 @@ def build_phase4_unitree_blocker_stress_probes(
         )
     )
     unlocked = sorted(
-        {
-            item
-            for receipt in probe_receipts
-            for item in receipt.follow_up_work_unlocked
-        }
+        {item for receipt in probe_receipts for item in receipt.follow_up_work_unlocked}
     )
     remaining = [
         "ros2_colcon_build_and_generated_message_import_not_executed",
@@ -1272,7 +1282,8 @@ def save_phase4_unitree_blocker_stress_probes(
     output = Path(output_dir)
     paths = {
         "report_path": output / "phase4_unitree_blocker_stress_probe_report_v1.json",
-        "probe_receipts_path": output / "unitree_blocker_stress_probe_receipts_v1.jsonl",
+        "probe_receipts_path": output
+        / "unitree_blocker_stress_probe_receipts_v1.jsonl",
         "mujoco_model_stress_receipts_path": output
         / "unitree_mujoco_model_stress_receipts_v1.jsonl",
     }
@@ -1300,15 +1311,11 @@ def load_unitree_blocker_stress_probe_receipts(
     path: str | Path,
 ) -> list[UnitreeBlockerStressProbeReceipt]:
     return [
-        UnitreeBlockerStressProbeReceipt.from_dict(row)
-        for row in _load_jsonl(path)
+        UnitreeBlockerStressProbeReceipt.from_dict(row) for row in _load_jsonl(path)
     ]
 
 
 def load_unitree_mujoco_model_stress_receipts(
     path: str | Path,
 ) -> list[UnitreeMujocoModelStressReceipt]:
-    return [
-        UnitreeMujocoModelStressReceipt.from_dict(row)
-        for row in _load_jsonl(path)
-    ]
+    return [UnitreeMujocoModelStressReceipt.from_dict(row) for row in _load_jsonl(path)]

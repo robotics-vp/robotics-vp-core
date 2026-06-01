@@ -156,10 +156,7 @@ def _provider_surface(
         "depth_anything_v2": "metric_depth",
         "vjepa2": "temporal_prediction",
     }
-    provider_availability = {
-        provider_id: "available"
-        for provider_id in provider_ids
-    }
+    provider_availability = {provider_id: "available" for provider_id in provider_ids}
     provider_truth_class = {
         "scene_tracks": "provider_backed",
         "vla_semantic_evidence": "advisory_evidence",
@@ -257,12 +254,16 @@ def _dataset_surface(
     sensor_inventory = ["rgb"]
     if isinstance(scene_tracks_payload, Mapping):
         sensor_inventory.append("scene_tracks")
-        if "scene_tracks_v1/poses_t" in scene_tracks_payload or "poses_t" in scene_tracks_payload:
+        if (
+            "scene_tracks_v1/poses_t" in scene_tracks_payload
+            or "poses_t" in scene_tracks_payload
+        ):
             sensor_inventory.append("pose")
     return DatasetSurfaceState(
         surface_id=f"dataset_surface_{state_id}",
         dataset_ids=strings(metadata_payload.get("dataset_ids")) or ["runtime_episode"],
-        world_inventory_ids=strings(metadata_payload.get("world_inventory_ids")) or ["runtime_scene"],
+        world_inventory_ids=strings(metadata_payload.get("world_inventory_ids"))
+        or ["runtime_scene"],
         split_name=str(metadata_payload.get("split_name", "runtime")),
         sensor_inventory=sensor_inventory,
         scene_hierarchy_levels=["object", "relation", "scene"],
@@ -286,12 +287,19 @@ def _task_measurements(
 ) -> TaskMeasurementSurface:
     grounding_quality = clip01(
         max(
-            _safe_float(getattr(semantic_state, "capability_scores", {}).get("grounding_quality"), 0.0),
+            _safe_float(
+                getattr(semantic_state, "capability_scores", {}).get(
+                    "grounding_quality"
+                ),
+                0.0,
+            ),
             fusion_confidence,
         )
     )
     temporal_stability = clip01(
-        _safe_float(getattr(semantic_state, "topology", {}).get("temporal_stability", 0.0), 0.0)
+        _safe_float(
+            getattr(semantic_state, "topology", {}).get("temporal_stability", 0.0), 0.0
+        )
     )
     semantic_density = clip01(min(object_count, 8) / 8.0 + min(edge_count, 8) / 16.0)
     measurement_values = {
@@ -313,7 +321,12 @@ def _task_measurements(
         vector_env_count=1,
         measurement_window_frames=max(
             1,
-            int(_safe_float(getattr(semantic_state, "topology", {}).get("track_count"), object_count)),
+            int(
+                _safe_float(
+                    getattr(semantic_state, "topology", {}).get("track_count"),
+                    object_count,
+                )
+            ),
         ),
         metadata={
             "measurement_mode": "compiler_shadow_runtime",
@@ -546,7 +559,10 @@ def _track_feature_token(
     risk_count: int,
 ) -> list[float]:
     hashed = stable_id("obj_tok", object_id)
-    hash_vals = [int(hashed[idx : idx + 2], 16) / 255.0 for idx in range(0, min(len(hashed), 16), 2)]
+    hash_vals = [
+        int(hashed[idx : idx + 2], 16) / 255.0
+        for idx in range(0, min(len(hashed), 16), 2)
+    ]
     return _dense_token(
         [
             confidence,
@@ -560,14 +576,20 @@ def _track_feature_token(
 
 
 def _semantic_object_to_track(item: Any) -> ObjectTrackState:
-    track_id = strings(getattr(item, "track_refs", []))[0] if strings(getattr(item, "track_refs", [])) else str(getattr(item, "object_id", "unknown"))
+    track_id = (
+        strings(getattr(item, "track_refs", []))[0]
+        if strings(getattr(item, "track_refs", []))
+        else str(getattr(item, "object_id", "unknown"))
+    )
     metadata = mapping(getattr(item, "metadata", {}))
     return ObjectTrackState(
         track_id=track_id,
         object_label=str(getattr(item, "label", "")),
         object_category=str(getattr(item, "category", "")),
         confidence=clip01(_safe_float(getattr(item, "confidence", 0.0), 0.0)),
-        epistemic_uncertainty=clip01(1.0 - _safe_float(getattr(item, "confidence", 0.0), 0.0)),
+        epistemic_uncertainty=clip01(
+            1.0 - _safe_float(getattr(item, "confidence", 0.0), 0.0)
+        ),
         feature_token=_track_feature_token(
             object_id=str(getattr(item, "object_id", "")),
             confidence=_safe_float(getattr(item, "confidence", 0.0), 0.0),
@@ -578,11 +600,18 @@ def _semantic_object_to_track(item: Any) -> ObjectTrackState:
         provider_sources=["scene_tracks", "semantic_world_model"],
         visibility=clip01(_safe_float(metadata.get("visibility_mean"), 0.5)),
         occlusion_score=clip01(_safe_float(metadata.get("occlusion_mean"), 0.0)),
-        temporal_persistence_frames=int(_safe_float(metadata.get("track_length"), 1.0,)),
+        temporal_persistence_frames=int(
+            _safe_float(
+                metadata.get("track_length"),
+                1.0,
+            )
+        ),
         first_seen_frame=int(_safe_float(metadata.get("first_seen_frame"), 0.0)),
         last_seen_frame=int(_safe_float(metadata.get("last_seen_frame"), 0.0)),
         occlusion_state=str(metadata.get("occlusion_state", "visible")),
-        reidentification_confidence=clip01(_safe_float(metadata.get("teacher_match"), 0.0) * 0.5 + 0.5),
+        reidentification_confidence=clip01(
+            _safe_float(metadata.get("teacher_match"), 0.0) * 0.5 + 0.5
+        ),
         affordance_hints=strings(getattr(item, "affordances", [])),
         risk_hints=strings(getattr(item, "risk_tags", [])),
         metadata={
@@ -594,17 +623,25 @@ def _semantic_object_to_track(item: Any) -> ObjectTrackState:
     )
 
 
-def _semantic_relation_to_edge(item: Any, object_id_to_track_id: Mapping[str, str]) -> SceneEdge:
+def _semantic_relation_to_edge(
+    item: Any, object_id_to_track_id: Mapping[str, str]
+) -> SceneEdge:
     subject_id = str(getattr(item, "subject_id", ""))
     object_id = str(getattr(item, "object_id", ""))
     relation_type = str(getattr(item, "relation_type", "semantic_relation"))
     return SceneEdge(
-        edge_id=str(getattr(item, "relation_id", stable_id(subject_id, relation_type, object_id))),
+        edge_id=str(
+            getattr(
+                item, "relation_id", stable_id(subject_id, relation_type, object_id)
+            )
+        ),
         source_track_id=str(object_id_to_track_id.get(subject_id, subject_id)),
         target_track_id=str(object_id_to_track_id.get(object_id, object_id)),
         edge_type=relation_type,
         confidence=clip01(_safe_float(getattr(item, "confidence", 0.0), 0.0)),
-        spatial_distance=_safe_float(mapping(getattr(item, "metadata", {})).get("distance"), 0.0),
+        spatial_distance=_safe_float(
+            mapping(getattr(item, "metadata", {})).get("distance"), 0.0
+        ),
         edge_features=_dense_token(
             [
                 _safe_float(getattr(item, "confidence", 0.0), 0.0),
@@ -616,10 +653,16 @@ def _semantic_relation_to_edge(item: Any, object_id_to_track_id: Mapping[str, st
     )
 
 
-def _scene_graph(semantic_state: Any, graph_helper: Mapping[str, Any]) -> SceneGraphState:
-    object_tracks = [_semantic_object_to_track(item) for item in getattr(semantic_state, "objects", [])]
+def _scene_graph(
+    semantic_state: Any, graph_helper: Mapping[str, Any]
+) -> SceneGraphState:
+    object_tracks = [
+        _semantic_object_to_track(item)
+        for item in getattr(semantic_state, "objects", [])
+    ]
     object_id_to_track_id = {
-        str(track.metadata.get("semantic_object_id", track.track_id)): track.track_id for track in object_tracks
+        str(track.metadata.get("semantic_object_id", track.track_id)): track.track_id
+        for track in object_tracks
     }
     edges = [
         _semantic_relation_to_edge(item, object_id_to_track_id)
@@ -643,12 +686,17 @@ def _scene_graph(semantic_state: Any, graph_helper: Mapping[str, Any]) -> SceneG
             clip01(_safe_float(capability_scores.get("affordance_grounding"), 0.0)),
             clip01(_safe_float(capability_scores.get("risk_reasoning"), 0.0)),
             clip01(graph_helper.get("helper_weight", 0.0)),
-            clip01(_safe_float(getattr(semantic_state, "topology", {}).get("temporal_stability"), 0.0)),
+            clip01(
+                _safe_float(
+                    getattr(semantic_state, "topology", {}).get("temporal_stability"),
+                    0.0,
+                )
+            ),
         ],
         target_dim=8,
     )
     return SceneGraphState(
-        graph_id=f"scene_graph_{getattr(semantic_state, 'world_model_id', stable_id('scene_graph', object_count, edge_count))}",
+        graph_id=f"scene_graph_{getattr(semantic_state, 'world_model_id', stable_id('scene_graph', str(object_count), str(edge_count)))}",
         object_tracks=object_tracks,
         edges=edges,
         scene_summary_token=scene_summary_token,
@@ -659,8 +707,12 @@ def _scene_graph(semantic_state: Any, graph_helper: Mapping[str, Any]) -> SceneG
         metadata={
             "source_world_model_id": getattr(semantic_state, "world_model_id", ""),
             "semantic_tags": strings(getattr(semantic_state, "semantic_tags", [])),
-            "helper_stage": str(graph_helper.get("promotion_stage", "heuristic_fallback")),
-            "functional_roles": mapping(getattr(semantic_state, "functional_roles", {})),
+            "helper_stage": str(
+                graph_helper.get("promotion_stage", "heuristic_fallback")
+            ),
+            "functional_roles": mapping(
+                getattr(semantic_state, "functional_roles", {})
+            ),
             "risk_register": mapping(getattr(semantic_state, "risk_register", {})),
         },
     )
@@ -675,7 +727,10 @@ def _temporal_grounding(
     helper_status: Mapping[str, Any],
 ) -> TemporalGroundingState:
     topology = mapping(getattr(semantic_state, "topology", {}))
-    total_tracks = max(scene_graph.object_count, int(_safe_float(topology.get("track_count"), scene_graph.object_count)))
+    total_tracks = max(
+        scene_graph.object_count,
+        int(_safe_float(topology.get("track_count"), scene_graph.object_count)),
+    )
     visible_tracks = scene_graph.object_count
     occluded_tracks = len(
         [
@@ -693,11 +748,17 @@ def _temporal_grounding(
         lost_tracks=max(0, total_tracks - visible_tracks),
         recovered_tracks=int(_safe_float(topology.get("recovered_track_count"), 0.0)),
         id_switch_count=int(_safe_float(topology.get("id_switch_count"), 0.0)),
-        temporal_coherence_score=clip01(_safe_float(topology.get("temporal_stability"), 0.0)),
-        prediction_quality_score=clip01(_safe_float(topology.get("grounding_confidence"), 0.0)),
+        temporal_coherence_score=clip01(
+            _safe_float(topology.get("temporal_stability"), 0.0)
+        ),
+        prediction_quality_score=clip01(
+            _safe_float(topology.get("grounding_confidence"), 0.0)
+        ),
         memory_token_count=scene_graph.object_count,
         helper_posture=str(helper_status.get("posture", "auto")),
-        helper_promotion_stage=str(helper_status.get("promotion_stage", "heuristic_fallback")),
+        helper_promotion_stage=str(
+            helper_status.get("promotion_stage", "heuristic_fallback")
+        ),
         metadata={
             "source_world_model_id": getattr(semantic_state, "world_model_id", ""),
             "topology": topology,
@@ -756,9 +817,7 @@ def _invoke_provider_adapter_seam(
             invocation_status="skipped",
             fallback_used=True,
             fallback_reason=(
-                "seam_not_promoted"
-                if seam is not None
-                else "seam_not_available"
+                "seam_not_promoted" if seam is not None else "seam_not_available"
             ),
             metadata={
                 "promotion_stage": promotion_stage,
@@ -781,7 +840,11 @@ def _invoke_provider_adapter_seam(
         import torch
 
         with torch.no_grad():
-            output = seam(seam_input) if not isinstance(seam_input, tuple) else seam(*seam_input)
+            output = (
+                seam(seam_input)
+                if not isinstance(seam_input, tuple)
+                else seam(*seam_input)
+            )
 
         # Extract quality/token count from output if available
         if isinstance(output, dict):
@@ -791,9 +854,13 @@ def _invoke_provider_adapter_seam(
                 if hasattr(value, "shape")
             }
             if "calibrated_confidence" in output:
-                output_quality = clip01(float(output["calibrated_confidence"].mean().item()))
+                output_quality = clip01(
+                    float(output["calibrated_confidence"].mean().item())
+                )
             elif "temporal_confidence" in output:
-                output_quality = clip01(float(output["temporal_confidence"].mean().item()))
+                output_quality = clip01(
+                    float(output["temporal_confidence"].mean().item())
+                )
             else:
                 output_quality = 0.7  # Default for successful projection
             token_tensor = None
@@ -805,7 +872,7 @@ def _invoke_provider_adapter_seam(
                 if token_key in output:
                     token_tensor = output[token_key]
                     break
-            if hasattr(token_tensor, "shape"):
+            if token_tensor is not None and hasattr(token_tensor, "shape"):
                 shape = token_tensor.shape
                 if len(shape) >= 3:
                     output_token_count = int(shape[-2])
@@ -873,9 +940,7 @@ def _evidence_routing(
     taken, the resulting weights, and confidence.
     """
     provider_ids = list(provider_surface.provider_ids)
-    promotion_stage = str(
-        helper_status.get("promotion_stage", "heuristic_fallback")
-    )
+    promotion_stage = str(helper_status.get("promotion_stage", "heuristic_fallback"))
     fusion_method = "semantic_world_model_heuristic_fusion"
     neural_seam_used = False
 
@@ -887,9 +952,7 @@ def _evidence_routing(
         _safe_float(belief_state.state_vector.get("evidence_coverage"), 0.0)
     )
     disagreement = clip01(
-        _safe_float(
-            belief_state.state_vector.get("evidence_disagreement_mean"), 0.0
-        )
+        _safe_float(belief_state.state_vector.get("evidence_disagreement_mean"), 0.0)
     )
 
     # --- Neural seam path (promoted + seam available) ---
@@ -917,10 +980,7 @@ def _evidence_routing(
                 )
 
             weights_list = weights_tensor.tolist()
-            normalized = {
-                pid: float(w)
-                for pid, w in zip(provider_ids, weights_list)
-            }
+            normalized = {pid: float(w) for pid, w in zip(provider_ids, weights_list)}
             fusion_confidence = clip01(float(confidence_tensor.item()))
             fusion_method = "neural_evidence_fusion_seam"
             neural_seam_used = True
@@ -943,7 +1003,9 @@ def _evidence_routing(
             if provider_id in contributions:
                 continue
             provider_kind = str(provider_surface.provider_kinds.get(provider_id, ""))
-            truth_class = str(provider_surface.provider_truth_class.get(provider_id, ""))
+            truth_class = str(
+                provider_surface.provider_truth_class.get(provider_id, "")
+            )
             if provider_kind == "vision_backbone":
                 contributions[provider_id] = 0.10
             elif provider_kind == "temporal_prediction":
@@ -952,12 +1014,10 @@ def _evidence_routing(
                 contributions[provider_id] = 0.05
         contribution_total = sum(contributions.values()) or 1.0
         normalized = {
-            key: value / contribution_total
-            for key, value in contributions.items()
+            key: value / contribution_total for key, value in contributions.items()
         }
         structure_bonus = clip01(
-            0.5 * min(object_count, 6) / 6.0
-            + 0.5 * min(edge_count, 8) / 8.0
+            0.5 * min(object_count, 6) / 6.0 + 0.5 * min(edge_count, 8) / 8.0
         )
         fusion_confidence = clip01(
             0.45 * semantic_quality + 0.25 * coverage + 0.3 * structure_bonus
@@ -1108,7 +1168,7 @@ def _run_graph_transformer_shadow(
     # Edge weight correlation with heuristic confidences
     heur_conf = torch.tensor(heuristic_edge_confidences, dtype=torch.float32)
     if len(heur_conf) > 1 and edge_weights.numel() > 1:
-        ew = edge_weights[:len(heur_conf)]
+        ew = edge_weights[: len(heur_conf)]
         # Pearson correlation
         hc_mean = heur_conf.mean()
         ew_mean = ew.mean()
@@ -1125,7 +1185,9 @@ def _run_graph_transformer_shadow(
     else:
         edge_overlap = 0.0
 
-    mean_edge_weight = float(edge_weights.mean().item()) if edge_weights.numel() > 0 else 0.0
+    mean_edge_weight = (
+        float(edge_weights.mean().item()) if edge_weights.numel() > 0 else 0.0
+    )
 
     # Confidence delta vs heuristic graph density as a proxy
     heuristic_confidence = scene_graph.graph_density
@@ -1147,19 +1209,13 @@ def _run_graph_transformer_shadow(
         benchmark_evidence_payload.get("evidence_source_provisional", False)
     )
     annotation_supervision_score = clip01(
-        _safe_float(
-            benchmark_evidence_payload.get("annotation_supervision_score", 0.0)
-        )
+        _safe_float(benchmark_evidence_payload.get("annotation_supervision_score", 0.0))
     )
     held_out_label_agreement = clip01(
-        _safe_float(
-            benchmark_evidence_payload.get("held_out_label_agreement", 0.0)
-        )
+        _safe_float(benchmark_evidence_payload.get("held_out_label_agreement", 0.0))
     )
     downstream_usefulness_score = clip01(
-        _safe_float(
-            benchmark_evidence_payload.get("downstream_usefulness_score", 0.0)
-        )
+        _safe_float(benchmark_evidence_payload.get("downstream_usefulness_score", 0.0))
     )
     receipt_consistency = clip01(
         _safe_float(benchmark_evidence_payload.get("receipt_consistency", 0.0))
@@ -1178,9 +1234,12 @@ def _run_graph_transformer_shadow(
             if "gate_score" in benchmark_evidence_payload
             else intrinsic_gate
         )
-        promotion_eligible = bool(
-            benchmark_evidence_payload.get("promotion_eligible", gate_score >= 0.6)
-        ) and not evidence_source_provisional
+        promotion_eligible = (
+            bool(
+                benchmark_evidence_payload.get("promotion_eligible", gate_score >= 0.6)
+            )
+            and not evidence_source_provisional
+        )
     else:
         gate_score = clip01(graph_confidence)
         promotion_eligible = False
@@ -1435,13 +1494,21 @@ def _semantic_bridge_registry(
             0.25
             + 0.25 * float(bool(track.affordance_hints))
             + 0.2 * float(bool(track.risk_hints))
-            + 0.15 * float(track.object_category in {"container", "fragile_object", "manipulated_object"})
+            + 0.15
+            * float(
+                track.object_category
+                in {"container", "fragile_object", "manipulated_object"}
+            )
             + 0.15 * float("object:" in f"object:{track.object_label}")
         )
         for track in objects
     ]
     object_preservation_scores = [
-        clip01(0.55 * track.confidence + 0.3 * (1.0 - track.epistemic_uncertainty) + 0.15 * track.visibility)
+        clip01(
+            0.55 * track.confidence
+            + 0.3 * (1.0 - track.epistemic_uncertainty)
+            + 0.15 * track.visibility
+        )
         for track in objects
     ]
     physics_edge_weights = {
@@ -1450,7 +1517,8 @@ def _semantic_bridge_registry(
             * (
                 1.0
                 if edge.edge_type in {"contact", "acts_on"}
-                else 0.8 if edge.edge_type in {"containment", "supports"}
+                else 0.8
+                if edge.edge_type in {"containment", "supports"}
                 else 0.5
             )
         )
@@ -1465,8 +1533,16 @@ def _semantic_bridge_registry(
         object_preservation_scores=object_preservation_scores,
         diffusion_conditioning_features=_dense_token(
             [
-                clip01(np.mean(branch_relevance_scores) if branch_relevance_scores else 0.0),
-                clip01(np.mean(object_preservation_scores) if object_preservation_scores else 0.0),
+                clip01(
+                    float(np.mean(branch_relevance_scores))
+                    if branch_relevance_scores
+                    else 0.0
+                ),
+                clip01(
+                    float(np.mean(object_preservation_scores))
+                    if object_preservation_scores
+                    else 0.0
+                ),
                 evidence_routing.fusion_confidence,
                 scene_graph.graph_density,
             ],
@@ -1474,7 +1550,11 @@ def _semantic_bridge_registry(
         ),
         contact_topology_summary={
             "contact_like_edge_count": len(
-                [edge for edge in edges if edge.edge_type in {"contact", "acts_on", "supports"}]
+                [
+                    edge
+                    for edge in edges
+                    if edge.edge_type in {"contact", "acts_on", "supports"}
+                ]
             ),
             "bridge_preconditions": [
                 "object_preservation",
@@ -1483,14 +1563,18 @@ def _semantic_bridge_registry(
             ],
         },
         helper_posture=str(helper_sim.get("posture", "auto")),
-        helper_promotion_stage=str(helper_sim.get("promotion_stage", "heuristic_fallback")),
+        helper_promotion_stage=str(
+            helper_sim.get("promotion_stage", "heuristic_fallback")
+        ),
         metadata={"downstream_wm": "sim_synth_physics"},
     )
     embodiment_bridge = EmbodimentSemanticBridgeState(
         bridge_id=f"embodiment_bridge_{state_id}",
         source_graph_id=scene_graph.graph_id,
         per_object_affordance_scores={
-            track.track_id: clip01(0.35 + 0.15 * len(track.affordance_hints) + 0.2 * track.confidence)
+            track.track_id: clip01(
+                0.35 + 0.15 * len(track.affordance_hints) + 0.2 * track.confidence
+            )
             for track in objects
         },
         per_object_affordance_classes={
@@ -1512,21 +1596,32 @@ def _semantic_bridge_registry(
                 "body_object_pairing",
             ],
         },
-        resource_conditioned=deployment_resource_surface.deployment_posture != "unavailable",
+        resource_conditioned=deployment_resource_surface.deployment_posture
+        != "unavailable",
         embodiment_dof=29,
         helper_posture=str(helper_embodiment.get("posture", "auto")),
-        helper_promotion_stage=str(helper_embodiment.get("promotion_stage", "heuristic_fallback")),
+        helper_promotion_stage=str(
+            helper_embodiment.get("promotion_stage", "heuristic_fallback")
+        ),
         metadata={"downstream_wm": "embodiment_actuation"},
     )
     annotation_bridge = AnnotationSemanticBridgeState(
         bridge_id=f"annotation_bridge_{state_id}",
         source_graph_id=scene_graph.graph_id,
         object_class_labels={track.track_id: track.object_label for track in objects},
-        object_confidence_scores={track.track_id: track.confidence for track in objects},
-        object_affordance_hints={track.track_id: track.affordance_hints for track in objects},
+        object_confidence_scores={
+            track.track_id: track.confidence for track in objects
+        },
+        object_affordance_hints={
+            track.track_id: track.affordance_hints for track in objects
+        },
         object_risk_hints={track.track_id: track.risk_hints for track in objects},
         primitive_segment_alignment_scores=[
-            clip01(0.45 + 0.2 * float(bool(track.affordance_hints)) + 0.15 * track.confidence)
+            clip01(
+                0.45
+                + 0.2 * float(bool(track.affordance_hints))
+                + 0.15 * track.confidence
+            )
             for track in objects
         ],
         object_event_labels={
@@ -1538,7 +1633,9 @@ def _semantic_bridge_registry(
         },
         failure_interpretation_tags=sorted(
             {
-                "risk:fragility" if any("fragility" in track.risk_hints for track in objects) else "",
+                "risk:fragility"
+                if any("fragility" in track.risk_hints for track in objects)
+                else "",
                 "recovery_needed" if "mode:recovery" in tag_set else "",
             }
             - {""}
@@ -1547,11 +1644,20 @@ def _semantic_bridge_registry(
             {"mode:recovery"} if "mode:recovery" in tag_set else set()
         ),
         teacher_alignment_score=clip01(
-            _safe_float(getattr(semantic_state, "capability_scores", {}).get("teacher_alignment"), 0.0)
-            or _safe_float(getattr(semantic_state, "topology", {}).get("grounding_confidence"), 0.0)
+            _safe_float(
+                getattr(semantic_state, "capability_scores", {}).get(
+                    "teacher_alignment"
+                ),
+                0.0,
+            )
+            or _safe_float(
+                getattr(semantic_state, "topology", {}).get("grounding_confidence"), 0.0
+            )
         ),
         helper_posture=str(helper_annotation.get("posture", "auto")),
-        helper_promotion_stage=str(helper_annotation.get("promotion_stage", "heuristic_fallback")),
+        helper_promotion_stage=str(
+            helper_annotation.get("promotion_stage", "heuristic_fallback")
+        ),
         metadata={
             "downstream_wm": "annotation_evidence",
             "bridge_preconditions": [
@@ -1573,17 +1679,27 @@ def _semantic_bridge_registry(
             ],
             target_dim=8,
         ),
-        semantic_density=clip01((scene_graph.object_count + scene_graph.edge_count) / 12.0),
-        object_diversity=clip01(len({track.object_category for track in objects}) / 6.0),
-        affordance_richness=clip01(sum(len(track.affordance_hints) for track in objects) / 10.0),
+        semantic_density=clip01(
+            (scene_graph.object_count + scene_graph.edge_count) / 12.0
+        ),
+        object_diversity=clip01(
+            len({track.object_category for track in objects}) / 6.0
+        ),
+        affordance_richness=clip01(
+            sum(len(track.affordance_hints) for track in objects) / 10.0
+        ),
         grounding_confidence=evidence_routing.fusion_confidence,
         temporal_stability=clip01(
-            _safe_float(getattr(semantic_state, "topology", {}).get("temporal_stability"), 0.0)
+            _safe_float(
+                getattr(semantic_state, "topology", {}).get("temporal_stability"), 0.0
+            )
         ),
         concept_coverage=clip01(len(tag_set) / 12.0),
         num_query_tokens=16,
         helper_posture=str(helper_economic.get("posture", "auto")),
-        helper_promotion_stage=str(helper_economic.get("promotion_stage", "heuristic_fallback")),
+        helper_promotion_stage=str(
+            helper_economic.get("promotion_stage", "heuristic_fallback")
+        ),
         metadata={
             "downstream_wm": "economic",
             "bridge_preconditions": [
@@ -1653,15 +1769,20 @@ def _semantic_bridge_receipts(
                 bridge_kind="embodiment",
                 source_graph_id=embodiment_bridge.source_graph_id,
                 output_quality_score=clip01(
-                    float(np.mean(list(embodiment_bridge.per_object_affordance_scores.values())))
+                    float(
+                        np.mean(
+                            list(
+                                embodiment_bridge.per_object_affordance_scores.values()
+                            )
+                        )
+                    )
                     if embodiment_bridge.per_object_affordance_scores
                     else 0.0
                 ),
                 downstream_usefulness_score=clip01(
                     0.5
                     + 0.3 * float(bool(embodiment_bridge.resource_conditioned))
-                    + 0.2
-                    * float(bool(embodiment_bridge.body_object_pairwise_scores))
+                    + 0.2 * float(bool(embodiment_bridge.body_object_pairwise_scores))
                 ),
                 helper_posture=embodiment_bridge.helper_posture,
                 helper_promotion_stage=embodiment_bridge.helper_promotion_stage,
@@ -1685,7 +1806,11 @@ def _semantic_bridge_receipts(
                 bridge_kind="annotation",
                 source_graph_id=annotation_bridge.source_graph_id,
                 output_quality_score=clip01(
-                    float(np.mean(list(annotation_bridge.object_confidence_scores.values())))
+                    float(
+                        np.mean(
+                            list(annotation_bridge.object_confidence_scores.values())
+                        )
+                    )
                     if annotation_bridge.object_confidence_scores
                     else 0.0
                 ),
@@ -1798,8 +1923,12 @@ def _inference_headroom_receipts(
     inf_cap = deployment_resource_surface.inference_capacity
     comp_env = deployment_resource_surface.compute_envelope
     headroom = float(getattr(inf_cap, "headroom_fraction", 0.0)) if inf_cap else 0.0
-    on_device = bool(getattr(comp_env, "on_device_available", False)) if comp_env else False
-    companion = bool(getattr(comp_env, "companion_available", False)) if comp_env else False
+    on_device = (
+        bool(getattr(comp_env, "on_device_available", False)) if comp_env else False
+    )
+    companion = (
+        bool(getattr(comp_env, "companion_available", False)) if comp_env else False
+    )
     bandwidth = float(deployment_resource_surface.bandwidth_mbps)
 
     for pid in provider_surface.provider_ids:
@@ -1834,12 +1963,10 @@ def _deployment_resource_receipt(
     batt = deployment_resource_surface.battery_state
     therm = deployment_resource_surface.thermal_state
     compute_ready = bool(getattr(comp, "on_device_available", False)) if comp else False
-    battery_ready = bool(
-        float(getattr(batt, "charge_fraction", 0.0)) > 0.1
-    ) if batt else False
-    thermal_ready = bool(
-        not getattr(therm, "throttled", True)
-    ) if therm else False
+    battery_ready = (
+        bool(float(getattr(batt, "charge_fraction", 0.0)) > 0.1) if batt else False
+    )
+    thermal_ready = bool(not getattr(therm, "throttled", True)) if therm else False
 
     bottlenecks: list[str] = []
     if not compute_ready:
@@ -1908,12 +2035,8 @@ def _perception_contribution_receipt(
             float(mv.get("grounding_quality", 0.0)) * 0.5
             + float(mv.get("object_count_norm", 0.0)) * 0.5
         ),
-        novelty_score=clip01(
-            1.0 - float(mv.get("temporal_stability", 0.5))
-        ),
-        temporal_stability=clip01(
-            temporal_grounding_state.temporal_coherence_score
-        ),
+        novelty_score=clip01(1.0 - float(mv.get("temporal_stability", 0.5))),
+        temporal_stability=clip01(temporal_grounding_state.temporal_coherence_score),
         provider_count=provider_count,
         object_count=scene_graph.object_count,
         metadata={
@@ -2010,8 +2133,7 @@ def compile_perception_grounding_world_state(
         loading_posture="auto",
         benchmark_signals=benchmark_payload,
         benchmark_evidence=(
-            graph_benchmark_evidence
-            or {"benchmark_evidence_present": False}
+            graph_benchmark_evidence or {"benchmark_evidence_present": False}
         ),
     )
     scene_graph = _scene_graph(semantic_state, graph_helper)
@@ -2054,7 +2176,11 @@ def compile_perception_grounding_world_state(
 
     # SAM calibration seam
     if sam_calibration_seam is not None and sam_mask_features is not None:
-        seam_input = (sam_mask_features, sam_raw_confidence) if sam_raw_confidence is not None else (sam_mask_features,)
+        seam_input = (
+            (sam_mask_features, sam_raw_confidence)
+            if sam_raw_confidence is not None
+            else (sam_mask_features,)
+        )
         output, receipt = _invoke_provider_adapter_seam(
             state_id=state_id,
             provider_id="sam_3_1",
@@ -2091,7 +2217,11 @@ def compile_perception_grounding_world_state(
 
     # Depth metric calibration seam
     if depth_metric_calibration_seam is not None and depth_map is not None:
-        seam_input = (depth_map, camera_intrinsics) if camera_intrinsics is not None else (depth_map,)
+        seam_input = (
+            (depth_map, camera_intrinsics)
+            if camera_intrinsics is not None
+            else (depth_map,)
+        )
         output, receipt = _invoke_provider_adapter_seam(
             state_id=state_id,
             provider_id="depth_anything_v2",
@@ -2114,6 +2244,7 @@ def compile_perception_grounding_world_state(
         wm_tokens = wm_object_tokens
         if wm_tokens is None and scene_graph.object_tracks:
             import torch
+
             d_wm_token = int(
                 getattr(vjepa_temporal_alignment_seam, "d_wm_token", 128) or 128
             )
@@ -2142,13 +2273,15 @@ def compile_perception_grounding_world_state(
                 provider_adapter_outputs["vjepa_temporal_alignment"] = output
 
     graph_d_token = getattr(scene_graph_transformer_seam, "d_token", 128)
-    benchmark_object_token_matrix, benchmark_object_source = _resolve_benchmark_object_tokens(
-        scene_graph=scene_graph,
-        d_token=graph_d_token,
-        explicit_tokens=benchmark_object_tokens,
-        explicit_source=benchmark_object_token_source,
-        provider_adapter_outputs=provider_adapter_outputs,
-        provider_adapter_receipts=provider_adapter_receipts,
+    benchmark_object_token_matrix, benchmark_object_source = (
+        _resolve_benchmark_object_tokens(
+            scene_graph=scene_graph,
+            d_token=graph_d_token,
+            explicit_tokens=benchmark_object_tokens,
+            explicit_source=benchmark_object_token_source,
+            provider_adapter_outputs=provider_adapter_outputs,
+            provider_adapter_receipts=provider_adapter_receipts,
+        )
     )
 
     # --- Graph Transformer shadow path ---
@@ -2274,14 +2407,22 @@ def compile_perception_grounding_world_state(
         metadata={
             "source_world_model_id": semantic_state.world_model_id,
             "semantic_topology": mapping(getattr(semantic_state, "topology", {})),
-            "semantic_capability_scores": mapping(getattr(semantic_state, "capability_scores", {})),
-            "semantic_functional_roles": mapping(getattr(semantic_state, "functional_roles", {})),
-            "semantic_risk_register": mapping(getattr(semantic_state, "risk_register", {})),
+            "semantic_capability_scores": mapping(
+                getattr(semantic_state, "capability_scores", {})
+            ),
+            "semantic_functional_roles": mapping(
+                getattr(semantic_state, "functional_roles", {})
+            ),
+            "semantic_risk_register": mapping(
+                getattr(semantic_state, "risk_register", {})
+            ),
             "graph_helper_status": graph_helper,
             "evidence_helper_status": evidence_helper,
             "temporal_helper_status": temporal_helper,
             "evidence_fusion_receipt": evidence_fusion_receipt.to_dict(),
-            "provider_adapter_receipts": [r.to_dict() for r in provider_adapter_receipts],
+            "provider_adapter_receipts": [
+                r.to_dict() for r in provider_adapter_receipts
+            ],
             "provider_adapter_outputs_available": list(provider_adapter_outputs.keys()),
             "benchmark_object_tokens": benchmark_object_token_matrix,
             "benchmark_object_token_source": benchmark_object_source,
@@ -2300,10 +2441,14 @@ def compile_perception_grounding_world_state(
                 if annotation_bridge_shadow_receipt is not None
                 else None
             ),
-            "provider_availability_receipts": [r.to_dict() for r in provider_avail_receipts],
+            "provider_availability_receipts": [
+                r.to_dict() for r in provider_avail_receipts
+            ],
             "semantic_bridge_receipts": [r.to_dict() for r in semantic_bridge_receipts],
             "grounding_calibration_receipt": grounding_cal_receipt.to_dict(),
-            "inference_headroom_receipts": [r.to_dict() for r in inference_headroom_recs],
+            "inference_headroom_receipts": [
+                r.to_dict() for r in inference_headroom_recs
+            ],
             "deployment_resource_receipt": deploy_receipt.to_dict(),
             "temporal_grounding_receipt": temporal_receipt.to_dict(),
             "perception_contribution_receipt": contribution_receipt.to_dict(),

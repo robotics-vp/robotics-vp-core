@@ -5,9 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from full_stack_training import (
+_REPO_ROOT_FOR_IMPORTS = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
+
+from scripts.runpod.full_stack_training import (
     DEFAULT_CONFIG_PATH,
     discover_workspace_state,
     evaluate_bundles,
@@ -20,7 +25,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
     parser.add_argument("--output-json", type=str, default="")
-    parser.add_argument("--bundle", type=str, default="auto", help="Specific bundle to highlight, or auto")
+    parser.add_argument(
+        "--bundle",
+        type=str,
+        default="auto",
+        help="Specific bundle to highlight, or auto",
+    )
     return parser.parse_args()
 
 

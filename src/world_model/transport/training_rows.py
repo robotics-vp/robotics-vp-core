@@ -322,14 +322,14 @@ def build_wm_transport_training_rows(
     for contract in contracts:
         receipt = receipts_by_contract[contract.contract_id]
         for row_family in ROW_FAMILIES:
-            payload = {
+            row_payload = {
                 "row_family": row_family,
                 "contract_id": contract.contract_id,
                 "bridge_key": contract.bridge_key,
             }
             rows.append(
                 WMTransportTrainingRow(
-                    row_id=f"wm_transport_row_{sha256_json(payload)[:16]}",
+                    row_id=f"wm_transport_row_{sha256_json(row_payload)[:16]}",
                     row_family=row_family,
                     contract_id=contract.contract_id,
                     bridge_key=contract.bridge_key,
@@ -362,7 +362,7 @@ def build_wm_transport_training_rows(
     for row in rows:
         family_counts[row.row_family] = family_counts.get(row.row_family, 0) + 1
     status = "ok" if rows and all(family_counts.values()) else "blocked"
-    payload = {
+    payload: dict[str, Any] = {
         "contract_pack_id": contract_pack.pack_id,
         "registry_id": transformer_registry.registry_id,
         "row_ids": [row.row_id for row in rows],

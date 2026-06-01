@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
 
 import torch
 import torch.nn.functional as F
@@ -110,7 +110,9 @@ class ProviderAgreementDataset(Dataset[MultiProviderSample]):
         *,
         min_providers: int = 2,
         required_provider_kinds: Optional[Sequence[str]] = None,
-        transform: Optional[Callable[[MultiProviderSample], MultiProviderSample]] = None,
+        transform: Optional[
+            Callable[[MultiProviderSample], MultiProviderSample]
+        ] = None,
     ) -> None:
         """Initialize dataset.
 
@@ -125,16 +127,12 @@ class ProviderAgreementDataset(Dataset[MultiProviderSample]):
         self.transform = transform
 
         # Filter samples by provider requirements
-        self.samples = [
-            s for s in samples
-            if self._sample_valid(s)
-        ]
+        self.samples = [s for s in samples if self._sample_valid(s)]
 
     def _sample_valid(self, sample: MultiProviderSample) -> bool:
         """Check if sample meets provider requirements."""
         available = [
-            p for p in sample.providers
-            if p.availability_status == "available"
+            p for p in sample.providers if p.availability_status == "available"
         ]
         if len(available) < self.min_providers:
             return False
@@ -165,8 +163,12 @@ class ProviderAgreementDataset(Dataset[MultiProviderSample]):
 class EvidenceFusionBatch:
     """Collated batch for evidence fusion seam training."""
 
-    provider_features: torch.Tensor  # (batch, N_providers, d_feature) raw features for loss
-    seam_input_features: torch.Tensor  # (batch, N_providers, 12) encoded metadata for seam forward
+    provider_features: (
+        torch.Tensor
+    )  # (batch, N_providers, d_feature) raw features for loss
+    seam_input_features: (
+        torch.Tensor
+    )  # (batch, N_providers, 12) encoded metadata for seam forward
     provider_availability: torch.Tensor  # (batch, N_providers) bool
     held_out_idx: torch.Tensor  # (batch,) int
     held_out_features: torch.Tensor  # (batch, d_feature)
@@ -225,13 +227,18 @@ class EvidenceFusionDataset(ProviderAgreementDataset):
 
         for i, sample in enumerate(samples):
             available_providers = [
-                (j, p) for j, p in enumerate(sample.providers)
+                (j, p)
+                for j, p in enumerate(sample.providers)
                 if p.availability_status == "available"
             ]
 
             # Randomly select held-out provider
-            hold_out_local_idx = torch.randint(len(available_providers), (1,)).item()
-            hold_out_global_idx, hold_out_provider = available_providers[hold_out_local_idx]
+            hold_out_local_idx = int(
+                torch.randint(len(available_providers), (1,)).item()
+            )
+            hold_out_global_idx, hold_out_provider = available_providers[
+                hold_out_local_idx
+            ]
 
             for j, provider in enumerate(sample.providers):
                 if j < max_providers:
@@ -247,7 +254,9 @@ class EvidenceFusionDataset(ProviderAgreementDataset):
                         feat = feat.flatten()
 
                     provider_features[i, j] = feat
-                    provider_availability[i, j] = provider.availability_status == "available"
+                    provider_availability[i, j] = (
+                        provider.availability_status == "available"
+                    )
 
                     # 12-dim encoded metadata for seam
                     kind_idx = PROVIDER_KIND_VOCAB.get(provider.provider_kind, -1)
@@ -256,7 +265,11 @@ class EvidenceFusionDataset(ProviderAgreementDataset):
                         kind_onehot[kind_idx] = 1.0
                     avail = 1.0 if provider.availability_status == "available" else 0.0
                     truth = TRUTH_CLASS_SCORES.get(provider.truth_class, 0.1)
-                    conf_val = float(provider.confidence.item()) if provider.confidence is not None else 0.0
+                    conf_val = (
+                        float(provider.confidence.item())
+                        if provider.confidence is not None
+                        else 0.0
+                    )
                     seam_input_features[i, j] = torch.tensor(
                         kind_onehot + [avail, truth, conf_val, 0.0, 0.0, 0.0, 0.0, 0.0],
                         dtype=torch.float32,
@@ -372,7 +385,9 @@ class SAMCalibrationDataset(Dataset[SAMCalibrationSample]):
             downstream_quality[i, :n_masks] = sample.downstream_quality[:n_masks]
 
             if sample.provider_disagreement is not None:
-                provider_disagreement[i, :n_masks] = sample.provider_disagreement[:n_masks]
+                provider_disagreement[i, :n_masks] = sample.provider_disagreement[
+                    :n_masks
+                ]
                 has_disagreement = True
             if sample.segmentation_iou is not None:
                 segmentation_iou[i, :n_masks] = sample.segmentation_iou[:n_masks]
@@ -589,9 +604,13 @@ class DepthCalibrationDataset(Dataset[DepthCalibrationSample]):
 
             mask = sample.depth_valid_mask
             if mask.shape[-2:] != (H, W):
-                mask = torch.nn.functional.interpolate(
-                    mask.float().unsqueeze(0), size=(H, W), mode="nearest"
-                ).squeeze(0).bool()
+                mask = (
+                    torch.nn.functional.interpolate(
+                        mask.float().unsqueeze(0), size=(H, W), mode="nearest"
+                    )
+                    .squeeze(0)
+                    .bool()
+                )
             depth_valid_mask[i] = mask
 
             if sample.previous_scale is not None:
@@ -703,7 +722,9 @@ class VJEPATemporalDataset(Dataset[VJEPATemporalSample]):
 
             # Future states
             d_o = min(sample.future_object_states.size(2), d_out)
-            future_object_states[i, :n_t, :n_obj, :d_o] = sample.future_object_states[:n_t, :n_obj, :d_o]
+            future_object_states[i, :n_t, :n_obj, :d_o] = sample.future_object_states[
+                :n_t, :n_obj, :d_o
+            ]
 
             # Valid mask
             n_valid = min(sample.object_valid_mask.size(0), max_objects)
@@ -746,7 +767,9 @@ class SceneGraphSample:
     # Supervision targets
     node_labels: Optional[torch.Tensor] = None  # (N,) int — category labels
     edge_importance: Optional[torch.Tensor] = None  # (E,) float — target edge weights
-    node_confidence_target: Optional[torch.Tensor] = None  # (N,) float — confidence targets
+    node_confidence_target: Optional[torch.Tensor] = (
+        None  # (N,) float — confidence targets
+    )
 
 
 @dataclass
@@ -887,7 +910,12 @@ def generate_synthetic_evidence_fusion_samples(
         torch.manual_seed(seed)
 
     samples = []
-    provider_kinds = ["scene_tracks", "vision_backbone", "teacher_semantics", "teacher_trace"]
+    provider_kinds = [
+        "scene_tracks",
+        "vision_backbone",
+        "teacher_semantics",
+        "teacher_trace",
+    ]
 
     for i in range(n_samples):
         providers = []
@@ -895,26 +923,30 @@ def generate_synthetic_evidence_fusion_samples(
             # Random availability (80% available)
             available = torch.rand(1).item() > 0.2
 
-            providers.append(ProviderObservation(
-                provider_id=f"provider_{j}",
-                provider_kind=provider_kinds[j % len(provider_kinds)],
-                availability_status="available" if available else "unavailable",
-                truth_class="provider_backed" if available else "unavailable",
-                features=torch.randn(d_feature),
-                confidence=torch.rand(1) if available else None,
-            ))
+            providers.append(
+                ProviderObservation(
+                    provider_id=f"provider_{j}",
+                    provider_kind=provider_kinds[j % len(provider_kinds)],
+                    availability_status="available" if available else "unavailable",
+                    truth_class="provider_backed" if available else "unavailable",
+                    features=torch.randn(d_feature),
+                    confidence=torch.rand(1) if available else None,
+                )
+            )
 
         # Synthetic task success (correlated with provider availability)
         n_available = sum(1 for p in providers if p.availability_status == "available")
         task_success = min(1.0, 0.3 + 0.2 * n_available + 0.1 * torch.rand(1).item())
 
-        samples.append(MultiProviderSample(
-            sample_id=f"synthetic_{i:04d}",
-            scene_id=f"scene_{i // 10}",
-            frame_idx=i % 10,
-            providers=providers,
-            downstream_task_success=task_success,
-        ))
+        samples.append(
+            MultiProviderSample(
+                sample_id=f"synthetic_{i:04d}",
+                scene_id=f"scene_{i // 10}",
+                frame_idx=i % 10,
+                providers=providers,
+                downstream_task_success=task_success,
+            )
+        )
 
     return samples
 
@@ -946,20 +978,24 @@ def generate_synthetic_sam_calibration_samples(
         downstream_quality = torch.clamp(raw_confidence + noise, 0, 1)
 
         # Provider disagreement (inversely correlated with quality)
-        disagreement = torch.clamp(1.0 - downstream_quality + torch.randn(n_masks) * 0.1, 0, 1)
+        disagreement = torch.clamp(
+            1.0 - downstream_quality + torch.randn(n_masks) * 0.1, 0, 1
+        )
 
         # IoU (correlated with quality)
         iou = torch.clamp(downstream_quality + torch.randn(n_masks) * 0.15, 0, 1)
 
-        samples.append(SAMCalibrationSample(
-            sample_id=f"sam_synthetic_{i:04d}",
-            mask_features=mask_features,
-            raw_confidence=raw_confidence,
-            mask_valid=mask_valid,
-            downstream_quality=downstream_quality,
-            provider_disagreement=disagreement,
-            segmentation_iou=iou,
-        ))
+        samples.append(
+            SAMCalibrationSample(
+                sample_id=f"sam_synthetic_{i:04d}",
+                mask_features=mask_features,
+                raw_confidence=raw_confidence,
+                mask_valid=mask_valid,
+                downstream_quality=downstream_quality,
+                provider_disagreement=disagreement,
+                segmentation_iou=iou,
+            )
+        )
 
     return samples
 
@@ -988,7 +1024,9 @@ def generate_synthetic_depth_calibration_samples(
         # Relative depth (scaled/shifted version of GT)
         true_scale = 0.5 + torch.rand(1).item()
         true_shift = -1.0 + 2.0 * torch.rand(1).item()
-        relative_depth = (gt_depth - true_shift) / true_scale + torch.randn_like(gt_depth) * 0.1
+        relative_depth = (gt_depth - true_shift) / true_scale + torch.randn_like(
+            gt_depth
+        ) * 0.1
 
         # Valid mask (80% valid, sparse for LiDAR simulation)
         depth_valid = torch.rand(1, height, width) > 0.2
@@ -1000,15 +1038,17 @@ def generate_synthetic_depth_calibration_samples(
         prev_scale = true_scale + torch.randn(1).item() * 0.1 if i > 0 else None
         prev_shift = true_shift + torch.randn(1).item() * 0.1 if i > 0 else None
 
-        samples.append(DepthCalibrationSample(
-            sample_id=f"depth_synthetic_{i:04d}",
-            relative_depth=relative_depth,
-            camera_intrinsics=intrinsics,
-            ground_truth_depth=gt_depth,
-            depth_valid_mask=depth_valid,
-            previous_scale=prev_scale,
-            previous_shift=prev_shift,
-        ))
+        samples.append(
+            DepthCalibrationSample(
+                sample_id=f"depth_synthetic_{i:04d}",
+                relative_depth=relative_depth,
+                camera_intrinsics=intrinsics,
+                ground_truth_depth=gt_depth,
+                depth_valid_mask=depth_valid,
+                previous_scale=prev_scale,
+                previous_shift=prev_shift,
+            )
+        )
 
     return samples
 
@@ -1035,15 +1075,23 @@ def generate_synthetic_vision_backbone_projection_samples(
         scene_label = i % max(1, n_scenes)
         labels = torch.arange(n_tokens) % max(1, n_identities)
         labels = labels[torch.randperm(n_tokens)]
-        backbone_features = identity_centers[labels] + torch.randn(
-            n_tokens,
-            d_backbone,
-        ) * 0.1
+        backbone_features = (
+            identity_centers[labels]
+            + torch.randn(
+                n_tokens,
+                d_backbone,
+            )
+            * 0.1
+        )
         cross_provider_embeddings = backbone_features @ provider_projection
-        cross_provider_embeddings = cross_provider_embeddings + torch.randn(
-            n_tokens,
-            d_out,
-        ) * 0.02
+        cross_provider_embeddings = (
+            cross_provider_embeddings
+            + torch.randn(
+                n_tokens,
+                d_out,
+            )
+            * 0.02
+        )
         samples.append(
             VisionBackboneProjectionSample(
                 sample_id=f"vision_proj_synthetic_{i:04d}",
@@ -1086,7 +1134,7 @@ def generate_synthetic_vjepa_temporal_samples(
 
         # Add temporal smoothness
         for t in range(1, n_temporal_steps):
-            base_future[t] = 0.7 * base_future[t-1] + 0.3 * base_future[t]
+            base_future[t] = 0.7 * base_future[t - 1] + 0.3 * base_future[t]
 
         # Object validity (80% valid)
         object_valid = torch.rand(n_objects) > 0.2
@@ -1094,14 +1142,16 @@ def generate_synthetic_vjepa_temporal_samples(
         # Temporal ordering
         ordering = torch.arange(n_temporal_steps)
 
-        samples.append(VJEPATemporalSample(
-            sample_id=f"vjepa_synthetic_{i:04d}",
-            vjepa_tokens=vjepa_tokens,
-            wm_object_tokens=wm_tokens,
-            future_object_states=base_future,
-            object_valid_mask=object_valid,
-            temporal_ordering_labels=ordering,
-        ))
+        samples.append(
+            VJEPATemporalSample(
+                sample_id=f"vjepa_synthetic_{i:04d}",
+                vjepa_tokens=vjepa_tokens,
+                wm_object_tokens=wm_tokens,
+                future_object_states=base_future,
+                object_valid_mask=object_valid,
+                temporal_ordering_labels=ordering,
+            )
+        )
 
     return samples
 
@@ -1172,21 +1222,25 @@ def generate_synthetic_scene_graph_samples(
         node_degree = torch.zeros(N)
         for s in src_list:
             node_degree[s] += 1
-        node_confidence = (node_degree / max(node_degree.max().item(), 1)).clamp(0.2, 1.0)
+        node_confidence = (node_degree / max(node_degree.max().item(), 1)).clamp(
+            0.2, 1.0
+        )
         node_confidence = node_confidence + torch.randn(N) * 0.05
         node_confidence = node_confidence.clamp(0, 1)
 
-        samples.append(SceneGraphSample(
-            sample_id=f"graph_synthetic_{i:04d}",
-            node_features=node_features,
-            edge_index=edge_index,
-            edge_type=edge_type,
-            edge_features=edge_features,
-            node_mask=torch.ones(N, dtype=torch.bool),
-            node_labels=node_labels,
-            edge_importance=edge_importance,
-            node_confidence_target=node_confidence,
-        ))
+        samples.append(
+            SceneGraphSample(
+                sample_id=f"graph_synthetic_{i:04d}",
+                node_features=node_features,
+                edge_index=edge_index,
+                edge_type=edge_type,
+                edge_features=edge_features,
+                node_mask=torch.ones(N, dtype=torch.bool),
+                node_labels=node_labels,
+                edge_importance=edge_importance,
+                node_confidence_target=node_confidence,
+            )
+        )
 
     return samples
 
@@ -1211,7 +1265,7 @@ def create_evidence_fusion_loader(
         return EvidenceFusionDataset.collate_fn(batch, d_feature=d_feature)
 
     return DataLoader(
-        dataset,
+        cast(Any, dataset),
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
@@ -1232,10 +1286,12 @@ def create_sam_calibration_loader(
     dataset = SAMCalibrationDataset(samples, max_masks=max_masks, d_mask=d_mask)
 
     def collate(batch: List[SAMCalibrationSample]) -> SAMCalibrationBatch:
-        return SAMCalibrationDataset.collate_fn(batch, max_masks=max_masks, d_mask=d_mask)
+        return SAMCalibrationDataset.collate_fn(
+            batch, max_masks=max_masks, d_mask=d_mask
+        )
 
     return DataLoader(
-        dataset,
+        cast(Any, dataset),
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
@@ -1258,7 +1314,7 @@ def create_depth_calibration_loader(
         return DepthCalibrationDataset.collate_fn(batch, target_size=target_size)
 
     return DataLoader(
-        dataset,
+        cast(Any, dataset),
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
@@ -1295,7 +1351,7 @@ def create_vision_backbone_projection_loader(
         )
 
     return DataLoader(
-        dataset,
+        cast(Any, dataset),
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
@@ -1323,7 +1379,7 @@ def create_vjepa_temporal_loader(
         )
 
     return DataLoader(
-        dataset,
+        cast(Any, dataset),
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
@@ -1347,12 +1403,15 @@ def create_scene_graph_loader(
 
     def collate(batch: List[SceneGraphSample]) -> SceneGraphBatch:
         return SceneGraphDataset.collate_fn(
-            batch, max_nodes=max_nodes, max_edges=max_edges,
-            d_token=d_token, d_edge=d_edge,
+            batch,
+            max_nodes=max_nodes,
+            max_edges=max_edges,
+            d_token=d_token,
+            d_edge=d_edge,
         )
 
     return DataLoader(
-        dataset,
+        cast(Any, dataset),
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
@@ -1499,22 +1558,28 @@ def annotation_export_to_scene_graph_samples(
             node_labels = torch.tensor(label_list, dtype=torch.long)
 
         # Node confidence targets
-        node_conf = torch.tensor(
-            [float(c) for c in object_confidences],
-            dtype=torch.float32,
-        ) if object_confidences else torch.ones(n_objects, dtype=torch.float32) * 0.5
+        node_conf = (
+            torch.tensor(
+                [float(c) for c in object_confidences],
+                dtype=torch.float32,
+            )
+            if object_confidences
+            else torch.ones(n_objects, dtype=torch.float32) * 0.5
+        )
 
-        samples.append(SceneGraphSample(
-            sample_id=record_id,
-            node_features=node_features,
-            edge_index=edge_index,
-            edge_type=edge_type,
-            edge_features=edge_features,
-            node_mask=torch.ones(n_objects, dtype=torch.bool),
-            node_labels=node_labels,
-            edge_importance=edge_importance,
-            node_confidence_target=node_conf,
-        ))
+        samples.append(
+            SceneGraphSample(
+                sample_id=record_id,
+                node_features=node_features,
+                edge_index=edge_index,
+                edge_type=edge_type,
+                edge_features=edge_features,
+                node_mask=torch.ones(n_objects, dtype=torch.bool),
+                node_labels=node_labels,
+                edge_importance=edge_importance,
+                node_confidence_target=node_conf,
+            )
+        )
 
     return samples
 
@@ -1568,6 +1633,7 @@ def evaluate_seam_on_annotations(
         - receipt_consistency: prediction consistency across samples
         - promotion_eligible: False when provisional, gate-scored otherwise
     """
+
     def _record_value(record: Any, key: str, default: Any = None) -> Any:
         if isinstance(record, dict):
             return record.get(key, default)
@@ -1610,16 +1676,8 @@ def evaluate_seam_on_annotations(
                 )
             )
         provisional = any(provisional_flags)
-        truth_class = (
-            truth_classes[0]
-            if len(set(truth_classes)) == 1
-            else "mixed"
-        )
-        source_kind = (
-            source_kinds[0]
-            if len(set(source_kinds)) == 1
-            else "mixed"
-        )
+        truth_class = truth_classes[0] if len(set(truth_classes)) == 1 else "mixed"
+        source_kind = source_kinds[0] if len(set(source_kinds)) == 1 else "mixed"
         return provisional, truth_class, source_kind
 
     def _centroid_accuracy(
@@ -1738,11 +1796,18 @@ def evaluate_seam_on_annotations(
                     )
 
         accuracy = correct / max(1, total) if total > 0 else 0.0
-        consistency = 1.0 - (
-            torch.tensor(conf_deltas).std().item() if len(conf_deltas) > 1 else 0.0
-        ) if conf_deltas else 0.0
+        consistency = (
+            1.0
+            - (torch.tensor(conf_deltas).std().item() if len(conf_deltas) > 1 else 0.0)
+            if conf_deltas
+            else 0.0
+        )
 
-        return {"accuracy": accuracy, "total": total, "consistency": max(0.0, consistency)}
+        return {
+            "accuracy": accuracy,
+            "total": total,
+            "consistency": max(0.0, consistency),
+        }
 
     train_metrics = _eval_batch(train_set)
     held_out_metrics = _eval_batch(held_out)
@@ -1750,9 +1815,12 @@ def evaluate_seam_on_annotations(
     annotation_supervision_score = train_metrics["accuracy"]
     held_out_label_agreement = held_out_metrics["accuracy"]
     downstream_usefulness_score = min(
-        1.0, (train_metrics["total"] + held_out_metrics["total"]) / max(1, len(samples) * 2)
+        1.0,
+        (train_metrics["total"] + held_out_metrics["total"]) / max(1, len(samples) * 2),
     )
-    receipt_consistency = (train_metrics["consistency"] + held_out_metrics["consistency"]) / 2.0
+    receipt_consistency = (
+        train_metrics["consistency"] + held_out_metrics["consistency"]
+    ) / 2.0
 
     # Promotion gate: only eligible when evidence is non-provisional
     gate_score = 0.0
@@ -1811,7 +1879,9 @@ def evaluate_and_persist_seam_on_annotations(
     evidence = build_perception_benchmark_evidence(
         subsystem_key=benchmark_subsystem_key or seam_type,
         metrics=metrics,
-        source_record_count=int(metrics.get("source_record_count", len(annotation_records))),
+        source_record_count=int(
+            metrics.get("source_record_count", len(annotation_records))
+        ),
         source_artifact_path=source_artifact_path,
         metadata=evidence_metadata,
     )

@@ -69,7 +69,13 @@ SEMANTIC_TOKEN_RULES: Dict[str, list[str]] = {
     "handle": ["drawer", "object:drawer", "part:handle", "affordance:grasp_handle"],
     "open": ["affordance:open", "intent:open"],
     "close": ["affordance:close", "intent:close"],
-    "vase": ["vase", "object:vase", "fragile", "risk:fragility", "constraint:avoid_collision"],
+    "vase": [
+        "vase",
+        "object:vase",
+        "fragile",
+        "risk:fragility",
+        "constraint:avoid_collision",
+    ],
     "fragile": ["fragile", "risk:fragility", "constraint:avoid_collision"],
     "safety": ["safety", "constraint:avoid_collision", "priority:safety"],
     "collision": ["constraint:avoid_collision", "risk:collision"],
@@ -321,9 +327,18 @@ class SemanticWorldModelState:
             task_id=str(payload.get("task_id", "")),
             objective_preset=str(payload.get("objective_preset", "")),
             semantic_tags=_strings(payload.get("semantic_tags")),
-            objects=[SemanticObjectState.from_dict(item) for item in payload.get("objects", []) or []],
-            relations=[SemanticRelationState.from_dict(item) for item in payload.get("relations", []) or []],
-            meta_nodes=[SemanticMetaNode.from_dict(item) for item in payload.get("meta_nodes", []) or []],
+            objects=[
+                SemanticObjectState.from_dict(item)
+                for item in payload.get("objects", []) or []
+            ],
+            relations=[
+                SemanticRelationState.from_dict(item)
+                for item in payload.get("relations", []) or []
+            ],
+            meta_nodes=[
+                SemanticMetaNode.from_dict(item)
+                for item in payload.get("meta_nodes", []) or []
+            ],
             capability_scores=_float_mapping(payload.get("capability_scores")),
             topology=_mapping(payload.get("topology")),
             functional_roles=_mapping(payload.get("functional_roles")),
@@ -350,12 +365,14 @@ class SemanticWorldModelState:
         if encoder is not None:
             try:
                 import torch
+
                 with torch.no_grad():
                     return encoder.encode_state(self).detach().numpy()
             except Exception:
                 pass
         # Fallback to flat deterministic encoding
         from src.world_model.semantic_state_encoder import encode_wm_state_flat
+
         return encode_wm_state_flat(self)
 
 
@@ -428,10 +445,16 @@ class SemanticWorldModelBuilder:
         artifact_refs: Optional[Mapping[str, Any]] = None,
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> SemanticWorldModelState:
-        tags = self.infer_seed_tags(video_ref, base_tags=semantic_tags or belief_state.semantic_tags)
+        tags = self.infer_seed_tags(
+            video_ref, base_tags=semantic_tags or belief_state.semantic_tags
+        )
         return self._build_world_model(
             episode_id=str(video_ref.get("episode_id", belief_state.episode_id)),
-            task_id=str(video_ref.get("task_type", video_ref.get("task_id", belief_state.episode_id))),
+            task_id=str(
+                video_ref.get(
+                    "task_type", video_ref.get("task_id", belief_state.episode_id)
+                )
+            ),
             objective_preset=objective_preset,
             semantic_tags=tags,
             belief_state=belief_state,
@@ -593,7 +616,9 @@ class SemanticWorldModelBuilder:
             "risk_register": risk_register,
         }
         world_model_id = f"semantic_world_{sha256_json(payload)[:16]}"
-        video_state_metadata = video_state_snapshot.metadata if video_state_snapshot is not None else {}
+        video_state_metadata = (
+            video_state_snapshot.metadata if video_state_snapshot is not None else {}
+        )
         return SemanticWorldModelState(
             world_model_id=world_model_id,
             episode_id=str(episode_id),
@@ -609,7 +634,9 @@ class SemanticWorldModelBuilder:
             risk_register=risk_register,
             artifact_refs={
                 **_mapping(belief_state.artifact_refs),
-                **_mapping(video_state_snapshot.artifact_refs if video_state_snapshot else None),
+                **_mapping(
+                    video_state_snapshot.artifact_refs if video_state_snapshot else None
+                ),
                 **_mapping(artifact_refs),
             },
             provenance={
@@ -619,7 +646,9 @@ class SemanticWorldModelBuilder:
                 "stage2_ontology_count": len(stage2_ontology_proposals or []),
                 "stage2_refinement_count": len(stage2_task_refinements or []),
                 "stage2_tag_count": len(stage2_tags or []),
-                "grounded_track_count": int(grounded_scene["summary"].get("track_count", 0)),
+                "grounded_track_count": int(
+                    grounded_scene["summary"].get("track_count", 0)
+                ),
             },
             metadata={
                 **_mapping(video_state_metadata),
@@ -646,10 +675,14 @@ class SemanticWorldModelBuilder:
             tokens.extend(part for part in cleaned.split() if part)
         return tokens
 
-    def _track_refs(self, semantic_fusion_summary: Optional[Mapping[str, Any]]) -> list[str]:
+    def _track_refs(
+        self, semantic_fusion_summary: Optional[Mapping[str, Any]]
+    ) -> list[str]:
         if not isinstance(semantic_fusion_summary, Mapping):
             return []
-        raw = semantic_fusion_summary.get("track_ids") or semantic_fusion_summary.get("tracks")
+        raw = semantic_fusion_summary.get("track_ids") or semantic_fusion_summary.get(
+            "tracks"
+        )
         return _strings(raw)
 
     def _load_npz_payload(self, path_like: Any) -> Optional[Dict[str, Any]]:
@@ -681,11 +714,17 @@ class SemanticWorldModelBuilder:
         if not isinstance(payload, Mapping):
             return None
         if any(str(key).startswith("scene_tracks_v1/") for key in payload.keys()):
-            return {str(key): value for key, value in payload.items() if str(key).startswith("scene_tracks_v1/")}
+            return {
+                str(key): value
+                for key, value in payload.items()
+                if str(key).startswith("scene_tracks_v1/")
+            }
         nested = payload.get("scene_tracks_v1")
         if isinstance(nested, Mapping):
             return {f"scene_tracks_v1/{key}": value for key, value in nested.items()}
-        scene_tracks_path = payload.get("scene_tracks_path") or payload.get("scene_tracks_npz")
+        scene_tracks_path = payload.get("scene_tracks_path") or payload.get(
+            "scene_tracks_npz"
+        )
         if scene_tracks_path:
             loaded = self._load_npz_payload(scene_tracks_path)
             return self._coerce_scene_tracks_payload(loaded)
@@ -717,7 +756,9 @@ class SemanticWorldModelBuilder:
             return None
         if isinstance(payload, (str, Path)):
             loaded = self._load_npz_payload(payload)
-            return self._coerce_vla_semantic_evidence(loaded, scene_track_ids=scene_track_ids)
+            return self._coerce_vla_semantic_evidence(
+                loaded, scene_track_ids=scene_track_ids
+            )
         return parse_vla_semantic_evidence(payload, scene_track_ids=scene_track_ids)
 
     def _teacher_tags(self, teacher_trace: Optional[TeacherTrace]) -> list[str]:
@@ -749,7 +790,9 @@ class SemanticWorldModelBuilder:
         for step in teacher_trace.steps:
             affordances.update(_strings(step.metadata.get("affordance_hints")))
         affordances.update(self._instruction_affordances(teacher_trace.instruction))
-        return sorted(_normalize_label(value) for value in affordances if _normalize_label(value))
+        return sorted(
+            _normalize_label(value) for value in affordances if _normalize_label(value)
+        )
 
     def _teacher_risk_hints(self, teacher_trace: Optional[TeacherTrace]) -> list[str]:
         if teacher_trace is None:
@@ -757,15 +800,25 @@ class SemanticWorldModelBuilder:
         risks = set(_strings(teacher_trace.metadata.get("risk_hints")))
         for step in teacher_trace.steps:
             risks.update(_strings(step.metadata.get("risk_hints")))
-        risks.update(tag.split("risk:", 1)[1] for tag in self._teacher_tags(teacher_trace) if tag.startswith("risk:"))
-        return sorted(_normalize_label(value) for value in risks if _normalize_label(value))
+        risks.update(
+            tag.split("risk:", 1)[1]
+            for tag in self._teacher_tags(teacher_trace)
+            if tag.startswith("risk:")
+        )
+        return sorted(
+            _normalize_label(value) for value in risks if _normalize_label(value)
+        )
 
     def _instruction_affordances(self, instruction: str) -> list[str]:
         instruction = str(instruction or "").lower()
         affordances: set[str] = set()
         for token, rule_tags in SEMANTIC_TOKEN_RULES.items():
             if token in instruction:
-                affordances.update(tag.split("affordance:", 1)[1] for tag in rule_tags if tag.startswith("affordance:"))
+                affordances.update(
+                    tag.split("affordance:", 1)[1]
+                    for tag in rule_tags
+                    if tag.startswith("affordance:")
+                )
         return sorted(affordances)
 
     def _grounded_label_to_tags(self, label: str, category: str) -> set[str]:
@@ -779,7 +832,14 @@ class SemanticWorldModelBuilder:
             tags.add(f"region:{normalized}")
         return tags
 
-    def _derive_track_label(self, *, track_id: str, entity_type: int, class_id: int, class_names: Optional[Sequence[str]]) -> str:
+    def _derive_track_label(
+        self,
+        *,
+        track_id: str,
+        entity_type: int,
+        class_id: int,
+        class_names: Optional[Sequence[str]],
+    ) -> str:
         if class_names and 0 <= int(class_id) < len(class_names):
             return _normalize_label(str(class_names[int(class_id)]))
         if int(entity_type) == 1:
@@ -811,7 +871,9 @@ class SemanticWorldModelBuilder:
             return {
                 "objects": [],
                 "relations": [],
-                "semantic_tags": sorted(set(_strings(semantic_tags)) | set(self._teacher_tags(teacher))),
+                "semantic_tags": sorted(
+                    set(_strings(semantic_tags)) | set(self._teacher_tags(teacher))
+                ),
                 "summary": {
                     "grounding_mode": "heuristic_fallback",
                     "track_count": 0,
@@ -819,16 +881,37 @@ class SemanticWorldModelBuilder:
                     "vla_semantic_evidence_present": bool(vla_evidence),
                 },
             }
+        scene_tracks_dict = scene_tracks_dict or {}
 
         track_ids = np.asarray(scene_tracks.track_ids)
         entity_types = np.asarray(scene_tracks.entity_types)
         class_ids = np.asarray(scene_tracks.class_ids)
         class_names = getattr(scene_tracks, "class_names", None)
-        poses_t = np.asarray(scene_tracks.poses_t, dtype=np.float32) if getattr(scene_tracks, "poses_t", None) is not None else np.zeros((0, 0, 3), dtype=np.float32)
-        visibility = np.asarray(scene_tracks.visibility, dtype=np.float32) if getattr(scene_tracks, "visibility", None) is not None else np.zeros((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
-        occlusion = np.asarray(scene_tracks.occlusion, dtype=np.float32) if getattr(scene_tracks, "occlusion", None) is not None else np.zeros((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
-        ir_loss = np.asarray(scene_tracks.ir_loss, dtype=np.float32) if getattr(scene_tracks, "ir_loss", None) is not None else np.zeros((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
-        converged = np.asarray(scene_tracks.converged, dtype=np.float32) if getattr(scene_tracks, "converged", None) is not None else np.ones((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
+        poses_t = (
+            np.asarray(scene_tracks.poses_t, dtype=np.float32)
+            if getattr(scene_tracks, "poses_t", None) is not None
+            else np.zeros((0, 0, 3), dtype=np.float32)
+        )
+        visibility = (
+            np.asarray(scene_tracks.visibility, dtype=np.float32)
+            if getattr(scene_tracks, "visibility", None) is not None
+            else np.zeros((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
+        )
+        occlusion = (
+            np.asarray(scene_tracks.occlusion, dtype=np.float32)
+            if getattr(scene_tracks, "occlusion", None) is not None
+            else np.zeros((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
+        )
+        ir_loss = (
+            np.asarray(scene_tracks.ir_loss, dtype=np.float32)
+            if getattr(scene_tracks, "ir_loss", None) is not None
+            else np.zeros((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
+        )
+        converged = (
+            np.asarray(scene_tracks.converged, dtype=np.float32)
+            if getattr(scene_tracks, "converged", None) is not None
+            else np.ones((poses_t.shape[0], poses_t.shape[1]), dtype=np.float32)
+        )
         teacher_tags = self._teacher_tags(teacher)
         instruction = ""
         if teacher is not None:
@@ -838,14 +921,22 @@ class SemanticWorldModelBuilder:
         teacher_affordances = set(self._teacher_affordances(teacher))
         teacher_risk_hints = set(self._teacher_risk_hints(teacher))
         track_sem_conf = {}
-        if vla_evidence is not None and getattr(vla_evidence, "class_probs", None) is not None:
+        if (
+            vla_evidence is not None
+            and getattr(vla_evidence, "class_probs", None) is not None
+        ):
             probs = np.asarray(vla_evidence.class_probs, dtype=np.float32)
             if probs.ndim == 3 and probs.shape[1] == len(track_ids):
                 track_sem_conf = {
-                    str(track_ids[idx]): float(np.mean(np.max(probs[:, idx, :], axis=-1)))
+                    str(track_ids[idx]): float(
+                        np.mean(np.max(probs[:, idx, :], axis=-1))
+                    )
                     for idx in range(len(track_ids))
                 }
-        if vla_evidence is not None and getattr(vla_evidence, "confidence", None) is not None:
+        if (
+            vla_evidence is not None
+            and getattr(vla_evidence, "confidence", None) is not None
+        ):
             conf_arr = np.asarray(vla_evidence.confidence, dtype=np.float32)
             if conf_arr.ndim >= 2 and conf_arr.shape[1] == len(track_ids):
                 track_sem_conf.update(
@@ -857,24 +948,64 @@ class SemanticWorldModelBuilder:
                         for idx in range(len(track_ids))
                     }
                 )
-        track_label_source = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_label_source", []))]
-        track_categories = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_category", []))]
+        track_label_source = [
+            str(value)
+            for value in list(
+                scene_tracks_dict.get("scene_tracks_v1/track_label_source", [])
+            )
+        ]
+        track_categories = [
+            str(value)
+            for value in list(
+                scene_tracks_dict.get("scene_tracks_v1/track_category", [])
+            )
+        ]
         track_label_confidence = np.asarray(
-            scene_tracks_dict.get("scene_tracks_v1/track_label_confidence", np.zeros((len(track_ids),), dtype=np.float32)),
+            scene_tracks_dict.get(
+                "scene_tracks_v1/track_label_confidence",
+                np.zeros((len(track_ids),), dtype=np.float32),
+            ),
             dtype=np.float32,
         ).reshape(-1)
-        track_source_instance_ids = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_source_instance_id", []))]
-        track_source_object_ids = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_source_object_id", []))]
-        track_hint_object_ids = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_hint_object_id", []))]
-        raw_track_tags = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_semantic_tags_json", []))]
-        raw_track_affordances = [str(value) for value in list(scene_tracks_dict.get("scene_tracks_v1/track_affordances_json", []))]
+        track_source_instance_ids = [
+            str(value)
+            for value in list(
+                scene_tracks_dict.get("scene_tracks_v1/track_source_instance_id", [])
+            )
+        ]
+        track_source_object_ids = [
+            str(value)
+            for value in list(
+                scene_tracks_dict.get("scene_tracks_v1/track_source_object_id", [])
+            )
+        ]
+        track_hint_object_ids = [
+            str(value)
+            for value in list(
+                scene_tracks_dict.get("scene_tracks_v1/track_hint_object_id", [])
+            )
+        ]
+        raw_track_tags = [
+            str(value)
+            for value in list(
+                scene_tracks_dict.get("scene_tracks_v1/track_semantic_tags_json", [])
+            )
+        ]
+        raw_track_affordances = [
+            str(value)
+            for value in list(
+                scene_tracks_dict.get("scene_tracks_v1/track_affordances_json", [])
+            )
+        ]
 
         grounded_objects: list[SemanticObjectState] = []
         grounded_tags: set[str] = set(_strings(semantic_tags))
         if bool(scene_tracks_dict):
             grounded_tags.add("scene_tracks:present")
         summary = getattr(scene_tracks, "summary", None) or {}
-        quality_score = _safe_float(summary.get("quality_score", summary.get("scene_ir_quality", 0.0)))
+        quality_score = _safe_float(
+            summary.get("quality_score", summary.get("scene_ir_quality", 0.0))
+        )
         for idx, track_id in enumerate(track_ids):
             label = self._derive_track_label(
                 track_id=str(track_id),
@@ -883,11 +1014,29 @@ class SemanticWorldModelBuilder:
                 class_names=class_names,
             )
             normalized_label = _normalize_label(label)
-            label_source = track_label_source[idx] if idx < len(track_label_source) else ""
-            label_confidence = float(track_label_confidence[idx]) if idx < track_label_confidence.shape[0] else 0.0
-            source_instance_id = _normalize_label(track_source_instance_ids[idx]) if idx < len(track_source_instance_ids) else ""
-            source_object_id = _normalize_label(track_source_object_ids[idx]) if idx < len(track_source_object_ids) else ""
-            hint_object_id = source_object_id or (_normalize_label(track_hint_object_ids[idx]) if idx < len(track_hint_object_ids) else "")
+            label_source = (
+                track_label_source[idx] if idx < len(track_label_source) else ""
+            )
+            label_confidence = (
+                float(track_label_confidence[idx])
+                if idx < track_label_confidence.shape[0]
+                else 0.0
+            )
+            source_instance_id = (
+                _normalize_label(track_source_instance_ids[idx])
+                if idx < len(track_source_instance_ids)
+                else ""
+            )
+            source_object_id = (
+                _normalize_label(track_source_object_ids[idx])
+                if idx < len(track_source_object_ids)
+                else ""
+            )
+            hint_object_id = source_object_id or (
+                _normalize_label(track_hint_object_ids[idx])
+                if idx < len(track_hint_object_ids)
+                else ""
+            )
             extra_track_tags: set[str] = set()
             extra_track_affordances: set[str] = set()
             if idx < len(raw_track_tags):
@@ -897,27 +1046,55 @@ class SemanticWorldModelBuilder:
                     pass
             if idx < len(raw_track_affordances):
                 try:
-                    extra_track_affordances.update(_strings(json.loads(raw_track_affordances[idx])))
+                    extra_track_affordances.update(
+                        _strings(json.loads(raw_track_affordances[idx]))
+                    )
                 except Exception:
                     pass
             prior = OBJECT_PRIORS.get(normalized_label, {})
-            visibility_mean = _safe_mean(visibility[:, idx] if visibility.ndim >= 2 and idx < visibility.shape[1] else [0.0])
-            occlusion_mean = _safe_mean(occlusion[:, idx] if occlusion.ndim >= 2 and idx < occlusion.shape[1] else [0.0])
-            ir_loss_mean = _safe_mean(ir_loss[:, idx] if ir_loss.ndim >= 2 and idx < ir_loss.shape[1] else [0.0])
-            converged_rate = _safe_mean(converged[:, idx] if converged.ndim >= 2 and idx < converged.shape[1] else [1.0], 1.0)
-            position_seq = poses_t[:, idx, :] if poses_t.ndim == 3 and idx < poses_t.shape[1] else np.zeros((1, 3), dtype=np.float32)
+            visibility_mean = _safe_mean(
+                visibility[:, idx]
+                if visibility.ndim >= 2 and idx < visibility.shape[1]
+                else [0.0]
+            )
+            occlusion_mean = _safe_mean(
+                occlusion[:, idx]
+                if occlusion.ndim >= 2 and idx < occlusion.shape[1]
+                else [0.0]
+            )
+            ir_loss_mean = _safe_mean(
+                ir_loss[:, idx]
+                if ir_loss.ndim >= 2 and idx < ir_loss.shape[1]
+                else [0.0]
+            )
+            converged_rate = _safe_mean(
+                converged[:, idx]
+                if converged.ndim >= 2 and idx < converged.shape[1]
+                else [1.0],
+                1.0,
+            )
+            position_seq = (
+                poses_t[:, idx, :]
+                if poses_t.ndim == 3 and idx < poses_t.shape[1]
+                else np.zeros((1, 3), dtype=np.float32)
+            )
             motion_score = 0.0
             if position_seq.shape[0] > 1:
                 diffs = np.diff(position_seq, axis=0)
                 motion_score = float(np.mean(np.linalg.norm(diffs, axis=-1)))
             teacher_match = float(
                 bool(
-                    any(normalized_label in tag or tag.endswith(normalized_label) for tag in teacher_tags)
+                    any(
+                        normalized_label in tag or tag.endswith(normalized_label)
+                        for tag in teacher_tags
+                    )
                     or normalized_label in teacher_object_refs
                     or (bool(hint_object_id) and hint_object_id in teacher_object_refs)
                 )
             )
-            semantic_conf = max(track_sem_conf.get(str(track_id), 0.0), label_confidence * 0.75)
+            semantic_conf = max(
+                track_sem_conf.get(str(track_id), 0.0), label_confidence * 0.75
+            )
             confidence = _clip01(
                 0.2
                 + 0.3 * visibility_mean
@@ -937,7 +1114,11 @@ class SemanticWorldModelBuilder:
             state_tags = list(prior.get("state_tags", []))
             affordances = list(prior.get("affordances", []))
             risk_tags = list(prior.get("risk_tags", []))
-            resolved_category = track_categories[idx] if idx < len(track_categories) and str(track_categories[idx]).strip() else ""
+            resolved_category = (
+                track_categories[idx]
+                if idx < len(track_categories) and str(track_categories[idx]).strip()
+                else ""
+            )
             if motion_score > 0.05:
                 state_tags.append("dynamic_track")
             else:
@@ -951,10 +1132,17 @@ class SemanticWorldModelBuilder:
             for affordance in instruction_affordances:
                 if normalized_label in instruction.lower():
                     affordances.append(affordance)
-            if normalized_label in teacher_object_refs or hint_object_id in teacher_object_refs:
+            if (
+                normalized_label in teacher_object_refs
+                or hint_object_id in teacher_object_refs
+            ):
                 affordances.extend(teacher_affordances)
                 risk_tags.extend(teacher_risk_hints)
-            if "fragile" in teacher_tags and normalized_label in {"vase", "glass", "fragile_object"}:
+            if "fragile" in teacher_tags and normalized_label in {
+                "vase",
+                "glass",
+                "fragile_object",
+            }:
                 risk_tags.append("fragility")
             for tag in extra_track_tags:
                 if tag.startswith("risk:"):
@@ -968,11 +1156,16 @@ class SemanticWorldModelBuilder:
                 state_tags.append(f"label_source:{_normalize_label(label_source)}")
             category = str(
                 resolved_category
-                or prior.get("category", "human_body" if int(entity_types[idx]) == 1 else "tracked_object")
+                or prior.get(
+                    "category",
+                    "human_body" if int(entity_types[idx]) == 1 else "tracked_object",
+                )
             )
             object_id = f"track:{track_id}"
-            grounded_tags.update(self._grounded_label_to_tags(normalized_label, category))
-            grounded_tags.update(_strings(extra_track_tags))
+            grounded_tags.update(
+                self._grounded_label_to_tags(normalized_label, category)
+            )
+            grounded_tags.update(_strings(list(extra_track_tags)))
             grounded_objects.append(
                 SemanticObjectState(
                     object_id=object_id,
@@ -989,13 +1182,17 @@ class SemanticWorldModelBuilder:
                         "track_id": str(track_id),
                         "class_id": int(class_ids[idx]) if idx < len(class_ids) else -1,
                         "class_name": normalized_label,
-                        "entity_type": int(entity_types[idx]) if idx < len(entity_types) else 0,
+                        "entity_type": int(entity_types[idx])
+                        if idx < len(entity_types)
+                        else 0,
                         "visibility_mean": visibility_mean,
                         "occlusion_mean": occlusion_mean,
                         "converged_rate": converged_rate,
                         "ir_loss_mean": ir_loss_mean,
                         "motion_score": motion_score,
-                        "mean_position": position_seq.mean(axis=0).tolist() if position_seq.size else [0.0, 0.0, 0.0],
+                        "mean_position": position_seq.mean(axis=0).tolist()
+                        if position_seq.size
+                        else [0.0, 0.0, 0.0],
                         "teacher_match": bool(teacher_match),
                         "semantic_confidence": semantic_conf,
                         "label_source": label_source,
@@ -1009,7 +1206,9 @@ class SemanticWorldModelBuilder:
 
         grounded_relations: list[SemanticRelationState] = []
         for obj in grounded_objects:
-            relation_id = f"rel_{sha256_json([obj.object_id, 'inside', 'workspace'])[:12]}"
+            relation_id = (
+                f"rel_{sha256_json([obj.object_id, 'inside', 'workspace'])[:12]}"
+            )
             grounded_relations.append(
                 SemanticRelationState(
                     relation_id=relation_id,
@@ -1021,11 +1220,16 @@ class SemanticWorldModelBuilder:
                 )
             )
         for idx, subject in enumerate(grounded_objects):
-            pos_i = np.asarray(subject.metadata.get("mean_position", [0.0, 0.0, 0.0]), dtype=np.float32)
+            pos_i = np.asarray(
+                subject.metadata.get("mean_position", [0.0, 0.0, 0.0]), dtype=np.float32
+            )
             motion_i = _safe_float(subject.metadata.get("motion_score", 0.0))
             for jdx in range(idx + 1, len(grounded_objects)):
                 target = grounded_objects[jdx]
-                pos_j = np.asarray(target.metadata.get("mean_position", [0.0, 0.0, 0.0]), dtype=np.float32)
+                pos_j = np.asarray(
+                    target.metadata.get("mean_position", [0.0, 0.0, 0.0]),
+                    dtype=np.float32,
+                )
                 distance = float(np.linalg.norm(pos_i - pos_j))
                 if distance <= 0.25:
                     relation_id = f"rel_{sha256_json([subject.object_id, 'near', target.object_id])[:12]}"
@@ -1040,7 +1244,11 @@ class SemanticWorldModelBuilder:
                         )
                     )
                 motion_j = _safe_float(target.metadata.get("motion_score", 0.0))
-                if distance <= 0.12 and abs(motion_i - motion_j) <= 0.03 and max(motion_i, motion_j) > 0.02:
+                if (
+                    distance <= 0.12
+                    and abs(motion_i - motion_j) <= 0.03
+                    and max(motion_i, motion_j) > 0.02
+                ):
                     relation_id = f"rel_{sha256_json([subject.object_id, 'moves_with', target.object_id])[:12]}"
                     grounded_relations.append(
                         SemanticRelationState(
@@ -1052,8 +1260,15 @@ class SemanticWorldModelBuilder:
                             metadata={"distance_m": distance, "source": "scene_tracks"},
                         )
                     )
-                if {"support_surface", "scene_region"} & {subject.category, target.category} and abs(float(pos_i[2] - pos_j[2])) <= 0.15:
-                    support = subject if subject.category in {"support_surface", "scene_region"} else target
+                if {"support_surface", "scene_region"} & {
+                    subject.category,
+                    target.category,
+                } and abs(float(pos_i[2] - pos_j[2])) <= 0.15:
+                    support = (
+                        subject
+                        if subject.category in {"support_surface", "scene_region"}
+                        else target
+                    )
                     resting = target if support is subject else subject
                     relation_id = f"rel_{sha256_json([resting.object_id, 'rests_on', support.object_id])[:12]}"
                     grounded_relations.append(
@@ -1077,7 +1292,9 @@ class SemanticWorldModelBuilder:
             "vla_semantic_evidence_present": bool(vla_evidence),
             "training_eligible": bool(summary.get("training_eligible", False)),
             "scene_ir_quality": quality_score,
-            "semantic_density_score": _safe_float(summary.get("semantic_density_score", 0.0)),
+            "semantic_density_score": _safe_float(
+                summary.get("semantic_density_score", 0.0)
+            ),
             "semantic_grounding_ready": bool(summary.get("grounding_ready", False)),
         }
         return {
@@ -1114,9 +1331,13 @@ class SemanticWorldModelBuilder:
                     if tag_dict.get(key):
                         object_names.add(str(tag_dict[key]))
 
-        confidence_mean = float(belief_state.state_vector.get("evidence_confidence_mean", 0.0))
+        confidence_mean = float(
+            belief_state.state_vector.get("evidence_confidence_mean", 0.0)
+        )
         coverage = float(belief_state.state_vector.get("evidence_coverage", 0.0))
-        disagreement = float(belief_state.state_vector.get("evidence_disagreement_mean", 0.0))
+        disagreement = float(
+            belief_state.state_vector.get("evidence_disagreement_mean", 0.0)
+        )
         track_refs = self._track_refs(semantic_fusion_summary)
         objects: list[SemanticObjectState] = list(grounded_objects or [])
         existing_ids = {item.object_id for item in objects}
@@ -1125,17 +1346,29 @@ class SemanticWorldModelBuilder:
             if object_name in existing_ids:
                 continue
             prior = OBJECT_PRIORS.get(object_name, {})
-            explicit_tag = 1.0 if object_name in tags or f"object:{object_name}" in tags else 0.0
+            explicit_tag = (
+                1.0 if object_name in tags or f"object:{object_name}" in tags else 0.0
+            )
             risk_tags = list(prior.get("risk_tags", []))
             state_tags = list(prior.get("state_tags", []))
             affordances = list(prior.get("affordances", []))
-            if "fragile" in tags and object_name == "vase" and "fragility" not in risk_tags:
+            if (
+                "fragile" in tags
+                and object_name == "vase"
+                and "fragility" not in risk_tags
+            ):
                 risk_tags.append("fragility")
             if "high_precision" in tags and object_name in {"gripper", "workpiece"}:
                 state_tags.append("precision_sensitive")
-            if "mode:recovery" in tags and object_name in {"gripper", "drawer", "workpiece"}:
+            if "mode:recovery" in tags and object_name in {
+                "gripper",
+                "drawer",
+                "workpiece",
+            }:
                 state_tags.append("recovery_context")
-            confidence = _clip01(0.25 + 0.35 * confidence_mean + 0.25 * explicit_tag + 0.15 * coverage)
+            confidence = _clip01(
+                0.25 + 0.35 * confidence_mean + 0.25 * explicit_tag + 0.15 * coverage
+            )
             salience = _clip01(
                 0.2
                 + 0.2 * explicit_tag
@@ -1143,7 +1376,11 @@ class SemanticWorldModelBuilder:
                 + 0.15 * float(object_name in {"drawer", "vase", "workpiece"})
                 + 0.15 * (1.0 - disagreement)
             )
-            object_track_refs = track_refs if object_name in {"workspace", "workpiece", "drawer", "vase"} else []
+            object_track_refs = (
+                track_refs
+                if object_name in {"workspace", "workpiece", "drawer", "vase"}
+                else []
+            )
             objects.append(
                 SemanticObjectState(
                     object_id=str(object_name),
@@ -1180,21 +1417,57 @@ class SemanticWorldModelBuilder:
             ("gripper", "operates_in", "workspace", 0.9, {}),
         ]
         if "drawer" in object_ids:
-            relations.append(("gripper", "acts_on", "drawer", 0.82, {"affordance": "open"}))
+            relations.append(
+                ("gripper", "acts_on", "drawer", 0.82, {"affordance": "open"})
+            )
             relations.append(("drawer", "inside", "workspace", 0.88, {}))
         if "vase" in object_ids:
             relations.append(("vase", "inside", "workspace", 0.86, {}))
-            relations.append(("gripper", "avoid_contact", "vase", 0.92, {"safety": True}))
+            relations.append(
+                ("gripper", "avoid_contact", "vase", 0.92, {"safety": True})
+            )
         if {"bench", "workpiece"} <= object_ids:
             relations.append(("workpiece", "rests_on", "bench", 0.8, {}))
-            relations.append(("gripper", "transfers", "workpiece", 0.84, {"affordance": "pick_place"}))
+            relations.append(
+                (
+                    "gripper",
+                    "transfers",
+                    "workpiece",
+                    0.84,
+                    {"affordance": "pick_place"},
+                )
+            )
         if "semantic_disambiguation" in hypothesis_modes:
-            relations.append(("gripper", "reobserve", "workspace", 0.72, {"mode": "semantic_disambiguation"}))
+            relations.append(
+                (
+                    "gripper",
+                    "reobserve",
+                    "workspace",
+                    0.72,
+                    {"mode": "semantic_disambiguation"},
+                )
+            )
         if "recovery_branch" in hypothesis_modes:
-            target = "drawer" if "drawer" in object_ids else "workpiece" if "workpiece" in object_ids else "workspace"
-            relations.append(("gripper", "recovers_from", target, 0.78, {"mode": "recovery_branch"}))
+            target = (
+                "drawer"
+                if "drawer" in object_ids
+                else "workpiece"
+                if "workpiece" in object_ids
+                else "workspace"
+            )
+            relations.append(
+                ("gripper", "recovers_from", target, 0.78, {"mode": "recovery_branch"})
+            )
         if "energy_saver_retiming" in hypothesis_modes:
-            relations.append(("robot_arm", "retimes_for", "workspace", 0.65, {"mode": "energy_saver_retiming"}))
+            relations.append(
+                (
+                    "robot_arm",
+                    "retimes_for",
+                    "workspace",
+                    0.65,
+                    {"mode": "energy_saver_retiming"},
+                )
+            )
 
         result: list[SemanticRelationState] = list(grounded_relations or [])
         seen_relation_ids = {item.relation_id for item in result}
@@ -1215,7 +1488,10 @@ class SemanticWorldModelBuilder:
                 )
             )
             seen_relation_ids.add(relation_id)
-        return sorted(result, key=lambda item: (item.subject_id, item.relation_type, item.object_id))
+        return sorted(
+            result,
+            key=lambda item: (item.subject_id, item.relation_type, item.object_id),
+        )
 
     def _build_meta_nodes(
         self,
@@ -1232,70 +1508,132 @@ class SemanticWorldModelBuilder:
         stage2_tags: Optional[Sequence[Any]],
     ) -> list[SemanticMetaNode]:
         tags = set(_strings(semantic_tags))
-        confidence = float(belief_state.state_vector.get("evidence_confidence_mean", 0.0))
-        disagreement = float(belief_state.state_vector.get("evidence_disagreement_mean", 0.0))
+        confidence = float(
+            belief_state.state_vector.get("evidence_confidence_mean", 0.0)
+        )
+        disagreement = float(
+            belief_state.state_vector.get("evidence_disagreement_mean", 0.0)
+        )
         coverage = float(belief_state.state_vector.get("evidence_coverage", 0.0))
-        teacher_alignment = float(belief_state.state_vector.get("teacher_alignment", 0.0))
-        hard_bounds = constraint_set.get("hard_bounds", {}) if isinstance(constraint_set, Mapping) else {}
+        teacher_alignment = float(
+            belief_state.state_vector.get("teacher_alignment", 0.0)
+        )
+        hard_bounds = (
+            constraint_set.get("hard_bounds", {})
+            if isinstance(constraint_set, Mapping)
+            else {}
+        )
         hypothesis_modes = {item.mode for item in (hypotheses or [])}
         has_risk_object = any(item.risk_tags for item in objects)
-        has_recovery = "error_recovery" in tags or "mode:recovery" in tags or "recovery_branch" in hypothesis_modes
+        has_recovery = (
+            "error_recovery" in tags
+            or "mode:recovery" in tags
+            or "recovery_branch" in hypothesis_modes
+        )
         has_fusion = bool(semantic_fusion_summary)
-        has_stage2 = bool(stage2_ontology_proposals or stage2_task_refinements or stage2_tags)
+        has_stage2 = bool(
+            stage2_ontology_proposals or stage2_task_refinements or stage2_tags
+        )
 
         node_specs = [
             (
                 "semantic_memory_refresh",
-                _clip01((1.0 - coverage) * 0.55 + disagreement * 0.3 + (1.0 - confidence) * 0.15),
+                _clip01(
+                    (1.0 - coverage) * 0.55
+                    + disagreement * 0.3
+                    + (1.0 - confidence) * 0.15
+                ),
                 ["belief_state", "semantic_snapshot"],
                 ["refresh_scene_memory", "request_additional_evidence"],
                 "Coverage or confidence is low enough that semantic memory should be refreshed.",
             ),
             (
                 "risk_triage",
-                _clip01(0.25 + 0.35 * float(has_risk_object) + 0.2 * min(len(hard_bounds), 4) / 4.0 + 0.2 * float("safety" in tags)),
+                _clip01(
+                    0.25
+                    + 0.35 * float(has_risk_object)
+                    + 0.2 * min(len(hard_bounds), 4) / 4.0
+                    + 0.2 * float("safety" in tags)
+                ),
                 [item.object_id for item in objects if item.risk_tags],
                 ["tighten_meta_node_attention", "prioritize_fragility_review"],
                 "Fragility, collision, or safety constraints are active.",
             ),
             (
                 "recovery_router",
-                _clip01(0.2 + 0.45 * float(has_recovery) + 0.2 * disagreement + 0.15 * (1.0 - teacher_alignment)),
+                _clip01(
+                    0.2
+                    + 0.45 * float(has_recovery)
+                    + 0.2 * disagreement
+                    + 0.15 * (1.0 - teacher_alignment)
+                ),
                 ["gripper", "workspace"],
                 ["route_recovery_supervision", "collect_recovery_counterfactuals"],
                 "Recovery signatures are present in tags or governed hypotheses.",
             ),
             (
                 "affordance_router",
-                _clip01(0.2 + 0.08 * min(sum(len(item.affordances) for item in objects), 8) + 0.18 * coverage),
+                _clip01(
+                    0.2
+                    + 0.08 * min(sum(len(item.affordances) for item in objects), 8)
+                    + 0.18 * coverage
+                ),
                 [item.object_id for item in objects if item.affordances],
                 ["prioritize_affordance_alignment", "emit_affordance_sidecars"],
                 "Object affordances are rich enough to drive meta-node routing.",
             ),
             (
                 "fusion_bridge",
-                _clip01(0.15 + 0.55 * float(has_fusion) + 0.15 * confidence + 0.15 * coverage),
+                _clip01(
+                    0.15
+                    + 0.55 * float(has_fusion)
+                    + 0.15 * confidence
+                    + 0.15 * coverage
+                ),
                 ["semantic_fusion", "belief_state"],
                 ["materialize_runtime_backbone", "persist_fusion_summary"],
                 "Runtime fusion evidence is available for backbone materialization.",
             ),
             (
                 "ontology_router",
-                _clip01(0.15 + 0.35 * float(bool(stage2_ontology_proposals)) + 0.2 * float(has_stage2) + 0.1 * coverage),
-                [getattr(item, "proposal_id", "") for item in (stage2_ontology_proposals or [])],
+                _clip01(
+                    0.15
+                    + 0.35 * float(bool(stage2_ontology_proposals))
+                    + 0.2 * float(has_stage2)
+                    + 0.1 * coverage
+                ),
+                [
+                    getattr(item, "proposal_id", "")
+                    for item in (stage2_ontology_proposals or [])
+                ],
                 ["route_ontology_advisories", "align_object_vocabulary"],
                 "Stage 2 ontology proposals should be translated into meta-node work.",
             ),
             (
                 "task_graph_router",
-                _clip01(0.12 + 0.4 * float(bool(stage2_task_refinements)) + 0.2 * float(len(relations) > 4) + 0.1 * float(bool(hypothesis_modes))),
-                [getattr(item, "proposal_id", "") for item in (stage2_task_refinements or [])],
+                _clip01(
+                    0.12
+                    + 0.4 * float(bool(stage2_task_refinements))
+                    + 0.2 * float(len(relations) > 4)
+                    + 0.1 * float(bool(hypothesis_modes))
+                ),
+                [
+                    getattr(item, "proposal_id", "")
+                    for item in (stage2_task_refinements or [])
+                ],
                 ["route_task_graph_review", "emit_subtask_reconciliation"],
                 "Task graph refinements should stay advisory but remain visible to orchestration.",
             ),
             (
                 "efficiency_router",
-                _clip01(0.18 + 0.3 * float("objective:throughput" in tags or "objective:energy" in tags) + 0.18 * teacher_alignment),
+                _clip01(
+                    0.18
+                    + 0.3
+                    * float(
+                        "objective:throughput" in tags or "objective:energy" in tags
+                    )
+                    + 0.18 * teacher_alignment
+                ),
                 ["robot_arm", "gripper"],
                 ["bias_toward_efficiency_meta_nodes", "review_energy_tradeoffs"],
                 "Objective mix indicates efficiency or energy pressure.",
@@ -1306,7 +1644,15 @@ class SemanticWorldModelBuilder:
         for node_type, score, target_refs, actions, rationale in node_specs:
             if score < self.config.meta_activation_floor:
                 continue
-            priority = "critical" if score >= 0.85 else "high" if score >= 0.65 else "medium" if score >= 0.4 else "low"
+            priority = (
+                "critical"
+                if score >= 0.85
+                else "high"
+                if score >= 0.65
+                else "medium"
+                if score >= 0.4
+                else "low"
+            )
             node_id = f"meta_{sha256_json([node_type, target_refs, actions])[:12]}"
             nodes.append(
                 SemanticMetaNode(
@@ -1324,7 +1670,9 @@ class SemanticWorldModelBuilder:
                     },
                 )
             )
-        return sorted(nodes, key=lambda item: (-item.score, item.node_type))[: self.config.max_meta_nodes]
+        return sorted(nodes, key=lambda item: (-item.score, item.node_type))[
+            : self.config.max_meta_nodes
+        ]
 
     def _build_capabilities(
         self,
@@ -1340,15 +1688,26 @@ class SemanticWorldModelBuilder:
         stage2_tags: Optional[Sequence[Any]],
     ) -> Dict[str, float]:
         coverage = float(belief_state.state_vector.get("evidence_coverage", 0.0))
-        confidence = float(belief_state.state_vector.get("evidence_confidence_mean", 0.0))
-        disagreement = float(belief_state.state_vector.get("evidence_disagreement_mean", 0.0))
+        confidence = float(
+            belief_state.state_vector.get("evidence_confidence_mean", 0.0)
+        )
+        disagreement = float(
+            belief_state.state_vector.get("evidence_disagreement_mean", 0.0)
+        )
         tags = set(_strings(semantic_tags))
         relation_scale = min(len(relations), 8) / 8.0
         object_scale = min(len(objects), 6) / 6.0
         meta_scale = min(len(meta_nodes), 6) / 6.0
         capability_scores = {
-            "object_memory": _clip01(0.25 + 0.25 * object_scale + 0.2 * coverage + 0.15 * confidence),
-            "relation_graph": _clip01(0.2 + 0.3 * relation_scale + 0.15 * coverage + 0.1 * (1.0 - disagreement)),
+            "object_memory": _clip01(
+                0.25 + 0.25 * object_scale + 0.2 * coverage + 0.15 * confidence
+            ),
+            "relation_graph": _clip01(
+                0.2
+                + 0.3 * relation_scale
+                + 0.15 * coverage
+                + 0.1 * (1.0 - disagreement)
+            ),
             "affordance_grounding": _clip01(
                 0.2
                 + 0.25 * min(sum(len(item.affordances) for item in objects), 8) / 8.0
@@ -1367,8 +1726,15 @@ class SemanticWorldModelBuilder:
                 + 0.12 * confidence
                 + 0.1 * coverage
             ),
-            "meta_node_orchestration": _clip01(0.2 + 0.35 * meta_scale + 0.15 * float(bool(meta_nodes))),
-            "fusion_bridge": _clip01(0.15 + 0.45 * float(bool(semantic_fusion_summary)) + 0.15 * coverage + 0.1 * confidence),
+            "meta_node_orchestration": _clip01(
+                0.2 + 0.35 * meta_scale + 0.15 * float(bool(meta_nodes))
+            ),
+            "fusion_bridge": _clip01(
+                0.15
+                + 0.45 * float(bool(semantic_fusion_summary))
+                + 0.15 * coverage
+                + 0.1 * confidence
+            ),
             "stage2_bridge": _clip01(
                 0.12
                 + 0.2 * float(bool(stage2_ontology_proposals))
@@ -1387,8 +1753,12 @@ class SemanticWorldModelBuilder:
         capability_scores: Mapping[str, Any],
     ) -> Dict[str, Any]:
         high_risk_objects = [item.object_id for item in objects if item.risk_tags]
-        uncertain_objects = [item.object_id for item in objects if item.confidence < 0.55]
-        grounded_objects = [item.object_id for item in objects if item.object_id.startswith("track:")]
+        uncertain_objects = [
+            item.object_id for item in objects if item.confidence < 0.55
+        ]
+        grounded_objects = [
+            item.object_id for item in objects if item.object_id.startswith("track:")
+        ]
         return {
             "object_count": len(objects),
             "grounded_track_object_count": len(grounded_objects),
@@ -1396,7 +1766,9 @@ class SemanticWorldModelBuilder:
             "meta_node_count": len(meta_nodes),
             "high_risk_objects": high_risk_objects,
             "uncertain_objects": uncertain_objects,
-            "active_capabilities": [key for key, value in capability_scores.items() if float(value) >= 0.5],
+            "active_capabilities": [
+                key for key, value in capability_scores.items() if float(value) >= 0.5
+            ],
         }
 
     def _build_risk_register(
@@ -1408,16 +1780,24 @@ class SemanticWorldModelBuilder:
         meta_nodes: Sequence[SemanticMetaNode],
     ) -> Dict[str, Any]:
         tags = set(_strings(semantic_tags))
-        hard_bounds = constraint_set.get("hard_bounds", {}) if isinstance(constraint_set, Mapping) else {}
-        active_nodes = [item.node_type for item in meta_nodes if item.node_type in {"risk_triage", "recovery_router"}]
+        hard_bounds = (
+            constraint_set.get("hard_bounds", {})
+            if isinstance(constraint_set, Mapping)
+            else {}
+        )
+        active_nodes = [
+            item.node_type
+            for item in meta_nodes
+            if item.node_type in {"risk_triage", "recovery_router"}
+        ]
         return {
             "risk_tags": sorted(
-                {
-                    risk
-                    for item in objects
-                    for risk in item.risk_tags
+                {risk for item in objects for risk in item.risk_tags}
+                | {
+                    tag
+                    for tag in tags
+                    if tag.startswith("risk:") or tag.startswith("constraint:")
                 }
-                | {tag for tag in tags if tag.startswith("risk:") or tag.startswith("constraint:")}
             ),
             "constraint_keys": sorted(hard_bounds.keys()),
             "high_risk_objects": [item.object_id for item in objects if item.risk_tags],
@@ -1437,7 +1817,11 @@ class SemanticWorldModelBuilder:
     ) -> Dict[str, Any]:
         return {
             "scene_memory": {
-                "tags": [tag for tag in semantic_tags if tag.startswith("object:") or tag.startswith("region:")],
+                "tags": [
+                    tag
+                    for tag in semantic_tags
+                    if tag.startswith("object:") or tag.startswith("region:")
+                ],
                 "capability": float(capability_scores.get("object_memory", 0.0)),
             },
             "action_bridge": {
@@ -1455,7 +1839,9 @@ class SemanticWorldModelBuilder:
             },
             "meta_nodes": {
                 "active": [item.node_type for item in meta_nodes],
-                "capability": float(capability_scores.get("meta_node_orchestration", 0.0)),
+                "capability": float(
+                    capability_scores.get("meta_node_orchestration", 0.0)
+                ),
             },
         }
 

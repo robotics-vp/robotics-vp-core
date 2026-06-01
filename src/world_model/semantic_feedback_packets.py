@@ -5,6 +5,7 @@ directly to ad hoc heuristics. It compiles runtime outcome/validation
 signals into typed packets that downstream meta-nodes and transformer
 shells can route as bounded work orders.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -244,7 +245,11 @@ def compile_semantic_coverage_feedback(
         outcome_quality_values.append(float(packet.quality_score))
         process_reward_values.append(float(packet.process_reward_delta))
         policy_delta_values.append(float(packet.policy_eval_delta))
-        gap_return = float(packet.coverage_delta + 0.5 * packet.process_reward_delta + 0.5 * packet.policy_eval_delta)
+        gap_return = float(
+            packet.coverage_delta
+            + 0.5 * packet.process_reward_delta
+            + 0.5 * packet.policy_eval_delta
+        )
         gap_return_values.append(gap_return)
         edge_metadata[edge] = {
             **edge_metadata.get(edge, {}),
@@ -281,7 +286,9 @@ def compile_semantic_coverage_feedback(
         marginal_value = _safe_float(getattr(record, "marginal_value", 0.0))
         edge_metadata.setdefault(edge, {})
         edge_metadata[edge]["marginal_value"] = marginal_value
-        edge_econ_overlay[edge] = _clip01(max(edge_econ_overlay.get(edge, 0.0), 0.5 + 0.25 * marginal_value))
+        edge_econ_overlay[edge] = _clip01(
+            max(edge_econ_overlay.get(edge, 0.0), 0.5 + 0.25 * marginal_value)
+        )
         edge_trust_overlay[edge] = _clip01(
             max(
                 edge_trust_overlay.get(edge, 0.0),
@@ -306,9 +313,10 @@ def compile_semantic_coverage_feedback(
         for packet in validation_packets
         if packet.severity in {"high", "critical"} or packet.error_score >= 0.5
     ]
-    validation_summary = {
+    validation_error_rate = float(_average(validation_errors, 0.0))
+    validation_summary: Dict[str, Any] = {
         "packet_count": len(validation_packets),
-        "error_rate": float(_average(validation_errors, 0.0)),
+        "error_rate": validation_error_rate,
         "high_error_count": len(severe_errors),
         "top_targets": [packet.target_ref for packet in severe_errors[:6]],
         "dominant_error_kinds": sorted(
@@ -316,37 +324,65 @@ def compile_semantic_coverage_feedback(
         )[:6],
     }
 
-    for packet in severe_errors:
-        edge = parse_edge_key(str(packet.metadata.get("edge_key", "")))
+    for validation_packet in severe_errors:
+        edge = parse_edge_key(str(validation_packet.metadata.get("edge_key", "")))
         if edge != ("", ""):
             edge_metadata.setdefault(edge, {})
-            edge_metadata[edge]["wm_validation_pressure"] = float(packet.error_score)
-            edge_readiness_overlay[edge] = min(edge_readiness_overlay.get(edge, 1.0), _clip01(0.5 - 0.4 * packet.error_score))
+            edge_metadata[edge]["wm_validation_pressure"] = float(
+                validation_packet.error_score
+            )
+            edge_readiness_overlay[edge] = min(
+                edge_readiness_overlay.get(edge, 1.0),
+                _clip01(0.5 - 0.4 * validation_packet.error_score),
+            )
 
     process_reward_mean = _average(
-        [_safe_float(item.get("phi_star", 0.0)) * _safe_float(item.get("confidence", 0.0)) for item in process_rewards],
+        [
+            _safe_float(item.get("phi_star", 0.0))
+            * _safe_float(item.get("confidence", 0.0))
+            for item in process_rewards
+        ],
         0.0,
     )
     process_reward_delta_mean = _average(
-        [_safe_float(item.get("phi_star_delta", item.get("phi_star", 0.0))) for item in process_rewards],
+        [
+            _safe_float(item.get("phi_star_delta", item.get("phi_star", 0.0)))
+            for item in process_rewards
+        ],
         0.0,
     )
     backend_health_mean = _average(
         [
-            _safe_float(item.get("evidence_density_score", item.get("backend_health_score", 0.0)))
+            _safe_float(
+                item.get(
+                    "evidence_density_score", item.get("backend_health_score", 0.0)
+                )
+            )
             for item in backend_health
         ],
-        _average([packet.backend_health_score for packet in outcome_packets], 1.0 if not outcome_packets else 0.0),
+        _average(
+            [packet.backend_health_score for packet in outcome_packets],
+            1.0 if not outcome_packets else 0.0,
+        ),
     )
 
-    global_econ = _safe_float((econ_signals or {}).get("urgency", (econ_signals or {}).get("mpl_urgency", 0.0)), 0.0)
+    global_econ = _safe_float(
+        (econ_signals or {}).get(
+            "urgency", (econ_signals or {}).get("mpl_urgency", 0.0)
+        ),
+        0.0,
+    )
     global_w_econ = _safe_float((econ_signals or {}).get("w_econ", 0.0), 0.0)
     global_trust = _safe_float((trust_state or {}).get("calibration_score", 0.0), 0.0)
 
     trust_overlay = {
-        "mean_signal": _clip01(0.4 * global_trust + 0.35 * _average(list(edge_trust_overlay.values()), global_trust) + 0.25 * backend_health_mean),
+        "mean_signal": _clip01(
+            0.4 * global_trust
+            + 0.35 * _average(list(edge_trust_overlay.values()), global_trust)
+            + 0.25 * backend_health_mean
+        ),
         "backend_health_mean": float(backend_health_mean),
-        "wm_validation_penalty": float(min(validation_summary["error_rate"], 1.0)),
+        "wm_validation_penalty": float(min(validation_error_rate, 1.0)),
         "blocked_edge_fraction": (
             len(blocked_edges) / float(max(len(outcome_packets) + len(fill_records), 1))
         ),
@@ -366,7 +402,13 @@ def compile_semantic_coverage_feedback(
     mutation_proposals: List[GraphMutationProposal] = []
     proposal_index = 0
     for item in stage2_ontology_proposals or []:
-        proposal_type = str(getattr(getattr(item, "proposal_type", None), "value", getattr(item, "proposal_type", "unknown")))
+        proposal_type = str(
+            getattr(
+                getattr(item, "proposal_type", None),
+                "value",
+                getattr(item, "proposal_type", "unknown"),
+            )
+        )
         target_ref = str(
             getattr(item, "target_object_id", None)
             or getattr(item, "target_affordance_type", None)
@@ -390,17 +432,27 @@ def compile_semantic_coverage_feedback(
                 target_ref=target_ref,
                 confidence=_safe_float(getattr(item, "confidence", 0.5), 0.5),
                 rationale=str(getattr(item, "rationale", proposal_type)),
-                source_refs=[str(getattr(item, "proposal_id", ""))] if getattr(item, "proposal_id", None) else [],
+                source_refs=[str(getattr(item, "proposal_id", ""))]
+                if getattr(item, "proposal_id", None)
+                else [],
                 metadata={
                     "proposal_type": proposal_type,
-                    "priority": str(getattr(getattr(item, "priority", None), "value", getattr(item, "priority", ""))),
+                    "priority": str(
+                        getattr(
+                            getattr(item, "priority", None),
+                            "value",
+                            getattr(item, "priority", ""),
+                        )
+                    ),
                 },
             )
         )
 
     seen_targets = {proposal.target_ref for proposal in mutation_proposals}
-    for packet in severe_errors:
-        novelty_hint = str(packet.metadata.get("novel_ref", packet.target_ref)).strip()
+    for validation_packet in severe_errors:
+        novelty_hint = str(
+            validation_packet.metadata.get("novel_ref", validation_packet.target_ref)
+        ).strip()
         if not novelty_hint or novelty_hint in seen_targets:
             continue
         seen_targets.add(novelty_hint)
@@ -408,12 +460,17 @@ def compile_semantic_coverage_feedback(
         mutation_proposals.append(
             GraphMutationProposal(
                 proposal_id=f"graph_mutation_{proposal_index:03d}",
-                action="add_provisional_skill" if "skill" in novelty_hint else "mark_for_review",
+                action="add_provisional_skill"
+                if "skill" in novelty_hint
+                else "mark_for_review",
                 target_ref=novelty_hint,
-                confidence=_clip01(0.35 + 0.5 * float(packet.error_score)),
+                confidence=_clip01(0.35 + 0.5 * float(validation_packet.error_score)),
                 rationale=f"Runtime validation exposed unsupported semantic state for {novelty_hint}",
-                source_refs=[packet.target_ref],
-                metadata={"validation_kind": packet.validation_kind, "severity": packet.severity},
+                source_refs=[validation_packet.target_ref],
+                metadata={
+                    "validation_kind": validation_packet.validation_kind,
+                    "severity": validation_packet.severity,
+                },
             )
         )
 
@@ -421,7 +478,7 @@ def compile_semantic_coverage_feedback(
         "coverage_outcome_count": len(outcome_packets),
         "fill_outcome_count": len(fill_records),
         "wm_validation_count": len(validation_packets),
-        "wm_validation_error_rate": float(validation_summary["error_rate"]),
+        "wm_validation_error_rate": validation_error_rate,
         "governance_blocked_count": len(blocked_edges),
         "blocked_edge_keys": sorted(blocked_edge_keys)[:16],
         "process_reward_mean": float(process_reward_mean),
@@ -431,7 +488,9 @@ def compile_semantic_coverage_feedback(
         "trust_overlay_mean": float(trust_overlay["mean_signal"]),
         "econ_overlay_mean": float(econ_overlay["mean_signal"]),
         "graph_mutation_pressure": float(len(mutation_proposals)),
-        "graph_mutation_actions": [proposal.action for proposal in mutation_proposals[:8]],
+        "graph_mutation_actions": [
+            proposal.action for proposal in mutation_proposals[:8]
+        ],
     }
 
     return SemanticCoverageFeedback(

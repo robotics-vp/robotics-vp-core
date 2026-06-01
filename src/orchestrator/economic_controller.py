@@ -4,14 +4,16 @@ import numpy as np
 
 from src.envs.dishwashing_env import EpisodeInfoSummary
 from src.config.econ_params import EconParams
-from src.valuation.datapack_schema import AttributionProfile, DataPackMeta, ObjectiveProfile
+from src.valuation.datapack_schema import (
+    AttributionProfile,
+    DataPackMeta,
+    ObjectiveProfile,
+)
 from src.valuation.reward_builder import build_reward_terms
-from src.valuation.energy_response_model import EnergyResponseNet
 from src.orchestrator.semantic_metrics import (
     SemanticMetrics,
     SemanticEconSuggestion,
     write_semantic_econ_suggestions,
-    semantic_metrics_to_dict,
 )
 from src.objectives.frontier import ParetoFrontierTracker
 from src.objectives.tensor import ObjectiveTensor, objective_tensor_from_axes
@@ -19,7 +21,7 @@ import time
 import math
 
 
-def _clamp01(val: float) -> float:
+def _clamp01(val: Any) -> float:
     try:
         if math.isnan(val):
             return 0.0
@@ -39,6 +41,7 @@ class EconSignals:
     IMPORTANT: This is UPSTREAM of SemanticOrchestrator.
     SemanticOrchestrator consumes these signals - it does not define them.
     """
+
     # Core MPL metrics
     current_mpl: float = 0.0
     baseline_mpl_human: float = 60.0
@@ -67,7 +70,9 @@ class EconSignals:
     energy_price_kWh: float = 0.12
 
     # Derived objectives
-    objective_weights: List[float] = field(default_factory=lambda: [1.0, 0.2, 0.1, 0.05, 0.0])
+    objective_weights: List[float] = field(
+        default_factory=lambda: [1.0, 0.2, 0.1, 0.05, 0.0]
+    )
 
     # Urgency signals
     mpl_urgency: float = 0.0
@@ -86,9 +91,17 @@ class EconSignals:
 
     def compute_urgencies(self):
         """Compute urgency signals based on gaps from targets."""
-        self.mpl_urgency = max(0.0, 1.0 - (self.current_mpl / self.baseline_mpl_human)) if self.baseline_mpl_human > 0 else 0.0
+        self.mpl_urgency = (
+            max(0.0, 1.0 - (self.current_mpl / self.baseline_mpl_human))
+            if self.baseline_mpl_human > 0
+            else 0.0
+        )
         self.error_urgency = min(1.0, self.error_rate * 10.0)
-        energy_fraction = self.energy_cost_per_unit / self.price_per_unit if self.price_per_unit > 0 else 0
+        energy_fraction = (
+            self.energy_cost_per_unit / self.price_per_unit
+            if self.price_per_unit > 0
+            else 0
+        )
         self.energy_urgency = min(1.0, energy_fraction / 0.2)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -131,7 +144,9 @@ class EconSignals:
     @classmethod
     def from_raw_dict(cls, raw: Dict[str, Any]) -> "EconSignals":
         """Lenient constructor that clamps urgencies and handles NaNs."""
-        filtered = {k: raw.get(k) for k in cls.__dataclass_fields__.keys()}
+        filtered: Dict[str, Any] = {
+            k: raw.get(k) for k in cls.__dataclass_fields__.keys()
+        }
         for key in ["mpl_urgency", "error_urgency", "energy_urgency"]:
             if filtered.get(key) is not None:
                 filtered[key] = _clamp01(filtered[key])
@@ -146,8 +161,20 @@ class EconSignals:
                 except Exception:
                     filtered[k] = 0.0
             elif v is None:
-                filtered[k] = 0.0 if k not in ["customer_segment", "market_region", "task_family", "objective_weights"] else filtered[k]
-        return cls(**{k: v for k, v in filtered.items() if k in cls.__dataclass_fields__})
+                filtered[k] = (
+                    0.0
+                    if k
+                    not in [
+                        "customer_segment",
+                        "market_region",
+                        "task_family",
+                        "objective_weights",
+                    ]
+                    else filtered[k]
+                )
+        return cls(
+            **{k: v for k, v in filtered.items() if k in cls.__dataclass_fields__}
+        )
 
 
 class EconomicController:
@@ -161,6 +188,7 @@ class EconomicController:
 
     This module DOES NOT import SemanticOrchestrator or MetaTransformer.
     """
+
     def __init__(
         self,
         econ_params: EconParams,
@@ -181,7 +209,9 @@ class EconomicController:
         energy_response_model: Any = None,
         attribution_config: Optional[Dict[str, Any]] = None,
     ) -> "EconomicController":
-        return cls(econ_params, objective_profile, energy_response_model, attribution_config)
+        return cls(
+            econ_params, objective_profile, energy_response_model, attribution_config
+        )
 
     def compute_episode_metrics(
         self,
@@ -228,12 +258,33 @@ class EconomicController:
             "data_premium": 0.0,
         }
         if datapacks:
-            metrics["mpl"] = float(np.mean([dp.attribution.delta_mpl for dp in datapacks]))
-            metrics["error"] = float(np.mean([dp.attribution.delta_error for dp in datapacks]))
-            metrics["energy_Wh"] = float(np.mean([dp.energy.total_Wh for dp in datapacks]))
-            metrics["rebate_pct"] = float(np.mean([getattr(dp.attribution, "rebate_pct", 0.0) for dp in datapacks]))
-            metrics["attributable_spread_capture"] = float(np.mean([getattr(dp.attribution, "attributable_spread_capture", 0.0) for dp in datapacks]))
-            metrics["data_premium"] = float(np.mean([getattr(dp.attribution, "data_premium", 0.0) for dp in datapacks]))
+            metrics["mpl"] = float(
+                np.mean([dp.attribution.delta_mpl for dp in datapacks])
+            )
+            metrics["error"] = float(
+                np.mean([dp.attribution.delta_error for dp in datapacks])
+            )
+            metrics["energy_Wh"] = float(
+                np.mean([dp.energy.total_Wh for dp in datapacks])
+            )
+            metrics["rebate_pct"] = float(
+                np.mean(
+                    [getattr(dp.attribution, "rebate_pct", 0.0) for dp in datapacks]
+                )
+            )
+            metrics["attributable_spread_capture"] = float(
+                np.mean(
+                    [
+                        getattr(dp.attribution, "attributable_spread_capture", 0.0)
+                        for dp in datapacks
+                    ]
+                )
+            )
+            metrics["data_premium"] = float(
+                np.mean(
+                    [getattr(dp.attribution, "data_premium", 0.0) for dp in datapacks]
+                )
+            )
         return metrics
 
     def suggest_objective_and_profiles(
@@ -288,42 +339,60 @@ class EconomicController:
         return adjustments
 
     # === Pareto tooling (advisory only) ===
-    def _dominates(self, a: Dict[str, float], b: Dict[str, float], keys: List[str]) -> bool:
+    def _dominates(
+        self, a: Dict[str, float], b: Dict[str, float], keys: List[str]
+    ) -> bool:
         def val(item, key):
             if key.startswith("-"):
                 return -item.get(key[1:], 0.0)
             return item.get(key, 0.0)
-        return all(val(a, k) <= val(b, k) for k in keys) and any(val(a, k) < val(b, k) for k in keys)
 
-    def compute_pareto_frontiers(self, datapacks_or_interventions: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        return all(val(a, k) <= val(b, k) for k in keys) and any(
+            val(a, k) < val(b, k) for k in keys
+        )
+
+    def compute_pareto_frontiers(
+        self, datapacks_or_interventions: List[Dict[str, Any]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Compute simple Pareto frontiers for MPL vs Energy, MPL vs Error, Energy vs Error, and multi-objective.
         Input items should contain 'mpl', 'energy_Wh', 'error', and optionally 'profile'.
         """
+
         def build_items():
             items = []
             for x in datapacks_or_interventions:
                 if isinstance(x, DataPackMeta):
-                    items.append({
-                        "mpl": x.attribution.delta_mpl,
-                        "energy_Wh": x.energy.total_Wh,
-                        "error": x.attribution.delta_error,
-                        "profile": getattr(x.condition, "econ_preset", None),
-                        "rebate_pct": getattr(x.attribution, "rebate_pct", 0.0),
-                        "attributable_spread_capture": getattr(x.attribution, "attributable_spread_capture", 0.0),
-                        "data_premium": getattr(x.attribution, "data_premium", 0.0),
-                    })
+                    items.append(
+                        {
+                            "mpl": x.attribution.delta_mpl,
+                            "energy_Wh": x.energy.total_Wh,
+                            "error": x.attribution.delta_error,
+                            "profile": getattr(x.condition, "econ_preset", None),
+                            "rebate_pct": getattr(x.attribution, "rebate_pct", 0.0),
+                            "attributable_spread_capture": getattr(
+                                x.attribution, "attributable_spread_capture", 0.0
+                            ),
+                            "data_premium": getattr(x.attribution, "data_premium", 0.0),
+                        }
+                    )
                 else:
                     if hasattr(x, "attribution") and hasattr(x, "energy"):
-                        items.append({
-                            "mpl": getattr(x.attribution, "delta_mpl", 0.0),
-                            "energy_Wh": getattr(x.energy, "total_Wh", 0.0),
-                            "error": getattr(x.attribution, "delta_error", 0.0),
-                            "profile": getattr(x, "profile", None),
-                            "rebate_pct": getattr(x.attribution, "rebate_pct", 0.0),
-                            "attributable_spread_capture": getattr(x.attribution, "attributable_spread_capture", 0.0),
-                            "data_premium": getattr(x.attribution, "data_premium", 0.0),
-                        })
+                        items.append(
+                            {
+                                "mpl": getattr(x.attribution, "delta_mpl", 0.0),
+                                "energy_Wh": getattr(x.energy, "total_Wh", 0.0),
+                                "error": getattr(x.attribution, "delta_error", 0.0),
+                                "profile": getattr(x, "profile", None),
+                                "rebate_pct": getattr(x.attribution, "rebate_pct", 0.0),
+                                "attributable_spread_capture": getattr(
+                                    x.attribution, "attributable_spread_capture", 0.0
+                                ),
+                                "data_premium": getattr(
+                                    x.attribution, "data_premium", 0.0
+                                ),
+                            }
+                        )
                     else:
                         if hasattr(x, "__dict__"):
                             d = x.__dict__
@@ -331,15 +400,19 @@ class EconomicController:
                             d = x
                         else:
                             d = {}
-                        items.append({
-                            "mpl": d.get("mpl", 0.0),
-                            "energy_Wh": d.get("energy_Wh", 0.0),
-                            "error": d.get("error", 0.0),
-                            "profile": d.get("profile", None),
-                            "rebate_pct": d.get("rebate_pct", 0.0),
-                            "attributable_spread_capture": d.get("attributable_spread_capture", 0.0),
-                            "data_premium": d.get("data_premium", 0.0),
-                        })
+                        items.append(
+                            {
+                                "mpl": d.get("mpl", 0.0),
+                                "energy_Wh": d.get("energy_Wh", 0.0),
+                                "error": d.get("error", 0.0),
+                                "profile": d.get("profile", None),
+                                "rebate_pct": d.get("rebate_pct", 0.0),
+                                "attributable_spread_capture": d.get(
+                                    "attributable_spread_capture", 0.0
+                                ),
+                                "data_premium": d.get("data_premium", 0.0),
+                            }
+                        )
             return items
 
         items = build_items()
@@ -358,13 +431,23 @@ class EconomicController:
         }
         # Multi-objective using utility with default objective vector
         if items:
-            obj_vec = self.objective_profile.objective_vector if self.objective_profile else [1.0, 0.2, 0.1, 0.05, 0.0]
+            obj_vec = (
+                self.objective_profile.objective_vector
+                if self.objective_profile
+                else [1.0, 0.2, 0.1, 0.05, 0.0]
+            )
             for it in items:
-                it["utility"] = obj_vec[0] * it["mpl"] - obj_vec[1] * it["error"] - obj_vec[2] * it["energy_Wh"]
+                it["utility"] = (
+                    obj_vec[0] * it["mpl"]
+                    - obj_vec[1] * it["error"]
+                    - obj_vec[2] * it["energy_Wh"]
+                )
             frontiers["objective"] = sorted(items, key=lambda x: -x["utility"])
         return frontiers
 
-    def filter_frontier_by_constraints(self, frontier: List[Dict[str, Any]], constraints: Dict[str, float]) -> List[Dict[str, Any]]:
+    def filter_frontier_by_constraints(
+        self, frontier: List[Dict[str, Any]], constraints: Dict[str, float]
+    ) -> List[Dict[str, Any]]:
         mp_min = constraints.get("mpl_min_human")
         e_max = constraints.get("energy_budget_Wh")
         err_max = constraints.get("error_max")
@@ -379,18 +462,26 @@ class EconomicController:
             filtered.append(pt)
         return filtered
 
-    def evaluate_frontier_for_spread(self, frontier: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def evaluate_frontier_for_spread(
+        self, frontier: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         evaluated = []
         for pt in frontier:
-            evaluated.append({
-                **pt,
-                "rebate_pct": pt.get("rebate_pct", 0.0),
-                "attributable_spread_capture": pt.get("attributable_spread_capture", 0.0),
-                "data_premium": pt.get("data_premium", 0.0),
-            })
+            evaluated.append(
+                {
+                    **pt,
+                    "rebate_pct": pt.get("rebate_pct", 0.0),
+                    "attributable_spread_capture": pt.get(
+                        "attributable_spread_capture", 0.0
+                    ),
+                    "data_premium": pt.get("data_premium", 0.0),
+                }
+            )
         return evaluated
 
-    def select_frontier_optimum(self, frontier: List[Dict[str, Any]], objective_vector: List[float]) -> Optional[Dict[str, Any]]:
+    def select_frontier_optimum(
+        self, frontier: List[Dict[str, Any]], objective_vector: List[float]
+    ) -> Optional[Dict[str, Any]]:
         if not frontier:
             return None
         if hasattr(objective_vector, "to_list"):
@@ -398,7 +489,11 @@ class EconomicController:
         best = None
         best_u = -np.inf
         for pt in frontier:
-            u = objective_vector[0] * pt.get("mpl", 0.0) - objective_vector[1] * pt.get("error", 0.0) - objective_vector[2] * pt.get("energy_Wh", 0.0)
+            u = (
+                objective_vector[0] * pt.get("mpl", 0.0)
+                - objective_vector[1] * pt.get("error", 0.0)
+                - objective_vector[2] * pt.get("energy_Wh", 0.0)
+            )
             if u > best_u:
                 best_u = u
                 best = pt
@@ -423,14 +518,18 @@ class EconomicController:
             EconSignals with computed metrics
         """
         signals = EconSignals(
-            baseline_mpl_human=self.econ_params.mpl_human if hasattr(self.econ_params, 'mpl_human') else 60.0,
-            human_wage=self.econ_params.wage_human if hasattr(self.econ_params, 'wage_human') else 18.0,
+            baseline_mpl_human=self.econ_params.mpl_human
+            if hasattr(self.econ_params, "mpl_human")
+            else 60.0,
+            human_wage=self.econ_params.wage_human
+            if hasattr(self.econ_params, "wage_human")
+            else 18.0,
             price_per_unit=self.econ_params.price_per_unit,
             damage_cost_per_error=self.econ_params.damage_cost,
-            energy_price_kWh=getattr(self.econ_params, 'energy_price_kWh', 0.12),
-            customer_segment=getattr(self.econ_params, 'customer_segment', 'balanced'),
-            market_region=getattr(self.econ_params, 'market_region', 'US'),
-            task_family=getattr(self.econ_params, 'task_family', 'dishwashing'),
+            energy_price_kWh=getattr(self.econ_params, "energy_price_kWh", 0.12),
+            customer_segment=getattr(self.econ_params, "customer_segment", "balanced"),
+            market_region=getattr(self.econ_params, "market_region", "US"),
+            task_family=getattr(self.econ_params, "task_family", "dishwashing"),
         )
 
         if self.objective_profile:
@@ -460,34 +559,41 @@ class EconomicController:
             # Damage costs from episode_metrics if available
             if dp.episode_metrics:
                 damage_costs.append(
-                    dp.episode_metrics.get('damage_cost', 0.0) or
-                    dp.episode_metrics.get('vase_breaks', 0) * self.econ_params.damage_cost
+                    dp.episode_metrics.get("damage_cost", 0.0)
+                    or dp.episode_metrics.get("vase_breaks", 0)
+                    * self.econ_params.damage_cost
                 )
 
         # Compute current metrics
         if mpls:
             signals.current_mpl = float(np.mean(mpls))
-            signals.mpl_delta = float(np.max(mpls) - np.min(mpls)) if len(mpls) > 1 else 0.0
+            signals.mpl_delta = (
+                float(np.max(mpls) - np.min(mpls)) if len(mpls) > 1 else 0.0
+            )
 
         if error_rates:
             signals.error_rate = float(np.mean(error_rates))
 
         if energy_per_units:
             signals.energy_Wh_per_unit = float(np.mean(energy_per_units))
-            signals.energy_cost_per_unit = signals.energy_Wh_per_unit * signals.energy_price_kWh / 1000.0
+            signals.energy_cost_per_unit = (
+                signals.energy_Wh_per_unit * signals.energy_price_kWh / 1000.0
+            )
 
         if damage_costs:
             signals.damage_cost_total = float(np.sum(damage_costs))
 
         # Data economics
         signals.rebate_pct = float(np.mean(rebates)) if rebates else 0.0
-        signals.attributable_spread_capture = float(np.mean(spreads)) if spreads else 0.0
+        signals.attributable_spread_capture = (
+            float(np.mean(spreads)) if spreads else 0.0
+        )
         signals.data_premium = float(np.mean(premiums)) if premiums else 0.0
 
         # Compute implied wage
         signals.implied_wage = (
-            signals.price_per_unit * signals.current_mpl -
-            signals.error_rate * signals.current_mpl * signals.damage_cost_per_error
+            signals.price_per_unit * signals.current_mpl
+            - signals.error_rate * signals.current_mpl * signals.damage_cost_per_error
         )
 
         # Compute wage parity
@@ -526,7 +632,9 @@ class EconomicController:
         # Derive suggested profile from econ signals
         if econ_signals.error_urgency > 0.6:
             suggested_profile = "SAFE"
-            rationale = f"High error urgency ({econ_signals.error_urgency:.2f}) -> SAFE profile"
+            rationale = (
+                f"High error urgency ({econ_signals.error_urgency:.2f}) -> SAFE profile"
+            )
         elif econ_signals.energy_urgency > 0.5:
             suggested_profile = "SAVER"
             rationale = f"High energy urgency ({econ_signals.energy_urgency:.2f}) -> SAVER profile"
@@ -549,11 +657,15 @@ class EconomicController:
         # Semantic-aware adjustments
         if semantic_metrics is not None:
             if getattr(semantic_metrics, "fragile_object_count", 0) > 0:
-                suggested_adjustments["w_safety"] = suggested_adjustments.get("w_safety", 1.0) * 1.2
+                suggested_adjustments["w_safety"] = (
+                    suggested_adjustments.get("w_safety", 1.0) * 1.2
+                )
                 rationale += f"; fragile objects present (count={semantic_metrics.fragile_object_count})"
 
             if getattr(semantic_metrics, "high_priority_task_fraction", 0.0) > 0.5:
-                suggested_adjustments["w_safety"] = suggested_adjustments.get("w_safety", 1.0) * 1.1
+                suggested_adjustments["w_safety"] = (
+                    suggested_adjustments.get("w_safety", 1.0) * 1.1
+                )
                 rationale += f"; high priority tasks ({semantic_metrics.high_priority_task_fraction:.2f})"
 
         # Derive sampling overrides from datapack signals
@@ -580,9 +692,15 @@ class EconomicController:
         semantic_summary = {}
         if semantic_metrics is not None:
             semantic_summary = {
-                "high_priority_task_fraction": getattr(semantic_metrics, "high_priority_task_fraction", 0.0),
-                "fragile_object_count": getattr(semantic_metrics, "fragile_object_count", 0),
-                "consistency_score": getattr(semantic_metrics, "consistency_score", 1.0),
+                "high_priority_task_fraction": getattr(
+                    semantic_metrics, "high_priority_task_fraction", 0.0
+                ),
+                "fragile_object_count": getattr(
+                    semantic_metrics, "fragile_object_count", 0
+                ),
+                "consistency_score": getattr(
+                    semantic_metrics, "consistency_score", 1.0
+                ),
                 "econ_relevant_task_fraction": semantic_metrics.econ_relevant_task_fraction,
             }
 
@@ -638,7 +756,9 @@ class EconomicController:
             objective_tensor_payload = dp.objective_tensor_v1
             if objective_tensor_payload:
                 try:
-                    objective_tensor = ObjectiveTensor.from_dict(objective_tensor_payload)
+                    objective_tensor = ObjectiveTensor.from_dict(
+                        objective_tensor_payload
+                    )
                 except Exception:
                     objective_tensor = None
             else:
@@ -647,11 +767,20 @@ class EconomicController:
                 objective_tensor = objective_tensor_from_axes(
                     {
                         "throughput": float(getattr(dp.attribution, "delta_mpl", 0.0)),
-                        "error": abs(float(getattr(dp.attribution, "delta_error", 0.0))),
-                        "safety": max(0.0, 1.0 - abs(float(getattr(dp.attribution, "delta_error", 0.0)))),
+                        "error": abs(
+                            float(getattr(dp.attribution, "delta_error", 0.0))
+                        ),
+                        "safety": max(
+                            0.0,
+                            1.0
+                            - abs(float(getattr(dp.attribution, "delta_error", 0.0))),
+                        ),
                         "energy": float(getattr(dp.energy, "Wh_per_unit", 0.0)),
                     },
-                    context={"pack_id": dp.pack_id, "source": "economic_controller_fallback"},
+                    context={
+                        "pack_id": dp.pack_id,
+                        "source": "economic_controller_fallback",
+                    },
                 )
 
             gain = frontier_tracker.marginal_gain(
@@ -661,7 +790,9 @@ class EconomicController:
                 profile_id=profile_id,
                 compute_cost=1.0,
             )
-            reliability = float(dp.semantic_quality if dp.semantic_quality is not None else 1.0)
+            reliability = float(
+                dp.semantic_quality if dp.semantic_quality is not None else 1.0
+            )
             priority = float(gain * max(0.0, min(1.0, reliability)))
             rankings.append(
                 {

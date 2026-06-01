@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, cast
 
 import numpy as np
 
@@ -26,7 +26,7 @@ from src.orchestrator.semantic_transformer_bridge import (
     estimate_expected_deltas,
     semantic_tokens,
 )
-from src.orchestrator.toolspecs import ToolCall
+from src.orchestrator.toolspecs import ToolCall, ToolName
 from src.orchestrator.training_dataset import OrchestrationSample
 from src.replay.dataset import ReplayDatasetBundle
 from src.replay.schema import ReplayEpisodeRecord, ReplayStepRecord, ReplayWindowRecord
@@ -86,10 +86,7 @@ def _normalize_weights(payload: Mapping[str, Any]) -> Dict[str, float]:
     total = sum(weights.values())
     if total <= 0.0:
         return {key: 0.0 for key in weights}
-    return {
-        key: value / total
-        for key, value in weights.items()
-    }
+    return {key: value / total for key, value in weights.items()}
 
 
 def _extract_artifact_refs(*payloads: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -228,7 +225,9 @@ class SemanticRuntimeLearningRow:
             "fusion_summary": _mapping(self.fusion_summary),
             "feedback_summary": _mapping(self.feedback_summary),
             "meta_transformer_target": _mapping(self.meta_transformer_target),
-            "orchestration_transformer_target": _mapping(self.orchestration_transformer_target),
+            "orchestration_transformer_target": _mapping(
+                self.orchestration_transformer_target
+            ),
             "outcome_summary": _mapping(self.outcome_summary),
             "inferential_summary": _mapping(self.inferential_summary),
             "counterfactuals": [item.to_dict() for item in self.counterfactuals],
@@ -249,10 +248,13 @@ class SemanticRuntimeLearningCorpus:
         }
 
 
-def _summarize_vla_lane(artifact_refs: Mapping[str, Any], root_dir: Optional[str]) -> Dict[str, Any]:
+def _summarize_vla_lane(
+    artifact_refs: Mapping[str, Any], root_dir: Optional[str]
+) -> Dict[str, Any]:
     teacher_trace_path = _resolve_artifact_path(
         root_dir,
-        artifact_refs.get("teacher_trace_ref") or artifact_refs.get("teacher_trace_path"),
+        artifact_refs.get("teacher_trace_ref")
+        or artifact_refs.get("teacher_trace_path"),
     )
     teacher_trace_payload = _load_json(teacher_trace_path)
     teacher_trace = None
@@ -268,24 +270,44 @@ def _summarize_vla_lane(artifact_refs: Mapping[str, Any], root_dir: Optional[str
         or artifact_refs.get("semantic_evidence_ref")
         or artifact_refs.get("semantic_evidence_path"),
     )
-    vla_evidence = parse_vla_semantic_evidence(_load_npz(vla_path)) if vla_path is not None else None
+    vla_evidence = (
+        parse_vla_semantic_evidence(_load_npz(vla_path))
+        if vla_path is not None
+        else None
+    )
     provenance = dict(getattr(vla_evidence, "provenance", {}) or {})
     confidence_mean = _safe_mean(getattr(vla_evidence, "confidence", None), 0.0)
-    track_ids = getattr(vla_evidence, "track_ids", None) if vla_evidence is not None else None
-    teacher_summary = dict(getattr(teacher_trace, "summary", {}) or {}) if teacher_trace is not None else {}
-    teacher_metadata = dict(getattr(teacher_trace, "metadata", {}) or {}) if teacher_trace is not None else {}
+    track_ids = (
+        getattr(vla_evidence, "track_ids", None) if vla_evidence is not None else None
+    )
+    teacher_summary = (
+        dict(getattr(teacher_trace, "summary", {}) or {})
+        if teacher_trace is not None
+        else {}
+    )
+    teacher_metadata = (
+        dict(getattr(teacher_trace, "metadata", {}) or {})
+        if teacher_trace is not None
+        else {}
+    )
     teacher_confidence_mean = _safe_float(
         teacher_summary.get("teacher_confidence_mean", 0.0),
-        _safe_mean([step.confidence for step in teacher_trace.steps], 0.0) if teacher_trace is not None else 0.0,
+        _safe_mean([step.confidence for step in teacher_trace.steps], 0.0)
+        if teacher_trace is not None
+        else 0.0,
     )
     return {
         "teacher_trace_available": teacher_trace is not None,
         "teacher_confidence_mean": float(teacher_confidence_mean),
         "teacher_semantic_tags": list(teacher_metadata.get("semantic_tags", []) or []),
         "teacher_object_refs": list(teacher_metadata.get("object_refs", []) or []),
-        "teacher_affordance_hints": list(teacher_metadata.get("affordance_hints", []) or []),
+        "teacher_affordance_hints": list(
+            teacher_metadata.get("affordance_hints", []) or []
+        ),
         "teacher_risk_hints": list(teacher_metadata.get("risk_hints", []) or []),
-        "vla_available": bool(provenance.get("vla_available", False) or confidence_mean > 0.1),
+        "vla_available": bool(
+            provenance.get("vla_available", False) or confidence_mean > 0.1
+        ),
         "vla_confidence_mean": float(confidence_mean),
         "vla_source": str(provenance.get("source", "")),
         "vla_fallback_mode": str(provenance.get("fallback_mode", "")),
@@ -294,7 +316,12 @@ def _summarize_vla_lane(artifact_refs: Mapping[str, Any], root_dir: Optional[str
         "vla_risk_hints": _string_list(provenance.get("risk_hints")),
         "vla_semantic_tags": _string_list(provenance.get("semantic_tags")),
         "vla_track_count": int(len(track_ids)) if track_ids is not None else 0,
-        "instruction": str(provenance.get("instruction", teacher_trace.instruction if teacher_trace is not None else "")),
+        "instruction": str(
+            provenance.get(
+                "instruction",
+                teacher_trace.instruction if teacher_trace is not None else "",
+            )
+        ),
     }
 
 
@@ -325,7 +352,12 @@ def _summarize_dino_lane(
     if isinstance(summary_json_raw, np.ndarray) and summary_json_raw.size > 0:
         try:
             summary_json = json.loads(str(summary_json_raw.flat[0]))
-            track_backend = str(summary_json.get("backend_selected", summary_json.get("adapter_status", {}).get("overall_mode", "")))
+            track_backend = str(
+                summary_json.get(
+                    "backend_selected",
+                    summary_json.get("adapter_status", {}).get("overall_mode", ""),
+                )
+            )
         except Exception:
             track_backend = ""
     if not track_backend:
@@ -333,10 +365,14 @@ def _summarize_dino_lane(
     return {
         "scene_tracks_available": bool(scene_tracks),
         "scene_track_count": int(len(track_ids) if track_ids is not None else 0),
-        "scene_track_label_confidence_mean": float(_safe_mean(label_confidence, semantic_summary.get("object_memory", 0.0))),
+        "scene_track_label_confidence_mean": float(
+            _safe_mean(label_confidence, semantic_summary.get("object_memory", 0.0))
+        ),
         "scene_track_motion_mean": float(_safe_mean(motion_score, 0.0)),
         "map_first_available": bool(map_first),
-        "map_first_confidence_mean": float(_safe_mean(map_confidence, semantic_summary.get("fusion_bridge", 0.0))),
+        "map_first_confidence_mean": float(
+            _safe_mean(map_confidence, semantic_summary.get("fusion_bridge", 0.0))
+        ),
         "map_first_vla_confidence_mean": float(_safe_mean(map_vla_confidence, 0.0)),
         "dino_proxy_available": bool(scene_tracks or map_first),
         "dino_proxy_confidence_mean": float(
@@ -347,7 +383,9 @@ def _summarize_dino_lane(
             )
         ),
         "scene_tracks_backend": track_backend,
-        "grounded_track_object_count": int(semantic_summary.get("grounded_track_object_count", 0) or 0),
+        "grounded_track_object_count": int(
+            semantic_summary.get("grounded_track_object_count", 0) or 0
+        ),
     }
 
 
@@ -358,11 +396,17 @@ def _summarize_fusion_lane(
 ) -> Dict[str, Any]:
     metadata = dict(episode.metadata or {})
     semantic_fusion_confidence = _safe_float(
-        metadata.get("semantic_fusion_confidence_mean", metadata.get("semantic_fusion_quality_score", 0.0))
+        metadata.get(
+            "semantic_fusion_confidence_mean",
+            metadata.get("semantic_fusion_quality_score", 0.0),
+        )
     )
     fused_available = semantic_fusion_confidence > 0.0
     if not fused_available:
-        fused_available = bool(vla_summary.get("vla_available") and dino_summary.get("dino_proxy_available"))
+        fused_available = bool(
+            vla_summary.get("vla_available")
+            and dino_summary.get("dino_proxy_available")
+        )
     source_gap = abs(
         _safe_float(vla_summary.get("vla_confidence_mean", 0.0))
         - _safe_float(dino_summary.get("dino_proxy_confidence_mean", 0.0))
@@ -375,7 +419,8 @@ def _summarize_fusion_lane(
         "source_confidence_gap": float(source_gap),
         "fusion_advantage_score": float(
             max(
-                semantic_fusion_confidence - max(
+                semantic_fusion_confidence
+                - max(
                     _safe_float(vla_summary.get("vla_confidence_mean", 0.0)),
                     _safe_float(dino_summary.get("dino_proxy_confidence_mean", 0.0)),
                 ),
@@ -410,8 +455,12 @@ def _summarize_outcome(
         or _safe_float(semantic_summary.get("grounded_track_object_count", 0.0)) > 0.0
         or _safe_float(topology.get("grounded_track_object_count", 0.0)) > 0.0
     )
-    work_order_ready = bool(source_work_order.get("ready", execution_preconditions.get("ready", False)))
-    fusion_quality = _safe_float(fusion_summary.get("semantic_fusion_confidence_mean", 0.0))
+    work_order_ready = bool(
+        source_work_order.get("ready", execution_preconditions.get("ready", False))
+    )
+    fusion_quality = _safe_float(
+        fusion_summary.get("semantic_fusion_confidence_mean", 0.0)
+    )
     quality_score = (
         0.25 * (1.0 if success else 0.0)
         + 0.25 * readiness_score
@@ -426,8 +475,12 @@ def _summarize_outcome(
         "readiness_score": float(readiness_score),
         "semantic_grounded": semantic_grounded,
         "teacher_runtime_live": bool(future_signals.get("teacher_runtime_live", False)),
-        "scene_tracks_non_stub": bool(future_signals.get("scene_tracks_non_stub", False)),
-        "promotion_trace_complete": bool(future_signals.get("promotion_trace_complete", False)),
+        "scene_tracks_non_stub": bool(
+            future_signals.get("scene_tracks_non_stub", False)
+        ),
+        "promotion_trace_complete": bool(
+            future_signals.get("promotion_trace_complete", False)
+        ),
         "total_reward": float(total_reward),
         "reward_signal": float(reward_signal),
         "step_count": int(len(steps)),
@@ -444,24 +497,44 @@ def _feedback_summary(
     fusion_summary: Mapping[str, Any],
     outcome_summary: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    coverage_feedback = dict(semantic_summary.get("coverage_feedback_summary", {}) or {})
+    coverage_feedback = dict(
+        semantic_summary.get("coverage_feedback_summary", {}) or {}
+    )
     wm_validation = dict(semantic_summary.get("wm_validation_summary", {}) or {})
-    correction_overlay = dict(semantic_summary.get("semantic_wm_correction_overlay", {}) or {})
+    correction_overlay = dict(
+        semantic_summary.get("semantic_wm_correction_overlay", {}) or {}
+    )
     return {
         "annotation_to_world_model": {
             "openvla_available": bool(vla_summary.get("vla_available", False)),
-            "teacher_trace_available": bool(vla_summary.get("teacher_trace_available", False)),
-            "dino_proxy_available": bool(dino_summary.get("dino_proxy_available", False)),
-            "annotation_agreement_score": float(fusion_summary.get("annotation_agreement_score", 0.0)),
-            "semantic_grounding_ready": bool(outcome_summary.get("semantic_grounded", False)),
+            "teacher_trace_available": bool(
+                vla_summary.get("teacher_trace_available", False)
+            ),
+            "dino_proxy_available": bool(
+                dino_summary.get("dino_proxy_available", False)
+            ),
+            "annotation_agreement_score": float(
+                fusion_summary.get("annotation_agreement_score", 0.0)
+            ),
+            "semantic_grounding_ready": bool(
+                outcome_summary.get("semantic_grounded", False)
+            ),
         },
         "world_model_to_transformers": {
             "top_meta_nodes": list(semantic_summary.get("top_meta_nodes", []) or []),
-            "active_capabilities": list(semantic_summary.get("active_capabilities", []) or []),
+            "active_capabilities": list(
+                semantic_summary.get("active_capabilities", []) or []
+            ),
             "object_count": int(semantic_summary.get("object_count", 0) or 0),
-            "affordance_density": float(semantic_summary.get("affordance_density", 0.0)),
-            "missing_edge_fraction": float(semantic_summary.get("missing_edge_fraction", 0.0)),
-            "graph_mutation_pressure": float(semantic_summary.get("graph_mutation_pressure", 0.0)),
+            "affordance_density": float(
+                semantic_summary.get("affordance_density", 0.0)
+            ),
+            "missing_edge_fraction": float(
+                semantic_summary.get("missing_edge_fraction", 0.0)
+            ),
+            "graph_mutation_pressure": float(
+                semantic_summary.get("graph_mutation_pressure", 0.0)
+            ),
         },
         "transformers_to_runtime": {
             "can_execute": bool(outcome_summary.get("work_order_ready", False)),
@@ -470,12 +543,23 @@ def _feedback_summary(
         },
         "runtime_to_world_model": {
             "reward_signal": float(outcome_summary.get("reward_signal", 0.0)),
-            "fusion_quality": float(outcome_summary.get("semantic_fusion_confidence_mean", 0.0)),
-            "promotion_trace_complete": bool(outcome_summary.get("promotion_trace_complete", False)),
+            "fusion_quality": float(
+                outcome_summary.get("semantic_fusion_confidence_mean", 0.0)
+            ),
+            "promotion_trace_complete": bool(
+                outcome_summary.get("promotion_trace_complete", False)
+            ),
             "coverage_gap_return": float(coverage_feedback.get("gap_return_mean", 0.0)),
-            "process_reward_mean": float(coverage_feedback.get("process_reward_mean", 0.0)),
-            "wm_validation_error_rate": float(wm_validation.get("error_rate", coverage_feedback.get("wm_validation_error_rate", 0.0))),
-            "wm_correction_pressure": float(correction_overlay.get("meta_node_pressure", 0.0)),
+            "process_reward_mean": float(
+                coverage_feedback.get("process_reward_mean", 0.0)
+            ),
+            "wm_validation_error_rate": float(
+                wm_validation.get("error_rate")
+                or coverage_feedback.get("wm_validation_error_rate", 0.0)
+            ),
+            "wm_correction_pressure": float(
+                correction_overlay.get("meta_node_pressure", 0.0)
+            ),
         },
     }
 
@@ -489,14 +573,19 @@ def _authority_success_label(
     outcome_summary: Mapping[str, Any],
 ) -> bool:
     authority = str(meta_target.get("authority_gt", "dino"))
-    route_success = bool(outcome_summary.get("success", False) and outcome_summary.get("work_order_ready", False))
+    route_success = bool(
+        outcome_summary.get("success", False)
+        and outcome_summary.get("work_order_ready", False)
+    )
     if authority == "vla":
         return bool(
             route_success
             and vla_summary.get("vla_available", False)
             and (
-                _safe_float(fusion_summary.get("annotation_agreement_score", 0.0)) >= 0.35
-                or _safe_float(semantic_summary.get("affordance_grounding", 0.0)) >= 0.45
+                _safe_float(fusion_summary.get("annotation_agreement_score", 0.0))
+                >= 0.35
+                or _safe_float(semantic_summary.get("affordance_grounding", 0.0))
+                >= 0.45
             )
         )
     return bool(
@@ -516,14 +605,20 @@ def _build_meta_transformer_target(
 ) -> Dict[str, Any]:
     econ_signals = {
         "mpl_urgency": max(0.0, 1.0 - float(outcome_summary.get("reward_signal", 0.0))),
-        "error_urgency": max(0.0, 1.0 - float(outcome_summary.get("quality_score", 0.0))),
+        "error_urgency": max(
+            0.0, 1.0 - float(outcome_summary.get("quality_score", 0.0))
+        ),
         "energy_urgency": float(semantic_summary.get("efficiency_router_score", 0.0)),
     }
     datapack_signals = {
         "data_coverage_score": float(outcome_summary.get("quality_score", 0.0)),
         "embedding_diversity": float(dino_summary.get("scene_track_motion_mean", 0.0)),
-        "vla_annotation_fraction": 1.0 if vla_summary.get("vla_available", False) else 0.0,
-        "guidance_annotation_fraction": 1.0 if vla_summary.get("teacher_trace_available", False) else 0.0,
+        "vla_annotation_fraction": 1.0
+        if vla_summary.get("vla_available", False)
+        else 0.0,
+        "guidance_annotation_fraction": 1.0
+        if vla_summary.get("teacher_trace_available", False)
+        else 0.0,
     }
     objective_preset = derive_objective_preset(
         semantic_summary,
@@ -559,7 +654,10 @@ def _build_meta_transformer_target(
         _safe_float(fusion_summary.get("semantic_fusion_confidence_mean", 0.0)),
     )
     authority_gt = "dino"
-    if vla_conf > dino_conf and _safe_float(semantic_summary.get("affordance_grounding", 0.0)) >= 0.45:
+    if (
+        vla_conf > dino_conf
+        and _safe_float(semantic_summary.get("affordance_grounding", 0.0)) >= 0.45
+    ):
         authority_gt = "vla"
     plan = build_semantic_orchestration_plan(
         semantic_summary,
@@ -578,7 +676,9 @@ def _build_meta_transformer_target(
         "data_mix_weights": dict(data_mix_weights),
         "chosen_backend": chosen_backend,
         "expected_deltas": dict(expected_deltas),
-        "execution_mode": "bounded_execution" if outcome_summary.get("execution_ready", False) else "advisory",
+        "execution_mode": "bounded_execution"
+        if outcome_summary.get("execution_ready", False)
+        else "advisory",
         "bounded_actions": [
             "set_objective_preset",
             "set_energy_profile",
@@ -597,11 +697,30 @@ def _tool_sequence_from_plan(
     tool_biases = build_tool_biases(
         semantic_summary,
         econ_signals={
-            "mpl_urgency": _safe_float(meta_target.get("expected_deltas", {}).get("expected_delta_mpl", 0.0)) / 10.0,
-            "energy_urgency": _safe_float(meta_target.get("expected_deltas", {}).get("expected_delta_energy_Wh", 0.0)) / 10.0,
-            "error_urgency": min(abs(_safe_float(meta_target.get("expected_deltas", {}).get("expected_delta_error", 0.0))), 1.0),
+            "mpl_urgency": _safe_float(
+                meta_target.get("expected_deltas", {}).get("expected_delta_mpl", 0.0)
+            )
+            / 10.0,
+            "energy_urgency": _safe_float(
+                meta_target.get("expected_deltas", {}).get(
+                    "expected_delta_energy_Wh", 0.0
+                )
+            )
+            / 10.0,
+            "error_urgency": min(
+                abs(
+                    _safe_float(
+                        meta_target.get("expected_deltas", {}).get(
+                            "expected_delta_error", 0.0
+                        )
+                    )
+                ),
+                1.0,
+            ),
         },
-        datapack_signals={"data_coverage_score": _safe_float(meta_target.get("confidence_dino", 0.0))},
+        datapack_signals={
+            "data_coverage_score": _safe_float(meta_target.get("confidence_dino", 0.0))
+        },
         instruction=instruction,
     )
     ranked = sorted(tool_biases.items(), key=lambda item: item[1], reverse=True)
@@ -618,14 +737,22 @@ def _tool_sequence_from_plan(
         elif name == "SET_BACKEND":
             args["backend"] = str(meta_target.get("chosen_backend", "pybullet"))
         elif name == "QUERY_DATAPACKS":
-            args["filter"] = {"focus": list(semantic_summary.get("top_meta_nodes", []) or [])}
+            args["filter"] = {
+                "focus": list(semantic_summary.get("top_meta_nodes", []) or [])
+            }
         elif name == "QUERY_ENERGY_SURFACE":
             args["profile_query"] = True
         elif name == "CALL_VLA_FOR_DATAPACK_CLASS":
-            args["class_filter"] = list(semantic_summary.get("top_object_labels", []) or [])
+            args["class_filter"] = list(
+                semantic_summary.get("top_object_labels", []) or []
+            )
         elif name == "CALL_VLA_SINGLE_STEP":
-            args["focus_meta_node"] = next(iter(semantic_summary.get("top_meta_nodes", []) or []), "")
-        sequence.append({"name": name, "args": args, "score": float(tool_biases.get(name, 0.0))})
+            args["focus_meta_node"] = next(
+                iter(semantic_summary.get("top_meta_nodes", []) or []), ""
+            )
+        sequence.append(
+            {"name": name, "args": args, "score": float(tool_biases.get(name, 0.0))}
+        )
     return sequence
 
 
@@ -637,8 +764,10 @@ def _build_orchestration_target(
     selection_summary: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     tool_sequence = _tool_sequence_from_plan(semantic_summary, meta_target, instruction)
-    activation_plan = {
-        "mode": "bounded_execution" if outcome_summary.get("execution_ready", False) else "advisory",
+    activation_plan: Dict[str, Any] = {
+        "mode": "bounded_execution"
+        if outcome_summary.get("execution_ready", False)
+        else "advisory",
         "bounded_actions": [
             "set_objective_preset",
             "set_energy_profile",
@@ -688,14 +817,30 @@ def _preset_alignment_score(
         return (
             0.45 * _safe_float(semantic_summary.get("efficiency_router_score", 0.0))
             + 0.25 * _safe_float(outcome_summary.get("quality_score", 0.0))
-            + 0.15 * _safe_float(meta_target.get("expected_deltas", {}).get("expected_delta_energy_Wh", 0.0)) / 5.0
+            + 0.15
+            * _safe_float(
+                meta_target.get("expected_deltas", {}).get(
+                    "expected_delta_energy_Wh", 0.0
+                )
+            )
+            / 5.0
             + 0.15 * _safe_float(meta_target.get("confidence_vla", 0.0))
         )
     if preset == "throughput":
         return (
-            0.35 * max(_safe_float(meta_target.get("expected_deltas", {}).get("expected_delta_mpl", 0.0)), 0.0) / 5.0
+            0.35
+            * max(
+                _safe_float(
+                    meta_target.get("expected_deltas", {}).get(
+                        "expected_delta_mpl", 0.0
+                    )
+                ),
+                0.0,
+            )
+            / 5.0
             + 0.25 * _safe_float(outcome_summary.get("reward_signal", 0.0))
-            + 0.2 * (1.0 - _safe_float(semantic_summary.get("risk_object_fraction", 0.0)))
+            + 0.2
+            * (1.0 - _safe_float(semantic_summary.get("risk_object_fraction", 0.0)))
             + 0.2 * _safe_float(meta_target.get("confidence_vla", 0.0))
         )
     return (
@@ -715,18 +860,24 @@ def _build_counterfactuals(
     max_count: int,
 ) -> List[SemanticRuntimeCounterfactual]:
     chosen_preset = str(meta_target.get("objective_preset", "balanced"))
-    chosen_score = _preset_alignment_score(chosen_preset, semantic_summary, meta_target, outcome_summary)
+    chosen_score = _preset_alignment_score(
+        chosen_preset, semantic_summary, meta_target, outcome_summary
+    )
     candidates: List[SemanticRuntimeCounterfactual] = []
     for preset in ["balanced", "safety", "energy_saver", "throughput"]:
         if preset == chosen_preset:
             continue
-        candidate_score = _preset_alignment_score(preset, semantic_summary, meta_target, outcome_summary)
+        candidate_score = _preset_alignment_score(
+            preset, semantic_summary, meta_target, outcome_summary
+        )
         candidate_payload = dict(meta_target)
         candidate_payload["objective_preset"] = preset
         candidate_payload["energy_profile_weights"] = derive_energy_profile_mix(
             semantic_summary,
             econ_signals={
-                "energy_urgency": float(semantic_summary.get("efficiency_router_score", 0.0)),
+                "energy_urgency": float(
+                    semantic_summary.get("efficiency_router_score", 0.0)
+                ),
             },
             objective_preset=preset,
         )
@@ -737,7 +888,9 @@ def _build_counterfactuals(
                 lane="meta_transformer",
                 candidate={
                     "objective_preset": preset,
-                    "energy_profile_weights": candidate_payload["energy_profile_weights"],
+                    "energy_profile_weights": candidate_payload[
+                        "energy_profile_weights"
+                    ],
                 },
                 predicted_outcome_score=float(candidate_score),
                 predicted_regret=float(chosen_score - candidate_score),
@@ -745,8 +898,12 @@ def _build_counterfactuals(
                 rationale=f"counterfactual_objective_preset:{preset}",
             )
         )
-    alternate_authority = "vla" if str(meta_target.get("authority_gt", "dino")) == "dino" else "dino"
-    authority_score = _safe_float(meta_target.get(f"confidence_{alternate_authority}", 0.0))
+    alternate_authority = (
+        "vla" if str(meta_target.get("authority_gt", "dino")) == "dino" else "dino"
+    )
+    authority_score = _safe_float(
+        meta_target.get(f"confidence_{alternate_authority}", 0.0)
+    )
     candidates.append(
         SemanticRuntimeCounterfactual(
             counterfactual_id=f"cf_{sha256_json({'sample_id': sample_id, 'lane': 'authority', 'authority': alternate_authority})[:16]}",
@@ -758,7 +915,9 @@ def _build_counterfactuals(
             rationale=f"counterfactual_authority:{alternate_authority}",
         )
     )
-    ranked = sorted(candidates, key=lambda item: item.predicted_outcome_score, reverse=True)
+    ranked = sorted(
+        candidates, key=lambda item: item.predicted_outcome_score, reverse=True
+    )
     return ranked[: max(max_count, 1)]
 
 
@@ -770,14 +929,23 @@ def build_semantic_runtime_learning_row(
     root_dir: Optional[str] = None,
     max_counterfactuals: int = 3,
 ) -> SemanticRuntimeLearningRow:
-    artifact_refs = _extract_artifact_refs(episode.metadata, episode.provenance, episode.metadata.get("future_training_artifacts", {}))
-    semantic_summary = dict(episode.metadata.get("semantic_world_model_summary", {}) or {})
+    artifact_refs = _extract_artifact_refs(
+        episode.metadata,
+        episode.provenance,
+        episode.metadata.get("future_training_artifacts", {}),
+    )
+    semantic_summary = dict(
+        episode.metadata.get("semantic_world_model_summary", {}) or {}
+    )
     if not semantic_summary:
         semantic_world_model_path = _resolve_artifact_path(
             root_dir,
-            artifact_refs.get("semantic_world_model_ref") or artifact_refs.get("semantic_world_model_path"),
+            artifact_refs.get("semantic_world_model_ref")
+            or artifact_refs.get("semantic_world_model_path"),
         )
-        semantic_summary = build_semantic_world_model_summary(_load_json(semantic_world_model_path))
+        semantic_summary = build_semantic_world_model_summary(
+            _load_json(semantic_world_model_path)
+        )
     semantic_summary.setdefault("task_id", episode.task_id)
     coverage_feedback_summary = dict(
         episode.metadata.get("coverage_feedback_summary")
@@ -789,18 +957,31 @@ def build_semantic_runtime_learning_row(
         semantic_summary.setdefault(
             "missing_edge_fraction",
             float(
-                episode.metadata.get("semantic_coverage", {}).get("coverage_summary", {}).get("missing_edges", 0)
+                episode.metadata.get("semantic_coverage", {})
+                .get("coverage_summary", {})
+                .get("missing_edges", 0)
             )
             / float(
                 max(
-                    episode.metadata.get("semantic_coverage", {}).get("coverage_summary", {}).get("total_edges", 0),
+                    episode.metadata.get("semantic_coverage", {})
+                    .get("coverage_summary", {})
+                    .get("total_edges", 0),
                     1,
                 )
             ),
         )
-        semantic_summary.setdefault("gap_return_mean", float(coverage_feedback_summary.get("gap_return_mean", 0.0)))
-        semantic_summary.setdefault("process_reward_mean", float(coverage_feedback_summary.get("process_reward_mean", 0.0)))
-        semantic_summary.setdefault("graph_mutation_pressure", float(coverage_feedback_summary.get("graph_mutation_pressure", 0.0)))
+        semantic_summary.setdefault(
+            "gap_return_mean",
+            float(coverage_feedback_summary.get("gap_return_mean", 0.0)),
+        )
+        semantic_summary.setdefault(
+            "process_reward_mean",
+            float(coverage_feedback_summary.get("process_reward_mean", 0.0)),
+        )
+        semantic_summary.setdefault(
+            "graph_mutation_pressure",
+            float(coverage_feedback_summary.get("graph_mutation_pressure", 0.0)),
+        )
     wm_validation_summary = dict(
         episode.metadata.get("wm_validation_summary")
         or episode.metadata.get("semantic_coverage", {}).get("wm_validation_summary")
@@ -808,25 +989,43 @@ def build_semantic_runtime_learning_row(
     )
     if wm_validation_summary:
         semantic_summary["wm_validation_summary"] = wm_validation_summary
-        semantic_summary.setdefault("wm_validation_error_rate", float(wm_validation_summary.get("error_rate", 0.0)))
+        semantic_summary.setdefault(
+            "wm_validation_error_rate",
+            float(wm_validation_summary.get("error_rate", 0.0)),
+        )
     correction_overlay = dict(
         episode.metadata.get("semantic_wm_correction_overlay")
-        or episode.metadata.get("semantic_coverage", {}).get("semantic_wm_correction_overlay")
+        or episode.metadata.get("semantic_coverage", {}).get(
+            "semantic_wm_correction_overlay"
+        )
         or {}
     )
     if correction_overlay:
         semantic_summary["semantic_wm_correction_overlay"] = correction_overlay
-        semantic_summary.setdefault("wm_correction_pressure", float(correction_overlay.get("meta_node_pressure", 0.0)))
+        semantic_summary.setdefault(
+            "wm_correction_pressure",
+            float(correction_overlay.get("meta_node_pressure", 0.0)),
+        )
     refiner_summary = dict(
         episode.metadata.get("semantic_wm_refiner_summary")
-        or episode.metadata.get("semantic_coverage", {}).get("semantic_wm_refiner_summary")
+        or episode.metadata.get("semantic_coverage", {}).get(
+            "semantic_wm_refiner_summary"
+        )
         or {}
     )
     if refiner_summary:
         semantic_summary["semantic_wm_refiner_summary"] = refiner_summary
-        semantic_summary.setdefault("learned_refinement_active", bool(refiner_summary.get("active", False)))
-        semantic_summary.setdefault("learned_overlay_pressure", float(refiner_summary.get("learned_overlay_pressure", 0.0)))
-        semantic_summary.setdefault("learned_graph_mutation_count", float(refiner_summary.get("learned_graph_mutation_count", 0.0)))
+        semantic_summary.setdefault(
+            "learned_refinement_active", bool(refiner_summary.get("active", False))
+        )
+        semantic_summary.setdefault(
+            "learned_overlay_pressure",
+            float(refiner_summary.get("learned_overlay_pressure", 0.0)),
+        )
+        semantic_summary.setdefault(
+            "learned_graph_mutation_count",
+            float(refiner_summary.get("learned_graph_mutation_count", 0.0)),
+        )
     vla_summary = _summarize_vla_lane(artifact_refs, root_dir)
     dino_summary = _summarize_dino_lane(artifact_refs, root_dir, semantic_summary)
     fusion_summary = _summarize_fusion_lane(episode, vla_summary, dino_summary)
@@ -861,7 +1060,9 @@ def build_semantic_runtime_learning_row(
         outcome_summary,
         max_count=max_counterfactuals,
     )
-    best_counterfactual = counterfactuals[0].predicted_outcome_score if counterfactuals else 0.0
+    best_counterfactual = (
+        counterfactuals[0].predicted_outcome_score if counterfactuals else 0.0
+    )
     chosen_score = _preset_alignment_score(
         str(meta_target.get("objective_preset", "balanced")),
         semantic_summary,
@@ -880,7 +1081,10 @@ def build_semantic_runtime_learning_row(
         "chosen_route_score": float(chosen_score),
         "best_counterfactual_score": float(best_counterfactual),
         "estimated_regret": float(max(best_counterfactual - chosen_score, 0.0)),
-        "route_success_label": bool(outcome_summary.get("success", False) and outcome_summary.get("work_order_ready", False)),
+        "route_success_label": bool(
+            outcome_summary.get("success", False)
+            and outcome_summary.get("work_order_ready", False)
+        ),
         "orchestration_route_success_label": bool(
             outcome_summary.get("success", False)
             and outcome_summary.get("work_order_ready", False)
@@ -895,7 +1099,9 @@ def build_semantic_runtime_learning_row(
             outcome_summary,
         ),
         "semantic_gain_label": bool(outcome_summary.get("semantic_grounded", False)),
-        "fusion_gain_label": bool(fusion_summary.get("fusion_advantage_score", 0.0) > 0.0),
+        "fusion_gain_label": bool(
+            fusion_summary.get("fusion_advantage_score", 0.0) > 0.0
+        ),
         "feedback_edges": feedback_summary,
     }
     semantic_token_list = semantic_tokens(semantic_summary)
@@ -954,8 +1160,16 @@ def build_semantic_runtime_learning_corpus(
         "row_count": len(rows),
         "source_domains": sorted({row.source_domain for row in rows}),
         "authority_distribution": {
-            "dino": sum(1 for row in rows if row.meta_transformer_target.get("authority_gt") == "dino"),
-            "vla": sum(1 for row in rows if row.meta_transformer_target.get("authority_gt") == "vla"),
+            "dino": sum(
+                1
+                for row in rows
+                if row.meta_transformer_target.get("authority_gt") == "dino"
+            ),
+            "vla": sum(
+                1
+                for row in rows
+                if row.meta_transformer_target.get("authority_gt") == "vla"
+            ),
         },
         "bounded_ready_count": sum(
             1 for row in rows if row.outcome_summary.get("execution_ready", False)
@@ -964,16 +1178,28 @@ def build_semantic_runtime_learning_corpus(
             1 for row in rows if row.outcome_summary.get("semantic_grounded", False)
         ),
         "route_success_count": sum(
-            1 for row in rows if row.inferential_summary.get("route_success_label", False)
+            1
+            for row in rows
+            if row.inferential_summary.get("route_success_label", False)
         ),
         "authority_success_count": sum(
-            1 for row in rows if row.inferential_summary.get("authority_success_label", False)
+            1
+            for row in rows
+            if row.inferential_summary.get("authority_success_label", False)
         ),
         "mean_quality_score": float(
-            sum(_safe_float(row.outcome_summary.get("quality_score", 0.0)) for row in rows) / float(max(len(rows), 1))
+            sum(
+                _safe_float(row.outcome_summary.get("quality_score", 0.0))
+                for row in rows
+            )
+            / float(max(len(rows), 1))
         ),
         "mean_estimated_regret": float(
-            sum(_safe_float(row.inferential_summary.get("estimated_regret", 0.0)) for row in rows) / float(max(len(rows), 1))
+            sum(
+                _safe_float(row.inferential_summary.get("estimated_regret", 0.0))
+                for row in rows
+            )
+            / float(max(len(rows), 1))
         ),
         "manifest_summary": dict(bundle.manifest.metadata),
     }
@@ -986,17 +1212,33 @@ def build_meta_transformer_runtime_dataset(
     samples: List[MetaTransformerSample] = []
     for row in rows:
         econ_signals = {
-            "mpl_urgency": max(0.0, 1.0 - _safe_float(row.outcome_summary.get("reward_signal", 0.0))),
-            "error_urgency": max(0.0, 1.0 - _safe_float(row.outcome_summary.get("quality_score", 0.0))),
-            "energy_urgency": _safe_float(row.semantic_world_model_summary.get("efficiency_router_score", 0.0)),
+            "mpl_urgency": max(
+                0.0, 1.0 - _safe_float(row.outcome_summary.get("reward_signal", 0.0))
+            ),
+            "error_urgency": max(
+                0.0, 1.0 - _safe_float(row.outcome_summary.get("quality_score", 0.0))
+            ),
+            "energy_urgency": _safe_float(
+                row.semantic_world_model_summary.get("efficiency_router_score", 0.0)
+            ),
         }
         datapack_signals = {
-            "data_coverage_score": _safe_float(row.outcome_summary.get("quality_score", 0.0)),
-            "embedding_diversity": _safe_float(row.dino_summary.get("scene_track_motion_mean", 0.0)),
-            "vla_annotation_fraction": 1.0 if row.vla_summary.get("vla_available", False) else 0.0,
-            "guidance_annotation_fraction": 1.0 if row.vla_summary.get("teacher_trace_available", False) else 0.0,
+            "data_coverage_score": _safe_float(
+                row.outcome_summary.get("quality_score", 0.0)
+            ),
+            "embedding_diversity": _safe_float(
+                row.dino_summary.get("scene_track_motion_mean", 0.0)
+            ),
+            "vla_annotation_fraction": 1.0
+            if row.vla_summary.get("vla_available", False)
+            else 0.0,
+            "guidance_annotation_fraction": 1.0
+            if row.vla_summary.get("teacher_trace_available", False)
+            else 0.0,
         }
-        semantic_feature_vec = encode_semantic_world_model_features(row.semantic_world_model_summary)
+        semantic_feature_vec = encode_semantic_world_model_features(
+            row.semantic_world_model_summary
+        )
         vla_embedding = np.array(
             [
                 _safe_float(row.vla_summary.get("vla_confidence_mean", 0.0)),
@@ -1005,7 +1247,9 @@ def build_meta_transformer_runtime_dataset(
                 float(len(row.vla_summary.get("vla_object_refs", []) or [])) / 8.0,
                 float(len(row.vla_summary.get("vla_affordance_hints", []) or [])) / 8.0,
                 float(len(row.vla_summary.get("vla_risk_hints", []) or [])) / 8.0,
-                _safe_float(row.fusion_summary.get("semantic_fusion_confidence_mean", 0.0)),
+                _safe_float(
+                    row.fusion_summary.get("semantic_fusion_confidence_mean", 0.0)
+                ),
                 _safe_float(row.fusion_summary.get("annotation_agreement_score", 0.0)),
             ],
             dtype=np.float32,
@@ -1015,9 +1259,17 @@ def build_meta_transformer_runtime_dataset(
                 semantic_feature_vec.astype(np.float32),
                 np.array(
                     [
-                        _safe_float(row.dino_summary.get("dino_proxy_confidence_mean", 0.0)),
-                        _safe_float(row.dino_summary.get("scene_track_label_confidence_mean", 0.0)),
-                        _safe_float(row.dino_summary.get("map_first_confidence_mean", 0.0)),
+                        _safe_float(
+                            row.dino_summary.get("dino_proxy_confidence_mean", 0.0)
+                        ),
+                        _safe_float(
+                            row.dino_summary.get(
+                                "scene_track_label_confidence_mean", 0.0
+                            )
+                        ),
+                        _safe_float(
+                            row.dino_summary.get("map_first_confidence_mean", 0.0)
+                        ),
                         float(row.dino_summary.get("scene_track_count", 0)) / 8.0,
                     ],
                     dtype=np.float32,
@@ -1030,14 +1282,22 @@ def build_meta_transformer_runtime_dataset(
                 vla_embedding=vla_embedding,
                 dino_embedding=dino_embedding,
                 semantic_tokens=list(row.semantic_tokens),
-                authority_gt=str(row.meta_transformer_target.get("authority_gt", "dino")),
-                confidence_vla=float(row.meta_transformer_target.get("confidence_vla", 0.0)),
-                confidence_dino=float(row.meta_transformer_target.get("confidence_dino", 0.0)),
+                authority_gt=str(
+                    row.meta_transformer_target.get("authority_gt", "dino")
+                ),
+                confidence_vla=float(
+                    row.meta_transformer_target.get("confidence_vla", 0.0)
+                ),
+                confidence_dino=float(
+                    row.meta_transformer_target.get("confidence_dino", 0.0)
+                ),
                 task_context={
                     "task_id": row.task_id,
                     "env_id": row.env_id,
                     "source_domain": row.source_domain,
-                    "objective_preset": row.meta_transformer_target.get("objective_preset", "balanced"),
+                    "objective_preset": row.meta_transformer_target.get(
+                        "objective_preset", "balanced"
+                    ),
                     "quality_score": row.outcome_summary.get("quality_score", 0.0),
                     "feedback_summary": row.feedback_summary,
                     "semantic_summary": row.semantic_world_model_summary,
@@ -1048,24 +1308,42 @@ def build_meta_transformer_runtime_dataset(
                         or row.orchestration_transformer_target.get("selection_summary")
                         or {}
                     ),
-                    "chosen_backend": row.meta_transformer_target.get("chosen_backend", "pybullet"),
+                    "chosen_backend": row.meta_transformer_target.get(
+                        "chosen_backend", "pybullet"
+                    ),
                     "energy_profile_weights": dict(
                         row.meta_transformer_target.get("energy_profile_weights", {})
                     ),
-                    "data_mix_weights": dict(row.meta_transformer_target.get("data_mix_weights", {})),
-                    "expected_deltas": dict(row.meta_transformer_target.get("expected_deltas", {})),
+                    "data_mix_weights": dict(
+                        row.meta_transformer_target.get("data_mix_weights", {})
+                    ),
+                    "expected_deltas": dict(
+                        row.meta_transformer_target.get("expected_deltas", {})
+                    ),
                 },
-                objective_preset=str(row.meta_transformer_target.get("objective_preset", "balanced")),
-                chosen_backend=str(row.meta_transformer_target.get("chosen_backend", "pybullet")),
-                energy_profile_weights=dict(row.meta_transformer_target.get("energy_profile_weights", {})),
-                data_mix_weights=dict(row.meta_transformer_target.get("data_mix_weights", {})),
-                expected_deltas=dict(row.meta_transformer_target.get("expected_deltas", {})),
+                objective_preset=str(
+                    row.meta_transformer_target.get("objective_preset", "balanced")
+                ),
+                chosen_backend=str(
+                    row.meta_transformer_target.get("chosen_backend", "pybullet")
+                ),
+                energy_profile_weights=dict(
+                    row.meta_transformer_target.get("energy_profile_weights", {})
+                ),
+                data_mix_weights=dict(
+                    row.meta_transformer_target.get("data_mix_weights", {})
+                ),
+                expected_deltas=dict(
+                    row.meta_transformer_target.get("expected_deltas", {})
+                ),
             )
         )
     return samples
 
 
-def _profile_summaries_from_energy_mix(weights: Mapping[str, Any]) -> Dict[str, Dict[str, float]]:
+def _profile_summaries_from_energy_mix(
+    weights: Mapping[str, Any],
+) -> Dict[str, Dict[str, float]]:
     normalized = _normalize_weights(weights)
     base_profiles = {
         "BASE": {"mpl": 60.0, "error": 0.03, "energy_Wh": 12.0, "risk": 0.2},
@@ -1083,19 +1361,35 @@ def build_orchestration_runtime_dataset(
 ) -> List[OrchestrationSample]:
     samples: List[OrchestrationSample] = []
     for row in rows:
-        objective_preset = str(row.meta_transformer_target.get("objective_preset", "balanced"))
+        objective_preset = str(
+            row.meta_transformer_target.get("objective_preset", "balanced")
+        )
         context = OrchestratorContext(
             env_name=row.env_id,
-            engine_type=str(row.orchestration_transformer_target.get("chosen_backend", "pybullet")),
+            engine_type=str(
+                row.orchestration_transformer_target.get("chosen_backend", "pybullet")
+            ),
             task_type=row.task_id,
             customer_segment="semantic_runtime",
             market_region=str(row.metadata.get("market_region", "US")),
             objective_vector=_objective_vector_from_preset(objective_preset),
             wage_human=float(row.metadata.get("wage_human", 20.0)),
             energy_price_kWh=float(row.metadata.get("energy_price_kWh", 0.12)),
-            mean_delta_mpl=float(row.meta_transformer_target.get("expected_deltas", {}).get("expected_delta_mpl", 0.0)),
-            mean_delta_error=float(row.meta_transformer_target.get("expected_deltas", {}).get("expected_delta_error", 0.0)),
-            mean_delta_j=float(row.meta_transformer_target.get("expected_deltas", {}).get("expected_delta_energy_Wh", 0.0)),
+            mean_delta_mpl=float(
+                row.meta_transformer_target.get("expected_deltas", {}).get(
+                    "expected_delta_mpl", 0.0
+                )
+            ),
+            mean_delta_error=float(
+                row.meta_transformer_target.get("expected_deltas", {}).get(
+                    "expected_delta_error", 0.0
+                )
+            ),
+            mean_delta_j=float(
+                row.meta_transformer_target.get("expected_deltas", {}).get(
+                    "expected_delta_energy_Wh", 0.0
+                )
+            ),
             mean_trust=float(row.outcome_summary.get("quality_score", 0.0)),
             mean_w_econ=float(row.outcome_summary.get("reward_signal", 0.0)),
             profile_summaries=_profile_summaries_from_energy_mix(
@@ -1113,8 +1407,13 @@ def build_orchestration_runtime_dataset(
         )
         context_features = np.asarray(_encode_ctx(context), dtype=np.float32)
         target_tool_sequence = [
-            ToolCall(name=str(item.get("name")), args=dict(item.get("args", {})))
-            for item in list(row.orchestration_transformer_target.get("tool_sequence", []) or [])
+            ToolCall(
+                name=cast(ToolName, str(item.get("name"))),
+                args=dict(item.get("args", {})),
+            )
+            for item in list(
+                row.orchestration_transformer_target.get("tool_sequence", []) or []
+            )
         ]
         samples.append(
             OrchestrationSample(
@@ -1123,7 +1422,10 @@ def build_orchestration_runtime_dataset(
                 target_tool_sequence=target_tool_sequence,
                 heuristic_rationale=[
                     f"score={_safe_float(item.get('score', 0.0)):.3f}"
-                    for item in list(row.orchestration_transformer_target.get("tool_sequence", []) or [])
+                    for item in list(
+                        row.orchestration_transformer_target.get("tool_sequence", [])
+                        or []
+                    )
                 ],
                 metadata={
                     "sample_id": row.sample_id,
@@ -1138,8 +1440,12 @@ def build_orchestration_runtime_dataset(
                     ),
                     "instruction_text": row.vla_summary.get("instruction", ""),
                     "runtime_instruction": row.vla_summary.get("instruction", ""),
-                    "execution_mode": row.orchestration_transformer_target.get("execution_mode", "advisory"),
-                    "activation_plan": row.orchestration_transformer_target.get("activation_plan", {}),
+                    "execution_mode": row.orchestration_transformer_target.get(
+                        "execution_mode", "advisory"
+                    ),
+                    "activation_plan": row.orchestration_transformer_target.get(
+                        "activation_plan", {}
+                    ),
                 },
                 source_type="semantic_runtime_corpus",
             )
@@ -1158,7 +1464,9 @@ def write_semantic_runtime_learning_corpus(
     with rows_path.open("w", encoding="utf-8") as handle:
         for row in corpus.rows:
             handle.write(json.dumps(row.to_dict(), sort_keys=True) + "\n")
-    summary_path.write_text(json.dumps(corpus.summary, indent=2, sort_keys=True), encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(corpus.summary, indent=2, sort_keys=True), encoding="utf-8"
+    )
     return {
         "rows_path": str(rows_path),
         "summary_path": str(summary_path),

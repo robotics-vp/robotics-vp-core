@@ -43,7 +43,9 @@ PHASE7_EVAL_REMAINING_BLOCKERS = (
 )
 
 
-def _phase7_eval_denied_gates(extra: Mapping[str, Any] | None = None) -> dict[str, bool]:
+def _phase7_eval_denied_gates(
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, bool]:
     gates = {
         "training_executed": False,
         "weights_written": False,
@@ -560,7 +562,8 @@ def _build_control_field_eval(
             and decision.decision_kind == "phase7_control_field_shadow_recorded"
         ),
         "decision_sources_event": float(
-            decision is not None and receipt.runtime_event_id in decision.source_event_ids
+            decision is not None
+            and receipt.runtime_event_id in decision.source_event_ids
         ),
         "shadow_only_verified": float(
             receipt.shadow_only and bool(event_metadata.get("shadow_only", False))
@@ -590,7 +593,9 @@ def _build_control_field_eval(
         for key, value in checks.items()
         if key not in {"node_signal_receipt_join_count", "lower_wm_signal_backed"}
     }
-    status = "ok" if all(value == 1.0 for value in required_checks.values()) else "blocked"
+    status = (
+        "ok" if all(value == 1.0 for value in required_checks.values()) else "blocked"
+    )
     outcome_slots = {
         "false_allow_observed": None,
         "false_veto_observed": None,
@@ -644,7 +649,8 @@ def _build_conflict_join_eval(
             and decision.decision_kind == "phase7_conflict_override_shadow_recorded"
         ),
         "decision_sources_event": float(
-            decision is not None and receipt.runtime_event_id in decision.source_event_ids
+            decision is not None
+            and receipt.runtime_event_id in decision.source_event_ids
         ),
         "related_field_join_present": float(
             bool(receipt.related_control_field_event_ids)
@@ -677,7 +683,9 @@ def _build_conflict_join_eval(
         for key, value in checks.items()
         if key not in {"node_signal_receipt_join_count", "lower_wm_signal_backed"}
     }
-    status = "ok" if all(value == 1.0 for value in required_checks.values()) else "blocked"
+    status = (
+        "ok" if all(value == 1.0 for value in required_checks.values()) else "blocked"
+    )
     outcome_slots = {
         "false_veto_observed": None,
         "false_allow_observed": None,
@@ -848,67 +856,76 @@ def _build_outcome_join_rows(
     regime_evals: Sequence[Phase7ParetoRegimeEvalReport],
 ) -> list[Phase7OutcomeJoinRow]:
     rows: list[Phase7OutcomeJoinRow] = []
-    for item in field_evals:
+    for field_item in field_evals:
         rows.append(
             Phase7OutcomeJoinRow(
                 row_id=stable_id(
                     "phase7_outcome_row",
-                    {"source_report_id": item.report_id, "family": "control_field"},
+                    {
+                        "source_report_id": field_item.report_id,
+                        "family": "control_field",
+                    },
                 ),
                 row_family="control_field_shadow_outcome_join",
-                episode_id=item.episode_id,
-                source_report_id=item.report_id,
-                source_event_ids=[item.runtime_event_id],
-                source_decision_ids=[item.decision_id],
+                episode_id=field_item.episode_id,
+                source_report_id=field_item.report_id,
+                source_event_ids=[field_item.runtime_event_id],
+                source_decision_ids=[field_item.decision_id],
                 label_slots={
                     "field_effectiveness": "awaiting_shadow_outcome_label",
                     "field_legibility": "awaiting_reviewer_or_metric_label",
                     "dispatch_was_denied": True,
                 },
-                outcome_join_slots=dict(item.outcome_join_slots),
+                outcome_join_slots=dict(field_item.outcome_join_slots),
             )
         )
-    for item in conflict_evals:
+    for conflict_item in conflict_evals:
         rows.append(
             Phase7OutcomeJoinRow(
                 row_id=stable_id(
                     "phase7_outcome_row",
-                    {"source_report_id": item.report_id, "family": "conflict_join"},
+                    {
+                        "source_report_id": conflict_item.report_id,
+                        "family": "conflict_join",
+                    },
                 ),
                 row_family="conflict_join_shadow_outcome_join",
-                episode_id=item.episode_id,
-                source_report_id=item.report_id,
+                episode_id=conflict_item.episode_id,
+                source_report_id=conflict_item.report_id,
                 source_event_ids=[
-                    item.runtime_event_id,
-                    *item.related_control_field_event_ids,
+                    conflict_item.runtime_event_id,
+                    *conflict_item.related_control_field_event_ids,
                 ],
-                source_decision_ids=[item.decision_id],
+                source_decision_ids=[conflict_item.decision_id],
                 label_slots={
                     "override_correctness": "awaiting_counterfactual_label",
                     "false_veto": "awaiting_governance_benchmark_label",
                     "false_allow": "awaiting_governance_benchmark_label",
                 },
-                outcome_join_slots=dict(item.outcome_join_slots),
+                outcome_join_slots=dict(conflict_item.outcome_join_slots),
             )
         )
-    for item in regime_evals:
+    for regime_item in regime_evals:
         rows.append(
             Phase7OutcomeJoinRow(
                 row_id=stable_id(
                     "phase7_outcome_row",
-                    {"source_report_id": item.report_id, "family": "pareto_regime"},
+                    {
+                        "source_report_id": regime_item.report_id,
+                        "family": "pareto_regime",
+                    },
                 ),
                 row_family="pareto_regime_shadow_outcome_join",
-                episode_id=item.episode_id,
-                source_report_id=item.report_id,
+                episode_id=regime_item.episode_id,
+                source_report_id=regime_item.report_id,
                 source_event_ids=[],
                 source_decision_ids=[],
                 label_slots={
-                    "regime_key": item.regime_key,
-                    "composition_modes_seen": item.composition_modes_seen,
+                    "regime_key": regime_item.regime_key,
+                    "composition_modes_seen": regime_item.composition_modes_seen,
                     "pareto_label": "awaiting_labeled_pareto_front",
                 },
-                outcome_join_slots=dict(item.outcome_join_slots),
+                outcome_join_slots=dict(regime_item.outcome_join_slots),
             )
         )
     return rows

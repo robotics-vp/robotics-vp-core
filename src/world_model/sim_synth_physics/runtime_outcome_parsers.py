@@ -11,7 +11,7 @@ from typing import Any, Mapping, Sequence
 try:
     import yaml
 except Exception:  # pragma: no cover - optional dependency
-    yaml = None
+    yaml = None  # type: ignore[assignment]
 
 from .common import safe_float, strings
 
@@ -55,9 +55,14 @@ def _classify_artifact(ref: str) -> str:
     if suffix == ".csv":
         return "runtime_metrics"
     if suffix in DEPLOY_SUFFIXES:
-        if any(token in lowered for token in ("metric", "summary", "result", "stats", "eval")):
+        if any(
+            token in lowered
+            for token in ("metric", "summary", "result", "stats", "eval")
+        ):
             return "runtime_metrics"
-        if any(token in name for token in ("deploy", "config", "task", "args", "manifest")):
+        if any(
+            token in name for token in ("deploy", "config", "task", "args", "manifest")
+        ):
             return "deploy_config"
         if any(token in lowered for token in ("logs/", "outputs/", "runs/")):
             return "runtime_metrics"
@@ -65,7 +70,9 @@ def _classify_artifact(ref: str) -> str:
     return "other"
 
 
-def _numeric_leaf_map(payload: Any, *, prefix: str = "", depth: int = 0) -> dict[str, float]:
+def _numeric_leaf_map(
+    payload: Any, *, prefix: str = "", depth: int = 0
+) -> dict[str, float]:
     if depth > 2:
         return {}
     metrics: dict[str, float] = {}
@@ -75,14 +82,18 @@ def _numeric_leaf_map(payload: Any, *, prefix: str = "", depth: int = 0) -> dict
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 metrics[child_key] = float(value)
             else:
-                metrics.update(_numeric_leaf_map(value, prefix=child_key, depth=depth + 1))
+                metrics.update(
+                    _numeric_leaf_map(value, prefix=child_key, depth=depth + 1)
+                )
     elif isinstance(payload, list):
         for index, value in enumerate(payload[:5]):
             child_key = f"{prefix}[{index}]"
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 metrics[child_key] = float(value)
             else:
-                metrics.update(_numeric_leaf_map(value, prefix=child_key, depth=depth + 1))
+                metrics.update(
+                    _numeric_leaf_map(value, prefix=child_key, depth=depth + 1)
+                )
     return metrics
 
 
@@ -178,7 +189,9 @@ def summarize_runtime_output_artifacts(artifact_refs: Sequence[str]) -> dict[str
         "motion_dataset_refs": categorized["motion_dataset"],
         "retargeting_bundle_refs": categorized["retargeting_bundle"],
         "primary_policy_ref": (
-            categorized["policy_checkpoint"][0] if categorized["policy_checkpoint"] else ""
+            categorized["policy_checkpoint"][0]
+            if categorized["policy_checkpoint"]
+            else ""
         ),
         "primary_deploy_config_ref": (
             categorized["deploy_config"][0] if categorized["deploy_config"] else ""

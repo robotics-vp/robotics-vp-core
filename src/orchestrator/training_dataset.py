@@ -16,11 +16,15 @@ import json
 import random
 import re
 from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 import numpy as np
 
 from src.orchestrator.context import OrchestratorContext
-from src.orchestrator.orchestration_transformer import PAD_TOOL_INDEX, TOOL_NAMES, _encode_ctx
+from src.orchestrator.orchestration_transformer import (
+    PAD_TOOL_INDEX,
+    TOOL_NAMES,
+    _encode_ctx,
+)
 from src.orchestrator.toolspecs import ToolCall, ToolName
 from src.valuation.datapack_schema import DataPackMeta
 
@@ -33,9 +37,12 @@ class EconSemanticDecisionSummary:
     This is the "ground truth" from econ/datapack/semantic feedback loop
     that the orchestration transformer should learn to predict.
     """
+
     chosen_profile: str  # "SAFE" | "SAVER" | "BASE" | "BOOST"
     objective_preset: str  # "balanced" | "safety" | "throughput" | "energy_saver"
-    pareto_classification: str  # "energy_tight" | "mpl_tight" | "balanced" | "safety_focused"
+    pareto_classification: (
+        str  # "energy_tight" | "mpl_tight" | "balanced" | "safety_focused"
+    )
     urgency_level: str  # "none" | "moderate" | "high" | "critical"
     recommended_focus: str  # "throughput_demonstrations" | "safety_edge_cases" | etc.
     semantic_priority_fraction: float  # Fraction of tasks with high/critical priority
@@ -86,26 +93,40 @@ def instruction_text_for_sample(sample: OrchestrationSample) -> str:
     ]
     objective_preset = str(
         metadata.get("objective_preset")
-        or (sample.econ_semantic_summary.objective_preset if sample.econ_semantic_summary else "")
+        or (
+            sample.econ_semantic_summary.objective_preset
+            if sample.econ_semantic_summary
+            else ""
+        )
         or "balanced"
     )
     if objective_preset:
         parts.append(f"objective {objective_preset}")
     recommended_focus = str(
         metadata.get("recommended_focus")
-        or (sample.econ_semantic_summary.recommended_focus if sample.econ_semantic_summary else "")
+        or (
+            sample.econ_semantic_summary.recommended_focus
+            if sample.econ_semantic_summary
+            else ""
+        )
         or ""
     )
     if recommended_focus:
         parts.append(f"focus {recommended_focus}")
     urgency = str(
         metadata.get("urgency_level")
-        or (sample.econ_semantic_summary.urgency_level if sample.econ_semantic_summary else "")
+        or (
+            sample.econ_semantic_summary.urgency_level
+            if sample.econ_semantic_summary
+            else ""
+        )
         or ""
     )
     if urgency and urgency != "none":
         parts.append(f"urgency {urgency}")
-    for gap in list((sample.context.semantic_metadata or {}).get("data_gaps", []) or [])[:4]:
+    for gap in list(
+        (sample.context.semantic_metadata or {}).get("data_gaps", []) or []
+    )[:4]:
         if str(gap):
             parts.append(f"gap {gap}")
     return " ".join(parts)
@@ -119,7 +140,9 @@ def instruction_tokens_from_text(
 ) -> np.ndarray:
     """Hash instruction text into a deterministic bounded token sequence."""
     tokens = re.findall(r"[a-z0-9_:+.-]+", str(instruction_text).lower())
-    ids = [((abs(hash(token)) % max(vocab_size - 1, 1)) + 1) for token in tokens[:seq_len]]
+    ids = [
+        ((abs(hash(token)) % max(vocab_size - 1, 1)) + 1) for token in tokens[:seq_len]
+    ]
     if not ids:
         ids = [0]
     while len(ids) < seq_len:
@@ -244,7 +267,9 @@ def heuristic_backend_decision(ctx: OrchestratorContext) -> HeuristicDecision:
         w_energy = ctx.objective_vector[2]
         if w_energy > 1.5:
             backend = "isaac"  # Would prefer, but may not be available
-            rationale = f"High energy weight (w_energy={w_energy}) -> prefer Isaac for accuracy"
+            rationale = (
+                f"High energy weight (w_energy={w_energy}) -> prefer Isaac for accuracy"
+            )
         else:
             backend = "pybullet"
             rationale = "Standard PyBullet backend sufficient"
@@ -284,7 +309,9 @@ def heuristic_data_mix_decision(ctx: OrchestratorContext) -> HeuristicDecision:
     else:
         # Good data quality: favor real
         mix = {"real": 0.7, "synthetic": 0.2, "hybrid": 0.1}
-        rationale = f"Good trust ({trust:.2f}) + w_econ ({w_econ:.2f}) -> favor real data"
+        rationale = (
+            f"Good trust ({trust:.2f}) + w_econ ({w_econ:.2f}) -> favor real data"
+        )
 
     return HeuristicDecision(
         tool="SET_DATA_MIX",
@@ -293,7 +320,9 @@ def heuristic_data_mix_decision(ctx: OrchestratorContext) -> HeuristicDecision:
     )
 
 
-def generate_heuristic_tool_sequence(ctx: OrchestratorContext) -> List[HeuristicDecision]:
+def generate_heuristic_tool_sequence(
+    ctx: OrchestratorContext,
+) -> List[HeuristicDecision]:
     """
     Generate target tool sequence using heuristic policy.
 
@@ -340,9 +369,7 @@ def context_to_sample(ctx: OrchestratorContext) -> OrchestrationSample:
     decisions = generate_heuristic_tool_sequence(ctx)
 
     # Convert to ToolCall format
-    target_sequence = [
-        ToolCall(name=d.tool, args=d.args) for d in decisions
-    ]
+    target_sequence = [ToolCall(name=d.tool, args=d.args) for d in decisions]
 
     rationales = [d.rationale for d in decisions]
 
@@ -469,13 +496,14 @@ def build_training_dataset(
 
     # Use real datapacks if provided
     if real_datapacks:
-        for dp in real_datapacks[:num_samples // 2]:
+        for dp in real_datapacks[: num_samples // 2]:
             if dp.objective_profile:
                 ctx = OrchestratorContext(
                     env_name=dp.objective_profile.env_name or dp.task_name,
                     engine_type=dp.objective_profile.engine_type or dp.env_type,
                     task_type=dp.objective_profile.task_type or "unknown",
-                    customer_segment=dp.objective_profile.customer_segment or "balanced",
+                    customer_segment=dp.objective_profile.customer_segment
+                    or "balanced",
                     market_region=dp.objective_profile.market_region or "US",
                     objective_vector=dp.objective_profile.objective_vector,
                     wage_human=dp.objective_profile.wage_human,
@@ -524,7 +552,9 @@ def sample_from_dict(payload: Dict[str, Any]) -> OrchestrationSample:
     """Reconstruct an `OrchestrationSample` from a saved JSON row."""
     context = OrchestratorContext(**dict(payload.get("context", {}) or {}))
     target_tool_sequence = [
-        ToolCall(name=str(item.get("name")), args=dict(item.get("args", {})))
+        ToolCall(
+            name=cast(ToolName, str(item.get("name"))), args=dict(item.get("args", {}))
+        )
         for item in list(payload.get("target_tool_sequence", []) or [])
     ]
     econ_semantic_payload = payload.get("econ_semantic_summary")
@@ -539,9 +569,13 @@ def sample_from_dict(payload: Dict[str, Any]) -> OrchestrationSample:
         metadata["instruction_text"] = str(instruction_text)
     return OrchestrationSample(
         context=context,
-        context_features=np.asarray(payload.get("context_features", []), dtype=np.float32),
+        context_features=np.asarray(
+            payload.get("context_features", []), dtype=np.float32
+        ),
         target_tool_sequence=target_tool_sequence,
-        heuristic_rationale=[str(item) for item in list(payload.get("heuristic_rationale", []) or [])],
+        heuristic_rationale=[
+            str(item) for item in list(payload.get("heuristic_rationale", []) or [])
+        ],
         metadata=metadata,
         econ_semantic_summary=econ_semantic_summary,
         source_type=str(payload.get("source_type", "heuristic")),
@@ -632,6 +666,7 @@ def dataset_to_model_tensors(
 # ==============================================================================
 # Econ/Semantic-Derived Training Samples
 # ==============================================================================
+
 
 def classify_pareto_frontier(
     econ_signals: Dict[str, Any],
@@ -752,7 +787,9 @@ def build_econ_semantic_sample(
 
     # Derive decisions from econ/semantic signals (not heuristics!)
     chosen_profile = derive_chosen_profile_from_signals(econ_signals, datapack_signals)
-    objective_preset = derive_objective_preset_from_signals(econ_signals, datapack_signals)
+    objective_preset = derive_objective_preset_from_signals(
+        econ_signals, datapack_signals
+    )
     pareto_class = classify_pareto_frontier(econ_signals, datapack_signals)
     urgency_level = derive_urgency_level(econ_signals)
     recommended_focus = datapack_signals.get("recommended_collection_focus", "balanced")
@@ -761,7 +798,9 @@ def build_econ_semantic_sample(
     semantic_priority_fraction = 0.0
     if semantic_metrics:
         # This would come from SemanticOrchestrator's task graph analysis
-        semantic_priority_fraction = semantic_metrics.get("high_priority_task_fraction", 0.0)
+        semantic_priority_fraction = semantic_metrics.get(
+            "high_priority_task_fraction", 0.0
+        )
 
     # Build econ/semantic summary (auxiliary supervision target)
     econ_semantic_summary = EconSemanticDecisionSummary(
@@ -780,27 +819,33 @@ def build_econ_semantic_sample(
 
     # 1. Set backend (based on energy needs)
     backend = "isaac" if econ_signals.get("energy_urgency", 0) > 0.5 else "pybullet"
-    decisions.append(HeuristicDecision(
-        tool="SET_BACKEND",
-        args={"backend": backend},
-        rationale=f"Econ-driven: energy_urgency={econ_signals.get('energy_urgency', 0):.2f}",
-    ))
+    decisions.append(
+        HeuristicDecision(
+            tool="SET_BACKEND",
+            args={"backend": backend},
+            rationale=f"Econ-driven: energy_urgency={econ_signals.get('energy_urgency', 0):.2f}",
+        )
+    )
 
     # 2. Set objective preset from econ signals
-    decisions.append(HeuristicDecision(
-        tool="SET_OBJECTIVE_PRESET",
-        args={"preset": objective_preset},
-        rationale=f"Econ-driven: pareto_class={pareto_class}, urgency={urgency_level}",
-    ))
+    decisions.append(
+        HeuristicDecision(
+            tool="SET_OBJECTIVE_PRESET",
+            args={"preset": objective_preset},
+            rationale=f"Econ-driven: pareto_class={pareto_class}, urgency={urgency_level}",
+        )
+    )
 
     # 3. Set energy profile from econ signals
     profile_weights = {p: 0.0 for p in ["BASE", "BOOST", "SAVER", "SAFE"]}
     profile_weights[chosen_profile] = 1.0
-    decisions.append(HeuristicDecision(
-        tool="SET_ENERGY_PROFILE",
-        args={"profile_mix": profile_weights},
-        rationale=f"Econ-driven: chosen_profile={chosen_profile} based on urgencies",
-    ))
+    decisions.append(
+        HeuristicDecision(
+            tool="SET_ENERGY_PROFILE",
+            args={"profile_mix": profile_weights},
+            rationale=f"Econ-driven: chosen_profile={chosen_profile} based on urgencies",
+        )
+    )
 
     # 4. Set data mix based on datapack signals
     tier2_frac = datapack_signals.get("tier2_fraction", 0.1)
@@ -811,11 +856,13 @@ def build_econ_semantic_sample(
     else:
         data_mix = {"real": 0.6, "synthetic": 0.3, "hybrid": 0.1}
 
-    decisions.append(HeuristicDecision(
-        tool="SET_DATA_MIX",
-        args={"data_mix": data_mix},
-        rationale=f"Datapack-driven: tier2_frac={tier2_frac:.2f}, coverage={datapack_signals.get('data_coverage_score', 0):.2f}",
-    ))
+    decisions.append(
+        HeuristicDecision(
+            tool="SET_DATA_MIX",
+            args={"data_mix": data_mix},
+            rationale=f"Datapack-driven: tier2_frac={tier2_frac:.2f}, coverage={datapack_signals.get('data_coverage_score', 0):.2f}",
+        )
+    )
 
     # Convert to ToolCall format
     target_sequence = [ToolCall(name=d.tool, args=d.args) for d in decisions]
@@ -897,13 +944,15 @@ def generate_synthetic_econ_semantic_context(
         "mean_rebate_pct": random.uniform(0.0, 0.15),
         "mean_spread_capture": random.uniform(0.0, 0.2),
         "mean_data_premium": random.uniform(0.0, 0.08),
-        "recommended_collection_focus": random.choice([
-            "safety_edge_cases",
-            "throughput_demonstrations",
-            "energy_efficient_trajectories",
-            "frontier_cases",
-            "balanced",
-        ]),
+        "recommended_collection_focus": random.choice(
+            [
+                "safety_edge_cases",
+                "throughput_demonstrations",
+                "energy_efficient_trajectories",
+                "frontier_cases",
+                "balanced",
+            ]
+        ),
     }
 
     return ctx, econ_signals, datapack_signals
@@ -936,7 +985,9 @@ def build_mixed_training_dataset(
 
     # Generate econ/semantic samples
     for i in range(num_econ_semantic):
-        ctx, econ_sig, datapack_sig = generate_synthetic_econ_semantic_context(seed=i + num_heuristic)
+        ctx, econ_sig, datapack_sig = generate_synthetic_econ_semantic_context(
+            seed=i + num_heuristic
+        )
         sample = build_econ_semantic_sample(ctx, econ_sig, datapack_sig)
         samples.append(sample)
 

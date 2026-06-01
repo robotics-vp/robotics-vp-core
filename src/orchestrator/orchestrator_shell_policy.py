@@ -68,7 +68,9 @@ def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
-def _normalize_distribution(values: Mapping[str, Any], keys: Sequence[str]) -> Dict[str, float]:
+def _normalize_distribution(
+    values: Mapping[str, Any], keys: Sequence[str]
+) -> Dict[str, float]:
     clean = {str(key): max(0.0, _safe_float(values.get(key, 0.0))) for key in keys}
     total = sum(clean.values())
     if total <= 0.0:
@@ -83,9 +85,13 @@ def _count_norm(value: Any, *, scale: float) -> float:
     return _clamp01(_safe_float(value, 0.0) / float(max(scale, 1.0)))
 
 
-def heuristic_preset_distribution(focus_objective_presets: Sequence[str]) -> Dict[str, float]:
+def heuristic_preset_distribution(
+    focus_objective_presets: Sequence[str],
+) -> Dict[str, float]:
     weights = {label: 0.0 for label in SHELL_POLICY_PRESET_LABELS}
-    selected = [str(label) for label in (focus_objective_presets or []) if str(label) in weights]
+    selected = [
+        str(label) for label in (focus_objective_presets or []) if str(label) in weights
+    ]
     if not selected:
         weights["balanced"] = 1.0
         return weights
@@ -106,15 +112,21 @@ def build_shell_policy_feature_map(
 ) -> Dict[str, float]:
     econ = snapshot.econ_slice
     meta = snapshot.meta_slice
-    recap = snapshot.metadata.get("recap", {}) if isinstance(snapshot.metadata, Mapping) else {}
-    execution_summary = {}
+    recap = (
+        snapshot.metadata.get("recap", {})
+        if isinstance(snapshot.metadata, Mapping)
+        else {}
+    )
+    execution_summary: Mapping[str, Any] = {}
     if isinstance(snapshot.metadata, Mapping):
         execution_summary = (
             snapshot.metadata.get("execution_precondition_summary")
             or snapshot.metadata.get("execution_preconditions")
             or {}
         )
-    execution_summary = execution_summary if isinstance(execution_summary, Mapping) else {}
+    execution_summary = (
+        execution_summary if isinstance(execution_summary, Mapping) else {}
+    )
     world_model = snapshot.semantic_world_model
     meta_node_weights: Dict[str, float] = {}
     capability_scores: Dict[str, float] = {}
@@ -139,42 +151,80 @@ def build_shell_policy_feature_map(
             ood_trust = _safe_float(ood_payload.get("trust_score", 0.0))
     return {
         "avg_wage_parity": _clamp01(_safe_float(getattr(econ, "avg_wage_parity", 0.0))),
-        "wage_gap": _clamp01(max(0.0, 1.0 - _safe_float(getattr(econ, "avg_wage_parity", 0.0)))),
+        "wage_gap": _clamp01(
+            max(0.0, 1.0 - _safe_float(getattr(econ, "avg_wage_parity", 0.0)))
+        ),
         "avg_energy_cost": _clamp01(_safe_float(getattr(econ, "avg_energy_cost", 0.0))),
         "avg_error_rate": _clamp01(_safe_float(getattr(econ, "avg_error_rate", 0.0))),
-        "frontier_episode_count_norm": _count_norm(len(list(getattr(econ, "frontier_episodes", []) or [])), scale=12.0),
-        "recap_mean_goodness": _clamp01(_safe_float(recap.get("mean_goodness", 0.0), 0.0)),
+        "frontier_episode_count_norm": _count_norm(
+            len(list(getattr(econ, "frontier_episodes", []) or [])), scale=12.0
+        ),
+        "recap_mean_goodness": _clamp01(
+            _safe_float(recap.get("mean_goodness", 0.0), 0.0)
+        ),
         "recap_top_episode_fraction": _count_norm(len(top_episodes), scale=6.0),
-        "num_segments_norm": _count_norm(getattr(snapshot, "num_segments", 0), scale=12.0),
-        "recovery_segment_fraction": _clamp01(_safe_float(getattr(snapshot, "recovery_segment_fraction", 0.0))),
-        "mobility_drift_rate": _clamp01(_safe_float(getattr(snapshot, "mobility_drift_rate", 0.0))),
+        "num_segments_norm": _count_norm(
+            getattr(snapshot, "num_segments", 0), scale=12.0
+        ),
+        "recovery_segment_fraction": _clamp01(
+            _safe_float(getattr(snapshot, "recovery_segment_fraction", 0.0))
+        ),
+        "mobility_drift_rate": _clamp01(
+            _safe_float(getattr(snapshot, "mobility_drift_rate", 0.0))
+        ),
         "blocked_count_norm": _count_norm(blocked_count, scale=6.0),
         "ready_count_norm": _count_norm(ready_count, scale=6.0),
-        "mean_readiness_score": _clamp01(_safe_float(execution_summary.get("mean_readiness_score", 0.0))),
+        "mean_readiness_score": _clamp01(
+            _safe_float(execution_summary.get("mean_readiness_score", 0.0))
+        ),
         "max_ood_severity": _clamp01(
             _safe_float(
-                snapshot.metadata.get("max_ood_severity", snapshot.metadata.get("ood_severity", 0.0))
+                snapshot.metadata.get(
+                    "max_ood_severity", snapshot.metadata.get("ood_severity", 0.0)
+                )
                 if isinstance(snapshot.metadata, Mapping)
                 else 0.0
             )
         ),
         "ood_trust": _clamp01(ood_trust),
         "risk_triage_score": _clamp01(meta_node_weights.get("risk_triage", 0.0)),
-        "recovery_router_score": _clamp01(meta_node_weights.get("recovery_router", 0.0)),
-        "semantic_memory_refresh_score": _clamp01(meta_node_weights.get("semantic_memory_refresh", 0.0)),
+        "recovery_router_score": _clamp01(
+            meta_node_weights.get("recovery_router", 0.0)
+        ),
+        "semantic_memory_refresh_score": _clamp01(
+            meta_node_weights.get("semantic_memory_refresh", 0.0)
+        ),
         "fusion_bridge_score": _clamp01(meta_node_weights.get("fusion_bridge", 0.0)),
-        "ontology_router_score": _clamp01(meta_node_weights.get("ontology_router", 0.0)),
-        "task_graph_router_score": _clamp01(meta_node_weights.get("task_graph_router", 0.0)),
-        "efficiency_router_score": _clamp01(meta_node_weights.get("efficiency_router", 0.0)),
+        "ontology_router_score": _clamp01(
+            meta_node_weights.get("ontology_router", 0.0)
+        ),
+        "task_graph_router_score": _clamp01(
+            meta_node_weights.get("task_graph_router", 0.0)
+        ),
+        "efficiency_router_score": _clamp01(
+            meta_node_weights.get("efficiency_router", 0.0)
+        ),
         "risk_reasoning": _clamp01(capability_scores.get("risk_reasoning", 0.0)),
         "stage2_bridge": _clamp01(capability_scores.get("stage2_bridge", 0.0)),
-        "fusion_bridge_capability": _clamp01(capability_scores.get("fusion_bridge", 0.0)),
+        "fusion_bridge_capability": _clamp01(
+            capability_scores.get("fusion_bridge", 0.0)
+        ),
         "object_memory": _clamp01(capability_scores.get("object_memory", 0.0)),
-        "affordance_grounding": _clamp01(capability_scores.get("affordance_grounding", 0.0)),
-        "meta_node_orchestration": _clamp01(capability_scores.get("meta_node_orchestration", 0.0)),
-        "expected_delta_mpl_norm": _clamp01(max(_safe_float(expected_deltas.get("mpl", 0.0), 0.0), 0.0) / 5.0),
-        "expected_delta_error_norm": _clamp01(abs(_safe_float(expected_deltas.get("error", 0.0), 0.0))),
-        "expected_delta_energy_norm": _clamp01(abs(_safe_float(expected_deltas.get("energy", 0.0), 0.0)) / 5.0),
+        "affordance_grounding": _clamp01(
+            capability_scores.get("affordance_grounding", 0.0)
+        ),
+        "meta_node_orchestration": _clamp01(
+            capability_scores.get("meta_node_orchestration", 0.0)
+        ),
+        "expected_delta_mpl_norm": _clamp01(
+            max(_safe_float(expected_deltas.get("mpl", 0.0), 0.0), 0.0) / 5.0
+        ),
+        "expected_delta_error_norm": _clamp01(
+            abs(_safe_float(expected_deltas.get("error", 0.0), 0.0))
+        ),
+        "expected_delta_energy_norm": _clamp01(
+            abs(_safe_float(expected_deltas.get("energy", 0.0), 0.0)) / 5.0
+        ),
         "preset_balanced_available": 1.0 if "balanced" in presets else 0.0,
         "preset_safety_available": 1.0 if "safety" in presets else 0.0,
         "preset_energy_saver_available": 1.0 if "energy_saver" in presets else 0.0,
@@ -195,8 +245,12 @@ def build_shell_policy_feature_vector(
 
 
 def extract_orchestrator_advisory_target(payload: Mapping[str, Any]) -> Dict[str, Any]:
-    focus_presets = [str(item) for item in list(payload.get("focus_objective_presets", []) or [])]
-    strategy = normalize_strategy_overrides(payload.get("sampler_strategy_overrides", {}) or {})
+    focus_presets = [
+        str(item) for item in list(payload.get("focus_objective_presets", []) or [])
+    ]
+    strategy = normalize_strategy_overrides(
+        payload.get("sampler_strategy_overrides", {}) or {}
+    )
     execution_mode = str(payload.get("execution_mode", "advisory") or "advisory")
     promotion_stage = payload.get("promotion_stage")
     if promotion_stage is not None:
@@ -208,7 +262,9 @@ def extract_orchestrator_advisory_target(payload: Mapping[str, Any]) -> Dict[str
         "safety_emphasis": _clamp01(_safe_float(payload.get("safety_emphasis", 0.0))),
         "execution_mode": execution_mode,
         "activation_label": 0.0 if execution_mode == "advisory" else 1.0,
-        "policy_source": str(payload.get("policy_source", "heuristic_fallback") or "heuristic_fallback"),
+        "policy_source": str(
+            payload.get("policy_source", "heuristic_fallback") or "heuristic_fallback"
+        ),
         "promotion_stage": promotion_stage or "heuristic_fallback",
         "activation_plan": dict(payload.get("activation_plan", {}) or {}),
     }

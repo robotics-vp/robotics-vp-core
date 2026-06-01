@@ -39,9 +39,7 @@ from src.world_model.humanoid_readiness.unitree_bringup_readiness import (
     default_unitree_local_roots,
 )
 
-PHASE4_UNITREE_LOCAL_HARNESS_REPORT_VERSION = (
-    "phase4_unitree_local_harness_report_v1"
-)
+PHASE4_UNITREE_LOCAL_HARNESS_REPORT_VERSION = "phase4_unitree_local_harness_report_v1"
 LOW_STATE_TRACE_VERSION = "unitree_low_state_trace_v1"
 IMU_TRACE_VERSION = "unitree_imu_trace_v1"
 WIRELESS_ESTOP_TRACE_VERSION = "unitree_wireless_estop_trace_v1"
@@ -50,9 +48,7 @@ TRACE_REPLAY_RECEIPT_VERSION = "unitree_trace_replay_receipt_v1"
 MOCK_RECEIVER_RECEIPT_VERSION = "unitree_mock_receiver_receipt_v1"
 STALE_DATA_VALIDATION_RECEIPT_VERSION = "unitree_stale_data_validation_receipt_v1"
 ROS_MESSAGE_DEFINITION_VERSION = "unitree_ros_message_definition_v1"
-COMMAND_SHAPE_VALIDATION_RECEIPT_VERSION = (
-    "unitree_command_shape_validation_receipt_v1"
-)
+COMMAND_SHAPE_VALIDATION_RECEIPT_VERSION = "unitree_command_shape_validation_receipt_v1"
 MOCK_TIMING_RUN_RECEIPT_VERSION = "unitree_mock_timing_run_receipt_v1"
 WATCHDOG_DEMOTION_RECEIPT_VERSION = "unitree_watchdog_demotion_receipt_v1"
 SAFETY_STATE_TRANSITION_VERSION = "unitree_safety_state_transition_v1"
@@ -140,7 +136,9 @@ class LowStateTrace:
             },
             joint_velocities={
                 str(key): _safe_float(value)
-                for key, value in dict(payload.get("joint_velocities", {}) or {}).items()
+                for key, value in dict(
+                    payload.get("joint_velocities", {}) or {}
+                ).items()
             },
             motor_count=int(payload.get("motor_count", 0) or 0),
             source=str(payload.get("source", "synthetic_local_trace")),
@@ -186,7 +184,9 @@ class ImuTrace:
             quaternion_xyzw=[
                 _safe_float(value) for value in list(payload.get("quaternion_xyzw", []))
             ],
-            gyro_rad_s=[_safe_float(value) for value in list(payload.get("gyro_rad_s", []))],
+            gyro_rad_s=[
+                _safe_float(value) for value in list(payload.get("gyro_rad_s", []))
+            ],
             accel_m_s2=[
                 _safe_float(value) for value in list(payload.get("accel_m_s2", []))
             ],
@@ -516,9 +516,7 @@ class CommandShapeValidationReceipt:
             "frame_count": int(self.frame_count),
             "required_fields_present": bool(self.required_fields_present),
             "array_capacity_sufficient": bool(self.array_capacity_sufficient),
-            "no_publish_serialization_ready": bool(
-                self.no_publish_serialization_ready
-            ),
+            "no_publish_serialization_ready": bool(self.no_publish_serialization_ready),
             "validated_frame_ids": strings(self.validated_frame_ids),
             "missing_fields": strings(self.missing_fields),
             "dry_run_payload_shape": mapping(self.dry_run_payload_shape),
@@ -536,9 +534,7 @@ class CommandShapeValidationReceipt:
             target_message_name=str(payload.get("target_message_name", "")),
             message_definition_id=str(payload.get("message_definition_id", "")),
             frame_count=int(payload.get("frame_count", 0) or 0),
-            required_fields_present=bool(
-                payload.get("required_fields_present", False)
-            ),
+            required_fields_present=bool(payload.get("required_fields_present", False)),
             array_capacity_sufficient=bool(
                 payload.get("array_capacity_sufficient", False)
             ),
@@ -619,7 +615,9 @@ class MockTimingRunReceipt:
             max_jitter_s=_safe_float(payload.get("max_jitter_s")),
             jitter_histogram={
                 str(key): int(value)
-                for key, value in dict(payload.get("jitter_histogram", {}) or {}).items()
+                for key, value in dict(
+                    payload.get("jitter_histogram", {}) or {}
+                ).items()
             },
             stale_event_count=int(payload.get("stale_event_count", 0) or 0),
             local_loop_executed=bool(payload.get("local_loop_executed", True)),
@@ -772,9 +770,7 @@ class SyntheticSafetyDrillReceipt:
             receipt_id=str(payload.get("receipt_id", "")),
             drill_key=str(payload.get("drill_key", "")),
             transition_ids=strings(payload.get("transition_ids")),
-            drill_executed_locally=bool(
-                payload.get("drill_executed_locally", True)
-            ),
+            drill_executed_locally=bool(payload.get("drill_executed_locally", True)),
             estop_latched=bool(payload.get("estop_latched", False)),
             stale_data_vetoed=bool(payload.get("stale_data_vetoed", False)),
             joint_clamp_observed=bool(payload.get("joint_clamp_observed", False)),
@@ -782,9 +778,7 @@ class SyntheticSafetyDrillReceipt:
                 payload.get("stable_base_demote_requested", False)
             ),
             recovery_state_reached=bool(payload.get("recovery_state_reached", False)),
-            teleop_runtime_executed=bool(
-                payload.get("teleop_runtime_executed", False)
-            ),
+            teleop_runtime_executed=bool(payload.get("teleop_runtime_executed", False)),
             hardware_executed=bool(payload.get("hardware_executed", False)),
             promotion_eligible=bool(payload.get("promotion_eligible", False)),
             authority_class=str(
@@ -915,9 +909,7 @@ class Phase4UnitreeLocalHarnessReport:
             "command_shape_validation_receipt_count": int(
                 self.command_shape_validation_receipt_count
             ),
-            "mock_timing_run_receipt_count": int(
-                self.mock_timing_run_receipt_count
-            ),
+            "mock_timing_run_receipt_count": int(self.mock_timing_run_receipt_count),
             "watchdog_demotion_receipt_count": int(
                 self.watchdog_demotion_receipt_count
             ),
@@ -928,12 +920,8 @@ class Phase4UnitreeLocalHarnessReport:
             "runtime_preflight_receipt_count": int(
                 self.runtime_preflight_receipt_count
             ),
-            "trace_stream_harness_complete": bool(
-                self.trace_stream_harness_complete
-            ),
-            "command_shape_harness_complete": bool(
-                self.command_shape_harness_complete
-            ),
+            "trace_stream_harness_complete": bool(self.trace_stream_harness_complete),
+            "command_shape_harness_complete": bool(self.command_shape_harness_complete),
             "mock_timing_watchdog_harness_complete": bool(
                 self.mock_timing_watchdog_harness_complete
             ),
@@ -961,9 +949,7 @@ class Phase4UnitreeLocalHarnessReport:
         }
 
     @classmethod
-    def from_dict(
-        cls, payload: Mapping[str, Any]
-    ) -> "Phase4UnitreeLocalHarnessReport":
+    def from_dict(cls, payload: Mapping[str, Any]) -> "Phase4UnitreeLocalHarnessReport":
         return cls(
             report_id=str(payload.get("report_id", "")),
             chassis_id=str(payload.get("chassis_id", "")),
@@ -1037,7 +1023,9 @@ class Phase4UnitreeLocalHarnessReport:
                 **_denied_gates(),
                 **{
                     str(key): bool(value)
-                    for key, value in dict(payload.get("denied_gates", {}) or {}).items()
+                    for key, value in dict(
+                        payload.get("denied_gates", {}) or {}
+                    ).items()
                 },
             },
             remaining_evidence_blockers=strings(
@@ -1396,7 +1384,9 @@ def build_command_shape_validation_receipts(
         "crc": "not_computed_no_publish",
     }
     request_required = ["header", "parameter", "binary"]
-    request_missing = [field for field in request_required if field not in request_fields]
+    request_missing = [
+        field for field in request_required if field not in request_fields
+    ]
     request_payload = {
         "header": "dry_run_header_required",
         "parameter": "json_command_payload_no_publish",
@@ -1453,7 +1443,9 @@ def build_command_shape_validation_receipts(
                 ),
                 validated_frame_ids=[frame.frame_id for frame in frames],
                 missing_fields=missing,
-                dry_run_payload_shape=payload_shape,
+                dry_run_payload_shape=(
+                    mapping(payload_shape) if isinstance(payload_shape, Mapping) else {}
+                ),
             )
         )
     return receipts
@@ -1548,7 +1540,9 @@ def run_safety_recovery_harness(
     transitions: list[SafetyStateTransition] = []
     current = "nominal_dry_run"
 
-    def transition(event_key: str, to_state: str, reason: str, timestamp_s: float) -> None:
+    def transition(
+        event_key: str, to_state: str, reason: str, timestamp_s: float
+    ) -> None:
         nonlocal current
         payload = {
             "event_key": event_key,
@@ -1611,7 +1605,8 @@ def run_safety_recovery_harness(
         joint_clamp_observed=clamp_seen,
         stable_base_demote_requested=bool(transitions),
         recovery_state_reached=bool(
-            transitions and transitions[-1].to_state == "recovery_ready_operator_required"
+            transitions
+            and transitions[-1].to_state == "recovery_ready_operator_required"
         ),
     )
     return transitions, [drill]
@@ -1724,7 +1719,10 @@ def build_runtime_preflight_receipts(
         ],
     )
     xml_failed = list(failed)
-    for xml_marker in ("unitree_robots/g1/scene_29dof.xml", "unitree_robots/g1/g1_29dof.xml"):
+    for xml_marker in (
+        "unitree_robots/g1/scene_29dof.xml",
+        "unitree_robots/g1/g1_29dof.xml",
+    ):
         xml_path = mujoco_root / xml_marker
         if xml_path.exists():
             try:
@@ -1965,11 +1963,9 @@ def save_phase4_unitree_local_harnesses(
         "report_path": output / "phase4_unitree_local_harness_report_v1.json",
         "low_state_traces_path": output / "unitree_low_state_traces_v1.jsonl",
         "imu_traces_path": output / "unitree_imu_traces_v1.jsonl",
-        "wireless_estop_traces_path": output
-        / "unitree_wireless_estop_traces_v1.jsonl",
+        "wireless_estop_traces_path": output / "unitree_wireless_estop_traces_v1.jsonl",
         "contact_traces_path": output / "unitree_contact_traces_v1.jsonl",
-        "trace_replay_receipts_path": output
-        / "unitree_trace_replay_receipts_v1.jsonl",
+        "trace_replay_receipts_path": output / "unitree_trace_replay_receipts_v1.jsonl",
         "mock_receiver_receipts_path": output
         / "unitree_mock_receiver_receipts_v1.jsonl",
         "stale_validation_receipts_path": output
@@ -1982,8 +1978,7 @@ def save_phase4_unitree_local_harnesses(
         / "unitree_mock_timing_run_receipts_v1.jsonl",
         "watchdog_demotion_receipts_path": output
         / "unitree_watchdog_demotion_receipts_v1.jsonl",
-        "safety_transitions_path": output
-        / "unitree_safety_state_transitions_v1.jsonl",
+        "safety_transitions_path": output / "unitree_safety_state_transitions_v1.jsonl",
         "synthetic_safety_drills_path": output
         / "unitree_synthetic_safety_drill_receipts_v1.jsonl",
         "runtime_preflight_receipts_path": output
