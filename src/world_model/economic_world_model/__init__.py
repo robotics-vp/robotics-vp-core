@@ -152,6 +152,13 @@ from src.world_model.economic_world_model.resource_surfaces import (
     load_economic_wm_resource_receipts,
     save_economic_wm_resource_surfaces,
 )
+from src.world_model.economic_world_model.regime_broadcast import (
+    DENIED_REGIME_BROADCAST_AUTHORITIES,
+    RegimeAcknowledgmentReceipt,
+    RegimeBroadcast,
+    build_regime_acknowledgment,
+    build_regime_broadcast,
+)
 
 from src.world_model.economic_world_model.scaffold import (
     AllocationEnvelope,
@@ -208,6 +215,7 @@ from src.world_model.economic_world_model.training_rows import (
 
 __all__ = [
     "AllocationEnvelope",
+    "DENIED_REGIME_BROADCAST_AUTHORITIES",
     "EconomicWMAllocationCandidate",
     "ArtifactRetentionReceipt",
     "ClaimEvidenceReceipt",
@@ -260,7 +268,11 @@ __all__ = [
     "EconomicWMShadowOutcomeReceipt",
     "EconomicWMNeuralArchitectureManifest",
     "EconomicWMNeuralComponentSpec",
+    "RegimeAcknowledgmentReceipt",
+    "RegimeBroadcast",
     "build_economic_wm_neural_architecture_manifest",
+    "build_regime_acknowledgment",
+    "build_regime_broadcast",
     "download_lerobot_minimal_files",
     "import_lerobot_corpus_slice",
     "load_external_corpus_quality_receipts",

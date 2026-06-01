@@ -145,12 +145,12 @@ The bio/neuro items are not uniformly "implemented." The current honest state:
 
 | Inspiration | Status | Evidence / Gap |
 | --- | --- | --- |
-| Efference copy / corollary discharge | Doctrine preserved, not implemented as named code | `SelfMotionExpectation` and `SelfDisturbanceReceipt` appear in doctrine only. Needs Embodiment predictor plus Perception comparison receipt. |
-| Active sensing | Doctrine preserved, not implemented as named code | `ActiveSensingProposal` / `ActiveSensingReceipt` are doctrine-only. Needs action proposal head plus value-of-information receipts. |
-| Neuromodulation / allostasis | Partially scaffolded | Economic regime estimator appears in neural manifest; Phase 7 regime eval/hypernetwork scaffolds exist. No `RegimeBroadcast` / `RegimeAcknowledgmentReceipt` runtime path yet. |
+| Efference copy / corollary discharge | Local substrate wired after this sweep | `SelfMotionExpectation` and `SelfDisturbanceReceipt` now exist as typed local surfaces. Still missing: trained predictor, real observed-motion corpus, and automatic runtime-loop emission. |
+| Active sensing | Local proposal/receipt substrate wired after this sweep | `ActiveSensingProposal` and `ActiveSensingReceipt` now exist. Still missing: executed active-sensing actions, measured information gain, and full Economic WM value-of-information shaping. |
+| Neuromodulation / allostasis | Local broadcast/ack substrate wired after this sweep | `RegimeBroadcast` and `RegimeAcknowledgmentReceipt` now exist as low-bandwidth advisory surfaces. Still missing: trained Economic regime estimator, real downstream adaptation, and meta-regal composition training. |
 | Plasticity gating | Partially implemented | Perception promotion gates, benchmark evidence, provisional-vs-promotion logic, and `promotion_eligible=false` discipline are real. Full training eligibility/consolidation receipt family is not complete. |
-| Motor synergies + interoception | Partially scaffolded | G1 body/resource schemas, bipedal chassis, compute/battery/thermal receipts exist. No learned synergy codebook or real interoceptive telemetry corpus. |
-| Immune-style anomaly governance | Partially scaffolded for Phase 7 | Governance/eval/signal scaffolds exist. No trained anomaly critics or meta-regal immune composition. |
+| Motor synergies + interoception | Local heuristic substrate wired after this sweep | `SynergyCodebookEntry` and `InteroceptiveState` now exist. Still missing: learned codebook, real interoceptive telemetry, and hardware-calibrated activation patterns. |
+| Immune-style anomaly governance | Local anomaly/escalation substrate wired after this sweep | `AnomalySuspicionReceipt` and `GovernanceEscalationEvent` now exist with abstention. Still missing: trained anomaly critics and meta-regal immune-style composition. |
 
 ## Multi-WM Roadmap Status Answer
 

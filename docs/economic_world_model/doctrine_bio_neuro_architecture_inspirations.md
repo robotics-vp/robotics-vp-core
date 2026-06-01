@@ -2,11 +2,24 @@
 
 ## Status
 
-Active doctrine note. No implementation implied. This document defines which
-biological and computational-neuroscience organizational principles are
-genuinely useful for the multi-WM robostack, where exactly they fit, what
-neural architecture families they suggest, what typed surfaces they imply,
-and what they must not be allowed to collapse into.
+Active doctrine note. As of 2026-06-01, the repo also has a local
+substrate-only implementation of the named typed surfaces in:
+
+- `src/world_model/embodiment_actuation/bio_neuro_surfaces.py`
+- `src/world_model/perception_grounding/bio_neuro_receipts.py`
+- `src/world_model/economic_world_model/regime_broadcast.py`
+- `src/regal/bio_neuro_anomaly.py`
+- `scripts/economic_world_model/check_bio_neuro_substrate.py`
+
+That implementation is deterministic, advisory, receipt-emitting, and denied
+authority. It does not imply trained models, provider execution, GPU proof,
+Unitree sim/hardware proof, reward-math mutation, live policy control, or
+promotion eligibility.
+
+This document defines which biological and computational-neuroscience
+organizational principles are genuinely useful for the multi-WM robostack,
+where exactly they fit, what neural architecture families they suggest, what
+typed surfaces they imply, and what they must not be allowed to collapse into.
 
 ## Anti-Metaphor Framing
 

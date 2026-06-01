@@ -3,7 +3,7 @@
     "description": "Training script migration backlog for @regal_training wrapper",
     "goal": "Reduce pending count to 0",
     "created_at": "2026-01-13",
-    "updated_at": "2026-05-24",
+    "updated_at": "2026-06-01",
     "backlog": [
         {
             "script": "train_orchestration_transformer_v1_curriculum.py",
@@ -219,6 +219,90 @@
             "notes": "Future real trainer must consume MetaNodeState rows, trajectory receipts, intervention receipts, counterfactual target slots, robustness reports, Phase-6 transport evals, Phase-3.5 posture/schema refs, and Phase-4 timing/resource/recovery contracts. No local trainer has run and no weights or authority are granted by the Phase-6.5 scaffold.",
             "created_at": "2026-05-24",
             "updated_at": "2026-05-24"
+        },
+        {
+            "script": "train_self_motion_expectation_v0.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "local SelfMotionExpectation and SelfDisturbanceReceipt substrate exists, but actual training remains blocked by synchronized embodiment/perception trajectories, observed egomotion/camera/body deltas, contact/force labels, provider-backed temporal grounding, Unitree sim or hardware traces, and promotion-grade disturbance benchmarks",
+            "downstream_dependents": [
+                "perception embodiment temporal alignment",
+                "active sensing proposal calibration",
+                "phase7 lower-WM signal adapters"
+            ],
+            "notes": "Future real trainer should learn Embodiment-owned efference-copy predictions over proprioception, issued action chunks, body pose, contact state, and camera/egomotion traces, then score Perception-side SelfDisturbanceReceipt mismatch. The current local substrate is deterministic and advisory only; it does not train, write weights, run providers, operate Unitree hardware, or grant promotion.",
+            "created_at": "2026-06-01",
+            "updated_at": "2026-06-01"
+        },
+        {
+            "script": "train_active_sensing_policy_v0.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "local ActiveSensingProposal and ActiveSensingReceipt substrate exists, but actual training remains blocked by executed active-sensing actions, measured uncertainty before/after, real cost telemetry, safety-reviewed exploration constraints, provider-backed perception uncertainty, and Economic WM value-of-information labels",
+            "downstream_dependents": [
+                "active sensing value-of-information shaping",
+                "perception provider bring-up evaluation",
+                "embodiment action proposal promotion"
+            ],
+            "notes": "Future real trainer should learn bounded information-gain proposal scoring for reposition/contact/mode-switch actions without turning active sensing into a generic exploration bonus. The current local substrate emits proposals and receipts only; no active-sensing action has been executed or promoted.",
+            "created_at": "2026-06-01",
+            "updated_at": "2026-06-01"
+        },
+        {
+            "script": "train_economic_regime_broadcast_v0.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "local RegimeBroadcast and RegimeAcknowledgmentReceipt substrate exists, but actual training remains blocked by Economic WM estimator/dynamics training, real resource telemetry, downstream adaptation receipts, shadow outcome corpora, provider/GPU capacity, and governance benchmark evidence",
+            "downstream_dependents": [
+                "economic allostatic regime shaping",
+                "phase7 meta-regal composition",
+                "runpod provider loop budgeting"
+            ],
+            "notes": "Future real trainer should learn low-bandwidth broadcast-conditioning signals only: trust, compute, exploration, training, energy, and degraded-mode posture. It must not become high-bandwidth control, lower-WM truth redefinition, reward-math mutation, or live policy authority.",
+            "created_at": "2026-06-01",
+            "updated_at": "2026-06-01"
+        },
+        {
+            "script": "train_embodiment_synergy_interoception_v0.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "local SynergyCodebookEntry and InteroceptiveState substrate exists, but actual training remains blocked by multi-joint G1 trajectories, real interoceptive telemetry, hardware-calibrated limits, thermal/battery/wear labels, safety envelopes, and whole-body policy evaluation evidence",
+            "downstream_dependents": [
+                "g1 whole-body action proposal training",
+                "embodiment resource-conditioned control",
+                "economic resource receipt ingestion"
+            ],
+            "notes": "Future real trainer should learn Embodiment-local synergy codebooks and interoceptive encoders for G1/R1-class whole-body control while preserving typed state ownership. The current entries are heuristic grouping and telemetry placeholders only.",
+            "created_at": "2026-06-01",
+            "updated_at": "2026-06-01"
+        },
+        {
+            "script": "train_regal_anomaly_governance_v0.py",
+            "priority": "P1",
+            "owner": "codex",
+            "blocked_by": "local AnomalySuspicionReceipt and GovernanceEscalationEvent substrate exists, but actual training remains blocked by domain-local anomaly corpora, abstention labels, operator review outcomes, Phase-6 transport evidence, Phase-7 shadow-runtime joins, provider/hardware evidence, and promotion-grade governance benchmarks",
+            "downstream_dependents": [
+                "immune-style anomaly governance",
+                "phase7 meta-regal composition",
+                "phase8 operations review loop"
+            ],
+            "notes": "Future real trainer should learn bounded anomaly support and abstention for per-domain governance nodes before any meta-regal composition. The current local receipts are deterministic and advisory; they do not grant live control or escalation authority.",
+            "created_at": "2026-06-01",
+            "updated_at": "2026-06-01"
+        },
+        {
+            "script": "train_plasticity_consolidation_gates_v0.py",
+            "priority": "P2",
+            "owner": "codex",
+            "blocked_by": "Perception promotion gates and provisional-evidence discipline exist, but stack-wide consolidation training remains blocked by cross-WM benchmark corpora, lower-WM promotion labels, replay outcome joins, provider-backed evidence, and governance-approved eligibility targets",
+            "downstream_dependents": [
+                "stack-wide plasticity gating",
+                "benchmark-gated provider promotion",
+                "phase8 backlog exhaustion governance"
+            ],
+            "notes": "Future real trainer should learn selective consolidation and promotion eligibility across WMs without overwriting typed promotion gates. Until benchmark evidence is real, local scaffolds must remain non-promotional.",
+            "created_at": "2026-06-01",
+            "updated_at": "2026-06-01"
         }
     ],
     "migrated": [

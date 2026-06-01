@@ -4168,3 +4168,38 @@ Verification for the Phase-5.1 pass:
 - Boundary preserved: this is an audit and next-session worklist. It does not
   run providers, launch pods, train models, operate hardware, or change any
   promotion/authority gate.
+
+### 2026-06-01: Bio/neuro substrate wiring and multi-WM unwired audit
+
+- Added local substrate-only code for the bio/neuro doctrine surfaces:
+  - Embodiment: `SelfMotionExpectation`, `ActiveSensingProposal`,
+    `SynergyCodebookEntry`, `InteroceptiveState`, and substrate receipt/bundle
+  - Perception: `SelfDisturbanceReceipt` and `ActiveSensingReceipt`
+  - Economic WM: `RegimeBroadcast` and `RegimeAcknowledgmentReceipt`
+  - Regal governance: `AnomalySuspicionReceipt` and
+    `GovernanceEscalationEvent`
+- Added `scripts/economic_world_model/check_bio_neuro_substrate.py`, which
+  emits a local JSON/JSONL substrate report over G1-facing scaffold state.
+- Added `docs/economic_world_model/multi_wm_unwired_surface_audit_2026_06_01.md`,
+  a claim-vs-code audit of remaining unwired multi-WM surfaces.
+- Updated `scripts/TRAINING_MIGRATION_BACKLOG.json` with six future
+  bio/neuro trainer lanes:
+  `train_self_motion_expectation_v0.py`,
+  `train_active_sensing_policy_v0.py`,
+  `train_economic_regime_broadcast_v0.py`,
+  `train_embodiment_synergy_interoception_v0.py`,
+  `train_regal_anomaly_governance_v0.py`, and
+  `train_plasticity_consolidation_gates_v0.py`.
+- Current receipts:
+  - bio/neuro substrate check: `status=ok_bio_neuro_substrate_passed`,
+    `surface_count=14`, `provider_or_hardware_proof=false`,
+    `trained_model_proof=false`, `promotion_eligible=false`
+  - nightly audit: `status=ok`, no higher-priority missing additive scaffold
+    detected by the existing scan
+  - targeted ruff: pass
+  - targeted bio/neuro tests: `5 passed`
+  - training backlog JSON validation: pass
+- Boundary preserved: these are typed, deterministic, advisory surfaces only.
+  They do not run providers, train models, execute active-sensing actions,
+  launch pods, operate Unitree hardware, mutate reward math, grant Phase 7
+  authority, or produce promotion-grade evidence.

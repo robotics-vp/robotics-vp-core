@@ -155,6 +155,12 @@ from .benchmark_evidence_emitter import (
     emit_annotation_benchmark_evidence,
     emit_provider_adapter_benchmark_evidence,
 )
+from .bio_neuro_receipts import (
+    ActiveSensingReceipt,
+    SelfDisturbanceReceipt,
+    build_active_sensing_receipt,
+    build_self_disturbance_receipt,
+)
 from .neural_seams import (
     AnnotationBridgeProjectionSeam,
     EDGE_TYPE_VOCAB,
@@ -245,6 +251,7 @@ __all__ = [
     "SemanticBridgeRegistry",
     "SimSynthSemanticBridgeState",
     # Receipts
+    "ActiveSensingReceipt",
     "AnnotationBridgeShadowReceipt",
     "DeploymentResourceReceipt",
     "EvidenceFusionReceipt",
@@ -254,7 +261,10 @@ __all__ = [
     "PerceptionContributionReceipt",
     "ProviderAvailabilityReceipt",
     "ProviderInvocationReceipt",
+    "SelfDisturbanceReceipt",
     "TemporalGroundingReceipt",
+    "build_active_sensing_receipt",
+    "build_self_disturbance_receipt",
     # Provider contracts
     "DepthProviderContract",
     "PerceptionProviderContract",

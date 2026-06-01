@@ -26,6 +26,12 @@ from src.regal.reward_safety import RegalRewardSafetyNode
 from src.regal.econ_consistency import RegalEconConsistencyNode
 from src.regal.gen_plausibility import RegalGenPlausibilityNode
 from src.regal.data_value import RegalDataValueNode
+from src.regal.bio_neuro_anomaly import (
+    AnomalySuspicionReceipt,
+    GovernanceEscalationEvent,
+    build_anomaly_suspicion_receipt,
+    build_governance_escalation_event,
+)
 
 __all__ = [
     # Regal evaluators
@@ -49,4 +55,8 @@ __all__ = [
     "RegalEconConsistencyNode",
     "RegalGenPlausibilityNode",
     "RegalDataValueNode",
+    "AnomalySuspicionReceipt",
+    "GovernanceEscalationEvent",
+    "build_anomaly_suspicion_receipt",
+    "build_governance_escalation_event",
 ]

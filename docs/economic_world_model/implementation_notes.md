@@ -6394,3 +6394,89 @@ Additional debt scans:
 This is a repo audit document only. It does not fix the listed debt, launch
 pods, run providers, train models, operate hardware, mutate reward math, or
 grant promotion/authority.
+
+## 2026-06-01 — Bio/neuro substrate wiring and multi-WM unwired audit
+
+### What changed
+
+- Added `src/world_model/embodiment_actuation/bio_neuro_surfaces.py`.
+  This owns the Embodiment-local substrate for:
+  - `SelfMotionExpectation`
+  - `ActiveSensingProposal`
+  - `SynergyCodebookEntry`
+  - `InteroceptiveState`
+  - `EmbodimentBioNeuroSubstrateReceipt`
+- Added `src/world_model/perception_grounding/bio_neuro_receipts.py`.
+  This owns Perception-side comparison/outcome receipts:
+  - `SelfDisturbanceReceipt`
+  - `ActiveSensingReceipt`
+- Added `src/world_model/economic_world_model/regime_broadcast.py`.
+  This owns low-bandwidth Economic WM broadcast conditioning:
+  - `RegimeBroadcast`
+  - `RegimeAcknowledgmentReceipt`
+- Added `src/regal/bio_neuro_anomaly.py`.
+  This owns local governance anomaly/escalation receipts:
+  - `AnomalySuspicionReceipt`
+  - `GovernanceEscalationEvent`
+- Added `scripts/economic_world_model/check_bio_neuro_substrate.py`, which
+  builds the local substrate over G1-facing scaffold state and writes
+  `bio_neuro_substrate_receipts_v1.jsonl` plus
+  `bio_neuro_substrate_report_v1.json`.
+- Added `tests/test_bio_neuro_substrate.py`.
+- Added `docs/economic_world_model/multi_wm_unwired_surface_audit_2026_06_01.md`.
+- Updated `scripts/TRAINING_MIGRATION_BACKLOG.json` so the new bio/neuro
+  substrate surfaces are represented as future blocked trainer lanes rather
+  than only as docs/code:
+  - `train_self_motion_expectation_v0.py`
+  - `train_active_sensing_policy_v0.py`
+  - `train_economic_regime_broadcast_v0.py`
+  - `train_embodiment_synergy_interoception_v0.py`
+  - `train_regal_anomaly_governance_v0.py`
+  - `train_plasticity_consolidation_gates_v0.py`
+- Updated the bio/neuro doctrine and the 2026-06-01 debt sweep so they no
+  longer say the named surfaces are doctrine-only.
+
+### Current receipts
+
+Commands:
+
+```bash
+python3 scripts/economic_world_model/nightly_audit.py \
+  --output-json /tmp/nightly_audit_bio_neuro.json \
+  --output-markdown /tmp/nightly_audit_bio_neuro.md
+
+python3 scripts/economic_world_model/check_bio_neuro_substrate.py \
+  --output-dir /tmp/bio_neuro_substrate_check
+
+python3 -m ruff check \
+  src/world_model/embodiment_actuation/bio_neuro_surfaces.py \
+  src/world_model/perception_grounding/bio_neuro_receipts.py \
+  src/world_model/economic_world_model/regime_broadcast.py \
+  src/regal/bio_neuro_anomaly.py \
+  scripts/economic_world_model/check_bio_neuro_substrate.py \
+  tests/test_bio_neuro_substrate.py
+
+python3 -m pytest -q tests/test_bio_neuro_substrate.py
+
+python3 -m json.tool scripts/TRAINING_MIGRATION_BACKLOG.json \
+  >/tmp/training_backlog.validated.json
+```
+
+Results:
+
+- nightly audit: `status=ok`
+- bio/neuro substrate check: `status=ok_bio_neuro_substrate_passed`
+- substrate `surface_count=14`
+- `provider_or_hardware_proof=false`
+- `trained_model_proof=false`
+- `promotion_eligible=false`
+- targeted ruff: pass
+- targeted tests: `5 passed`
+- training backlog JSON validation: pass
+
+### Boundary
+
+This is local typed substrate and audit work only. It does not run providers,
+train models, execute active sensing on hardware, launch RunPod, operate
+Unitree sim/hardware, mutate reward math, grant Phase 7 authority, or produce
+promotion-grade evidence.
