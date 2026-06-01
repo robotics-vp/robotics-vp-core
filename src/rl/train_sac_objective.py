@@ -21,7 +21,6 @@ import numpy as np
 # Project imports
 from src.config.econ_params import EconParams
 from src.config.objective_profile import ObjectiveVector
-from src.envs.physics.backend_factory import make_backend
 from src.envs.dishwashing_env import EpisodeInfoSummary
 from src.valuation.reward_builder import (
     build_reward_terms,
@@ -29,6 +28,8 @@ from src.valuation.reward_builder import (
     default_objective_vector,
 )
 from src.observation.condition_vector_builder import ConditionVectorBuilder
+
+DEFAULT_CURRICULUM_ENV = "drawer_vase"
 
 
 def extract_step_summary(info: Dict[str, Any]) -> EpisodeInfoSummary:
@@ -93,6 +94,7 @@ def train_episode_with_objective(
     step_count = 0
     total_raw_reward = 0.0
     total_objective_reward = 0.0
+    total_shaped_reward = 0.0
 
     # Track both reward types for comparison
     raw_rewards = []
@@ -121,6 +123,7 @@ def train_episode_with_objective(
         else:
             # CURRENT: Use raw reward (no behavior change)
             shaped_reward = raw_reward
+        total_shaped_reward += shaped_reward
 
         # Add to replay buffer (stub)
         # policy.buffer.add(obs, action, shaped_reward, next_obs, done)
@@ -163,6 +166,7 @@ def train_episode_with_objective(
         "steps": step_count,
         "total_raw_reward": total_raw_reward,
         "total_objective_reward": total_objective_reward,
+        "total_shaped_reward": total_shaped_reward,
         "episode_J": episode_J,
         "reward_terms": episode_reward_terms,
         "objective_vector": objective_vector,
@@ -181,7 +185,12 @@ def train_episode_with_objective(
 
 def main():
     parser = argparse.ArgumentParser(description="Objective-Conditioned SAC Training")
-    parser.add_argument("--env", type=str, default="drawer_vase")
+    parser.add_argument(
+        "--env",
+        type=str,
+        default=DEFAULT_CURRICULUM_ENV,
+        help="Fixed-base curriculum environment for objective-conditioned SAC.",
+    )
     parser.add_argument("--engine-type", type=str, default="pybullet")
     parser.add_argument(
         "--objective-preset",
@@ -222,7 +231,7 @@ def main():
         print(f"Using default objective vector: {objective_vector}")
 
     # Load econ params (stub)
-    econ_params = EconParams(
+    _econ_params = EconParams(
         price_per_unit=0.30,
         mpl_human=60.0,
         wage_human=18.0,

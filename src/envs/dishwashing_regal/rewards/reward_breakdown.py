@@ -2,7 +2,7 @@
 RewardBreakdownV1 implementation for dishwashing environment.
 
 Phase 4: Standardized reward decomposition for regality compliance.
-Maps dishwashing-specific metrics to canonical RewardBreakdownV1 components.
+Maps fixed-base curriculum dishwashing metrics to RewardBreakdownV1 components.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def compute_dishwashing_reward_breakdown(
 ) -> RewardBreakdownV1:
     """Compute RewardBreakdownV1 for a dishwashing step.
 
-    Maps dishwashing-specific metrics to canonical components:
+    Maps fixed-base curriculum dishwashing metrics to components:
     - task_reward: throughput-based reward (completed items)
     - time_penalty: negative component from time cost
     - energy_cost: energy consumption penalty

@@ -12,6 +12,8 @@ from src.envs.drawer_vase_arm_env import DrawerVaseArmEnv
 from policies.scripted.drawer_open_avoid_vase import DrawerOpenAvoidVasePolicy
 from src.controllers.energy_profile import EnergyProfile, apply_energy_profile_to_action
 
+DEFAULT_CURRICULUM_ENV = "drawer_vase"
+
 
 PROFILES = {
     "BASE": EnergyProfile(),
@@ -110,7 +112,12 @@ def run_episode(env, policy, profile_name, env_type):
 
 def main():
     parser = argparse.ArgumentParser(description="Energy interventions")
-    parser.add_argument("--env", type=str, default="drawer_vase")
+    parser.add_argument(
+        "--env",
+        type=str,
+        default=DEFAULT_CURRICULUM_ENV,
+        help="Fixed-base curriculum environment for energy intervention probes.",
+    )
     parser.add_argument("--episodes", type=int, default=20)
     parser.add_argument("--output", type=str, default="data/energy_interventions.jsonl")
     args = parser.parse_args()

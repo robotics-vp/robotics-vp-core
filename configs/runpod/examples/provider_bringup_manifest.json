@@ -6,11 +6,12 @@
   "epistemic_status": "proof_of_life",
   "commit_sha": "d85aa85",
   "branch": "codex/multi-wm-architecture-plan",
-  "task": "SAM 3.1 provider bring-up: image predictor + video tracking smoke",
+  "task": "G1 egocentric provider bring-up: image predictor + video tracking smoke",
   "wm": "perception_grounding",
   "subsystem": "open_vocab_segmentation_tracking",
   "blocker": "sam3_provider_bringup_not_run",
   "config_paths": [
+    "configs/humanoid/g1_primary_env.yaml",
     "docs/agent_ergonomics/run_manifest_schema.md",
     "docs/economic_world_model/roadmap.md"
   ],
@@ -48,5 +49,15 @@
   "urgency": "medium",
   "justified_itself": null,
   "rollback_notes": "Do not promote provider outputs from this smoke; discard receipts if provider truth is unavailable.",
-  "replay_notes": "Re-run the same image, commit, and smoke commands with the recorded provider weights and seeds."
+  "replay_notes": "Re-run the same image, commit, G1 profile, and smoke commands with the recorded provider weights and seeds.",
+  "metadata": {
+    "primary_env_id": "bipedal_whole_body_unitree_g1",
+    "primary_task_id": "humanoid_wbt_g1",
+    "primary_robot_family": "unitree_g1",
+    "primary_hardware_class": "unitree_g1_r1_class",
+    "primary_posture_tag": "bipedal_whole_body",
+    "unitree_hardware_truth": false,
+    "unitree_sim_runtime_truth": false,
+    "promotion_eligible": false
+  }
 }

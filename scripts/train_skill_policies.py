@@ -273,7 +273,7 @@ def evaluate_scripted_baseline(n_episodes=50):
 from src.training.wrap_training_entrypoint import regal_training
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(runner=None):
     """Main training function with regality wrapper."""
     parser = argparse.ArgumentParser(description='Train HRL Skill Policies (FULL regality)')

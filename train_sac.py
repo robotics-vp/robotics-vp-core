@@ -6,6 +6,10 @@ End-to-end deep learning:
 - Policy π_θ and critics Q_ϕ operate on latents
 - Novelty weighting from diffusion
 - Economic reward + Lagrangian constraint
+
+The default target metadata is Unitree G1 bipedal whole-body. The executable
+local source environment remains a fixed-base dishwashing curriculum proxy
+until G1 sim/hardware receipts exist.
 """
 import argparse
 import json
@@ -39,6 +43,18 @@ from src.rl.trunk_net import TrunkNet
 from src.objectives.profile import ObjectiveProfile
 from src.objectives.compiler import ObjectiveCompiler
 from src.objectives.tensor import objective_tensor_from_axes
+from src.world_model.humanoid_readiness.g1_primary_environment import (
+    CURRICULUM_POSTURE_TAG,
+    PRIMARY_EMBODIMENT_ID,
+    PRIMARY_ENV_ID,
+    PRIMARY_POSTURE_TAG,
+    PRIMARY_ROBOT_FAMILY,
+    PRIMARY_TASK_ID,
+    curriculum_proxy_metadata,
+    primary_env_metadata,
+)
+
+SAC_SOURCE_CURRICULUM_ENV = "dishwashing"
 
 
 def _load_datapacks(path: Path):
@@ -139,6 +155,12 @@ def train_sac(
     use_condition_vector: bool = False,
     use_condition_vector_for_policy: bool = False,
     objective_profile: Optional[ObjectiveProfile] = None,
+    primary_env_id: str = PRIMARY_ENV_ID,
+    target_task_id: str = PRIMARY_TASK_ID,
+    target_robot_family: str = PRIMARY_ROBOT_FAMILY,
+    target_posture_tag: str = PRIMARY_POSTURE_TAG,
+    target_embodiment_id: str = PRIMARY_EMBODIMENT_ID,
+    source_curriculum_env: str = "dishwashing",
 ):
     """Train SAC agent with economic objectives."""
 
@@ -176,7 +198,18 @@ def train_sac(
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
 
-    # Environment / physics backend
+    target_metadata = primary_env_metadata(
+        primary_env_id=primary_env_id,
+        primary_task_id=target_task_id,
+        robot_family=target_robot_family,
+        posture_tag=target_posture_tag,
+        embodiment_id=target_embodiment_id,
+        source_curriculum_env=source_curriculum_env,
+    )
+    curriculum_metadata = curriculum_proxy_metadata(source_curriculum_env)
+
+    # Environment / physics backend. This is still the curriculum source, not
+    # G1 sim or hardware truth.
     backend = make_backend(physics_backend, {"econ_preset": econ_preset, "use_mobility_policy": use_mobility_policy})
     env = backend.env if hasattr(backend, "env") else DishwashingEnv(econ_params)
 
@@ -253,6 +286,8 @@ def train_sac(
     print(f"Episodes: {episodes}")
     print(f"Latent dim: {latent_dim}")
     print(f"Device: {device}")
+    print(f"Primary target env: {primary_env_id} ({target_posture_tag})")
+    print(f"Source curriculum env: {source_curriculum_env} ({CURRICULUM_POSTURE_TAG})")
     print(f"Initial human wage: ${wh:.2f}/hr\n")
 
     # Stage 3 sampling/curriculum (advisory-only, flag-gated)
@@ -474,7 +509,14 @@ def train_sac(
                 "damage_cost": error_cost,
             }
             condition_vector = condition_builder.build(
-                episode_config=descriptor or {"task_id": "dishwashing", "env_id": "dishwashing_env", "backend": physics_backend, "objective_preset": "balanced"},
+                episode_config=descriptor or {
+                    "task_id": target_task_id,
+                    "env_id": primary_env_id,
+                    "backend": physics_backend,
+                    "objective_preset": "balanced",
+                    "primary_env_metadata": target_metadata,
+                    "source_curriculum": curriculum_metadata,
+                },
                 econ_state={"target_mpl": mp_r, "current_wage_parity": wage_parity, "energy_budget_wh": summary.energy_Wh if hasattr(summary, "energy_Wh") else 0.0},
                 curriculum_phase=curriculum_phase or "warmup",
                 sima2_trust=None,
@@ -557,6 +599,14 @@ def train_sac(
             condition_skill_mode=getattr(condition_vector, "skill_mode", ""),
             condition_phase=getattr(condition_vector, "curriculum_phase", ""),
             policy_condition_norm=round(policy_condition_norm, 6),
+            primary_env_id=primary_env_id,
+            target_task_id=target_task_id,
+            target_robot_family=target_robot_family,
+            target_posture_tag=target_posture_tag,
+            target_embodiment_id=target_embodiment_id,
+            source_curriculum_env=source_curriculum_env,
+            source_curriculum_posture=CURRICULUM_POSTURE_TAG,
+            humanoid_primary_env_contract=target_metadata["authority_class"],
         )
 
         # Print progress
@@ -615,6 +665,17 @@ if __name__ == "__main__":
         choices=["legacy", "weighted_sum", "constrained", "lexicographic", "chebyshev", "epsilon", "product"],
         help="Optional ObjectiveCompiler scalarization mode at entrypoint; legacy keeps existing scalar reward.",
     )
+    parser.add_argument("--primary-env-id", type=str, default=PRIMARY_ENV_ID)
+    parser.add_argument("--target-task-id", type=str, default=PRIMARY_TASK_ID)
+    parser.add_argument("--target-robot-family", type=str, default=PRIMARY_ROBOT_FAMILY)
+    parser.add_argument("--target-posture-tag", type=str, default=PRIMARY_POSTURE_TAG)
+    parser.add_argument("--target-embodiment-id", type=str, default=PRIMARY_EMBODIMENT_ID)
+    parser.add_argument(
+        "--source-curriculum-env",
+        type=str,
+        default=SAC_SOURCE_CURRICULUM_ENV,
+        help="Executable fixed-base curriculum source feeding G1 target metadata.",
+    )
     args = parser.parse_args()
 
     if args.engine_type != "pybullet":
@@ -655,4 +716,10 @@ if __name__ == "__main__":
         use_condition_vector=args.use_condition_vector,
         use_condition_vector_for_policy=args.use_condition_vector_for_policy,
         objective_profile=objective_profile,
+        primary_env_id=args.primary_env_id,
+        target_task_id=args.target_task_id,
+        target_robot_family=args.target_robot_family,
+        target_posture_tag=args.target_posture_tag,
+        target_embodiment_id=args.target_embodiment_id,
+        source_curriculum_env=args.source_curriculum_env,
     )

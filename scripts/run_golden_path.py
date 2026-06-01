@@ -52,6 +52,8 @@ from src.regal.regal_evaluator import evaluate_regals
 from src.utils.config_digest import sha256_json
 from src.valuation.trajectory_audit import create_trajectory_audit
 
+GOLDEN_PATH_CURRICULUM_ENV = "workcell"
+
 
 def _build_objective_profile() -> ObjectiveProfile:
     return ObjectiveProfile(
@@ -757,9 +759,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--env",
         type=str,
-        default="workcell",
+        default=GOLDEN_PATH_CURRICULUM_ENV,
         choices=["workcell"],
-        help="Environment label used in artifacts.",
+        help="Fixed-base curriculum environment label used in artifacts.",
     )
     parser.add_argument(
         "--episodes", type=int, default=10, help="Number of episodes to synthesize."

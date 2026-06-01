@@ -590,17 +590,18 @@ def generate_synthetic_datapacks(model, source_datapacks, run_id, horizon=10):
     return synthetic
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(runner=None):
     """Main entrypoint with regality wrapper."""
     if runner:
         runner.start_training()
     
+    default_curriculum_task = 'drawer_vase'
     parser = argparse.ArgumentParser(description='Train world model from DataPacks')
     parser.add_argument('--data-dir', type=str, default='data/datapacks',
                         help='DataPack repository directory')
-    parser.add_argument('--task', type=str, default='drawer_vase',
-                        help='Task name')
+    parser.add_argument('--task', type=str, default=default_curriculum_task,
+                        help='Fixed-base curriculum task name')
     parser.add_argument('--epochs', type=int, default=100,
                         help='Training epochs')
     parser.add_argument('--batch-size', type=int, default=32,

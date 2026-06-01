@@ -169,11 +169,11 @@ def _normalize_env_id(env_id: str) -> str:
     canonical = _safe_str(env_id).strip().lower()
     if not canonical:
         return ""
-    if "drawer_vase" in canonical or ("drawer" in canonical and "vase" in canonical):
+    if "drawer_vase" in canonical or ("drawer" in canonical and "vase" in canonical):  # fixed-base curriculum source
         return "drawer_vase"
-    if "dishwashing" in canonical or "dishwash" in canonical:
+    if "dishwashing" in canonical or "dishwash" in canonical:  # fixed-base curriculum source
         return "dishwashing"
-    if "workcell" in canonical:
+    if "workcell" in canonical:  # fixed-base curriculum source
         return "workcell"
     return canonical
 

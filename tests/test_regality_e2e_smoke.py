@@ -168,8 +168,8 @@ class TestWrappedTrainersImportable:
         assert has_decorator, f"{trainer_name} must use @regal_training"
     
     @pytest.mark.parametrize("trainer_name", WRAPPED_TRAINERS)
-    def test_trainer_specifies_workcell(self, trainer_name):
-        """Wrapped trainer specifies env_type='workcell'."""
+    def test_trainer_specifies_unitree_g1(self, trainer_name):
+        """Wrapped trainer specifies env_type='unitree_g1'."""
         scripts_dir = ROOT / "scripts"
         script_path = scripts_dir / f"{trainer_name}.py"
         
@@ -177,9 +177,12 @@ class TestWrappedTrainersImportable:
             pytest.skip(f"Script not found: {script_path}")
         
         content = script_path.read_text()
-        has_workcell = 'env_type="workcell"' in content or "env_type='workcell'" in content
+        has_unitree_g1 = (
+            'env_type="unitree_g1"' in content
+            or "env_type='unitree_g1'" in content
+        )
         
-        assert has_workcell, f"{trainer_name} must specify env_type='workcell'"
+        assert has_unitree_g1, f"{trainer_name} must specify env_type='unitree_g1'"
 
 
 class TestBlockingCheckIDsComplete:

@@ -53,6 +53,16 @@ from src.training.training_manifest import (
 from src.training.wrap_training_entrypoint import regal_training
 from src.envs.workcell_env.base import EpisodeLog
 from src.utils.config_digest import sha256_json
+from src.world_model.humanoid_readiness.g1_primary_environment import (
+    CURRICULUM_POSTURE_TAG,
+    PRIMARY_EMBODIMENT_ID,
+    PRIMARY_ENV_ID,
+    PRIMARY_POSTURE_TAG,
+    PRIMARY_ROBOT_FAMILY,
+    PRIMARY_TASK_ID,
+    curriculum_proxy_metadata,
+    primary_env_metadata,
+)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -61,8 +71,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--ontology-root", type=str, default="data/ontology")
     parser.add_argument("--output-dir", type=str, default="artifacts/train_sac_with_ontology_logging")
-    parser.add_argument("--task-id", type=str, default="task_dishwashing")
-    parser.add_argument("--robot-id", type=str, default="robot_sac")
+    parser.add_argument("--task-id", type=str, default=PRIMARY_TASK_ID)
+    parser.add_argument("--robot-id", type=str, default=PRIMARY_EMBODIMENT_ID)
+    parser.add_argument("--primary-env-id", type=str, default=PRIMARY_ENV_ID)
+    parser.add_argument("--target-posture-tag", type=str, default=PRIMARY_POSTURE_TAG)
+    parser.add_argument("--target-robot-family", type=str, default=PRIMARY_ROBOT_FAMILY)
+    parser.add_argument("--target-embodiment-id", type=str, default=PRIMARY_EMBODIMENT_ID)
+    parser.add_argument("--source-curriculum-env", type=str, default="dishwashing")
     parser.add_argument("--econ-domain", type=str, default="default")
     parser.add_argument("--promotion-policy", type=str, default="configs/regality/promotion_default.yaml")
     parser.add_argument("--receipt-label-mode", type=str, default="training_run")
@@ -166,14 +181,22 @@ def _episode_log_payload(
     trajectory: List[Dict[str, Any]],
     info_history: List[Dict[str, Any]],
     metrics: Dict[str, float],
+    primary_env: Dict[str, Any],
+    source_curriculum: Dict[str, Any],
 ) -> Dict[str, Any]:
     episode_log = EpisodeLog(
         metadata=EpisodeMetadata(
             episode_id=episode_id,
             task_id=task_id,
-            robot_family="dishwasher_sac",
+            robot_family=str(primary_env["primary_robot_family"]),
             seed=seed,
-            env_params={"config": {"topology_type": "dishwashing_online_sac"}},
+            env_params={
+                "config": {
+                    "topology_type": "g1_primary_sac_curriculum_proxy",
+                    "primary_env": dict(primary_env),
+                    "source_curriculum": dict(source_curriculum),
+                }
+            },
         ),
         trajectory=trajectory,
         info_history=info_history,
@@ -237,17 +260,22 @@ def _descriptor_from_receipt_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "pack_id": row["episode_id"],
         "episode_id": row["episode_id"],
-        "env_name": "dishwashing_online_sac",
-        "task_type": "dishwashing_online_sac",
+        "env_name": row["primary_env"]["primary_env_id"],
+        "task_type": row["primary_env"]["primary_task_id"],
         "backend": "training_run",
-        "engine_type": "dishwashing_online_sac",
+        "engine_type": row["source_curriculum"]["source_env"],
         "objective_vector": [1.0, 1.0, 1.0, 1.0, 0.0],
         "tier": 1 if row["task_success"] else 0,
         "trust_score": max(0.1, min(1.0, 1.0 - row["summary"]["error_rate_episode"])),
         "sampling_weight": max(0.1, 1.0 + priority_score),
         "episode_length": int(row["summary"]["steps"]),
-        "semantic_tags": list(row["sampling_recommendation"]["queue_tags"]),
-        "focus_areas": ["online_sac"],
+        "semantic_tags": [
+            *list(row["sampling_recommendation"]["queue_tags"]),
+            "robot:unitree_g1",
+            "posture:bipedal_whole_body",
+            f"curriculum:{row['source_curriculum']['source_env']}",
+        ],
+        "focus_areas": ["g1_humanoid_primary", "online_sac"],
         "priority": row["sampling_recommendation"]["priority_label"],
         "delta_J": float(row["receipt"]["realized_value"]),
         "w_embodiment": 1.0,
@@ -255,6 +283,8 @@ def _descriptor_from_receipt_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "metadata": {
             "summary": dict(row["summary"]),
             "receipt": dict(row["receipt"]),
+            "primary_env": dict(row["primary_env"]),
+            "source_curriculum": dict(row["source_curriculum"]),
         },
     }
 
@@ -285,7 +315,7 @@ def _advisory_episode_from_row(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(runner=None, _wrapped_args=None):
     """Main training function with canonical online SAC artifacts."""
     args = _parse_args()
@@ -303,6 +333,15 @@ def main(runner=None, _wrapped_args=None):
     live_queue_latest_path = output_root / "live_queue_selection.json"
     episode_receipts_path = output_root / "online_episode_receipts.jsonl"
     metrics_path = output_root / "online_sac_metrics.jsonl"
+    g1_metadata = primary_env_metadata(
+        primary_env_id=args.primary_env_id,
+        primary_task_id=args.task_id,
+        robot_family=args.target_robot_family,
+        posture_tag=args.target_posture_tag,
+        embodiment_id=args.target_embodiment_id,
+        source_curriculum_env=args.source_curriculum_env,
+    )
+    source_curriculum = curriculum_proxy_metadata(args.source_curriculum_env)
 
     econ_params = EconParams(
         price_per_unit=0.3,
@@ -357,14 +396,17 @@ def main(runner=None, _wrapped_args=None):
     store = OntologyStore(root_dir=args.ontology_root)
     task = Task(
         task_id=args.task_id,
-        name="Dishwashing",
-        description="Online SAC dishwashing task",
-        environment_id="dishwashing_env",
+        name="Unitree G1 whole-body SAC curriculum shadow",
+        description=(
+            "Online SAC plumbing for the Unitree G1 primary target using an "
+            "explicit fixed-base curriculum source."
+        ),
+        environment_id=args.primary_env_id,
         human_mpl_units_per_hour=60.0,
         human_wage_per_hour=18.0,
         default_energy_cost_per_wh=0.12,
     )
-    robot = Robot(robot_id=args.robot_id, name="DishwasherBot")
+    robot = Robot(robot_id=args.robot_id, name="Unitree G1 Shadow")
     store.upsert_task(task)
     store.upsert_robot(robot)
 
@@ -502,6 +544,8 @@ def main(runner=None, _wrapped_args=None):
                 "time_step_s": float(econ_params.time_step_s),
                 "energy_wh_per_unit": float(summary.energy_Wh_per_unit),
             },
+            primary_env=g1_metadata,
+            source_curriculum=source_curriculum,
         )
         episode_log_path = episode_logs_dir / f"{episode.episode_id}.json"
         _write_json(episode_log_path, log_payload)
@@ -521,6 +565,8 @@ def main(runner=None, _wrapped_args=None):
             "receipt": receipt_row,
             "sampling_recommendation": sampling_recommendation,
             "task_success": bool(receipt_row["task_success"]),
+            "primary_env": g1_metadata,
+            "source_curriculum": source_curriculum,
         }
         episode_rows.append(row)
         descriptors.append(_descriptor_from_receipt_row(row))
@@ -682,6 +728,9 @@ def main(runner=None, _wrapped_args=None):
                 "update_count": update_count,
                 "queue_selection_mode": args.queue_selection_mode,
                 "contract_aware_mode": args.contract_aware_mode,
+                "primary_env": g1_metadata,
+                "source_curriculum": source_curriculum,
+                "source_curriculum_posture": CURRICULUM_POSTURE_TAG,
             },
         )
         runner.register_artifact("online_episode_logs", episode_logs_dir)

@@ -17,10 +17,18 @@ import argparse
 import json
 import os
 
+DEFAULT_CURRICULUM_ENV = "drawer_vase"
+
 
 def main():
     parser = argparse.ArgumentParser(description="Preview the 5-stage learning pipeline")
-    parser.add_argument("--env", type=str, default="drawer_vase", choices=["drawer_vase", "grasp_place"])
+    parser.add_argument(
+        "--env",
+        type=str,
+        default=DEFAULT_CURRICULUM_ENV,
+        choices=["drawer_vase", "grasp_place"],
+        help="Fixed-base curriculum environment to preview.",
+    )
     parser.add_argument("--iterations", type=int, default=3, help="Number of iterations to simulate")
     parser.add_argument("--out-dir", type=str, default="results/pipeline_preview")
     parser.add_argument("--verbose", action="store_true", help="Show detailed output")

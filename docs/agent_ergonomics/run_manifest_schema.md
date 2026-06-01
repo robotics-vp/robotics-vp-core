@@ -206,6 +206,17 @@ comparison artifacts for promotion/deployment candidates.
 
 ## Examples
 
-- SAC training: `configs/runpod/examples/train_sac_manifest.json`
+- G1-primary SAC training/plumbing: `configs/runpod/examples/train_sac_manifest.json`
 - Provider bring-up: `configs/runpod/examples/provider_bringup_manifest.json`
 - Benchmark candidate training: `configs/runpod/examples/benchmark_candidate_training_manifest_v2.json`
+
+Prepare a typed RunPod launch manifest before launching:
+
+```bash
+python3 scripts/runpod/prepare_launch_manifest.py --profile provider_bringup
+python3 scripts/runpod/prepare_launch_manifest.py --profile g1_loop_run --volume-id "$RUNPOD_VOLUME_ID"
+python3 scripts/runpod/prepare_launch_manifest.py --profile g1_sac_training --volume-id "$RUNPOD_VOLUME_ID"
+```
+
+Then run the generated `.agent/runs/<run_id>/launch_command.sh` so pod metadata
+lands beside the prepared manifest.

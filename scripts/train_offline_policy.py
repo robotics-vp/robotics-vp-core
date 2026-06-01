@@ -511,7 +511,7 @@ if str(repo_root_path) not in sys.path:
 from src.training.wrap_training_entrypoint import regal_training
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(runner=None):
     """Main training function with regality wrapper."""
     parser = argparse.ArgumentParser(description='Train offline policy with data augmentation (FULL regality)')

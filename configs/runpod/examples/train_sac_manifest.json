@@ -6,13 +6,13 @@
   "epistemic_status": "proof_of_life",
   "commit_sha": "d85aa85",
   "branch": "main",
-  "task": "SAC training on dishwashing env with econ-preset production",
-  "wm": "baseline_policy",
-  "subsystem": "dishwashing_sac",
+  "task": "G1 primary SAC plumbing proof-of-life with dishwashing fixed-base curriculum source",
+  "wm": "embodiment_actuation",
+  "subsystem": "g1_sac_plumbing",
   "blocker": "gpu_training_runtime_receipts_missing",
   "config_paths": [
-    "configs/sac/default.yaml",
-    "configs/dishwashing_physics/default.yaml"
+    "configs/humanoid/g1_primary_env.yaml",
+    "configs/sac/contract_aware_smoke.yaml"
   ],
   "seeds": [0, 42, 137],
   "image": "nvidia/cuda:12.1.0-runtime-ubuntu22.04",
@@ -21,7 +21,7 @@
   "volume_id": null,
   "commands": [
     "pip install -r requirements-gpu.txt",
-    "python train_sac.py --config configs/sac/default.yaml --episodes 1000 --seed 0"
+    "python train_sac.py --episodes 1000 --seed 0 --primary-env-id bipedal_whole_body_unitree_g1 --target-task-id humanoid_wbt_g1 --target-robot-family unitree_g1 --target-posture-tag bipedal_whole_body --target-embodiment-id unitree_g1_shadow --source-curriculum-env dishwashing --use-condition-vector --log-path results/run_registry/runpod-20260901-120000-abc123/metrics/sac_train.csv --checkpoint-path results/run_registry/runpod-20260901-120000-abc123/checkpoints/sac_final.pt"
   ],
   "artifact_paths": [
     "artifacts/economic_world_model/provider_runs/runpod-20260901-120000-abc123/training_runtime_manifest_v1.json",
@@ -46,5 +46,17 @@
   "urgency": "medium",
   "justified_itself": null,
   "rollback_notes": "Do not replace stable checkpoints from this smoke; discard raw weights unless benchmark receipts justify retention.",
-  "replay_notes": "Re-run with the same configs, image, commit, and seeds after preserving the emitted runtime manifest."
+  "replay_notes": "Re-run with the same G1 profile, source curriculum env, configs, image, commit, and seeds after preserving the emitted runtime manifest.",
+  "metadata": {
+    "primary_env_id": "bipedal_whole_body_unitree_g1",
+    "primary_task_id": "humanoid_wbt_g1",
+    "primary_robot_family": "unitree_g1",
+    "primary_hardware_class": "unitree_g1_r1_class",
+    "primary_posture_tag": "bipedal_whole_body",
+    "source_curriculum_env": "dishwashing",
+    "source_curriculum_posture": "fixed_base_tabletop",
+    "unitree_hardware_truth": false,
+    "unitree_sim_runtime_truth": false,
+    "promotion_eligible": false
+  }
 }

@@ -7,7 +7,7 @@
       "bundle_id": "workcell_data_refresh",
       "priority_rank": 1,
       "manual_only": false,
-      "title": "Workcell semantic data refresh (real SAM3D)",
+      "title": "G1-primary loop curriculum refresh (real SAM3D)",
       "production_importance": "highest",
       "recommended_runpod": {
         "gpu_label": "A100 80GB",
@@ -30,7 +30,7 @@
         ]
       },
       "preferred_internal_data": [
-        "Repo-local workcell rollout generation",
+        "Repo-local workcell rollout generation as fixed-base curriculum for G1",
         "Existing ontology and replay artifacts under artifacts/ and data/"
       ],
       "preferred_external_data": [
@@ -40,7 +40,7 @@
       "commands": [
         "python3 scripts/bootstrap_semantic_workcell_loop.py --output-root {bundle_output_root}/workcell_bootstrap --episodes 24 --steps 8 --max-frames 8 --seed 24 --backend-policy real"
       ],
-      "notes": "Canonical refresh/replay now assumes real SAM3D grounding rather than passthrough. Treat this as a Linux/NVIDIA A100 lane; local passthrough refreshes remain useful for plumbing only and do not satisfy the benchmark-grade replay requirement."
+      "notes": "Canonical refresh/replay now assumes real SAM3D grounding rather than passthrough, with Unitree G1 as the primary target and workcell as a fixed-base curriculum source. Treat this as a Linux/NVIDIA A100 lane; local passthrough refreshes remain useful for plumbing only and do not satisfy the benchmark-grade replay requirement."
     },
     {
       "bundle_id": "semantic_runtime_training",
@@ -70,7 +70,7 @@
         ]
       },
       "preferred_internal_data": [
-        "Canonical replay datasets from shadow runs, online SAC, or bootstrap workcell loops"
+        "Canonical replay datasets from G1-primary shadow runs, online SAC, or fixed-base bootstrap workcell curriculum loops"
       ],
       "preferred_external_data": [
         "DROID replay conversions",

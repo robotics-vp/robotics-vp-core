@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Canonical dishwashing runner with full regality compliance.
+Fixed-base curriculum dishwashing runner with full regality compliance.
 
 REGALITY COMPLIANCE: FULL
 -------------------------

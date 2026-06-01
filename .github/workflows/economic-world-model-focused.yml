@@ -6,13 +6,20 @@ on:
     paths:
       - "src/world_model/economic_world_model/**"
       - "src/world_model/humanoid_readiness/**"
+      - "src/runpod/**"
       - "scripts/economic_world_model/**"
+      - "scripts/runpod/**"
+      - "configs/humanoid/**"
+      - "configs/runpod/examples/**"
+      - "docs/economic_world_model/g1_primary_environment.md"
       - "tests/test_cpu_august_gap_tranche.py"
       - "tests/test_economic_wm_post_gap_readiness.py"
       - "tests/test_external_lerobot_corpus_import.py"
       - "tests/test_economic_wm_evidence_hygiene.py"
       - "tests/test_gpu_run_hygiene.py"
       - "tests/test_wm_surface_hygiene.py"
+      - "tests/test_g1_primary_environment.py"
+      - "tests/test_runpod_launch_profiles.py"
       - ".github/workflows/economic-world-model-focused.yml"
       - "pyproject.toml"
       - "requirements*.txt"
@@ -21,13 +28,20 @@ on:
     paths:
       - "src/world_model/economic_world_model/**"
       - "src/world_model/humanoid_readiness/**"
+      - "src/runpod/**"
       - "scripts/economic_world_model/**"
+      - "scripts/runpod/**"
+      - "configs/humanoid/**"
+      - "configs/runpod/examples/**"
+      - "docs/economic_world_model/g1_primary_environment.md"
       - "tests/test_cpu_august_gap_tranche.py"
       - "tests/test_economic_wm_post_gap_readiness.py"
       - "tests/test_external_lerobot_corpus_import.py"
       - "tests/test_economic_wm_evidence_hygiene.py"
       - "tests/test_gpu_run_hygiene.py"
       - "tests/test_wm_surface_hygiene.py"
+      - "tests/test_g1_primary_environment.py"
+      - "tests/test_runpod_launch_profiles.py"
       - ".github/workflows/economic-world-model-focused.yml"
       - "pyproject.toml"
       - "requirements*.txt"
@@ -55,13 +69,17 @@ jobs:
           python3 -m compileall \
             src/world_model/economic_world_model \
             src/world_model/humanoid_readiness \
+            src/runpod \
             scripts/economic_world_model \
+            scripts/runpod/prepare_launch_manifest.py \
             tests/test_cpu_august_gap_tranche.py \
             tests/test_economic_wm_post_gap_readiness.py \
             tests/test_external_lerobot_corpus_import.py \
             tests/test_economic_wm_evidence_hygiene.py \
             tests/test_gpu_run_hygiene.py \
             tests/test_wm_surface_hygiene.py \
+            tests/test_g1_primary_environment.py \
+            tests/test_runpod_launch_profiles.py \
             -q
 
       - name: Ruff focused surfaces
@@ -69,13 +87,17 @@ jobs:
           python3 -m ruff check \
             src/world_model/economic_world_model \
             src/world_model/humanoid_readiness \
+            src/runpod \
             scripts/economic_world_model \
+            scripts/runpod/prepare_launch_manifest.py \
             tests/test_cpu_august_gap_tranche.py \
             tests/test_economic_wm_post_gap_readiness.py \
             tests/test_external_lerobot_corpus_import.py \
             tests/test_economic_wm_evidence_hygiene.py \
             tests/test_gpu_run_hygiene.py \
-            tests/test_wm_surface_hygiene.py
+            tests/test_wm_surface_hygiene.py \
+            tests/test_g1_primary_environment.py \
+            tests/test_runpod_launch_profiles.py
 
       - name: Targeted mypy debt gate
         run: |
@@ -88,10 +110,14 @@ jobs:
             src/world_model/economic_world_model/evidence_hygiene.py \
             src/world_model/economic_world_model/gpu_run_hygiene.py \
             src/world_model/economic_world_model/wm_surface_hygiene.py \
+            src/world_model/humanoid_readiness/g1_primary_environment.py \
+            src/runpod/launch_profiles.py \
             scripts/economic_world_model/import_lerobot_corpus_slice.py \
             scripts/economic_world_model/check_evidence_hygiene.py \
             scripts/economic_world_model/check_gpu_run_hygiene.py \
-            scripts/economic_world_model/check_wm_surface_hygiene.py
+            scripts/economic_world_model/check_wm_surface_hygiene.py \
+            scripts/economic_world_model/check_g1_primary_env_hygiene.py \
+            scripts/runpod/prepare_launch_manifest.py
 
       - name: Focused CPU gap and corpus tests
         run: |
@@ -101,13 +127,20 @@ jobs:
             tests/test_external_lerobot_corpus_import.py \
             tests/test_economic_wm_evidence_hygiene.py \
             tests/test_gpu_run_hygiene.py \
-            tests/test_wm_surface_hygiene.py
+            tests/test_wm_surface_hygiene.py \
+            tests/test_g1_primary_environment.py \
+            tests/test_runpod_launch_profiles.py
 
       - name: GPU run manifest hygiene scan
         run: |
           python3 scripts/economic_world_model/check_gpu_run_hygiene.py \
             --manifest-dir configs/runpod/examples \
             --output-dir /tmp/economic_wm_gpu_run_hygiene
+
+      - name: G1 primary environment hygiene scan
+        run: |
+          python3 scripts/economic_world_model/check_g1_primary_env_hygiene.py \
+            --output-dir /tmp/economic_wm_g1_primary_env_hygiene
 
       - name: Post-gap readiness artifact compile
         run: |

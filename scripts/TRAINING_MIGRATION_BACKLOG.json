@@ -225,27 +225,27 @@
         {
             "script": "train_behaviour_model.py",
             "migrated_at": "2026-01-13",
-            "notes": "P0 complete - wrapped with @regal_training(env_type='workcell')"
+            "notes": "P0 complete - wrapped with @regal_training(env_type='unitree_g1')"
         },
         {
             "script": "train_world_model_from_datapacks.py",
             "migrated_at": "2026-01-13",
-            "notes": "P0 complete - wrapped with @regal_training(env_type='workcell')"
+            "notes": "P0 complete - wrapped with @regal_training(env_type='unitree_g1')"
         },
         {
             "script": "train_stable_world_model.py",
             "migrated_at": "2026-01-13",
-            "notes": "P0 complete - wrapped with @regal_training(env_type='workcell')"
+            "notes": "P0 complete - wrapped with @regal_training(env_type='unitree_g1')"
         },
         {
             "script": "train_trust_aware_world_model.py",
             "migrated_at": "2026-01-13",
-            "notes": "P0 complete - wrapped with @regal_training(env_type='workcell')"
+            "notes": "P0 complete - wrapped with @regal_training(env_type='unitree_g1')"
         },
         {
             "script": "train_horizon_agnostic_world_model.py",
             "migrated_at": "2026-01-13",
-            "notes": "P0 complete - wrapped with @regal_training(env_type='workcell')"
+            "notes": "P0 complete - wrapped with @regal_training(env_type='unitree_g1')"
         },
         {
             "script": "train_latent_diffusion.py",

@@ -8,7 +8,7 @@ Usage:
     from src.training.wrap_training_entrypoint import wrap_training_entrypoint, regal_training
 
     # Decorator style
-    @regal_training(env_type="workcell")
+    @regal_training(env_type="unitree_g1")
     def main(runner: RegalTrainingRunner):
         # Your training code here
         runner.record_sample("pick", datapack_id="dp_001")
@@ -19,7 +19,7 @@ Usage:
     def train():
         ...
     
-    wrap_training_entrypoint(train, env_type="workcell")
+    wrap_training_entrypoint(train, env_type="unitree_g1")
 """
 from __future__ import annotations
 
@@ -36,6 +36,9 @@ from src.training.regal_training_runner import (
     run_training_with_regality,
 )
 from src.utils.config_digest import sha256_json
+from src.world_model.humanoid_readiness.g1_primary_environment import (
+    PRIMARY_ENV_TYPE,
+)
 
 
 def create_training_argparser(
@@ -58,9 +61,9 @@ def create_training_argparser(
                         help="Number of training steps")
     
     # Regality args
-    parser.add_argument("--env-type", type=str, default="workcell",
-                        choices=["workcell", "dishwashing", "manufacturing"],
-                        help="Environment type (default: workcell)")
+    parser.add_argument("--env-type", type=str, default=PRIMARY_ENV_TYPE,
+                        choices=["unitree_g1", "workcell", "dishwashing", "manufacturing"],
+                        help="Environment type (default: unitree_g1)")
     parser.add_argument("--regal-level", type=str, default="FULL",
                         choices=["NONE", "DEMO", "FULL"],
                         help="Regality level (default: FULL)")
@@ -79,7 +82,7 @@ def create_training_argparser(
 def wrap_training_entrypoint(
     training_fn: Callable[[RegalTrainingRunner], None],
     *,
-    env_type: str = "workcell",
+    env_type: str = PRIMARY_ENV_TYPE,
     seed: int = 42,
     output_dir: str = "artifacts/training",
     num_episodes: int = 10,
@@ -93,7 +96,7 @@ def wrap_training_entrypoint(
     
     Args:
         training_fn: Training function that receives RegalTrainingRunner
-        env_type: Environment type (workcell, dishwashing, manufacturing)
+        env_type: Environment type (unitree_g1 by default; workcell/dishwashing are curriculum sources)
         seed: Random seed
         output_dir: Output directory for artifacts
         num_episodes: Number of training episodes
@@ -136,14 +139,14 @@ def wrap_training_entrypoint(
 
 
 def regal_training(
-    env_type: str = "workcell",
+    env_type: str = PRIMARY_ENV_TYPE,
     regal_ids: Optional[List[str]] = None,
     fail_on_verify_error: bool = True,
 ) -> Callable:
     """Decorator for training functions with regality compliance.
     
     Usage:
-        @regal_training(env_type="workcell")
+        @regal_training(env_type="unitree_g1")
         def main(runner: RegalTrainingRunner, args):
             # Training code
             ...
@@ -220,7 +223,7 @@ def check_training_script_compliance(script_path: str) -> bool:
     
     if not has_runner:
         print(f"[FAIL] {path.name}: Does not use RegalTrainingRunner")
-        print(f"       Add runner import or add to TRAINING_SCRIPT_ALLOWLIST with reason")
+        print("       Add runner import or add to TRAINING_SCRIPT_ALLOWLIST with reason")
         return False
     
     print(f"[OK] {path.name}: Uses RegalTrainingRunner")
@@ -251,7 +254,7 @@ def main():
             all_compliant = False
     
     if not all_compliant:
-        print(f"\n[FAIL] Some training scripts are not compliant")
+        print("\n[FAIL] Some training scripts are not compliant")
         sys.exit(1)
     
     print(f"\n[OK] All {len(scripts)} training scripts are compliant")

@@ -72,14 +72,16 @@ class TestStage6BlessedPath:
 class TestStage6OrchestratorStructure:
     """Test Stage6 orchestrator structure."""
     
-    def test_orchestrator_defaults_to_workcell(self):
-        """Stage6 defaults to workcell env_type."""
+    def test_orchestrator_defaults_to_unitree_g1(self):
+        """Stage6 defaults to Unitree G1 env_type."""
         from scripts.run_stage6_train_all import Stage6TrainingOrchestrator
         import tempfile
         
         with tempfile.TemporaryDirectory() as tmpdir:
             orch = Stage6TrainingOrchestrator(output_dir=tmpdir)
-            assert orch.env_type == "workcell", "Stage6 must default to workcell"
+            assert orch.env_type == "unitree_g1", (
+                "Stage6 must default to Unitree G1"
+            )
     
     def test_orchestrator_has_runner(self):
         """Stage6 must have RegalTrainingRunner."""

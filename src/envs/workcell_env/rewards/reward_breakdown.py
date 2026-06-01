@@ -1,5 +1,5 @@
 """
-Canonical RewardBreakdownV1 integration for workcell environments.
+RewardBreakdownV1 integration for fixed-base curriculum workcell environments.
 
 Phase 4: Standardized reward component schema for RewardIntegrity checks.
 """

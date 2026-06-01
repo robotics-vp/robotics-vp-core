@@ -248,7 +248,7 @@ def extract_skill_trace(episode: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     # Try to infer from actions
     if 'actions' not in episode:
-        # Generate default skill sequence for drawer_vase
+        # Generate default fixed-base curriculum skill sequence for drawer_vase
         return [
             {'t': 0, 'skill_id': 0, 'params': {}, 'duration': 10},  # LOCATE_DRAWER
             {'t': 10, 'skill_id': 1, 'params': {}, 'duration': 10},  # LOCATE_VASE
@@ -530,13 +530,14 @@ def generate_synthetic_episodes(n: int = 100) -> List[Dict[str, Any]]:
 
 
 def main():
+    default_curriculum_task = 'drawer_vase'
     parser = argparse.ArgumentParser(description='Build DataPacks from episodes')
     parser.add_argument('--data-dir', type=str, default='data/episodes',
                         help='Directory containing episode data')
     parser.add_argument('--output-dir', type=str, default='data/datapacks',
                         help='Directory for datapack repository')
-    parser.add_argument('--task', type=str, default='drawer_vase',
-                        help='Task name')
+    parser.add_argument('--task', type=str, default=default_curriculum_task,
+                        help='Fixed-base curriculum task name')
     parser.add_argument('--engine', type=str, default='pybullet',
                         choices=['pybullet', 'isaac', 'ue5'],
                         help='Simulation engine type')

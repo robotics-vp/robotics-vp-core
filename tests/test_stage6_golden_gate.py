@@ -45,7 +45,7 @@ def create_test_orchestrator(tmp_path, run_id):
     orch.run_id = run_id
     orch.output_dir = Path(tmp_path) / run_id
     orch.output_dir.mkdir(parents=True, exist_ok=True)
-    orch.env_type = "workcell"
+    orch.env_type = "unitree_g1"
     orch.seed = 42
     orch._child_results = []
     orch._checkpoint_refs = []
@@ -256,12 +256,12 @@ class TestGoldenGateDeterminism:
 class TestOrchestratorIntegration:
     """Test Stage6 orchestrator integration."""
     
-    def test_orchestrator_uses_workcell_default(self, tmp_path):
-        """Stage6 orchestrator defaults to workcell env."""
+    def test_orchestrator_uses_unitree_g1_default(self, tmp_path):
+        """Stage6 orchestrator defaults to Unitree G1 env."""
         from scripts.run_stage6_train_all import Stage6TrainingOrchestrator
         
         orch = Stage6TrainingOrchestrator(output_dir=str(tmp_path))
-        assert orch.env_type == "workcell"
+        assert orch.env_type == "unitree_g1"
     
     def test_orchestrator_has_migrated_trainers(self, tmp_path):
         """Stage6 has MIGRATED_TRAINERS mapping."""

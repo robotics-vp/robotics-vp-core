@@ -3113,11 +3113,11 @@ New package `src/world_model/perception_grounding/` following the exact pattern 
     - `semantic_grounding_ready=true`
     - `semantic_grounding_non_heuristic=true`
     solely because passthrough or auto was present
-- `scripts/bootstrap_semantic_workcell_loop.py` now writes the same truth semantics into the workcell bootstrap lane:
+- `scripts/bootstrap_semantic_workcell_loop.py` now writes the same truth semantics into the workcell fixed-base curriculum bootstrap lane:
   - `metadata.json` preserves the selected backend and training-eligibility status
   - only real SceneTracks remain eligible to set `scene_tracks_non_stub` / `semantic_grounding_non_heuristic`
   - passthrough bootstrap runs remain useful for corpus/debugging, but they stop overstating readiness in downstream replay/runtime consumers
-- The bootstrap workcell lane now emits canonical runtime traces instead of stopping at semantic sidecars:
+- The bootstrap workcell fixed-base curriculum lane now emits canonical runtime traces instead of stopping at semantic sidecars:
   - each episode now writes:
     - `*_runtime_packet_v1.json`
     - `*_event_spine_v1.json`
@@ -3134,9 +3134,9 @@ New package `src/world_model/perception_grounding/` following the exact pattern 
   - real SAM3D plus a GPU-backed non-fallback backend is now the explicit requirement for `grounded_data_ready`
   - that truth is recorded in trace-sidecar decisions and summary metadata instead of remaining doc-only
   - benchmark eligibility still remains false in this lane by default because trace completeness and real grounding are not the same as full teacher/vision/runtime promotion readiness
-- Workcell coverage mapping is now aligned to the actual graph contract:
-  - `src/world_model/coverage_evidence_harvester.py` now canonicalizes env ids such as `workcell_env` into the registered `workcell` inventory
-  - harvested task→skill and skill→primitive evidence now uses the same canonical skill ids as the graph (`hrl:*`, `workcell:*`, etc.) instead of the old mismatched `skill:*` envelope
+- Workcell fixed-base curriculum coverage mapping is now aligned to the actual graph contract:
+  - `src/world_model/coverage_evidence_harvester.py` now canonicalizes fixed-base curriculum env ids such as `workcell_env` into the registered `workcell` inventory
+  - harvested task→skill and skill→primitive evidence now uses the same canonical skill ids as the graph (`hrl:*`, `workcell:*`, etc., with `workcell:*` bounded to fixed-base curriculum source data) instead of the old mismatched `skill:*` envelope
   - `src/hrl/skill_graph.py` now includes a built-in `peg_in_hole` workcell skill chain, and `src/orchestrator/coverage_loop.py` enables it automatically for workcell envs
   - this fixes the earlier failure mode where many workcell rows could still leave the coverage loop effectively blind because the evidence keys did not line up with the graph topology
 - Shadow advisory replay selection now has a learned runtime-scorer seam instead of staying purely rule-weighted:
@@ -3156,8 +3156,8 @@ New package `src/world_model/perception_grounding/` following the exact pattern 
 - Added a canonical full-stack training backlog document at `docs/economic_world_model/full_stack_training_backlog.md`:
   - it records the current workspace truth that replay, coverage, and semantic-runtime corpora are still tiny
   - it ranks the real learned lanes by production importance and dependency instead of by script existence
-  - it explicitly recommends `workcell_data_refresh` as the first recurring remote bundle before heavier scorer/refiner/shadow jobs
-  - it now also distinguishes local passthrough refreshes from the canonical recurring lane: benchmark-grade workcell refresh/replay assumes real SAM3D on a Linux/NVIDIA A100-class host
+  - it explicitly recommends the G1-primary loop refresh as the first recurring remote bundle, with `workcell_data_refresh` only as a fixed-base curriculum source before heavier scorer/refiner/shadow jobs
+  - it now also distinguishes local passthrough refreshes from the canonical recurring lane: benchmark-grade G1-primary refresh/replay assumes real SAM3D on a Linux/NVIDIA A100-class host
 - Added Runpod training-bundle scaffolding under `scripts/runpod/`:
   - `FULL_STACK_TRAINING_BUNDLES.json` is the checked-in bundle source of truth
   - `assess_full_stack_training.py` scans the workspace and emits honest readiness/blocker state
@@ -6280,3 +6280,64 @@ WM surface sweep result:
 These checks prepare the repo for cleaner provider bring-up, loop runs, and
 eventual training. They do not launch providers, run GPU workloads, train,
 promote, write weights, operate hardware, or grant Phase 7 authority.
+
+## 2026-06-01 — G1 primary environment sweep and RunPod launch profiles
+
+### What changed
+
+- Added `src/world_model/humanoid_readiness/g1_primary_environment.py` as the
+  typed source of truth for the primary target:
+  - env type: `unitree_g1`
+  - primary env id: `bipedal_whole_body_unitree_g1`
+  - posture: `bipedal_whole_body`
+  - robot family: `unitree_g1`
+  - embodiment id: `unitree_g1_shadow`
+- Added `configs/humanoid/g1_primary_env.yaml` and
+  `docs/economic_world_model/g1_primary_environment.md` so the doctrine is
+  visible outside Python.
+- Retargeted regality and training entrypoint defaults to G1 primary metadata.
+  Lower-posture environments are still available, but are now labeled as
+  fixed-base curriculum/regression sources instead of defaults.
+- Updated `train_sac.py` and `scripts/train_sac_with_ontology_logging.py` so
+  the executable local dishwashing loop emits G1 primary target metadata and
+  source-curriculum boundaries. This is plumbing proof only, not G1 sim or
+  hardware proof.
+- Added `scripts/economic_world_model/check_g1_primary_env_hygiene.py`, which
+  scans repo text and emits a receipt-backed report for missing required G1
+  surfaces or unbounded legacy primary/default/canonical claims.
+- Added `src/runpod/launch_profiles.py` and
+  `scripts/runpod/prepare_launch_manifest.py` for typed pending manifests:
+  - `provider_bringup`
+  - `g1_loop_run`
+  - `g1_sac_training`
+- Updated `scripts/runpod/launch_pod.sh` to accept a prepared `--run-id` and
+  image override so the pod metadata lands in the same `.agent/runs/<run_id>/`
+  directory as the pending manifest. When a manifest already exists there, the
+  launcher updates it with pod id, launch status, image, GPU class, and start
+  time.
+
+### Current receipts
+
+Command:
+
+```bash
+python3 scripts/economic_world_model/check_g1_primary_env_hygiene.py \
+  --output-dir /tmp/g1_primary_env_hygiene_pass
+```
+
+Result:
+
+- `status=ok_g1_primary_env_hygiene_passed`
+- `scanned_file_count=1649`
+- `required_surface_count=8`
+- `missing_required_surface_count=0`
+- `legacy_primary_claim_count=0`
+- `advisory_legacy_reference_count=113`
+- `blocking_issue_count=0`
+
+### Boundary
+
+This tranche makes G1 the primary target across doctrine, defaults, SAC
+metadata, hygiene gates, and RunPod launch intent. It does not launch a pod,
+execute a provider, run GPU training, prove G1 simulation, operate Unitree
+hardware, write weights, or promote anything.

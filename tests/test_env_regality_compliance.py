@@ -49,8 +49,8 @@ class TestRegalEnvKitProtocol:
         
         class FullEnv:
             REGALITY_LEVEL = "FULL"
-            env_type = "workcell"
-            task_family = "dishwashing"
+            env_type = "unitree_g1"
+            task_family = "humanoid_wbt_g1"
             safety_invariants = ["no_collision", "gripper_safe"]
             
             def compute_reward_breakdown(self, reward, info):
@@ -110,8 +110,8 @@ class TestRegalEnvKitProtocol:
         
         class FullEnv:
             REGALITY_LEVEL = "FULL"
-            env_type = "workcell"
-            task_family = "dishwashing"
+            env_type = "unitree_g1"
+            task_family = "humanoid_wbt_g1"
             safety_invariants = []
             
             def compute_reward_breakdown(self, reward, info):
@@ -182,12 +182,12 @@ class TestEnvRegistryCompliance:
 
 
 class TestDefaultEnvType:
-    """Test DEFAULT_ENV_TYPE is workcell."""
+    """Test DEFAULT_ENV_TYPE is Unitree G1."""
     
-    def test_default_is_workcell(self):
-        """DEFAULT_ENV_TYPE must be 'workcell'."""
+    def test_default_is_unitree_g1(self):
+        """DEFAULT_ENV_TYPE must be 'unitree_g1'."""
         from src.training.regal_env_kit import DEFAULT_ENV_TYPE
         
-        assert DEFAULT_ENV_TYPE == "workcell", (
-            "Workcell must be the paramount env_type"
+        assert DEFAULT_ENV_TYPE == "unitree_g1", (
+            "Unitree G1 must be the primary env_type"
         )

@@ -4,10 +4,10 @@ set -euo pipefail
 # launch_pod.sh — Launch a RunPod pod for a given pod class.
 #
 # Usage:
-#   ./scripts/runpod/launch_pod.sh --class train --gpu A100-80GB [--volume $RUNPOD_VOLUME_ID] [--template $RUNPOD_TEMPLATE_ID] [--timeout 3600]
+#   ./scripts/runpod/launch_pod.sh --class train --gpu A100-80GB [--run-id runpod-...] [--volume $RUNPOD_VOLUME_ID] [--template $RUNPOD_TEMPLATE_ID] [--timeout 3600]
 #
 # Pod classes: loop, provider, train, refactor
-# Records pod metadata to .agent/runs/runpod-<timestamp>/meta.json
+# Records pod metadata to .agent/runs/<run-id>/meta.json
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -19,6 +19,8 @@ VOLUME_ID="${RUNPOD_VOLUME_ID:-}"
 TEMPLATE_ID="${RUNPOD_TEMPLATE_ID:-}"
 TIMEOUT="${RUNPOD_POD_TIMEOUT:-14400}"
 POD_NAME=""
+RUN_ID=""
+IMAGE_NAME="${RUNPOD_IMAGE_NAME:-nvidia/cuda:12.1.0-runtime-ubuntu22.04}"
 
 # --- Class defaults ---
 declare -A CLASS_GPU_DEFAULT=(
@@ -50,8 +52,12 @@ while [[ $# -gt 0 ]]; do
             TIMEOUT="$2"; shift 2 ;;
         --name)
             POD_NAME="$2"; shift 2 ;;
+        --run-id)
+            RUN_ID="$2"; shift 2 ;;
+        --image)
+            IMAGE_NAME="$2"; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 --class <loop|provider|train|refactor> --gpu <GPU_TYPE> [--volume ID] [--template ID] [--timeout SECS] [--name NAME]"
+            echo "Usage: $0 --class <loop|provider|train|refactor> --gpu <GPU_TYPE> [--run-id ID] [--volume ID] [--template ID] [--timeout SECS] [--name NAME] [--image IMAGE]"
             exit 0 ;;
         *)
             echo "ERROR: Unknown argument: $1"
@@ -91,7 +97,9 @@ fi
 
 # Generate run ID and metadata directory
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
-RUN_ID="runpod-${TIMESTAMP}-$(openssl rand -hex 3)"
+if [ -z "$RUN_ID" ]; then
+    RUN_ID="runpod-${TIMESTAMP}-$(openssl rand -hex 3)"
+fi
 RUN_DIR="$REPO_ROOT/.agent/runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
@@ -111,11 +119,11 @@ echo "  Run ID:   $RUN_ID"
 
 # --- Build runpodctl command ---
 CMD=(runpodctl create pod
-    --name "$POD_NAME"
-    --gpuType "$GPU_TYPE"
-    --gpuCount 1
-    --imageName "nvidia/cuda:12.1.0-runtime-ubuntu22.04"
-)
+	    --name "$POD_NAME"
+	    --gpuType "$GPU_TYPE"
+	    --gpuCount 1
+	    --imageName "$IMAGE_NAME"
+	)
 
 if [ -n "$VOLUME_ID" ]; then
     CMD+=(--volumeId "$VOLUME_ID" --volumePath "/workspace")
@@ -147,8 +155,9 @@ cat > "$RUN_DIR/meta.json" <<EOF
   "pod_name": "$POD_NAME",
   "gpu_type": "$GPU_TYPE",
   "volume_id": "$VOLUME_ID",
-  "template_id": "$TEMPLATE_ID",
-  "timeout_seconds": $TIMEOUT,
+	  "template_id": "$TEMPLATE_ID",
+	  "image_name": "$IMAGE_NAME",
+	  "timeout_seconds": $TIMEOUT,
   "commit_sha": "$COMMIT_SHA",
   "branch": "$BRANCH",
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
@@ -158,5 +167,34 @@ EOF
 
 echo ""
 echo "Pod metadata written to: $RUN_DIR/meta.json"
+MANIFEST_PATH="$RUN_DIR/manifest.json"
+if [ -f "$MANIFEST_PATH" ]; then
+    python3 - "$MANIFEST_PATH" "$POD_ID" "$POD_CLASS" "$GPU_TYPE" "$VOLUME_ID" "$TEMPLATE_ID" "$IMAGE_NAME" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+manifest_path = Path(sys.argv[1])
+pod_id = sys.argv[2]
+pod_class = sys.argv[3]
+gpu_type = sys.argv[4]
+volume_id = sys.argv[5] or None
+template_id = sys.argv[6] or ""
+image_name = sys.argv[7]
+
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["pod_id"] = pod_id
+manifest["pod_class"] = pod_class
+manifest["gpu_class"] = gpu_type
+manifest["volume_id"] = volume_id
+manifest["template"] = template_id
+manifest["image"] = image_name
+manifest["status"] = "launched"
+manifest["started_at"] = datetime.now(timezone.utc).isoformat()
+manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+PY
+    echo "Run manifest updated: $MANIFEST_PATH"
+fi
 echo "Pod ID: $POD_ID"
 echo "Run ID: $RUN_ID"

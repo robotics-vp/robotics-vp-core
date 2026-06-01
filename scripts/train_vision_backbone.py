@@ -107,7 +107,7 @@ def write_checkpoint(checkpoint_dir: Path, payload: Dict[str, Any], head_state: 
     return path
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(argv: Optional[List[str]] = None, runner=None) -> None:
     """Main entrypoint with regality wrapper."""
     if runner:

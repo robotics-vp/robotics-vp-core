@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Canonical workcell (manufacturing cell) runner with full regality compliance.
+Fixed-base curriculum workcell (manufacturing cell) runner with full regality compliance.
 
-This is the PARAMOUNT env for regality - produces all required artifacts:
+This is a regression/curriculum env for regality - produces all required artifacts:
 - RunManifestV1 + ledger.jsonl + exposure_manifest.json
 - selection_manifest.json (Phase 2)
 - orchestrator_state.json (Phase 1)

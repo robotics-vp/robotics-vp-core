@@ -68,7 +68,7 @@ If `epistemic_status` is omitted, interpret the run conservatively as no stronge
 |-------|-----|--------|----------|------|-----------|
 | `loop` | A40 / L40 | Persistent | Hours | Episode collection, replay generation | Replay files, env logs |
 | `provider` | A100-40GB+ | None | Minutes-hours | Provider smoke tests (SAM 3, V-JEPA 2, DINOv2, Depth Anything) | Smoke logs, latency benchmarks |
-| `train` | A100-80GB | Persistent | Hours-days | SAC training, seam training, policy training | Checkpoints, training logs |
+| `train` | A100-80GB | Persistent | Hours-days | G1-primary SAC plumbing, seam training, policy training | Checkpoints, training logs |
 | `refactor` | A40+ | None | Minutes | CUDA/Isaac build validation | Build logs, test output |
 
 ## Workflow
@@ -76,10 +76,18 @@ If `epistemic_status` is omitted, interpret the run conservatively as no stronge
 ### 1. Launch
 
 ```bash
-./scripts/runpod/launch_pod.sh --class train --gpu A100-80GB --timeout 14400
+python3 scripts/runpod/prepare_launch_manifest.py \
+  --profile g1_sac_training \
+  --run-id runpod-20260901-120000-g1-sac-training \
+  --volume-id "$RUNPOD_VOLUME_ID"
+bash .agent/runs/runpod-20260901-120000-g1-sac-training/launch_command.sh
 ```
 
-This creates the pod and writes metadata to `.agent/runs/runpod-<timestamp>/meta.json`.
+The `prepare_launch_manifest.py` command writes the decision-facing
+`.agent/runs/<run_id>/manifest.json` and launch command first. Launching from
+that command keeps pod metadata in the same `.agent/runs/<run_id>/` directory.
+If `manifest.json` already exists there, `launch_pod.sh` updates it with pod
+id, launch status, image, GPU class, and start time.
 
 ### 2. Sync
 
@@ -93,7 +101,11 @@ Pushes the repo (respecting `.gitignore`) to `/workspace/` on the pod.
 
 ```bash
 ./scripts/runpod/exec_remote.sh --pod <pod_id> -- pip install -r requirements-gpu.txt
-./scripts/runpod/exec_remote.sh --pod <pod_id> -- python train_sac.py --config configs/sac/default.yaml
+./scripts/runpod/exec_remote.sh --pod <pod_id> -- python train_sac.py \
+  --primary-env-id bipedal_whole_body_unitree_g1 \
+  --target-task-id humanoid_wbt_g1 \
+  --target-robot-family unitree_g1 \
+  --source-curriculum-env dishwashing
 ```
 
 Stdout/stderr are captured to `.agent/runs/runpod-<run_id>/`.
@@ -142,6 +154,17 @@ Example manifests:
 - `configs/runpod/examples/train_sac_manifest.json`
 - `configs/runpod/examples/provider_bringup_manifest.json`
 - `configs/runpod/examples/benchmark_candidate_training_manifest_v2.json`
+
+Prepared launch profiles:
+
+```bash
+python3 scripts/runpod/prepare_launch_manifest.py --profile provider_bringup
+python3 scripts/runpod/prepare_launch_manifest.py --profile g1_loop_run --volume-id "$RUNPOD_VOLUME_ID"
+python3 scripts/runpod/prepare_launch_manifest.py --profile g1_sac_training --volume-id "$RUNPOD_VOLUME_ID"
+```
+
+These profiles keep `bipedal_whole_body_unitree_g1` as the primary target and
+mark workcell/dishwashing inputs as fixed-base curriculum sources.
 
 ## Comparison Artifacts
 
@@ -196,7 +219,7 @@ Is the task code-only (no GPU needed)?
     NO  --> Local
   NO  --> Does it need GPU?
     YES --> What kind of work?
-      Training (SAC, seam, policy)      --> RunPod: train class
+      Training (G1 SAC plumbing, seam, policy) --> RunPod: train class
       Provider smoke (SAM, V-JEPA, ...) --> RunPod: provider class
       Episode collection / replay       --> RunPod: loop class
       CUDA/Isaac build validation       --> RunPod: refactor class
@@ -230,6 +253,6 @@ The thin-wrapper + manifest + registry + skill model remains correct.
 - [RunPod GPU Execution Skill](../../codex_skills/runpod-gpu-execution/SKILL.md)
 - [Run Manifest Schema](run_manifest_schema.md)
 - [Run Comparison Template](../../results/run_registry/templates/run_comparison_template.md)
-- [Example: SAC Training Manifest](../../configs/runpod/examples/train_sac_manifest.json)
+- [Example: G1 SAC Training Manifest](../../configs/runpod/examples/train_sac_manifest.json)
 - [Example: Provider Bring-Up Manifest](../../configs/runpod/examples/provider_bringup_manifest.json)
 - [Example: Benchmark Candidate Manifest](../../configs/runpod/examples/benchmark_candidate_training_manifest_v2.json)

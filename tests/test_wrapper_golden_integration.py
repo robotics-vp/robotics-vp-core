@@ -88,13 +88,13 @@ class TestWrapperDecoratorIntegration:
         sig = inspect.signature(regal_training)
         assert "env_type" in sig.parameters
     
-    def test_decorator_defaults_to_workcell(self):
-        """@regal_training must default to workcell."""
+    def test_decorator_defaults_to_unitree_g1(self):
+        """@regal_training must default to Unitree G1."""
         from src.training.wrap_training_entrypoint import regal_training
         import inspect
         
         sig = inspect.signature(regal_training)
-        assert sig.parameters["env_type"].default == "workcell"
+        assert sig.parameters["env_type"].default == "unitree_g1"
 
 
 class TestVerificationIntegration:
@@ -180,10 +180,10 @@ class TestTrainerFamilyCoverage:
             
             assert has_wrapper, f"{trainer} missing regality wrapper"
             
-            # If using decorator, must specify workcell
+            # If using decorator, must specify Unitree G1 as primary target
             if "@regal_training" in content:
-                has_workcell = 'env_type="workcell"' in content
-                assert has_workcell, f"{trainer} missing env_type='workcell'"
+                has_unitree_g1 = 'env_type="unitree_g1"' in content
+                assert has_unitree_g1, f"{trainer} missing env_type='unitree_g1'"
     
     def test_wrapped_trainer_count(self):
         """Track number of wrapped trainers."""
@@ -232,4 +232,3 @@ class TestBlockingCheckIDsComplete:
         assert policy_checks.issubset(BLOCKING_CHECK_IDS), (
             f"Missing policy checks: {policy_checks - BLOCKING_CHECK_IDS}"
         )
-

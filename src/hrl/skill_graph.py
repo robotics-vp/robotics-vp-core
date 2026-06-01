@@ -239,7 +239,7 @@ class SkillGraph:
                     object_family_requirements=objs,
                     risk_families=risk,
                 )
-            # default drawer-vase task transition chain
+            # default fixed-base curriculum drawer-vase task transition chain
             ordered = [f"hrl:{SkillID.name(i).lower()}" for i in SkillID.all_ids()]
             for a, b in zip(ordered, ordered[1:]):
                 transitions.append(SkillTransitionEdge(

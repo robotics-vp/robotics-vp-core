@@ -96,12 +96,13 @@ Verify readiness:
 
 ## Workflow
 
-1. **Launch**: `./scripts/runpod/launch_pod.sh --class <pod_class> --gpu <gpu_type>`
-2. **Sync repo up**: `./scripts/runpod/sync_up.sh --pod <pod_id>`
-3. **Execute**: `./scripts/runpod/exec_remote.sh --pod <pod_id> -- <command>`
-4. **Sync results down**: `./scripts/runpod/sync_down.sh --pod <pod_id> --remote-path /workspace/results --local-path results/run_registry/<run_id>/`
-5. **Collect billing**: `./scripts/runpod/collect_billing.sh --pod <pod_id>`
-6. **Cleanup**: `./scripts/runpod/cleanup_idle.sh` or stop the pod manually
+1. **Prepare launch manifest**: `python3 scripts/runpod/prepare_launch_manifest.py --profile <provider_bringup|g1_loop_run|g1_sac_training> [--volume-id "$RUNPOD_VOLUME_ID"]`
+2. **Launch**: `bash .agent/runs/<run_id>/launch_command.sh`
+3. **Sync repo up**: `./scripts/runpod/sync_up.sh --pod <pod_id>`
+4. **Execute**: `./scripts/runpod/exec_remote.sh --pod <pod_id> -- <command>`
+5. **Sync results down**: `./scripts/runpod/sync_down.sh --pod <pod_id> --remote-path /workspace/results --local-path results/run_registry/<run_id>/`
+6. **Collect billing**: `./scripts/runpod/collect_billing.sh --pod <pod_id>`
+7. **Cleanup**: `./scripts/runpod/cleanup_idle.sh` or stop the pod manually
 
 ## Run Manifests
 

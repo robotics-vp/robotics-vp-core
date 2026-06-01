@@ -798,7 +798,12 @@ def run_semantic_workcell_bootstrap(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", required=True, help="Directory for datapacks, replay data, and coverage artifacts")
-    parser.add_argument("--episodes", type=int, default=2, help="Number of workcell episodes to capture")
+    parser.add_argument(
+        "--episodes",
+        type=int,
+        default=2,
+        help="Number of fixed-base curriculum workcell episodes to capture",
+    )
     parser.add_argument("--steps", type=int, default=5, help="Control steps per episode")
     parser.add_argument("--max-frames", type=int, default=5, help="Rendered frames per episode")
     parser.add_argument("--seed", type=int, default=42, help="Seed for deterministic scene/task variation")

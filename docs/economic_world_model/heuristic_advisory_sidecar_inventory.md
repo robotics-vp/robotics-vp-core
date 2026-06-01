@@ -241,9 +241,9 @@ Ranking dimensions:
   - `remain explicit fallback`
   - `benchmark-gated`
 
-### 3a. Bootstrap workcell runtime trace completeness + grounded-data lane classification
+### 3a. Bootstrap workcell fixed-base curriculum runtime trace completeness + grounded-data lane classification
 
-- surface: bootstrap workcell episodes looked replay-shaped but lacked canonical runtime packet / event spine / decision ledger refs
+- surface: bootstrap workcell fixed-base curriculum episodes looked replay-shaped but lacked canonical runtime packet / event spine / decision ledger refs
 - file/path: `scripts/bootstrap_semantic_workcell_loop.py`, `src/replay/ingest.py`
 - category: `sidecar`
 - current behavior:
@@ -276,16 +276,16 @@ Ranking dimensions:
   - `remain explicit fallback`
   - `benchmark-gated`
 
-### 3b. Workcell `peg_in_hole` coverage-graph mapping
+### 3b. Workcell fixed-base curriculum `peg_in_hole` coverage-graph mapping
 
-- surface: workcell rows were barely landing in the canonical task × skill × env-primitive graph
+- surface: workcell fixed-base curriculum rows were barely landing in the canonical task × skill × env-primitive graph
 - file/path: `src/world_model/coverage_evidence_harvester.py`, `src/hrl/skill_graph.py`, `src/orchestrator/coverage_loop.py`
 - category: `heuristic`
 - current behavior:
-  - the coverage harvester now canonicalizes env ids such as `workcell_env` into the registered `workcell` inventory
+  - the coverage harvester now canonicalizes fixed-base curriculum env ids such as `workcell_env` into the registered `workcell` inventory
   - harvested skill ids are now canonicalized to the same ids the graph uses (`hrl:*`, `workcell:*`, etc.) instead of the old mismatched `skill:*` shape
   - the skill graph now has a built-in workcell chain for `peg_in_hole`
-  - the harvester now maps workcell affordance/task evidence into that chain instead of defaulting to drawer-era skill assumptions
+  - the harvester now maps workcell fixed-base curriculum affordance/task evidence into that chain instead of defaulting to drawer-era skill assumptions
 - current consumers:
   - `run_coverage_loop(...)`
   - workcell bootstrap coverage artifacts

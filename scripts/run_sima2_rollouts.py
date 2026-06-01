@@ -12,10 +12,17 @@ sys.path.insert(0, str(repo_root))
 
 from src.sima2.client import Sima2Client
 
+DEFAULT_CURRICULUM_TASK_ID = "drawer_vase"
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run SIMA-2 stub rollouts.")
-    parser.add_argument("--task-id", type=str, default="drawer_vase")
+    parser.add_argument(
+        "--task-id",
+        type=str,
+        default=DEFAULT_CURRICULUM_TASK_ID,
+        help="Fixed-base curriculum task id for stub rollout generation.",
+    )
     parser.add_argument("--num-episodes", type=int, default=2)
     parser.add_argument("--output-jsonl", type=str, default="")
     args = parser.parse_args()

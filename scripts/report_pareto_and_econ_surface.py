@@ -17,11 +17,18 @@ from src.config.objective_profile import get_objective_presets
 from src.valuation.datapack_repo import DataPackRepo
 from src.valuation.datapack_validators import validate_datapack_meta
 
+DEFAULT_CURRICULUM_ENV = "drawer_vase"
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--datapack-dir", type=str, default="data/datapacks/phase_c")
-    parser.add_argument("--env-name", type=str, default="drawer_vase")
+    parser.add_argument(
+        "--env-name",
+        type=str,
+        default=DEFAULT_CURRICULUM_ENV,
+        help="Fixed-base curriculum environment name to analyze.",
+    )
     parser.add_argument("--out-json", type=str, default="results/pareto_econ_surface_report.json")
     args = parser.parse_args()
 

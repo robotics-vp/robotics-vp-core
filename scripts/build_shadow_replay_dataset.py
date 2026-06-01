@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a canonical replay dataset from shadow or workcell artifacts."""
+"""Build a G1-primary replay dataset from shadow or workcell curriculum artifacts."""
 from __future__ import annotations
 
 import argparse
@@ -19,7 +19,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build canonical replay dataset artifacts")
     parser.add_argument("--output-dir", type=str, required=True)
     parser.add_argument("--shadow-run-dir", type=str, default=None)
-    parser.add_argument("--workcell-episode-log", type=str, default=None)
+    parser.add_argument(
+        "--workcell-episode-log",
+        type=str,
+        default=None,
+        help="Fixed-base curriculum workcell episode log to import.",
+    )
     parser.add_argument("--rollout-bundle-dir", type=str, default=None)
     parser.add_argument("--rollout-scenario-id", type=str, default=None)
     parser.add_argument("--generate-shadow-run", action="store_true")

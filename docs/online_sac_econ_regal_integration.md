@@ -1,8 +1,14 @@
 # Online SAC Econ / Regal Integration
 
+This flow is now G1-primary by metadata and manifest contract. The executable
+local source remains the legacy fixed-base dishwashing curriculum proxy until
+Unitree G1 sim/hardware receipts exist.
+
 This change moves the econ / regal layer from advisory-only sidecars into the actual online SAC sampling and evidence loop, while preserving the repo contract:
 
-- SAC remains the online backbone.
+- SAC remains the online backbone for G1-target plumbing, not G1 control proof.
+- `bipedal_whole_body_unitree_g1` is the primary target env.
+- `dishwashing_online_sac` is only a fixed-base curriculum source.
 - PPO is not promoted.
 - Learned advisors remain bounded and evidence-gated.
 - No hard deny is applied by default.

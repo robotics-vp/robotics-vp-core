@@ -339,7 +339,7 @@ class TrustAwareWorldModelTrainer:
         return history
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(runner=None):
     """Main entrypoint with regality wrapper."""
     if runner:

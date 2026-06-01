@@ -33,6 +33,9 @@ from src.contracts.schemas import (
     TrajectoryAuditV1,
 )
 from src.utils.config_digest import sha256_json, sha256_file
+from src.world_model.humanoid_readiness.g1_primary_environment import (
+    PRIMARY_ENV_TYPE,
+)
 
 
 class Stage6TrainingOrchestrator:
@@ -49,7 +52,7 @@ class Stage6TrainingOrchestrator:
         self,
         run_id: Optional[str] = None,
         output_dir: str = "artifacts/stage6",
-        env_type: str = "workcell",  # Default: workcell (paramount)
+        env_type: str = PRIMARY_ENV_TYPE,
         seed: int = 42,
         policy_mode: str = "prod",  # "prod" or "paranoid"
     ):
@@ -427,7 +430,7 @@ class Stage6TrainingOrchestrator:
         print("[Stage6] PIPELINE COMPLETE")
         print(f"{'='*60}")
         print(f"Run ID: {self.run_id}")
-        print(f"Env Type: {self.env_type} (paramount)")
+        print(f"Env Type: {self.env_type} (G1 primary target)")
         print(f"Child Runs: {len(self._child_results)}")
         print(f"All Success: {all_success}")
         print(f"Total Training Steps: {total_steps}")
@@ -444,9 +447,9 @@ def main():
     )
     parser.add_argument("--seed", type=int, default=42, help="Global random seed")
     parser.add_argument(
-        "--env-type", type=str, default="workcell",
-        choices=["workcell", "dishwashing", "manufacturing"],
-        help="Environment type (default: workcell, paramount)"
+        "--env-type", type=str, default=PRIMARY_ENV_TYPE,
+        choices=["unitree_g1", "workcell", "dishwashing", "manufacturing"],
+        help="Environment type (default: unitree_g1 primary target)"
     )
     parser.add_argument("--output-dir", type=str, default="artifacts/stage6",
                         help="Output directory for Stage6 artifacts")

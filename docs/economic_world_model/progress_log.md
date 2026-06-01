@@ -2313,9 +2313,9 @@
 - Blocked: real grounded-data rows are still host-blocked here because this workspace does not have the actual Linux/NVIDIA + SAM3D setup. The new host-precondition artifact makes that limitation explicit in runner metadata instead of letting downstream consumers infer from sidecar existence alone.
 - Next recommended task: replace the tag-overlap datapack/scenario policy in `src/orchestrator/semantic_policy.py` with bounded evidence/runtime-aware scoring and thread that selection rationale into `src/orchestrator/semantic_simulation.py`.
 
-- Changed: completed the bootstrap workcell honesty tranche. `scripts/bootstrap_semantic_workcell_loop.py` now emits canonical per-episode `*_runtime_packet_v1.json`, `*_event_spine_v1.json`, and `*_decision_ledger_v1.json` artifacts, records `runtime_packet_id` / `event_refs` / `decision_refs` into `metadata.json`, and distinguishes trace-complete replay rows from `grounded_data_ready` rows that actually require real SAM3D plus GPU-backed execution.
+- Changed: completed the bootstrap workcell fixed-base curriculum honesty tranche. `scripts/bootstrap_semantic_workcell_loop.py` now emits canonical per-episode `*_runtime_packet_v1.json`, `*_event_spine_v1.json`, and `*_decision_ledger_v1.json` artifacts, records `runtime_packet_id` / `event_refs` / `decision_refs` into `metadata.json`, and distinguishes trace-complete replay rows from `grounded_data_ready` rows that actually require real SAM3D plus GPU-backed execution.
 - Changed: tightened rollout replay import to honor those bootstrap artifacts directly. `src/replay/ingest.py` now discovers runtime/event/decision refs from rollout metadata or sidecar filenames, carries `runtime_packet_id` / `event_refs` / `decision_refs` into replay metadata, and lets the bootstrap runtime corpus stop failing readiness solely because the canonical refs were missing.
-- Changed: fixed the workcell coverage-graph contract instead of just inflating bootstrap summaries. `src/world_model/coverage_evidence_harvester.py` now canonicalizes env ids like `workcell_env`, emits canonical skill ids aligned with the graph, and maps `peg_in_hole` affordance evidence into a built-in workcell skill chain added in `src/hrl/skill_graph.py`; `src/orchestrator/coverage_loop.py` now enables that chain automatically for workcell envs.
+- Changed: fixed the workcell fixed-base curriculum coverage-graph contract instead of just inflating bootstrap summaries. `src/world_model/coverage_evidence_harvester.py` now canonicalizes env ids like `workcell_env`, emits canonical skill ids aligned with the graph, and maps `peg_in_hole` affordance evidence into a built-in workcell curriculum skill chain added in `src/hrl/skill_graph.py`; `src/orchestrator/coverage_loop.py` now enables that chain automatically for workcell envs.
 - Changed: updated `docs/economic_world_model/heuristic_advisory_sidecar_inventory.md` and `scripts/RUNTIME_WIRING_BACKLOG.json` to mark bootstrap trace completeness and workcell coverage-graph mapping as wired now, leaving shadow advisory sampling and semantic policy selection as the main remaining runtime heuristic lanes.
 - Verification: `python3 -m compileall src/hrl/skill_graph.py src/world_model/coverage_evidence_harvester.py src/orchestrator/coverage_loop.py src/replay/ingest.py scripts/bootstrap_semantic_workcell_loop.py tests/test_skill_graph.py tests/test_coverage_evidence_harvester.py tests/test_replay_dataset.py tests/integration/test_bootstrap_semantic_workcell_loop.py -q`, `python3 -m ruff check src/hrl/skill_graph.py src/world_model/coverage_evidence_harvester.py src/orchestrator/coverage_loop.py src/replay/ingest.py scripts/bootstrap_semantic_workcell_loop.py tests/test_skill_graph.py tests/test_coverage_evidence_harvester.py tests/test_replay_dataset.py tests/integration/test_bootstrap_semantic_workcell_loop.py`, `python3 -m pytest -q tests/test_skill_graph.py tests/test_coverage_evidence_harvester.py tests/test_replay_dataset.py tests/integration/test_bootstrap_semantic_workcell_loop.py`, and `python3 -m pytest -q tests/test_coverage_loop.py tests/test_semantic_coverage_graph.py tests/test_gap_ranker.py` passed.
 - Blocked: the current workspace still does not have a real SAM3D host/checkpoint setup, so bootstrap runs can now tell the truth about grounded-data readiness and trace completeness, but they still cannot claim real grounded data locally.
@@ -4111,3 +4111,37 @@ Verification for the Phase-5.1 pass:
   launch providers, create pods, run GPU loops, train models, write weights,
   touch the stable checkpoint, operate hardware, or grant promotion/Phase 7
   authority.
+
+### 2026-06-01: G1 primary environment sweep and RunPod launch-profile wiring
+
+- Changed: added a canonical Unitree G1 primary-environment doctrine in
+  `src/world_model/humanoid_readiness/g1_primary_environment.py` and
+  `configs/humanoid/g1_primary_env.yaml`. The repo target is now
+  `unitree_g1` / `bipedal_whole_body_unitree_g1`; workcell, drawer/vase, and
+  dishwashing are explicitly fixed-base curriculum or regression sources.
+- Changed: retargeted training defaults and regality wrappers away from
+  legacy workcell-as-primary claims. SAC still executes the local dishwashing environment
+  where that is the only CPU-capable loop, but it now emits G1 primary metadata,
+  target posture, robot family, source-curriculum boundary, and non-promotion
+  truth in the log surface.
+- Changed: added a repo sweep command,
+  `scripts/economic_world_model/check_g1_primary_env_hygiene.py`, that writes
+  typed JSON/JSONL receipts and blocks unbounded legacy `primary` / `default` /
+  `canonical` / `paramount` claims.
+- Changed: added typed RunPod launch profiles in `src/runpod/launch_profiles.py`
+  and `scripts/runpod/prepare_launch_manifest.py` for
+  `provider_bringup`, `g1_loop_run`, and `g1_sac_training`. These write
+  `.agent/runs/<run_id>/manifest.json` plus a launch command that routes
+  through `scripts/runpod/launch_pod.sh`.
+- Current G1 primary hygiene result:
+  `status=ok_g1_primary_env_hygiene_passed`,
+  `scanned_file_count=1649`,
+  `required_surface_count=8`,
+  `missing_required_surface_count=0`,
+  `legacy_primary_claim_count=0`,
+  `advisory_legacy_reference_count=113`, and
+  `blocking_issue_count=0`.
+- Boundary preserved: this is repo doctrine, plumbing, manifest prep, and CPU
+  validation only. It does not launch pods, run providers, run GPU loops, train
+  G1 whole-body policies, operate Unitree hardware, write stable checkpoints, or
+  create promotion-grade proof.

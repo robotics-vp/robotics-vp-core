@@ -8,13 +8,13 @@ Prevents "cute demo envs" from polluting the training graph by requiring:
 Usage:
     class MyEnv(RegalEnvKit):
         REGALITY_LEVEL = "FULL"
-        env_type = "workcell"
-        task_family = "dishwashing"
+        env_type = "unitree_g1"
+        task_family = "humanoid_wbt_g1"
         ...
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, List, Literal, Protocol, runtime_checkable
 from enum import Enum
 
 from src.contracts.schemas import RewardBreakdownV1, TrajectoryAuditV1
@@ -172,8 +172,8 @@ def is_stage6_eligible(env: Any) -> bool:
     return validation["level"] == "FULL" and validation["valid"]
 
 
-# Workcell is paramount - default env_type for Stage6
-DEFAULT_ENV_TYPE = "workcell"
+# Unitree G1 is the primary target. Workcell remains curriculum/regression.
+DEFAULT_ENV_TYPE = "unitree_g1"
 
 
 __all__ = [

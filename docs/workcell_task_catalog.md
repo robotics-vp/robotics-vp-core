@@ -1,6 +1,6 @@
 # Workcell Task Catalog
 
-This catalog defines the canonical manufacturing task families and difficulty progression for the workcell environment suite.
+This catalog defines fixed-base curriculum manufacturing task families and difficulty progression for the workcell environment suite.
 
 ## Task Family Overview
 

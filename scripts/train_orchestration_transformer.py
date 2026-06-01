@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Train the orchestration transformer with runtime-backed datasets when available."""
 # Compatibility marker for legacy regality smoke tests:
-# @regal_training(env_type="workcell")
+# @regal_training(env_type="unitree_g1")
 
 from __future__ import annotations
 

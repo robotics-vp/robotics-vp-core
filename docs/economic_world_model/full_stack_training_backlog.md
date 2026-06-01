@@ -92,7 +92,7 @@ Dependency shape:
 - depends mainly on a real replay corpus
 
 Internal data sources:
-- canonical replay datasets built from shadow runs, online SAC, or bootstrap workcell loops
+- G1-primary replay datasets built from shadow runs, online SAC, or bootstrap workcell fixed-base curriculum loops
 
 External data sources:
 - DROID replay conversions
@@ -259,7 +259,7 @@ The bundle readiness and launch scripts are:
 
 Current intended cadence:
 
-1. run `workcell_data_refresh`
+1. run the G1-primary `g1_loop_run` refresh, with `workcell_data_refresh` only as its fixed-base curriculum source
 2. re-assess corpus density
 3. only then allow `semantic_runtime_training`
 4. only after repeated coverage artifacts exist, allow `semantic_feedback_training`
@@ -334,7 +334,7 @@ The intended autonomous model is:
 Important honesty rules:
 
 - if the image does not contain the desired code, the launcher does not fix that for you
-- if the image does not contain real SAM3D repos plus authenticated checkpoints, `workcell_data_refresh` is not actually ready even if the bootstrap script itself exists
+- if the image does not contain real SAM3D repos plus authenticated checkpoints, the G1-primary loop refresh is not actually ready even if the workcell curriculum bootstrap script itself exists
 - if `runpodctl` is missing locally, launch will fail
 - if a network volume is attached, the pod should be removed rather than merely stopped
 - if readiness gates fail and `--force` is not passed, launch must stop before spend begins
@@ -439,7 +439,7 @@ python3 scripts/runpod/launch_training_bundle.py \
 
 Today, the right recurring autonomous Runpod job is:
 
-- run an A100-backed real-SAM3D workcell refresh/replay pass
+- run an A100-backed real-SAM3D G1-primary loop refresh/replay pass, using workcell only as fixed-base curriculum source data
 - regenerate replay and coverage artifacts
 - wait until those corpora are honestly larger
 - only then spend A100 time on scorer, refiner, and shadow-model checkpoints

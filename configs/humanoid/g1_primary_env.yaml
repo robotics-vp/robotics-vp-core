@@ -1,0 +1,36 @@
+schema_version: g1_primary_environment_profile_v1
+env_type: unitree_g1
+primary_env_id: bipedal_whole_body_unitree_g1
+primary_task_id: humanoid_wbt_g1
+primary_robot_family: unitree_g1
+primary_hardware_class: unitree_g1_r1_class
+primary_embodiment_id: unitree_g1_shadow
+primary_posture_tag: bipedal_whole_body
+fallback_posture_tag: stable_base_mobile_manipulator
+curriculum_posture_tag: fixed_base_tabletop
+authority_class: g1_primary_env_shadow_contract
+denied_claims:
+  unitree_hardware_truth: false
+  unitree_sim_runtime_truth: false
+  live_policy_control: false
+  trained_whole_body_policy: false
+  promotion_eligible: false
+curriculum_sources:
+  - env_id: dishwashing
+    posture_tag: fixed_base_tabletop
+    role: legacy SAC and econ reward plumbing source
+    promotion_limit: cannot_close_g1_r1_whole_body_readiness
+  - env_id: drawer_vase
+    posture_tag: fixed_base_tabletop
+    role: manipulation curriculum and semantic replay source
+    promotion_limit: cannot_close_g1_r1_whole_body_readiness
+  - env_id: workcell
+    posture_tag: fixed_base_tabletop
+    role: workcell replay, semantic grounding, and loop curriculum source
+    promotion_limit: cannot_close_g1_r1_whole_body_readiness
+runpod_profiles:
+  provider: provider_bringup
+  loop: g1_loop_run
+  train: g1_sac_training
+verification:
+  hygiene_command: python3 scripts/economic_world_model/check_g1_primary_env_hygiene.py --output-dir artifacts/economic_world_model/g1_primary_env_hygiene

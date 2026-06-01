@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smoke test for dishwashing SAC wiring.
+Smoke test for legacy fixed-base dishwashing SAC wiring.
 
 Runs a few episodes with random actions to sanity-check:
 - Env termination reasons
@@ -17,6 +17,10 @@ For FULL dishwashing regality compliance, use:
 
 For FULL workcell (manufacturing cell) regality compliance, use:
     python scripts/run_workcell_regal.py --output-dir artifacts/workcell_regal
+
+Boundary: this remains a fixed-base curriculum/regression source. The repo
+primary target is Unitree G1 bipedal whole-body; this smoke does not provide G1
+sim, hardware, training-promotion, or live-control proof.
 """
 import argparse
 import json
@@ -27,6 +31,12 @@ import numpy as np
 from src.envs.dishwashing_env import DishwashingEnv, summarize_episode_info
 from src.config.internal_profile import get_internal_experiment_profile
 from src.config.econ_params import load_econ_params
+from src.world_model.humanoid_readiness.g1_primary_environment import (
+    CURRICULUM_POSTURE_TAG,
+    PRIMARY_ENV_ID,
+    PRIMARY_POSTURE_TAG,
+    curriculum_proxy_metadata,
+)
 
 
 from typing import Optional
@@ -51,6 +61,11 @@ def run_smoke(episodes: int, econ_preset: str, out_json: Optional[str], out_csv:
         summary = summarize_episode_info(info_history)
         summary_dict = asdict(summary)
         summary_dict["econ_preset"] = econ_params.preset
+        summary_dict["primary_env_id"] = PRIMARY_ENV_ID
+        summary_dict["primary_posture_tag"] = PRIMARY_POSTURE_TAG
+        summary_dict["source_curriculum"] = curriculum_proxy_metadata("dishwashing")
+        summary_dict["source_curriculum_posture"] = CURRICULUM_POSTURE_TAG
+        summary_dict["promotion_limit"] = "curriculum_regression_only_not_g1_proof"
         summaries.append(summary_dict)
 
         print(f"[Episode {ep+1}] preset={econ_params.preset} term={summary.termination_reason} "

@@ -6,11 +6,12 @@
   "epistemic_status": "benchmark_candidate",
   "commit_sha": "abcdef1",
   "branch": "codex/multi-wm-architecture-plan",
-  "task": "Perception seam training benchmark candidate on curated workcell slice",
+  "task": "Perception seam training benchmark candidate on curated G1 humanoid slice",
   "wm": "perception_grounding",
   "subsystem": "evidence_fusion_seam",
   "blocker": "Need disciplined comparison against heuristic-init seam and prior loss schedule",
   "config_paths": [
+    "configs/humanoid/g1_primary_env.yaml",
     "configs/training/perception_seam/default.yaml",
     "configs/workcell/curated_slice_occlusion.yaml"
   ],
@@ -50,5 +51,16 @@
   "urgency": "high",
   "justified_itself": null,
   "rollback_notes": "Do not promote seam defaults from this run without a comparison artifact.",
-  "replay_notes": "Re-run with the same seeds and config paths after baseline receipt is recorded."
+  "replay_notes": "Re-run with the same G1 profile, seeds, and config paths after baseline receipt is recorded.",
+  "metadata": {
+    "primary_env_id": "bipedal_whole_body_unitree_g1",
+    "primary_task_id": "humanoid_wbt_g1",
+    "primary_robot_family": "unitree_g1",
+    "primary_hardware_class": "unitree_g1_r1_class",
+    "primary_posture_tag": "bipedal_whole_body",
+    "source_curriculum_env": "workcell",
+    "source_curriculum_posture": "fixed_base_tabletop",
+    "unitree_hardware_truth": false,
+    "unitree_sim_runtime_truth": false
+  }
 }

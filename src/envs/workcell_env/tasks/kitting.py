@@ -1,5 +1,5 @@
 """
-Canonical kitting task implementation for workcell environments.
+Kitting task implementation for fixed-base curriculum workcell environments.
 """
 from __future__ import annotations
 

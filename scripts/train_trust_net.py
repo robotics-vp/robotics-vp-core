@@ -19,7 +19,7 @@ from src.valuation.trust_net import train_trust_net, score_episodes_with_trust
 from src.training.wrap_training_entrypoint import regal_training
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(runner=None):
     """Main entrypoint with regality wrapper."""
     if runner:

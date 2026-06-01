@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-# Regality wrapper (Phase 10: workcell paramount)
+# Regality wrapper (Phase 10: Unitree G1 primary; workcell is curriculum)
 _repo_root = Path(__file__).parent.parent
 if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
@@ -621,7 +621,7 @@ def _run_training(config: TrainingConfig, runner=None, verbose: bool = True) -> 
     return result
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(runner=None) -> int:
     """Main entrypoint with regality wrapper."""
     parser = argparse.ArgumentParser(

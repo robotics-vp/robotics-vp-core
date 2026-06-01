@@ -5,7 +5,7 @@ deterministic regression loop against condition features, and emits a checkpoint
 
 Notes:
 - Wrapped with @regal_training for artifacts + verify_run()
-- Default env_type=workcell (paramount)
+- Default env_type=unitree_g1; workcell inputs are curriculum/regression only
 """
 import argparse
 import hashlib
@@ -191,7 +191,7 @@ def write_checkpoint(checkpoint_dir: Path, payload: Dict[str, Any], policy_state
     return path
 
 
-@regal_training(env_type="workcell")
+@regal_training(env_type="unitree_g1")
 def main(argv: Optional[List[str]] = None, runner=None) -> None:
     """Main training function with regality wrapper.
     

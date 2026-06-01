@@ -1,12 +1,13 @@
-"""CI tests for workcell paramount guarantee.
+"""CI tests for Unitree G1 primary-env guarantee.
 
-Ensures workcell is the default env_type across all regality-aware components.
+Ensures Unitree G1 is the default env_type across regality-aware components.
+Workcell/dishwashing/drawer-vase remain curriculum and regression sources.
 
 Tests:
-1. Stage6TrainingOrchestrator defaults to env_type="workcell"
-2. @regal_training defaults to env_type="workcell" if not specified
-3. RegalTrainingRunner defaults to env_type="workcell"
-4. All wrapped trainers use env_type="workcell"
+1. Stage6TrainingOrchestrator defaults to env_type="unitree_g1"
+2. @regal_training defaults to env_type="unitree_g1" if not specified
+3. RegalTrainingRunner preserves the training config contract
+4. All wrapped trainers use env_type="unitree_g1"
 """
 import sys
 from pathlib import Path
@@ -16,11 +17,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-class TestWorkcellParamountDefaults:
-    """Test that workcell is the default env_type everywhere."""
+class TestG1PrimaryDefaults:
+    """Test that Unitree G1 is the default env_type everywhere."""
     
-    def test_regal_training_decorator_defaults_to_workcell(self):
-        """@regal_training must default to env_type='workcell'."""
+    def test_regal_training_decorator_defaults_to_unitree_g1(self):
+        """@regal_training must default to env_type='unitree_g1'."""
         from src.training.wrap_training_entrypoint import regal_training
         import inspect
         
@@ -28,26 +29,26 @@ class TestWorkcellParamountDefaults:
         env_type_param = sig.parameters.get("env_type")
         
         assert env_type_param is not None, "regal_training must have env_type parameter"
-        assert env_type_param.default == "workcell", (
-            f"regal_training must default to 'workcell', got '{env_type_param.default}'"
+        assert env_type_param.default == "unitree_g1", (
+            f"regal_training must default to 'unitree_g1', got '{env_type_param.default}'"
         )
     
-    def test_stage6_orchestrator_defaults_to_workcell(self):
-        """Stage6TrainingOrchestrator must default to env_type='workcell'."""
+    def test_stage6_orchestrator_defaults_to_unitree_g1(self):
+        """Stage6TrainingOrchestrator must default to env_type='unitree_g1'."""
         stage6_path = ROOT / "scripts" / "run_stage6_train_all.py"
         assert stage6_path.exists(), "run_stage6_train_all.py not found"
         
         content = stage6_path.read_text()
         
-        # Check for env_type = "workcell" or env_type="workcell"
-        has_workcell_default = (
-            'env_type="workcell"' in content or
-            "env_type='workcell'" in content or
-            'env_type: str = "workcell"' in content
+        has_g1_default = (
+            "PRIMARY_ENV_TYPE" in content
+            or 'env_type="unitree_g1"' in content
+            or "env_type='unitree_g1'" in content
+            or 'env_type: str = "unitree_g1"' in content
         )
         
-        assert has_workcell_default, (
-            "Stage6TrainingOrchestrator must default to env_type='workcell'"
+        assert has_g1_default, (
+            "Stage6TrainingOrchestrator must default to env_type='unitree_g1'"
         )
     
     def test_regal_training_runner_has_config(self):
@@ -72,8 +73,8 @@ class TestWorkcellParamountDefaults:
         )
 
 
-class TestWrappedTrainersUseWorkcell:
-    """Test that all wrapped trainers use workcell."""
+class TestWrappedTrainersUseG1:
+    """Test that all wrapped trainers use Unitree G1 as target env type."""
     
     WRAPPED_TRAINERS = [
         "train_hydra_policy.py",
@@ -82,8 +83,8 @@ class TestWrappedTrainersUseWorkcell:
         "train_skill_policies.py",
     ]
     
-    def test_wrapped_trainers_specify_workcell(self):
-        """All wrapped trainers must explicitly use env_type='workcell'."""
+    def test_wrapped_trainers_specify_unitree_g1(self):
+        """All wrapped trainers must explicitly use env_type='unitree_g1'."""
         scripts_dir = ROOT / "scripts"
         
         for trainer_name in self.WRAPPED_TRAINERS:
@@ -98,29 +99,28 @@ class TestWrappedTrainersUseWorkcell:
                 f"{trainer_name} must use @regal_training decorator"
             )
             
-            # Must specify workcell
-            has_workcell = (
-                'env_type="workcell"' in content or
-                "env_type='workcell'" in content
+            has_unitree_g1 = (
+                'env_type="unitree_g1"' in content or
+                "env_type='unitree_g1'" in content
             )
-            assert has_workcell, (
-                f"{trainer_name} must specify env_type='workcell'"
+            assert has_unitree_g1, (
+                f"{trainer_name} must specify env_type='unitree_g1'"
             )
 
 
 class TestEnvTypeNotOmittable:
     """Test that env_type cannot be accidentally omitted for FULL runs."""
     
-    def test_missing_env_type_raises_or_defaults_workcell(self):
-        """Missing env_type should either fail or default to workcell."""
+    def test_missing_env_type_raises_or_defaults_unitree_g1(self):
+        """Missing env_type should either fail or default to unitree_g1."""
         from src.training.wrap_training_entrypoint import regal_training
         
-        # Calling without env_type should use workcell default
+        # Calling without env_type should use unitree_g1 default
         @regal_training()  # No env_type specified
         def dummy_trainer(runner=None):
             pass
         
-        # The decorator should have set workcell as default
+        # The decorator should have set unitree_g1 as default
         # This test passes if decorator doesn't raise
 
 
@@ -262,4 +262,3 @@ class TestPendingMigrationTracking:
         
         # Track that we're making progress
         assert migrated_count >= 0, "Should track migrated scripts"
-

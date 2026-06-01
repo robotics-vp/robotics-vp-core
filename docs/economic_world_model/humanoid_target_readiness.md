@@ -294,7 +294,7 @@ Status key:
 | Real-time control split | reflex/servo loop separated from governance loop | `src/world_model/humanoid_readiness/phase4.py` | `partial` | contract surfaces exist; no measured control interface or jitter traces yet |
 | Downstream controller primitive | bounded low-level command frame, safety receipt, dispatch receipt | `src/world_model/humanoid_readiness/downstream_controller.py` | `partial` | dry-run command frames exist; no ROS2/SDK2 publish, hardware, or sim dispatch yet |
 | Physical safety layer | joint limits, self-collision, e-stop, fall protection | local `JointLimitEnvelope` planning receipts | `partial` | joint-limit envelopes are not hardware-calibrated safety limits |
-| Spatial state / SLAM | localization, mapping, navigation state | none canonical yet | `missing` | current envs are mostly fixed-workcell |
+| Spatial state / SLAM | localization, mapping, navigation state | none canonical yet | `missing` | current local env evidence is mostly fixed-base workcell curriculum, not G1-primary SLAM truth |
 | Companion compute / comms | onboard/offboard split, QoS, degraded-link handling | `src/world_model/humanoid_readiness/phase4.py` | `partial` | local middleware contracts exist; no ROS2/DDS/Unitree runtime evidence yet |
 | Robot asset + calibration | URDF/Xacro/SRDF, extrinsics, calibration sidecars | `src/world_model/embodiment_actuation/bipedal_readiness.py` | `partial` | asset intake/parser receipts exist; no real calibrated transforms yet |
 | Teleop / recovery fallback | operator override and recovery trace path | `src/world_model/humanoid_readiness/phase4.py` | `partial` | local operator/recovery contracts exist; no live recovery traces yet |
