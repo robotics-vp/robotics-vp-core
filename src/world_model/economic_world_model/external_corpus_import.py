@@ -13,27 +13,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import urllib.error
+import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from src.replay.dataset import ReplayDatasetBuilder
 from src.utils.config_digest import sha256_json
 from src.utils.json_safe import to_json_safe
-
-EXTERNAL_LEROBOT_CORPUS_IMPORT_REPORT_VERSION = (
-    "external_lerobot_corpus_import_report_v1"
-)
-EXTERNAL_CORPUS_QUALITY_RECEIPT_VERSION = "external_corpus_quality_receipt_v1"
-EXTERNAL_CORPUS_LABEL_GAP_LEDGER_VERSION = "external_corpus_label_gap_ledger_v1"
-EXTERNAL_CORPUS_GOVERNANCE_LABEL_SPEC_VERSION = (
-    "external_corpus_governance_label_spec_v1"
-)
-EXTERNAL_CORPUS_SPLIT_MANIFEST_VERSION = "external_corpus_split_manifest_v1"
-EXTERNAL_CORPUS_REPLAY_INDEX_ROW_VERSION = "external_corpus_replay_index_row_v1"
-ECONOMIC_WM_EXTERNAL_CORPUS_INGESTION_ROW_VERSION = (
-    "economic_wm_external_corpus_ingestion_row_v1"
+from src.world_model.economic_world_model.external_corpus_import_models import (
+    EXTERNAL_CORPUS_QUALITY_RECEIPT_VERSION,
+    EconomicWMExternalCorpusIngestionRow,
+    ExternalCorpusGovernanceLabelSpec,
+    ExternalCorpusLabelGapLedgerEntry,
+    ExternalCorpusQualityReceipt,
+    ExternalCorpusReplayIndexRow,
+    ExternalCorpusSplitManifest,
+    ExternalLerobotCorpusImportReport,
 )
 
 DEFAULT_LEROBOT_FILES = [
@@ -45,6 +42,7 @@ DEFAULT_LEROBOT_FILES = [
     "meta/episodes/chunk-000/file-000.parquet",
     "data/chunk-000/file-000.parquet",
 ]
+DEFAULT_LEROBOT_VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv", ".avi", ".webm")
 
 
 def _mapping(payload: Optional[Mapping[str, Any]]) -> dict[str, Any]:
@@ -100,11 +98,99 @@ def _download_hf_dataset_file(repo_id: str, file_path: str, destination: Path) -
     urllib.request.urlretrieve(url, destination)
 
 
+def _file_receipt(
+    *,
+    path: Path,
+    source_path: str,
+    modality: str,
+) -> dict[str, Any]:
+    return {
+        "path": str(path),
+        "source_path": source_path,
+        "modality": modality,
+        "size_bytes": path.stat().st_size,
+        "sha256": _sha256_file(path),
+    }
+
+
+def _is_lerobot_video_path(path: str) -> bool:
+    lower = path.lower()
+    return lower.startswith("videos/") and lower.endswith(
+        DEFAULT_LEROBOT_VIDEO_EXTENSIONS
+    )
+
+
+def discover_lerobot_video_files(
+    *,
+    repo_id: str,
+    max_files: int = 1,
+) -> list[str]:
+    """Best-effort discovery of video files in a LeRobot Hugging Face dataset."""
+
+    if max_files <= 0:
+        return []
+    url = f"https://huggingface.co/api/datasets/{repo_id}/tree/main/videos?recursive=1"
+    try:
+        with urllib.request.urlopen(url, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    paths: list[str] = []
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        path = str(row.get("path", ""))
+        if row.get("type") == "file" and _is_lerobot_video_path(path):
+            paths.append(path)
+        if len(paths) >= max_files:
+            break
+    return paths
+
+
+def _local_video_file_receipts(
+    *,
+    source_root: Path,
+    max_video_files: int,
+    max_video_bytes: int,
+) -> list[dict[str, Any]]:
+    if max_video_files <= 0 or max_video_bytes <= 0:
+        return []
+    video_root = source_root / "videos"
+    if not video_root.exists():
+        return []
+    receipts: list[dict[str, Any]] = []
+    total_bytes = 0
+    for path in sorted(video_root.rglob("*")):
+        if not path.is_file() or not _is_lerobot_video_path(
+            path.relative_to(source_root).as_posix()
+        ):
+            continue
+        size_bytes = path.stat().st_size
+        if total_bytes + size_bytes > max_video_bytes:
+            break
+        receipts.append(
+            _file_receipt(
+                path=path,
+                source_path=path.relative_to(source_root).as_posix(),
+                modality="video",
+            )
+        )
+        total_bytes += size_bytes
+        if len(receipts) >= max_video_files:
+            break
+    return receipts
+
+
 def download_lerobot_minimal_files(
     *,
     repo_id: str,
     download_root: str | Path,
     files: Sequence[str] = DEFAULT_LEROBOT_FILES,
+    include_videos: bool = False,
+    max_video_files: int = 1,
+    max_video_bytes: int = 25_000_000,
 ) -> tuple[Path, list[dict[str, Any]]]:
     """Download the minimal LeRobot files needed for a CPU import proof."""
 
@@ -115,13 +201,33 @@ def download_lerobot_minimal_files(
         if not destination.exists():
             _download_hf_dataset_file(repo_id, file_path, destination)
         receipts.append(
-            {
-                "path": str(destination),
-                "source_path": file_path,
-                "size_bytes": destination.stat().st_size,
-                "sha256": _sha256_file(destination),
-            }
+            _file_receipt(
+                path=destination,
+                source_path=file_path,
+                modality="metadata_or_parquet",
+            )
         )
+    if include_videos:
+        total_video_bytes = 0
+        for video_path in discover_lerobot_video_files(
+            repo_id=repo_id,
+            max_files=max_video_files,
+        ):
+            destination = dataset_root / video_path
+            if not destination.exists():
+                _download_hf_dataset_file(repo_id, video_path, destination)
+            size_bytes = destination.stat().st_size
+            if total_video_bytes + size_bytes > max_video_bytes:
+                destination.unlink(missing_ok=True)
+                break
+            receipts.append(
+                _file_receipt(
+                    path=destination,
+                    source_path=video_path,
+                    modality="video",
+                )
+            )
+            total_video_bytes += size_bytes
     return dataset_root, receipts
 
 
@@ -272,286 +378,12 @@ def _lerobot_rows_from_parquet_rows(
     return rows
 
 
-@dataclass(frozen=True)
-class ExternalCorpusQualityReceipt:
-    receipt_id: str
-    dataset_id: str
-    check_key: str
-    status: str
-    passed: bool
-    measured_value: Any = None
-    blockers: list[str] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
-    version: str = EXTERNAL_CORPUS_QUALITY_RECEIPT_VERSION
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "receipt_id": self.receipt_id,
-            "version": self.version,
-            "dataset_id": self.dataset_id,
-            "check_key": self.check_key,
-            "status": self.status,
-            "passed": bool(self.passed),
-            "measured_value": to_json_safe(self.measured_value),
-            "blockers": list(self.blockers),
-            "metadata": _mapping(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class ExternalCorpusLabelGapLedgerEntry:
-    gap_id: str
-    dataset_id: str
-    gap_key: str
-    severity: str
-    downstream_effect: str
-    mitigation: str
-    blocks_training: bool
-    blocks_promotion: bool
-    metadata: dict[str, Any] = field(default_factory=dict)
-    version: str = EXTERNAL_CORPUS_LABEL_GAP_LEDGER_VERSION
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "gap_id": self.gap_id,
-            "version": self.version,
-            "dataset_id": self.dataset_id,
-            "gap_key": self.gap_key,
-            "severity": self.severity,
-            "downstream_effect": self.downstream_effect,
-            "mitigation": self.mitigation,
-            "blocks_training": bool(self.blocks_training),
-            "blocks_promotion": bool(self.blocks_promotion),
-            "metadata": _mapping(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class ExternalCorpusGovernanceLabelSpec:
-    label_id: str
-    dataset_id: str
-    label_key: str
-    positive_definition: str
-    negative_definition: str
-    use_for_training: bool
-    authority_class: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-    version: str = EXTERNAL_CORPUS_GOVERNANCE_LABEL_SPEC_VERSION
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "label_id": self.label_id,
-            "version": self.version,
-            "dataset_id": self.dataset_id,
-            "label_key": self.label_key,
-            "positive_definition": self.positive_definition,
-            "negative_definition": self.negative_definition,
-            "use_for_training": bool(self.use_for_training),
-            "authority_class": self.authority_class,
-            "metadata": _mapping(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class ExternalCorpusSplitManifest:
-    split_id: str
-    dataset_id: str
-    train_episode_ids: list[str]
-    eval_episode_ids: list[str]
-    holdout_policy: str
-    ready_for_training: bool
-    metadata: dict[str, Any] = field(default_factory=dict)
-    version: str = EXTERNAL_CORPUS_SPLIT_MANIFEST_VERSION
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "split_id": self.split_id,
-            "version": self.version,
-            "dataset_id": self.dataset_id,
-            "train_episode_ids": list(self.train_episode_ids),
-            "eval_episode_ids": list(self.eval_episode_ids),
-            "holdout_policy": self.holdout_policy,
-            "ready_for_training": bool(self.ready_for_training),
-            "metadata": _mapping(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class ExternalCorpusReplayIndexRow:
-    index_id: str
-    dataset_id: str
-    episode_id: str
-    step_idx: int
-    task_id: str
-    source_domain: str
-    replay_step_record_id: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-    version: str = EXTERNAL_CORPUS_REPLAY_INDEX_ROW_VERSION
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "index_id": self.index_id,
-            "version": self.version,
-            "dataset_id": self.dataset_id,
-            "episode_id": self.episode_id,
-            "step_idx": int(self.step_idx),
-            "task_id": self.task_id,
-            "source_domain": self.source_domain,
-            "replay_step_record_id": self.replay_step_record_id,
-            "metadata": _mapping(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class EconomicWMExternalCorpusIngestionRow:
-    ingestion_id: str
-    dataset_id: str
-    corpus_surface: str
-    status: str
-    episode_count: int
-    step_count: int
-    replay_dataset_dir: str
-    split_manifest_ref: str
-    replay_index_ref: str
-    data_quality_ref: str
-    label_gap_ref: str
-    governance_label_ref: str
-    ready_for_shadow_eval: bool
-    ready_for_training: bool
-    promotion_eligible: bool
-    blockers: list[str] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
-    version: str = ECONOMIC_WM_EXTERNAL_CORPUS_INGESTION_ROW_VERSION
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "ingestion_id": self.ingestion_id,
-            "version": self.version,
-            "dataset_id": self.dataset_id,
-            "corpus_surface": self.corpus_surface,
-            "status": self.status,
-            "episode_count": int(self.episode_count),
-            "step_count": int(self.step_count),
-            "replay_dataset_dir": self.replay_dataset_dir,
-            "split_manifest_ref": self.split_manifest_ref,
-            "replay_index_ref": self.replay_index_ref,
-            "data_quality_ref": self.data_quality_ref,
-            "label_gap_ref": self.label_gap_ref,
-            "governance_label_ref": self.governance_label_ref,
-            "ready_for_shadow_eval": bool(self.ready_for_shadow_eval),
-            "ready_for_training": bool(self.ready_for_training),
-            "promotion_eligible": bool(self.promotion_eligible),
-            "blockers": list(self.blockers),
-            "metadata": _mapping(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class ExternalLerobotCorpusImportReport:
-    report_id: str
-    dataset_id: str
-    status: str
-    source_root: str
-    download_executed: bool
-    files_downloaded_count: int
-    source_total_bytes: int
-    selected_episode_count: int
-    selected_step_count: int
-    replay_episode_count: int
-    replay_step_count: int
-    quality_receipt_count: int
-    quality_passed_count: int
-    label_gap_count: int
-    governance_label_count: int
-    ingestion_row_count: int
-    ready_for_shadow_eval: bool
-    ready_for_training: bool
-    provider_executed: bool
-    gpu_training_executed: bool
-    unitree_hardware_truth: bool
-    promotion_eligible: bool
-    phase7_authority_granted: bool
-    remaining_blockers: list[str] = field(default_factory=list)
-    artifact_refs: dict[str, Any] = field(default_factory=dict)
-    metadata: dict[str, Any] = field(default_factory=dict)
-    version: str = EXTERNAL_LEROBOT_CORPUS_IMPORT_REPORT_VERSION
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "report_id": self.report_id,
-            "version": self.version,
-            "dataset_id": self.dataset_id,
-            "status": self.status,
-            "source_root": self.source_root,
-            "download_executed": bool(self.download_executed),
-            "files_downloaded_count": int(self.files_downloaded_count),
-            "source_total_bytes": int(self.source_total_bytes),
-            "selected_episode_count": int(self.selected_episode_count),
-            "selected_step_count": int(self.selected_step_count),
-            "replay_episode_count": int(self.replay_episode_count),
-            "replay_step_count": int(self.replay_step_count),
-            "quality_receipt_count": int(self.quality_receipt_count),
-            "quality_passed_count": int(self.quality_passed_count),
-            "label_gap_count": int(self.label_gap_count),
-            "governance_label_count": int(self.governance_label_count),
-            "ingestion_row_count": int(self.ingestion_row_count),
-            "ready_for_shadow_eval": bool(self.ready_for_shadow_eval),
-            "ready_for_training": bool(self.ready_for_training),
-            "provider_executed": bool(self.provider_executed),
-            "gpu_training_executed": bool(self.gpu_training_executed),
-            "unitree_hardware_truth": bool(self.unitree_hardware_truth),
-            "promotion_eligible": bool(self.promotion_eligible),
-            "phase7_authority_granted": bool(self.phase7_authority_granted),
-            "remaining_blockers": list(self.remaining_blockers),
-            "artifact_refs": _mapping(self.artifact_refs),
-            "metadata": _mapping(self.metadata),
-        }
-
-    @classmethod
-    def from_dict(
-        cls, payload: Mapping[str, Any]
-    ) -> "ExternalLerobotCorpusImportReport":
-        return cls(
-            report_id=str(payload.get("report_id", "")),
-            dataset_id=str(payload.get("dataset_id", "")),
-            status=str(payload.get("status", "")),
-            source_root=str(payload.get("source_root", "")),
-            download_executed=bool(payload.get("download_executed", False)),
-            files_downloaded_count=int(payload.get("files_downloaded_count", 0) or 0),
-            source_total_bytes=int(payload.get("source_total_bytes", 0) or 0),
-            selected_episode_count=int(payload.get("selected_episode_count", 0) or 0),
-            selected_step_count=int(payload.get("selected_step_count", 0) or 0),
-            replay_episode_count=int(payload.get("replay_episode_count", 0) or 0),
-            replay_step_count=int(payload.get("replay_step_count", 0) or 0),
-            quality_receipt_count=int(payload.get("quality_receipt_count", 0) or 0),
-            quality_passed_count=int(payload.get("quality_passed_count", 0) or 0),
-            label_gap_count=int(payload.get("label_gap_count", 0) or 0),
-            governance_label_count=int(payload.get("governance_label_count", 0) or 0),
-            ingestion_row_count=int(payload.get("ingestion_row_count", 0) or 0),
-            ready_for_shadow_eval=bool(payload.get("ready_for_shadow_eval", False)),
-            ready_for_training=bool(payload.get("ready_for_training", False)),
-            provider_executed=bool(payload.get("provider_executed", False)),
-            gpu_training_executed=bool(payload.get("gpu_training_executed", False)),
-            unitree_hardware_truth=bool(payload.get("unitree_hardware_truth", False)),
-            promotion_eligible=bool(payload.get("promotion_eligible", False)),
-            phase7_authority_granted=bool(
-                payload.get("phase7_authority_granted", False)
-            ),
-            remaining_blockers=_strings(payload.get("remaining_blockers")),
-            artifact_refs=_mapping(payload.get("artifact_refs")),
-            metadata=_mapping(payload.get("metadata")),
-            version=str(
-                payload.get(
-                    "version", EXTERNAL_LEROBOT_CORPUS_IMPORT_REPORT_VERSION
-                )
-            ),
-        )
-
-
 def _quality_receipts(
     *,
     dataset_id: str,
     source_file_receipts: Sequence[Mapping[str, Any]],
+    video_file_receipts: Sequence[Mapping[str, Any]],
+    include_videos: bool,
     tasks_rows: Sequence[Mapping[str, Any]],
     episode_rows: Sequence[Mapping[str, Any]],
     selected_rows: Sequence[Mapping[str, Any]],
@@ -592,7 +424,7 @@ def _quality_receipts(
         if timestamps != sorted(timestamps):
             monotonic = False
             break
-    return [
+    receipts = [
         receipt("source_files_downloaded_or_present", bool(source_file_receipts), len(source_file_receipts)),
         receipt("source_file_digests_recorded", all("sha256" in row for row in source_file_receipts), len(source_file_receipts)),
         receipt("task_metadata_present", bool(tasks_rows), len(tasks_rows)),
@@ -605,9 +437,23 @@ def _quality_receipts(
         receipt("train_eval_split_possible", len(selected_episode_ids) >= 2, len(selected_episode_ids)),
         receipt("promotion_gate_fail_closed", True, False),
     ]
+    if include_videos:
+        receipts.append(
+            receipt(
+                "image_video_file_receipts_recorded",
+                bool(video_file_receipts),
+                len(video_file_receipts),
+                ["image_video_requested_but_no_video_files_recorded"],
+            )
+        )
+    return receipts
 
 
-def _label_gaps(dataset_id: str) -> list[ExternalCorpusLabelGapLedgerEntry]:
+def _label_gaps(
+    dataset_id: str,
+    *,
+    image_video_modalities_imported: bool,
+) -> list[ExternalCorpusLabelGapLedgerEntry]:
     specs = [
         (
             "not_unitree_hardware_truth",
@@ -634,14 +480,6 @@ def _label_gaps(dataset_id: str) -> list[ExternalCorpusLabelGapLedgerEntry]:
             True,
         ),
         (
-            "no_image_video_modalities_in_selected_slice",
-            "medium",
-            "The selected proof slice validates Parquet rows, not perception pixels.",
-            "Follow with LeRobot image/video slice only after this row path proves stable.",
-            False,
-            True,
-        ),
-        (
             "non_bipedal_task_domain",
             "medium",
             "PushT tabletop/keypoint behavior is not bipedal whole-body locomotion.",
@@ -650,6 +488,28 @@ def _label_gaps(dataset_id: str) -> list[ExternalCorpusLabelGapLedgerEntry]:
             True,
         ),
     ]
+    if image_video_modalities_imported:
+        specs.append(
+            (
+                "image_video_modalities_imported_but_not_decoded",
+                "medium",
+                "Video files are receipted for logistics but not decoded into perception training rows.",
+                "Decode frames through an explicit perception replay loop before visual training claims.",
+                False,
+                True,
+            )
+        )
+    else:
+        specs.append(
+            (
+                "no_image_video_modalities_in_selected_slice",
+                "medium",
+                "The selected proof slice validates Parquet rows, not perception pixels.",
+                "Follow with LeRobot image/video slice only after this row path proves stable.",
+                False,
+                True,
+            )
+        )
     return [
         ExternalCorpusLabelGapLedgerEntry(
             gap_id=_stable_id(
@@ -740,6 +600,9 @@ def import_lerobot_corpus_slice(
     download: bool = True,
     max_episodes: int = 2,
     max_steps_per_episode: int = 200,
+    include_videos: bool = False,
+    max_video_files: int = 1,
+    max_video_bytes: int = 25_000_000,
 ) -> dict[str, Any]:
     """Import a small LeRobot Parquet slice into repo-native artifacts."""
 
@@ -750,21 +613,35 @@ def import_lerobot_corpus_slice(
         resolved_source_root, source_file_receipts = download_lerobot_minimal_files(
             repo_id=repo_id,
             download_root=download_root,
+            include_videos=include_videos,
+            max_video_files=max_video_files,
+            max_video_bytes=max_video_bytes,
         )
         download_executed = download
     else:
         resolved_source_root = Path(source_root)
         source_file_receipts = [
-            {
-                "path": str(resolved_source_root / file_path),
-                "source_path": file_path,
-                "size_bytes": (resolved_source_root / file_path).stat().st_size,
-                "sha256": _sha256_file(resolved_source_root / file_path),
-            }
+            _file_receipt(
+                path=resolved_source_root / file_path,
+                source_path=file_path,
+                modality="metadata_or_parquet",
+            )
             for file_path in DEFAULT_LEROBOT_FILES
             if (resolved_source_root / file_path).exists()
         ]
+        if include_videos:
+            source_file_receipts.extend(
+                _local_video_file_receipts(
+                    source_root=resolved_source_root,
+                    max_video_files=max_video_files,
+                    max_video_bytes=max_video_bytes,
+                )
+            )
         download_executed = False
+    video_file_receipts = [
+        row for row in source_file_receipts if row.get("modality") == "video"
+    ]
+    image_video_modalities_imported = bool(video_file_receipts)
     info = _read_json(resolved_source_root / "meta/info.json")
     tasks_rows = _read_parquet(resolved_source_root / "meta/tasks.parquet")
     episode_rows = _read_parquet(
@@ -822,6 +699,8 @@ def import_lerobot_corpus_slice(
     quality_receipts = _quality_receipts(
         dataset_id=repo_id,
         source_file_receipts=source_file_receipts,
+        video_file_receipts=video_file_receipts,
+        include_videos=include_videos,
         tasks_rows=tasks_rows,
         episode_rows=episode_rows,
         selected_rows=lerobot_rows,
@@ -829,7 +708,10 @@ def import_lerobot_corpus_slice(
         replay_step_count=len(replay_bundle.steps),
         selected_episode_ids=episode_ids,
     )
-    label_gaps = _label_gaps(repo_id)
+    label_gaps = _label_gaps(
+        repo_id,
+        image_video_modalities_imported=image_video_modalities_imported,
+    )
     governance_labels = _governance_labels(repo_id)
 
     rows_path = output_root / "external_lerobot_rows.jsonl"
@@ -838,6 +720,7 @@ def import_lerobot_corpus_slice(
     quality_path = output_root / "data_quality_receipts.jsonl"
     gap_path = output_root / "label_gap_ledger.jsonl"
     governance_path = output_root / "governance_label_specs.jsonl"
+    video_receipts_path = output_root / "video_file_receipts.jsonl"
     ingestion_path = output_root / "economic_wm_external_corpus_ingestion_rows.jsonl"
     report_path = output_root / "external_lerobot_corpus_import_report_v1.json"
 
@@ -879,9 +762,11 @@ def import_lerobot_corpus_slice(
     _write_jsonl(quality_path, [row.to_dict() for row in quality_receipts])
     _write_jsonl(gap_path, [row.to_dict() for row in label_gaps])
     _write_jsonl(governance_path, [row.to_dict() for row in governance_labels])
+    _write_jsonl(video_receipts_path, video_file_receipts)
     _write_jsonl(ingestion_path, [row.to_dict() for row in ingestion_rows])
 
     source_total_bytes = sum(int(row.get("size_bytes", 0) or 0) for row in source_file_receipts)
+    video_total_bytes = sum(int(row.get("size_bytes", 0) or 0) for row in video_file_receipts)
     quality_passed_count = sum(1 for receipt in quality_receipts if receipt.passed)
     artifact_refs = {
         "report_path": str(report_path),
@@ -894,6 +779,7 @@ def import_lerobot_corpus_slice(
         "data_quality_receipts_path": str(quality_path),
         "label_gap_ledger_path": str(gap_path),
         "governance_label_specs_path": str(governance_path),
+        "video_file_receipts_path": str(video_receipts_path),
         "economic_wm_external_corpus_ingestion_rows_path": str(ingestion_path),
     }
     report = ExternalLerobotCorpusImportReport(
@@ -910,7 +796,9 @@ def import_lerobot_corpus_slice(
         source_root=str(resolved_source_root),
         download_executed=download_executed,
         files_downloaded_count=len(source_file_receipts),
+        video_files_downloaded_count=len(video_file_receipts),
         source_total_bytes=source_total_bytes,
+        video_total_bytes=video_total_bytes,
         selected_episode_count=len(rows_by_episode),
         selected_step_count=len(lerobot_rows),
         replay_episode_count=len(replay_bundle.episodes),
@@ -927,6 +815,7 @@ def import_lerobot_corpus_slice(
         unitree_hardware_truth=False,
         promotion_eligible=False,
         phase7_authority_granted=False,
+        image_video_modalities_imported=image_video_modalities_imported,
         remaining_blockers=[
             "external_slice_not_training_scale",
             "not_unitree_hardware_truth",
@@ -940,6 +829,10 @@ def import_lerobot_corpus_slice(
             "selected_episode_indexes": selected_indexes,
             "task_by_index": dict(task_by_index),
             "source_file_receipts": list(source_file_receipts),
+            "video_file_receipts": list(video_file_receipts),
+            "include_videos_requested": include_videos,
+            "max_video_files": max_video_files,
+            "max_video_bytes": max_video_bytes,
         },
     )
     _write_json(report_path, report.to_dict())

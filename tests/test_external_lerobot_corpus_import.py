@@ -80,6 +80,13 @@ def _write_fixture_source(root: Path) -> None:
     )
 
 
+def _write_fixture_video(root: Path) -> Path:
+    path = root / "videos/chunk-000/observation.images.camera/file-000.mp4"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"fixture-video-bytes")
+    return path
+
+
 def test_external_lerobot_corpus_import_writes_real_artifacts(tmp_path: Path) -> None:
     source = tmp_path / "source"
     output = tmp_path / "out"
@@ -106,6 +113,9 @@ def test_external_lerobot_corpus_import_writes_real_artifacts(tmp_path: Path) ->
     assert payload["unitree_hardware_truth"] is False
     assert payload["promotion_eligible"] is False
     assert payload["phase7_authority_granted"] is False
+    assert payload["video_files_downloaded_count"] == 0
+    assert payload["video_total_bytes"] == 0
+    assert payload["image_video_modalities_imported"] is False
 
     report = load_external_lerobot_corpus_import_report(
         payload["artifact_refs"]["report_path"]
@@ -130,3 +140,38 @@ def test_external_lerobot_corpus_import_writes_real_artifacts(tmp_path: Path) ->
     assert Path(
         payload["artifact_refs"]["economic_wm_external_corpus_ingestion_rows_path"]
     ).exists()
+    assert Path(payload["artifact_refs"]["video_file_receipts_path"]).exists()
+
+
+def test_external_lerobot_corpus_import_receipts_video_slice(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    output = tmp_path / "out"
+    _write_fixture_source(source)
+    video_path = _write_fixture_video(source)
+
+    payload = import_lerobot_corpus_slice(
+        repo_id="fixture/lerobot",
+        output_dir=output,
+        source_root=source,
+        max_episodes=2,
+        max_steps_per_episode=3,
+        include_videos=True,
+        max_video_files=1,
+        max_video_bytes=1024,
+    )
+
+    assert payload["ready_for_training"] is False
+    assert payload["video_files_downloaded_count"] == 1
+    assert payload["video_total_bytes"] == video_path.stat().st_size
+    assert payload["image_video_modalities_imported"] is True
+    assert payload["metadata"]["video_file_receipts"][0]["modality"] == "video"
+
+    receipts = load_external_corpus_quality_receipts(
+        payload["artifact_refs"]["data_quality_receipts_path"]
+    )
+    assert {
+        receipt.check_key for receipt in receipts if receipt.passed
+    } >= {"image_video_file_receipts_recorded"}
+    assert Path(payload["artifact_refs"]["video_file_receipts_path"]).exists()

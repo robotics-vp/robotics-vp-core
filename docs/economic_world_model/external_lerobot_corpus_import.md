@@ -24,7 +24,10 @@ Current result:
 
 - `status=ok_external_corpus_slice_imported_shadow_only`
 - `dataset_id=lerobot/pusht_keypoints`
+- `files_downloaded_count=7`
+- `video_files_downloaded_count=0`
 - `source_total_bytes=2253085`
+- `video_total_bytes=0`
 - `selected_episode_count=3`
 - `selected_step_count=420`
 - `replay_episode_count=3`
@@ -41,6 +44,7 @@ Current result:
 - `unitree_hardware_truth=false`
 - `promotion_eligible=false`
 - `phase7_authority_granted=false`
+- `image_video_modalities_imported=false`
 
 Artifacts emitted:
 
@@ -54,7 +58,23 @@ Artifacts emitted:
 - `data_quality_receipts.jsonl`
 - `label_gap_ledger.jsonl`
 - `governance_label_specs.jsonl`
+- `video_file_receipts.jsonl`
 - `economic_wm_external_corpus_ingestion_rows.jsonl`
+
+Optional video logistics check:
+
+```bash
+python3 scripts/economic_world_model/import_lerobot_corpus_slice.py \
+  --repo-id <lerobot-dataset> \
+  --output-dir artifacts/economic_world_model/external_lerobot_import \
+  --include-videos \
+  --max-video-files 1 \
+  --max-video-bytes 25000000
+```
+
+When video files are included, the importer records source digests and size
+receipts for the selected video files. It still does not decode frames into
+perception training rows or mark the corpus as training-ready.
 
 ## Boundary
 
@@ -64,5 +84,5 @@ replay export, split/index generation, quality receipts, label-gap ledger,
 false-veto/false-allow label specs, and Economic WM shadow ingestion.
 
 It does not prove Unitree hardware behavior, provider execution, GPU training,
-perception video handling, benchmark-grade corpus scale, reward-math mutation,
+perception video training, benchmark-grade corpus scale, reward-math mutation,
 promotion, or Phase 7 authority.

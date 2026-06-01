@@ -2,9 +2,14 @@
   "run_id": "runpod-20260901-120000-abc123",
   "mode": "runpod",
   "pod_class": "train",
+  "run_class": "train",
+  "epistemic_status": "proof_of_life",
   "commit_sha": "d85aa85",
   "branch": "main",
   "task": "SAC training on dishwashing env with econ-preset production",
+  "wm": "baseline_policy",
+  "subsystem": "dishwashing_sac",
+  "blocker": "gpu_training_runtime_receipts_missing",
   "config_paths": [
     "configs/sac/default.yaml",
     "configs/dishwashing_physics/default.yaml"
@@ -19,13 +24,27 @@
     "python train_sac.py --config configs/sac/default.yaml --episodes 1000 --seed 0"
   ],
   "artifact_paths": [
-    "results/training_logs/",
-    "checkpoints/"
+    "artifacts/economic_world_model/provider_runs/runpod-20260901-120000-abc123/training_runtime_manifest_v1.json",
+    "artifacts/economic_world_model/provider_runs/runpod-20260901-120000-abc123/gpu_runtime_receipt_v1.json",
+    "artifacts/economic_world_model/provider_runs/runpod-20260901-120000-abc123/checkpoint_manifest_v1.json"
   ],
   "status": "pending",
   "started_at": null,
   "finished_at": null,
   "cost_snapshot": null,
-  "rollback_notes": "",
-  "replay_notes": ""
+  "gpu_class": "train-dependent",
+  "wall_clock_seconds": null,
+  "artifact_size_bytes": null,
+  "storage_or_checkpoint_size_bytes": null,
+  "expected_value": "proof-of-life only: verify GPU training loop receipts before interpreting any policy quality",
+  "estimated_cost_usd": 12.0,
+  "dependency_chain": [
+    "runtime manifest schema",
+    "training config reviewed",
+    "promotion gate remains false"
+  ],
+  "urgency": "medium",
+  "justified_itself": null,
+  "rollback_notes": "Do not replace stable checkpoints from this smoke; discard raw weights unless benchmark receipts justify retention.",
+  "replay_notes": "Re-run with the same configs, image, commit, and seeds after preserving the emitted runtime manifest."
 }

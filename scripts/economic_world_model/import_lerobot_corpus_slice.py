@@ -24,6 +24,9 @@ def run_import_lerobot_corpus_slice(
     source_root: Optional[str | Path] = None,
     max_episodes: int = 2,
     max_steps_per_episode: int = 200,
+    include_videos: bool = False,
+    max_video_files: int = 1,
+    max_video_bytes: int = 25_000_000,
 ) -> dict[str, Any]:
     return import_lerobot_corpus_slice(
         repo_id=repo_id,
@@ -32,6 +35,9 @@ def run_import_lerobot_corpus_slice(
         download=source_root is None,
         max_episodes=max_episodes,
         max_steps_per_episode=max_steps_per_episode,
+        include_videos=include_videos,
+        max_video_files=max_video_files,
+        max_video_bytes=max_video_bytes,
     )
 
 
@@ -47,6 +53,9 @@ def main() -> int:
     parser.add_argument("--source-root", default=None)
     parser.add_argument("--max-episodes", type=int, default=2)
     parser.add_argument("--max-steps-per-episode", type=int, default=200)
+    parser.add_argument("--include-videos", action="store_true")
+    parser.add_argument("--max-video-files", type=int, default=1)
+    parser.add_argument("--max-video-bytes", type=int, default=25_000_000)
     args = parser.parse_args()
     payload = run_import_lerobot_corpus_slice(
         repo_id=args.repo_id,
@@ -54,13 +63,18 @@ def main() -> int:
         source_root=args.source_root,
         max_episodes=args.max_episodes,
         max_steps_per_episode=args.max_steps_per_episode,
+        include_videos=args.include_videos,
+        max_video_files=args.max_video_files,
+        max_video_bytes=args.max_video_bytes,
     )
     summary_keys = [
         "status",
         "dataset_id",
         "download_executed",
         "files_downloaded_count",
+        "video_files_downloaded_count",
         "source_total_bytes",
+        "video_total_bytes",
         "selected_episode_count",
         "selected_step_count",
         "replay_episode_count",
@@ -77,6 +91,7 @@ def main() -> int:
         "unitree_hardware_truth",
         "promotion_eligible",
         "phase7_authority_granted",
+        "image_video_modalities_imported",
     ]
     print(json.dumps({key: payload[key] for key in summary_keys}, indent=2))
     return 0

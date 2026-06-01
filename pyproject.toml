@@ -15,6 +15,7 @@ dependencies = [
   "torch",
   "scikit-learn",
   "pydantic>=2",
+  "pyarrow>=21",
 ]
 
 [tool.setuptools.packages.find]

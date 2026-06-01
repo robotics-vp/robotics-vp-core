@@ -182,6 +182,28 @@ A `promotion_candidate` run should not be treated as promotion-credible without 
 6. Fill in `wall_clock_seconds`, artifact/storage sizes, and `justified_itself` after results are reviewed.
 7. If the run is benchmark-, promotion-, or deployment-oriented, attach or create a comparison artifact.
 
+## Local Hygiene Preflight
+
+Before launching a RunPod/provider/training/loop run, validate the manifest:
+
+```bash
+python3 scripts/economic_world_model/check_gpu_run_hygiene.py \
+  --manifest .agent/runs/<run_id>/manifest.json \
+  --output-dir artifacts/economic_world_model/gpu_run_hygiene
+```
+
+For a broader roadmap sweep, run:
+
+```bash
+python3 scripts/economic_world_model/check_wm_surface_hygiene.py \
+  --output-dir artifacts/economic_world_model/wm_surface_hygiene
+```
+
+The hygiene checks fail closed on missing manifest fields, invalid
+`run_class`/`epistemic_status`, inline secrets, generic checkpoint sinks,
+protected baseline references, risky execution claims set to true, and missing
+comparison artifacts for promotion/deployment candidates.
+
 ## Examples
 
 - SAC training: `configs/runpod/examples/train_sac_manifest.json`

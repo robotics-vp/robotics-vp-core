@@ -6167,3 +6167,116 @@ This pass proves real external Parquet download/decoding and repo-native
 shadow ingestion. It does not prove Unitree hardware behavior, provider
 execution, GPU training, perception video handling, benchmark-grade corpus
 scale, reward-math mutation, promotion, or Phase 7 authority.
+
+## 2026-05-31 — Local evidence hygiene and focused CI burn-down
+
+### What changed
+
+- Declared `pyarrow>=21` in `pyproject.toml`; LeRobot Parquet tests no longer
+  depend on an undeclared local install.
+- Split large readiness/import files into model and catalog modules:
+  - `src/world_model/economic_world_model/external_corpus_import_models.py`
+  - `src/world_model/economic_world_model/post_gap_readiness_models.py`
+  - `src/world_model/economic_world_model/post_gap_readiness_catalog.py`
+- Added optional video-file logistics support to the LeRobot importer. Video
+  files are discovered or read from local LeRobot `videos/` trees, hashed, size
+  capped, and written to `video_file_receipts.jsonl`; they are not decoded into
+  training rows.
+- Added `src/world_model/economic_world_model/evidence_hygiene.py` and
+  `scripts/economic_world_model/check_evidence_hygiene.py` for claim-vs-evidence
+  checks, stale artifact-reference checks, and local artifact retention checks.
+- Added focused CI workflow:
+  `.github/workflows/economic-world-model-focused.yml`.
+
+### Current receipts
+
+Commands:
+
+```bash
+python3 scripts/economic_world_model/import_lerobot_corpus_slice.py \
+  --repo-id lerobot/pusht_keypoints \
+  --output-dir artifacts/economic_world_model/external_lerobot_import \
+  --max-episodes 3 \
+  --max-steps-per-episode 200
+
+python3 scripts/economic_world_model/check_evidence_hygiene.py \
+  --artifact-root artifacts/economic_world_model \
+  --output-dir artifacts/economic_world_model/evidence_hygiene
+```
+
+Evidence hygiene result:
+
+- `status=ok_evidence_hygiene_passed`
+- `scanned_file_count=692`
+- `claim_receipt_count=3212`
+- `stale_receipt_count=926`
+- `retention_receipt_count=692`
+- `blocking_issue_count=0`
+- `provider_gpu_hardware_claims_blocked=true`
+- `artifact_refs_resolved=true`
+- `retention_policy_passed=true`
+
+### Boundary
+
+This is local hygiene work only. It does not run GPU training, execute a
+provider, operate Unitree hardware, promote a model, mutate reward math, or
+grant Phase 7 authority.
+
+## 2026-05-31 — GPU/provider run hygiene and WM surface sweep
+
+### What changed
+
+- Added `src/world_model/economic_world_model/gpu_run_hygiene.py` and
+  `scripts/economic_world_model/check_gpu_run_hygiene.py`.
+- Added `src/world_model/economic_world_model/wm_surface_hygiene.py` and
+  `scripts/economic_world_model/check_wm_surface_hygiene.py`.
+- Added tests for both sweep layers:
+  - `tests/test_gpu_run_hygiene.py`
+  - `tests/test_wm_surface_hygiene.py`
+- Added `docs/economic_world_model/gpu_run_hygiene.md` and linked the preflight
+  commands from `docs/agent_ergonomics/run_manifest_schema.md`.
+- Updated the RunPod manifest examples so future provider/training runs start
+  with explicit run class, epistemic status, dependency chain, scoped artifacts,
+  rollback notes, and replay notes.
+- Extended focused CI to run GPU-run hygiene and the WM surface sweep.
+
+### Current receipts
+
+Commands:
+
+```bash
+python3 scripts/economic_world_model/check_gpu_run_hygiene.py \
+  --manifest-dir configs/runpod/examples \
+  --output-dir artifacts/economic_world_model/gpu_run_hygiene
+
+python3 scripts/economic_world_model/check_wm_surface_hygiene.py \
+  --output-dir artifacts/economic_world_model/wm_surface_hygiene
+```
+
+GPU-run hygiene result:
+
+- `status=ok_gpu_run_hygiene_passed`
+- `manifest_count=3`
+- `receipt_count=51`
+- `blocking_issue_count=0`
+- `safe_to_queue_count=3`
+- `unsafe_to_queue_count=0`
+
+WM surface sweep result:
+
+- `status=ok_wm_surface_hygiene_passed`
+- `scanned_file_count=326`
+- `python_file_count=243`
+- `doc_file_count=75`
+- `manifest_file_count=3`
+- `blocking_issue_count=0`
+- `risky_true_claim_count=0`
+- `protected_change_count=0`
+- `oversized_python_file_count=3`
+- `todo_marker_count=0`
+
+### Boundary
+
+These checks prepare the repo for cleaner provider bring-up, loop runs, and
+eventual training. They do not launch providers, run GPU workloads, train,
+promote, write weights, operate hardware, or grant Phase 7 authority.

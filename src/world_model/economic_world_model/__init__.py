@@ -16,6 +16,26 @@ from src.world_model.economic_world_model.evidence_contracts import (
     load_economic_wm_teacher_provider_contract,
     save_economic_wm_teacher_provider_contract,
 )
+from src.world_model.economic_world_model.evidence_hygiene import (
+    ArtifactRetentionReceipt,
+    ClaimEvidenceReceipt,
+    EvidenceHygieneReport,
+    StaleArtifactReceipt,
+    load_evidence_hygiene_report,
+    run_economic_wm_evidence_hygiene,
+)
+from src.world_model.economic_world_model.gpu_run_hygiene import (
+    GPURunHygieneReceipt,
+    GPURunHygieneReport,
+    run_gpu_run_hygiene,
+    validate_gpu_run_manifest_file,
+    validate_gpu_run_manifest_payload,
+)
+from src.world_model.economic_world_model.wm_surface_hygiene import (
+    WMSurfaceHygieneReceipt,
+    WMSurfaceHygieneReport,
+    run_wm_surface_hygiene,
+)
 
 from src.world_model.economic_world_model.external_corpus_import import (
     EconomicWMExternalCorpusIngestionRow,
@@ -189,6 +209,9 @@ from src.world_model.economic_world_model.training_rows import (
 __all__ = [
     "AllocationEnvelope",
     "EconomicWMAllocationCandidate",
+    "ArtifactRetentionReceipt",
+    "ClaimEvidenceReceipt",
+    "EvidenceHygieneReport",
     "EconomicWMEvidenceRequirement",
     "EconomicWMExternalCorpusIngestionRow",
     "EconomicState",
@@ -198,6 +221,11 @@ __all__ = [
     "ExternalCorpusReplayIndexRow",
     "ExternalCorpusSplitManifest",
     "ExternalLerobotCorpusImportReport",
+    "GPURunHygieneReceipt",
+    "GPURunHygieneReport",
+    "StaleArtifactReceipt",
+    "WMSurfaceHygieneReceipt",
+    "WMSurfaceHygieneReport",
     "EconomicWMCompanionComputeContract",
     "EconomicWMDegradedModeRunbook",
     "EconomicWMQueueTelemetrySurface",
@@ -243,6 +271,7 @@ __all__ = [
     "build_benchmark_gate_specs",
     "build_corpus_prep_artifact_plans",
     "build_evidence_hygiene_specs",
+    "load_evidence_hygiene_report",
     "build_external_dataset_corpus_plans",
     "build_g1_r1_purchase_readiness_specs",
     "build_gpu_day_one_runbooks",
@@ -256,6 +285,11 @@ __all__ = [
     "load_post_gap_readiness_report",
     "load_readiness_specs",
     "save_post_gap_readiness_bundle",
+    "run_economic_wm_evidence_hygiene",
+    "run_gpu_run_hygiene",
+    "run_wm_surface_hygiene",
+    "validate_gpu_run_manifest_file",
+    "validate_gpu_run_manifest_payload",
     "build_economic_wm_lower_wm_consumption_preflight",
     "build_economic_wm_lower_wm_consumption_preflight_from_paths",
     "load_economic_wm_canonical_consumption_rows",

@@ -4036,3 +4036,78 @@ Verification for the Phase-5.1 pass:
   does not claim Unitree hardware truth, provider/GPU execution, benchmark-grade
   corpus scale, perception video import, reward math mutation, promotion, or
   Phase 7 authority.
+
+### 2026-05-31: Local debt burn-down for CPU gap and corpus readiness
+
+- Added `pyarrow>=21` as a declared runtime dependency so LeRobot Parquet import
+  tests and scripts are reproducible from `requirements-dev.txt`.
+- Split the largest new Economic WM readiness modules into typed model/catalog
+  modules while preserving the package-level API:
+  `external_corpus_import_models.py`, `post_gap_readiness_models.py`, and
+  `post_gap_readiness_catalog.py`.
+- Hardened the external corpus importer with optional LeRobot video-file
+  discovery/receipting (`--include-videos`, `--max-video-files`,
+  `--max-video-bytes`). The refreshed `lerobot/pusht_keypoints` artifact remains
+  Parquet-only: `video_files_downloaded_count=0`,
+  `image_video_modalities_imported=false`, and `ready_for_training=false`.
+- Added a receipt-emitting evidence hygiene checker:
+  `scripts/economic_world_model/check_evidence_hygiene.py` and
+  `src/world_model/economic_world_model/evidence_hygiene.py`.
+  Current scan result:
+  `status=ok_evidence_hygiene_passed`,
+  `scanned_file_count=692`,
+  `claim_receipt_count=3212`,
+  `stale_receipt_count=926`,
+  `retention_receipt_count=692`,
+  `blocking_issue_count=0`,
+  `provider_gpu_hardware_claims_blocked=true`,
+  `artifact_refs_resolved=true`, and
+  `retention_policy_passed=true`.
+- Added focused CI coverage in
+  `.github/workflows/economic-world-model-focused.yml` for compile, ruff,
+  targeted mypy, CPU gap tests, post-gap readiness tests, external corpus tests,
+  evidence hygiene tests, post-gap artifact compilation, and artifact hygiene
+  scanning.
+- Boundary preserved: this burns down local CPU/documentation/artifact hygiene
+  debt only. It does not claim GPU training, provider execution, Unitree hardware
+  truth, promotion eligibility, reward-math changes, or Phase 7 authority.
+
+### 2026-05-31: WM surface sweep and GPU-run hygiene preflight
+
+- Added a GPU/provider/loop/training manifest preflight:
+  - `src/world_model/economic_world_model/gpu_run_hygiene.py`
+  - `scripts/economic_world_model/check_gpu_run_hygiene.py`
+  - `tests/test_gpu_run_hygiene.py`
+  - `docs/economic_world_model/gpu_run_hygiene.md`
+- Added a full WM-surface hygiene sweep:
+  - `src/world_model/economic_world_model/wm_surface_hygiene.py`
+  - `scripts/economic_world_model/check_wm_surface_hygiene.py`
+  - `tests/test_wm_surface_hygiene.py`
+- Hardened `configs/runpod/examples/*.json` so the examples carry explicit
+  `run_class`, `epistemic_status`, run-scoped artifact paths, dependency
+  chains, rollback notes, and replay notes before future GPU/provider use.
+- Current GPU-run hygiene result:
+  `status=ok_gpu_run_hygiene_passed`,
+  `manifest_count=3`,
+  `receipt_count=51`,
+  `blocking_issue_count=0`,
+  `advisory_issue_count=0`,
+  `safe_to_queue_count=3`, and
+  `unsafe_to_queue_count=0`.
+- Current WM surface sweep result:
+  `status=ok_wm_surface_hygiene_passed`,
+  `scanned_file_count=326`,
+  `python_file_count=243`,
+  `doc_file_count=75`,
+  `manifest_file_count=3`,
+  `receipt_count=9`,
+  `blocking_issue_count=0`,
+  `advisory_issue_count=0`,
+  `risky_true_claim_count=0`,
+  `protected_change_count=0`,
+  `oversized_python_file_count=3`, and
+  `todo_marker_count=0`.
+- Boundary preserved: this is preflight and sweep hygiene only. It does not
+  launch providers, create pods, run GPU loops, train models, write weights,
+  touch the stable checkpoint, operate hardware, or grant promotion/Phase 7
+  authority.
